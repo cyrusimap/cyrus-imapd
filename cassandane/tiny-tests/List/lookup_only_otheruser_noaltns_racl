@@ -2,31 +2,29 @@
 use Cassandane::Tiny;
 
 sub test_lookup_only_otheruser_noaltns_racl
-    :UnixHierarchySep :NoAltNamespace :ReverseACLs
-{
-    my ($self) = @_;
+  : UnixHierarchySep : NoAltNamespace : ReverseACLs {
+  my ($self) = @_;
 
-    $self->{instance}->create_user("other");
+  $self->{instance}->create_user("other");
 
-    my $admintalk = $self->{adminstore}->get_client();
-    $admintalk->create('user/other/foo');
-    $self->assert_str_equals('ok',
-        $admintalk->get_last_completion_response());
-    $admintalk->setacl('user/other/foo',
-        'cassandane' => 'l');
-    $self->assert_str_equals('ok',
-        $admintalk->get_last_completion_response());
+  my $admintalk = $self->{adminstore}->get_client();
+  $admintalk->create('user/other/foo');
+  $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+  $admintalk->setacl('user/other/foo', 'cassandane' => 'l');
+  $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    my $data = $imaptalk->list("", "*");
-    $self->assert_mailbox_structure($data, '/', {
-        'INBOX' => [qw( \\HasNoChildren )],
-        'user/other/foo' => [qw( \\HasNoChildren )],
-    });
+  my $data = $imaptalk->list("", "*");
+  $self->assert_mailbox_structure(
+    $data, '/',
+    {
+      'INBOX'          => [qw( \\HasNoChildren )],
+      'user/other/foo' => [qw( \\HasNoChildren )],
+    }
+  );
 
-    # only "l" permission, should be able to list, but not select!
-    $imaptalk->select('user/other/foo');
-    $self->assert_str_equals('no',
-        $imaptalk->get_last_completion_response());
+  # only "l" permission, should be able to list, but not select!
+  $imaptalk->select('user/other/foo');
+  $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
 }

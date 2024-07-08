@@ -2,25 +2,29 @@
 use Cassandane::Tiny;
 
 sub test_crossdomains_alt
-    :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_0
-{
-    my ($self) = @_;
+  : UnixHierarchySep : VirtDomains : CrossDomains : AltNamespace :
+  min_version_3_0 {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
-    my $admintalk = $self->{adminstore}->get_client();
+  my $imaptalk  = $self->{store}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    $admintalk->create("user/foo\@example.com");
-    $admintalk->create("user/bar\@example.net");
-    $admintalk->create("user/bar/Shared\@example.net"); # yay bogus domaining
+  $admintalk->create("user/foo\@example.com");
+  $admintalk->create("user/bar\@example.net");
+  $admintalk->create("user/bar/Shared\@example.net"); # yay bogus domaining
 
-    $admintalk->setacl("user/foo\@example.com", 'cassandane' => 'lrswipkxtecd');
-    $admintalk->setacl("user/bar/Shared\@example.net", 'cassandane' => 'lrswipkxtecd');
+  $admintalk->setacl("user/foo\@example.com", 'cassandane' => 'lrswipkxtecd');
+  $admintalk->setacl("user/bar/Shared\@example.net",
+    'cassandane' => 'lrswipkxtecd');
 
-    my $data = $imaptalk->list("", "*");
+  my $data = $imaptalk->list("", "*");
 
-    $self->assert_mailbox_structure($data, '/', {
-        'INBOX' => '\\HasNoChildren',
-        'Other Users/foo@example.com' => '\\HasNoChildren',
-        'Other Users/bar@example.net/Shared' => '\\HasNoChildren',
-    });
+  $self->assert_mailbox_structure(
+    $data, '/',
+    {
+      'INBOX'                              => '\\HasNoChildren',
+      'Other Users/foo@example.com'        => '\\HasNoChildren',
+      'Other Users/bar@example.net/Shared' => '\\HasNoChildren',
+    }
+  );
 }

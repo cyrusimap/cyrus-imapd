@@ -2,106 +2,121 @@
 use Cassandane::Tiny;
 
 sub test_email_copy_snoozed
-    :min_version_3_9 :needs_component_jmap :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imaptalk = $self->{store}->get_client();
-    my $admintalk = $self->{adminstore}->get_client();
+  : min_version_3_9 : needs_component_jmap : JMAPExtensions {
+  my ($self)    = @_;
+  my $jmap      = $self->{jmap};
+  my $imaptalk  = $self->{store}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
-    # snoozed property
-    my @using = @{ $jmap->DefaultUsing() };
-    push @using, 'https://cyrusimap.org/ns/jmap/mail';
-    $jmap->DefaultUsing(\@using);
+  # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+  # snoozed property
+  my @using = @{ $jmap->DefaultUsing() };
+  push @using, 'https://cyrusimap.org/ns/jmap/mail';
+  $jmap->DefaultUsing(\@using);
 
-    my $inboxId = $self->getinbox()->{id};
-    $self->assert_not_null($inboxId);
+  my $inboxId = $self->getinbox()->{id};
+  $self->assert_not_null($inboxId);
 
-    xlog $self, "create snooze mailbox";
-    my $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "snoozed",
-                            parentId => undef,
-                            role => "snoozed"
-             }}}, "R1"]
-    ]);
-    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
-    $self->assert_not_null($res->[0][1]{created});
-    my $snoozedId = $res->[0][1]{created}{"1"}{id};
+  xlog $self, "create snooze mailbox";
+  my $res = $jmap->CallMethods([ [
+    'Mailbox/set',
+    {
+      create => {
+        "1" => {
+          name     => "snoozed",
+          parentId => undef,
+          role     => "snoozed"
+        }
+      }
+    },
+    "R1"
+  ] ]);
+  $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+  $self->assert_str_equals('R1',          $res->[0][2]);
+  $self->assert_not_null($res->[0][1]{created});
+  my $snoozedId = $res->[0][1]{created}{"1"}{id};
 
-    xlog $self, "Create user and share mailbox";
-    $self->{instance}->create_user("other");
-    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+  xlog $self, "Create user and share mailbox";
+  $self->{instance}->create_user("other");
+  $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
 
-    my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
-    $self->assert_not_null($dstInboxId);
+  my $dstInboxId = $self->getinbox({ accountId => 'other' })->{id};
+  $self->assert_not_null($dstInboxId);
 
-    my $maildate = DateTime->now();
-    $maildate->add(DateTime::Duration->new(seconds => 30));
-    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+  my $maildate = DateTime->now();
+  $maildate->add(DateTime::Duration->new(seconds => 30));
+  my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
 
-    xlog $self, "create snoozed email";
-    my $res = $jmap->CallMethods([
-        ['Email/set', {
-            create => {
-                1 => {
-                    mailboxIds => {
-                        $snoozedId => JSON::true,
-                    },
-                    keywords => {
-                        'foo' => JSON::true,
-                    },
-                    subject => 'hello',
-                    bodyStructure => {
-                        type => 'text/plain',
-                        partId => 'part1',
-                    },
-                    bodyValues => {
-                        part1 => {
-                            value => 'world',
-                        }
-                    },
-                },
+  xlog $self, "create snoozed email";
+  my $res = $jmap->CallMethods([
+    [
+      'Email/set',
+      {
+        create => {
+          1 => {
+            mailboxIds => {
+              $snoozedId => JSON::true,
             },
-        }, 'R1'],
-    ]);
-    my $emailId = $res->[0][1]->{created}{1}{id};
-    $self->assert_not_null($emailId);
-
-    xlog $self, "copy email to shared mailbox - removing snoozed";
-    $res = $jmap->CallMethods([
-        ['Email/copy', {
-            fromAccountId => 'cassandane',
-            accountId => 'other',
-            create => {
-                1 => {
-                    id => $emailId,
-                    mailboxIds => {
-                        $dstInboxId => JSON::true,
-                    },
-                    keywords => {
-                        'bar' => JSON::true,
-                    },
-                    snoozed => JSON::null
-                },
+            keywords => {
+              'foo' => JSON::true,
             },
-        }, 'R1'],
-    ]);
+            subject       => 'hello',
+            bodyStructure => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => {
+              part1 => {
+                value => 'world',
+              }
+            },
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  my $emailId = $res->[0][1]->{created}{1}{id};
+  $self->assert_not_null($emailId);
 
-    my $copiedEmailId = $res->[0][1]->{created}{1}{id};
-    $self->assert_not_null($copiedEmailId);
+  xlog $self, "copy email to shared mailbox - removing snoozed";
+  $res = $jmap->CallMethods([
+    [
+      'Email/copy',
+      {
+        fromAccountId => 'cassandane',
+        accountId     => 'other',
+        create        => {
+          1 => {
+            id         => $emailId,
+            mailboxIds => {
+              $dstInboxId => JSON::true,
+            },
+            keywords => {
+              'bar' => JSON::true,
+            },
+            snoozed => JSON::null
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
 
-    xlog $self, "get copied email";
-    $res = $jmap->CallMethods([
-        ['Email/get', {
-            accountId => 'other',
-            ids => [$copiedEmailId],
-            properties => ['keywords', 'snoozed'],
-        }, 'R1']
-    ]);
-    my $wantKeywords = { 'bar' => JSON::true };
-    $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
-    $self->assert_null($res->[0][1]{list}[0]{snoozed});
+  my $copiedEmailId = $res->[0][1]->{created}{1}{id};
+  $self->assert_not_null($copiedEmailId);
+
+  xlog $self, "get copied email";
+  $res = $jmap->CallMethods([ [
+    'Email/get',
+    {
+      accountId  => 'other',
+      ids        => [$copiedEmailId],
+      properties => [ 'keywords', 'snoozed' ],
+    },
+    'R1'
+  ] ]);
+  my $wantKeywords = { 'bar' => JSON::true };
+  $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+  $self->assert_null($res->[0][1]{list}[0]{snoozed});
 }

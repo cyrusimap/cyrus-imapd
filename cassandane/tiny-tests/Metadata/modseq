@@ -8,103 +8,101 @@ use Cassandane::Tiny;
 #  - deleting an annotation bumps the message's modseq etc
 #  - modseq of other messages is never affected
 #
-sub test_modseq
-{
-    my ($self) = @_;
+sub test_modseq {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid modseq));
+  my $talk = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid modseq));
 
-    xlog $self, "Append 3 messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{B} = $self->make_message('Message B');
-    $msg{C} = $self->make_message('Message C');
+  xlog $self, "Append 3 messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{B} = $self->make_message('Message B');
+  $msg{C} = $self->make_message('Message C');
 
-    my $entry = '/comment';
-    my $attrib = 'value.priv';
-    my $value1 = "Hello World";
+  my $entry  = '/comment';
+  my $attrib = 'value.priv';
+  my $value1 = "Hello World";
 
-    xlog $self, "fetch an annotation - should be no values";
-    my $hms0 = $self->get_highestmodseq();
-    my $res = $talk->fetch('1:*',
-                           ['modseq', 'annotation', [$entry, $attrib]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals(
-            {
-                1 => {
-                        modseq => [$hms0-2],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                2 => {
-                        modseq => [$hms0-1],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                3 => {
-                        modseq => [$hms0],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-            },
-            $res);
+  xlog $self, "fetch an annotation - should be no values";
+  my $hms0 = $self->get_highestmodseq();
+  my $res
+    = $talk->fetch('1:*', [ 'modseq', 'annotation', [ $entry, $attrib ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      1 => {
+        modseq     => [ $hms0 - 2 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      2 => {
+        modseq     => [ $hms0 - 1 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      3 => {
+        modseq     => [$hms0],
+        annotation => { $entry => { $attrib => undef } }
+      },
+    },
+    $res
+  );
 
-    xlog $self, "store an annotation";
-    $talk->store('1', 'annotation',
-                 [$entry, [$attrib, $value1]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "store an annotation";
+  $talk->store('1', 'annotation', [ $entry, [ $attrib, $value1 ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog $self, "fetch an annotation - should be updated";
-    my $hms1 = $self->get_highestmodseq();
-    $self->assert($hms1 > $hms0);
-    $res = $talk->fetch('1:*',
-                        ['modseq', 'annotation', [$entry, $attrib]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals(
-            {
-                1 => {
-                        modseq => [$hms1],
-                        annotation => { $entry => { $attrib => $value1 } }
-                     },
-                2 => {
-                        modseq => [$hms0-1],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                3 => {
-                        modseq => [$hms0],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-            },
-            $res);
+  xlog $self, "fetch an annotation - should be updated";
+  my $hms1 = $self->get_highestmodseq();
+  $self->assert($hms1 > $hms0);
+  $res = $talk->fetch('1:*', [ 'modseq', 'annotation', [ $entry, $attrib ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      1 => {
+        modseq     => [$hms1],
+        annotation => { $entry => { $attrib => $value1 } }
+      },
+      2 => {
+        modseq     => [ $hms0 - 1 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      3 => {
+        modseq     => [$hms0],
+        annotation => { $entry => { $attrib => undef } }
+      },
+    },
+    $res
+  );
 
-    xlog $self, "delete an annotation";
-    $talk->store('1', 'annotation',
-                 [$entry, [$attrib, undef]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "delete an annotation";
+  $talk->store('1', 'annotation', [ $entry, [ $attrib, undef ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog $self, "fetch an annotation - should be updated";
-    my $hms2 = $self->get_highestmodseq();
-    $self->assert($hms2 > $hms1);
-    $res = $talk->fetch('1:*',
-                        ['modseq', 'annotation', [$entry, $attrib]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals(
-            {
-                1 => {
-                        modseq => [$hms2],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                2 => {
-                        modseq => [$hms0-1],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                3 => {
-                        modseq => [$hms0],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-            },
-            $res);
+  xlog $self, "fetch an annotation - should be updated";
+  my $hms2 = $self->get_highestmodseq();
+  $self->assert($hms2 > $hms1);
+  $res = $talk->fetch('1:*', [ 'modseq', 'annotation', [ $entry, $attrib ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      1 => {
+        modseq     => [$hms2],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      2 => {
+        modseq     => [ $hms0 - 1 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      3 => {
+        modseq     => [$hms0],
+        annotation => { $entry => { $attrib => undef } }
+      },
+    },
+    $res
+  );
 }

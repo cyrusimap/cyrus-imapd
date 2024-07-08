@@ -2,25 +2,27 @@
 use Cassandane::Tiny;
 
 sub test_createspecialuse
-    :NoAltNameSpace
-{
-    my ($self) = @_;
+  : NoAltNameSpace {
+  my ($self) = @_;
 
-    xlog $self, "testing create specialuse";
+  xlog $self, "testing create specialuse";
 
-    my $imaptalk = $self->{store}->get_client();
-    my $res;
-    my $entry = '/private/specialuse';
-    my $folder = "INBOX.Archive";
-    my $use = "\\Archive";
-    $imaptalk->create($folder, "(USE ($use))")
-        or die "Cannot create mailbox $folder with special-use $use: $@";
+  my $imaptalk = $self->{store}->get_client();
+  my $res;
+  my $entry  = '/private/specialuse';
+  my $folder = "INBOX.Archive";
+  my $use    = "\\Archive";
+  $imaptalk->create($folder, "(USE ($use))")
+    or die "Cannot create mailbox $folder with special-use $use: $@";
 
-    xlog $self, "initial value for $folder is $use";
-    $res = $imaptalk->getmetadata($folder, $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals({
-        $folder => { $entry => $use }
-    }, $res);
+  xlog $self, "initial value for $folder is $use";
+  $res = $imaptalk->getmetadata($folder, $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      $folder => { $entry => $use }
+    },
+    $res
+  );
 }

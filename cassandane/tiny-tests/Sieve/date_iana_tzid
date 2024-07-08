@@ -2,12 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_date_iana_tzid
-    :needs_component_sieve :min_version_3_7
-    :needs_dependency_ical
-{
-    my ($self) = @_;
+  : needs_component_sieve : min_version_3_7
+  : needs_dependency_ical {
+  my ($self) = @_;
 
-    $self->{instance}->install_sieve_script(<<'EOF'
+  $self->{instance}->install_sieve_script(
+    <<'EOF'
 require ["date", "variables", "imap4flags", "regex", "relational"];
 
 if date :zone "-1000" "date" "hour" "19" {
@@ -18,9 +18,9 @@ if date :zone "Pacific/Honolulu" "date" "hour" "19" {
   addflag "Test2";
 }
 EOF
-        );
+  );
 
-    my $raw = << 'EOF';
+  my $raw = << 'EOF';
 Date: Wed, 16 May 2018 22:06:18 -0700
 From: Some Person <notifications@github.com>
 To: foo/bar <bar@noreply.github.com>
@@ -30,14 +30,14 @@ X-Cassandane-Unique: foo
 
 foo bar
 EOF
-    xlog $self, "Deliver a message";
-    my $msg1 = Cassandane::Message->new(raw => $raw);
-    $self->{instance}->deliver($msg1);
+  xlog $self, "Deliver a message";
+  my $msg1 = Cassandane::Message->new(raw => $raw);
+  $self->{instance}->deliver($msg1);
 
-    my $imaptalk = $self->{store}->get_client();
-    $self->{store}->set_fetch_attributes(qw(uid flags));
-    $self->{store}->set_folder('INBOX');
-    $msg1->set_attribute(uid => 1);
-    $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2' ]);
-    $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
+  my $imaptalk = $self->{store}->get_client();
+  $self->{store}->set_fetch_attributes(qw(uid flags));
+  $self->{store}->set_folder('INBOX');
+  $msg1->set_attribute(uid   => 1);
+  $msg1->set_attribute(flags => [ '\\Recent', 'Test1', 'Test2' ]);
+  $self->check_messages({ 1 => $msg1 }, keyed_on => 'uid', check_guid => 0);
 }

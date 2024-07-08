@@ -2,23 +2,23 @@
 use Cassandane::Tiny;
 
 sub test_imip_strip_personal_data
-    :needs_component_sieve :needs_component_httpd :min_version_3_7
-    :want_service_http
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_httpd : min_version_3_7
+  : want_service_http {
+  my ($self) = @_;
 
-    my $IMAP = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $IMAP->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $IMAP = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $IMAP->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Create calendar user";
-    my $CalDAV = $self->{caldav};
-    my $CalendarId = 'Default';
-    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+  xlog $self, "Create calendar user";
+  my $CalDAV     = $self->{caldav};
+  my $CalendarId = 'Default';
+  my $uuid       = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :outcome "outcome";
@@ -27,9 +27,9 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    my $imip = <<EOF;
+  my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -68,18 +68,18 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $imip);
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver iMIP invite";
+  my $msg = Cassandane::Message->new(raw => $imip);
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Get the event and verify that personal data has been stripped";
-    my $events = $CalDAV->GetEvents($CalendarId);
-    my $response = $CalDAV->Request('GET', $events->[0]{href});
-    my $ical = $response->{content};
-    $self->assert_does_not_match(qr/\r\nBEGIN:VALARM/, $ical);
-    $self->assert_does_not_match(qr/\r\nCOLOR:/, $ical);
-    $self->assert_does_not_match(qr/\r\nTRANSP:/, $ical);
-    $self->assert_does_not_match(qr/\r\nCATEGORIES:#0000FF/, $ical);
-    $self->assert_does_not_match(qr/\r\nCATEGORIES:blue/, $ical);
-    $self->assert_matches(qr/\r\nCATEGORIES:foo/, $ical);
+  xlog $self, "Get the event and verify that personal data has been stripped";
+  my $events   = $CalDAV->GetEvents($CalendarId);
+  my $response = $CalDAV->Request('GET', $events->[0]{href});
+  my $ical     = $response->{content};
+  $self->assert_does_not_match(qr/\r\nBEGIN:VALARM/,       $ical);
+  $self->assert_does_not_match(qr/\r\nCOLOR:/,             $ical);
+  $self->assert_does_not_match(qr/\r\nTRANSP:/,            $ical);
+  $self->assert_does_not_match(qr/\r\nCATEGORIES:#0000FF/, $ical);
+  $self->assert_does_not_match(qr/\r\nCATEGORIES:blue/,    $ical);
+  $self->assert_matches(qr/\r\nCATEGORIES:foo/, $ical);
 }

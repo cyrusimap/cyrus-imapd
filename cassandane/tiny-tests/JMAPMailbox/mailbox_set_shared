@@ -2,78 +2,90 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_shared
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_1 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $imaptalk = $self->{store}->get_client();
-    my $admintalk = $self->{adminstore}->get_client();
+  my $imaptalk  = $self->{store}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    # Create account
-    $self->{instance}->create_user("foo");
+  # Create account
+  $self->{instance}->create_user("foo");
 
-    # Share inbox but do not allow to create subfolders
-    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
+  # Share inbox but do not allow to create subfolders
+  $admintalk->setacl("user.foo", "cassandane", "lr") or die;
 
-    xlog $self, "get mailboxes for foo account";
-    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
-    my $inboxId = $res->[0][1]{list}[0]{id};
+  xlog $self, "get mailboxes for foo account";
+  my $res
+    = $jmap->CallMethods([ [ 'Mailbox/get', { accountId => "foo" }, "R1" ] ]);
+  my $inboxId = $res->[0][1]{list}[0]{id};
 
-    my $update = ['Mailbox/set', {
-        accountId => "foo",
-        update => {
-            $inboxId => {
-                name => "UpdatedInbox",
-            }
+  my $update = [
+    'Mailbox/set',
+    {
+      accountId => "foo",
+      update    => {
+        $inboxId => {
+          name => "UpdatedInbox",
         }
-    }, "R1"];
+      }
+    },
+    "R1"
+  ];
 
-    xlog $self, "update shared INBOX (should fail)";
-    $res = $jmap->CallMethods([ $update ]);
-    $self->assert(exists $res->[0][1]{notUpdated}{$inboxId});
+  xlog $self, "update shared INBOX (should fail)";
+  $res = $jmap->CallMethods([$update]);
+  $self->assert(exists $res->[0][1]{notUpdated}{$inboxId});
 
-    xlog $self, "Add update ACL rights to shared INBOX";
-    $admintalk->setacl("user.foo", "cassandane", "lrw") or die;
+  xlog $self, "Add update ACL rights to shared INBOX";
+  $admintalk->setacl("user.foo", "cassandane", "lrw") or die;
 
-    xlog $self, "update shared INBOX (should succeed)";
-    $res = $jmap->CallMethods([ $update ]);
-    $self->assert(exists $res->[0][1]{updated}{$inboxId});
+  xlog $self, "update shared INBOX (should succeed)";
+  $res = $jmap->CallMethods([$update]);
+  $self->assert(exists $res->[0][1]{updated}{$inboxId});
 
-    my $create = ['Mailbox/set', {
-        accountId => "foo",
-        create => {
-            "1" => {
-                name => "x",
-            }
+  my $create = [
+    'Mailbox/set',
+    {
+      accountId => "foo",
+      create    => {
+        "1" => {
+          name => "x",
         }
-    }, "R1"];
+      }
+    },
+    "R1"
+  ];
 
-    xlog $self, "create mailbox child (should fail)";
-    $res = $jmap->CallMethods([ $create ]);
-    $self->assert_not_null($res->[0][1]{notCreated}{1});
+  xlog $self, "create mailbox child (should fail)";
+  $res = $jmap->CallMethods([$create]);
+  $self->assert_not_null($res->[0][1]{notCreated}{1});
 
-    xlog $self, "Add update ACL rights to shared INBOX";
-    $admintalk->setacl("user.foo", "cassandane", "lrwk") or die;
+  xlog $self, "Add update ACL rights to shared INBOX";
+  $admintalk->setacl("user.foo", "cassandane", "lrwk") or die;
 
-    xlog $self, "create mailbox child (should succeed)";
-    $res = $jmap->CallMethods([ $create ]);
-    $self->assert_not_null($res->[0][1]{created}{1});
-    my $childId = $res->[0][1]{created}{1}{id};
+  xlog $self, "create mailbox child (should succeed)";
+  $res = $jmap->CallMethods([$create]);
+  $self->assert_not_null($res->[0][1]{created}{1});
+  my $childId = $res->[0][1]{created}{1}{id};
 
-    my $destroy = ['Mailbox/set', {
-        accountId => "foo",
-        destroy => [ $childId ],
-    }, 'R1' ];
+  my $destroy = [
+    'Mailbox/set',
+    {
+      accountId => "foo",
+      destroy   => [$childId],
+    },
+    'R1'
+  ];
 
-    xlog $self, "destroy shared mailbox child (should fail)";
-    $res = $jmap->CallMethods([ $destroy ]);
-    $self->assert(exists $res->[0][1]{notDestroyed}{$childId});
+  xlog $self, "destroy shared mailbox child (should fail)";
+  $res = $jmap->CallMethods([$destroy]);
+  $self->assert(exists $res->[0][1]{notDestroyed}{$childId});
 
-    xlog $self, "Add delete ACL rights";
-    $admintalk->setacl("user.foo.x", "cassandane", "lrwkx") or die;
+  xlog $self, "Add delete ACL rights";
+  $admintalk->setacl("user.foo.x", "cassandane", "lrwkx") or die;
 
-    xlog $self, "destroy shared mailbox child (should succeed)";
-    $res = $jmap->CallMethods([ $destroy ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+  xlog $self, "destroy shared mailbox child (should succeed)";
+  $res = $jmap->CallMethods([$destroy]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{destroyed} });
 }

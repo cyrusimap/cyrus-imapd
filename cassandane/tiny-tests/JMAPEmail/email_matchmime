@@ -2,19 +2,18 @@
 use Cassandane::Tiny;
 
 sub test_email_matchmime
-    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
-    :needs_component_sieve :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_1 : needs_component_jmap : needs_component_calalarmd
+  : needs_component_sieve : JMAPExtensions {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
-    # Email/matchMime method
-    my @using = @{ $jmap->DefaultUsing() };
-    push @using, 'https://cyrusimap.org/ns/jmap/mail';
-    $jmap->DefaultUsing(\@using);
+  # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+  # Email/matchMime method
+  my @using = @{ $jmap->DefaultUsing() };
+  push @using, 'https://cyrusimap.org/ns/jmap/mail';
+  $jmap->DefaultUsing(\@using);
 
-    my $email = <<'EOF';
+  my $email = <<'EOF';
 From: sender@local
 To: recipient@local
 Subject: test email
@@ -26,44 +25,59 @@ Content-Transfer-Encoding: quoted-printable
 
 Some body.
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
+  $email =~ s/\r?\n/\r\n/gs;
 
-    my $res = $jmap->CallMethods([
-        ['Email/matchMime', {
-            mime => $email,
-            filter => {
-                subject => "test",
-                header => [ "X-tra", 'baz' ],
+  my $res = $jmap->CallMethods([
+    [
+      'Email/matchMime',
+      {
+        mime   => $email,
+        filter => {
+          subject => "test",
+          header  => [ "X-tra", 'baz' ],
+        },
+      },
+      "R1"
+    ],
+  ]);
+
+  $self->assert_equals(JSON::true, $res->[0][1]{matches});
+
+  $res = $jmap->CallMethods([
+    [
+      'Email/matchMime',
+      {
+        mime   => $email,
+        filter => {
+          operator   => 'AND',
+          conditions => [
+            {
+              text => "body",
             },
-        }, "R1"],
-    ]);
+            {
+              header => ["X-tra"],
+            }
+          ],
+        },
+      },
+      "R1"
+    ],
+  ]);
 
-    $self->assert_equals(JSON::true, $res->[0][1]{matches});
+  $self->assert_equals(JSON::true, $res->[0][1]{matches});
 
-    $res = $jmap->CallMethods([
-        ['Email/matchMime', {
-            mime => $email,
-            filter => {
-                operator => 'AND',
-                conditions => [{
-                    text => "body",
-                }, {
-                    header => [ "X-tra" ],
-                }],
-            },
-        }, "R1"],
-    ]);
+  $res = $jmap->CallMethods([
+    [
+      'Email/matchMime',
+      {
+        mime   => $email,
+        filter => {
+          hasAttachment => JSON::true,
+        },
+      },
+      "R1"
+    ],
+  ]);
 
-    $self->assert_equals(JSON::true, $res->[0][1]{matches});
-
-    $res = $jmap->CallMethods([
-        ['Email/matchMime', {
-            mime => $email,
-            filter => {
-                hasAttachment => JSON::true,
-            },
-        }, "R1"],
-    ]);
-
-    $self->assert_equals(JSON::false, $res->[0][1]{matches});
+  $self->assert_equals(JSON::false, $res->[0][1]{matches});
 }

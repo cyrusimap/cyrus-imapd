@@ -2,27 +2,26 @@
 use Cassandane::Tiny;
 
 sub test_contact_get_avatar_v4
-    :min_version_3_5 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_5 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $service = $self->{instance}->get_service("http");
-    $ENV{DEBUGDAV} = 1;
-    my $carddav = Net::CardDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+  my $service = $self->{instance}->get_service("http");
+  $ENV{DEBUGDAV} = 1;
+  my $carddav = Net::CardDAVTalk->new(
+    user      => 'cassandane',
+    password  => 'pass',
+    host      => $service->host(),
+    port      => $service->port(),
+    scheme    => 'http',
+    url       => '/',
+    expandurl => 1,
+  );
 
-    xlog $self, "create a v4 contact with a photo";
-    my $id = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
-    my $href = "Default/$id.vcf";
-    my $card = <<EOF;
+  xlog $self, "create a v4 contact with a photo";
+  my $id   = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
+  my $href = "Default/$id.vcf";
+  my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
 PRODID:+//IDN bitfire.at//DAVx5/4.2.0.3-gplay ez-vcard/0.11.3
@@ -63,18 +62,20 @@ REV:20220504T040120Z
 END:VCARD
 EOF
 
-    $card =~ s/\r?\n/\r\n/gs;
+  $card =~ s/\r?\n/\r\n/gs;
 
-    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+  $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
-    my $res = $jmap->CallMethods([
-        ['Contact/get', {
-            properties => ['avatar', 'x-hasPhoto'],
-        }, 'R1']
-    ]);
+  my $res = $jmap->CallMethods([ [
+    'Contact/get',
+    {
+      properties => [ 'avatar', 'x-hasPhoto' ],
+    },
+    'R1'
+  ] ]);
 
-    $self->assert_not_null($res->[0][1]{list}[0]{id});
-    $self->assert_not_null($res->[0][1]{list}[0]{avatar});
-    $self->assert_equals("image/png", $res->[0][1]{list}[0]{avatar}{type});
-    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{'x-hasPhoto'});
+  $self->assert_not_null($res->[0][1]{list}[0]{id});
+  $self->assert_not_null($res->[0][1]{list}[0]{avatar});
+  $self->assert_equals("image/png", $res->[0][1]{list}[0]{avatar}{type});
+  $self->assert_equals(JSON::true,  $res->[0][1]{list}[0]{'x-hasPhoto'});
 }

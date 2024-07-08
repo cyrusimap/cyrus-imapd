@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_attachbinary_blobid
-    :min_version_3_5 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_5 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog "Create event via CalDAV";
-    my $rawIcal = <<'EOF';
+  xlog "Create event via CalDAV";
+  my $rawIcal = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
@@ -28,56 +27,68 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
-        'Content-Type' => 'text/calendar');
+  $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+    'Content-Type' => 'text/calendar');
 
-    xlog "Fetch Link.blobId";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['links'],
-        }, 'R1'],
-    ]);
-    my $event1 = $res->[0][1]{list}[0];
-    $self->assert_not_null($event1);
-    my $blobId1 = (values %{$event1->{links}})[0]->{blobId};
-    $self->assert_not_null($blobId1);
+  xlog "Fetch Link.blobId";
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => ['links'],
+      },
+      'R1'
+    ],
+  ]);
+  my $event1 = $res->[0][1]{list}[0];
+  $self->assert_not_null($event1);
+  my $blobId1 = (values %{ $event1->{links} })[0]->{blobId};
+  $self->assert_not_null($blobId1);
 
-    xlog "Assert blobId is a smart blob";
-    $self->assert_str_equals("I", substr($blobId1, 0, 1));
+  xlog "Assert blobId is a smart blob";
+  $self->assert_str_equals("I", substr($blobId1, 0, 1));
 
-    xlog "Create event with same blobId";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                event2 => {
-                    calendarIds => {
-                        Default => JSON::true,
-                    },
-                    title => "event2",
-                    start => "2021-08-01T23:30:00",
-                    duration => "PT1H",
-                    timeZone => "Australia/Melbourne",
-                    links => {
-                        link => {
-                            blobId => $blobId1,
-                        },
-                    },
-                },
+  xlog "Create event with same blobId";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        create => {
+          event2 => {
+            calendarIds => {
+              Default => JSON::true,
             },
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            ids => ['#event2'],
-            properties => ['links', 'x-href'],
-        }, 'R2'],
-    ]);
-    my $event2 = $res->[1][1]{list}[0];
-    $self->assert_not_null($event2);
-    my $blobId2 = (values %{$event2->{links}})[0]->{blobId};
+            title    => "event2",
+            start    => "2021-08-01T23:30:00",
+            duration => "PT1H",
+            timeZone => "Australia/Melbourne",
+            links    => {
+              link => {
+                blobId => $blobId1,
+              },
+            },
+          },
+        },
+      },
+      'R1'
+    ],
+    [
+      'CalendarEvent/get',
+      {
+        ids        => ['#event2'],
+        properties => [ 'links', 'x-href' ],
+      },
+      'R2'
+    ],
+  ]);
+  my $event2 = $res->[1][1]{list}[0];
+  $self->assert_not_null($event2);
+  my $blobId2 = (values %{ $event2->{links} })[0]->{blobId};
 
-    xlog "Assert blobId is a G blob";
-    $self->assert_str_equals("G", substr($blobId2, 0, 1));
+  xlog "Assert blobId is a G blob";
+  $self->assert_str_equals("G", substr($blobId2, 0, 1));
 
-    xlog "Assert /set response reported new blobId";
-    $self->assert_str_equals($blobId2,
-        $res->[0][1]{created}{event2}{"links/link/blobId"});
+  xlog "Assert /set response reported new blobId";
+  $self->assert_str_equals($blobId2,
+    $res->[0][1]{created}{event2}{"links/link/blobId"});
 }

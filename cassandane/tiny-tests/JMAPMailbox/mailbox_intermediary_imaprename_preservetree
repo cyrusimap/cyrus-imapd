@@ -2,53 +2,60 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_intermediary_imaprename_preservetree
-    :min_version_3_1 :max_version_3_4 :needs_component_jmap :NoAltNameSpace
-{
-    my ($self) = @_;
+  : min_version_3_1 : max_version_3_4 : needs_component_jmap : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  my $jmap = $self->{jmap};
+  my $imap = $self->{store}->get_client();
 
-    xlog $self, "Create mailboxes";
-    $imap->create("INBOX.i1.i2.i3.foo") or die;
-    $imap->create("INBOX.i1.i2.bar") or die;
-    my $res = $jmap->CallMethods([['Mailbox/get', {
-        properties => ['name', 'parentId'],
-    }, "R1"]]);
+  xlog $self, "Create mailboxes";
+  $imap->create("INBOX.i1.i2.i3.foo") or die;
+  $imap->create("INBOX.i1.i2.bar")    or die;
+  my $res = $jmap->CallMethods([ [
+    'Mailbox/get',
+    {
+      properties => [ 'name', 'parentId' ],
+    },
+    "R1"
+  ] ]);
 
-    xlog $self, "Assert mailbox tree";
-    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(6, scalar keys %mboxByName);
-    $self->assert_not_null($mboxByName{'Inbox'});
-    $self->assert_not_null($mboxByName{'i1'});
-    $self->assert_not_null($mboxByName{'i2'});
-    $self->assert_not_null($mboxByName{'i3'});
-    $self->assert_not_null($mboxByName{'foo'});
-    $self->assert_not_null($mboxByName{'bar'});
-    $self->assert_null($mboxByName{i1}->{parentId});
-    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
-    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{i3}->{parentId});
-    $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
-    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+  xlog $self, "Assert mailbox tree";
+  my %mboxByName = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  $self->assert_num_equals(6, scalar keys %mboxByName);
+  $self->assert_not_null($mboxByName{'Inbox'});
+  $self->assert_not_null($mboxByName{'i1'});
+  $self->assert_not_null($mboxByName{'i2'});
+  $self->assert_not_null($mboxByName{'i3'});
+  $self->assert_not_null($mboxByName{'foo'});
+  $self->assert_not_null($mboxByName{'bar'});
+  $self->assert_null($mboxByName{i1}->{parentId});
+  $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+  $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{i3}->{parentId});
+  $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
+  $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
 
-    xlog $self, "Rename mailbox";
-    $imap->rename("INBOX.i1.i2.i3.foo", "INBOX.i1.i4.baz") or die;
+  xlog $self, "Rename mailbox";
+  $imap->rename("INBOX.i1.i2.i3.foo", "INBOX.i1.i4.baz") or die;
 
-    xlog $self, "Assert mailbox tree";
-    $res = $jmap->CallMethods([['Mailbox/get', {
-        properties => ['name', 'parentId'],
-    }, "R1"]]);
-    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(6, scalar keys %mboxByName);
-    $self->assert_not_null($mboxByName{'Inbox'});
-    $self->assert_not_null($mboxByName{'i1'});
-    $self->assert_not_null($mboxByName{'i2'});
-    $self->assert_not_null($mboxByName{'i4'});
-    $self->assert_not_null($mboxByName{'bar'});
-    $self->assert_not_null($mboxByName{'baz'});
-    $self->assert_null($mboxByName{i1}->{parentId});
-    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
-    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i4}->{parentId});
-    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
-    $self->assert_str_equals($mboxByName{i4}->{id}, $mboxByName{baz}->{parentId});
+  xlog $self, "Assert mailbox tree";
+  $res = $jmap->CallMethods([ [
+    'Mailbox/get',
+    {
+      properties => [ 'name', 'parentId' ],
+    },
+    "R1"
+  ] ]);
+  %mboxByName = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  $self->assert_num_equals(6, scalar keys %mboxByName);
+  $self->assert_not_null($mboxByName{'Inbox'});
+  $self->assert_not_null($mboxByName{'i1'});
+  $self->assert_not_null($mboxByName{'i2'});
+  $self->assert_not_null($mboxByName{'i4'});
+  $self->assert_not_null($mboxByName{'bar'});
+  $self->assert_not_null($mboxByName{'baz'});
+  $self->assert_null($mboxByName{i1}->{parentId});
+  $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+  $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i4}->{parentId});
+  $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+  $self->assert_str_equals($mboxByName{i4}->{id}, $mboxByName{baz}->{parentId});
 }

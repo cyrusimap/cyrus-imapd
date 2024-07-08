@@ -2,56 +2,55 @@
 use Cassandane::Tiny;
 
 sub test_rfc5490_metadata
-    :min_version_3_0
-    :needs_component_sieve
-{
-    my ($self) = @_;
+  : min_version_3_0
+  : needs_component_sieve {
+  my ($self) = @_;
 
-    xlog $self, "Testing the \"metadata\" test";
+  xlog $self, "Testing the \"metadata\" test";
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    my $hitfolder = "INBOX.newfolder";
-    my $missfolder = "INBOX";
+  my $hitfolder  = "INBOX.newfolder";
+  my $missfolder = "INBOX";
 
-    xlog $self, "Install the sieve script";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install the sieve script";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["fileinto", "mboxmetadata"];
 if metadata "INBOX" "/private/comment" "awesome" {
     fileinto "$hitfolder";
 }
 EOF
-    );
+  );
 
-    $talk->create($hitfolder);
+  $talk->create($hitfolder);
 
-    my %uid = ($hitfolder => 1, $missfolder => 1);
-    my %exp;
-    xlog $self, "Deliver a message";
-    {
-        my $msg = $self->{gen}->generate(subject => "msg1");
-        $msg->set_attribute(uid => $uid{$missfolder});
-        $uid{$missfolder}++;
-        $self->{instance}->deliver($msg);
-        $exp{$missfolder}->{"msg1"} = $msg;
-    }
+  my %uid = ($hitfolder => 1, $missfolder => 1);
+  my %exp;
+  xlog $self, "Deliver a message";
+  {
+    my $msg = $self->{gen}->generate(subject => "msg1");
+    $msg->set_attribute(uid => $uid{$missfolder});
+    $uid{$missfolder}++;
+    $self->{instance}->deliver($msg);
+    $exp{$missfolder}->{"msg1"} = $msg;
+  }
 
-    xlog $self, "Create the annotation";
-    $talk->setmetadata("INBOX", "/private/comment", "awesome");
+  xlog $self, "Create the annotation";
+  $talk->setmetadata("INBOX", "/private/comment", "awesome");
 
-    xlog $self, "Deliver a message now that the folder exists";
-    {
-        my $msg = $self->{gen}->generate(subject => "msg2");
-        $msg->set_attribute(uid => $uid{$hitfolder});
-        $uid{$hitfolder}++;
-        $self->{instance}->deliver($msg);
-        $exp{$hitfolder}->{"msg2"} = $msg;
-    }
+  xlog $self, "Deliver a message now that the folder exists";
+  {
+    my $msg = $self->{gen}->generate(subject => "msg2");
+    $msg->set_attribute(uid => $uid{$hitfolder});
+    $uid{$hitfolder}++;
+    $self->{instance}->deliver($msg);
+    $exp{$hitfolder}->{"msg2"} = $msg;
+  }
 
-    xlog $self, "Check that the messages made it";
-    foreach my $folder (keys %exp)
-    {
-        $self->{store}->set_folder($folder);
-        $self->check_messages($exp{$folder}, check_guid => 0);
-    }
+  xlog $self, "Check that the messages made it";
+  foreach my $folder (keys %exp) {
+    $self->{store}->set_folder($folder);
+    $self->check_messages($exp{$folder}, check_guid => 0);
+  }
 }

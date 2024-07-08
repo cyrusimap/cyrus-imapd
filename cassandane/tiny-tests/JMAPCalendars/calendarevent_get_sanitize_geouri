@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_sanitize_geouri
-    :min_version_3_9 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_9 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog $self, "Create event with TEXT-escaped geo: URIs";
-    my $ical = <<'EOF';
+  xlog $self, "Create event with TEXT-escaped geo: URIs";
+  my $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
@@ -36,45 +35,52 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    my $res = $caldav->Request('PUT',
-        '/dav/calendars/user/cassandane/Default/test.ics',
-        $ical, 'Content-Type' => 'text/calendar');
+  my $res = $caldav->Request(
+    'PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+    $ical, 'Content-Type' => 'text/calendar'
+  );
 
-    xlog $self, "Assert text-escaped geo: URI values are sanitized when read";
+  xlog $self, "Assert text-escaped geo: URI values are sanitized when read";
 
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['locations'],
-        }, 'R1']
-    ]);
-    $self->assert_str_equals('geo:13.4125,103.8667',
-        $res->[0][1]{list}[0]{locations}{location1}{coordinates});
-    $self->assert_str_equals('geo:14.4125,104.8667',
-        $res->[0][1]{list}[0]{locations}{location2}{coordinates});
+  $res = $jmap->CallMethods([ [
+    'CalendarEvent/get',
+    {
+      properties => ['locations'],
+    },
+    'R1'
+  ] ]);
+  $self->assert_str_equals('geo:13.4125,103.8667',
+    $res->[0][1]{list}[0]{locations}{location1}{coordinates});
+  $self->assert_str_equals('geo:14.4125,104.8667',
+    $res->[0][1]{list}[0]{locations}{location2}{coordinates});
 
-    xlog $self, "Assert text-escaped geo: URI values are rejected when set";
+  xlog $self, "Assert text-escaped geo: URI values are rejected when set";
 
-    my $eventId = $res->[0][1]{list}[0]{id};
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    'locations/location1/coordinates' => 'geo:13.4125\,103.8667',
-                }
-            },
-        }, 'R1']
-    ]);
-    $self->assert_deep_equals(['locations/location1/coordinates'],
-        $res->[0][1]{notUpdated}{$eventId}{properties});
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    'locations/location2/coordinates' => 'geo:14.4125\,104.8667',
-                }
-            },
-        }, 'R1']
-    ]);
-    $self->assert_deep_equals(['locations/location2/coordinates'],
-        $res->[0][1]{notUpdated}{$eventId}{properties});
+  my $eventId = $res->[0][1]{list}[0]{id};
+  $res = $jmap->CallMethods([ [
+    'CalendarEvent/set',
+    {
+      update => {
+        $eventId => {
+          'locations/location1/coordinates' => 'geo:13.4125\,103.8667',
+        }
+      },
+    },
+    'R1'
+  ] ]);
+  $self->assert_deep_equals(['locations/location1/coordinates'],
+    $res->[0][1]{notUpdated}{$eventId}{properties});
+  $res = $jmap->CallMethods([ [
+    'CalendarEvent/set',
+    {
+      update => {
+        $eventId => {
+          'locations/location2/coordinates' => 'geo:14.4125\,104.8667',
+        }
+      },
+    },
+    'R1'
+  ] ]);
+  $self->assert_deep_equals(['locations/location2/coordinates'],
+    $res->[0][1]{notUpdated}{$eventId}{properties});
 }

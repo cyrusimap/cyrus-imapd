@@ -2,52 +2,51 @@
 use Cassandane::Tiny;
 
 sub test_reschedule_exception
-    :min_version_3_0 :needs_component_calalarmd
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_component_calalarmd {
+  my ($self) = @_;
 
-    # FIXME disable this test until calalarmd is fixed
-    return;
+  # FIXME disable this test until calalarmd is fixed
+  return;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Europe/Vienna');
-    # bump everything forward so a slow run (say: valgrind)
-    # doesn't cause things to magically fire...
-    $now->add(DateTime::Duration->new(seconds => 300));
+  my $now = DateTime->now();
+  $now->set_time_zone('Europe/Vienna');
+  # bump everything forward so a slow run (say: valgrind)
+  # doesn't cause things to magically fire...
+  $now->add(DateTime::Duration->new(seconds => 300));
 
-    # define an event that started yesterday and repeats daily
-    my $startdt = $now->clone();
-    $startdt->subtract(DateTime::Duration->new(hours => 23));
-    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+  # define an event that started yesterday and repeats daily
+  my $startdt = $now->clone();
+  $startdt->subtract(DateTime::Duration->new(hours => 23));
+  my $start = $startdt->strftime('%Y%m%dT%H%M%S');
 
-    my $enddt = $startdt->clone();
-    $enddt->add(DateTime::Duration->new(minutes => 15));
-    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+  my $enddt = $startdt->clone();
+  $enddt->add(DateTime::Duration->new(minutes => 15));
+  my $end = $enddt->strftime('%Y%m%dT%H%M%S');
 
-    # the next event will start in one hour
-    my $recuriddt = $now->clone();
-    $recuriddt->add(DateTime::Duration->new(hours => 1));
-    my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
+  # the next event will start in one hour
+  my $recuriddt = $now->clone();
+  $recuriddt->add(DateTime::Duration->new(hours => 1));
+  my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
 
-    # but it exceptionally starts in two hours
-    my $rstartdt = $now->clone();
-    $rstartdt->add(DateTime::Duration->new(hours => 2));
-    my $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
-    my $renddt = $rstartdt->clone();
-    $renddt->add(DateTime::Duration->new(minutes => 15));
-    my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+  # but it exceptionally starts in two hours
+  my $rstartdt = $now->clone();
+  $rstartdt->add(DateTime::Duration->new(hours => 2));
+  my $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
+  my $renddt     = $rstartdt->clone();
+  $renddt->add(DateTime::Duration->new(minutes => 15));
+  my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
 
-    # set the trigger to notify us at the start of the event
-    my $trigger="PT0S";
+  # set the trigger to notify us at the start of the event
+  my $trigger = "PT0S";
 
-    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
@@ -100,29 +99,30 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "PUT VEVENT";
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  xlog $self, "PUT VEVENT";
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    # trigger processing of alarms: wall clock for calalarmd is 10 seconds *after*
-    # the occurrence of the exception. This will trigger it to fire its alarm.
-    xlog $self, "run calalarmd";
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10 );
+  # trigger processing of alarms: wall clock for calalarmd is 10 seconds *after*
+  # the occurrence of the exception. This will trigger it to fire its alarm.
+  xlog $self, "run calalarmd";
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10);
 
-    $self->assert_alarms({summary => 'exception', start => $recurstart});
+  $self->assert_alarms({ summary => 'exception', start => $recurstart });
 
-    # reschedule the exception event to start one hour later than the original
-    # exceptional start time.
-    $rstartdt->add(DateTime::Duration->new(hours => 1));
-    $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
-    $renddt = $rstartdt->clone();
-    $renddt->add(DateTime::Duration->new(minutes => 15));
-    $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+  # reschedule the exception event to start one hour later than the original
+  # exceptional start time.
+  $rstartdt->add(DateTime::Duration->new(hours => 1));
+  $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
+  $renddt     = $rstartdt->clone();
+  $renddt->add(DateTime::Duration->new(minutes => 15));
+  $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
 
-    # set the trigger to notify us at the start of the event
-    $card = <<EOF;
+  # set the trigger to notify us at the start of the event
+  $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
@@ -175,16 +175,17 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "PUT rescheduled VEVENT";
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  xlog $self, "PUT rescheduled VEVENT";
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    xlog $self, "Re-run calalarmd";
-    # trigger processing of alarms: wall clock now is 10 seconds after the
-    # newly scheduled exception time
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10 );
+  xlog $self, "Re-run calalarmd";
+  # trigger processing of alarms: wall clock now is 10 seconds after the
+  # newly scheduled exception time
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10);
 
-    $self->assert_alarms({summary => 'rescheduled', start => $recurstart});
+  $self->assert_alarms({ summary => 'rescheduled', start => $recurstart });
 }

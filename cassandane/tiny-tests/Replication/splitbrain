@@ -5,67 +5,67 @@ use Cassandane::Tiny;
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain
-    :needs_component_replication
-{
-    my ($self) = @_;
+  : needs_component_replication {
+  my ($self) = @_;
 
-    my $master_store = $self->{master_store};
-    my $replica_store = $self->{replica_store};
+  my $master_store  = $self->{master_store};
+  my $replica_store = $self->{replica_store};
 
-    xlog $self, "generating messages A..D";
-    my %exp;
-    $exp{A} = $self->make_message("Message A", store => $master_store);
-    $exp{B} = $self->make_message("Message B", store => $master_store);
-    $exp{C} = $self->make_message("Message C", store => $master_store);
-    $exp{D} = $self->make_message("Message D", store => $master_store);
+  xlog $self, "generating messages A..D";
+  my %exp;
+  $exp{A} = $self->make_message("Message A", store => $master_store);
+  $exp{B} = $self->make_message("Message B", store => $master_store);
+  $exp{C} = $self->make_message("Message C", store => $master_store);
+  $exp{D} = $self->make_message("Message D", store => $master_store);
 
-    xlog $self, "Before replication, the master should have all four messages";
-    $self->check_messages(\%exp, store => $master_store);
-    xlog $self, "Before replication, the replica should have no messages";
-    $self->check_messages({}, store => $replica_store);
+  xlog $self, "Before replication, the master should have all four messages";
+  $self->check_messages(\%exp, store => $master_store);
+  xlog $self, "Before replication, the replica should have no messages";
+  $self->check_messages({}, store => $replica_store);
 
-    $self->run_replication();
-    $self->check_replication('cassandane');
+  $self->run_replication();
+  $self->check_replication('cassandane');
 
-    xlog $self, "After replication, the master should still have all four messages";
-    $self->check_messages(\%exp, store => $master_store);
-    xlog $self, "After replication, the replica should now have all four messages";
-    $self->check_messages(\%exp, store => $replica_store);
+  xlog $self,
+    "After replication, the master should still have all four messages";
+  $self->check_messages(\%exp, store => $master_store);
+  xlog $self,
+    "After replication, the replica should now have all four messages";
+  $self->check_messages(\%exp, store => $replica_store);
 
-    my %mexp = %exp;
-    my %rexp = %exp;
+  my %mexp = %exp;
+  my %rexp = %exp;
 
-    $mexp{E} = $self->make_message("Message E", store => $master_store);
-    $rexp{F} = $self->make_message("Message F", store => $replica_store);
+  $mexp{E} = $self->make_message("Message E", store => $master_store);
+  $rexp{F} = $self->make_message("Message F", store => $replica_store);
 
-    # uid is 5 at both ends
-    $rexp{F}->set_attribute(uid => 5);
+  # uid is 5 at both ends
+  $rexp{F}->set_attribute(uid => 5);
 
-    xlog $self, "No replication, the master should have its 5 messages";
-    $self->check_messages(\%mexp, store => $master_store);
-    xlog $self, "No replication, the replica should have the other 5 messages";
-    $self->check_messages(\%rexp, store => $replica_store);
+  xlog $self, "No replication, the master should have its 5 messages";
+  $self->check_messages(\%mexp, store => $master_store);
+  xlog $self, "No replication, the replica should have the other 5 messages";
+  $self->check_messages(\%rexp, store => $replica_store);
 
-    $self->run_replication();
+  $self->run_replication();
 
-    # replication will generate a couple of SYNCERRORS in syslog
-    my $pattern = qr{
+  # replication will generate a couple of SYNCERRORS in syslog
+  my $pattern = qr{
         \bSYNCERROR:\sguid\smismatch
         (?: \suser\.cassandane\s5\b
             | :\smailbox=<user\.cassandane>\suid=<5>
         )
     }x;
-    $self->assert_syslog_matches($self->{instance}, $pattern);
+  $self->assert_syslog_matches($self->{instance}, $pattern);
 
-    $self->check_replication('cassandane');
+  $self->check_replication('cassandane');
 
-
-    %exp = (%mexp, %rexp);
-    # we could calculate 6 and 7 by sorting from GUID, but easiest is to ignore UIDs
-    $exp{E}->set_attribute(uid => undef);
-    $exp{F}->set_attribute(uid => undef);
-    xlog $self, "After replication, the master should have all 6 messages";
-    $self->check_messages(\%exp, store => $master_store);
-    xlog $self, "After replication, the replica should have all 6 messages";
-    $self->check_messages(\%exp, store => $replica_store);
+  %exp = (%mexp, %rexp);
+# we could calculate 6 and 7 by sorting from GUID, but easiest is to ignore UIDs
+  $exp{E}->set_attribute(uid => undef);
+  $exp{F}->set_attribute(uid => undef);
+  xlog $self, "After replication, the master should have all 6 messages";
+  $self->check_messages(\%exp, store => $master_store);
+  xlog $self, "After replication, the replica should have all 6 messages";
+  $self->check_messages(\%exp, store => $replica_store);
 }

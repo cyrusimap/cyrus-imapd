@@ -2,23 +2,23 @@
 use Cassandane::Tiny;
 
 sub test_imip_cancel_instance
-    :needs_component_sieve :needs_component_httpd :min_version_3_7
-    :want_service_http
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_httpd : min_version_3_7
+  : want_service_http {
+  my ($self) = @_;
 
-    my $IMAP = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $IMAP->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $IMAP = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $IMAP->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Create calendar user";
-    my $CalDAV = $self->{caldav};
-    my $CalendarId = 'Default';
-    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+  xlog $self, "Create calendar user";
+  my $CalDAV     = $self->{caldav};
+  my $CalendarId = 'Default';
+  my $uuid       = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :deletecanceled :outcome "outcome";
@@ -27,9 +27,9 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    my $imip = <<EOF;
+  my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -58,28 +58,30 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $imip);
-    $msg->set_attribute(uid => 1,
-                        flags => [ '\\Recent', '\\Flagged' ]);
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver iMIP invite";
+  my $msg = Cassandane::Message->new(raw => $imip);
+  $msg->set_attribute(
+    uid   => 1,
+    flags => [ '\\Recent', '\\Flagged' ]
+  );
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Check that the message made it to INBOX";
-    $self->check_messages({ 1 => $msg }, check_guid => 0);
+  xlog $self, "Check that the message made it to INBOX";
+  $self->check_messages({ 1 => $msg }, check_guid => 0);
 
-    xlog $self, "Expunge the message";
-    $IMAP->store('1', '+flags', '(\\Deleted)');
-    $IMAP->expunge();
+  xlog $self, "Expunge the message";
+  $IMAP->store('1', '+flags', '(\\Deleted)');
+  $IMAP->expunge();
 
-    xlog $self, "Check that the event made it to calendar";
-    my $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_str_equals('An Event', $events->[0]{title});
-    $self->assert_str_equals('2021-09-23T15:30:00', $events->[0]{start});
-    my $href = $events->[0]{href};
+  xlog $self, "Check that the event made it to calendar";
+  my $events = $CalDAV->GetEvents($CalendarId);
+  $self->assert_equals(1, scalar @$events);
+  $self->assert_str_equals($uuid,                 $events->[0]{uid});
+  $self->assert_str_equals('An Event',            $events->[0]{title});
+  $self->assert_str_equals('2021-09-23T15:30:00', $events->[0]{start});
+  my $href = $events->[0]{href};
 
-    $imip = <<EOF;
+  $imip = <<EOF;
 Date: Thu, 24 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -104,20 +106,22 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP cancel";
-    $msg = Cassandane::Message->new(raw => $imip);
-    $msg->set_attribute(uid => 2,
-                        flags => [ '\\Recent', '\\Flagged' ]);
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver iMIP cancel";
+  $msg = Cassandane::Message->new(raw => $imip);
+  $msg->set_attribute(
+    uid   => 2,
+    flags => [ '\\Recent', '\\Flagged' ]
+  );
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Check that the message made it to INBOX";
-    $self->check_messages({ 1 => $msg }, check_guid => 0);
+  xlog $self, "Check that the message made it to INBOX";
+  $self->check_messages({ 1 => $msg }, check_guid => 0);
 
-    xlog $self, "Check that the updated event made it to calendar";
-    $events = $CalDAV->GetEvents($CalendarId);
+  xlog $self, "Check that the updated event made it to calendar";
+  $events = $CalDAV->GetEvents($CalendarId);
 
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_equals(JSON::null,
-                         $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'});
+  $self->assert_equals(1, scalar @$events);
+  $self->assert_str_equals($uuid, $events->[0]{uid});
+  $self->assert_equals(JSON::null,
+    $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'});
 }

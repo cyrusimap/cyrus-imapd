@@ -2,29 +2,28 @@
 use Cassandane::Tiny;
 
 sub test_calendaralert_notification
-    :min_version_3_7 :needs_component_calalarmd :needs_component_jmap
-{
-    my ($self) = @_;
-    my $caldav = $self->{caldav};
-    my $jmap = $self->{jmap};
+  : min_version_3_7 : needs_component_calalarmd : needs_component_jmap {
+  my ($self) = @_;
+  my $caldav = $self->{caldav};
+  my $jmap   = $self->{jmap};
 
-    my $calendarId = $caldav->NewCalendar({name => 'foo'});
-    $self->assert_not_null($calendarId);
+  my $calendarId = $caldav->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($calendarId);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Australia/Sydney');
-    # bump everything forward so a slow run (say: valgrind)
-    # doesn't cause things to magically fire...
-    $now->add(DateTime::Duration->new(seconds => 300));
+  my $now = DateTime->now();
+  $now->set_time_zone('Australia/Sydney');
+  # bump everything forward so a slow run (say: valgrind)
+  # doesn't cause things to magically fire...
+  $now->add(DateTime::Duration->new(seconds => 300));
 
-    # define the event to start in a few seconds
-    my $startdt = $now->clone();
-    $startdt->add(DateTime::Duration->new(seconds => 2));
-    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+  # define the event to start in a few seconds
+  my $startdt = $now->clone();
+  $startdt->add(DateTime::Duration->new(seconds => 2));
+  my $start = $startdt->strftime('%Y%m%dT%H%M%S');
 
-    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
-    my $href = "$calendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+  my $href = "$calendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -72,68 +71,74 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $caldav->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    xlog "Get calendar event alert ids";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['alerts'],
-        }, 'R1'],
-    ]);
+  xlog "Get calendar event alert ids";
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => ['alerts'],
+      },
+      'R1'
+    ],
+  ]);
 
-    my %alerts = %{$res->[0][1]{list}[0]{alerts}};
-    my %alertIds = map { $alerts{$_}{trigger}{offset} => $_ } keys %alerts;
-    $self->assert_num_equals(2, scalar keys %alertIds);
+  my %alerts   = %{ $res->[0][1]{list}[0]{alerts} };
+  my %alertIds = map { $alerts{$_}{trigger}{offset} => $_ } keys %alerts;
+  $self->assert_num_equals(2, scalar keys %alertIds);
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60);
 
-    my $data = $self->{instance}->getnotify();
-    my @events;
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                push @events, $e;
-            }
-        }
+  my $data = $self->{instance}->getnotify();
+  my @events;
+  foreach (@$data) {
+    if ($_->{CLASS} eq 'EVENT') {
+      my $e = decode_json($_->{MESSAGE});
+      if ($e->{event} eq "CalendarAlarm") {
+        push @events, $e;
+      }
     }
+  }
 
-    $self->assert_num_equals(1, scalar @events);
-    $self->assert_str_equals('cassandane',
-        $events[0]{userId}); # accountId
-    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
-        $events[0]{uid});
-    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
-        $events[0]{calendarEventId});
-    $self->assert_str_equals('', $events[0]{recurrenceId});
-    $self->assert_str_equals($alertIds{'PT0S'}, $events[0]{alertId});
+  $self->assert_num_equals(1, scalar @events);
+  $self->assert_str_equals('cassandane', $events[0]{userId}); # accountId
+  $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+    $events[0]{uid});
+  $self->assert_str_equals(
+    encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
+    $events[0]{calendarEventId});
+  $self->assert_str_equals('',                $events[0]{recurrenceId});
+  $self->assert_str_equals($alertIds{'PT0S'}, $events[0]{alertId});
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 3660 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 3660);
 
-    $data = $self->{instance}->getnotify();
-    @events = ();
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "CalendarAlarm") {
-                push @events, $e;
-            }
-        }
+  $data   = $self->{instance}->getnotify();
+  @events = ();
+  foreach (@$data) {
+    if ($_->{CLASS} eq 'EVENT') {
+      my $e = decode_json($_->{MESSAGE});
+      if ($e->{event} eq "CalendarAlarm") {
+        push @events, $e;
+      }
     }
+  }
 
-    $self->assert_num_equals(1, scalar @events);
-    $self->assert_str_equals('cassandane',
-        $events[0]{userId}); # accountId
-    $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
-        $events[0]{uid});
-    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
-        $events[0]{calendarEventId});
-    $self->assert_str_equals('', $events[0]{recurrenceId});
-    $self->assert_str_equals($alertIds{'PT1H'}, $events[0]{alertId});
+  $self->assert_num_equals(1, scalar @events);
+  $self->assert_str_equals('cassandane', $events[0]{userId}); # accountId
+  $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
+    $events[0]{uid});
+  $self->assert_str_equals(
+    encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
+    $events[0]{calendarEventId});
+  $self->assert_str_equals('',                $events[0]{recurrenceId});
+  $self->assert_str_equals($alertIds{'PT1H'}, $events[0]{alertId});
 }

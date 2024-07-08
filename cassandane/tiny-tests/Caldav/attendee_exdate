@@ -2,25 +2,24 @@
 use Cassandane::Tiny;
 
 sub test_attendee_exdate
-    :needs_component_httpd
-{
-    my ($self) = @_;
-    my $CalDAV = $self->{caldav};
+  : needs_component_httpd {
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'test' });
+  $self->assert_not_null($CalendarId);
 
-    xlog $self, "recurring event";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "recurring event";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 RRULE:FREQ=WEEKLY
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+    $self->{instance}->getnotify();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
@@ -28,17 +27,17 @@ RRULE:FREQ=WEEKLY
 EXDATE;TZID=Australia/Melbourne:20160608T153000
 EOF
 
-        # should this send a PARTSTAT=DECLINED instead?
-        $self->assert_caldav_notified(
-            {
-                recipient => "test1\@example.com",
-                method => 'REPLY',
-                event => {
-                    uid => $uuid,
-                    replyTo => { imip => "mailto:test1\@example.com" },
-                    recurrenceOverrides => { '2016-06-08T15:30:00' => undef },
-                },
-            },
-        );
-    }
+    # should this send a PARTSTAT=DECLINED instead?
+    $self->assert_caldav_notified(
+      {
+        recipient => "test1\@example.com",
+        method    => 'REPLY',
+        event     => {
+          uid                 => $uuid,
+          replyTo             => { imip => "mailto:test1\@example.com" },
+          recurrenceOverrides => { '2016-06-08T15:30:00' => undef },
+        },
+      },
+    );
+  }
 }

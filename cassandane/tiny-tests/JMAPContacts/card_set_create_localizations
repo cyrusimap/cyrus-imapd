@@ -3,152 +3,156 @@ use Cassandane::Tiny;
 use utf8;
 
 sub test_card_set_create_localizations
-    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_9 : needs_component_jmap : needs_dependency_icalvcard {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $service = $self->{instance}->get_service("http");
-    $ENV{DEBUGDAV} = 1;
-    my $carddav = Net::CardDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+  my $service = $self->{instance}->get_service("http");
+  $ENV{DEBUGDAV} = 1;
+  my $carddav = Net::CardDAVTalk->new(
+    user      => 'cassandane',
+    password  => 'pass',
+    host      => $service->host(),
+    port      => $service->port(),
+    scheme    => 'http',
+    url       => '/',
+    expandurl => 1,
+  );
 
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+  my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
 
-    my $res = $jmap->CallMethods([
-        ['ContactCard/set', {
-            create => {
-                "1" => {
-                    '@type' => 'Card',
-                    version => '1.0',
-                    uid => $id,
-                    language => 'es',
-                    name => {
-                        '@type' => 'Name',
-                        full => 'Gabriel García Márquez',
-                        isOrdered => JSON::false,
-                        components => [
-                            {
-                                '@type' => 'Name',
-                                kind => 'given',
-                                value => 'Gabriel'
-                            },
-                            {
-                                '@type' => 'Name',
-                                kind => 'given2',
-                                value => 'García'
-                            },
-                            {
-                                '@type' => 'Name',
-                                kind => 'surname',
-                                value => 'Márquez'
-                            }
-                        ]
-                    },
-                    addresses => {
-                        addr1 => {
-                            '@type' => 'Address',
-                            isOrdered => JSON::false,
-                            components => [
-                                { kind => 'locality', value => 'Tokio' }
-                            ]
-                        }
-                    },
-                    speakToAs => {
-                        '@type' => 'SpeakToAs',
-                        grammaticalGender => 'neuter',
-                        pronouns => {
-                            k19 => {
-                                '@type' => 'Pronouns',
-                                pronouns => 'él',
-                            }
-                        }
-                    },
-                    localizations => {
-                        en => {
-                            titles => {
-                                t1 => {
-                                    '@type' => 'Title',
-                                    name => 'Novelist'
-                                }
-                            },
-                            'addresses/addr1/components/0/value' => 'Tokyo',
-                            'speakToAs/grammaticalGender' => 'masculine'
-                        },
-                        de => {
-                            'speakToAs/pronouns/k19/pronouns' => 'er'
-                        },
-                        it => {
-                            'speakToAs/pronouns/k19/pronouns' => 'lui'
-                        },
-                        fr => {
-                            titles => {
-                                t1 => {
-                                    '@type' => 'Title',
-                                    name => 'Écrivain'
-                                }
-                            },
-                            speakToAs => {
-                                '@type' => 'SpeakToAs',
-                                pronouns => {
-                                    k19 => {
-                                        '@type' => 'Pronouns',
-                                        pronouns => 'il',
-                                    }
-                                }
-                            }
-                        },
-                        es => {
-                            titles => {
-                                t1 => {
-                                    '@type' => 'Title',
-                                    name => 'Novelista'
-                                }
-                            }
-                        },
-                        jp => {
-                            'name/full' => 'ガブリエル・ガルシア・マルケス',
-                            'name/components/0/value' => 'ガブリエル',
-                            'name/components/1/value' => 'ガルシア',
-                            'name/components/2/value' => 'マルケス',
-                            'addresses/addr1/components/0/value' => '東京'
-                        }
-                    }
-                }
+  my $res = $jmap->CallMethods([ [
+    'ContactCard/set',
+    {
+      create => {
+        "1" => {
+          '@type'  => 'Card',
+          version  => '1.0',
+          uid      => $id,
+          language => 'es',
+          name     => {
+            '@type'    => 'Name',
+            full       => 'Gabriel García Márquez',
+            isOrdered  => JSON::false,
+            components => [
+              {
+                '@type' => 'Name',
+                kind    => 'given',
+                value   => 'Gabriel'
+              },
+              {
+                '@type' => 'Name',
+                kind    => 'given2',
+                value   => 'García'
+              },
+              {
+                '@type' => 'Name',
+                kind    => 'surname',
+                value   => 'Márquez'
+              }
+            ]
+          },
+          addresses => {
+            addr1 => {
+              '@type'    => 'Address',
+              isOrdered  => JSON::false,
+              components => [ { kind => 'locality', value => 'Tokio' } ]
             }
-        }, 'R1']
-    ]);
+          },
+          speakToAs => {
+            '@type'           => 'SpeakToAs',
+            grammaticalGender => 'neuter',
+            pronouns          => {
+              k19 => {
+                '@type'  => 'Pronouns',
+                pronouns => 'él',
+              }
+            }
+          },
+          localizations => {
+            en => {
+              titles => {
+                t1 => {
+                  '@type' => 'Title',
+                  name    => 'Novelist'
+                }
+              },
+              'addresses/addr1/components/0/value' => 'Tokyo',
+              'speakToAs/grammaticalGender'        => 'masculine'
+            },
+            de => {
+              'speakToAs/pronouns/k19/pronouns' => 'er'
+            },
+            it => {
+              'speakToAs/pronouns/k19/pronouns' => 'lui'
+            },
+            fr => {
+              titles => {
+                t1 => {
+                  '@type' => 'Title',
+                  name    => 'Écrivain'
+                }
+              },
+              speakToAs => {
+                '@type'  => 'SpeakToAs',
+                pronouns => {
+                  k19 => {
+                    '@type'  => 'Pronouns',
+                    pronouns => 'il',
+                  }
+                }
+              }
+            },
+            es => {
+              titles => {
+                t1 => {
+                  '@type' => 'Title',
+                  name    => 'Novelista'
+                }
+              }
+            },
+            jp => {
+              'name/full'                          => 'ガブリエル・ガルシア・マルケス',
+              'name/components/0/value'            => 'ガブリエル',
+              'name/components/1/value'            => 'ガルシア',
+              'name/components/2/value'            => 'マルケス',
+              'addresses/addr1/components/0/value' => '東京'
+            }
+          }
+        }
+      }
+    },
+    'R1'
+  ] ]);
 
-    $self->assert_not_null($res->[0][1]{created}{1});
+  $self->assert_not_null($res->[0][1]{created}{1});
 
-    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
-    $res = $carddav->Request('GET', $href, '',
-                             'Accept' => 'text/vcard; version=4.0');
+  my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+  $res = $carddav->Request('GET', $href, '',
+    'Accept' => 'text/vcard; version=4.0');
 
-    my $card = $res->{content};
-    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+  my $card = $res->{content};
+  $card =~ s/\r?\n[ \t]+//gs; # unfold long properties
 
-    $self->assert_matches(qr/FN:Gabriel/, $card);
-    $self->assert_matches(qr/FN;LANGUAGE=jp:/, $card);
-    $self->assert_matches(qr/N;ALTID=n1:M/, $card);
-    $self->assert_matches(qr/N;ALTID=n1;LANGUAGE=jp:/, $card);
-    $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1:;;;Tokio;;;/, $card);
-    $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1;LANGUAGE=jp:/, $card);
-    $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
-    $self->assert_matches(qr/TITLE;PROP-ID=t1;ALTID=t1:Novelista/, $card);
-    $self->assert_matches(qr/TITLE;PROP-ID=t1;ALTID=t1;LANGUAGE=en:Novelist/, $card);
-    $self->assert_matches(qr/GRAMGENDER:NEUTER/, $card);
-    $self->assert_matches(qr/GRAMGENDER;LANGUAGE=en:MASCULINE/, $card);
-    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19:/, $card);
-    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=fr:il/, $card);
-    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=de:er/, $card);
-    $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=it:lui/, $card);
-    $self->assert_does_not_match(qr/JSPROP/, $card);
+  $self->assert_matches(qr/FN:Gabriel/,                                 $card);
+  $self->assert_matches(qr/FN;LANGUAGE=jp:/,                            $card);
+  $self->assert_matches(qr/N;ALTID=n1:M/,                               $card);
+  $self->assert_matches(qr/N;ALTID=n1;LANGUAGE=jp:/,                    $card);
+  $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1:;;;Tokio;;;/,  $card);
+  $self->assert_matches(qr/ADR;PROP-ID=addr1;ALTID=addr1;LANGUAGE=jp:/, $card);
+  $self->assert_matches(
+    qr/ADR;PROP-ID=addr1;ALTID=addr1;LANGUAGE=en:;;;Tokyo;;;/, $card);
+  $self->assert_matches(qr/TITLE;PROP-ID=t1;ALTID=t1:Novelista/, $card);
+  $self->assert_matches(qr/TITLE;PROP-ID=t1;ALTID=t1;LANGUAGE=en:Novelist/,
+    $card);
+  $self->assert_matches(qr/GRAMGENDER:NEUTER/,                $card);
+  $self->assert_matches(qr/GRAMGENDER;LANGUAGE=en:MASCULINE/, $card);
+  $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19:/,  $card);
+  $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=fr:il/,
+    $card);
+  $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=de:er/,
+    $card);
+  $self->assert_matches(qr/PRONOUNS;PROP-ID=k19;ALTID=k19;LANGUAGE=it:lui/,
+    $card);
+  $self->assert_does_not_match(qr/JSPROP/, $card);
 }

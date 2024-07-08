@@ -2,30 +2,30 @@
 use Cassandane::Tiny;
 
 sub test_implicit_keep_target_specialuse
-    :min_version_3_9 :needs_component_sieve :NoAltNameSpace
-{
-    my ($self) = @_;
+  : min_version_3_9 : needs_component_sieve : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $folder = "INBOX.foo";
+  my $folder = "INBOX.foo";
 
-    xlog $self, "Create folder";
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->create($folder, "(use (\\Important))")
-        or die "Cannot create $folder: $@";
+  xlog $self, "Create folder";
+  my $imaptalk = $self->{store}->get_client();
+  $imaptalk->create($folder, "(use (\\Important))")
+    or die "Cannot create $folder: $@";
 
-    xlog $self, "Install a script";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a script";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["vnd.cyrus.implicit_keep_target", "special-use"];
 implicit_keep_target :specialuse "\\\\Important" "INBOX";
 EOF
-    );
+  );
 
-    xlog $self, "Deliver a message";
-    my $msg = $self->{gen}->generate(subject => "Message 1");
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver a message";
+  my $msg = $self->{gen}->generate(subject => "Message 1");
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Check that the message made it to $folder";
-    $self->{store}->set_folder($folder);
-    $self->check_messages({ 1 => $msg }, check_guid => 0);
+  xlog $self, "Check that the message made it to $folder";
+  $self->{store}->set_folder($folder);
+  $self->check_messages({ 1 => $msg }, check_guid => 0);
 }
 

@@ -2,63 +2,63 @@
 use Cassandane::Tiny;
 
 sub test_simple_multiuser
-    :min_version_3_1 :needs_component_calalarmd :NoAltNameSpace
-{
-    my ($self) = @_;
+  : min_version_3_1 : needs_component_calalarmd : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $AdminTalk = $self->{adminstore}->get_client();
-    $AdminTalk->create("user.foo");
-    $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId", "foo", "lrswipkxtecdn789");
+  my $AdminTalk = $self->{adminstore}->get_client();
+  $AdminTalk->create("user.foo");
+  $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId",
+    "foo", "lrswipkxtecdn789");
 
-    my $foostore = $self->{instance}->get_service('imap')->create_store(
-                        username => "foo");
-    my $footalk = $foostore->get_client();
-    $footalk->subscribe("user.cassandane.#calendars.$CalendarId");
+  my $foostore
+    = $self->{instance}->get_service('imap')->create_store(username => "foo");
+  my $footalk = $foostore->get_client();
+  $footalk->subscribe("user.cassandane.#calendars.$CalendarId");
 
-    my $service = $self->{instance}->get_service("http");
-    my $FooDAV = Net::CalDAVTalk->new(
-        user => 'foo',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+  my $service = $self->{instance}->get_service("http");
+  my $FooDAV  = Net::CalDAVTalk->new(
+    user      => 'foo',
+    password  => 'pass',
+    host      => $service->host(),
+    port      => $service->port(),
+    scheme    => 'http',
+    url       => '/',
+    expandurl => 1,
+  );
 
-    my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
-    $self->assert_not_null($cal);
+  my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
+  $self->assert_not_null($cal);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Australia/Sydney');
-    # bump everything forward so a slow run (say: valgrind)
-    # doesn't cause things to magically fire...
-    $now->add(DateTime::Duration->new(seconds => 300));
+  my $now = DateTime->now();
+  $now->set_time_zone('Australia/Sydney');
+  # bump everything forward so a slow run (say: valgrind)
+  # doesn't cause things to magically fire...
+  $now->add(DateTime::Duration->new(seconds => 300));
 
-    # define the event to start in a few seconds
-    my $startdt = $now->clone();
-    $startdt->add(DateTime::Duration->new(seconds => 2));
-    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+  # define the event to start in a few seconds
+  my $startdt = $now->clone();
+  $startdt->add(DateTime::Duration->new(seconds => 2));
+  my $start = $startdt->strftime('%Y%m%dT%H%M%S');
 
-    my $enddt = $startdt->clone();
-    $enddt->add(DateTime::Duration->new(seconds => 15));
-    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+  my $enddt = $startdt->clone();
+  $enddt->add(DateTime::Duration->new(seconds => 15));
+  my $end = $enddt->strftime('%Y%m%dT%H%M%S');
 
-    my $latedt = $startdt->clone();
-    $latedt->add(DateTime::Duration->new(seconds => 300));
-    my $late = $latedt->strftime('%Y%m%dT%H%M%S');
+  my $latedt = $startdt->clone();
+  $latedt->add(DateTime::Duration->new(seconds => 300));
+  my $late = $latedt->strftime('%Y%m%dT%H%M%S');
 
-    # set the trigger to notify us at the start of the event
-    my $trigger="PT0S";
+  # set the trigger to notify us at the start of the event
+  my $trigger = "PT0S";
 
-    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
-    my $href = "$CalendarId/$uuid.ics";
-    my $cardtmpl = <<EOF;
+  my $uuid     = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+  my $href     = "$CalendarId/$uuid.ics";
+  my $cardtmpl = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -94,7 +94,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $alarm = <<EOF;
+  my $alarm = <<EOF;
 BEGIN:VALARM
 TRIGGER:$trigger
 ACTION:DISPLAY
@@ -103,7 +103,7 @@ DESCRIPTION:My alarm has triggered
 END:VALARM
 EOF
 
-    my $latealarm = <<EOF;
+  my $latealarm = <<EOF;
 BEGIN:VALARM
 TRIGGER:PT5M
 ACTION:DISPLAY
@@ -112,46 +112,65 @@ DESCRIPTION:My latealarm has triggered
 END:VALARM
 EOF
 
-    my $card = $cardtmpl;
-    $card =~ s/XXALARMDATAXX/$alarm/;
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  my $card = $cardtmpl;
+  $card =~ s/XXALARMDATAXX/$alarm/;
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    my $Events = $CalDAV->GetEvents("$CalendarId");
-    my $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
-    $self->assert_num_equals(1, scalar @$Events);
-    $self->assert_num_equals(1, scalar @$FooEvents);
-    $self->assert_not_null($Events->[0]{alerts});
-    # foo event does not yet have alarms
-    $self->assert_null($FooEvents->[0]{alerts});
+  my $Events    = $CalDAV->GetEvents("$CalendarId");
+  my $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
+  $self->assert_num_equals(1, scalar @$Events);
+  $self->assert_num_equals(1, scalar @$FooEvents);
+  $self->assert_not_null($Events->[0]{alerts});
+  # foo event does not yet have alarms
+  $self->assert_null($FooEvents->[0]{alerts});
 
-    my $foocard = $cardtmpl;
-    $foocard =~ s/XXALARMDATAXX/$latealarm/;
-    $FooDAV->Request('PUT', $FooEvents->[0]{href}, $foocard, 'Content-Type' => 'text/calendar');
+  my $foocard = $cardtmpl;
+  $foocard =~ s/XXALARMDATAXX/$latealarm/;
+  $FooDAV->Request('PUT', $FooEvents->[0]{href},
+    $foocard, 'Content-Type' => 'text/calendar');
 
-    $Events = $CalDAV->GetEvents("$CalendarId");
-    $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
-    $self->assert_num_equals(1, scalar @$Events);
-    $self->assert_num_equals(1, scalar @$FooEvents);
-    $self->assert_not_null($Events->[0]{alerts});
-    # foo event has alarms
-    $self->assert_not_null($FooEvents->[0]{alerts});
+  $Events    = $CalDAV->GetEvents("$CalendarId");
+  $FooEvents = $FooDAV->GetEvents("cassandane.$CalendarId");
+  $self->assert_num_equals(1, scalar @$Events);
+  $self->assert_num_equals(1, scalar @$FooEvents);
+  $self->assert_not_null($Events->[0]{alerts});
+  # foo event has alarms
+  $self->assert_not_null($FooEvents->[0]{alerts});
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() - 60);
 
-    $self->assert_alarms();
+  $self->assert_alarms();
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60);
 
-    $self->assert_alarms({summary => 'Simple', userId => 'cassandane', alarmTime => $start, start => $start});
+  $self->assert_alarms(
+    {
+      summary   => 'Simple',
+      userId    => 'cassandane',
+      alarmTime => $start,
+      start     => $start
+    }
+  );
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 600 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 600);
 
-    $self->assert_alarms({summary => 'Simple', userId => 'foo', alarmTime => $late, start => $start});
+  $self->assert_alarms(
+    {
+      summary   => 'Simple',
+      userId    => 'foo',
+      alarmTime => $late,
+      start     => $start
+    }
+  );
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 900 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 900);
 
-    $self->assert_alarms();
+  $self->assert_alarms();
 }

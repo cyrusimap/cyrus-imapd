@@ -2,32 +2,31 @@
 use Cassandane::Tiny;
 
 sub test_squatter_attachextract_cache
-    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor
-{
-    my ($self) = @_;
-    my $instance = $self->{instance};
-    my $imap = $self->{store}->get_client();
+  : min_version_3_9 : needs_search_xapian : SearchAttachmentExtractor {
+  my ($self)   = @_;
+  my $instance = $self->{instance};
+  my $imap     = $self->{store}->get_client();
 
-    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
-    $self->start_echo_extractor(tracedir => $tracedir);
+  my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+  $self->start_echo_extractor(tracedir => $tracedir);
 
-    xlog "Create and index index messages";
-    my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
-    $self->squatter_attachextract_cache_run($cachedir);
+  xlog "Create and index index messages";
+  my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+  $self->squatter_attachextract_cache_run($cachedir);
 
-    xlog "Assert text bodies of both messages are indexed";
-    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1,2], $uids);
+  xlog "Assert text bodies of both messages are indexed";
+  my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+  $self->assert_deep_equals([ 1, 2 ], $uids);
 
-    xlog "Assert attachments of both messages are indexed";
-    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([1,2], $uids);
+  xlog "Assert attachments of both messages are indexed";
+  $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+  $self->assert_deep_equals([ 1, 2 ], $uids);
 
-    xlog "Assert extractor only got called once";
-    my @tracefiles = glob($tracedir."/*_PUT_*");
-    $self->assert_num_equals(1, scalar @tracefiles);
+  xlog "Assert extractor only got called once";
+  my @tracefiles = glob($tracedir . "/*_PUT_*");
+  $self->assert_num_equals(1, scalar @tracefiles);
 
-    xlog "Assert cache contains one file";
-    my @files = glob($cachedir."/*");
-    $self->assert_num_equals(1, scalar @files);
+  xlog "Assert cache contains one file";
+  my @files = glob($cachedir . "/*");
+  $self->assert_num_equals(1, scalar @files);
 }

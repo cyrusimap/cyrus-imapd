@@ -2,62 +2,70 @@
 use Cassandane::Tiny;
 
 sub test_audit_unindexed
-    :min_version_3_1 :needs_component_jmap
-{
-    # This test does some sneaky things to cyrus.indexed.db to force squatter
-    # report audit errors. It assumes a specific format for cyrus.indexed.db
-    # and Cyrus to preserve UIDVALDITY across two consecutive APPENDs.
-    # As such, it's likely to break for internal changes.
+  : min_version_3_1 : needs_component_jmap {
+  # This test does some sneaky things to cyrus.indexed.db to force squatter
+  # report audit errors. It assumes a specific format for cyrus.indexed.db
+  # and Cyrus to preserve UIDVALDITY across two consecutive APPENDs.
+  # As such, it's likely to break for internal changes.
 
-    my ($self) = @_;
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    my $basedir = $self->{instance}->{basedir};
-    my $outfile = "$basedir/audit.tmp";
+  my $basedir = $self->{instance}->{basedir};
+  my $outfile = "$basedir/audit.tmp";
 
-    *_readfile = sub {
-        open FH, '<', $outfile
-            or die "Cannot open $outfile for reading: $!";
-        my @entries = readline(FH);
-        close FH;
-        return @entries;
-    };
+  *_readfile = sub {
+    open FH, '<', $outfile
+      or die "Cannot open $outfile for reading: $!";
+    my @entries = readline(FH);
+    close FH;
+    return @entries;
+  };
 
-    xlog $self, "Create message UID 1 and index it in Xapian and cyrus.indexed.db.";
-    $self->make_message() || die;
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  xlog $self,
+    "Create message UID 1 and index it in Xapian and cyrus.indexed.db.";
+  $self->make_message() || die;
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    xlog $self, "Create message UID 2 but *don't* index it.";
-    $self->make_message() || die;
+  xlog $self, "Create message UID 2 but *don't* index it.";
+  $self->make_message() || die;
 
-    my $data = $self->{instance}->run_mbpath(-u => 'cassandane');
-    my $xapdir = $data->{xapian}{t1};
+  my $data   = $self->{instance}->run_mbpath(-u => 'cassandane');
+  my $xapdir = $data->{xapian}{t1};
 
-    xlog $self, "Read current cyrus.indexed.db.";
-    my ($key, $val);
-    my $result = $self->{instance}->run_dbcommand_cb(sub {
+  xlog $self, "Read current cyrus.indexed.db.";
+  my ($key, $val);
+  my $result = $self->{instance}->run_dbcommand_cb(
+    sub {
       my ($k, $v) = @_;
       return if $k =~ m/\*V\*/;
       $self->assert_null($key);
       ($key, $val) = ($k, $v);
-    }, "$xapdir/xapian/cyrus.indexed.db", "twoskip", ['SHOW']);
-    $self->assert_str_equals('ok', $result);
-    $self->assert_not_null($key);
-    $self->assert_not_null($val);
+    },
+    "$xapdir/xapian/cyrus.indexed.db",
+    "twoskip",
+    ['SHOW']
+  );
+  $self->assert_str_equals('ok', $result);
+  $self->assert_not_null($key);
+  $self->assert_not_null($val);
 
-    xlog $self, "Add UID 2 to sequence set in cyrus.indexed.db";
-    $self->{instance}->run_dbcommand("$xapdir/xapian/cyrus.indexed.db", "twoskip", ['SET', $key, $val . ':2']);
+  xlog $self, "Add UID 2 to sequence set in cyrus.indexed.db";
+  $self->{instance}->run_dbcommand("$xapdir/xapian/cyrus.indexed.db",
+    "twoskip", [ 'SET', $key, $val . ':2' ]);
 
-    xlog $self, "Run squatter audit";
-    $result = $self->{instance}->run_command(
-        {
-            cyrus => 1,
-            redirects => { stdout => $outfile },
-        },
-        'squatter', '-A'
-    );
-    my @audits = _readfile();
-    $self->assert_num_equals(1, scalar @audits);
-    $self->assert_str_equals("Unindexed message(s) in user.cassandane: 2 \n", $audits[0]);
+  xlog $self, "Run squatter audit";
+  $result = $self->{instance}->run_command(
+    {
+      cyrus     => 1,
+      redirects => { stdout => $outfile },
+    },
+    'squatter',
+    '-A'
+  );
+  my @audits = _readfile();
+  $self->assert_num_equals(1, scalar @audits);
+  $self->assert_str_equals("Unindexed message(s) in user.cassandane: 2 \n",
+    $audits[0]);
 }

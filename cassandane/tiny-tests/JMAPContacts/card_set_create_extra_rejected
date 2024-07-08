@@ -2,41 +2,41 @@
 use Cassandane::Tiny;
 
 sub test_card_set_create_extra_rejected
-    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $carddav = $self->{carddav};
+  : min_version_3_9 : needs_component_jmap : needs_dependency_icalvcard {
+  my ($self)  = @_;
+  my $jmap    = $self->{jmap};
+  my $carddav = $self->{carddav};
 
-    my $res = $jmap->CallMethods([
-        ['ContactCard/set', {
-            create => {
-                card1 => {
-                    '@type' => 'Card',
-                    name => {
-                        full => 'John',
-                        extra => 'reserved',
-                    },
-                    extra => 'reserved',
-                    localizations => {
-                        de => {
-                            'name/extra' => 'reserved2',
-                        },
-                    },
-                },
+  my $res = $jmap->CallMethods([
+    [
+      'ContactCard/set',
+      {
+        create => {
+          card1 => {
+            '@type' => 'Card',
+            name    => {
+              full  => 'John',
+              extra => 'reserved',
             },
-        }, 'R1'],
-    ]);
+            extra         => 'reserved',
+            localizations => {
+              de => {
+                'name/extra' => 'reserved2',
+              },
+            },
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
 
-    $self->assert_null($res->[0][1]{created}{card1});
-    $self->assert_str_equals('invalidProperties',
-        $res->[0][1]{notCreated}{card1}{type});
+  $self->assert_null($res->[0][1]{created}{card1});
+  $self->assert_str_equals('invalidProperties',
+    $res->[0][1]{notCreated}{card1}{type});
 
-    my @wantInvalidProps = (
-        "extra",
-        "localizations/de/name~1extra",
-        "name/extra",
-    );
-    my @haveInvalidProps = sort @{$res->[0][1]{notCreated}{card1}{properties}};
-    $self->assert_deep_equals(\@wantInvalidProps, \@haveInvalidProps);
+  my @wantInvalidProps
+    = ("extra", "localizations/de/name~1extra", "name/extra",);
+  my @haveInvalidProps = sort @{ $res->[0][1]{notCreated}{card1}{properties} };
+  $self->assert_deep_equals(\@wantInvalidProps, \@haveInvalidProps);
 }

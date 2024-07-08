@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_preserve_class
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    my $ical = <<EOF;
+  my $ical = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
@@ -28,31 +27,35 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
-        $ical, 'Content-Type' => 'text/calendar');
+  $caldav->Request(
+    'PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+    $ical, 'Content-Type' => 'text/calendar'
+  );
 
-    $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
-    $self->assert_matches(qr/CLASS:PRIVATE/, $res->{content});
+  $res = $caldav->Request('GET',
+    '/dav/calendars/user/cassandane/Default/test.ics');
+  $self->assert_matches(qr/CLASS:PRIVATE/, $res->{content});
 
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/query', {
-        }, 'R1'],
-    ]);
-    my $eventId = $res->[0][1]{ids}[0];
-    $self->assert_not_null($eventId);
+  my $res     = $jmap->CallMethods([ [ 'CalendarEvent/query', {}, 'R1' ], ]);
+  my $eventId = $res->[0][1]{ids}[0];
+  $self->assert_not_null($eventId);
 
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        update => {
+          $eventId => {
+            title => 'update'
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    title => 'update'
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
-
-    $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
-    $self->assert_matches(qr/CLASS:PRIVATE/, $res->{content});
+  $res = $caldav->Request('GET',
+    '/dav/calendars/user/cassandane/Default/test.ics');
+  $self->assert_matches(qr/CLASS:PRIVATE/, $res->{content});
 }

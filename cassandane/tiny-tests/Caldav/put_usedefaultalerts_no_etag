@@ -2,15 +2,14 @@
 use Cassandane::Tiny;
 
 sub test_put_usedefaultalerts_no_etag
-    :min_version_3_7
-{
-    my ($self) = @_;
+  : min_version_3_7 {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog "PROPPATCH default alarms on the calendar";
-    my $proppatchXml = <<EOF;
+  xlog "PROPPATCH default alarms on the calendar";
+  my $proppatchXml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
 <D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:set>
@@ -27,16 +26,18 @@ END:VALARM
   </D:set>
 </D:propertyupdate>
 EOF
-    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane/Default",
-        $proppatchXml, 'Content-Type' => 'text/xml');
+  $caldav->Request(
+    'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+    $proppatchXml, 'Content-Type' => 'text/xml'
+  );
 
-    my %Headers = (
-        'Content-Type' => 'text/calendar',
-        'Authorization' => $caldav->auth_header(),
-    );
+  my %Headers = (
+    'Content-Type'  => 'text/calendar',
+    'Authorization' => $caldav->auth_header(),
+  );
 
-    xlog "PUT event with useDefaultAlerts set";
-    my $ical = <<'EOF';
+  xlog "PUT event with useDefaultAlerts set";
+  my $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
@@ -53,22 +54,30 @@ X-JMAP-USEDEFAULTALERTS;VALUE=BOOLEAN:TRUE
 END:VEVENT
 END:VCALENDAR
 EOF
-    my $href = $caldav->request_url('/dav/calendars/user/cassandane/Default/test1.ics');
-    my $res = $caldav->{ua}->request('PUT', $href, {
-        content => $ical, headers => \%Headers,
-    });
+  my $href
+    = $caldav->request_url('/dav/calendars/user/cassandane/Default/test1.ics');
+  my $res = $caldav->{ua}->request(
+    'PUT', $href,
+    {
+      content => $ical,
+      headers => \%Headers,
+    }
+  );
 
-    xlog "Assert no ETag is returned";
-    $self->assert_null($res->{headers}{etag});
+  xlog "Assert no ETag is returned";
+  $self->assert_null($res->{headers}{etag});
 
-    xlog "Assert ETag is returned for HEAD";
-    $res = $caldav->{ua}->request('HEAD', $href, {
-        headers => \%Headers,
-    });
-    $self->assert_not_null($res->{headers}{etag});
+  xlog "Assert ETag is returned for HEAD";
+  $res = $caldav->{ua}->request(
+    'HEAD', $href,
+    {
+      headers => \%Headers,
+    }
+  );
+  $self->assert_not_null($res->{headers}{etag});
 
-    xlog "PUT event without useDefaultAlerts set";
-    $ical = <<'EOF';
+  xlog "PUT event without useDefaultAlerts set";
+  $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
@@ -84,18 +93,26 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $href = $caldav->request_url('/dav/calendars/user/cassandane/Default/test2.ics');
-    $res = $caldav->{ua}->request('PUT', $href, {
-        content => $ical, headers => \%Headers,
-    });
+  $href
+    = $caldav->request_url('/dav/calendars/user/cassandane/Default/test2.ics');
+  $res = $caldav->{ua}->request(
+    'PUT', $href,
+    {
+      content => $ical,
+      headers => \%Headers,
+    }
+  );
 
-    xlog "Assert ETag is returned";
-    my $etag = $res->{headers}{etag};
-    $self->assert_not_null($etag);
+  xlog "Assert ETag is returned";
+  my $etag = $res->{headers}{etag};
+  $self->assert_not_null($etag);
 
-    xlog "Assert ETag matches for HEAD";
-    $res = $caldav->{ua}->request('HEAD', $href, {
-        headers => \%Headers,
-    });
-    $self->assert_str_equals($etag, $res->{headers}{etag});
+  xlog "Assert ETag matches for HEAD";
+  $res = $caldav->{ua}->request(
+    'HEAD', $href,
+    {
+      headers => \%Headers,
+    }
+  );
+  $self->assert_str_equals($etag, $res->{headers}{etag});
 }

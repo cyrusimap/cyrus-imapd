@@ -2,29 +2,28 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_participantreply_caldav
-    :min_version_3_7 :needs_component_jmap :NoStartInstances
-{
-    my ($self) = @_;
+  : min_version_3_7 : needs_component_jmap : NoStartInstances {
+  my ($self) = @_;
 
-    my $instance = $self->{instance};
-    $instance->{config}->set(defaultdomain => 'internal');
-    $instance->{config}->set(calendar_user_address_set => 'internal');
+  my $instance = $self->{instance};
+  $instance->{config}->set(defaultdomain             => 'internal');
+  $instance->{config}->set(calendar_user_address_set => 'internal');
 
-    $self->_start_instances();
-    $self->_setup_http_service_objects();
+  $self->_start_instances();
+  $self->_setup_http_service_objects();
 
-    my $jmap = $self->{jmap};
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:principals',
-        'urn:ietf:params:jmap:calendars:preferences',
-        'https://cyrusimap.org/ns/jmap/calendars',
-        'https://cyrusimap.org/ns/jmap/debug',
-    ]);
+  my $jmap = $self->{jmap};
+  $jmap->DefaultUsing([
+    'urn:ietf:params:jmap:core',
+    'urn:ietf:params:jmap:calendars',
+    'urn:ietf:params:jmap:principals',
+    'urn:ietf:params:jmap:calendars:preferences',
+    'https://cyrusimap.org/ns/jmap/calendars',
+    'https://cyrusimap.org/ns/jmap/debug',
+  ]);
 
-    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
-    my $card = <<EOF;
+  my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -46,69 +45,73 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    xlog $self, "create scheduled event";
-    my $event = $self->putandget_vevent($uuid, $card);
-    my $id = $event->{id};
+  xlog $self, "create scheduled event";
+  my $event = $self->putandget_vevent($uuid, $card);
+  my $id    = $event->{id};
 
-    xlog $self, "verify invitation sent from organizer to attendees";
-    my $data = $self->{instance}->getnotify();
-    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
-    my $imip = $imips[0];
-    $self->assert_not_null($imip);
+  xlog $self, "verify invitation sent from organizer to attendees";
+  my $data  = $self->{instance}->getnotify();
+  my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+  my $imip  = $imips[0];
+  $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
-    my $ical = $payload->{ical};
+  my $payload = decode_json($imip->{MESSAGE});
+  my $ical    = $payload->{ical};
 
-    $self->assert_str_equals("CalDAV", $payload->{schedulingMechanism});
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
-    $self->assert_num_equals(0, $payload->{patch}{sequence});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "SEQUENCE:0");
-    $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
+  $self->assert_str_equals("CalDAV", $payload->{schedulingMechanism});
+  $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+  $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
+  $self->assert_num_equals(0, $payload->{patch}{sequence});
+  $self->assert($ical =~ "METHOD:REQUEST");
+  $self->assert($ical =~ "SEQUENCE:0");
+  $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
-    $imip = $imips[1];
-    $self->assert_not_null($imip);
+  $imip = $imips[1];
+  $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
+  $payload = decode_json($imip->{MESSAGE});
+  $ical    = $payload->{ical};
 
-    $self->assert_str_equals("CalDAV", $payload->{schedulingMechanism});
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
-    $self->assert_num_equals(0, $payload->{patch}{sequence});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "SEQUENCE:0");
-    $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
+  $self->assert_str_equals("CalDAV", $payload->{schedulingMechanism});
+  $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+  $self->assert_matches(qr/(bugs|rr)\@looneytunes.com/, $payload->{recipient});
+  $self->assert_num_equals(0, $payload->{patch}{sequence});
+  $self->assert($ical =~ "METHOD:REQUEST");
+  $self->assert($ical =~ "SEQUENCE:0");
+  $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
-    xlog $self, "set attendee status";
-    my $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
-        eventId => $id,
-        participantEmail => "bugs\@looneytunes.com",
-        updates => {
-            participationStatus => "accepted"
-        }
-    }, "R2"]]);
-    $self->assert_str_equals("1.1", $res->[0][1]{scheduleStatus});
+  xlog $self, "set attendee status";
+  my $res = $jmap->CallMethods([ [
+    'CalendarEvent/participantReply',
+    {
+      eventId          => $id,
+      participantEmail => "bugs\@looneytunes.com",
+      updates          => {
+        participationStatus => "accepted"
+      }
+    },
+    "R2"
+  ] ]);
+  $self->assert_str_equals("1.1", $res->[0][1]{scheduleStatus});
 
-    xlog $self, "verify reply sent from attendee to organizer";
-    $data = $self->{instance}->getnotify();
-    @imips = grep { $_->{METHOD} eq 'imip' } @$data;
-    $imip = $imips[0];
-    $self->assert_not_null($imip);
+  xlog $self, "verify reply sent from attendee to organizer";
+  $data  = $self->{instance}->getnotify();
+  @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+  $imip  = $imips[0];
+  $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
+  $payload = decode_json($imip->{MESSAGE});
+  $ical    = $payload->{ical};
 
-    $self->assert_str_equals("CalendarEvent/participantReply",
-                             $payload->{schedulingMechanism});
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{sender});
-    $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
-    $self->assert_num_equals(0, $payload->{jsevent}{sequence});
-    $self->assert($ical =~ "METHOD:REPLY");
-    $self->assert($ical =~ "SEQUENCE:0");
-    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+  $self->assert_str_equals("CalendarEvent/participantReply",
+    $payload->{schedulingMechanism});
+  $self->assert_str_equals("bugs\@looneytunes.com",   $payload->{sender});
+  $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
+  $self->assert_num_equals(0, $payload->{jsevent}{sequence});
+  $self->assert($ical =~ "METHOD:REPLY");
+  $self->assert($ical =~ "SEQUENCE:0");
+  $self->assert($ical =~ "PARTSTAT=ACCEPTED");
 }

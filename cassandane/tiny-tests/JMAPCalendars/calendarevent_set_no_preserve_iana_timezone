@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_no_preserve_iana_timezone
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog "Create event with custom IANA timezone via CalDAV";
-    my $ical = <<EOF;
+  xlog "Create event with custom IANA timezone via CalDAV";
+  my $ical = <<EOF;
 BEGIN:VCALENDAR
 PRODID://Foo/Bar
 VERSION:2.0
@@ -38,42 +37,51 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $ics = '/dav/calendars/user/cassandane/Default/test.ics';
-    $caldav->Request('PUT', $ics, $ical, 'Content-Type' => 'text/calendar');
+  my $ics = '/dav/calendars/user/cassandane/Default/test.ics';
+  $caldav->Request('PUT', $ics, $ical, 'Content-Type' => 'text/calendar');
 
-    xlog "Assert timeZone and UTC times are correct";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/query', {
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'CalendarEvent/query',
-                path => '/ids'
-            },
-            properties => ['timeZone', 'utcStart', 'utcEnd'],
-        }, 'R2'],
-    ]);
-    my $eventId = $res->[1][1]{list}[0]{id};
-    $self->assert_not_null($eventId);
-    $self->assert_str_equals('Europe/Vienna', $res->[1][1]{list}[0]{timeZone});
-    $self->assert_str_equals('2022-04-12T06:00:00Z', $res->[1][1]{list}[0]{utcStart});
-    $self->assert_str_equals('2022-04-12T06:30:00Z', $res->[1][1]{list}[0]{utcEnd});
+  xlog "Assert timeZone and UTC times are correct";
+  my $res = $jmap->CallMethods([
+    [ 'CalendarEvent/query', {}, 'R1' ],
+    [
+      'CalendarEvent/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'CalendarEvent/query',
+          path     => '/ids'
+        },
+        properties => [ 'timeZone', 'utcStart', 'utcEnd' ],
+      },
+      'R2'
+    ],
+  ]);
+  my $eventId = $res->[1][1]{list}[0]{id};
+  $self->assert_not_null($eventId);
+  $self->assert_str_equals('Europe/Vienna', $res->[1][1]{list}[0]{timeZone});
+  $self->assert_str_equals('2022-04-12T06:00:00Z',
+    $res->[1][1]{list}[0]{utcStart});
+  $self->assert_str_equals('2022-04-12T06:30:00Z',
+    $res->[1][1]{list}[0]{utcEnd});
 
-    xlog "Update event title, keep timeZone untouched";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    title => 'updatedTitle',
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
+  xlog "Update event title, keep timeZone untouched";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        update => {
+          $eventId => {
+            title => 'updatedTitle',
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog "Assert VTIMEZONE got replaced";
-    $res = $caldav->Request('GET', $ics);
-    $self->assert(not $res->{content} =~ m/TZOFFSETFROM:\+1000/);
-    $self->assert($res->{content} =~ m/TZOFFSETFROM:\+0200/);
+  xlog "Assert VTIMEZONE got replaced";
+  $res = $caldav->Request('GET', $ics);
+  $self->assert(not $res->{content} =~ m/TZOFFSETFROM:\+1000/);
+  $self->assert($res->{content} =~ m/TZOFFSETFROM:\+0200/);
 }

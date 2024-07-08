@@ -2,20 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_replication_delete
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    $self->run_replication();
-    $self->check_replication('cassandane');
+  $self->run_replication();
+  $self->check_replication('cassandane');
 
-    my $href = "$CalendarId/event1.ics";
-    my $card = <<EOF;
+  my $href = "$CalendarId/event1.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -33,16 +32,16 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
-    my $response = $CalDAV->Request('GET', $href);
-    my $value = $response->{content};
-    $self->assert_matches(qr/An Event/, $value);
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  my $response = $CalDAV->Request('GET', $href);
+  my $value    = $response->{content};
+  $self->assert_matches(qr/An Event/, $value);
 
-    $self->run_replication();
-    $self->check_replication('cassandane');
+  $self->run_replication();
+  $self->check_replication('cassandane');
 
-    $CalDAV->DeleteCalendar($CalendarId);
+  $CalDAV->DeleteCalendar($CalendarId);
 
-    $self->run_replication();
-    $self->check_replication('cassandane');
+  $self->run_replication();
+  $self->check_replication('cassandane');
 }

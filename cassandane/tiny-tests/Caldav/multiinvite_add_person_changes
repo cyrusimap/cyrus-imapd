@@ -2,18 +2,17 @@
 use Cassandane::Tiny;
 
 sub test_multiinvite_add_person_changes
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'invite2'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'invite2' });
+  $self->assert_not_null($CalendarId);
 
-    my $uuid = "a684f618-da72-4254-9274-d11f4180696b";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "a684f618-da72-4254-9274-d11f4180696b";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -53,17 +52,25 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
-        { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
-        { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
-    );
+  $self->assert_caldav_notified(
+    {
+      recipient => "test1\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST'
+    },
+    {
+      recipient => "test2\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST'
+    },
+  );
 
-    # add an override instance
-    $card =~ s/An Event/An Event just us/;
-    $card =~ s/SEQUENCE:0/SEQUENCE:1/;
-    my $override = <<EOF;
+  # add an override instance
+  $card =~ s/An Event/An Event just us/;
+  $card =~ s/SEQUENCE:0/SEQUENCE:1/;
+  my $override = <<EOF;
 BEGIN:VEVENT
 CREATED:20150701T234328Z
 UID:$uuid
@@ -81,71 +88,76 @@ ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 END:VEVENT
 EOF
 
-    $card =~ s/END:VCALENDAR/${override}END:VCALENDAR/;
+  $card =~ s/END:VCALENDAR/${override}END:VCALENDAR/;
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
-        { recipient => "test1\@example.com",
-          is_update => JSON::true,
-          method => 'REQUEST',
-          event => {
-            uid => $uuid,
-            replyTo => { imip => "mailto:cassandane\@example.com" },
-            recurrenceOverrides => {
-                '2016-06-08T15:30:00' => {
-                    title => "An Event with a different friend",
-                    participants => {
-                        "cassandane\@example.com" => { email => "cassandane\@example.com" },
-                        "test1\@example.com" => { email => "test1\@example.com" },
-                        "test3\@example.com" => { email => "test3\@example.com" },
-                    },
-                },
-            },
-            start => '2016-06-01T15:30:00',
-            title => "An Event just us",
+  $self->assert_caldav_notified(
+    {
+      recipient => "test1\@example.com",
+      is_update => JSON::true,
+      method    => 'REQUEST',
+      event     => {
+        uid                 => $uuid,
+        replyTo             => { imip => "mailto:cassandane\@example.com" },
+        recurrenceOverrides => {
+          '2016-06-08T15:30:00' => {
+            title        => "An Event with a different friend",
             participants => {
-                "cassandane\@example.com" => { email => "cassandane\@example.com" },
-                "test1\@example.com" => { email => "test1\@example.com" },
-                "test2\@example.com" => { email => "test2\@example.com" },
+              "cassandane\@example.com" =>
+                { email => "cassandane\@example.com" },
+              "test1\@example.com" => { email => "test1\@example.com" },
+              "test3\@example.com" => { email => "test3\@example.com" },
             },
           },
         },
-        { recipient => "test2\@example.com",
-          is_update => JSON::true,
-          method => 'REQUEST',
-          event => {
-            uid => $uuid,
-            replyTo => { imip => "mailto:cassandane\@example.com" },
-            recurrenceOverrides => {
-                '2016-06-08T15:30:00' => undef,
-            },
-            start => '2016-06-01T15:30:00',
-            title => "An Event just us",
+        start        => '2016-06-01T15:30:00',
+        title        => "An Event just us",
+        participants => {
+          "cassandane\@example.com" => { email => "cassandane\@example.com" },
+          "test1\@example.com"      => { email => "test1\@example.com" },
+          "test2\@example.com"      => { email => "test2\@example.com" },
+        },
+      },
+    },
+    {
+      recipient => "test2\@example.com",
+      is_update => JSON::true,
+      method    => 'REQUEST',
+      event     => {
+        uid                 => $uuid,
+        replyTo             => { imip => "mailto:cassandane\@example.com" },
+        recurrenceOverrides => {
+          '2016-06-08T15:30:00' => undef,
+        },
+        start        => '2016-06-01T15:30:00',
+        title        => "An Event just us",
+        participants => {
+          "cassandane\@example.com" => { email => "cassandane\@example.com" },
+          "test1\@example.com"      => { email => "test1\@example.com" },
+          "test2\@example.com"      => { email => "test2\@example.com" },
+        },
+      },
+    },
+    {
+      recipient => "test3\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST',
+      event     => {
+        uid                 => $uuid,
+        replyTo             => { imip => "mailto:cassandane\@example.com" },
+        recurrenceOverrides => {
+          '2016-06-08T15:30:00' => {
+            title        => "An Event with a different friend",
             participants => {
-                "cassandane\@example.com" => { email => "cassandane\@example.com" },
-                "test1\@example.com" => { email => "test1\@example.com" },
-                "test2\@example.com" => { email => "test2\@example.com" },
+              "cassandane\@example.com" =>
+                { email => "cassandane\@example.com" },
+              "test1\@example.com" => { email => "test1\@example.com" },
+              "test3\@example.com" => { email => "test3\@example.com" },
             },
           },
         },
-        { recipient => "test3\@example.com",
-          is_update => JSON::false,
-          method => 'REQUEST',
-          event => {
-            uid => $uuid,
-            replyTo => { imip => "mailto:cassandane\@example.com" },
-            recurrenceOverrides => {
-                '2016-06-08T15:30:00' => {
-                    title => "An Event with a different friend",
-                    participants => {
-                        "cassandane\@example.com" => { email => "cassandane\@example.com" },
-                        "test1\@example.com" => { email => "test1\@example.com" },
-                        "test3\@example.com" => { email => "test3\@example.com" },
-                    },
-                },
-            },
-          },
-        },
-    );
+      },
+    },
+  );
 }

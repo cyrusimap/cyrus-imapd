@@ -2,68 +2,65 @@
 use Cassandane::Tiny;
 
 sub test_rfc6638_3_2_1_3_remove
-    :needs_component_httpd
-{
-    my ($self) = @_;
-    my $CalDAV = $self->{caldav};
+  : needs_component_httpd {
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'test' });
+  $self->assert_not_null($CalendarId);
 
-    xlog $self, "default => CANCEL";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "default => CANCEL";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
-        $self->assert_caldav_notified(
-            { recipient => "test1\@example.com", method => 'CANCEL' },
-        );
-    }
+    $self->{instance}->getnotify();
+    $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
+    $self->assert_caldav_notified(
+      { recipient => "test1\@example.com", method => 'CANCEL' },);
+  }
 
-    xlog $self, "SERVER => CANCEL";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "SERVER => CANCEL";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=SERVER:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 STATUS:CONFIRMED
 EOF
-        $self->{instance}->getnotify();
-        $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
-        $self->assert_caldav_notified(
-            { recipient => "test1\@example.com", method => 'CANCEL' },
-        );
-    }
+    $self->{instance}->getnotify();
+    $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
+    $self->assert_caldav_notified(
+      { recipient => "test1\@example.com", method => 'CANCEL' },);
+  }
 
-    xlog $self, "CLIENT => nothing";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "CLIENT => nothing";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
-        $self->assert_caldav_notified();
-    }
+    $self->{instance}->getnotify();
+    $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "NONE => nothing";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "NONE => nothing";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
-        $self->assert_caldav_notified();
-    }
+    $self->{instance}->getnotify();
+    $CalDAV->Request('DELETE', "$CalendarId/$uuid.ics");
+    $self->assert_caldav_notified();
+  }
 }

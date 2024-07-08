@@ -2,15 +2,14 @@
 use Cassandane::Tiny;
 
 sub test_email_get_createdmodseq
-    :min_version_3_9 :needs_component_jmap :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
-    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+  : min_version_3_9 : needs_component_jmap : JMAPExtensions {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
+  $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
 
-    xlog $self, "Append duplicate messages";
-    $mimeMessage = <<'EOF';
+  xlog $self, "Append duplicate messages";
+  $mimeMessage = <<'EOF';
 From: <from@local>
 To: to@local
 Subject: test
@@ -20,32 +19,34 @@ Content-Type: text/plain
 
 test
 EOF
-    $mimeMessage =~ s/\r?\n/\r\n/gs;
-    $imap->append('INBOX', '17-Aug-2023 15:13:54 +0200', $mimeMessage) || die $@;
-    $imap->append('INBOX', '17-Aug-2023 15:13:54 +0200', $mimeMessage) || die $@;
+  $mimeMessage =~ s/\r?\n/\r\n/gs;
+  $imap->append('INBOX', '17-Aug-2023 15:13:54 +0200', $mimeMessage) || die $@;
+  $imap->append('INBOX', '17-Aug-2023 15:13:54 +0200', $mimeMessage) || die $@;
 
-    $imap->select('INBOX');
-    $fetch = $imap->fetch('1:2', ['INTERNALDATE', 'CREATEDMODSEQ']);
-    $self->assert_str_equals(
-        $fetch->{1}{internaldate}, $fetch->{2}{internaldate}
-    );
-    $self->assert_num_lt(
-        $fetch->{2}{createdmodseq}[0], $fetch->{1}{createdmodseq}[0]
-    );
+  $imap->select('INBOX');
+  $fetch = $imap->fetch('1:2', [ 'INTERNALDATE', 'CREATEDMODSEQ' ]);
+  $self->assert_str_equals($fetch->{1}{internaldate},
+    $fetch->{2}{internaldate});
+  $self->assert_num_lt($fetch->{2}{createdmodseq}[0],
+    $fetch->{1}{createdmodseq}[0]);
 
-    # The createdModseq must be the lower modseq.
-    $res = $jmap->CallMethods([
-        ['Email/query', { }, "R1"],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids'
-            },
-            properties => ['createdModseq'],
-        }, 'R2' ],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
-    $self->assert_num_equals($fetch->{1}{createdmodseq}[0],
-        $res->[1][1]{list}[0]{createdModseq});
+  # The createdModseq must be the lower modseq.
+  $res = $jmap->CallMethods([
+    [ 'Email/query', {}, "R1" ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => ['createdModseq'],
+      },
+      'R2'
+    ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[1][1]{list} });
+  $self->assert_num_equals($fetch->{1}{createdmodseq}[0],
+    $res->[1][1]{list}[0]{createdModseq});
 }

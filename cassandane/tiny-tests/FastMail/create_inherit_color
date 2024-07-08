@@ -2,38 +2,41 @@
 use Cassandane::Tiny;
 
 sub test_create_inherit_color
-    :min_version_3_9 :AltNameSpace :needs_component_jmap
-{
-    my ($self) = @_;
+  : min_version_3_9 : AltNameSpace : needs_component_jmap {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "Create mailbox with color";
-    my $res = $self->_fmjmap_ok('Mailbox/set',
-        accountId => 'cassandane',
-        create => {
-            1 => {
-                parentId => JSON::null,
-                name => 'foo',
-                color => "coral",
-            },
-        },
-        update => {},
-        destroy => [],
-    );
-    $self->assert_not_null($res->{created}{1});
+  xlog $self, "Create mailbox with color";
+  my $res = $self->_fmjmap_ok(
+    'Mailbox/set',
+    accountId => 'cassandane',
+    create    => {
+      1 => {
+        parentId => JSON::null,
+        name     => 'foo',
+        color    => "coral",
+      },
+    },
+    update  => {},
+    destroy => [],
+  );
+  $self->assert_not_null($res->{created}{1});
 
-    my $folder = "foo.bar";
-    my $entry = "/shared/vendor/cmu/cyrus-imapd/color";
-    my $color = "coral";
+  my $folder = "foo.bar";
+  my $entry  = "/shared/vendor/cmu/cyrus-imapd/color";
+  my $color  = "coral";
 
-    xlog $self, "Create child mailbox";
-    $imaptalk->create($folder);
+  xlog $self, "Create child mailbox";
+  $imaptalk->create($folder);
 
-    xlog $self, "Check the child has the same color";
-    $res = $imaptalk->getmetadata($folder, $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
-        $folder => { $entry => $color }
-    }, $res);
+  xlog $self, "Check the child has the same color";
+  $res = $imaptalk->getmetadata($folder, $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_deep_equals(
+    {
+      $folder => { $entry => $color }
+    },
+    $res
+  );
 }

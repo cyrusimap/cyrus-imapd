@@ -2,28 +2,30 @@
 use Cassandane::Tiny;
 
 sub test_dotuser_gh1875_virt_altns
-    :VirtDomains :UnixHierarchySep :AltNamespace
-{
-    my ($self) = @_;
+  : VirtDomains : UnixHierarchySep : AltNamespace {
+  my ($self) = @_;
 
-    my $admintalk = $self->{adminstore}->get_client();
-    $admintalk->create("user/foo.bar\@example.com");
+  my $admintalk = $self->{adminstore}->get_client();
+  $admintalk->create("user/foo.bar\@example.com");
 
-    my $foostore = $self->{instance}->get_service('imap')->create_store(
-                        username => "foo.bar\@example.com");
-    my $footalk = $foostore->get_client();
+  my $foostore = $self->{instance}->get_service('imap')
+    ->create_store(username => "foo.bar\@example.com");
+  my $footalk = $foostore->get_client();
 
-    $footalk->create("Drafts");
-    $footalk->create("Sent");
-    $footalk->create("Trash");
+  $footalk->create("Drafts");
+  $footalk->create("Sent");
+  $footalk->create("Trash");
 
-    my $data = $footalk->list("", "*");
+  my $data = $footalk->list("", "*");
 
-    xlog $self, Dumper $data;
-    $self->assert_mailbox_structure($data, '/', {
-        'INBOX'       => [qw( \\HasNoChildren )],
-        'Sent'        => [qw( \\HasNoChildren )],
-        'Drafts'      => [qw( \\HasNoChildren )],
-        'Trash'       => [qw( \\HasNoChildren )],
-    });
+  xlog $self, Dumper $data;
+  $self->assert_mailbox_structure(
+    $data, '/',
+    {
+      'INBOX'  => [qw( \\HasNoChildren )],
+      'Sent'   => [qw( \\HasNoChildren )],
+      'Drafts' => [qw( \\HasNoChildren )],
+      'Trash'  => [qw( \\HasNoChildren )],
+    }
+  );
 }

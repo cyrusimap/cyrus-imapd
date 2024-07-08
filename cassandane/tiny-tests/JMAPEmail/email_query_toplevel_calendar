@@ -2,23 +2,22 @@
 use Cassandane::Tiny;
 
 sub test_email_query_toplevel_calendar
-    :min_version_3_5 :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  : min_version_3_5 : needs_component_sieve : needs_component_jmap
+  : JMAPExtensions {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
 
-    my $using = [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-        'https://cyrusimap.org/ns/jmap/mail',
-        'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/performance',
-    ];
+  my $using = [
+    'urn:ietf:params:jmap:core',
+    'urn:ietf:params:jmap:mail',
+    'urn:ietf:params:jmap:submission',
+    'https://cyrusimap.org/ns/jmap/mail',
+    'https://cyrusimap.org/ns/jmap/debug',
+    'https://cyrusimap.org/ns/jmap/performance',
+  ];
 
-    my $rawMessage = <<'EOF';
+  my $rawMessage = <<'EOF';
 From: from@local
 To: to@local
 Subject: test
@@ -43,36 +42,55 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
-    $imap->append('INBOX', $rawMessage) || die $@;
+  $rawMessage =~ s/\r?\n/\r\n/gs;
+  $imap->append('INBOX', $rawMessage) || die $@;
 
-    xlog $self, 'run squatter';
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  xlog $self, 'run squatter';
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    my $res = $jmap->CallMethods([
-        ['Email/query', {
-            filter => {
-                from => 'organizer@local',
-            },
-        }, 'R1'],
-        ['Email/query', {
-            filter => {
-                to => 'attendee@local',
-            },
-        }, 'R2'],
-        ['Email/query', {
-            filter => {
-                from => 'from@local',
-            },
-        }, 'R3'],
-        ['Email/query', {
-            filter => {
-                to => 'to@local',
-            },
-        }, 'R4'],
-    ], $using);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
-    $self->assert_num_equals(1, scalar @{$res->[3][1]{ids}});
+  my $res = $jmap->CallMethods(
+    [
+      [
+        'Email/query',
+        {
+          filter => {
+            from => 'organizer@local',
+          },
+        },
+        'R1'
+      ],
+      [
+        'Email/query',
+        {
+          filter => {
+            to => 'attendee@local',
+          },
+        },
+        'R2'
+      ],
+      [
+        'Email/query',
+        {
+          filter => {
+            from => 'from@local',
+          },
+        },
+        'R3'
+      ],
+      [
+        'Email/query',
+        {
+          filter => {
+            to => 'to@local',
+          },
+        },
+        'R4'
+      ],
+    ],
+    $using
+  );
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+  $self->assert_num_equals(1, scalar @{ $res->[1][1]{ids} });
+  $self->assert_num_equals(1, scalar @{ $res->[2][1]{ids} });
+  $self->assert_num_equals(1, scalar @{ $res->[3][1]{ids} });
 }

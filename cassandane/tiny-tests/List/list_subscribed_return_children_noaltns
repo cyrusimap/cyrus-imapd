@@ -2,31 +2,42 @@
 use Cassandane::Tiny;
 
 sub test_list_subscribed_return_children_noaltns
-    :UnixHierarchySep
-{
-    my ($self) = @_;
+  : UnixHierarchySep {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    $self->setup_mailbox_structure($imaptalk, [
-        [ 'subscribe' => 'INBOX' ],
-        [ 'create' => [qw( INBOX/Fruit INBOX/Fruit/Apple INBOX/Fruit/Banana
-                           INBOX/Fruit/Peach )] ],
-        [ 'subscribe' => [qw( INBOX/Fruit/Banana INBOX/Fruit/Peach )] ],
-        [ 'delete' => 'INBOX/Fruit/Peach' ],
-        [ 'create' => [qw( INBOX/Tofu INBOX/Vegetable INBOX/Vegetable/Broccoli
-                           INBOX/Vegetable/Corn )] ],
-        [ 'subscribe' => [qw( INBOX/Vegetable )] ],
-    ]);
+  $self->setup_mailbox_structure(
+    $imaptalk,
+    [
+      [ 'subscribe' => 'INBOX' ],
+      [
+        'create' => [ qw( INBOX/Fruit INBOX/Fruit/Apple INBOX/Fruit/Banana
+          INBOX/Fruit/Peach ) ]
+      ],
+      [ 'subscribe' => [qw( INBOX/Fruit/Banana INBOX/Fruit/Peach )] ],
+      [ 'delete'    => 'INBOX/Fruit/Peach' ],
+      [
+        'create' => [ qw( INBOX/Tofu INBOX/Vegetable INBOX/Vegetable/Broccoli
+          INBOX/Vegetable/Corn ) ]
+      ],
+      [ 'subscribe' => [qw( INBOX/Vegetable )] ],
+    ]
+  );
 
-    xlog $self, "listing...";
-    my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*", "RETURN", [qw(CHILDREN)]);
+  xlog $self, "listing...";
+  my $subdata
+    = $imaptalk->list([qw(SUBSCRIBED)], "", "*", "RETURN", [qw(CHILDREN)]);
 
-    xlog $self, "subscribed to: " . Dumper $subdata;
-    $self->assert_mailbox_structure($subdata, '/', {
-        'INBOX'                 => [qw( \\Subscribed \\HasChildren )],
-        'INBOX/Fruit/Banana'    => [qw( \\Subscribed \\HasNoChildren )],
-        'INBOX/Fruit/Peach'     => [qw( \\NonExistent \\Subscribed \\HasNoChildren )],
-        'INBOX/Vegetable'       => [qw( \\Subscribed \\HasChildren )],
-    }, 'strict');
+  xlog $self, "subscribed to: " . Dumper $subdata;
+  $self->assert_mailbox_structure(
+    $subdata, '/',
+    {
+      'INBOX'              => [qw( \\Subscribed \\HasChildren )],
+      'INBOX/Fruit/Banana' => [qw( \\Subscribed \\HasNoChildren )],
+      'INBOX/Fruit/Peach' => [qw( \\NonExistent \\Subscribed \\HasNoChildren )],
+      'INBOX/Vegetable'   => [qw( \\Subscribed \\HasChildren )],
+    },
+    'strict'
+  );
 }

@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_github_issue_complex_variables
-    :min_version_3_1
-    :needs_component_sieve
-{
-    my ($self) = @_;
+  : min_version_3_1
+  : needs_component_sieve {
+  my ($self) = @_;
 
-    xlog $self, "Install a sieve script with complex variable work";
-    $self->{instance}->install_sieve_script(<<'EOF');
+  xlog $self, "Install a sieve script with complex variable work";
+  $self->{instance}->install_sieve_script(<<'EOF');
 require ["fileinto", "reject", "vacation", "envelope", "body", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables", "imap4flags", "editheader", "duplicate", "vacation-seconds"];
 
 ### BEGIN USER SIEVE
@@ -80,7 +79,7 @@ if allof (
 }
 EOF
 
-    my $raw = << 'EOF';
+  my $raw = << 'EOF';
 Date: Wed, 16 May 2018 22:06:18 -0700
 From: Some Person <notifications@github.com>
 To: foo/bar <bar@noreply.github.com>
@@ -90,17 +89,17 @@ X-GitHub-Reason: subscribed
 
 foo bar
 EOF
-    xlog $self, "Deliver a message";
-    my $msg1 = Cassandane::Message->new(raw => $raw);
-    $self->{instance}->deliver($msg1);
+  xlog $self, "Deliver a message";
+  my $msg1 = Cassandane::Message->new(raw => $raw);
+  $self->{instance}->deliver($msg1);
 
-    # if there's a delivery failure, it will be in the Inbox
-    xlog $self, "Check there there are no messages in the Inbox";
-    my $talk = $self->{store}->get_client();
-    $talk->select("INBOX");
-    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+  # if there's a delivery failure, it will be in the Inbox
+  xlog $self, "Check there there are no messages in the Inbox";
+  my $talk = $self->{store}->get_client();
+  $talk->select("INBOX");
+  $self->assert_num_equals(0, $talk->get_response_code('exists'));
 
-    # if there's no delivery failure, this folder will be created!
-    $talk->select("INBOX.GitHub.foo.bar.pulls.replies");
-    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+  # if there's no delivery failure, this folder will be created!
+  $talk->select("INBOX.GitHub.foo.bar.pulls.replies");
+  $self->assert_num_equals(1, $talk->get_response_code('exists'));
 }

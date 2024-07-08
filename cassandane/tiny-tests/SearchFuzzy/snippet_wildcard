@@ -2,45 +2,40 @@
 use Cassandane::Tiny;
 
 sub test_snippet_wildcard
-    :min_version_3_0 :needs_search_xapian
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_search_xapian {
+  my ($self) = @_;
 
-    # Set up Xapian database
-    xlog $self, "Generate and index test messages";
-    my %params = (
-        mime_charset => "utf-8",
-    );
-    my $subject;
-    my $body;
+  # Set up Xapian database
+  xlog $self, "Generate and index test messages";
+  my %params = (mime_charset => "utf-8",);
+  my $subject;
+  my $body;
 
-    $subject = "1";
-    $body = "Waiter! There's a foo in my soup!";
-    $params{body} = $body;
-    $self->make_message($subject, %params) || die;
+  $subject      = "1";
+  $body         = "Waiter! There's a foo in my soup!";
+  $params{body} = $body;
+  $self->make_message($subject, %params) || die;
 
-    $subject = "2";
-    $body = "Let's foop the loop.";
-    $params{body} = $body;
-    $self->make_message($subject, %params) || die;
+  $subject      = "2";
+  $body         = "Let's foop the loop.";
+  $params{body} = $body;
+  $self->make_message($subject, %params) || die;
 
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    my $term = "foo";
-    xlog $self, "SEARCH for FUZZY body $term*";
-    my $r = $talk->search(
-        "fuzzy", ["body", { Quote => "$term*" }],
-    ) || die;
-    $self->assert_num_equals(2, scalar @$r);
-    my $uids = $r;
+  my $term = "foo";
+  xlog $self, "SEARCH for FUZZY body $term*";
+  my $r = $talk->search("fuzzy", [ "body", { Quote => "$term*" } ],) || die;
+  $self->assert_num_equals(2, scalar @$r);
+  my $uids = $r;
 
-    xlog $self, "Select INBOX";
-    $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
+  xlog $self, "Select INBOX";
+  $talk->select("INBOX") || die;
+  my $uidvalidity = $talk->get_response_code('uidvalidity');
 
-    xlog $self, "Get snippets for $term";
-    $r = $self->get_snippets('INBOX', $uids, { 'text' => "$term*" });
-    $self->assert_num_equals(2, scalar @{$r->{snippets}});
+  xlog $self, "Get snippets for $term";
+  $r = $self->get_snippets('INBOX', $uids, { 'text' => "$term*" });
+  $self->assert_num_equals(2, scalar @{ $r->{snippets} });
 }

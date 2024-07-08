@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_attachbinary
-    :min_version_3_5 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_5 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog "Create event via CalDAV";
-    my $rawIcal = <<'EOF';
+  xlog "Create event via CalDAV";
+  my $rawIcal = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
@@ -28,44 +27,54 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
-        'Content-Type' => 'text/calendar');
+  $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
+    'Content-Type' => 'text/calendar');
 
-    xlog "Fetch with Cyrus extension";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['links'],
-        }, 'R1'],
-    ]);
-    my $event = $res->[0][1]{list}[0];
-    $self->assert_not_null($event);
+  xlog "Fetch with Cyrus extension";
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => ['links'],
+      },
+      'R1'
+    ],
+  ]);
+  my $event = $res->[0][1]{list}[0];
+  $self->assert_not_null($event);
 
-    my @links = values %{$event->{links}};
-    $self->assert_num_equals(1, scalar @links);
-    $self->assert_null($links[0]{href});
-    $self->assert_str_equals('text/plain', $links[0]{contentType});
-    my $blobId = $links[0]{blobId};
-    $self->assert_not_null($blobId);
+  my @links = values %{ $event->{links} };
+  $self->assert_num_equals(1, scalar @links);
+  $self->assert_null($links[0]{href});
+  $self->assert_str_equals('text/plain', $links[0]{contentType});
+  my $blobId = $links[0]{blobId};
+  $self->assert_not_null($blobId);
 
-    xlog "Fetch blob";
-    $res = $jmap->Download('cassandane', $blobId);
-    $self->assert_str_equals("hello", $res->{content});
+  xlog "Fetch blob";
+  $res = $jmap->Download('cassandane', $blobId);
+  $self->assert_str_equals("hello", $res->{content});
 
-    xlog "Fetch without Cyrus extension";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['links'],
-        }, 'R2'],
-    ], [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:principals',
-    ]);
-    $event = $res->[0][1]{list}[0];
-    $self->assert_not_null($event);
+  xlog "Fetch without Cyrus extension";
+  $res = $jmap->CallMethods(
+    [
+      [
+        'CalendarEvent/get',
+        {
+          properties => ['links'],
+        },
+        'R2'
+      ],
+    ],
+    [
+      'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:calendars',
+      'urn:ietf:params:jmap:principals',
+    ]
+  );
+  $event = $res->[0][1]{list}[0];
+  $self->assert_not_null($event);
 
-    @links = values %{$event->{links}};
-    $self->assert_num_equals(1, scalar @links);
-    $self->assert_str_equals('data:text/plain;base64,aGVsbG8=', $links[0]{href});
-    $self->assert_str_equals('text/plain', $links[0]{contentType});
+  @links = values %{ $event->{links} };
+  $self->assert_num_equals(1, scalar @links);
+  $self->assert_str_equals('data:text/plain;base64,aGVsbG8=', $links[0]{href});
+  $self->assert_str_equals('text/plain', $links[0]{contentType});
 }

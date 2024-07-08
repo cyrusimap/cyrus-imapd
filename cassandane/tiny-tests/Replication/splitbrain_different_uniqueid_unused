@@ -5,37 +5,36 @@ use Cassandane::Tiny;
 # Test empty mailbox gets overwritten
 #
 sub test_splitbrain_different_uniqueid_unused
-    :min_version_3_5 :needs_component_replication :NoReplicaonly
-{
-    my ($self) = @_;
+  : min_version_3_5 : needs_component_replication : NoReplicaonly {
+  my ($self) = @_;
 
-    my $master_store = $self->{master_store};
-    my $replica_store = $self->{replica_store};
+  my $master_store  = $self->{master_store};
+  my $replica_store = $self->{replica_store};
 
-    my $mtalk = $master_store->get_client();
-    my $rtalk = $replica_store->get_client();
+  my $mtalk = $master_store->get_client();
+  my $rtalk = $replica_store->get_client();
 
-    $mtalk->create('INBOX.subfolder');
-    my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
-    my $mid = $mres->{mailboxid}[0];
-    $rtalk->create('INBOX.subfolder');
-    my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
-    my $rid = $rres->{mailboxid}[0];
+  $mtalk->create('INBOX.subfolder');
+  my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
+  my $mid  = $mres->{mailboxid}[0];
+  $rtalk->create('INBOX.subfolder');
+  my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+  my $rid  = $rres->{mailboxid}[0];
 
-    $self->assert_not_null($mid);
-    $self->assert_not_null($rid);
-    $self->assert_str_not_equals($mid, $rid);
+  $self->assert_not_null($mid);
+  $self->assert_not_null($rid);
+  $self->assert_str_not_equals($mid, $rid);
 
-    $master_store->set_folder("INBOX.subfolder");
+  $master_store->set_folder("INBOX.subfolder");
 
-    $self->make_message("Message A", store => $master_store);
+  $self->make_message("Message A", store => $master_store);
 
-    $self->run_replication();
-    $self->check_replication('cassandane');
+  $self->run_replication();
+  $self->check_replication('cassandane');
 
-    $rtalk = $replica_store->get_client();
-    $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
-    $rid = $rres->{mailboxid}[0];
+  $rtalk = $replica_store->get_client();
+  $rres  = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+  $rid   = $rres->{mailboxid}[0];
 
-    $self->assert_str_equals($mid, $rid);
+  $self->assert_str_equals($mid, $rid);
 }

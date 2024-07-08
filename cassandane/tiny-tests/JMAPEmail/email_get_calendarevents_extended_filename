@@ -2,12 +2,11 @@
 use Cassandane::Tiny;
 
 sub test_email_get_calendarevents_extended_filename
-    :min_version_3_7 :needs_component_jmap :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_7 : needs_component_jmap : JMAPExtensions {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $body = <<'EOF';
+  my $body = <<'EOF';
 --boundary_1
 Content-Type: text/plain
 
@@ -32,35 +31,44 @@ END:VEVENT
 END:VCALENDAR
 --boundary_1--
 EOF
-    $body =~ s/\r?\n/\r\n/gs;
+  $body =~ s/\r?\n/\r\n/gs;
 
-    $self->make_message('test', mime_type => 'multipart/related',
-        mime_boundary => 'boundary_1', body => $body) or die;
+  $self->make_message(
+    'test',
+    mime_type     => 'multipart/related',
+    mime_boundary => 'boundary_1',
+    body          => $body
+  ) or die;
 
-    xlog $self, 'get email';
-    my $res = $jmap->CallMethods([
-        ['Email/query', { }, 'R1'],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids'
-            },
-            properties => [
-                'calendarEvents', 'bodyStructure',
-            ],
-        }, 'R2'],
-    ], [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:principals',
-        'https://cyrusimap.org/ns/jmap/mail',
-        'https://cyrusimap.org/ns/jmap/calendars',
-    ]);
+  xlog $self, 'get email';
+  my $res = $jmap->CallMethods(
+    [
+      [ 'Email/query', {}, 'R1' ],
+      [
+        'Email/get',
+        {
+          '#ids' => {
+            resultOf => 'R1',
+            name     => 'Email/query',
+            path     => '/ids'
+          },
+          properties => [ 'calendarEvents', 'bodyStructure', ],
+        },
+        'R2'
+      ],
+    ],
+    [
+      'urn:ietf:params:jmap:core',
+      'urn:ietf:params:jmap:mail',
+      'urn:ietf:params:jmap:calendars',
+      'urn:ietf:params:jmap:principals',
+      'https://cyrusimap.org/ns/jmap/mail',
+      'https://cyrusimap.org/ns/jmap/calendars',
+    ]
+  );
 
-    $self->assert_num_equals(1,
-        scalar @{$res->[1][1]{list}[0]{calendarEvents}{2}});
-    $self->assert_str_equals('test',
-        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
+  $self->assert_num_equals(1,
+    scalar @{ $res->[1][1]{list}[0]{calendarEvents}{2} });
+  $self->assert_str_equals('test',
+    $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
 }

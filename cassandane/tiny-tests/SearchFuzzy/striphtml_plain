@@ -2,22 +2,20 @@
 use Cassandane::Tiny;
 
 sub test_striphtml_plain
-    :min_version_3_3 :needs_search_xapian
-{
-    my ($self) = @_;
-    my $talk = $self->{store}->get_client();
+  : min_version_3_3 : needs_search_xapian {
+  my ($self) = @_;
+  my $talk = $self->{store}->get_client();
 
-    xlog "Index message with only plain text part";
-    $self->make_message("test",
-        body => ""
-          . "<div>This is a plain text body with <b>html</b>.</div>\r\n"
-    ) || die;
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  xlog "Index message with only plain text part";
+  $self->make_message("test",
+    body => "" . "<div>This is a plain text body with <b>html</b>.</div>\r\n")
+    || die;
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    xlog "Assert that HTML in plain-text only isn't stripped";
-    my $uids = $talk->search('fuzzy', 'body', 'html') || die;
-    $self->assert_deep_equals([1], $uids);
+  xlog "Assert that HTML in plain-text only isn't stripped";
+  my $uids = $talk->search('fuzzy', 'body', 'html') || die;
+  $self->assert_deep_equals([1], $uids);
 
-    $uids = $talk->search('fuzzy', 'body', 'div') || die;
-    $self->assert_deep_equals([1], $uids);
+  $uids = $talk->search('fuzzy', 'body', 'div') || die;
+  $self->assert_deep_equals([1], $uids);
 }

@@ -2,15 +2,17 @@
 use Cassandane::Tiny;
 
 sub test_empty_mailbox
-    :UnixHierarchySep
-{
-    my ($self) = @_;
+  : UnixHierarchySep {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    my $data = $imaptalk->list("", "");
+  my $data = $imaptalk->list("", "");
 
-    $self->assert_mailbox_structure($data, '/', {
-        '' => [ '\\Noselect' ],
-    });
+  $self->assert_mailbox_structure(
+    $data, '/',
+    {
+      '' => ['\\Noselect'],
+    }
+  );
 }

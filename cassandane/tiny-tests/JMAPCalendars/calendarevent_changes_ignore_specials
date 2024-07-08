@@ -2,21 +2,26 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_changes_ignore_specials
-    :needs_component_sieve :needs_component_httpd :needs_component_jmap :min_version_3_7
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : needs_component_sieve : needs_component_httpd : needs_component_jmap :
+  min_version_3_7 {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            ids => [],
-        }, 'R1'],
-    ]);
-    my $state = $res->[0][1]{state};
-    $self->assert_not_null($state);
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        ids => [],
+      },
+      'R1'
+    ],
+  ]);
+  my $state = $res->[0][1]{state};
+  $self->assert_not_null($state);
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :deletecanceled :outcome "outcome";
@@ -25,9 +30,9 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    my $imip = <<'EOF';
+  my $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -55,13 +60,17 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP invite";
-    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+  xlog $self, "Deliver iMIP invite";
+  $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/changes', {
-            sinceState => $state
-        }, 'R1'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/changes',
+      {
+        sinceState => $state
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{created} });
 }

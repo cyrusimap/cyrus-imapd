@@ -2,15 +2,14 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_schedule_reply_custom_tz
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    my $uid = "xxaaasdfasfhialskdjflaksjfdalskdfja";
-    my $ical = <<EOF;
+  my $uid  = "xxaaasdfasfhialskdjflaksjfdalskdfja";
+  my $ical = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:Microsoft Exchange Server 2010
@@ -44,29 +43,33 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $event = $self->putandget_vevent($uid, $ical);
-    my $id = $event->{id};
+  my $event = $self->putandget_vevent($uid, $ical);
+  my $id    = $event->{id};
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    xlog $self, "send reply as attendee to organizer";
-    my $res = $jmap->CallMethods([['CalendarEvent/set', {
-        sendSchedulingMessages => JSON::true,
-        update => {
-            $id => {
-                'participants/att/participationStatus' => "tentative",
-            }
+  xlog $self, "send reply as attendee to organizer";
+  my $res = $jmap->CallMethods([ [
+    'CalendarEvent/set',
+    {
+      sendSchedulingMessages => JSON::true,
+      update                 => {
+        $id => {
+          'participants/att/participationStatus' => "tentative",
         }
-    }, "R1"]]);
+      }
+    },
+    "R1"
+  ] ]);
 
-    my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $self->assert_not_null($imip);
+  my $data = $self->{instance}->getnotify();
+  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+  $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
+  my $payload = decode_json($imip->{MESSAGE});
+  $ical = $payload->{ical};
 
-    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
-    $self->assert($ical =~ "METHOD:REPLY");
+  $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+  $self->assert($ical =~ "METHOD:REPLY");
 }

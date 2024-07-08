@@ -2,20 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_sync_collection
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CardDAV = $self->{carddav};
+  my $CardDAV = $self->{carddav};
 
-    my $homeset = "/dav/addressbooks/user/cassandane";
-    my $bookId = "Default";
+  my $homeset = "/dav/addressbooks/user/cassandane";
+  my $bookId  = "Default";
 
-    my $uid1 = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
-    my $uid2 = "addr1\@example.com";
-    my $uid3 = "addr2\@example.com";
+  my $uid1 = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+  my $uid2 = "addr1\@example.com";
+  my $uid3 = "addr2\@example.com";
 
-    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+  my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
 BEGIN:VCARD
 VERSION:3.0
 UID:$uid1
@@ -27,7 +26,7 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+  my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:me
@@ -37,7 +36,7 @@ EMAIL:cdaboo\@example.com
 END:VCARD
 EOF
 
-    my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+  my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:eric
@@ -46,35 +45,35 @@ FN:Eric York
 END:VCARD
 EOF
 
-    my $href1 = $CardDAV->NewContact($bookId, $vcard1);
-    my $href2 = $CardDAV->NewContact($bookId, $vcard2);
+  my $href1 = $CardDAV->NewContact($bookId, $vcard1);
+  my $href2 = $CardDAV->NewContact($bookId, $vcard2);
 
-    my ($adds, $removes, $errors, $syncToken) =
-        $CardDAV->SyncContactLinks($bookId);
+  my ($adds, $removes, $errors, $syncToken)
+    = $CardDAV->SyncContactLinks($bookId);
 
-    $self->assert_equals(scalar %$adds, 2);
-    $self->assert_not_null($adds->{"$homeset/$href1"});
-    $self->assert_not_null($adds->{"$homeset/$href2"});
-    $self->assert_deep_equals($removes, []);
-    $self->assert_deep_equals($errors, []);
+  $self->assert_equals(scalar %$adds, 2);
+  $self->assert_not_null($adds->{"$homeset/$href1"});
+  $self->assert_not_null($adds->{"$homeset/$href2"});
+  $self->assert_deep_equals($removes, []);
+  $self->assert_deep_equals($errors,  []);
 
-    $CardDAV->DeleteContact("$homeset/$href1");
+  $CardDAV->DeleteContact("$homeset/$href1");
 
-    my $href3 = $CardDAV->NewContact($bookId, $vcard3);
+  my $href3 = $CardDAV->NewContact($bookId, $vcard3);
 
-    ($adds, $removes, $errors, $syncToken) =
-        $CardDAV->SyncContactLinks($bookId, syncToken => $syncToken);
+  ($adds, $removes, $errors, $syncToken)
+    = $CardDAV->SyncContactLinks($bookId, syncToken => $syncToken);
 
-    $self->assert_equals(scalar %$adds, 1);
-    $self->assert_not_null($adds->{"$homeset/$href3"});
-    $self->assert_equals(scalar @$removes, 1);
-    $self->assert_str_equals("$homeset/$href1", $removes->[0]);
-    $self->assert_deep_equals($errors, []);
+  $self->assert_equals(scalar %$adds, 1);
+  $self->assert_not_null($adds->{"$homeset/$href3"});
+  $self->assert_equals(scalar @$removes, 1);
+  $self->assert_str_equals("$homeset/$href1", $removes->[0]);
+  $self->assert_deep_equals($errors, []);
 
-    ($adds, $removes, $errors, $syncToken) =
-        $CardDAV->SyncContactLinks($bookId, syncToken => $syncToken);
+  ($adds, $removes, $errors, $syncToken)
+    = $CardDAV->SyncContactLinks($bookId, syncToken => $syncToken);
 
-    $self->assert_deep_equals($adds, {});
-    $self->assert_deep_equals($removes, []);
-    $self->assert_deep_equals($errors, []);
+  $self->assert_deep_equals($adds,    {});
+  $self->assert_deep_equals($removes, []);
+  $self->assert_deep_equals($errors,  []);
 }

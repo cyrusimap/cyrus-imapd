@@ -2,20 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_changes_add
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $Cal = $CalDAV->GetCalendar($CalendarId);
+  my $Cal = $CalDAV->GetCalendar($CalendarId);
 
-    my $uuid = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -50,12 +49,13 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    my ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $Cal->{syncToken});
+  my ($adds, $removes, $errors)
+    = $CalDAV->SyncEvents($CalendarId, syncToken => $Cal->{syncToken});
 
-    $self->assert_equals(scalar @$adds, 1);
-    $self->assert_str_equals($adds->[0]{uid}, $uuid);
-    $self->assert_deep_equals($removes, []);
-    $self->assert_deep_equals($errors, []);
+  $self->assert_equals(scalar @$adds, 1);
+  $self->assert_str_equals($adds->[0]{uid}, $uuid);
+  $self->assert_deep_equals($removes, []);
+  $self->assert_deep_equals($errors,  []);
 }

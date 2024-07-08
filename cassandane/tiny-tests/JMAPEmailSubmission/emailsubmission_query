@@ -2,22 +2,22 @@
 use Cassandane::Tiny;
 
 sub test_emailsubmission_query
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_1 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    xlog $self, "get email submission list (no arguments)";
-    my $res = $jmap->CallMethods([['EmailSubmission/query', { }, "R1"]]);
-    $self->assert_null($res->[0][1]{filter});
-    $self->assert_null($res->[0][1]{sort});
-    $self->assert_not_null($res->[0][1]{queryState});
-    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
-    $self->assert_num_equals(0, $res->[0][1]{position});
-    $self->assert_num_equals(0, $res->[0][1]{total});
-    $self->assert_not_null($res->[0][1]{ids});
+  xlog $self, "get email submission list (no arguments)";
+  my $res = $jmap->CallMethods([ [ 'EmailSubmission/query', {}, "R1" ] ]);
+  $self->assert_null($res->[0][1]{filter});
+  $self->assert_null($res->[0][1]{sort});
+  $self->assert_not_null($res->[0][1]{queryState});
+  $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
+  $self->assert_num_equals(0, $res->[0][1]{position});
+  $self->assert_num_equals(0, $res->[0][1]{total});
+  $self->assert_not_null($res->[0][1]{ids});
 
-    xlog $self, "get email submission list (error arguments)";
-    $res = $jmap->CallMethods([['EmailSubmission/query', { filter => 1 }, "R1"]]);
-    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+  xlog $self, "get email submission list (error arguments)";
+  $res = $jmap->CallMethods(
+    [ [ 'EmailSubmission/query', { filter => 1 }, "R1" ] ]);
+  $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
 }

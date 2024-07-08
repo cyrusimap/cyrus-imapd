@@ -2,36 +2,35 @@
 use Cassandane::Tiny;
 
 sub test_carddav_rewrite_v4card_on_get
-    :needs_component_httpd :needs_dependency_icalvcard
-{
-    my ($self) = @_;
-    my $CardDAV = $self->{carddav};
+  : needs_component_httpd : needs_dependency_icalvcard {
+  my ($self) = @_;
+  my $CardDAV = $self->{carddav};
 
-    my $Id = $CardDAV->NewAddressBook('foo');
-    my $href = "$Id/test.vcf";
-    my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
-    my $image = "R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+  my $Id    = $CardDAV->NewAddressBook('foo');
+  my $href  = "$Id/test.vcf";
+  my $uid   = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+  my $image = "R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
-    # The UID and PHOTO property values of this version 4.0
-    # vCard are bogus. The UID property value should either
-    # be a valid URI or it should have the VALUE=TEXT
-    # parameter set. The PHOTO property value must be a URI
-    # but instead it uses version 3.0 encoding for embedding
-    # data.
-    #
-    # This test asserts that we accept such data but rewrite on GET.
-    #
-    # The alternatives are:
-    # 1. Reject on PUT. This is problematic, as we might have
-    # been the ones writing that bogus data in the first place:
-    # https://github.com/cyrusimap/cyrus-imapd/commit/b8a879ccf22d52d336662d506d3a14ddf341b60b
-    #
-    # 2. Rewrite on PUT. This looks to be the preferrable
-    # solution in the long run, but it will require us to
-    # check how clients deal with us rewriting the UID value
-    # on PUT.
+# The UID and PHOTO property values of this version 4.0
+# vCard are bogus. The UID property value should either
+# be a valid URI or it should have the VALUE=TEXT
+# parameter set. The PHOTO property value must be a URI
+# but instead it uses version 3.0 encoding for embedding
+# data.
+#
+# This test asserts that we accept such data but rewrite on GET.
+#
+# The alternatives are:
+# 1. Reject on PUT. This is problematic, as we might have
+# been the ones writing that bogus data in the first place:
+# https://github.com/cyrusimap/cyrus-imapd/commit/b8a879ccf22d52d336662d506d3a14ddf341b60b
+#
+# 2. Rewrite on PUT. This looks to be the preferrable
+# solution in the long run, but it will require us to
+# check how clients deal with us rewriting the UID value
+# on PUT.
 
-    my $card = <<EOF;
+  my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
 UID:$uid
@@ -42,45 +41,48 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my %Headers = (
-      'Content-Type' => 'text/vcard; version=4.0',
-      'Authorization' => $CardDAV->auth_header(),
-    );
+  my %Headers = (
+    'Content-Type'  => 'text/vcard; version=4.0',
+    'Authorization' => $CardDAV->auth_header(),
+  );
 
-    xlog $self, "PUT vCard v4 with v3 values";
-    my $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
-        content => $card,
-        headers => \%Headers,
-    });
-    $self->assert_num_equals(201, $Response->{status});
-    $self->assert_not_null($Response->{headers}{etag});
+  xlog $self, "PUT vCard v4 with v3 values";
+  my $Response = $CardDAV->{ua}->request(
+    'PUT',
+    $CardDAV->request_url($href),
+    {
+      content => $card,
+      headers => \%Headers,
+    }
+  );
+  $self->assert_num_equals(201, $Response->{status});
+  $self->assert_not_null($Response->{headers}{etag});
 
-    xlog $self, "GET as vCard v4";
-    my $response = $CardDAV->Request('GET', $href, '',
-                                     'Accept' => 'text/vcard; version=4.0');
-    my $newcard = $response->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/PHOTO:data:image\/gif;base64,$image/, $newcard);
+  xlog $self, "GET as vCard v4";
+  my $response = $CardDAV->Request('GET', $href, '',
+    'Accept' => 'text/vcard; version=4.0');
+  my $newcard = $response->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
+  $self->assert_matches(qr/PHOTO:data:image\/gif;base64,$image/, $newcard);
 
-    xlog $self, "GET as vCard v3";
-    $response = $CardDAV->Request('GET', $href, '',
-                                  'Accept' => 'text/vcard; version=3.0');
-    $newcard = $response->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
+  xlog $self, "GET as vCard v3";
+  $response = $CardDAV->Request('GET', $href, '',
+    'Accept' => 'text/vcard; version=3.0');
+  $newcard = $response->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
+  $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
 
-    xlog $self, "GET without explicit version in Accept header";
-    $response = $CardDAV->Request('GET', $href, '',
-                                  'Accept' => 'text/vcard');
-    $newcard = $response->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/VERSION:3.0/, $newcard);
-    $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
+  xlog $self, "GET without explicit version in Accept header";
+  $response = $CardDAV->Request('GET', $href, '', 'Accept' => 'text/vcard');
+  $newcard  = $response->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
+  $self->assert_matches(qr/VERSION:3.0/,                         $newcard);
+  $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
 
-    xlog $self, "GET without Accept header";
-    $response = $CardDAV->Request('GET', $href, '');
-    $newcard = $response->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/VERSION:3.0/, $newcard);
-    $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
+  xlog $self, "GET without Accept header";
+  $response = $CardDAV->Request('GET', $href, '');
+  $newcard  = $response->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
+  $self->assert_matches(qr/VERSION:3.0/,                         $newcard);
+  $self->assert_matches(qr/PHOTO;ENCODING=[bB];TYPE=GIF:$image/, $newcard);
 }

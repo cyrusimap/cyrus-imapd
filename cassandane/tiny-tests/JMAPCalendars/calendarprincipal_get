@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarprincipal_get
-    :min_version_3_3 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $CalDAV = $self->{caldav};
+  : min_version_3_3 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $CalDAV = $self->{caldav};
 
-    # Set timezone
-    my $proppatchXml = <<EOF;
+  # Set timezone
+  my $proppatchXml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
 <D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:set>
@@ -51,11 +50,13 @@ END:VCALENDAR
   </D:set>
 </D:propertyupdate>
 EOF
-    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
-                       $proppatchXml, 'Content-Type' => 'text/xml');
+  $CalDAV->Request(
+    'PROPPATCH',   "/dav/calendars/user/cassandane",
+    $proppatchXml, 'Content-Type' => 'text/xml'
+  );
 
-    # Set description
-    $proppatchXml = <<EOF;
+  # Set description
+  $proppatchXml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
 <D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:set>
@@ -65,11 +66,13 @@ EOF
   </D:set>
 </D:propertyupdate>
 EOF
-    $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane",
-                       $proppatchXml, 'Content-Type' => 'text/xml');
+  $CalDAV->Request(
+    'PROPPATCH',   "/dav/calendars/user/cassandane",
+    $proppatchXml, 'Content-Type' => 'text/xml'
+  );
 
-    # Set name
-    $proppatchXml = <<EOF;
+  # Set name
+  $proppatchXml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
 <D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:set>
@@ -79,31 +82,37 @@ EOF
   </D:set>
 </D:propertyupdate>
 EOF
-    $CalDAV->Request('PROPPATCH', "/dav/principals/user/cassandane",
-                       $proppatchXml, 'Content-Type' => 'text/xml');
+  $CalDAV->Request(
+    'PROPPATCH',   "/dav/principals/user/cassandane",
+    $proppatchXml, 'Content-Type' => 'text/xml'
+  );
 
+  my $res = $jmap->CallMethods([ [
+    'Principal/get',
+    {
+      ids => [ 'cassandane', 'nope' ],
+    },
+    'R1'
+  ] ]);
+  my $p = $res->[0][1]{list}[0];
 
-    my $res = $jmap->CallMethods([
-        ['Principal/get', {
-            ids => ['cassandane', 'nope'],
-        }, 'R1']
-    ]);
-    my $p = $res->[0][1]{list}[0];
-
-    $self->assert_not_null($p->{account});
-    delete ($p->{account});
-    $self->assert_deep_equals({
-        id => 'cassandane',
-        name => 'Cassandane User',
-        description => 'A description',
-        email => 'cassandane@example.com',
-        type => 'individual',
-        timeZone => 'Europe/Berlin',
-        mayGetAvailability => JSON::true,
-        accountId => 'cassandane',
-        sendTo => {
-            imip => 'mailto:cassandane@example.com',
-        },
-    }, $p);
-    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+  $self->assert_not_null($p->{account});
+  delete($p->{account});
+  $self->assert_deep_equals(
+    {
+      id                 => 'cassandane',
+      name               => 'Cassandane User',
+      description        => 'A description',
+      email              => 'cassandane@example.com',
+      type               => 'individual',
+      timeZone           => 'Europe/Berlin',
+      mayGetAvailability => JSON::true,
+      accountId          => 'cassandane',
+      sendTo             => {
+        imip => 'mailto:cassandane@example.com',
+      },
+    },
+    $p
+  );
+  $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
 }

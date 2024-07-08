@@ -2,17 +2,16 @@
 use Cassandane::Tiny;
 
 sub test_copy_messages
-    :needs_search_xapian
-{
-    my ($self) = @_;
+  : needs_search_xapian {
+  my ($self) = @_;
 
-    $self->create_testmessages();
+  $self->create_testmessages();
 
-    my $talk = $self->{store}->get_client();
-    $talk->create("INBOX.foo");
-    $talk->select("INBOX");
-    $talk->copy("1:*", "INBOX.foo");
+  my $talk = $self->{store}->get_client();
+  $talk->create("INBOX.foo");
+  $talk->select("INBOX");
+  $talk->copy("1:*", "INBOX.foo");
 
-    xlog $self, "Run squatter again";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+  xlog $self, "Run squatter again";
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter', '-i');
 }

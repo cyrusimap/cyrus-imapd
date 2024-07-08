@@ -2,49 +2,51 @@
 use Cassandane::Tiny;
 
 sub test_msg_replication_new_mas_partial_wwd
-    :needs_component_replication
-{
-    my ($self) = @_;
+  : needs_component_replication {
+  my ($self) = @_;
 
-    xlog $self, "testing partial replication of message scope annotations";
-    xlog $self, "case master to replica: write, write, delete";
+  xlog $self, "testing partial replication of message scope annotations";
+  xlog $self, "case master to replica: write, write, delete";
 
-    xlog $self, "need a master and replica pair";
-    $self->assert_not_null($self->{replica});
-    my $master_store = $self->{master_store};
-    my $replica_store = $self->{replica_store};
+  xlog $self, "need a master and replica pair";
+  $self->assert_not_null($self->{replica});
+  my $master_store  = $self->{master_store};
+  my $replica_store = $self->{replica_store};
 
-    xlog $self, "Append a message";
-    my %master_exp;
-    my %replica_exp;
-    $master_exp{A} = $self->make_message('Message A', store => $master_store);
-    $master_exp{A}->set_attribute('uid', 1);
+  xlog $self, "Append a message";
+  my %master_exp;
+  my %replica_exp;
+  $master_exp{A} = $self->make_message('Message A', store => $master_store);
+  $master_exp{A}->set_attribute('uid', 1);
 
-    xlog $self, "Run replication";
-    $self->run_replication();
-    $self->check_msg_annotation_replication($master_store, $replica_store);
+  xlog $self, "Run replication";
+  $self->run_replication();
+  $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog $self, "Write an annotation";
-    $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c1');
+  xlog $self, "Write an annotation";
+  $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c1');
 
-    xlog $self, "Run replication";
-    $self->run_replication();
-    $self->check_msg_annotation_replication($master_store, $replica_store);
+  xlog $self, "Run replication";
+  $self->run_replication();
+  $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog $self, "Write another few annotations";
-    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
-    $self->set_msg_annotation($master_store, 1, '/comment', 'value.shared', 'cs');
-    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared', 'as');
+  xlog $self, "Write another few annotations";
+  $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv',
+    'a1');
+  $self->set_msg_annotation($master_store, 1, '/comment', 'value.shared', 'cs');
+  $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared',
+    'as');
 
-    xlog $self, "Run replication";
-    $self->run_replication();
-    $self->check_msg_annotation_replication($master_store, $replica_store);
+  xlog $self, "Run replication";
+  $self->run_replication();
+  $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog $self, "Delete the first annotation";
-    $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', '');
-    $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared', '');
+  xlog $self, "Delete the first annotation";
+  $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', '');
+  $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.shared',
+    '');
 
-    xlog $self, "Run replication";
-    $self->run_replication();
-    $self->check_msg_annotation_replication($master_store, $replica_store);
+  xlog $self, "Run replication";
+  $self->run_replication();
+  $self->check_msg_annotation_replication($master_store, $replica_store);
 }

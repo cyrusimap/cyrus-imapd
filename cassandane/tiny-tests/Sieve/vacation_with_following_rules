@@ -2,14 +2,15 @@
 use Cassandane::Tiny;
 
 sub test_vacation_with_following_rules
-    :needs_component_sieve :min_version_3_0
-{
-    my ($self) = @_;
+  : needs_component_sieve : min_version_3_0 {
+  my ($self) = @_;
 
-    my $target = "INBOX.target";
+  my $target = "INBOX.target";
 
-    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
-    $self->{instance}->install_sieve_script(<<'EOF'
+  xlog $self,
+    "Install a sieve script filing all mail into a nonexistant folder";
+  $self->{instance}->install_sieve_script(
+    <<'EOF'
 
 require ["fileinto", "reject", "vacation", "imap4flags", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
 
@@ -34,11 +35,11 @@ if header :contains ["To","Cc","From","Subject","Date","Content-Type","Delivered
 }
 
 EOF
-    );
+  );
 
-    xlog $self, "Deliver a message";
-    my $msg1 = $self->{gen}->generate(subject => "Message 1");
-    $self->{instance}->deliver($msg1);
+  xlog $self, "Deliver a message";
+  my $msg1 = $self->{gen}->generate(subject => "Message 1");
+  $self->{instance}->deliver($msg1);
 
-    # This will crash if we have broken parsing of vacation
+  # This will crash if we have broken parsing of vacation
 }

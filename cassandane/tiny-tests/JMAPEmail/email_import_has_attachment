@@ -2,15 +2,14 @@
 use Cassandane::Tiny;
 
 sub test_email_import_has_attachment
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_1 : needs_component_sieve : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $store = $self->{store};
-    my $talk = $store->get_client();
+  my $store = $self->{store};
+  my $talk  = $store->get_client();
 
-    my $emailSimple = <<'EOF';
+  my $emailSimple = <<'EOF';
 From: example@example.com
 To: example@example.biz
 Subject: This is a test
@@ -20,10 +19,10 @@ MIME-Version: 1.0
 
 This is a very simple message.
 EOF
-    $emailSimple =~ s/\r?\n/\r\n/gs;
-    my $blobIdSimple = $jmap->Upload($emailSimple, "message/rfc822")->{blobId};
+  $emailSimple =~ s/\r?\n/\r\n/gs;
+  my $blobIdSimple = $jmap->Upload($emailSimple, "message/rfc822")->{blobId};
 
-    my $emailMixed = <<'EOF';
+  my $emailMixed = <<'EOF';
 From: example@example.com
 To: example@example.biz
 Subject: This is a test
@@ -45,26 +44,33 @@ data
 
 --123456789--
 EOF
-    $emailMixed =~ s/\r?\n/\r\n/gs;
-    my $blobIdMixed = $jmap->Upload($emailMixed, "message/rfc822")->{blobId};
+  $emailMixed =~ s/\r?\n/\r\n/gs;
+  my $blobIdMixed = $jmap->Upload($emailMixed, "message/rfc822")->{blobId};
 
-    my $inboxId = $self->getinbox()->{id};
+  my $inboxId = $self->getinbox()->{id};
 
-    my $res = $jmap->CallMethods([['Email/import', {
+  my $res = $jmap->CallMethods([
+    [
+      'Email/import',
+      {
         emails => {
-            "1" => {
-                blobId => $blobIdSimple,
-                mailboxIds => {$inboxId =>  JSON::true},
-            },
-            "2" => {
-                blobId => $blobIdMixed,
-                mailboxIds => {$inboxId =>  JSON::true},
-            },
+          "1" => {
+            blobId     => $blobIdSimple,
+            mailboxIds => { $inboxId => JSON::true },
+          },
+          "2" => {
+            blobId     => $blobIdMixed,
+            mailboxIds => { $inboxId => JSON::true },
+          },
         },
-    }, "R1"], ["Email/get", { ids => ["#1", "#2"] }, "R2" ]]);
+      },
+      "R1"
+    ],
+    [ "Email/get", { ids => [ "#1", "#2" ] }, "R2" ]
+  ]);
 
-    my $msgSimple = $res->[1][1]{list}[0];
-    $self->assert_equals(JSON::false, $msgSimple->{hasAttachment});
-    my $msgMixed = $res->[1][1]{list}[1];
-    $self->assert_equals(JSON::true, $msgMixed->{hasAttachment});
+  my $msgSimple = $res->[1][1]{list}[0];
+  $self->assert_equals(JSON::false, $msgSimple->{hasAttachment});
+  my $msgMixed = $res->[1][1]{list}[1];
+  $self->assert_equals(JSON::true, $msgMixed->{hasAttachment});
 }

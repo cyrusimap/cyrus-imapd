@@ -2,14 +2,14 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_changes_add_override_keep_main_unchanged
-    :min_version_3_7 :needs_component_sieve :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  : min_version_3_7 : needs_component_sieve : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :outcome "outcome";
@@ -18,17 +18,14 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    xlog $self, "Fetch CalendarEvent state";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-        }, 'R1'],
-    ]);
-    my $state = $res->[0][1]{state};
-    $self->assert_not_null($state);
+  xlog $self, "Fetch CalendarEvent state";
+  my $res   = $jmap->CallMethods([ [ 'CalendarEvent/get', {}, 'R1' ], ]);
+  my $state = $res->[0][1]{state};
+  $self->assert_not_null($state);
 
-    my $imip = <<'EOF';
+  my $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -59,28 +56,36 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP invite for recurring main event";
-    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+  xlog $self, "Deliver iMIP invite for recurring main event";
+  $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-    xlog $self, "Query changes";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/changes', {
-            sinceState => $state,
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'CalendarEvent/changes',
-                path => '/created',
-            },
-        }, 'R2'],
-    ]);
-    $state = $res->[0][1]{newState};
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
-    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
-    $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
+  xlog $self, "Query changes";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/changes',
+      {
+        sinceState => $state,
+      },
+      'R1'
+    ],
+    [
+      'CalendarEvent/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'CalendarEvent/changes',
+          path     => '/created',
+        },
+      },
+      'R2'
+    ],
+  ]);
+  $state = $res->[0][1]{newState};
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{created} });
+  $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
+  $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
-    $imip = <<'EOF';
+  $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -114,23 +119,31 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP override without main event";
-    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+  xlog $self, "Deliver iMIP override without main event";
+  $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-    xlog $self, "Query changes";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/changes', {
-            sinceState => $state,
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'CalendarEvent/changes',
-                path => '/updated',
-            },
-        }, 'R2'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
-    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
-    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceOverrides});
+  xlog $self, "Query changes";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/changes',
+      {
+        sinceState => $state,
+      },
+      'R1'
+    ],
+    [
+      'CalendarEvent/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'CalendarEvent/changes',
+          path     => '/updated',
+        },
+      },
+      'R2'
+    ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{updated} });
+  $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
+  $self->assert_not_null($res->[1][1]{list}[0]{recurrenceOverrides});
 }

@@ -2,18 +2,17 @@
 use Cassandane::Tiny;
 
 sub test_fantastical_strip_prior_overrides
-    :needs_component_httpd :min_version_3_9
-{
-    my ($self) = @_;
+  : needs_component_httpd : min_version_3_9 {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $uuid = "BB19B9E8-CDFB-4163-873E-EE0B9714F919";
-    my $href = "$CalendarId/$uuid.ics";
-    my $event = <<EOF;
+  my $uuid  = "BB19B9E8-CDFB-4163-873E-EE0B9714F919";
+  my $href  = "$CalendarId/$uuid.ics";
+  my $event = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Flexibits Inc./Fantastical for Mac 3.7.8//EN
@@ -87,16 +86,21 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Add event with overrides prior to start of RRULE";
-    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+  xlog $self, "Add event with overrides prior to start of RRULE";
+  $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
 
-    xlog $self, "Make sure prior overrides are removed but subsequent remain";
-    my $response = $CalDAV->Request('GET', $href);
-    my $newevent = $response->{content};
+  xlog $self, "Make sure prior overrides are removed but subsequent remain";
+  my $response = $CalDAV->Request('GET', $href);
+  my $newevent = $response->{content};
 
-    $self->assert_does_not_match(qr|RECURRENCE-ID;TZID=America/New_York:20230313T140000|, $newevent);
-    $self->assert_does_not_match(qr|RECURRENCE-ID;TZID=America/New_York:20230315T140000|, $newevent);
-    $self->assert_matches(qr|RECURRENCE-ID;TZID=America/New_York:20230317T140000|, $newevent);
-    $self->assert_matches(qr|RECURRENCE-ID;TZID=America/New_York:20230312T120000|, $newevent);
-    $self->assert_matches(qr|SUMMARY:Test override of RDATE before DTSTART|, $newevent);
+  $self->assert_does_not_match(
+    qr|RECURRENCE-ID;TZID=America/New_York:20230313T140000|, $newevent);
+  $self->assert_does_not_match(
+    qr|RECURRENCE-ID;TZID=America/New_York:20230315T140000|, $newevent);
+  $self->assert_matches(qr|RECURRENCE-ID;TZID=America/New_York:20230317T140000|,
+    $newevent);
+  $self->assert_matches(qr|RECURRENCE-ID;TZID=America/New_York:20230312T120000|,
+    $newevent);
+  $self->assert_matches(qr|SUMMARY:Test override of RDATE before DTSTART|,
+    $newevent);
 }

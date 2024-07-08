@@ -2,24 +2,24 @@
 use Cassandane::Tiny;
 
 sub test_imip_reply_one_recurrence
-    :needs_component_sieve :needs_component_httpd :min_version_3_5
-    :want_service_http
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_httpd : min_version_3_5
+  : want_service_http {
+  my ($self) = @_;
 
-    my $IMAP = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $IMAP->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $IMAP = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $IMAP->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Create calendar user";
-    my $CalDAV = $self->{caldav};
-    my $CalendarId = 'Default';
-    my $uuid = "09b59913-30b2-4f90-982a-7ce6e2a56655";
-    my $href = "$CalendarId/$uuid.ics";
+  xlog $self, "Create calendar user";
+  my $CalDAV     = $self->{caldav};
+  my $CalendarId = 'Default';
+  my $uuid       = "09b59913-30b2-4f90-982a-7ce6e2a56655";
+  my $href       = "$CalendarId/$uuid.ics";
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip", "editheader"];
 set "processimip_outcome" "no_action";
 if body :content "text/calendar" :contains "\nMETHOD:" {
@@ -34,9 +34,9 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    my $event = <<'EOF';
+  my $event = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -89,20 +89,19 @@ X-JMAP-SENT-BY;VALUE=TEXT:foo@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
-    xlog $self, "Create an event on calendar";
-    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+  xlog $self, "Create an event on calendar";
+  $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
 
-    xlog $self, "Check that the event made it to calendar";
-    my $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{participants}{'foo@example.net'}{name});
-    $self->assert_str_equals('accepted',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+  xlog $self, "Check that the event made it to calendar";
+  my $events = $CalDAV->GetEvents($CalendarId);
+  $self->assert_equals(1, scalar @$events);
+  $self->assert_str_equals($uuid, $events->[0]{uid});
+  $self->assert_str_equals('Emerson Leaf',
+    $events->[0]{participants}{'foo@example.net'}{name});
+  $self->assert_str_equals('accepted',
+    $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
 
-
-    my $imip = <<'EOF';
+  my $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -159,29 +158,33 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP reply";
-    my $msg = Cassandane::Message->new(raw => $imip);
-    $msg->set_attribute(uid => 1,
-                        flags => [ '\\Recent', '\\Flagged' ]);
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver iMIP reply";
+  my $msg = Cassandane::Message->new(raw => $imip);
+  $msg->set_attribute(
+    uid   => 1,
+    flags => [ '\\Recent', '\\Flagged' ]
+  );
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Check that the message made it to INBOX";
-    $self->check_messages({ 1 => $msg }, check_guid => 0);
+  xlog $self, "Check that the message made it to INBOX";
+  $self->check_messages({ 1 => $msg }, check_guid => 0);
 
-    xlog $self, "Check that the reply made it to calendar";
-    $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    # top level is not updated
-    $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{participants}{'foo@example.net'}{name});
-    $self->assert_str_equals('accepted',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
-    # particular recurrence is
-    my $recur = '2023-06-29T09:00:00';
+  xlog $self, "Check that the reply made it to calendar";
+  $events = $CalDAV->GetEvents($CalendarId);
+  $self->assert_equals(1, scalar @$events);
+  $self->assert_str_equals($uuid, $events->[0]{uid});
+  # top level is not updated
+  $self->assert_str_equals('Emerson Leaf',
+    $events->[0]{participants}{'foo@example.net'}{name});
+  $self->assert_str_equals('accepted',
+    $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+  # particular recurrence is
+  my $recur = '2023-06-29T09:00:00';
 
-    $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{name});
-    $self->assert_str_equals('tentative',
-                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{scheduleStatus});
+  $self->assert_str_equals('Emerson Leaf',
+    $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}
+      {name});
+  $self->assert_str_equals('tentative',
+    $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}
+      {scheduleStatus});
 }

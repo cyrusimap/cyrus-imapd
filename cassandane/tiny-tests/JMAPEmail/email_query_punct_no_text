@@ -2,17 +2,17 @@
 use Cassandane::Tiny;
 
 sub test_email_query_punct_no_text
-    :needs_component_sieve :needs_component_jmap :JMAPExtensions
-{
-    my ($self) = @_;
-    my $imap = $self->{store}->get_client();
+  : needs_component_sieve : needs_component_jmap : JMAPExtensions {
+  my ($self) = @_;
+  my $imap = $self->{store}->get_client();
 
-    $imap->create("matches") or die;
+  $imap->create("matches") or die;
 
-    # Assert that punctuation-only terms in non-text criteria
-    # match nothing. Also see email_query_utf8punct_term.
+  # Assert that punctuation-only terms in non-text criteria
+  # match nothing. Also see email_query_utf8punct_term.
 
-    $self->{instance}->install_sieve_script(<<'EOF'
+  $self->{instance}->install_sieve_script(
+    <<'EOF'
 require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
 # Search: "from:\"=\""
 if allof(
@@ -32,9 +32,9 @@ if allof(
   set "stop" "Y";
 }
 EOF
-    );
+  );
 
-    my $mime = <<'EOF';
+  my $mime = <<'EOF';
 From: from@local
 To: to@local
 Subject: test
@@ -45,12 +45,12 @@ Content-Transfer-Encoding: 7bit
 
 hello
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
-    my $msg = Cassandane::Message->new();
-    $msg->set_lines(split /\n/, $mime);
-    $self->{instance}->deliver($msg);
+  $mime =~ s/\r?\n/\r\n/gs;
+  my $msg = Cassandane::Message->new();
+  $msg->set_lines(split /\n/, $mime);
+  $self->{instance}->deliver($msg);
 
-    xlog "Assert that message did not match";
-    $self->assert_num_equals(0, $imap->message_count('matches'));
-    $self->assert_num_equals(1, $imap->message_count('INBOX'));
+  xlog "Assert that message did not match";
+  $self->assert_num_equals(0, $imap->message_count('matches'));
+  $self->assert_num_equals(1, $imap->message_count('INBOX'));
 }

@@ -2,27 +2,26 @@
 use Cassandane::Tiny;
 
 sub test_put_get_v3_v4
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CardDAV = $self->{carddav};
-    my $Id = $CardDAV->NewAddressBook('foo');
-    $self->assert_not_null($Id);
-    $self->assert_str_equals($Id, 'foo');
-    my $href = "$Id/bar.vcf";
-    my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
-    my $photo = "R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
-    my $logo = "http://bubbagump.com/logo.jpg";
-    my $sound = "ABCDEF";
-    my $lat = "30.3912";
-    my $lon = "-88.8610";
-    my $tel = "+1-800-555-1212";
-    my $email1 = "shrimp\@bubbagump.com";
-    my $email2 = "bubba\@bubbagump.com";
-    my $tzid = "America/New_York";
+  my $CardDAV = $self->{carddav};
+  my $Id      = $CardDAV->NewAddressBook('foo');
+  $self->assert_not_null($Id);
+  $self->assert_str_equals($Id, 'foo');
+  my $href   = "$Id/bar.vcf";
+  my $uid    = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+  my $photo  = "R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+  my $logo   = "http://bubbagump.com/logo.jpg";
+  my $sound  = "ABCDEF";
+  my $lat    = "30.3912";
+  my $lon    = "-88.8610";
+  my $tel    = "+1-800-555-1212";
+  my $email1 = "shrimp\@bubbagump.com";
+  my $email2 = "bubba\@bubbagump.com";
+  my $tzid   = "America/New_York";
 
-    my $card = <<EOF;
+  my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
 UID:$uid
@@ -42,77 +41,85 @@ TZ;VALUE=TEXT:$tzid
 END:VCARD
 EOF
 
-    # patterns for matching parameters
-    my $typesep = "(,|;TYPE=)";  # either comma-separated values or separate params
-    my $binary = "ENCODING=[B|b]";
-    my $utcoff = "[U|u][T|t][C|c]-[O|o][F|f][F|f][S|s][E|e][T|t]";
-    my $video = "[V|v][I|i][D|d][E|e][O|o]";
-    my $work = "[W|w][O|o][R|r][K|k]";
-    my $pref = "[P|p][R|r][E|e][F|f]";
-    my $text = "[T|t][E|e][X|x][T|t]";
-    my $uri = "[U|u][R|r][I|i]";
-    my $gif = "[G|g][I|i][F|f]";
-    my $mp3 = "[M|m][P|p]3";
+  # patterns for matching parameters
+  my $typesep = "(,|;TYPE=)"; # either comma-separated values or separate params
+  my $binary  = "ENCODING=[B|b]";
+  my $utcoff  = "[U|u][T|t][C|c]-[O|o][F|f][F|f][S|s][E|e][T|t]";
+  my $video   = "[V|v][I|i][D|d][E|e][O|o]";
+  my $work    = "[W|w][O|o][R|r][K|k]";
+  my $pref    = "[P|p][R|r][E|e][F|f]";
+  my $text    = "[T|t][E|e][X|x][T|t]";
+  my $uri     = "[U|u][R|r][I|i]";
+  my $gif     = "[G|g][I|i][F|f]";
+  my $mp3     = "[M|m][P|p]3";
 
-    my %Headers = (
-      'Content-Type' => 'text/vcard',
-      'Authorization' => $CardDAV->auth_header(),
-    );
+  my %Headers = (
+    'Content-Type'  => 'text/vcard',
+    'Authorization' => $CardDAV->auth_header(),
+  );
 
-    xlog $self, "PUT vCard v3 with text UID";
-    my $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
-        content => $card,
-        headers => \%Headers,
-    });
-    $self->assert_num_equals(201, $Response->{status});
+  xlog $self, "PUT vCard v3 with text UID";
+  my $Response = $CardDAV->{ua}->request(
+    'PUT',
+    $CardDAV->request_url($href),
+    {
+      content => $card,
+      headers => \%Headers,
+    }
+  );
+  $self->assert_num_equals(201, $Response->{status});
 
-    xlog $self, "GET as vCard v4";
-    my $response = $CardDAV->Request('GET', $href, '',
-                                     'Accept' => 'text/vcard; version=4.0');
-    my $newcard = $response->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
-    $self->assert_matches(qr/PHOTO;TYPE=$video:data:image\/gif;base64,$photo/,
-                          $newcard);
-    $self->assert_matches(qr/LOGO;MEDIATYPE=image\/jpeg:$logo/, $newcard);
-    $self->assert_matches(qr/GEO(;VALUE=$uri)?:geo:$lat,$lon/, $newcard);
-    $self->assert_matches(qr/TEL;TYPE=foo$typesep$work;PREF=1:/, $newcard);
-    $self->assert_matches(qr/EMAIL;PREF=1:$email1/, $newcard);
-    $self->assert_matches(qr/EMAIL:$email2/, $newcard);
-    $self->assert_matches(qr/TZ;VALUE=$utcoff:-0500/, $newcard);
-    $self->assert_matches(qr/TZ(;VALUE=$text)?:$tzid/, $newcard);
+  xlog $self, "GET as vCard v4";
+  my $response = $CardDAV->Request('GET', $href, '',
+    'Accept' => 'text/vcard; version=4.0');
+  my $newcard = $response->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
+  $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
+  $self->assert_matches(qr/PHOTO;TYPE=$video:data:image\/gif;base64,$photo/,
+    $newcard);
+  $self->assert_matches(qr/LOGO;MEDIATYPE=image\/jpeg:$logo/,  $newcard);
+  $self->assert_matches(qr/GEO(;VALUE=$uri)?:geo:$lat,$lon/,   $newcard);
+  $self->assert_matches(qr/TEL;TYPE=foo$typesep$work;PREF=1:/, $newcard);
+  $self->assert_matches(qr/EMAIL;PREF=1:$email1/,              $newcard);
+  $self->assert_matches(qr/EMAIL:$email2/,                     $newcard);
+  $self->assert_matches(qr/TZ;VALUE=$utcoff:-0500/,            $newcard);
+  $self->assert_matches(qr/TZ(;VALUE=$text)?:$tzid/,           $newcard);
 
-    xlog $self, "PUT same vCard as v4 with some edits";
-    $newcard =~ s|END:|SOUND;MEDIATYPE=audio/mp3:data:;base64,$sound\r\nEND:|;
-    $newcard =~ s/:$tel/;VALUE=URL:tel:$tel/;
-    $newcard =~ s/EMAIL;PREF=1:/EMAIL;PREF=2:/;
-    $newcard =~ s/:$email2/;PREF=1:$email2/;
-#    $newcard =~ s/-0500/-05/;  #not supported by libicalvcard yet
-    $newcard =~ s/TZ;VALUE=TEXT:/TZ:/;
+  xlog $self, "PUT same vCard as v4 with some edits";
+  $newcard =~ s|END:|SOUND;MEDIATYPE=audio/mp3:data:;base64,$sound\r\nEND:|;
+  $newcard =~ s/:$tel/;VALUE=URL:tel:$tel/;
+  $newcard =~ s/EMAIL;PREF=1:/EMAIL;PREF=2:/;
+  $newcard =~ s/:$email2/;PREF=1:$email2/;
+  #    $newcard =~ s/-0500/-05/;  #not supported by libicalvcard yet
+  $newcard =~ s/TZ;VALUE=TEXT:/TZ:/;
 
-    $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
-        content => $newcard,
-        headers => \%Headers,
-    });
-    $self->assert_num_equals(204, $Response->{status});
+  $Response = $CardDAV->{ua}->request(
+    'PUT',
+    $CardDAV->request_url($href),
+    {
+      content => $newcard,
+      headers => \%Headers,
+    }
+  );
+  $self->assert_num_equals(204, $Response->{status});
 
-    xlog $self, "GET as vCard v3";
-    $tel =~ s/\+/\\+/;  # escape the '+' for matching
+  xlog $self, "GET as vCard v3";
+  $tel =~ s/\+/\\+/; # escape the '+' for matching
 
-    $response = $CardDAV->Request('GET', $href, '',
-                                  'Accept' => 'text/vcard; version=3.0');
-    $newcard = $response->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/UID:$uid/, $newcard);
-    $self->assert_matches(qr/PHOTO;TYPE=$video(,$gif)?;$binary(;TYPE=$gif)?:$photo/,
-                          $newcard);
-    $self->assert_matches(qr/LOGO;VALUE=$uri;TYPE=JPEG:$logo/, $newcard);
-    $self->assert_matches(qr/SOUND;$binary;TYPE=$mp3:$sound/, $newcard);
-    $self->assert_matches(qr/GEO:$lat;$lon/, $newcard);
-    $self->assert_matches(qr/TEL;TYPE=foo$typesep$work$typesep$pref:$tel/,
-                          $newcard);
-    $self->assert_matches(qr/EMAIL:$email1/, $newcard);
-    $self->assert_matches(qr/EMAIL;TYPE=$pref:$email2/, $newcard);
-    $self->assert_matches(qr/TZ(;VALUE=$utcoff)?:-05(:)?00/, $newcard);
-    $self->assert_matches(qr/TZ;VALUE=$text:$tzid/, $newcard);
+  $response = $CardDAV->Request('GET', $href, '',
+    'Accept' => 'text/vcard; version=3.0');
+  $newcard = $response->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
+  $self->assert_matches(qr/UID:$uid/, $newcard);
+  $self->assert_matches(
+    qr/PHOTO;TYPE=$video(,$gif)?;$binary(;TYPE=$gif)?:$photo/, $newcard);
+  $self->assert_matches(qr/LOGO;VALUE=$uri;TYPE=JPEG:$logo/, $newcard);
+  $self->assert_matches(qr/SOUND;$binary;TYPE=$mp3:$sound/,  $newcard);
+  $self->assert_matches(qr/GEO:$lat;$lon/,                   $newcard);
+  $self->assert_matches(qr/TEL;TYPE=foo$typesep$work$typesep$pref:$tel/,
+    $newcard);
+  $self->assert_matches(qr/EMAIL:$email1/,                 $newcard);
+  $self->assert_matches(qr/EMAIL;TYPE=$pref:$email2/,      $newcard);
+  $self->assert_matches(qr/TZ(;VALUE=$utcoff)?:-05(:)?00/, $newcard);
+  $self->assert_matches(qr/TZ;VALUE=$text:$tzid/,          $newcard);
 }

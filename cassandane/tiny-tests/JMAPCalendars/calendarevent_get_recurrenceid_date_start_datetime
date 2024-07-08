@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_recurrenceid_date_start_datetime
-    :min_version_3_5 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_5 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    my $ical = <<EOF;
+  my $ical = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//foo//bar//EN
@@ -46,15 +45,18 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $event = $self->putandget_vevent('2a358cee-6489-4f14-a57f-c104db4dc357',
-        $ical, ['recurrenceOverrides']);
+  my $event = $self->putandget_vevent('2a358cee-6489-4f14-a57f-c104db4dc357',
+    $ical, ['recurrenceOverrides']);
 
-    $self->assert_deep_equals({
-        '2016-09-02T16:15:14' => {
-            title => 'testWithDateTimeRecurId',
-        },
-        '2016-09-03T16:15:14' => {
-            title => 'testWithDateRecurId',
-        },
-    }, $event->{recurrenceOverrides});
+  $self->assert_deep_equals(
+    {
+      '2016-09-02T16:15:14' => {
+        title => 'testWithDateTimeRecurId',
+      },
+      '2016-09-03T16:15:14' => {
+        title => 'testWithDateRecurId',
+      },
+    },
+    $event->{recurrenceOverrides}
+  );
 }

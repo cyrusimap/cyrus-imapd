@@ -2,32 +2,31 @@
 use Cassandane::Tiny;
 
 sub test_stem_verbs
-    :min_version_3_0 :needs_search_xapian :JMAPExtensions
-{
-    my ($self) = @_;
-    $self->create_testmessages();
+  : min_version_3_0 : needs_search_xapian : JMAPExtensions {
+  my ($self) = @_;
+  $self->create_testmessages();
 
-    my $talk = $self->{store}->get_client();
-    $self->assert_not_null($self->{jmap});
+  my $talk = $self->{store}->get_client();
+  $self->assert_not_null($self->{jmap});
 
-    xlog $self, "Select INBOX";
-    my $r = $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
-    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+  xlog $self, "Select INBOX";
+  my $r           = $talk->select("INBOX") || die;
+  my $uidvalidity = $talk->get_response_code('uidvalidity');
+  my $uids        = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog $self, 'SEARCH for subject "runs"';
-    $r = $talk->search('subject', { Quote => "runs" }) || die;
-    if ($self->{fuzzyalways}) {
-        $self->assert_num_equals(3, scalar @$r);
-    } else {
-        $self->assert_num_equals(1, scalar @$r);
-    }
-
-    xlog $self, 'SEARCH for FUZZY subject "runs"';
-    $r = $talk->search('fuzzy', ['subject', { Quote => "runs" }]) || die;
+  xlog $self, 'SEARCH for subject "runs"';
+  $r = $talk->search('subject', { Quote => "runs" }) || die;
+  if ($self->{fuzzyalways}) {
     $self->assert_num_equals(3, scalar @$r);
+  } else {
+    $self->assert_num_equals(1, scalar @$r);
+  }
 
-    xlog $self, 'Get snippets for FUZZY subject "runs"';
-    $r = $self->get_snippets('INBOX', $uids, { subject => 'runs' });
-    $self->assert_num_equals(3, scalar @{$r->{snippets}});
+  xlog $self, 'SEARCH for FUZZY subject "runs"';
+  $r = $talk->search('fuzzy', [ 'subject', { Quote => "runs" } ]) || die;
+  $self->assert_num_equals(3, scalar @$r);
+
+  xlog $self, 'Get snippets for FUZZY subject "runs"';
+  $r = $self->get_snippets('INBOX', $uids, { subject => 'runs' });
+  $self->assert_num_equals(3, scalar @{ $r->{snippets} });
 }

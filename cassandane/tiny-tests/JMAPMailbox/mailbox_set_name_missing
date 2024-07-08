@@ -2,22 +2,27 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_name_missing
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
+  : min_version_3_1 : needs_component_jmap {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
+  my $jmap = $self->{jmap};
 
-    xlog $self, "create mailbox";
-    my $res = $jmap->CallMethods([
-        ['Mailbox/set', { create => {
-                "1" => { role => undef },
-                "2" => { role => undef, name => "\t " },
-        }}, "R1"]
-    ]);
-    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
-    $self->assert_str_equals('name', $res->[0][1]{notCreated}{1}{properties}[0]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{2}{type});
-    $self->assert_str_equals('name', $res->[0][1]{notCreated}{2}{properties}[0]);
+  xlog $self, "create mailbox";
+  my $res = $jmap->CallMethods([ [
+    'Mailbox/set',
+    {
+      create => {
+        "1" => { role => undef },
+        "2" => { role => undef, name => "\t " },
+      }
+    },
+    "R1"
+  ] ]);
+  $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+  $self->assert_str_equals('invalidProperties',
+    $res->[0][1]{notCreated}{1}{type});
+  $self->assert_str_equals('name', $res->[0][1]{notCreated}{1}{properties}[0]);
+  $self->assert_str_equals('invalidProperties',
+    $res->[0][1]{notCreated}{2}{type});
+  $self->assert_str_equals('name', $res->[0][1]{notCreated}{2}{properties}[0]);
 }

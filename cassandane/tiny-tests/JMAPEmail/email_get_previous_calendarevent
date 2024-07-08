@@ -2,24 +2,22 @@
 use Cassandane::Tiny;
 
 sub test_email_get_previous_calendarevent
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
-    my $instance = $self->{instance};
+  : min_version_3_5 : needs_component_jmap : JMAPExtensions {
+  my ($self)   = @_;
+  my $jmap     = $self->{jmap};
+  my $imap     = $self->{store}->get_client();
+  my $instance = $self->{instance};
 
+  my $using = [
+    'urn:ietf:params:jmap:core',
+    'urn:ietf:params:jmap:mail',
+    'urn:ietf:params:jmap:submission',
+    'https://cyrusimap.org/ns/jmap/mail',
+    'https://cyrusimap.org/ns/jmap/debug',
+    'https://cyrusimap.org/ns/jmap/performance',
+  ];
 
-    my $using = [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-        'https://cyrusimap.org/ns/jmap/mail',
-        'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/performance',
-    ];
-
-    my $rawMessage = <<'EOF';
+  my $rawMessage = <<'EOF';
 From: from@local
 To: to@local
 Subject: test
@@ -73,31 +71,39 @@ END:VCALENDAR
 
 --c4683f7a320d4d20902b000486fbdf9b--
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
-    $imap->append('INBOX', $rawMessage) || die $@;
+  $rawMessage =~ s/\r?\n/\r\n/gs;
+  $imap->append('INBOX', $rawMessage) || die $@;
 
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    my $res = $jmap->CallMethods([
-        ['Email/query', {
-        }, 'R1'],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids',
-            },
-            properties => ['calendarEvents', 'previousCalendarEvent'],
-        }, 'R2'],
-    ], $using);
+  my $res = $jmap->CallMethods(
+    [
+      [ 'Email/query', {}, 'R1' ],
+      [
+        'Email/get',
+        {
+          '#ids' => {
+            resultOf => 'R1',
+            name     => 'Email/query',
+            path     => '/ids',
+          },
+          properties => [ 'calendarEvents', 'previousCalendarEvent' ],
+        },
+        'R2'
+      ],
+    ],
+    $using
+  );
 
-    $self->assert_str_equals('test',
-        $res->[1][1]{list}[0]{previousCalendarEvent}{title});
-    $self->assert_str_equals('updatedTest',
-        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
+  $self->assert_str_equals('test',
+    $res->[1][1]{list}[0]{previousCalendarEvent}{title});
+  $self->assert_str_equals('updatedTest',
+    $res->[1][1]{list}[0]{calendarEvents}{2}[0]{title});
 
-    $self->assert_str_equals('40d6fe3c-6a51-489e-823e-3ea22f427a3e',
-        $res->[1][1]{list}[0]{previousCalendarEvent}{uid});
-    $self->assert_str_equals('40d6fe3c-6a51-489e-823e-3ea22f427a3e',
-        $res->[1][1]{list}[0]{calendarEvents}{2}[0]{uid});
+  $self->assert_str_equals('40d6fe3c-6a51-489e-823e-3ea22f427a3e',
+    $res->[1][1]{list}[0]{previousCalendarEvent}{uid});
+  $self->assert_str_equals(
+    '40d6fe3c-6a51-489e-823e-3ea22f427a3e',
+    $res->[1][1]{list}[0]{calendarEvents}{2}[0]{uid}
+  );
 }

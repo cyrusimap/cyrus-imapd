@@ -2,56 +2,67 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_intermediary_rename
-    :min_version_3_1 :max_version_3_4 :needs_component_jmap :NoAltNameSpace
-{
-    my ($self) = @_;
+  : min_version_3_1 : max_version_3_4 : needs_component_jmap : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  my $jmap = $self->{jmap};
+  my $imap = $self->{store}->get_client();
 
-    xlog $self, "Create mailboxes";
-    $imap->create("INBOX.i1.i2.foo") or die;
-    my $res = $jmap->CallMethods([
-        ['Mailbox/get', {
-            properties => ['name', 'parentId'],
-        }, "R1"]
-    ]);
-    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    my $mboxId = $mboxByName{'i2'}->{id};
-    my $mboxIdParent = $mboxByName{'i2'}->{parentId};
-    $self->assert_not_null($mboxIdParent);
+  xlog $self, "Create mailboxes";
+  $imap->create("INBOX.i1.i2.foo") or die;
+  my $res = $jmap->CallMethods([ [
+    'Mailbox/get',
+    {
+      properties => [ 'name', 'parentId' ],
+    },
+    "R1"
+  ] ]);
+  my %mboxByName   = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  my $mboxId       = $mboxByName{'i2'}->{id};
+  my $mboxIdParent = $mboxByName{'i2'}->{parentId};
+  $self->assert_not_null($mboxIdParent);
 
-    xlog $self, "Rename intermediate";
-    $res = $jmap->CallMethods([
-        ['Mailbox/set', {
-            update => {
-                $mboxId => {
-                    name => 'i3',
-                },
-            }
-        }, 'R1'],
-        ['Mailbox/get', {
-            ids => [$mboxId],
-            properties => ['name', 'parentId'],
-        }, 'R2'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$mboxId});
-    $self->assert_str_equals('i3', $res->[1][1]{list}[0]{name});
-    $self->assert_str_equals($mboxIdParent, $res->[1][1]{list}[0]{parentId});
+  xlog $self, "Rename intermediate";
+  $res = $jmap->CallMethods([
+    [
+      'Mailbox/set',
+      {
+        update => {
+          $mboxId => {
+            name => 'i3',
+          },
+        }
+      },
+      'R1'
+    ],
+    [
+      'Mailbox/get',
+      {
+        ids        => [$mboxId],
+        properties => [ 'name', 'parentId' ],
+      },
+      'R2'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$mboxId});
+  $self->assert_str_equals('i3',          $res->[1][1]{list}[0]{name});
+  $self->assert_str_equals($mboxIdParent, $res->[1][1]{list}[0]{parentId});
 
-    xlog $self, "Assert mailbox tree";
-    $res = $jmap->CallMethods([
-        ['Mailbox/get', {
-            properties => ['name', 'parentId'],
-        }, "R1"]
-    ]);
-    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(4, scalar keys %mboxByName);
-    $self->assert_not_null($mboxByName{'Inbox'});
-    $self->assert_not_null($mboxByName{'i1'});
-    $self->assert_not_null($mboxByName{'i3'});
-    $self->assert_not_null($mboxByName{'foo'});
-    $self->assert_null($mboxByName{i1}->{parentId});
-    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i3}->{parentId});
-    $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
+  xlog $self, "Assert mailbox tree";
+  $res = $jmap->CallMethods([ [
+    'Mailbox/get',
+    {
+      properties => [ 'name', 'parentId' ],
+    },
+    "R1"
+  ] ]);
+  %mboxByName = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  $self->assert_num_equals(4, scalar keys %mboxByName);
+  $self->assert_not_null($mboxByName{'Inbox'});
+  $self->assert_not_null($mboxByName{'i1'});
+  $self->assert_not_null($mboxByName{'i3'});
+  $self->assert_not_null($mboxByName{'foo'});
+  $self->assert_null($mboxByName{i1}->{parentId});
+  $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i3}->{parentId});
+  $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
 }

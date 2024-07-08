@@ -2,23 +2,23 @@
 use Cassandane::Tiny;
 
 sub test_replication_repair_zero_msgs
-    :needs_component_replication
-{
-    my ($self) = @_;
+  : needs_component_replication {
+  my ($self) = @_;
 
-    my $mastertalk = $self->{master_store}->get_client();
-    my $replicatalk = $self->{replica_store}->get_client();
+  my $mastertalk  = $self->{master_store}->get_client();
+  my $replicatalk = $self->{replica_store}->get_client();
 
-    # raise the modseq on the master end
-    $mastertalk->setmetadata("INBOX", "/shared/comment", "foo");
-    $mastertalk->setmetadata("INBOX", "/shared/comment", "");
-    $mastertalk->setmetadata("INBOX", "/shared/comment", "foo");
-    $mastertalk->setmetadata("INBOX", "/shared/comment", "");
+  # raise the modseq on the master end
+  $mastertalk->setmetadata("INBOX", "/shared/comment", "foo");
+  $mastertalk->setmetadata("INBOX", "/shared/comment", "");
+  $mastertalk->setmetadata("INBOX", "/shared/comment", "foo");
+  $mastertalk->setmetadata("INBOX", "/shared/comment", "");
 
-    my $msg = $self->make_message("to be deleted", store => $self->{replica_store});
+  my $msg
+    = $self->make_message("to be deleted", store => $self->{replica_store});
 
-    $replicatalk->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
-    $replicatalk->expunge();
+  $replicatalk->store($msg->{attrs}->{uid}, '+flags', '(\\deleted)');
+  $replicatalk->expunge();
 
-    $self->run_replication(user => 'cassandane');
+  $self->run_replication(user => 'cassandane');
 }

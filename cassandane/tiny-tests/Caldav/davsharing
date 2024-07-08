@@ -2,30 +2,29 @@
 use Cassandane::Tiny;
 
 sub test_davsharing
-    :min_version_3_0 :needs_component_httpd :NoVirtDomains
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_component_httpd : NoVirtDomains {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $admintalk = $self->{adminstore}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    $admintalk->create("user.manifold");
-    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
-    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+  $admintalk->create("user.manifold");
+  $admintalk->setacl("user.manifold", admin    => 'lrswipkxtecdan');
+  $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
 
-    my $service = $self->{instance}->get_service("http");
-    my $mantalk = Net::CalDAVTalk->new(
-        user => "manifold",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+  my $service = $self->{instance}->get_service("http");
+  my $mantalk = Net::CalDAVTalk->new(
+    user      => "manifold",
+    password  => 'pass',
+    host      => $service->host(),
+    port      => $service->port(),
+    scheme    => 'http',
+    url       => '/',
+    expandurl => 1,
+  );
 
-    my $invite = <<EOF;
+  my $invite = <<EOF;
 <?xml version="1.0" encoding="utf-8" ?>
 <D:share-resource xmlns:D="DAV:">
   <D:sharee>
@@ -41,7 +40,7 @@ sub test_davsharing
 </D:share-resource>
 EOF
 
-    my $reply = <<EOF;
+  my $reply = <<EOF;
 <?xml version="1.0" encoding="utf-8" ?>
 <D:invite-reply xmlns:D="DAV:">
   <D:invite-accepted />
@@ -52,86 +51,87 @@ EOF
 </D:invite-reply>
 EOF
 
-    xlog $self, "create calendar";
-    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
-    $self->assert_not_null($CalendarId);
+  xlog $self, "create calendar";
+  my $CalendarId = $mantalk->NewCalendar({ name => 'Manifold Calendar' });
+  $self->assert_not_null($CalendarId);
 
-    xlog $self, "share to user";
-    $mantalk->Request('POST', $CalendarId, $invite,
-                      'Content-Type' => 'application/davsharing+xml');
+  xlog $self, "share to user";
+  $mantalk->Request('POST', $CalendarId, $invite,
+    'Content-Type' => 'application/davsharing+xml');
 
-    xlog $self, "fetch invite";
-    my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
-    $self->assert_equals(scalar %$adds, 1);
-    my $notification = (keys %$adds)[0];
+  xlog $self, "fetch invite";
+  my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
+  $self->assert_equals(scalar %$adds, 1);
+  my $notification = (keys %$adds)[0];
 
-    xlog $self, "accept invite";
-    $CalDAV->Request('POST', $notification, $reply,
-                     'Content-Type' => 'application/davsharing+xml');
+  xlog $self, "accept invite";
+  $CalDAV->Request('POST', $notification, $reply,
+    'Content-Type' => 'application/davsharing+xml');
 
-    xlog $self, "fetch invite reply";
-    ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
-    $self->assert_equals(scalar %$adds, 1);
-    $notification = (keys %$adds)[0];
+  xlog $self, "fetch invite reply";
+  ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
+  $self->assert_equals(scalar %$adds, 1);
+  $notification = (keys %$adds)[0];
 
-    my $res = $mantalk->Request('GET', $notification);
-    my $xml = xmlToHash($res->{content});
-    my $CS = 'http://calendarserver.org/ns/';
-    $reply = $xml->{"{$CS}invite-reply"};
-    $self->assert_not_null($reply);
-    $self->assert_not_null($reply->{"{$CS}invite-accepted"});
-    $self->assert_str_equals($mantalk->fullpath($CalendarId) . "/",
-                             $reply->{"{$CS}hosturl"}{'{DAV:}href'}{content});
-    $self->assert_str_equals(basename($notification),
-                             $reply->{"{$CS}in-reply-to"}{content});
+  my $res = $mantalk->Request('GET', $notification);
+  my $xml = xmlToHash($res->{content});
+  my $CS  = 'http://calendarserver.org/ns/';
+  $reply = $xml->{"{$CS}invite-reply"};
+  $self->assert_not_null($reply);
+  $self->assert_not_null($reply->{"{$CS}invite-accepted"});
+  $self->assert_str_equals($mantalk->fullpath($CalendarId) . "/",
+    $reply->{"{$CS}hosturl"}{'{DAV:}href'}{content});
+  $self->assert_str_equals(basename($notification),
+    $reply->{"{$CS}in-reply-to"}{content});
 
-    # need to version-gate features that aren't in 3.0...
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
-        $self->assert_str_equals('Test User',
-                                 $reply->{"{$CS}common-name"}{content});
-    }
+  # need to version-gate features that aren't in 3.0...
+  my ($maj, $min) = Cassandane::Instance->get_version();
+  if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+    $self->assert_str_equals('Test User',
+      $reply->{"{$CS}common-name"}{content});
+  }
 
-    xlog $self, "get calendars as manifold";
-    my $ManCal = $mantalk->GetCalendars();
-    $self->assert_num_equals(2, scalar @$ManCal);
-    my $names = join "/", sort map { $_->{name} } @$ManCal;
-    $self->assert_str_equals($names, "Manifold Calendar/personal");
+  xlog $self, "get calendars as manifold";
+  my $ManCal = $mantalk->GetCalendars();
+  $self->assert_num_equals(2, scalar @$ManCal);
+  my $names = join "/", sort map { $_->{name} } @$ManCal;
+  $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog $self, "get calendars as cassandane";
-    my $CasCal = $CalDAV->GetCalendars();
-    $self->assert_num_equals(2, scalar @$CasCal);
-    $names = join "/", sort map { $_->{name} } @$CasCal;
-    $self->assert_str_equals($names, "Manifold Calendar/personal");
+  xlog $self, "get calendars as cassandane";
+  my $CasCal = $CalDAV->GetCalendars();
+  $self->assert_num_equals(2, scalar @$CasCal);
+  $names = join "/", sort map { $_->{name} } @$CasCal;
+  $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog $self, "Update calendar name as cassandane";
-    my ($CasId) = map { $_->{id} } grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
-    $CalDAV->UpdateCalendar({id => $CasId, name => "Cassandane Name"});
+  xlog $self, "Update calendar name as cassandane";
+  my ($CasId)
+    = map { $_->{id} } grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
+  $CalDAV->UpdateCalendar({ id => $CasId, name => "Cassandane Name" });
 
-    xlog $self, "changed as cassandane";
-    $CasCal = $CalDAV->GetCalendars();
-    $self->assert_num_equals(2, scalar @$CasCal);
-    $names = join "/", sort map { $_->{name} } @$CasCal;
-    $self->assert_str_equals($names, "Cassandane Name/personal");
+  xlog $self, "changed as cassandane";
+  $CasCal = $CalDAV->GetCalendars();
+  $self->assert_num_equals(2, scalar @$CasCal);
+  $names = join "/", sort map { $_->{name} } @$CasCal;
+  $self->assert_str_equals($names, "Cassandane Name/personal");
 
-    xlog $self, "unchanged as manifold";
-    $ManCal = $mantalk->GetCalendars();
-    $self->assert_num_equals(2, scalar @$ManCal);
-    $names = join "/", sort map { $_->{name} } @$ManCal;
-    $self->assert_str_equals($names, "Manifold Calendar/personal");
+  xlog $self, "unchanged as manifold";
+  $ManCal = $mantalk->GetCalendars();
+  $self->assert_num_equals(2, scalar @$ManCal);
+  $names = join "/", sort map { $_->{name} } @$ManCal;
+  $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog $self, "delete calendar as cassandane";
-    $CalDAV->DeleteCalendar($CasId);
+  xlog $self, "delete calendar as cassandane";
+  $CalDAV->DeleteCalendar($CasId);
 
-    xlog $self, "changed as cassandane";
-    $CasCal = $CalDAV->GetCalendars();
-    $self->assert_num_equals(1, scalar @$CasCal);
-    $names = join "/", sort map { $_->{name} } @$CasCal;
-    $self->assert_str_equals($names, "personal");
+  xlog $self, "changed as cassandane";
+  $CasCal = $CalDAV->GetCalendars();
+  $self->assert_num_equals(1, scalar @$CasCal);
+  $names = join "/", sort map { $_->{name} } @$CasCal;
+  $self->assert_str_equals($names, "personal");
 
-    xlog $self, "unchanged as manifold";
-    $ManCal = $mantalk->GetCalendars();
-    $self->assert_num_equals(2, scalar @$ManCal);
-    $names = join "/", sort map { $_->{name} } @$ManCal;
-    $self->assert_str_equals($names, "Manifold Calendar/personal");
+  xlog $self, "unchanged as manifold";
+  $ManCal = $mantalk->GetCalendars();
+  $self->assert_num_equals(2, scalar @$ManCal);
+  $names = join "/", sort map { $_->{name} } @$ManCal;
+  $self->assert_str_equals($names, "Manifold Calendar/personal");
 }

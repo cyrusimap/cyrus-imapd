@@ -1,61 +1,63 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_private
-{
-    my ($self) = @_;
+sub test_private {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "testing private metadata operations";
+  xlog $self, "testing private metadata operations";
 
-    xlog $self, "testing specific entries";
-    my $res = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/private');
-    my $r = $res->{INBOX};
-    $self->assert_not_null($r);
-    my %specific_entries = (
-            '/private/vendor/cmu/cyrus-imapd/squat' => undef,
-            '/private/vendor/cmu/cyrus-imapd/sieve' => undef,
-            '/private/vendor/cmu/cyrus-imapd/news2mail' => undef,
-            '/private/vendor/cmu/cyrus-imapd/expire' => undef,
-            '/private/thread' => undef,
-            '/private/sort' => undef,
-            '/private/comment' => undef,
-            '/private/checkperiod' => undef,
-            '/private/check' => undef,
-            '/private/specialuse' => undef,
-            '/private' => undef,
-    );
-    my ($maj, $min, $rev) = Cassandane::Instance->get_version();
-    # We introduced vendor/cmu/cyrus-imapd/{archive,delete} in 3.1.0
-    if ($maj > 3 or ($maj == 3 and $min >= 1)) {
-        $specific_entries{'/private/vendor/cmu/cyrus-imapd/archive'} = undef;
-        $specific_entries{'/private/vendor/cmu/cyrus-imapd/delete'} = undef;
-    }
-    # We introduced vendor/cmu/cyrus-imapd/sortorder in 3.1.3
-    if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 3)))) {
-        $specific_entries{'/private/vendor/cmu/cyrus-imapd/sortorder'} = undef;
-    }
-    # We introduced vendor/cmu/cyrus-imapd/search-fuzzy-always in 3.3.0
-    if ($maj > 3 or ($maj == 3 and $min >= 3)) {
-        $specific_entries{'/private/vendor/cmu/cyrus-imapd/search-fuzzy-always'} = undef;
-    }
+  xlog $self, "testing specific entries";
+  my $res
+    = $imaptalk->getmetadata('INBOX', { depth => 'infinity' }, '/private');
+  my $r = $res->{INBOX};
+  $self->assert_not_null($r);
+  my %specific_entries = (
+    '/private/vendor/cmu/cyrus-imapd/squat'     => undef,
+    '/private/vendor/cmu/cyrus-imapd/sieve'     => undef,
+    '/private/vendor/cmu/cyrus-imapd/news2mail' => undef,
+    '/private/vendor/cmu/cyrus-imapd/expire'    => undef,
+    '/private/thread'                           => undef,
+    '/private/sort'                             => undef,
+    '/private/comment'                          => undef,
+    '/private/checkperiod'                      => undef,
+    '/private/check'                            => undef,
+    '/private/specialuse'                       => undef,
+    '/private'                                  => undef,
+  );
+  my ($maj, $min, $rev) = Cassandane::Instance->get_version();
+  # We introduced vendor/cmu/cyrus-imapd/{archive,delete} in 3.1.0
+  if ($maj > 3 or ($maj == 3 and $min >= 1)) {
+    $specific_entries{'/private/vendor/cmu/cyrus-imapd/archive'} = undef;
+    $specific_entries{'/private/vendor/cmu/cyrus-imapd/delete'}  = undef;
+  }
+  # We introduced vendor/cmu/cyrus-imapd/sortorder in 3.1.3
+  if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 3)))) {
+    $specific_entries{'/private/vendor/cmu/cyrus-imapd/sortorder'} = undef;
+  }
+  # We introduced vendor/cmu/cyrus-imapd/search-fuzzy-always in 3.3.0
+  if ($maj > 3 or ($maj == 3 and $min >= 3)) {
+    $specific_entries{'/private/vendor/cmu/cyrus-imapd/search-fuzzy-always'}
+      = undef;
+  }
 
-    # We introduced vendor/cmu/cyrus-imapd/noexpire_until in 3.9.0
-    if ($maj > 3 or ($maj == 3 and $min >= 9)) {
-        $specific_entries{'/private/vendor/cmu/cyrus-imapd/noexpire_until'} = undef;
-    }
+  # We introduced vendor/cmu/cyrus-imapd/noexpire_until in 3.9.0
+  if ($maj > 3 or ($maj == 3 and $min >= 9)) {
+    $specific_entries{'/private/vendor/cmu/cyrus-imapd/noexpire_until'} = undef;
+  }
 
-    $self->assert_deep_equals(\%specific_entries, $r);
+  $self->assert_deep_equals(\%specific_entries, $r);
 
-    $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    my $com = $imaptalk->getmetadata('INBOX', "/private/comment");
-    $self->assert_str_equals("This is a comment", $com->{INBOX}{"/private/comment"});
+  $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  my $com = $imaptalk->getmetadata('INBOX', "/private/comment");
+  $self->assert_str_equals("This is a comment",
+    $com->{INBOX}{"/private/comment"});
 
-    # remove it again
-    $imaptalk->setmetadata('INBOX', "/private/comment", undef);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $com = $imaptalk->getmetadata('INBOX', "/private/comment");
-    $self->assert_null($com->{INBOX}{"/private/comment"});
+  # remove it again
+  $imaptalk->setmetadata('INBOX', "/private/comment", undef);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $com = $imaptalk->getmetadata('INBOX', "/private/comment");
+  $self->assert_null($com->{INBOX}{"/private/comment"});
 }

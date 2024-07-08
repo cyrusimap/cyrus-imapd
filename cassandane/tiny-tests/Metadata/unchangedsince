@@ -20,155 +20,149 @@ use Cassandane::Tiny;
 #       - returns an OK response
 #       - but reports the UID in the MODIFIED response code
 #
-sub test_unchangedsince
-{
-    my ($self) = @_;
+sub test_unchangedsince {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid modseq));
+  my $talk = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid modseq));
 
-    xlog $self, "Append 3 messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{B} = $self->make_message('Message B');
-    $msg{C} = $self->make_message('Message C');
-    my $hms0 = $self->get_highestmodseq();
+  xlog $self, "Append 3 messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{B} = $self->make_message('Message B');
+  $msg{C} = $self->make_message('Message C');
+  my $hms0 = $self->get_highestmodseq();
 
-    my $entry = '/comment';
-    my $attrib = 'value.priv';
-    my $value1 = "Hello World";
-    my $value2 = "Janis Joplin";
-    my $value3 = "Phantom of the Opera";
+  my $entry  = '/comment';
+  my $attrib = 'value.priv';
+  my $value1 = "Hello World";
+  my $value2 = "Janis Joplin";
+  my $value3 = "Phantom of the Opera";
 
-    my %fetched;
-    my $modified;
-    my %handlers =
-    (
-        fetch => sub
-        {
-            my ($response, $rr, $id) = @_;
+  my %fetched;
+  my $modified;
+  my %handlers = (
+    fetch => sub {
+      my ($response, $rr, $id) = @_;
 
-            # older versions of Mail::IMAPTalk don't have
-            # the 3rd argument.  We can't test properly in
-            # those circumstances.
-            $self->assert_not_null($id);
+      # older versions of Mail::IMAPTalk don't have
+      # the 3rd argument.  We can't test properly in
+      # those circumstances.
+      $self->assert_not_null($id);
 
-            $fetched{$id} = $rr;
-        },
-        modified => sub
-        {
-            my ($response, $rr) = @_;
-            # we should not get more than one of these ever
-            $self->assert_null($modified);
-            $modified = $rr;
-        }
-    );
+      $fetched{$id} = $rr;
+    },
+    modified => sub {
+      my ($response, $rr) = @_;
+      # we should not get more than one of these ever
+      $self->assert_null($modified);
+      $modified = $rr;
+    }
+  );
 
-    # Note: Mail::IMAPTalk::store() doesn't support modifiers
-    # so we have to resort to the lower level interface.
+  # Note: Mail::IMAPTalk::store() doesn't support modifiers
+  # so we have to resort to the lower level interface.
 
-    xlog $self, "setting an annotation with current modseq == UNCHANGEDSINCE";
-    %fetched = ();
-    $modified = undef;
-    $talk->_imap_cmd('store', 1, \%handlers,
-                 '1', ['unchangedsince', $hms0-2],
-                 'annotation', [$entry, [$attrib, $value1]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "setting an annotation with current modseq == UNCHANGEDSINCE";
+  %fetched  = ();
+  $modified = undef;
+  $talk->_imap_cmd('store', 1, \%handlers, '1', [ 'unchangedsince', $hms0 - 2 ],
+    'annotation', [ $entry, [ $attrib, $value1 ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog $self, "fetch an annotation - should be updated";
-    my $hms1 = $self->get_highestmodseq();
-    $self->assert($hms1 > $hms0);
-    my $res = $talk->fetch('1:*',
-                           ['modseq', 'annotation', [$entry, $attrib]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals(
-            {
-                1 => {
-                        modseq => [$hms1],
-                        annotation => { $entry => { $attrib => $value1 } }
-                     },
-                2 => {
-                        modseq => [$hms0-1],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                3 => {
-                        modseq => [$hms0],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-            },
-            $res);
+  xlog $self, "fetch an annotation - should be updated";
+  my $hms1 = $self->get_highestmodseq();
+  $self->assert($hms1 > $hms0);
+  my $res
+    = $talk->fetch('1:*', [ 'modseq', 'annotation', [ $entry, $attrib ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      1 => {
+        modseq     => [$hms1],
+        annotation => { $entry => { $attrib => $value1 } }
+      },
+      2 => {
+        modseq     => [ $hms0 - 1 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      3 => {
+        modseq     => [$hms0],
+        annotation => { $entry => { $attrib => undef } }
+      },
+    },
+    $res
+  );
 
-    xlog $self, "setting an annotation with current modseq < UNCHANGEDSINCE";
-    %fetched = ();
-    $modified = undef;
-    $talk->_imap_cmd('store', 1, \%handlers,
-                 '1', ['unchangedsince', $hms1+1],
-                 'annotation', [$entry, [$attrib, $value2]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "setting an annotation with current modseq < UNCHANGEDSINCE";
+  %fetched  = ();
+  $modified = undef;
+  $talk->_imap_cmd('store', 1, \%handlers, '1', [ 'unchangedsince', $hms1 + 1 ],
+    'annotation', [ $entry, [ $attrib, $value2 ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog $self, "fetch an annotation - should be updated";
-    my $hms2 = $self->get_highestmodseq();
-    $self->assert($hms2 > $hms1);
-    $res = $talk->fetch('1:*',
-                        ['modseq', 'annotation', [$entry, $attrib]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals(
-            {
-                1 => {
-                        modseq => [$hms2],
-                        annotation => { $entry => { $attrib => $value2 } }
-                     },
-                2 => {
-                        modseq => [$hms0-1],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                3 => {
-                        modseq => [$hms0],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-            },
-            $res);
+  xlog $self, "fetch an annotation - should be updated";
+  my $hms2 = $self->get_highestmodseq();
+  $self->assert($hms2 > $hms1);
+  $res = $talk->fetch('1:*', [ 'modseq', 'annotation', [ $entry, $attrib ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      1 => {
+        modseq     => [$hms2],
+        annotation => { $entry => { $attrib => $value2 } }
+      },
+      2 => {
+        modseq     => [ $hms0 - 1 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      3 => {
+        modseq     => [$hms0],
+        annotation => { $entry => { $attrib => undef } }
+      },
+    },
+    $res
+  );
 
-    xlog $self, "setting an annotation with current modseq > UNCHANGEDSINCE";
-    %fetched = ();
-    $modified = undef;
-    $talk->_imap_cmd('store', 1, \%handlers,
-                 '1', ['unchangedsince', $hms2-1],
-                 'annotation', [$entry, [$attrib, $value3]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "setting an annotation with current modseq > UNCHANGEDSINCE";
+  %fetched  = ();
+  $modified = undef;
+  $talk->_imap_cmd('store', 1, \%handlers, '1', [ 'unchangedsince', $hms2 - 1 ],
+    'annotation', [ $entry, [ $attrib, $value3 ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog $self, "didn't update modseq?";
-    my $hms3 = $self->get_highestmodseq();
-    $self->assert($hms3 == $hms2);
-    xlog $self, "fetch an annotation - should not be updated";
-    $res = $talk->fetch('1:*',
-                        ['modseq', 'annotation', [$entry, $attrib]]);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals(
-            {
-                1 => {
-                        # unchanged
-                        modseq => [$hms2],
-                        annotation => { $entry => { $attrib => $value2 } }
-                     },
-                2 => {
-                        modseq => [$hms0-1],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-                3 => {
-                        modseq => [$hms0],
-                        annotation => { $entry => { $attrib => undef } }
-                     },
-            },
-            $res);
-    xlog $self, "reports the UID in the MODIFIED response code?";
-    $self->assert_not_null($modified);
-    $self->assert_deep_equals($modified, [1]);
-    xlog $self, "sent no FETCH untagged response?";
-    $self->assert_num_equals(0, scalar keys %fetched);
+  xlog $self, "didn't update modseq?";
+  my $hms3 = $self->get_highestmodseq();
+  $self->assert($hms3 == $hms2);
+  xlog $self, "fetch an annotation - should not be updated";
+  $res = $talk->fetch('1:*', [ 'modseq', 'annotation', [ $entry, $attrib ] ]);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      1 => {
+        # unchanged
+        modseq     => [$hms2],
+        annotation => { $entry => { $attrib => $value2 } }
+      },
+      2 => {
+        modseq     => [ $hms0 - 1 ],
+        annotation => { $entry => { $attrib => undef } }
+      },
+      3 => {
+        modseq     => [$hms0],
+        annotation => { $entry => { $attrib => undef } }
+      },
+    },
+    $res
+  );
+  xlog $self, "reports the UID in the MODIFIED response code?";
+  $self->assert_not_null($modified);
+  $self->assert_deep_equals($modified, [1]);
+  xlog $self, "sent no FETCH untagged response?";
+  $self->assert_num_equals(0, scalar keys %fetched);
 }
