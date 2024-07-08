@@ -1018,7 +1018,7 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     if (val.empty()) {
-        syslog(LOG_WARNING, "Xapian: not a valid list-id: %s",
+        syslog(LOG_DEBUG, "Xapian: not a valid list-id: %s",
                 buf_cstring(part));
         return 0;
     }
