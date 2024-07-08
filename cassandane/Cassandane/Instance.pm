@@ -681,6 +681,7 @@ sub _build_skeleton
         'data',
         'meta',
         'run',
+        'smtpd',
         'tmp',
     );
     foreach my $sd (@subdirs)
@@ -1120,6 +1121,9 @@ sub _start_smtpd
             port => $port,
             max_servers => 3, # default is 50, yikes
             control_file => "$basedir/conf/smtpd.json",
+            xmtp_tmp_dir => "$basedir/tmp/",
+            store_msg => 1,
+            messages_dir => "$basedir/smtpd/",
         });
         $smtpd->run() or die;
         exit 0; # Never reached
