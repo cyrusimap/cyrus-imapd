@@ -2310,13 +2310,15 @@ static void unorm_cleanup(struct convert_rock *rock, int is_free)
 
 /* converter initialisation routines */
 
-static struct convert_rock *unorm_init(struct convert_rock *next)
+static struct convert_rock *unorm_init(struct convert_rock *next, int flags)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct unorm_state *state = xzmalloc(sizeof(struct unorm_state));
 
     UErrorCode err = U_ZERO_ERROR;
-    state->unorm = unorm2_getNFCInstance(&err);
+    state->unorm = flags & CHARSET_UNORM_NFKC_CF
+        ? unorm2_getNFKCCasefoldInstance(&err)
+        : unorm2_getNFCInstance(&err);
     assert(U_SUCCESS(err));
 
     ucharbuf_reserve(&state->buf, 8);
@@ -2377,8 +2379,8 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     rock->state = s;
     rock->next = next;
 
-    if (flags & CHARSET_UNORM_NFC) {
-        rock = unorm_init(rock);
+    if (flags & (CHARSET_UNORM_NFC|CHARSET_UNORM_NFKC_CF)) {
+        rock = unorm_init(rock, flags);
     }
 
     return rock;

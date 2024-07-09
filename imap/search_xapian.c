@@ -2940,7 +2940,11 @@ static int end_mailbox_update(search_text_receiver_t *rx,
 
 static int xapian_charset_flags(int flags)
 {
-    return (flags|CHARSET_KEEPCASE|CHARSET_MIME_UTF8) & ~CHARSET_SKIPDIACRIT;
+    return (flags |
+            CHARSET_KEEPCASE |
+            CHARSET_MIME_UTF8 |
+            CHARSET_UNORM_NFKC_CF) &
+        ~CHARSET_SKIPDIACRIT;
 }
 
 static int xapian_message_format(int format __attribute__((unused)),
