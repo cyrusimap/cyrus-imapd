@@ -57,6 +57,7 @@ Cyrus::SyncProto  -
 =head1 EXAMPLES
 
 =cut
+
 =head1 PUBLIC API
 =over
 =item Cyrus::SyncProto->new()
@@ -66,39 +67,41 @@ my $digest = Digest::SHA->new();
 
 sub new {
   my $class = shift;
-  my $talk = shift;
+  my $talk  = shift;
 
   my $Self = bless {
     verbose => 1,
-    talk => $talk,
-    tag => 1,
-  }, ref($class) || $class;
+    talk    => $talk,
+    tag     => 1,
+    },
+    ref($class) || $class;
 
   return $Self;
 }
 
 sub mailbox_crc {
-  my $Self = shift;
+  my $Self    = shift;
   my $mailbox = shift;
-  my $crc = 0;
-  foreach my $record (@{$mailbox->{RECORD}}) {
+  my $crc     = 0;
+  foreach my $record (@{ $mailbox->{RECORD} }) {
     $crc ^= $Self->record_crc($record);
   }
   return $crc;
 }
 
 sub record_crc {
-  my $Self = shift;
+  my $Self   = shift;
   my $record = shift;
 
   my $flagcrc = 0;
-  foreach my $flag (@{$record->{FLAGS}}) {
+  foreach my $flag (@{ $record->{FLAGS} }) {
     my $item = lc($flag);
     return 0 if $item eq '\\expunged'; # specialcase
     $flagcrc ^= crc32($item);
   }
 
-  my $str = "$record->{UID} $record->{MODSEQ} $record->{LAST_UPDATED} ($flagcrc) $record->{INTERNALDATE} $record->{GUID}";
+  my $str
+    = "$record->{UID} $record->{MODSEQ} $record->{LAST_UPDATED} ($flagcrc) $record->{INTERNALDATE} $record->{GUID}";
 
   return crc32($str);
 }
@@ -109,9 +112,9 @@ sub _dlitem {
 }
 
 sub dlwrite {
-  my $Self = shift;
+  my $Self    = shift;
   my $command = join(' ', map { _dlitem($_) } @_);
-  my $tag = sprintf("S%08d", $Self->{tag}++);
+  my $tag     = sprintf("S%08d", $Self->{tag}++);
   $Self->{talk}->_imap_socket_out("$tag SYNC$command\r\n");
   my %data;
   my $onecmd = '';
@@ -119,13 +122,13 @@ sub dlwrite {
     if ($line =~ s/^(\* )// || $line =~ m/^( )/) {
       if ($onecmd && $1 eq '* ') {
         my $val = Cyrus::DList->parse_string($onecmd, 1);
-        push @{$data{$val->{key}}}, $val->as_perl();
+        push @{ $data{ $val->{key} } }, $val->as_perl();
         $onecmd = '';
       }
       $onecmd .= $line;
       while ($onecmd =~ m/(\d+)\+?\}\s*$/s) {
         my $length = $1;
-        my $buf = $Self->{talk}->_imap_socket_read_bytes($length);
+        my $buf    = $Self->{talk}->_imap_socket_read_bytes($length);
         $onecmd .= "\r\n" . $buf;
         $onecmd .= $Self->{talk}->_imap_socket_read_line();
       }
@@ -133,7 +136,7 @@ sub dlwrite {
     }
     if ($onecmd) {
       my $val = Cyrus::DList->parse_string($onecmd, 1);
-      push @{$data{$val->{key}}}, $val->as_perl();
+      push @{ $data{ $val->{key} } }, $val->as_perl();
       $onecmd = '';
     }
     die "dlwrite failed @_ => $line" unless $line =~ m{^$tag OK }i;
@@ -158,19 +161,21 @@ sub mailbox_user {
 }
 
 sub apply_sub {
-  my $Self = shift;
+  my $Self    = shift;
   my $mailbox = shift;
-  my $user = shift;
+  my $user    = shift;
 
-  return $Self->dlwrite('APPLY', 'SUB', { MBOXNAME => $mailbox, USERID => $user });
+  return $Self->dlwrite('APPLY', 'SUB',
+    { MBOXNAME => $mailbox, USERID => $user });
 }
 
 sub apply_unsub {
-  my $Self = shift;
+  my $Self    = shift;
   my $mailbox = shift;
-  my $user = shift;
+  my $user    = shift;
 
-  return $Self->dlwrite('APPLY', 'UNSUB', { MBOXNAME => $mailbox, USERID => $user });
+  return $Self->dlwrite('APPLY', 'UNSUB',
+    { MBOXNAME => $mailbox, USERID => $user });
 }
 
 sub apply_unuser {
@@ -181,7 +186,7 @@ sub apply_unuser {
 }
 
 sub apply_unmailbox {
-  my $Self = shift;
+  my $Self    = shift;
   my $mailbox = shift;
 
   return $Self->dlwrite('APPLY', 'UNMAILBOX', $mailbox);
@@ -195,7 +200,7 @@ sub get_user {
 }
 
 sub get_mailboxes {
-  my $Self = shift;
+  my $Self      = shift;
   my @mailboxes = shift;
 
   return $Self->dlwrite("GET", "MAILBOXES", [@mailboxes]);

@@ -40,7 +40,7 @@
 package Cassandane::Cyrus::TesterCardDAV;
 use strict;
 use warnings;
-use Cwd qw(abs_path);
+use Cwd        qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
 use JSON::XS;
@@ -143,218 +143,213 @@ well-known/Simple PROPFIND tests/5 | 1
 well-known/Simple PROPFIND tests/6 | 1
 EOF
 
-sub init
-{
-    my $cassini = Cassandane::Cassini->instance();
-    $basedir = $cassini->val('caldavtester', 'basedir');
-    return unless defined $basedir;
-    $basedir = abs_path($basedir);
+sub init {
+  my $cassini = Cassandane::Cassini->instance();
+  $basedir = $cassini->val('caldavtester', 'basedir');
+  return unless defined $basedir;
+  $basedir = abs_path($basedir);
 
-    my $supp = $cassini->val('caldavtester', 'suppress-carddav',
-                             '');
-    map { $suppressed{$_} = 1; } split(/\s+/, $supp);
+  my $supp = $cassini->val('caldavtester', 'suppress-carddav', '');
+  map { $suppressed{$_} = 1; } split(/\s+/, $supp);
 
-    foreach my $row (split /\n/, $KNOWN_ERRORS) {
-        next if $row =~ m/\s*\#/;
-        next unless $row =~ m/\S/;
-        my ($key, @items) = split /\s*\|\s*/, $row;
-        $expected{$key} = \@items;
-    }
+  foreach my $row (split /\n/, $KNOWN_ERRORS) {
+    next if $row     =~ m/\s*\#/;
+    next unless $row =~ m/\S/;
+    my ($key, @items) = split /\s*\|\s*/, $row;
+    $expected{$key} = \@items;
+  }
 
-    $binary = "$basedir/testcaldav.py";
-    $testdir = "$basedir/scripts/tests/CardDAV";
+  $binary  = "$basedir/testcaldav.py";
+  $testdir = "$basedir/scripts/tests/CardDAV";
 }
 init;
 
-sub new
-{
-    my $class = shift;
+sub new {
+  my $class = shift;
 
-    my $buildinfo = Cassandane::BuildInfo->new();
+  my $buildinfo = Cassandane::BuildInfo->new();
 
-    if (not defined $basedir or not $buildinfo->get('component', 'httpd')) {
-        # don't bother setting up, we're not running tests anyway
-        return $class->SUPER::new({}, @_);
-    }
+  if (not defined $basedir or not $buildinfo->get('component', 'httpd')) {
+    # don't bother setting up, we're not running tests anyway
+    return $class->SUPER::new({}, @_);
+  }
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(servername => "127.0.0.1"); # urlauth needs matching servername
-    $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'carddav');
-    $config->set(httpallowcompress => 'no');
+  my $config = Cassandane::Config->default()->clone();
+  $config->set(servername   => "127.0.0.1"); # urlauth needs matching servername
+  $config->set(caldav_realm => 'Cassandane');
+  $config->set(httpmodules  => 'carddav');
+  $config->set(httpallowcompress => 'no');
 
-    return $class->SUPER::new({
-        config => $config,
-        adminstore => 1,
-        services => ['imap', 'http'],
-    }, @_);
+  return $class->SUPER::new(
+    {
+      config     => $config,
+      adminstore => 1,
+      services   => [ 'imap', 'http' ],
+    },
+    @_
+  );
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 
-    if (not defined $basedir
-        or not $self->{instance}->{buildinfo}->get('component', 'httpd'))
-    {
-        # don't bother setting up further, we're not running tests anyway
-        return;
-    }
+  if ( not defined $basedir
+    or not $self->{instance}->{buildinfo}->get('component', 'httpd'))
+  {
+    # don't bother setting up further, we're not running tests anyway
+    return;
+  }
 
-    my $admintalk = $self->{adminstore}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    for (1..40) {
-        my $name = sprintf("user%02d", $_);
-        $admintalk->create("user.$name");
-        $admintalk->setacl("user.$name", admin => 'lrswipkxtecda');
-        $admintalk->setacl("user.$name", $name => 'lrswipkxtecd');
-    }
+  for (1 .. 40) {
+    my $name = sprintf("user%02d", $_);
+    $admintalk->create("user.$name");
+    $admintalk->setacl("user.$name", admin => 'lrswipkxtecda');
+    $admintalk->setacl("user.$name", $name => 'lrswipkxtecd');
+  }
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
-sub list_tests
-{
-    my @tests;
+sub list_tests {
+  my @tests;
 
-    if (!defined $basedir)
-    {
-        return ( 'test_warning_caldavtester_is_not_installed' );
-    }
+  if (!defined $basedir) {
+    return ('test_warning_caldavtester_is_not_installed');
+  }
 
-    open(FH, "-|", 'find', $testdir, '-name' => '*.xml');
-    while (<FH>)
-    {
-        chomp;
-        next unless s{^$testdir/}{};
-        next unless s{\.xml$}{};
-        next if $suppressed{$_};
-        push(@tests, "test_$_");
-    }
+  open(FH, "-|", 'find', $testdir, '-name' => '*.xml');
+  while (<FH>) {
+    chomp;
+    next unless s{^$testdir/}{};
+    next unless s{\.xml$}{};
+    next if $suppressed{$_};
+    push(@tests, "test_$_");
+  }
+  close(FH);
+
+  return @tests;
+}
+
+sub run_test {
+  my ($self) = @_;
+
+  if (!defined $basedir) {
+    xlog "CalDAVTester tests are not enabled.  To enabled them, please";
+    xlog
+      "install CalDAVTester from http://calendarserver.org/wiki/CalDAVTester";
+    xlog "and edit [caldavtester]basedir in cassandane.ini";
+    xlog "This is not a failure";
+    return;
+  }
+
+  my $name = $self->name();
+  $name =~ s/^test_//;
+  my $testname = $name;
+  $testname .= ".xml";
+
+  my $logdir = "$self->{instance}->{basedir}/rawlog/";
+  mkdir($logdir);
+
+  my $svc    = $self->{instance}->get_service('http');
+  my $params = $svc->store_params();
+
+  my $rundir = "$self->{instance}->{basedir}/run";
+  mkdir($rundir);
+
+  system('ln', '-s', "$testdir", "$rundir/tests");
+  system('ln', '-s', "$basedir", "$rundir/data");
+
+  # XXX - make the config file!
+  my $configfile = "$rundir/serverinfo.xml";
+  {
+    my $config
+      = slurp_file(abs_path("data/caldavtester-serverinfo-template.xml"));
+    $config =~ s/SERVICE_HOST/$params->{host}/g;
+    $config =~ s/SERVICE_PORT/$params->{port}/g;
+
+    open(FH, ">", $configfile);
+    print FH $config;
     close(FH);
+  }
 
-    return @tests;
-}
-
-sub run_test
-{
-    my ($self) = @_;
-
-    if (!defined $basedir)
+  my $errfile = $self->{instance}->{basedir} . "/$name.errors";
+  my $outfile = $self->{instance}->{basedir} . "/$name.stdout";
+  my $status;
+  my @verbose;
+  if (get_verbose) {
+    push @verbose, "--always-print-request", "--always-print-response";
+  }
+  $self->{instance}->run_command(
     {
-        xlog "CalDAVTester tests are not enabled.  To enabled them, please";
-        xlog "install CalDAVTester from http://calendarserver.org/wiki/CalDAVTester";
-        xlog "and edit [caldavtester]basedir in cassandane.ini";
-        xlog "This is not a failure";
-        return;
+      redirects  => { stderr => $errfile, stdout => $outfile },
+      workingdir => $logdir,
+      handlers   => {
+        exited_normally   => sub { $status = 1; },
+        exited_abnormally => sub { $status = 0; },
+      },
+    },
+    $binary,
+    "--basedir" => $rundir,
+    "--observer=jsondump",
+    @verbose,
+    $testname
+  );
+
+  my $json = decode_json(slurp_file($outfile));
+
+  if (0 && (!$status || get_verbose)) {
+    foreach my $file ($errfile) {
+      next unless -f $file;
+      xlog $self, slurp_file($file);
     }
+  }
 
-    my $name = $self->name();
-    $name =~ s/^test_//;
-    my $testname = $name;
-    $testname .= ".xml";
-
-    my $logdir = "$self->{instance}->{basedir}/rawlog/";
-    mkdir($logdir);
-
-    my $svc = $self->{instance}->get_service('http');
-    my $params = $svc->store_params();
-
-    my $rundir = "$self->{instance}->{basedir}/run";
-    mkdir($rundir);
-
-    system('ln', '-s', "$testdir", "$rundir/tests");
-    system('ln', '-s', "$basedir", "$rundir/data");
-
-    # XXX - make the config file!
-    my $configfile = "$rundir/serverinfo.xml";
-    {
-        my $config = slurp_file(abs_path("data/caldavtester-serverinfo-template.xml"));
-        $config =~ s/SERVICE_HOST/$params->{host}/g;
-        $config =~ s/SERVICE_PORT/$params->{port}/g;
-
-        open(FH, ">", $configfile);
-        print FH $config;
-        close(FH);
-    }
-
-    my $errfile = $self->{instance}->{basedir} .  "/$name.errors";
-    my $outfile = $self->{instance}->{basedir} .  "/$name.stdout";
-    my $status;
-    my @verbose;
-    if (get_verbose) {
-        push @verbose, "--always-print-request", "--always-print-response";
-    }
-    $self->{instance}->run_command({
-            redirects => { stderr => $errfile, stdout => $outfile },
-            workingdir => $logdir,
-            handlers => {
-                exited_normally => sub { $status = 1; },
-                exited_abnormally => sub { $status = 0; },
-            },
-        },
-        $binary,
-        "--basedir" => $rundir,
-        "--observer=jsondump",
-        @verbose,
-        $testname);
-
-    my $json = decode_json(slurp_file($outfile));
-
-    if (0 && (!$status || get_verbose)) {
-        foreach my $file ($errfile) {
-            next unless -f $file;
-            xlog $self, slurp_file($file);
-        }
-    }
-
-    $json->[0]{name} = $name; # short name at top level
-    $self->assert(_check_result($name, $json->[0]));
+  $json->[0]{name} = $name; # short name at top level
+  $self->assert(_check_result($name, $json->[0]));
 }
 
 sub _check_result {
-    my $name = shift;
-    my $json = shift;
-    my $res = 1;
+  my $name = shift;
+  my $json = shift;
+  my $res  = 1;
 
-    if (defined $json->{result}) {
-        if ($json->{result} == 0) {
-            xlog "$name [OK]";
-        }
-        elsif ($json->{result} == 1) {
-            xlog "$name [FAILED]";
-            $res = 0;
-        }
-        elsif ($json->{result} == 3) {
-            xlog "$name [SKIPPED]";
-        }
-        if (exists $expected{$name}) {
-            if ($json->{result} == $expected{$name}[0]) {
-                xlog "EXPECTED RESULT FOR $name";
-                $res = 1;
-            }
-            else {
-                xlog "UNEXPECTED RESULT FOR $name: " . $expected{$name}[1] if $expected{$name}[1];
-                $res = 0; # yep, even if we succeeded
-            }
-        }
-        xlog $json->{details} if $json->{result};
+  if (defined $json->{result}) {
+    if ($json->{result} == 0) {
+      xlog "$name [OK]";
+    } elsif ($json->{result} == 1) {
+      xlog "$name [FAILED]";
+      $res = 0;
+    } elsif ($json->{result} == 3) {
+      xlog "$name [SKIPPED]";
     }
-
-    xlog "FAILED WHEN NOT EXPECTED $name" unless $res;
-
-    if ($json->{tests}) {
-        foreach my $test (@{$json->{tests}}) {
-            $res = 0 unless _check_result("$name/$test->{name}", $test);
-        }
+    if (exists $expected{$name}) {
+      if ($json->{result} == $expected{$name}[0]) {
+        xlog "EXPECTED RESULT FOR $name";
+        $res = 1;
+      } else {
+        xlog "UNEXPECTED RESULT FOR $name: " . $expected{$name}[1]
+          if $expected{$name}[1];
+        $res = 0; # yep, even if we succeeded
+      }
     }
+    xlog $json->{details} if $json->{result};
+  }
 
-    return $res;
+  xlog "FAILED WHEN NOT EXPECTED $name" unless $res;
+
+  if ($json->{tests}) {
+    foreach my $test (@{ $json->{tests} }) {
+      $res = 0 unless _check_result("$name/$test->{name}", $test);
+    }
+  }
+
+  return $res;
 }
 
 1;

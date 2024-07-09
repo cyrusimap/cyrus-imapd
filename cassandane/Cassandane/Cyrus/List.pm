@@ -52,27 +52,24 @@ use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
 
-sub new
-{
-    my ($class, @args) = @_;
+sub new {
+  my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
+  my $config = Cassandane::Config->default()->clone();
 
-    return $class->SUPER::new({ config => $config, adminstore => 1 }, @args);
+  return $class->SUPER::new({ config => $config, adminstore => 1 }, @args);
 }
 
-sub set_up
-{
-    my ($self) = @_;
+sub set_up {
+  my ($self) = @_;
 
-    $self->SUPER::set_up();
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
+sub tear_down {
+  my ($self) = @_;
 
-    $self->SUPER::tear_down();
+  $self->SUPER::tear_down();
 }
 
 # tests based on rfc 5258 examples:
@@ -123,35 +120,40 @@ sub tear_down
 #
 # Cyrus does not (at least, not at the moment), so this test is disabled.
 sub bogus_test_rfc6154_ex01_list_non_extended
-    :UnixHierarchySep :AltNamespace
-{
-    my ($self) = @_;
+  : UnixHierarchySep : AltNamespace {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    $self->setup_mailbox_structure($imaptalk, [
-        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
-    ]);
+  $self->setup_mailbox_structure(
+    $imaptalk,
+    [
+      [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash)] ],
+    ]
+  );
 
-    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
-    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+  $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+  $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 
-    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
-    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+  $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+  $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 
-    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
-    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+  $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+  $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 
-    my $alldata = $imaptalk->list("", "%");
+  my $alldata = $imaptalk->list("", "%");
 
-    $self->assert_mailbox_structure($alldata, '/', {
-        'INBOX'                 => [qw( \\HasNoChildren )],
-        'ToDo'                  => [qw( \\HasNoChildren )],
-        'Projects'              => [qw( \\HasChildren )],
-        'SentMail'              => [qw( \\Sent \\HasNoChildren )],
-        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
-        'Trash'                 => [qw( \\Trash \\HasNoChildren )],
-    });
+  $self->assert_mailbox_structure(
+    $alldata, '/',
+    {
+      'INBOX'    => [qw( \\HasNoChildren )],
+      'ToDo'     => [qw( \\HasNoChildren )],
+      'Projects' => [qw( \\HasChildren )],
+      'SentMail' => [qw( \\Sent \\HasNoChildren )],
+      'MyDrafts' => [qw( \\Drafts \\HasNoChildren )],
+      'Trash'    => [qw( \\Trash \\HasNoChildren )],
+    }
+  );
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/List';

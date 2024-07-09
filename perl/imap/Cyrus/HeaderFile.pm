@@ -34,7 +34,8 @@ XXX: see index_uids.pl
 =cut
 
 our $HL1 = qq{\241\002\213\015Cyrus mailbox header};
-our $HL2 = qq{"The best thing about this system was that it had lots of goals."};
+our $HL2
+  = qq{"The best thing about this system was that it had lots of goals."};
 our $HL3 = qq{\t--Jim Morris on Andrew};
 
 =head1 PUBLIC API
@@ -48,7 +49,7 @@ Read the header file in $fh
 =cut
 
 sub new {
-  my $class = shift;
+  my $class  = shift;
   my $handle = shift;
 
   # read header
@@ -56,9 +57,9 @@ sub new {
   my $body = <$handle>;
 
   my $Self = bless {}, ref($class) || $class;
-  $Self->{handle} = $handle; # keep for locking
+  $Self->{handle}    = $handle;                   # keep for locking
   $Self->{rawheader} = $body;
-  $Self->{header} = $Self->parse_header($body);
+  $Self->{header}    = $Self->parse_header($body);
 
   return $Self;
 }
@@ -75,18 +76,18 @@ calls $class->new() with the filehandle.
 =cut
 
 sub new_file {
-  my $class = shift;
-  my $file = shift;
+  my $class    = shift;
+  my $file     = shift;
   my $lockopts = shift;
 
   my $fh;
   if ($lockopts) {
     $lockopts = ['lock_ex'] unless ref($lockopts) eq 'ARRAY';
-    $fh = IO::File::fcntl->new($file, '+<', @$lockopts)
-          || die "Can't open $file for locked read: $!";
+    $fh       = IO::File::fcntl->new($file, '+<', @$lockopts)
+      || die "Can't open $file for locked read: $!";
   } else {
     $fh = IO::File->new("< $file")
-          || die "Can't open $file for read: $!";
+      || die "Can't open $file for read: $!";
   }
 
   return $class->new($fh);
@@ -99,7 +100,7 @@ Return the entire header as a hash, or individual named field.
 =cut
 
 sub header {
-  my $Self = shift;
+  my $Self  = shift;
   my $Field = shift;
 
   if ($Field) {
@@ -117,8 +118,8 @@ to the given filehandle.
 =cut
 
 sub write_header {
-  my $Self = shift;
-  my $fh = shift;
+  my $Self   = shift;
+  my $fh     = shift;
   my $header = shift || $Self->header();
 
   $fh->print($Self->make_header($header));
@@ -127,15 +128,15 @@ sub write_header {
 # XXX still writes old-style header!
 sub make_header {
   my $Self = shift;
-  my $ds = shift || $Self->header();
+  my $ds   = shift || $Self->header();
 
   # NOTE: no tab separator if no uniqueid!
   my $qr_uuid = $ds->{QuotaRoot};
   $qr_uuid .= "\t$ds->{UniqueId}" if $ds->{UniqueId};
 
   # NOTE: acl and flags should have '' as the last element!
-  my $flags = join(" ", @{$ds->{Flags}}, '');
-  my $acl = join("\t", @{$ds->{ACL}}, '');
+  my $flags = join(" ",  @{ $ds->{Flags} }, '');
+  my $acl   = join("\t", @{ $ds->{ACL} },   '');
 
   my $buf = <<EOF;
 $HL1
@@ -157,8 +158,8 @@ to the given filehandle.
 
 sub write_newheader {
   my $Self = shift;
-  my $fh = shift;
-  my $dl = shift || $Self->{dlistheader};
+  my $fh   = shift;
+  my $dl   = shift || $Self->{dlistheader};
 
   my $buf = <<EOF;
 $HL1
@@ -186,35 +187,34 @@ sub parse_header {
     # new dlist-style header
     $Self->{dlistheader} = $lines[3];
     my $dlist = Cyrus::DList->parse_string($lines[3]);
-    my $hash = $dlist->as_perl();
+    my $hash  = $dlist->as_perl();
 
     $quotaroot = $hash->{Q} // '';
-    $uniqueid = $hash->{I};
-    @flags = @{$hash->{U}} if ref $hash->{U};
+    $uniqueid  = $hash->{I};
+    @flags     = @{ $hash->{U} } if ref $hash->{U};
     if (ref $hash->{A}) {
-        my $order = delete $hash->{A}->{__kvlist_order};
+      my $order = delete $hash->{A}->{__kvlist_order};
 
-        if ($order && ref $order eq 'ARRAY') {
-            foreach my $k (@{$order}) {
-                my $v = delete $hash->{A}->{$k};
-                push @acl, $k, $v;
-            }
+      if ($order && ref $order eq 'ARRAY') {
+        foreach my $k (@{$order}) {
+          my $v = delete $hash->{A}->{$k};
+          push @acl, $k, $v;
         }
+      }
 
-        push @acl, %{$hash->{A}};
+      push @acl, %{ $hash->{A} };
     }
-  }
-  else {
+  } else {
     ($quotaroot, $uniqueid) = split /\t/, $lines[3];
-    @flags = split / /, $lines[4];
-    @acl = split /\t/, $lines[5];
+    @flags = split / /,  $lines[4];
+    @acl   = split /\t/, $lines[5];
   }
 
   return {
     QuotaRoot => $quotaroot,
-    UniqueId => $uniqueid,
-    Flags => \@flags,
-    ACL => \@acl,
+    UniqueId  => $uniqueid,
+    Flags     => \@flags,
+    ACL       => \@acl,
   };
 }
 
@@ -227,6 +227,5 @@ Bron Gondwana <brong@fastmail.fm> - Copyright 2008 FastMail
 Licenced under the same terms as Cyrus IMAPd.
 
 =cut
-
 
 1;

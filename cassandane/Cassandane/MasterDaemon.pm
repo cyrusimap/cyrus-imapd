@@ -44,15 +44,13 @@ use warnings;
 use lib '.';
 use base qw(Cassandane::MasterEntry);
 
-sub new
-{
-    return shift->SUPER::new(@_);
+sub new {
+  return shift->SUPER::new(@_);
 }
 
-sub _otherparams
-{
-    my ($self) = @_;
-    return ( qw(wait) );
+sub _otherparams {
+  my ($self) = @_;
+  return (qw(wait));
 }
 
 1;

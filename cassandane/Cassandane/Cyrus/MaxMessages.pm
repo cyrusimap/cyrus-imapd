@@ -51,66 +51,64 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Generator;
 use Cassandane::Util::Log;
 
-my $LOTS = 20;
+my $LOTS    = 20;
 my $LIMITED = 5;
 
-sub new
-{
-    my $class = shift;
+sub new {
+  my $class = shift;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(
-        caldav_realm => 'Cassandane',
-        calendar_user_address_set => 'example.com',
-        caldav_historical_age => -1,
-        conversations => 1,
-        httpmodules => 'caldav carddav jmap',
-        httpallowcompress => 'no',
-        icalendar_max_size => 100000,
-        jmap_nonstandard_extensions => 'yes',
-        sieve_maxscripts => $LOTS,
-        vcard_max_size => 100000,
-    );
+  my $config = Cassandane::Config->default()->clone();
+  $config->set(
+    caldav_realm                => 'Cassandane',
+    calendar_user_address_set   => 'example.com',
+    caldav_historical_age       => -1,
+    conversations               =>  1,
+    httpmodules                 => 'caldav carddav jmap',
+    httpallowcompress           => 'no',
+    icalendar_max_size          => 100000,
+    jmap_nonstandard_extensions => 'yes',
+    sieve_maxscripts            => $LOTS,
+    vcard_max_size              => 100000,
+  );
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        services => ['imap', 'http', 'sieve'],
-    }, @_);
+  return $class->SUPER::new(
+    {
+      config   => $config,
+      jmap     => 1,
+      services => [ 'imap', 'http', 'sieve' ],
+    },
+    @_
+  );
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $ENV{DEBUGDAV} = 1;
-    $ENV{JMAP_ALWAYS_FULL} = 1;
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
+  $ENV{DEBUGDAV}         = 1;
+  $ENV{JMAP_ALWAYS_FULL} = 1;
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
-sub skip_check
-{
-    my ($self) = @_;
+sub skip_check {
+  my ($self) = @_;
 
-    # XXX skip all tests from this suite in verbose mode for now -- see
-    # XXX detailed comment on put_submission below
-    my $reason = "test would hang in verbose mode";
-    return get_verbose() ? $reason : undef;
+  # XXX skip all tests from this suite in verbose mode for now -- see
+  # XXX detailed comment on put_submission below
+  my $reason = "test would hang in verbose mode";
+  return get_verbose() ? $reason : undef;
 }
 
-sub _random_vevent
-{
-    my ($self) = @_;
-    state $counter = 1;
+sub _random_vevent {
+  my ($self) = @_;
+  state $counter = 1;
 
-    my $uuid = $self->{caldav}->genuuid();
+  my $uuid = $self->{caldav}->genuuid();
 
-    my $ics = <<"EOF";
+  my $ics = <<"EOF";
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -127,17 +125,16 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $counter ++;
+  $counter++;
 
-    return $ics, $uuid;
+  return $ics, $uuid;
 }
 
-sub _random_vcard
-{
-    my $fn = Cassandane::Generator::make_random_address()->name();
-    my ($first, $middle, $last) = split /[\s\.]+/, $fn;
-    my $n = "$last;$first;$middle;;";
-    my $str = <<"EOF";
+sub _random_vcard {
+  my $fn = Cassandane::Generator::make_random_address()->name();
+  my ($first, $middle, $last) = split /[\s\.]+/, $fn;
+  my $n   = "$last;$first;$middle;;";
+  my $str = <<"EOF";
 BEGIN:VCARD
 VERSION:3.0
 N:$n
@@ -145,105 +142,112 @@ FN:$fn
 REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
-    return $str;
+  return $str;
 }
 
-sub put_vevent
-{
-    my ($self, $calendarid) = @_;
+sub put_vevent {
+  my ($self, $calendarid) = @_;
 
-    my ($ics, $uuid) = $self->_random_vevent();
-    my $href = "$calendarid/$uuid.ics";
+  my ($ics, $uuid) = $self->_random_vevent();
+  my $href = "$calendarid/$uuid.ics";
 
-    $self->{caldav}->Request('PUT', $href, $ics,
-                             'Content-Type' => 'text/calendar');
+  $self->{caldav}
+    ->Request('PUT', $href, $ics, 'Content-Type' => 'text/calendar');
 }
 
-sub put_vcard
-{
-    my ($self, $addrbookid) = @_;
+sub put_vcard {
+  my ($self, $addrbookid) = @_;
 
-    my $vcard = Net::CardDAVTalk::VCard->new_fromstring(_random_vcard());
+  my $vcard = Net::CardDAVTalk::VCard->new_fromstring(_random_vcard());
 
-    $self->{carddav}->NewContact($addrbookid, $vcard);
+  $self->{carddav}->NewContact($addrbookid, $vcard);
 }
 
-sub put_script
-{
-    my ($self) = @_;
-    state $counter = 1;
+sub put_script {
+  my ($self) = @_;
+  state $counter = 1;
 
-    my $name = "script $counter";
-    my $script = "# $name\r\nkeep;\r\n";
-    $counter ++;
+  my $name   = "script $counter";
+  my $script = "# $name\r\nkeep;\r\n";
+  $counter++;
 
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/sieve',
-        'https://cyrusimap.org/ns/jmap/blob',
-    ]);
+  $self->{jmap}->DefaultUsing([
+    'urn:ietf:params:jmap:core',
+    'urn:ietf:params:jmap:mail',
+    'https://cyrusimap.org/ns/jmap/sieve',
+    'https://cyrusimap.org/ns/jmap/blob',
+  ]);
 
-    my $res = $self->{jmap}->CallMethods([
-        ['Blob/upload', {
-            create => {
-               "A" => { data => [{'data:asText' => $script}] }
-            }
-         }, "R0"],
-        ['SieveScript/set', {
-            create => {
-                "1" => {
-                    name => $name,
-                    blobId => "#A"
-                },
-            },
-         }, "R1"],
-    ]);
+  my $res = $self->{jmap}->CallMethods([
+    [
+      'Blob/upload',
+      {
+        create => {
+          "A" => { data => [ { 'data:asText' => $script } ] }
+        }
+      },
+      "R0"
+    ],
+    [
+      'SieveScript/set',
+      {
+        create => {
+          "1" => {
+            name   => $name,
+            blobId => "#A"
+          },
+        },
+      },
+      "R1"
+    ],
+  ]);
 
-    $self->assert_not_null($res);
-    $self->assert_not_null($res->[1][1]{created}{"1"}{id});
+  $self->assert_not_null($res);
+  $self->assert_not_null($res->[1][1]{created}{"1"}{id});
 }
 
 # XXX lots of copies of getinbox -- dedup them!
-sub getinbox
-{
-    my ($self, $args) = @_;
+sub getinbox {
+  my ($self, $args) = @_;
 
-    $args = {} unless $args;
+  $args = {} unless $args;
 
-    my $jmap = $self->{jmap};
+  my $jmap = $self->{jmap};
 
-    xlog $self, "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', $args, "R1"]]);
-    $self->assert_not_null($res);
+  xlog $self, "get existing mailboxes";
+  my $res = $jmap->CallMethods([ [ 'Mailbox/get', $args, "R1" ] ]);
+  $self->assert_not_null($res);
 
-    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    return $m{"Inbox"};
+  my %m = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  return $m{"Inbox"};
 }
 
-sub _submissions_mailbox
-{
-    my ($self, $counter) = @_;
+sub _submissions_mailbox {
+  my ($self, $counter) = @_;
 
-    my $jmap = $self->{jmap};
-    my $folder = "submission $counter";
+  my $jmap   = $self->{jmap};
+  my $folder = "submission $counter";
 
-    my $inboxId = $self->getinbox()->{id};
-    $self->assert_not_null($inboxId);
+  my $inboxId = $self->getinbox()->{id};
+  $self->assert_not_null($inboxId);
 
-    my $res = $jmap->CallMethods([['Mailbox/set', {
-        create => {
-            "m$counter" => {
-                parentId => $inboxId,
-                name => $folder,
-            },
+  my $res = $jmap->CallMethods([ [
+    'Mailbox/set',
+    {
+      create => {
+        "m$counter" => {
+          parentId => $inboxId,
+          name     => $folder,
         },
-    }, "R1"]]);
+      },
+    },
+    "R1"
+  ] ]);
 
-    $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{created}{"m$counter"}{id});
+  $self->assert_not_null($res);
+  $self->assert_not_null($res->[0][1]{created}{"m$counter"}{id});
 
-    return $res->[0][1]{created}{"m$counter"}{id};
+  return $res->[0][1]{created}{"m$counter"}{id};
 }
 
 # XXX When creating JMAP EmailSubmissions objects, the http service
@@ -257,309 +261,301 @@ sub _submissions_mailbox
 # XXX correctly in verbose mode, sorry.  This affects tests in the
 # XXX JMAPEmailSubmission suite too, though it affects this one worse
 # XXX because it wants to create a lot more EmailSubmissions objects.
-sub put_submission
-{
-    my ($self) = @_;
-    state $counter = 0;
+sub put_submission {
+  my ($self) = @_;
+  state $counter = 0;
 
-    $counter ++;
+  $counter++;
 
-    my $jmap = $self->{jmap};
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-    ]);
+  my $jmap = $self->{jmap};
+  $jmap->DefaultUsing([
+    'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail',
+    'urn:ietf:params:jmap:submission',
+  ]);
 
-    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
-    my $identityId = $res->[0][1]->{list}[0]->{id};
-    $self->assert_not_null($identityId);
+  my $res        = $jmap->CallMethods([ [ 'Identity/get', {}, "R1" ] ]);
+  my $identityId = $res->[0][1]->{list}[0]->{id};
+  $self->assert_not_null($identityId);
 
-    # upload each draft to its own mailbox so that we don't accidentally
-    # exceed mailbox_maxmessages_email
-    my $mailboxId = $self->_submissions_mailbox($counter);
-    $self->assert_not_null($mailboxId);
+  # upload each draft to its own mailbox so that we don't accidentally
+  # exceed mailbox_maxmessages_email
+  my $mailboxId = $self->_submissions_mailbox($counter);
+  $self->assert_not_null($mailboxId);
 
-    my $rcpt = Cassandane::Generator::make_random_address();
+  my $rcpt = Cassandane::Generator::make_random_address();
 
-    $res = $jmap->CallMethods([
-        ['Email/set', {
-            create => {
-                "m$counter" => {
-                    mailboxIds => {
-                        $mailboxId => JSON::true,
-                    },
-                    from => [{
-                        name => 'cassandane',
-                        email => 'cassandane@local',
-                    }],
-                    to => [{
-                        name => $rcpt->name(),
-                        email => $rcpt->address(),
-                    }],
-                    subject => "message $counter",
-                    bodyStructure => {
-                        type => 'text/plain',
-                        partId => 'part1',
-                    },
-                    bodyValues => {
-                        part1 => {
-                            value => 'hello world',
-                        }
-                    },
-                },
+  $res = $jmap->CallMethods([
+    [
+      'Email/set',
+      {
+        create => {
+          "m$counter" => {
+            mailboxIds => {
+              $mailboxId => JSON::true,
             },
-        }, 'R1'],
-        [ 'EmailSubmission/set', {
-            create => {
-                "s$counter" => {
-                    identityId => $identityId,
-                    emailId  => "#m$counter",
-                    envelope => {
-                        mailFrom => {
-                            email => 'cassandane@localhost',
-                            parameters => {
-                                "holdfor" => "30",
-                            }
-                        },
-                        rcptTo => [{
-                            email => $rcpt->address(),
-                        }],
-                    },
+            from => [ {
+              name  => 'cassandane',
+              email => 'cassandane@local',
+            } ],
+            to => [ {
+              name  => $rcpt->name(),
+              email => $rcpt->address(),
+            } ],
+            subject       => "message $counter",
+            bodyStructure => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => {
+              part1 => {
+                value => 'hello world',
+              }
+            },
+          },
+        },
+      },
+      'R1'
+    ],
+    [
+      'EmailSubmission/set',
+      {
+        create => {
+          "s$counter" => {
+            identityId => $identityId,
+            emailId    => "#m$counter",
+            envelope   => {
+              mailFrom => {
+                email      => 'cassandane@localhost',
+                parameters => {
+                  "holdfor" => "30",
                 }
-           },
-        }, 'R2' ],
-    ]);
+              },
+              rcptTo => [ {
+                email => $rcpt->address(),
+              } ],
+            },
+          }
+        },
+      },
+      'R2'
+    ],
+  ]);
 
-    $self->assert_not_null($res);
-    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{created}});
-    $self->assert_num_equals(0, scalar keys %{$res->[0][1]{notCreated}});
-    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{created}});
-    $self->assert_num_equals(0, scalar keys %{$res->[1][1]{notCreated}});
+  $self->assert_not_null($res);
+  $self->assert_num_equals(1, scalar keys %{ $res->[0][1]{created} });
+  $self->assert_num_equals(0, scalar keys %{ $res->[0][1]{notCreated} });
+  $self->assert_num_equals(1, scalar keys %{ $res->[1][1]{created} });
+  $self->assert_num_equals(0, scalar keys %{ $res->[1][1]{notCreated} });
 }
 
-sub put_email
-{
-    my ($self) = @_;
-    state $counter = 0;
+sub put_email {
+  my ($self) = @_;
+  state $counter = 0;
 
-    $counter ++;
+  $counter++;
 
-    $self->make_message(subject => "message $counter");
+  $self->make_message(subject => "message $counter");
 }
 
 sub test_maxmsg_addressbook_limited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-    :NoStartInstances
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_jmap
+  : JMAPExtensions
+  : NoStartInstances {
+  my ($self) = @_;
 
-    my $mailbox_maxmessages_addressbook = $LIMITED;
-    $self->{instance}->{config}->set(
-        mailbox_maxmessages_addressbook => $mailbox_maxmessages_addressbook,
-    );
-    $self->_start_instances();
-    $self->_setup_http_service_objects();
+  my $mailbox_maxmessages_addressbook = $LIMITED;
+  $self->{instance}->{config}
+    ->set(mailbox_maxmessages_addressbook => $mailbox_maxmessages_addressbook,);
+  $self->_start_instances();
+  $self->_setup_http_service_objects();
 
-    my $carddav = $self->{carddav};
-    my $addrbookid = $carddav->NewAddressBook('foo');
-    $self->assert_not_null($addrbookid);
+  my $carddav    = $self->{carddav};
+  my $addrbookid = $carddav->NewAddressBook('foo');
+  $self->assert_not_null($addrbookid);
 
-    # should be able to upload 5
-    foreach my $i (1..$mailbox_maxmessages_addressbook) {
-        $self->put_vcard($addrbookid);
-    }
+  # should be able to upload 5
+  foreach my $i (1 .. $mailbox_maxmessages_addressbook) {
+    $self->put_vcard($addrbookid);
+  }
 
-    # but any more should be rejected
-    eval {
-        $self->put_vcard($addrbookid);
-    };
-    my $e = $@;
-    $self->assert_not_null($e);
-    $self->assert_matches(qr{quota-not-exceeded}, $e);
+  # but any more should be rejected
+  eval { $self->put_vcard($addrbookid); };
+  my $e = $@;
+  $self->assert_not_null($e);
+  $self->assert_matches(qr{quota-not-exceeded}, $e);
 
-    # should have syslogged about it too
-    $self->assert_syslog_matches($self->{instance},
-                                 qr{client hit per-addressbook exists limit});
+  # should have syslogged about it too
+  $self->assert_syslog_matches($self->{instance},
+    qr{client hit per-addressbook exists limit});
 
-    # should be able to upload lots of calendar events
-    my $caldav = $self->{caldav};
-    my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
-    $self->assert_not_null($calendarid);
-    foreach my $i (1..$LOTS) {
-        $self->put_vevent($calendarid);
-    }
+  # should be able to upload lots of calendar events
+  my $caldav     = $self->{caldav};
+  my $calendarid = $caldav->NewCalendar({ name => 'mycalendar' });
+  $self->assert_not_null($calendarid);
+  foreach my $i (1 .. $LOTS) {
+    $self->put_vevent($calendarid);
+  }
 
-    # should be able to upload lots of sieve scripts
-    foreach my $i (1..$LOTS) {
-        $self->put_script();
-    }
+  # should be able to upload lots of sieve scripts
+  foreach my $i (1 .. $LOTS) {
+    $self->put_script();
+  }
 
-    # should be able to upload lots of jmap submissions
-    foreach my $i (1..$LOTS) {
-        $self->put_submission();
-    }
+  # should be able to upload lots of jmap submissions
+  foreach my $i (1 .. $LOTS) {
+    $self->put_submission();
+  }
 
-    # should be able to upload lots of regular emails
-    foreach my $i (1..$LOTS) {
-        $self->put_email();
-    }
+  # should be able to upload lots of regular emails
+  foreach my $i (1 .. $LOTS) {
+    $self->put_email();
+  }
 }
 
 sub test_maxmsg_calendar_limited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-    :NoStartInstances
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_jmap
+  : JMAPExtensions
+  : NoStartInstances {
+  my ($self) = @_;
 
-    my $mailbox_maxmessages_calendar = $LIMITED;
-    $self->{instance}->{config}->set(
-        mailbox_maxmessages_calendar => $mailbox_maxmessages_calendar,
-    );
-    $self->_start_instances();
-    $self->_setup_http_service_objects();
+  my $mailbox_maxmessages_calendar = $LIMITED;
+  $self->{instance}->{config}
+    ->set(mailbox_maxmessages_calendar => $mailbox_maxmessages_calendar,);
+  $self->_start_instances();
+  $self->_setup_http_service_objects();
 
-    my $caldav = $self->{caldav};
-    my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
-    $self->assert_not_null($calendarid);
+  my $caldav     = $self->{caldav};
+  my $calendarid = $caldav->NewCalendar({ name => 'mycalendar' });
+  $self->assert_not_null($calendarid);
 
-    # should be able to upload 5
-    foreach my $i (1..$mailbox_maxmessages_calendar) {
-        $self->put_vevent($calendarid);
-    }
+  # should be able to upload 5
+  foreach my $i (1 .. $mailbox_maxmessages_calendar) {
+    $self->put_vevent($calendarid);
+  }
 
-    # but any more should be rejected
-    eval {
-        $self->put_vevent($calendarid);
-    };
-    my $e = $@;
-    $self->assert_not_null($e);
-    $self->assert_matches(qr{quota-not-exceeded}, $e);
+  # but any more should be rejected
+  eval { $self->put_vevent($calendarid); };
+  my $e = $@;
+  $self->assert_not_null($e);
+  $self->assert_matches(qr{quota-not-exceeded}, $e);
 
-    # should have syslogged about it too
-    $self->assert_syslog_matches($self->{instance},
-                                 qr{client hit per-calendar exists limit});
+  # should have syslogged about it too
+  $self->assert_syslog_matches($self->{instance},
+    qr{client hit per-calendar exists limit});
 
-    # should be able to upload lots of contacts
-    my $carddav = $self->{carddav};
-    my $addrbookid = $carddav->NewAddressBook('foo');
-    $self->assert_not_null($addrbookid);
-    foreach my $i (1..$LOTS) {
-        $self->put_vcard($addrbookid);
-    }
+  # should be able to upload lots of contacts
+  my $carddav    = $self->{carddav};
+  my $addrbookid = $carddav->NewAddressBook('foo');
+  $self->assert_not_null($addrbookid);
+  foreach my $i (1 .. $LOTS) {
+    $self->put_vcard($addrbookid);
+  }
 
-    # should be able to upload lots of sieve scripts
-    foreach my $i (1..$LOTS) {
-        $self->put_script();
-    }
+  # should be able to upload lots of sieve scripts
+  foreach my $i (1 .. $LOTS) {
+    $self->put_script();
+  }
 
-    # should be able to upload lots of jmap submissions
-    foreach my $i (1..$LOTS) {
-        $self->put_submission();
-    }
+  # should be able to upload lots of jmap submissions
+  foreach my $i (1 .. $LOTS) {
+    $self->put_submission();
+  }
 
-    # should be able to upload lots of regular emails
-    foreach my $i (1..$LOTS) {
-        $self->put_email();
-    }
+  # should be able to upload lots of regular emails
+  foreach my $i (1 .. $LOTS) {
+    $self->put_email();
+  }
 }
 
 sub test_maxmsg_email_limited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-    :NoStartInstances
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_jmap
+  : JMAPExtensions
+  : NoStartInstances {
+  my ($self) = @_;
 
-    my $mailbox_maxmessages_email = $LIMITED;
-    $self->{instance}->{config}->set(
-        mailbox_maxmessages_email => $mailbox_maxmessages_email,
-    );
-    $self->_start_instances();
-    $self->_setup_http_service_objects();
+  my $mailbox_maxmessages_email = $LIMITED;
+  $self->{instance}->{config}
+    ->set(mailbox_maxmessages_email => $mailbox_maxmessages_email,);
+  $self->_start_instances();
+  $self->_setup_http_service_objects();
 
-    # should be able to upload 5
-    foreach my $i (1..$mailbox_maxmessages_email) {
-        $self->put_email();
-    }
+  # should be able to upload 5
+  foreach my $i (1 .. $mailbox_maxmessages_email) {
+    $self->put_email();
+  }
 
-    # but any more should be rejected
-    eval {
-        $self->put_email();
-    };
-    my $e = $@;
-    $self->assert_not_null($e);
-    $self->assert_matches(qr{Over quota}, $e);
+  # but any more should be rejected
+  eval { $self->put_email(); };
+  my $e = $@;
+  $self->assert_not_null($e);
+  $self->assert_matches(qr{Over quota}, $e);
 
-    # should have syslogged about it too
-    $self->assert_syslog_matches($self->{instance},
-                                 qr{client hit per-mailbox exists limit});
+  # should have syslogged about it too
+  $self->assert_syslog_matches($self->{instance},
+    qr{client hit per-mailbox exists limit});
 
-    # should be able to upload lots of contacts
-    my $carddav = $self->{carddav};
-    my $addrbookid = $carddav->NewAddressBook('foo');
-    $self->assert_not_null($addrbookid);
-    foreach my $i (1..$LOTS) {
-        $self->put_vcard($addrbookid);
-    }
+  # should be able to upload lots of contacts
+  my $carddav    = $self->{carddav};
+  my $addrbookid = $carddav->NewAddressBook('foo');
+  $self->assert_not_null($addrbookid);
+  foreach my $i (1 .. $LOTS) {
+    $self->put_vcard($addrbookid);
+  }
 
-    # should be able to upload lots of calendar events
-    my $caldav = $self->{caldav};
-    my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
-    $self->assert_not_null($calendarid);
-    foreach my $i (1..$LOTS) {
-        $self->put_vevent($calendarid);
-    }
+  # should be able to upload lots of calendar events
+  my $caldav     = $self->{caldav};
+  my $calendarid = $caldav->NewCalendar({ name => 'mycalendar' });
+  $self->assert_not_null($calendarid);
+  foreach my $i (1 .. $LOTS) {
+    $self->put_vevent($calendarid);
+  }
 
-    # should be able to upload lots of sieve scripts
-    foreach my $i (1..$LOTS) {
-        $self->put_script();
-    }
+  # should be able to upload lots of sieve scripts
+  foreach my $i (1 .. $LOTS) {
+    $self->put_script();
+  }
 
-    # should be able to upload lots of jmap submissions
-    foreach my $i (1..$LOTS) {
-        $self->put_submission();
-    }
+  # should be able to upload lots of jmap submissions
+  foreach my $i (1 .. $LOTS) {
+    $self->put_submission();
+  }
 }
 
 sub test_maxmsg_unlimited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_jmap
+  : JMAPExtensions {
+  my ($self) = @_;
 
-    # should be able to upload lots of contacts
-    my $carddav = $self->{carddav};
-    my $addrbookid = $carddav->NewAddressBook('foo');
-    $self->assert_not_null($addrbookid);
-    foreach my $i (1..$LOTS) {
-        $self->put_vcard($addrbookid);
-    }
+  # should be able to upload lots of contacts
+  my $carddav    = $self->{carddav};
+  my $addrbookid = $carddav->NewAddressBook('foo');
+  $self->assert_not_null($addrbookid);
+  foreach my $i (1 .. $LOTS) {
+    $self->put_vcard($addrbookid);
+  }
 
-    # should be able to upload lots of calendar events
-    my $caldav = $self->{caldav};
-    my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
-    $self->assert_not_null($calendarid);
-    foreach my $i (1..$LOTS) {
-        $self->put_vevent($calendarid);
-    }
+  # should be able to upload lots of calendar events
+  my $caldav     = $self->{caldav};
+  my $calendarid = $caldav->NewCalendar({ name => 'mycalendar' });
+  $self->assert_not_null($calendarid);
+  foreach my $i (1 .. $LOTS) {
+    $self->put_vevent($calendarid);
+  }
 
-    # should be able to upload lots of sieve scripts
-    foreach my $i (1..$LOTS) {
-        $self->put_script();
-    }
+  # should be able to upload lots of sieve scripts
+  foreach my $i (1 .. $LOTS) {
+    $self->put_script();
+  }
 
-    # should be able to upload lots of jmap submissions
-    foreach my $i (1..$LOTS) {
-        $self->put_submission();
-    }
+  # should be able to upload lots of jmap submissions
+  foreach my $i (1 .. $LOTS) {
+    $self->put_submission();
+  }
 
-    # should be able to upload lots of regular emails
-    foreach my $i (1..$LOTS) {
-        $self->put_email();
-    }
+  # should be able to upload lots of regular emails
+  foreach my $i (1 .. $LOTS) {
+    $self->put_email();
+  }
 }
 
 1;

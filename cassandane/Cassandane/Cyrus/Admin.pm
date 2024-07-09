@@ -47,113 +47,109 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
-sub new
-{
-    my $class = shift;
-    my $config = Cassandane::Config::default()->clone();
-    $config->set( imap_admins => 'admin imapadmin' );
-    return $class->SUPER::new({ config => $config, adminstore => 1 }, @_);
+sub new {
+  my $class  = shift;
+  my $config = Cassandane::Config::default()->clone();
+  $config->set(imap_admins => 'admin imapadmin');
+  return $class->SUPER::new({ config => $config, adminstore => 1 }, @_);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 
-    my $imap = $self->{instance}->get_service('imap');
-    $self->{imapadminstore} = $imap->create_store(username => 'imapadmin');
+  my $imap = $self->{instance}->get_service('imap');
+  $self->{imapadminstore} = $imap->create_store(username => 'imapadmin');
 }
 
-sub tear_down
-{
-    my ($self) = @_;
+sub tear_down {
+  my ($self) = @_;
 
-    $self->{imapadminstore}->disconnect();
-    delete $self->{imapadminstore};
+  $self->{imapadminstore}->disconnect();
+  delete $self->{imapadminstore};
 
-    $self->SUPER::tear_down();
+  $self->SUPER::tear_down();
 }
 
-sub test_imap_admins
-{
-    # test whether the imap_admins setting works correctly
-    my ($self) = @_;
+sub test_imap_admins {
+  # test whether the imap_admins setting works correctly
+  my ($self) = @_;
 
-    my $admintalk = $self->{adminstore}->get_client();
-    my $imapadmintalk = $self->{imapadminstore}->get_client();
-    my $talk = $self->{store}->get_client();
+  my $admintalk     = $self->{adminstore}->get_client();
+  my $imapadmintalk = $self->{imapadminstore}->get_client();
+  my $talk          = $self->{store}->get_client();
 
-    # we should be able to reconstruct as 'admin', because although
-    # imap_admins overrides admins, we have 'admin' in imap_admins too
-    # (it MUST be there for Cassandane itself to work)
-    my $res = $admintalk->_imap_cmd("reconstruct" , 0, {}, "user.cassandane");
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+  # we should be able to reconstruct as 'admin', because although
+  # imap_admins overrides admins, we have 'admin' in imap_admins too
+  # (it MUST be there for Cassandane itself to work)
+  my $res = $admintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
-    # we should not be able to reconstruct as 'cassandane', because
-    # reconstruct is an admin-only command
-    $res = $talk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
-    $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
+  # we should not be able to reconstruct as 'cassandane', because
+  # reconstruct is an admin-only command
+  $res = $talk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('no', $talk->get_last_completion_response());
+  $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
 
-    # we should be able to reconstruct as 'imapadmin', because this user
-    # is in imap_admins
-    $res = $imapadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
-    $self->assert_str_equals('ok', $imapadmintalk->get_last_completion_response());
+  # we should be able to reconstruct as 'imapadmin', because this user
+  # is in imap_admins
+  $res = $imapadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('ok',
+    $imapadmintalk->get_last_completion_response());
 }
 
 #Magic word virtdomains in name sets config virtdomains = userid
-sub test_imap_admins_virtdomains
-{
-    # test whether the imap_admins setting works correctly under virtdomains
-    my ($self) = @_;
+sub test_imap_admins_virtdomains {
+  # test whether the imap_admins setting works correctly under virtdomains
+  my ($self) = @_;
 
-    my $domainadmin = 'admin@uhoh.org';
-    my $defaultdomain = $self->{instance}->{config}->get('defaultdomain')
-                        // 'internal';
-    my $defdomadmin = "admin\@$defaultdomain";
+  my $domainadmin   = 'admin@uhoh.org';
+  my $defaultdomain = $self->{instance}->{config}->get('defaultdomain')
+    // 'internal';
+  my $defdomadmin = "admin\@$defaultdomain";
 
-    $self->{instance}->create_user($domainadmin);
-    my $imap = $self->{instance}->get_service('imap');
-    my $domainadminstore = $imap->create_store(username => $domainadmin);
-    my $defdomadminstore = $imap->create_store(username => $defdomadmin);
+  $self->{instance}->create_user($domainadmin);
+  my $imap             = $self->{instance}->get_service('imap');
+  my $domainadminstore = $imap->create_store(username => $domainadmin);
+  my $defdomadminstore = $imap->create_store(username => $defdomadmin);
 
-    my $admintalk = $self->{adminstore}->get_client();
-    my $imapadmintalk = $self->{imapadminstore}->get_client();
-    my $domainadmintalk = $domainadminstore->get_client();
-    my $defdomadmintalk = $defdomadminstore->get_client();
-    my $talk = $self->{store}->get_client();
+  my $admintalk       = $self->{adminstore}->get_client();
+  my $imapadmintalk   = $self->{imapadminstore}->get_client();
+  my $domainadmintalk = $domainadminstore->get_client();
+  my $defdomadmintalk = $defdomadminstore->get_client();
+  my $talk            = $self->{store}->get_client();
 
-    # we should be able to reconstruct as 'admin', because although
-    # imap_admins overrides admins, we have 'admin' in imap_admins too
-    # (it MUST be there for Cassandane itself to work)
-    my $res = $admintalk->_imap_cmd("reconstruct" , 0, {}, "user.cassandane");
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+  # we should be able to reconstruct as 'admin', because although
+  # imap_admins overrides admins, we have 'admin' in imap_admins too
+  # (it MUST be there for Cassandane itself to work)
+  my $res = $admintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
-    # we should not be able to reconstruct as 'cassandane', because
-    # reconstruct is an admin-only command
-    $res = $talk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
-    $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
+  # we should not be able to reconstruct as 'cassandane', because
+  # reconstruct is an admin-only command
+  $res = $talk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('no', $talk->get_last_completion_response());
+  $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
 
-    # we should be able to reconstruct as 'imapadmin', because this user
-    # is in imap_admins
-    $res = $imapadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
-    $self->assert_str_equals('ok',
-                             $imapadmintalk->get_last_completion_response());
+  # we should be able to reconstruct as 'imapadmin', because this user
+  # is in imap_admins
+  $res = $imapadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('ok',
+    $imapadmintalk->get_last_completion_response());
 
-    # we MUST NOT be able to reconstruct as 'admin@uhoh.org', because
-    # this user is not in imap_admins, even though bare 'admin' is
-    $res = $domainadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
-    $self->assert_str_equals('no',
-                             $domainadmintalk->get_last_completion_response());
-    $self->assert_matches(qr/permission denied/i,
-                          $domainadmintalk->get_last_error());
+  # we MUST NOT be able to reconstruct as 'admin@uhoh.org', because
+  # this user is not in imap_admins, even though bare 'admin' is
+  $res = $domainadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('no',
+    $domainadmintalk->get_last_completion_response());
+  $self->assert_matches(qr/permission denied/i,
+    $domainadmintalk->get_last_error());
 
-    # we should be able to reconstruct as admin@$defaultdomain, because
-    # we treat bare username and username@defaultdomain as equivalent
-    $res = $defdomadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
-    $self->assert_str_equals('ok',
-                             $defdomadmintalk->get_last_completion_response());
+  # we should be able to reconstruct as admin@$defaultdomain, because
+  # we treat bare username and username@defaultdomain as equivalent
+  $res = $defdomadmintalk->_imap_cmd("reconstruct", 0, {}, "user.cassandane");
+  $self->assert_str_equals('ok',
+    $defdomadmintalk->get_last_completion_response());
 }
 
 1;

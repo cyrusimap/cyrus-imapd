@@ -55,165 +55,164 @@ use Cyrus::DList;
 use Cyrus::HeaderFile;
 use Cyrus::IndexFile;
 
-sub new
-{
-    my $class = shift;
-    return $class->SUPER::new({ adminstore => 1 }, @_);
+sub new {
+  my $class = shift;
+  return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
 #
 # Test zeroed out data across the UID
 #
-sub test_reconstruct_zerouid
-{
-    my ($self) = @_;
+sub test_reconstruct_zerouid {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    for (1..10) {
-        my $msg = $self->{gen}->generate(subject => "subject $_");
-        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
-    }
-    $self->{store}->write_end();
-    $imaptalk->select("INBOX") || die;
+  for (1 .. 10) {
+    my $msg = $self->{gen}->generate(subject => "subject $_");
+    $self->{store}->write_message($msg, flags => [ "\\Seen", "\$NotJunk" ]);
+  }
+  $self->{store}->write_end();
+  $imaptalk->select("INBOX") || die;
 
-    my @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  my @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+  $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
 
-    # this needs a bit of magic to know where to write... so
-    # we do some hard-coded cyrus.index handling
-    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
-    my $file = "$dir/cyrus.index";
-    my $fh = IO::File->new($file, "+<");
-    die "NO SUCH FILE $file" unless $fh;
-    my $index = Cyrus::IndexFile->new($fh);
+  # this needs a bit of magic to know where to write... so
+  # we do some hard-coded cyrus.index handling
+  my $dir  = $self->{instance}->folder_to_directory('user.cassandane');
+  my $file = "$dir/cyrus.index";
+  my $fh   = IO::File->new($file, "+<");
+  die "NO SUCH FILE $file" unless $fh;
+  my $index = Cyrus::IndexFile->new($fh);
 
-    my $offset = $index->header('StartOffset') + (5 * $index->header('RecordSize'));
-    warn "seeking to offset $offset";
-    $fh->seek($offset, 0);
-    $fh->syswrite("\0\0\0\0\0\0\0\0", 8);
-    $fh->close();
+  my $offset
+    = $index->header('StartOffset') + (5 * $index->header('RecordSize'));
+  warn "seeking to offset $offset";
+  $fh->seek($offset, 0);
+  $fh->syswrite("\0\0\0\0\0\0\0\0", 8);
+  $fh->close();
 
-    # this time, the reconstruct will fix up the broken record and re-insert later
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+  # this time, the reconstruct will fix up the broken record and re-insert later
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(not grep { $_ == 6 } @records);
-    $self->assert(grep { $_ == 11 } @records);
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(not grep { $_ == 6 } @records);
+  $self->assert(grep { $_ == 11 } @records);
 }
 
 #
 # Test truncated file
 #
-sub test_reconstruct_truncated
-{
-    my ($self) = @_;
+sub test_reconstruct_truncated {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    for (1..10) {
-        my $msg = $self->{gen}->generate(subject => "subject $_");
-        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
-    }
-    $self->{store}->write_end();
-    $imaptalk->select("INBOX") || die;
+  for (1 .. 10) {
+    my $msg = $self->{gen}->generate(subject => "subject $_");
+    $self->{store}->write_message($msg, flags => [ "\\Seen", "\$NotJunk" ]);
+  }
+  $self->{store}->write_end();
+  $imaptalk->select("INBOX") || die;
 
-    my @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  my @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+  $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
 
-    # this needs a bit of magic to know where to write... so
-    # we do some hard-coded cyrus.index handling
-    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
-    my $file = "$dir/cyrus.index";
-    my $fh = IO::File->new($file, "+<");
-    die "NO SUCH FILE $file" unless $fh;
-    my $index = Cyrus::IndexFile->new($fh);
+  # this needs a bit of magic to know where to write... so
+  # we do some hard-coded cyrus.index handling
+  my $dir  = $self->{instance}->folder_to_directory('user.cassandane');
+  my $file = "$dir/cyrus.index";
+  my $fh   = IO::File->new($file, "+<");
+  die "NO SUCH FILE $file" unless $fh;
+  my $index = Cyrus::IndexFile->new($fh);
 
-    my $offset = $index->header('StartOffset') + (5 * $index->header('RecordSize'));
-    $fh->truncate($offset);
-    $fh->close();
+  my $offset
+    = $index->header('StartOffset') + (5 * $index->header('RecordSize'));
+  $fh->truncate($offset);
+  $fh->close();
 
-    # this time, the reconstruct will create the records again
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+  # this time, the reconstruct will create the records again
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
 
-    # XXX - this actually deletes everything, so we unselect and reselect.  A
-    # too-short cyrus.index is a fatal error, so we don't even try to read it.
-    $imaptalk->unselect();
-    $imaptalk->select("INBOX") || die;
+  # XXX - this actually deletes everything, so we unselect and reselect.  A
+  # too-short cyrus.index is a fatal error, so we don't even try to read it.
+  $imaptalk->unselect();
+  $imaptalk->select("INBOX") || die;
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
-    $self->assert(not grep { $_ == 11 } @records);
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
+  $self->assert(not grep { $_ == 11 } @records);
 
-    # We should have generated a SYNCERROR or two
-    $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: refreshing index/);
+  # We should have generated a SYNCERROR or two
+  $self->assert_syslog_matches($self->{instance},
+    qr/IOERROR: refreshing index/);
 }
 #
 # Test removed file
 #
-sub test_reconstruct_removedfile
-{
-    my ($self) = @_;
+sub test_reconstruct_removedfile {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    for (1..10) {
-        my $msg = $self->{gen}->generate(subject => "subject $_");
-        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
-    }
-    $self->{store}->write_end();
-    $imaptalk->select("INBOX") || die;
+  for (1 .. 10) {
+    my $msg = $self->{gen}->generate(subject => "subject $_");
+    $self->{store}->write_message($msg, flags => [ "\\Seen", "\$NotJunk" ]);
+  }
+  $self->{store}->write_end();
+  $imaptalk->select("INBOX") || die;
 
-    my @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  my @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+  $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
 
-    # this needs a bit of magic to know where to write... so
-    # we do some hard-coded cyrus.index handling
-    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
-    unlink("$dir/6.");
+  # this needs a bit of magic to know where to write... so
+  # we do some hard-coded cyrus.index handling
+  my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+  unlink("$dir/6.");
 
-    # this time, the reconstruct will fix up the broken record and re-insert later
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+  # this time, the reconstruct will fix up the broken record and re-insert later
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(9, scalar @records);
-    $self->assert(not grep { $_ == 6 } @records);
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(9, scalar @records);
+  $self->assert(not grep { $_ == 6 } @records);
 }
 
 #
@@ -221,406 +220,404 @@ sub test_reconstruct_removedfile
 #
 # XXX need to downgrade min version if this is backported to 3.2
 sub test_reconstruct_snoozed
-    :min_version_3_3
-{
-    my ($self) = @_;
+  : min_version_3_3 {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    for (1..10) {
-        my $msg = $self->{gen}->generate(subject => "subject $_");
-        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
+  for (1 .. 10) {
+    my $msg = $self->{gen}->generate(subject => "subject $_");
+    $self->{store}->write_message($msg, flags => [ "\\Seen", "\$NotJunk" ]);
+  }
+  $self->{store}->write_end();
+  $imaptalk->select("INBOX") || die;
+
+  my @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
+
+  $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+
+  @records = $imaptalk->search("all");
+  $self->assert_num_equals(10, scalar @records);
+  $self->assert(grep { $_ == 6 } @records);
+
+  $imaptalk->store(
+    '5',
+    'annotation',
+    [
+      "/vendor/cmu/cyrus-imapd/snoozed",
+      [
+        'value.shared',
+        { Quote => encode_json({ until => '2020-01-01T00:00:00' }) }
+      ],
+    ]
+  );
+
+  # this needs a bit of magic to know where to write... so
+  # we do some hard-coded cyrus.index handling
+  my $dir  = $self->{instance}->folder_to_directory('user.cassandane');
+  my $file = "$dir/cyrus.index";
+  my $fh   = IO::File->new($file, "+<");
+  die "NO SUCH FILE $file" unless $fh;
+  my $index = Cyrus::IndexFile->new($fh);
+
+  while (my $record = $index->next_record_hash()) {
+    if ($record->{Uid} == 5) {
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
+    } else {
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
     }
-    $self->{store}->write_end();
-    $imaptalk->select("INBOX") || die;
+  }
+  close($fh);
 
-    my @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+  # the reconstruct shouldn't change anything
+  $self->{instance}->getsyslog();
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+  $self->assert_syslog_does_not_match($self->{instance}, qr/mismatch/);
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+  xlog $self, "update some \\Snoozed flags";
+  $fh = IO::File->new($file, "+<");
+  die "NO SUCH FILE $file" unless $fh;
+  $index = Cyrus::IndexFile->new($fh);
 
-    @records = $imaptalk->search("all");
-    $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
-
-    $imaptalk->store('5', 'annotation', ["/vendor/cmu/cyrus-imapd/snoozed",
-        ['value.shared', { Quote => encode_json({until => '2020-01-01T00:00:00'}) }],
-    ]);
-
-    # this needs a bit of magic to know where to write... so
-    # we do some hard-coded cyrus.index handling
-    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
-    my $file = "$dir/cyrus.index";
-    my $fh = IO::File->new($file, "+<");
-    die "NO SUCH FILE $file" unless $fh;
-    my $index = Cyrus::IndexFile->new($fh);
-
-    while (my $record = $index->next_record_hash()) {
-        if ($record->{Uid} == 5) {
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
-        }
-        else {
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
-        }
+  while (my $record = $index->next_record_hash()) {
+    if ($record->{Uid} == 5) {
+      # nuke the Snoozed flag
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
+      substr($record->{SystemFlags}, 5, 1) = '0';
+      $index->rewrite_record($record);
+    } elsif ($record->{Uid} == 6) {
+      # add the Snoozed flag
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
+      substr($record->{SystemFlags}, 5, 1) = '1';
+      $index->rewrite_record($record);
+    } else {
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
     }
-    close($fh);
+  }
+  close($fh);
 
-    # the reconstruct shouldn't change anything
-    $self->{instance}->getsyslog();
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    $self->assert_syslog_does_not_match($self->{instance}, qr/mismatch/);
+  # this reconstruct should change things back!
+  $self->{instance}->getsyslog();
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+  my @lines = $self->{instance}->getsyslog();
+  $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
+  $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
 
-    xlog $self, "update some \\Snoozed flags";
-    $fh = IO::File->new($file, "+<");
-    die "NO SUCH FILE $file" unless $fh;
-    $index = Cyrus::IndexFile->new($fh);
+  xlog $self, "check that the values are changed back";
+  $fh = IO::File->new($file, "+<");
+  die "NO SUCH FILE $file" unless $fh;
+  $index = Cyrus::IndexFile->new($fh);
 
-    while (my $record = $index->next_record_hash()) {
-        if ($record->{Uid} == 5) {
-            # nuke the Snoozed flag
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
-            substr($record->{SystemFlags}, 5, 1) = '0';
-            $index->rewrite_record($record);
-        }
-        elsif ($record->{Uid} == 6) {
-            # add the Snoozed flag
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
-            substr($record->{SystemFlags}, 5, 1) = '1';
-            $index->rewrite_record($record);
-        }
-        else {
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
-        }
+  while (my $record = $index->next_record_hash()) {
+    if ($record->{Uid} == 5) {
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
+    } else {
+      $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
     }
-    close($fh);
-
-    # this reconstruct should change things back!
-    $self->{instance}->getsyslog();
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
-    $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
-
-    xlog $self, "check that the values are changed back";
-    $fh = IO::File->new($file, "+<");
-    die "NO SUCH FILE $file" unless $fh;
-    $index = Cyrus::IndexFile->new($fh);
-
-    while (my $record = $index->next_record_hash()) {
-        if ($record->{Uid} == 5) {
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '1');
-        }
-        else {
-            $self->assert_str_equals(substr($record->{SystemFlags}, 5, 1), '0');
-        }
-    }
-    close($fh);
+  }
+  close($fh);
 }
 
 sub test_reconstruct_uniqueid_from_header_path_legacymb
-    :min_version_3_7 :MailboxLegacyDirs :NoStartInstances
-{
-    my ($self) = @_;
-    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+  : min_version_3_7 : MailboxLegacyDirs : NoStartInstances {
+  my ($self) = @_;
+  my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
 
-    # first start will set up cassandane user
-    $self->_start_instances();
-    my $basedir = $self->{instance}->get_basedir();
-    my $mailboxes_db = "$basedir/conf/mailboxes.db";
-    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+  # first start will set up cassandane user
+  $self->_start_instances();
+  my $basedir      = $self->{instance}->get_basedir();
+  my $mailboxes_db = "$basedir/conf/mailboxes.db";
+  $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
 
-    # find out the uniqueid of the inbox
-    my $imaptalk = $self->{store}->get_client();
-    my $res = $imaptalk->getmetadata("INBOX", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    my $uniqueid = $res->{INBOX}{$entry};
-    $self->assert_not_null($uniqueid);
-    $imaptalk->logout();
-    undef $imaptalk;
+  # find out the uniqueid of the inbox
+  my $imaptalk = $self->{store}->get_client();
+  my $res      = $imaptalk->getmetadata("INBOX", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  my $uniqueid = $res->{INBOX}{$entry};
+  $self->assert_not_null($uniqueid);
+  $imaptalk->logout();
+  undef $imaptalk;
 
-    # stop service while tinkering
-    $self->{instance}->stop();
-    $self->{instance}->{re_use_dir} = 1;
+  # stop service while tinkering
+  $self->{instance}->stop();
+  $self->{instance}->{re_use_dir} = 1;
 
-    # get header path
-    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
-                       . '/cyrus.header';
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  # get header path
+  my $cyrus_header
+    = $self->{instance}->folder_to_directory('INBOX') . '/cyrus.header';
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
 
-    # lose uniqueid from cyrus.header
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
-    copy($cyrus_header, "$cyrus_header.OLD");
-    my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
-    my $dlist = Cyrus::DList->parse_string($hf->{dlistheader});
-    my $hash = $dlist->as_perl();
-    $self->assert_str_equals($uniqueid, $hash->{I});
-    $hash->{I} = undef;
-    $dlist = Cyrus::DList->new_perl('', $hash);
-    my $out = IO::File->new($cyrus_header, 'w');
-    $hf->write_newheader($out, $dlist->as_string());
+  # lose uniqueid from cyrus.header
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  copy($cyrus_header, "$cyrus_header.OLD");
+  my $hf    = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
+  my $dlist = Cyrus::DList->parse_string($hf->{dlistheader});
+  my $hash  = $dlist->as_perl();
+  $self->assert_str_equals($uniqueid, $hash->{I});
+  $hash->{I} = undef;
+  $dlist = Cyrus::DList->new_perl('', $hash);
+  my $out = IO::File->new($cyrus_header, 'w');
+  $hf->write_newheader($out, $dlist->as_string());
 
-    # reconstruct -P should find and fix the missing uniqueid
-    $self->{instance}->getsyslog();
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'reconstruct', '-P', $cyrus_header);
+  # reconstruct -P should find and fix the missing uniqueid
+  $self->{instance}->getsyslog();
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', '-P', $cyrus_header);
 
-    # should not have existed in cyrus.header, get from mbentry
-    $self->assert_syslog_matches(
-        $self->{instance},
-        qr{mailbox header had no uniqueid, setting from mbentry}
-    );
+  # should not have existed in cyrus.header, get from mbentry
+  $self->assert_syslog_matches($self->{instance},
+    qr{mailbox header had no uniqueid, setting from mbentry});
 
-    # bring service back up
-    $self->{instance}->start();
+  # bring service back up
+  $self->{instance}->start();
 
-    # header should have the same uniqueid as before
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
-    $hf = Cyrus::HeaderFile->new_file($cyrus_header);
-    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+  # header should have the same uniqueid as before
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+  $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
 }
 
 sub test_reconstruct_uniqueid_from_header_path_uuidmb
-    :min_version_3_7 :NoStartInstances
-{
-    my ($self) = @_;
-    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+  : min_version_3_7 : NoStartInstances {
+  my ($self) = @_;
+  my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
 
-    # first start will set up cassandane user
-    $self->_start_instances();
-    my $basedir = $self->{instance}->get_basedir();
-    my $mailboxes_db = "$basedir/conf/mailboxes.db";
-    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+  # first start will set up cassandane user
+  $self->_start_instances();
+  my $basedir      = $self->{instance}->get_basedir();
+  my $mailboxes_db = "$basedir/conf/mailboxes.db";
+  $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
 
-    # find out the uniqueid of the inbox
-    my $imaptalk = $self->{store}->get_client();
-    my $res = $imaptalk->getmetadata("INBOX", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    my $uniqueid = $res->{INBOX}{$entry};
-    $self->assert_not_null($uniqueid);
-    $imaptalk->logout();
-    undef $imaptalk;
+  # find out the uniqueid of the inbox
+  my $imaptalk = $self->{store}->get_client();
+  my $res      = $imaptalk->getmetadata("INBOX", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  my $uniqueid = $res->{INBOX}{$entry};
+  $self->assert_not_null($uniqueid);
+  $imaptalk->logout();
+  undef $imaptalk;
 
-    # stop service while tinkering
-    $self->{instance}->stop();
-    $self->{instance}->{re_use_dir} = 1;
+  # stop service while tinkering
+  $self->{instance}->stop();
+  $self->{instance}->{re_use_dir} = 1;
 
-    # get header path
-    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
-                       . '/cyrus.header';
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  # get header path
+  my $cyrus_header
+    = $self->{instance}->folder_to_directory('INBOX') . '/cyrus.header';
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
 
-    # lose that uniqueid from mailboxes.db
-    my $I = "I$uniqueid";
-    my $N = "Nuser\x1fcassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
-                                     [ 'DELETE', $I ]);
-    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $N]);
-    my $dlist = Cyrus::DList->parse_string($mbentry);
-    my $hash = $dlist->as_perl();
-    $self->assert_str_equals($uniqueid, $hash->{I});
-    $hash->{I} = undef;
-    $dlist = Cyrus::DList->new_perl('', $hash);
-    $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        [ 'SET', $N, $dlist->as_string() ]);
+  # lose that uniqueid from mailboxes.db
+  my $I = "I$uniqueid";
+  my $N = "Nuser\x1fcassandane";
+  $self->{instance}->run_dbcommand($mailboxes_db, "twoskip", [ 'DELETE', $I ]);
+  my (undef, $mbentry)
+    = $self->{instance}
+    ->run_dbcommand($mailboxes_db, "twoskip", [ 'SHOW', $N ]);
+  my $dlist = Cyrus::DList->parse_string($mbentry);
+  my $hash  = $dlist->as_perl();
+  $self->assert_str_equals($uniqueid, $hash->{I});
+  $hash->{I} = undef;
+  $dlist = Cyrus::DList->new_perl('', $hash);
+  $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+    [ 'SET', $N, $dlist->as_string() ]);
 
-    my %updated = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip", ['SHOW']);
-    xlog "updated mailboxes.db: " . Dumper \%updated;
+  my %updated
+    = $self->{instance}->run_dbcommand($mailboxes_db, "twoskip", ['SHOW']);
+  xlog "updated mailboxes.db: " . Dumper \%updated;
 
-    # lose it from cyrus.header too
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
-    copy($cyrus_header, "$cyrus_header.OLD");
-    my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
-    $dlist = Cyrus::DList->parse_string($hf->{dlistheader});
-    $hash = $dlist->as_perl();
-    $self->assert_str_equals($uniqueid, $hash->{I});
-    $hash->{I} = undef;
-    $dlist = Cyrus::DList->new_perl('', $hash);
-    my $out = IO::File->new($cyrus_header, 'w');
-    $hf->write_newheader($out, $dlist->as_string());
+  # lose it from cyrus.header too
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  copy($cyrus_header, "$cyrus_header.OLD");
+  my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
+  $dlist = Cyrus::DList->parse_string($hf->{dlistheader});
+  $hash  = $dlist->as_perl();
+  $self->assert_str_equals($uniqueid, $hash->{I});
+  $hash->{I} = undef;
+  $dlist = Cyrus::DList->new_perl('', $hash);
+  my $out = IO::File->new($cyrus_header, 'w');
+  $hf->write_newheader($out, $dlist->as_string());
 
-    # reconstruct -P should find and fix the missing uniqueid
-    $self->{instance}->getsyslog();
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'reconstruct', '-P', $cyrus_header);
+  # reconstruct -P should find and fix the missing uniqueid
+  $self->{instance}->getsyslog();
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', '-P', $cyrus_header);
 
-    # should not have existed in cyrus.header, get from path
-    $self->assert_syslog_matches(
-        $self->{instance},
-        qr{mailbox header had no uniqueid, setting from path}
-    );
+  # should not have existed in cyrus.header, get from path
+  $self->assert_syslog_matches($self->{instance},
+    qr{mailbox header had no uniqueid, setting from path});
 
-    # bring service back up
-    $self->{instance}->start();
+  # bring service back up
+  $self->{instance}->start();
 
-    # header should have the same uniqueid as before
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
-    $hf = Cyrus::HeaderFile->new_file($cyrus_header);
-    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+  # header should have the same uniqueid as before
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+  $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
 
-    # mbentry should have the same uniqueid as before
-    (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $N]);
-    $dlist = Cyrus::DList->parse_string($mbentry);
-    $hash = $dlist->as_perl();
-    $self->assert_str_equals($uniqueid, $hash->{I});
+  # mbentry should have the same uniqueid as before
+  (undef, $mbentry)
+    = $self->{instance}
+    ->run_dbcommand($mailboxes_db, "twoskip", [ 'SHOW', $N ]);
+  $dlist = Cyrus::DList->parse_string($mbentry);
+  $hash  = $dlist->as_perl();
+  $self->assert_str_equals($uniqueid, $hash->{I});
 
-    # $I entry should be back
-    my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $I]);
-    $self->assert_str_equals($I, $key);
-    $dlist = Cyrus::DList->parse_string($value);
-    $hash = $dlist->as_perl();
-    $self->assert_str_equals("user\x1fcassandane", $hash->{N});
+  # $I entry should be back
+  my ($key, $value)
+    = $self->{instance}
+    ->run_dbcommand($mailboxes_db, "twoskip", [ 'SHOW', $I ]);
+  $self->assert_str_equals($I, $key);
+  $dlist = Cyrus::DList->parse_string($value);
+  $hash  = $dlist->as_perl();
+  $self->assert_str_equals("user\x1fcassandane", $hash->{N});
 }
 
 sub test_reconstruct_uniqueid_from_header_uuidmb
-    :min_version_3_7 :NoStartInstances
-{
-    my ($self) = @_;
-    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+  : min_version_3_7 : NoStartInstances {
+  my ($self) = @_;
+  my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
 
-    # first start will set up cassandane user
-    $self->_start_instances();
-    my $basedir = $self->{instance}->get_basedir();
-    my $mailboxes_db = "$basedir/conf/mailboxes.db";
-    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+  # first start will set up cassandane user
+  $self->_start_instances();
+  my $basedir      = $self->{instance}->get_basedir();
+  my $mailboxes_db = "$basedir/conf/mailboxes.db";
+  $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
 
-    # find out the uniqueid of the inbox
-    my $imaptalk = $self->{store}->get_client();
-    my $res = $imaptalk->getmetadata("INBOX", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    my $uniqueid = $res->{INBOX}{$entry};
-    $self->assert_not_null($uniqueid);
-    $imaptalk->logout();
-    undef $imaptalk;
+  # find out the uniqueid of the inbox
+  my $imaptalk = $self->{store}->get_client();
+  my $res      = $imaptalk->getmetadata("INBOX", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  my $uniqueid = $res->{INBOX}{$entry};
+  $self->assert_not_null($uniqueid);
+  $imaptalk->logout();
+  undef $imaptalk;
 
-    # stop service while tinkering
-    $self->{instance}->stop();
-    $self->{instance}->{re_use_dir} = 1;
+  # stop service while tinkering
+  $self->{instance}->stop();
+  $self->{instance}->{re_use_dir} = 1;
 
-    # get header path
-    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
-                       . '/cyrus.header';
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  # get header path
+  my $cyrus_header
+    = $self->{instance}->folder_to_directory('INBOX') . '/cyrus.header';
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
 
-    # lose that uniqueid from mailboxes.db
-    my $I = "I$uniqueid";
-    my $N = "Nuser\x1fcassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
-                                     [ 'DELETE', $I ]);
-    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $N]);
-    my $dlist = Cyrus::DList->parse_string($mbentry);
-    my $hash = $dlist->as_perl();
-    $self->assert_str_equals($uniqueid, $hash->{I});
-    $hash->{I} = undef;
-    $dlist = Cyrus::DList->new_perl('', $hash);
-    $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        [ 'SET', $N, $dlist->as_string() ]);
+  # lose that uniqueid from mailboxes.db
+  my $I = "I$uniqueid";
+  my $N = "Nuser\x1fcassandane";
+  $self->{instance}->run_dbcommand($mailboxes_db, "twoskip", [ 'DELETE', $I ]);
+  my (undef, $mbentry)
+    = $self->{instance}
+    ->run_dbcommand($mailboxes_db, "twoskip", [ 'SHOW', $N ]);
+  my $dlist = Cyrus::DList->parse_string($mbentry);
+  my $hash  = $dlist->as_perl();
+  $self->assert_str_equals($uniqueid, $hash->{I});
+  $hash->{I} = undef;
+  $dlist = Cyrus::DList->new_perl('', $hash);
+  $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+    [ 'SET', $N, $dlist->as_string() ]);
 
-    my %updated = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip", ['SHOW']);
-    xlog "updated mailboxes.db: " . Dumper \%updated;
+  my %updated
+    = $self->{instance}->run_dbcommand($mailboxes_db, "twoskip", ['SHOW']);
+  xlog "updated mailboxes.db: " . Dumper \%updated;
 
-    # reconstruct -P should find and fix the missing uniqueid
-    $self->{instance}->getsyslog();
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'reconstruct', '-P', $cyrus_header);
-    my $syslog = join(q{}, $self->{instance}->getsyslog());
+  # reconstruct -P should find and fix the missing uniqueid
+  $self->{instance}->getsyslog();
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'reconstruct', '-P', $cyrus_header);
+  my $syslog = join(q{}, $self->{instance}->getsyslog());
 
-    # should have still existed in cyrus.header
-    $self->assert_does_not_match(qr{mailbox header had no uniqueid}, $syslog);
+  # should have still existed in cyrus.header
+  $self->assert_does_not_match(qr{mailbox header had no uniqueid}, $syslog);
 
-    # expect to find the log line
-    $self->assert_matches(qr{setting mbentry uniqueid from header}, $syslog);
+  # expect to find the log line
+  $self->assert_matches(qr{setting mbentry uniqueid from header}, $syslog);
 
-    # bring service back up
-    $self->{instance}->start();
+  # bring service back up
+  $self->{instance}->start();
 
-    # header should have the same uniqueid as before
-    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
-    my $hf = Cyrus::HeaderFile->new_file($cyrus_header);
-    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+  # header should have the same uniqueid as before
+  $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+  my $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+  $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
 
-    # mbentry should have the same uniqueid as before
-    (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $N]);
-    $dlist = Cyrus::DList->parse_string($mbentry);
-    $hash = $dlist->as_perl();
-    $self->assert_str_equals($uniqueid, $hash->{I});
+  # mbentry should have the same uniqueid as before
+  (undef, $mbentry)
+    = $self->{instance}
+    ->run_dbcommand($mailboxes_db, "twoskip", [ 'SHOW', $N ]);
+  $dlist = Cyrus::DList->parse_string($mbentry);
+  $hash  = $dlist->as_perl();
+  $self->assert_str_equals($uniqueid, $hash->{I});
 
-    # $I entry should be back
-    my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
-        ['SHOW', $I]);
-    $self->assert_str_equals($I, $key);
-    $dlist = Cyrus::DList->parse_string($value);
-    $hash = $dlist->as_perl();
-    $self->assert_str_equals("user\x1fcassandane", $hash->{N});
+  # $I entry should be back
+  my ($key, $value)
+    = $self->{instance}
+    ->run_dbcommand($mailboxes_db, "twoskip", [ 'SHOW', $I ]);
+  $self->assert_str_equals($I, $key);
+  $dlist = Cyrus::DList->parse_string($value);
+  $hash  = $dlist->as_perl();
+  $self->assert_str_equals("user\x1fcassandane", $hash->{N});
 }
 
-sub test_downgrade_upgrade
-{
-    my ($self) = @_;
+sub test_downgrade_upgrade {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
+
+  xlog $self, "Add two messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{A}->set_attributes(
+    id    => 1,
+    uid   => 1,
+    flags => []
+  );
+  $msg{B} = $self->make_message('Message B');
+  $msg{B}->set_attributes(
+    id    => 2,
+    uid   => 2,
+    flags => []
+  );
+  $self->check_messages(\%msg);
+
+  xlog $self, "Set \\Seen on message A";
+  my $res = $talk->store('1', '+flags', '(\\Seen)');
+  $self->assert_deep_equals({ '1' => { 'flags' => ['\\Seen'] } }, $res);
+  $msg{A}->set_attribute(flags => ['\\Seen']);
+  $self->check_messages(\%msg);
+
+  xlog $self, "Clear \\Seen on message A";
+  $res = $talk->store('1', '-flags', '(\\Seen)');
+  $self->assert_deep_equals({ '1' => { 'flags' => [] } }, $res);
+  $msg{A}->set_attribute(flags => []);
+  $self->check_messages(\%msg);
+
+  xlog $self, "Set \\Seen on message A again";
+  $res = $talk->store('1', '+flags', '(\\Seen)');
+  $self->assert_deep_equals({ '1' => { 'flags' => ['\\Seen'] } }, $res);
+  $msg{A}->set_attribute(flags => ['\\Seen']);
+  $self->check_messages(\%msg);
+
+  for my $version (12, 14, 16, 'max') {
+    xlog $self, "Set to version $version";
+    $self->{instance}
+      ->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
+
+    xlog $self, "Reconnect, \\Seen should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
-
-    xlog $self, "Add two messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{A}->set_attributes(id => 1,
-                            uid => 1,
-                            flags => []);
-    $msg{B} = $self->make_message('Message B');
-    $msg{B}->set_attributes(id => 2,
-                            uid => 2,
-                            flags => []);
     $self->check_messages(\%msg);
-
-    xlog $self, "Set \\Seen on message A";
-    my $res = $talk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
-    $msg{A}->set_attribute(flags => ['\\Seen']);
-    $self->check_messages(\%msg);
-
-    xlog $self, "Clear \\Seen on message A";
-        $res = $talk->store('1', '-flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
-    $msg{A}->set_attribute(flags => []);
-    $self->check_messages(\%msg);
-
-    xlog $self, "Set \\Seen on message A again";
-    $res = $talk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
-    $msg{A}->set_attribute(flags => ['\\Seen']);
-    $self->check_messages(\%msg);
-
-    for my $version (12, 14, 16, 'max') {
-        xlog $self, "Set to version $version";
-        $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
-
-        xlog $self, "Reconnect, \\Seen should still be on message A";
-        $self->{store}->disconnect();
-        $self->{store}->connect();
-        $self->{store}->_select();
-        $self->check_messages(\%msg);
-    }
+  }
 }
 
 1;

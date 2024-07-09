@@ -12,7 +12,9 @@ sub import {
   my $into = caller;
 
   unless (-d $path) {
-    Carp::confess(qq{can't find path "$path" for loading tests; Cassandane expects to be run from the ./cyrus-imapd/cassandane directory"});
+    Carp::confess(
+      qq{can't find path "$path" for loading tests; Cassandane expects to be run from the ./cyrus-imapd/cassandane directory"}
+    );
   }
 
   my @tests = `find $path -type f \! -name "*~" \! -name ".*"`;
@@ -31,7 +33,8 @@ sub import {
     }
 
     unless ($RELOADED) {
-      Carp::confess("tried to load $test but it did not 'use Cassandane::Tiny'");
+      Carp::confess(
+        "tried to load $test but it did not 'use Cassandane::Tiny'");
     }
   }
 

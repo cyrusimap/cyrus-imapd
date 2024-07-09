@@ -48,22 +48,19 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 
-sub new
-{
-    my ($class, @args) = @_;
-    return $class->SUPER::new({ adminstore => 1 }, @args);
+sub new {
+  my ($class, @args) = @_;
+  return $class->SUPER::new({ adminstore => 1 }, @args);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
 #
@@ -75,280 +72,300 @@ sub tear_down
 #    isn't available to clients during the archive operation
 #
 sub test_archive_messages
-    :ArchivePartition :min_version_3_0
-{
-    my ($self) = @_;
+  : ArchivePartition : min_version_3_0 {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $talk = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Append 3 messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{A}->set_attributes(id => 1,
-                            uid => 1,
-                            flags => []);
-    $msg{B} = $self->make_message('Message B');
-    $msg{B}->set_attributes(id => 2,
-                            uid => 2,
-                            flags => []);
-    $msg{C} = $self->make_message('Message C');
-    $msg{C}->set_attributes(id => 3,
-                            uid => 3,
-                            flags => []);
-    $self->check_messages(\%msg);
+  xlog $self, "Append 3 messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{A}->set_attributes(
+    id    => 1,
+    uid   => 1,
+    flags => []
+  );
+  $msg{B} = $self->make_message('Message B');
+  $msg{B}->set_attributes(
+    id    => 2,
+    uid   => 2,
+    flags => []
+  );
+  $msg{C} = $self->make_message('Message C');
+  $msg{C}->set_attributes(
+    id    => 3,
+    uid   => 3,
+    flags => []
+  );
+  $self->check_messages(\%msg);
 
-    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
-    my $datadir = $data->{data};
-    my $archivedir = $data->{archive};
+  my $data       = $self->{instance}->run_mbpath("-u", 'cassandane');
+  my $datadir    = $data->{data};
+  my $archivedir = $data->{archive};
 
-    $self->assert_file_test("$datadir/1.", "-f");
-    $self->assert_file_test("$datadir/2.", "-f");
-    $self->assert_file_test("$datadir/3.", "-f");
+  $self->assert_file_test("$datadir/1.", "-f");
+  $self->assert_file_test("$datadir/2.", "-f");
+  $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert_not_file_test("$archivedir/1.", "-f");
-    $self->assert_not_file_test("$archivedir/2.", "-f");
-    $self->assert_not_file_test("$archivedir/3.", "-f");
+  $self->assert_not_file_test("$archivedir/1.", "-f");
+  $self->assert_not_file_test("$archivedir/2.", "-f");
+  $self->assert_not_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire but no messages should move";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+  xlog $self, "Run cyr_expire but no messages should move";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d');
 
-    $self->assert_file_test("$datadir/1.", "-f");
-    $self->assert_file_test("$datadir/2.", "-f");
-    $self->assert_file_test("$datadir/3.", "-f");
+  $self->assert_file_test("$datadir/1.", "-f");
+  $self->assert_file_test("$datadir/2.", "-f");
+  $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert_not_file_test("$archivedir/1.", "-f");
-    $self->assert_not_file_test("$archivedir/2.", "-f");
-    $self->assert_not_file_test("$archivedir/3.", "-f");
+  $self->assert_not_file_test("$archivedir/1.", "-f");
+  $self->assert_not_file_test("$archivedir/2.", "-f");
+  $self->assert_not_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire to archive now";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
+  xlog $self, "Run cyr_expire to archive now";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 sub test_archivenow_messages
-    :ArchiveNow :min_version_3_0
-{
-    my ($self) = @_;
+  : ArchiveNow : min_version_3_0 {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $talk = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Append 3 messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{A}->set_attributes(id => 1,
-                            uid => 1,
-                            flags => []);
-    $msg{B} = $self->make_message('Message B');
-    $msg{B}->set_attributes(id => 2,
-                            uid => 2,
-                            flags => []);
-    $msg{C} = $self->make_message('Message C');
-    $msg{C}->set_attributes(id => 3,
-                            uid => 3,
-                            flags => []);
-    $self->check_messages(\%msg);
+  xlog $self, "Append 3 messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{A}->set_attributes(
+    id    => 1,
+    uid   => 1,
+    flags => []
+  );
+  $msg{B} = $self->make_message('Message B');
+  $msg{B}->set_attributes(
+    id    => 2,
+    uid   => 2,
+    flags => []
+  );
+  $msg{C} = $self->make_message('Message C');
+  $msg{C}->set_attributes(
+    id    => 3,
+    uid   => 3,
+    flags => []
+  );
+  $self->check_messages(\%msg);
 
-    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
-    my $datadir = $data->{data};
-    my $archivedir = $data->{archive};
+  my $data       = $self->{instance}->run_mbpath("-u", 'cassandane');
+  my $datadir    = $data->{data};
+  my $archivedir = $data->{archive};
 
-    # already archived
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  # already archived
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire with old and messages stay archived";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+  xlog $self, "Run cyr_expire with old and messages stay archived";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire to archive now and messages stay archived";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
+  xlog $self, "Run cyr_expire to archive now and messages stay archived";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 1;
 
 sub test_archive_messages_archive_annotation
-    :ArchivePartition :min_version_3_1
-{
-    my ($self) = @_;
+  : ArchivePartition : min_version_3_1 {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
-    my $admintalk = $self->{adminstore}->get_client();
+  my $talk      = $self->{store}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Append 3 messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{A}->set_attributes(id => 1,
-                            uid => 1,
-                            flags => []);
-    $msg{B} = $self->make_message('Message B');
-    $msg{B}->set_attributes(id => 2,
-                            uid => 2,
-                            flags => []);
-    $msg{C} = $self->make_message('Message C');
-    $msg{C}->set_attributes(id => 3,
-                            uid => 3,
-                            flags => []);
-    $self->check_messages(\%msg);
+  xlog $self, "Append 3 messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{A}->set_attributes(
+    id    => 1,
+    uid   => 1,
+    flags => []
+  );
+  $msg{B} = $self->make_message('Message B');
+  $msg{B}->set_attributes(
+    id    => 2,
+    uid   => 2,
+    flags => []
+  );
+  $msg{C} = $self->make_message('Message C');
+  $msg{C}->set_attributes(
+    id    => 3,
+    uid   => 3,
+    flags => []
+  );
+  $self->check_messages(\%msg);
 
-    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
-    my $datadir = $data->{data};
-    my $archivedir = $data->{archive};
+  my $data       = $self->{instance}->run_mbpath("-u", 'cassandane');
+  my $datadir    = $data->{data};
+  my $archivedir = $data->{archive};
 
-    $self->assert_file_test("$datadir/1.", "-f");
-    $self->assert_file_test("$datadir/2.", "-f");
-    $self->assert_file_test("$datadir/3.", "-f");
+  $self->assert_file_test("$datadir/1.", "-f");
+  $self->assert_file_test("$datadir/2.", "-f");
+  $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert_not_file_test("$archivedir/1.", "-f");
-    $self->assert_not_file_test("$archivedir/2.", "-f");
-    $self->assert_not_file_test("$archivedir/3.", "-f");
+  $self->assert_not_file_test("$archivedir/1.", "-f");
+  $self->assert_not_file_test("$archivedir/2.", "-f");
+  $self->assert_not_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire but no messages should move";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+  xlog $self, "Run cyr_expire but no messages should move";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d');
 
-    $self->assert_file_test("$datadir/1.", "-f");
-    $self->assert_file_test("$datadir/2.", "-f");
-    $self->assert_file_test("$datadir/3.", "-f");
+  $self->assert_file_test("$datadir/1.", "-f");
+  $self->assert_file_test("$datadir/2.", "-f");
+  $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert_not_file_test("$archivedir/1.", "-f");
-    $self->assert_not_file_test("$archivedir/2.", "-f");
-    $self->assert_not_file_test("$archivedir/3.", "-f");
+  $self->assert_not_file_test("$archivedir/1.", "-f");
+  $self->assert_not_file_test("$archivedir/2.", "-f");
+  $self->assert_not_file_test("$archivedir/3.", "-f");
 
-    $admintalk->setmetadata('user.cassandane',
-                            "/shared/vendor/cmu/cyrus-imapd/archive",
-                            '3');
+  $admintalk->setmetadata('user.cassandane',
+    "/shared/vendor/cmu/cyrus-imapd/archive", '3');
 
-    xlog $self, "Run cyr_expire asking to archive now, but it shouldn't";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
+  xlog $self, "Run cyr_expire asking to archive now, but it shouldn't";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0');
 
-    $self->assert_file_test("$datadir/1.", "-f");
-    $self->assert_file_test("$datadir/2.", "-f");
-    $self->assert_file_test("$datadir/3.", "-f");
+  $self->assert_file_test("$datadir/1.", "-f");
+  $self->assert_file_test("$datadir/2.", "-f");
+  $self->assert_file_test("$datadir/3.", "-f");
 
-    $self->assert_not_file_test("$archivedir/1.", "-f");
-    $self->assert_not_file_test("$archivedir/2.", "-f");
-    $self->assert_not_file_test("$archivedir/3.", "-f");
+  $self->assert_not_file_test("$archivedir/1.", "-f");
+  $self->assert_not_file_test("$archivedir/2.", "-f");
+  $self->assert_not_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire asking to archive now, with skip annotation";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' , '-a');
+  xlog $self, "Run cyr_expire asking to archive now, with skip annotation";
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0', '-a');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 sub test_archivenow_reconstruct
-    :ArchiveNow :min_version_3_0
-{
-    my ($self) = @_;
+  : ArchiveNow : min_version_3_0 {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $talk = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $talk->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Append 3 messages";
-    my %msg;
-    $msg{A} = $self->make_message('Message A');
-    $msg{A}->set_attributes(id => 1,
-                            uid => 1,
-                            flags => []);
-    $msg{B} = $self->make_message('Message B');
-    $msg{B}->set_attributes(id => 2,
-                            uid => 2,
-                            flags => []);
-    $msg{C} = $self->make_message('Message C');
-    $msg{C}->set_attributes(id => 3,
-                            uid => 3,
-                            flags => []);
-    $self->check_messages(\%msg);
+  xlog $self, "Append 3 messages";
+  my %msg;
+  $msg{A} = $self->make_message('Message A');
+  $msg{A}->set_attributes(
+    id    => 1,
+    uid   => 1,
+    flags => []
+  );
+  $msg{B} = $self->make_message('Message B');
+  $msg{B}->set_attributes(
+    id    => 2,
+    uid   => 2,
+    flags => []
+  );
+  $msg{C} = $self->make_message('Message C');
+  $msg{C}->set_attributes(
+    id    => 3,
+    uid   => 3,
+    flags => []
+  );
+  $self->check_messages(\%msg);
 
-    my $data = $self->{instance}->run_mbpath("-u", 'cassandane');
-    my $datadir = $data->{data};
-    my $archivedir = $data->{archive};
+  my $data       = $self->{instance}->run_mbpath("-u", 'cassandane');
+  my $datadir    = $data->{data};
+  my $archivedir = $data->{archive};
 
-    # already archived
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  # already archived
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire with old and messages stay archived";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
+  xlog $self, "Run cyr_expire with old and messages stay archived";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Run cyr_expire to archive now and messages stay archived";
-    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
+  xlog $self, "Run cyr_expire to archive now and messages stay archived";
+  $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 
-    xlog $self, "Reconstruct doesn't lose files";
+  xlog $self, "Reconstruct doesn't lose files";
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-s');
+  $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-s');
 
-    $self->assert_not_file_test("$datadir/1.", "-f");
-    $self->assert_not_file_test("$datadir/2.", "-f");
-    $self->assert_not_file_test("$datadir/3.", "-f");
+  $self->assert_not_file_test("$datadir/1.", "-f");
+  $self->assert_not_file_test("$datadir/2.", "-f");
+  $self->assert_not_file_test("$datadir/3.", "-f");
 
-    $self->assert_file_test("$archivedir/1.", "-f");
-    $self->assert_file_test("$archivedir/2.", "-f");
-    $self->assert_file_test("$archivedir/3.", "-f");
+  $self->assert_file_test("$archivedir/1.", "-f");
+  $self->assert_file_test("$archivedir/2.", "-f");
+  $self->assert_file_test("$archivedir/3.", "-f");
 }
 
 1;

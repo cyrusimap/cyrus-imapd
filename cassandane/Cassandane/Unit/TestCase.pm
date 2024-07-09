@@ -53,252 +53,225 @@ use Cassandane::Util::TestUrl;
 my $enabled;
 my $buildinfo;
 
-sub new
-{
-    my $class = shift;
-    if (not $buildinfo) {
-        $buildinfo = Cassandane::BuildInfo->new();
-    }
-    return $class->SUPER::new(@_);
+sub new {
+  my $class = shift;
+  if (not $buildinfo) {
+    $buildinfo = Cassandane::BuildInfo->new();
+  }
+  return $class->SUPER::new(@_);
 }
 
-sub enable_test
-{
-    my ($class, $test) = @_;
-    $enabled = $test;
+sub enable_test {
+  my ($class, $test) = @_;
+  $enabled = $test;
 }
 
-sub _skip_version
-{
-    my ($str) = @_;
+sub _skip_version {
+  my ($str) = @_;
 
-    return if not $str =~ m/^(min|max)_version_([\d_]+)$/;
-    my $minmax = $1;
-    my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
-        = map { 0 + $_ } split /_/, $2;
-    return if not defined $lim_major;
+  return if not $str =~ m/^(min|max)_version_([\d_]+)$/;
+  my $minmax = $1;
+  my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
+    = map { 0 + $_ } split /_/, $2;
+  return if not defined $lim_major;
 
-    my ($major, $minor, $revision, $commits) = Cassandane::Instance->get_version();
+  my ($major, $minor, $revision, $commits)
+    = Cassandane::Instance->get_version();
 
-    if ($minmax eq 'min') {
-        return 1 if $major < $lim_major; # too old, skip!
-        return if $major > $lim_major;   # definitely new enough
+  if ($minmax eq 'min') {
+    return 1 if $major < $lim_major; # too old, skip!
+    return   if $major > $lim_major; # definitely new enough
 
-        return if not defined $lim_minor; # don't check deeper if caller doesn't care
-        return 1 if $minor < $lim_minor;
-        return if $minor > $lim_minor;
-
-        return if not defined $lim_revision;
-        return 1 if $revision < $lim_revision;
-
-        return if not defined $lim_commits;
-        return 1 if $commits < $lim_commits;
-    }
-    else {
-        return 1 if $major > $lim_major; # too new, skip!
-        return if $major < $lim_major;   # definitely old enough
-
-        return if not defined $lim_minor; # don't check deeper if caller doesn't care
-        return 1 if $minor > $lim_minor;
-        return if $minor < $lim_minor;
-
-        return if not defined $lim_revision;
-        return 1 if $revision > $lim_revision;
-
-        return if not defined $lim_commits;
-        return 1 if $commits > $lim_commits;
-    }
-
-    return;
-}
-
-sub filter
-{
-    my ($self) = @_;
     return
-    {
-        # filters return 1 if the test should be skipped, or undef otherwise
-        x => sub
-        {
-            my $method = shift;
-            $method =~ s/^test_//;
-            # Only the explicitly enabled test runs
-            return ($enabled eq $method ? undef : 1);
-        },
-        skip_version => sub
-        {
-            return if not exists $self->{_name};
-            my $sub = $self->can($self->{_name});
-            return if not defined $sub;
-            foreach my $attr (attributes::get($sub)) {
-                next if $attr !~ m/^(?:min|max)_version_[\d_]+$/;
-                return 1 if _skip_version($attr);
-            }
-            return;
-        },
-        skip_missing_features => sub
-        {
-            return if not exists $self->{_name};
-            my $sub = $self->can($self->{_name});
-            return if not defined $sub;
-            foreach my $attr (attributes::get($sub)) {
-                next if $attr !~
-                    m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
+      if not defined $lim_minor;     # don't check deeper if caller doesn't care
+    return 1 if $minor < $lim_minor;
+    return   if $minor > $lim_minor;
 
-                if (defined $3) {
-                    my $actual = $buildinfo->get($1, $2);
-                    if ($actual ne $3) {
-                        xlog "$1.$2 not '$3' (is '$actual'),",
-                             "$self->{_name} will be skipped";
-                        return 1;
-                    }
-                }
-                elsif (not $buildinfo->get($1, $2)) {
-                    xlog "$1.$2 not enabled, $self->{_name} will be skipped";
-                    return 1;
-                }
-            }
-            return;
-        },
-        skip_slow => sub
-        {
-            my ($method) = @_;
-            return 1 if $method =~ m/_slow$/;
-            return;
-        },
-        slow_only => sub
-        {
-            my ($method) = @_;
-            return 1 if $method !~ m/_slow$/;
-            return;
-        },
-        skip_runtime_check => sub
-        {
-            # To use: add a skip_check method to your test suite that
-            # implements logic to determine whether some test should run or
-            # not (perhaps by examining $self->{_name}).  Return undef if
-            # the test should run, or a message explaining why the test is
-            # being skipped
-            return if not $self->can('skip_check');
-            my $reason = $self->skip_check();
-            if ($reason) {
-                xlog "$self->{_name} will be skipped:",
-                     "skip_check said '$reason'";
-                return 1;
-            }
-            return;
-        },
-    };
+    return   if not defined $lim_revision;
+    return 1 if $revision < $lim_revision;
+
+    return   if not defined $lim_commits;
+    return 1 if $commits < $lim_commits;
+  } else {
+    return 1 if $major > $lim_major; # too new, skip!
+    return   if $major < $lim_major; # definitely old enough
+
+    return
+      if not defined $lim_minor;     # don't check deeper if caller doesn't care
+    return 1 if $minor > $lim_minor;
+    return   if $minor < $lim_minor;
+
+    return   if not defined $lim_revision;
+    return 1 if $revision > $lim_revision;
+
+    return   if not defined $lim_commits;
+    return 1 if $commits > $lim_commits;
+  }
+
+  return;
 }
 
-sub annotate_from_file
-{
-    my ($self, $filename) = @_;
-    return if !defined $filename;
+sub filter {
+  my ($self) = @_;
+  return {
+    # filters return 1 if the test should be skipped, or undef otherwise
+    x => sub {
+      my $method = shift;
+      $method =~ s/^test_//;
+      # Only the explicitly enabled test runs
+      return ($enabled eq $method ? undef : 1);
+    },
+    skip_version => sub {
+      return if not exists $self->{_name};
+      my $sub = $self->can($self->{_name});
+      return if not defined $sub;
+      foreach my $attr (attributes::get($sub)) {
+        next     if $attr !~ m/^(?:min|max)_version_[\d_]+$/;
+        return 1 if _skip_version($attr);
+      }
+      return;
+    },
+    skip_missing_features => sub {
+      return if not exists $self->{_name};
+      my $sub = $self->can($self->{_name});
+      return if not defined $sub;
+      foreach my $attr (attributes::get($sub)) {
+        next if $attr !~ m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
 
-    open LOG, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    while (<LOG>)
-    {
-        $self->annotate($_);
-    }
-    close LOG;
+        if (defined $3) {
+          my $actual = $buildinfo->get($1, $2);
+          if ($actual ne $3) {
+            xlog "$1.$2 not '$3' (is '$actual'),",
+              "$self->{_name} will be skipped";
+            return 1;
+          }
+        } elsif (not $buildinfo->get($1, $2)) {
+          xlog "$1.$2 not enabled, $self->{_name} will be skipped";
+          return 1;
+        }
+      }
+      return;
+    },
+    skip_slow => sub {
+      my ($method) = @_;
+      return 1 if $method =~ m/_slow$/;
+      return;
+    },
+    slow_only => sub {
+      my ($method) = @_;
+      return 1 if $method !~ m/_slow$/;
+      return;
+    },
+    skip_runtime_check => sub {
+      # To use: add a skip_check method to your test suite that
+      # implements logic to determine whether some test should run or
+      # not (perhaps by examining $self->{_name}).  Return undef if
+      # the test should run, or a message explaining why the test is
+      # being skipped
+      return if not $self->can('skip_check');
+      my $reason = $self->skip_check();
+      if ($reason) {
+        xlog "$self->{_name} will be skipped:", "skip_check said '$reason'";
+        return 1;
+      }
+      return;
+    },
+  };
+}
+
+sub annotate_from_file {
+  my ($self, $filename) = @_;
+  return if !defined $filename;
+
+  open LOG, '<', $filename
+    or die "Cannot open $filename for reading: $!";
+  while (<LOG>) {
+    $self->annotate($_);
+  }
+  close LOG;
 }
 
 my @params;
 
-sub parameter
-{
-    my ($ref, @values) = @_;
+sub parameter {
+  my ($ref, @values) = @_;
 
-    return if (!scalar(@values));
+  return if (!scalar(@values));
 
-    my $param = {
-        id => scalar(@params),
-        package => caller,
-        values => \@values,
-        maxvidx => scalar(@values)-1,
-        reference => $ref,
-    };
-    push(@params, $param);
+  my $param = {
+    id        => scalar(@params),
+    package   => caller,
+    values    => \@values,
+    maxvidx   => scalar(@values) - 1,
+    reference => $ref,
+  };
+  push(@params, $param);
 
 #     xlog "XXX registering parameter id $param->{id} in package $param->{package}";
 }
 
-sub _describe_setting
-{
-    my ($setting) = @_;
-    $setting ||= [];
+sub _describe_setting {
+  my ($setting) = @_;
+  $setting ||= [];
 
-    my @parts;
-    my @ss = ( @$setting );
-    while (scalar @ss)
-    {
-        my $id = shift @ss;
-        my $value = $params[$id]->{values}->[shift @ss];
-        push(@parts, "$id:\"$value\"");
-    }
-    return '[' . join(' ', @parts) . ']';
+  my @parts;
+  my @ss = (@$setting);
+  while (scalar @ss) {
+    my $id    = shift @ss;
+    my $value = $params[$id]->{values}->[ shift @ss ];
+    push(@parts, "$id:\"$value\"");
+  }
+  return '[' . join(' ', @parts) . ']';
 }
 
-sub make_parameter_settings
-{
-    my ($class, $package) = @_;
+sub make_parameter_settings {
+  my ($class, $package) = @_;
 
-#     xlog "XXX making parameter settings for package $package";
+  #     xlog "XXX making parameter settings for package $package";
 
-    my @settings;
-    my @stack;
-    foreach my $param (grep { $_->{package} eq $package } @params)
-    {
-        push(@stack, { param => $param, vidx => 0 });
+  my @settings;
+  my @stack;
+  foreach my $param (grep { $_->{package} eq $package } @params) {
+    push(@stack, { param => $param, vidx => 0 });
+  }
+  return [] if !scalar(@stack);
+
+  SETTING: while (1) {
+    # save a setting
+    my $setting = [ map { $_->{param}->{id}, $_->{vidx} } @stack ];
+    #       xlog "XXX making setting " . _describe_setting($setting);
+    push(@settings, $setting);
+    # increment indexes, wrapping and overflowing
+    foreach my $s (@stack) {
+      $s->{vidx}++;
+      if ($s->{vidx} > $s->{param}->{maxvidx}) {
+        $s->{vidx} = 0;
+      } else {
+        next SETTING;
+      }
     }
-    return [] if !scalar(@stack);
+    last;
+  }
 
-    SETTING: while (1)
-    {
-        # save a setting
-        my $setting = [ map { $_->{param}->{id}, $_->{vidx} } @stack ];
-#       xlog "XXX making setting " . _describe_setting($setting);
-        push(@settings, $setting);
-        # increment indexes, wrapping and overflowing
-        foreach my $s (@stack)
-        {
-            $s->{vidx}++;
-            if ($s->{vidx} > $s->{param}->{maxvidx})
-            {
-                $s->{vidx} = 0;
-            }
-            else
-            {
-                next SETTING;
-            }
-        }
-        last;
-    }
-
-    return @settings;
+  return @settings;
 }
 
-sub apply_parameter_setting
-{
-    my ($class, $setting) = @_;
+sub apply_parameter_setting {
+  my ($class, $setting) = @_;
 
-#     xlog "XXX applying setting " . _describe_setting($setting);
+  #     xlog "XXX applying setting " . _describe_setting($setting);
 
-    foreach my $param (@params)
-    {
-        ${$param->{reference}} = undef;
-    }
+  foreach my $param (@params) {
+    ${ $param->{reference} } = undef;
+  }
 
-    my @ss = ( @$setting );
-    while (scalar @ss)
-    {
-        my $param = $params[shift @ss];
-        my $value = $param->{values}->[shift @ss];
-#       xlog "XXX setting parameter id $param->{id} to value \"$value\"";
-        ${$param->{reference}} = $value;
-    }
+  my @ss = (@$setting);
+  while (scalar @ss) {
+    my $param = $params[ shift @ss ];
+    my $value = $param->{values}->[ shift @ss ];
+    #       xlog "XXX setting parameter id $param->{id} to value \"$value\"";
+    ${ $param->{reference} } = $value;
+  }
 }
 
 # n.b. it's okay for unexpected bits to also be set!
@@ -307,155 +280,138 @@ sub apply_parameter_setting
 #   assert_bits_set($want, $got);
 #   assert_bits_not_set(~$want, $got);
 #
-sub assert_bits_set
-{
-    my ($self, $expected_bits, $actual_bitfield) = @_;
+sub assert_bits_set {
+  my ($self, $expected_bits, $actual_bitfield) = @_;
 
-    # force args to be numeric
-    # XXX use feature 'bitwise';
-    $expected_bits += 0;
-    $actual_bitfield += 0;
+  # force args to be numeric
+  # XXX use feature 'bitwise';
+  $expected_bits   += 0;
+  $actual_bitfield += 0;
 
-    my $fail_msg = sprintf("%#.8b does not have all of %#.8b bits set",
-                           $actual_bitfield, $expected_bits);
+  my $fail_msg = sprintf("%#.8b does not have all of %#.8b bits set",
+    $actual_bitfield, $expected_bits);
 
-    $self->assert((($actual_bitfield & $expected_bits) == $expected_bits),
-                  $fail_msg);
+  $self->assert((($actual_bitfield & $expected_bits) == $expected_bits),
+    $fail_msg);
 }
 
-sub assert_bits_not_set
-{
-    my ($self, $expected_bits, $actual_bitfield) = @_;
+sub assert_bits_not_set {
+  my ($self, $expected_bits, $actual_bitfield) = @_;
 
-    # force args to be numeric
-    # XXX use feature 'bitwise';
-    $expected_bits += 0;
-    $actual_bitfield += 0;
+  # force args to be numeric
+  # XXX use feature 'bitwise';
+  $expected_bits   += 0;
+  $actual_bitfield += 0;
 
-    my $fail_msg = sprintf("%#.8b has some of %#.8b bits set",
-                           $actual_bitfield, $expected_bits);
+  my $fail_msg = sprintf("%#.8b has some of %#.8b bits set",
+    $actual_bitfield, $expected_bits);
 
-    $self->assert((($actual_bitfield & $expected_bits) == 0), $fail_msg);
+  $self->assert((($actual_bitfield & $expected_bits) == 0), $fail_msg);
 }
 
-sub assert_num_gte
-{
-    my ($self, $expected, $actual) = @_;
+sub assert_num_gte {
+  my ($self, $expected, $actual) = @_;
 
-    $self->assert(($actual >= $expected),
-                  "$actual is not greater-than-or-equal-to $expected");
+  $self->assert(($actual >= $expected),
+    "$actual is not greater-than-or-equal-to $expected");
 }
 
-sub assert_num_lte
-{
-    my ($self, $expected, $actual) = @_;
+sub assert_num_lte {
+  my ($self, $expected, $actual) = @_;
 
-    $self->assert(($actual <= $expected),
-                  "$actual is not less-than-or-equal-to $expected");
+  $self->assert(($actual <= $expected),
+    "$actual is not less-than-or-equal-to $expected");
 }
 
-sub assert_num_gt
-{
-    my ($self, $expected, $actual) = @_;
+sub assert_num_gt {
+  my ($self, $expected, $actual) = @_;
 
-    $self->assert(($actual > $expected),
-                  "$actual is not greater-than $expected");
+  $self->assert(($actual > $expected), "$actual is not greater-than $expected");
 }
 
-sub assert_num_lt
-{
-    my ($self, $expected, $actual) = @_;
+sub assert_num_lt {
+  my ($self, $expected, $actual) = @_;
 
-    $self->assert(($actual < $expected),
-                  "$actual is not less-than $expected");
+  $self->assert(($actual < $expected), "$actual is not less-than $expected");
 }
 
-sub assert_date_matches
-{
-    my ($self, $expected, $actual, $tolerance) = @_;
+sub assert_date_matches {
+  my ($self, $expected, $actual, $tolerance) = @_;
 
-    my ($expected_dt, $expected_str, $actual_dt, $actual_str);
+  my ($expected_dt, $expected_str, $actual_dt, $actual_str);
 
-    # $expected may be a DateTime object or an ISO8601 string
-    my $reftype = ref $expected;
-    if (not $reftype) {
-        $expected_str = $expected;
-        $expected_dt = DateTime::Format::ISO8601->parse_datetime($expected);
-    }
-    elsif ($reftype ne 'DateTime') {
-        die "wanted string or 'DateTime' for expected, got '$reftype'";
-    }
-    else {
-        $expected_dt = $expected;
-        $expected_str = $expected_dt->stringify();
-    }
+  # $expected may be a DateTime object or an ISO8601 string
+  my $reftype = ref $expected;
+  if (not $reftype) {
+    $expected_str = $expected;
+    $expected_dt  = DateTime::Format::ISO8601->parse_datetime($expected);
+  } elsif ($reftype ne 'DateTime') {
+    die "wanted string or 'DateTime' for expected, got '$reftype'";
+  } else {
+    $expected_dt  = $expected;
+    $expected_str = $expected_dt->stringify();
+  }
 
-    # $actual may be a DateTime object or an ISO8601 string
-    $reftype = ref $actual;
-    if (not $reftype) {
-        $actual_str = $actual;
-        $actual_dt = DateTime::Format::ISO8601->parse_datetime($actual);
-    }
-    elsif ($reftype ne 'DateTime') {
-        die "wanted string or 'DateTime' for actual, got '$reftype'";
-    }
-    else {
-        $actual_dt = $actual;
-        $actual_str = $actual_dt->stringify();
-    }
+  # $actual may be a DateTime object or an ISO8601 string
+  $reftype = ref $actual;
+  if (not $reftype) {
+    $actual_str = $actual;
+    $actual_dt  = DateTime::Format::ISO8601->parse_datetime($actual);
+  } elsif ($reftype ne 'DateTime') {
+    die "wanted string or 'DateTime' for actual, got '$reftype'";
+  } else {
+    $actual_dt  = $actual;
+    $actual_str = $actual_dt->stringify();
+  }
 
-    # $tolerance is in seconds, default 0
-    $tolerance //= 0;
+  # $tolerance is in seconds, default 0
+  $tolerance //= 0;
 
-    # XXX here is where to check that timezones match:
-    # XXX * if one has a timezone and the other doesn't, fail
-    # XXX * if both have timezones but they're different, fail
-    # XXX otherwise, carry on...
+  # XXX here is where to check that timezones match:
+  # XXX * if one has a timezone and the other doesn't, fail
+  # XXX * if both have timezones but they're different, fail
+  # XXX otherwise, carry on...
 
-    my $diff = $expected_dt->epoch() - $actual_dt->epoch();
+  my $diff = $expected_dt->epoch() - $actual_dt->epoch();
 
-    my $msg = "expected '$expected_str', got '$actual_str'";
-    if ($tolerance) {
-        $msg .= " (difference $diff is greater than $tolerance)";
-    }
+  my $msg = "expected '$expected_str', got '$actual_str'";
+  if ($tolerance) {
+    $msg .= " (difference $diff is greater than $tolerance)";
+  }
 
-    $self->assert((abs($diff) <= $tolerance), $msg);
+  $self->assert((abs($diff) <= $tolerance), $msg);
 }
 
-sub assert_file_test
-{
-    my ($self, $path, $test_type) = @_;
+sub assert_file_test {
+  my ($self, $path, $test_type) = @_;
 
-    # see `perldoc -f -X` for valid test types
-    $test_type ||= '-e';
-    my $test = "$test_type \$path";
-    xlog "XXX test=<$test> path=<$path>";
-    my $result = eval $test;
-    die $@ if $@;
-    $self->assert($result, "'$path' failed '$test_type' test");
+  # see `perldoc -f -X` for valid test types
+  $test_type ||= '-e';
+  my $test = "$test_type \$path";
+  xlog "XXX test=<$test> path=<$path>";
+  my $result = eval $test;
+  die $@ if $@;
+  $self->assert($result, "'$path' failed '$test_type' test");
 }
 
-sub assert_not_file_test
-{
-    my ($self, $path, $test_type) = @_;
+sub assert_not_file_test {
+  my ($self, $path, $test_type) = @_;
 
-    # see `perldoc -f -X` for valid test types
-    $test_type ||= '-e';
-    my $test = "$test_type \$path";
-    xlog "XXX test=<$test> path=<$path>";
-    my $result = eval $test;
-    die $@ if $@;
-    $self->assert(!$result,
-                  "'$path' unexpectedly passed '$test_type' test");
+  # see `perldoc -f -X` for valid test types
+  $test_type ||= '-e';
+  my $test = "$test_type \$path";
+  xlog "XXX test=<$test> path=<$path>";
+  my $result = eval $test;
+  die $@ if $@;
+  $self->assert(!$result, "'$path' unexpectedly passed '$test_type' test");
 }
 
-sub new_test_url
-{
-    my ($self, $content_or_app) = @_;
+sub new_test_url {
+  my ($self, $content_or_app) = @_;
 
-    return Cassandane::Util::TestURL->new({
-        app => $content_or_app,
-    });
+  return Cassandane::Util::TestURL->new({
+    app => $content_or_app,
+  });
 }
 
 1;

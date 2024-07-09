@@ -42,9 +42,9 @@ package Cyrus::IMAP::Admin;
 use strict;
 use Cyrus::IMAP;
 use vars qw($VERSION
-            *create *delete *deleteacl *listacl *list *rename *setacl
-            *subscribed *quota *quotaroot *info *setinfo *xfer
-            *subscribe *unsubscribe);
+  *create *delete *deleteacl *listacl *list *rename *setacl
+  *subscribed *quota *quotaroot *info *setinfo *xfer
+  *subscribe *unsubscribe);
 
 $VERSION = '1.00';
 
@@ -57,47 +57,51 @@ sub _cb_ref_eof {
   my %cb = @_;
   # indicate that the connection went away
   print STDERR "\nReferral connection to server lost.\n";
-  ${$cb{-rock}} = undef;
+  ${ $cb{-rock} } = undef;
 }
 
 sub new {
   my $class = shift;
-  my $self = bless {}, $class;
+  my $self  = bless {}, $class;
   $self->{cyrus} = Cyrus::IMAP->new(@_) or $self = undef;
 
   # Figure out if the remote supports MAILBOX-REFERRALS
   # This is sort of annoying that authenticate also issues a CAPABILITY
   # but the API makes it difficult to get at the results of that command.
-  if(defined($self)) {
-    $self->{support_referrals} = 0;
-    $self->{support_annotatemore} = 0;
-    $self->{support_list_extended} = 0;
-    $self->{support_list_special_use} = 0;
+  if (defined($self)) {
+    $self->{support_referrals}          = 0;
+    $self->{support_annotatemore}       = 0;
+    $self->{support_list_extended}      = 0;
+    $self->{support_list_special_use}   = 0;
     $self->{support_create_special_use} = 0;
-    $self->{authopts} = [];
-    $self->addcallback({-trigger => 'CAPABILITY',
-                        -callback => sub {my %a = @_;
-                                          map {
-                                                # RFC 2193 IMAP4 Mailbox Referrals
-                                                $self->{support_referrals} = 1
-                                                  if /^MAILBOX-REFERRALS$/i;
-                                                $self->{support_annotatemore} = 1
-                                                  if /^ANNOTATEMORE$/i;
-                                                $self->{support_metadata} = 1
-                                                  if /^METADATA$/i;
-                                                # RFC 5258 IMAPv4 - LIST Command Extensions
-                                                $self->{support_list_extended} = 1
-                                                  if /^LIST-EXTENDED$/i;
-                                                # RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
-                                                $self->{support_list_special_use} = 1
-                                                  if /^SPECIAL-USE$/i;
-                                                # RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
-                                                $self->{support_create_special_use} = 1
-                                                  if /^CREATE-SPECIAL-USE$/i;
-                                              }
-                                          split(/ /, $a{-text})}});
+    $self->{authopts}                   = [];
+    $self->addcallback({
+      -trigger  => 'CAPABILITY',
+      -callback => sub {
+        my %a = @_;
+        map {
+          # RFC 2193 IMAP4 Mailbox Referrals
+          $self->{support_referrals} = 1
+            if /^MAILBOX-REFERRALS$/i;
+          $self->{support_annotatemore} = 1
+            if /^ANNOTATEMORE$/i;
+          $self->{support_metadata} = 1
+            if /^METADATA$/i;
+          # RFC 5258 IMAPv4 - LIST Command Extensions
+          $self->{support_list_extended} = 1
+            if /^LIST-EXTENDED$/i;
+          # RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
+          $self->{support_list_special_use} = 1
+            if /^SPECIAL-USE$/i;
+          # RFC 6154 - IMAP LIST Extension for Special-Use Mailboxes
+          $self->{support_create_special_use} = 1
+            if /^CREATE-SPECIAL-USE$/i;
+          }
+          split(/ /, $a{-text});
+      }
+    });
     $self->send(undef, undef, 'CAPABILITY');
-    $self->addcallback({-trigger => 'CAPABILITY'});
+    $self->addcallback({ -trigger => 'CAPABILITY' });
   }
 
   $self;
@@ -115,99 +119,101 @@ sub AUTOLOAD {
   no strict 'refs';
   $AUTOLOAD =~ s/^.*:://;
   my $sub = $Cyrus::IMAP::{$AUTOLOAD};
-  *$AUTOLOAD = sub { &$sub($_[0]->{cyrus}, @_[1..$#_]); };
+  *$AUTOLOAD = sub { &$sub($_[0]->{cyrus}, @_[ 1 .. $#_ ]); };
   goto &$AUTOLOAD;
 }
 
 # Wrap around Cyrus::IMAP's authenticate, so that we are sure to
 # send an rlist command if they support referrals
 sub authenticate {
-    my $self = shift;
-    if(@_) {
-      $self->{authopts} = \@_;
+  my $self = shift;
+  if (@_) {
+    $self->{authopts} = \@_;
+  }
+  my $rc = $self->{cyrus}->authenticate(@_);
+  if ($rc && $self->{support_referrals}) {
+    # Advertise our desire for referrals
+    my $msg;
+    ($rc, $msg) = $self->send('', '', 'RLIST "" ""');
+    if ($rc eq "OK") {
+      $rc = 1;
+    } else {
+      $rc = 0;
     }
-    my $rc = $self->{cyrus}->authenticate(@_);
-    if($rc && $self->{support_referrals}) {
-      # Advertise our desire for referrals
-      my $msg;
-      ($rc, $msg) = $self->send('', '', 'RLIST "" ""');
-      if($rc eq "OK") {
-        $rc = 1;
-      } else {
-        $rc = 0;
-      }
-    }
-    return $rc;
+  }
+  return $rc;
 }
 
 # Spit out a reference to the previous authentication options:
 sub _getauthopts {
-    my $self = shift;
-    return $self->{authopts};
+  my $self = shift;
+  return $self->{authopts};
 }
 
 sub reconstruct {
-    my ($self, $mailbox, $recurse) = @_;
-    my $rc;
-    my $msg;
-    if($recurse == 1) {
-      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s RECURSIVE',
-                                $mailbox);
-    } else {
-      ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s', $mailbox);
-    }
-    $self->{error} = $msg;
-    if($rc eq "OK") {
-      $rc = 1;
-    } else {
-      if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
-        my ($refserver, $box) = $self->fromURL($1);
-        my $port = 143;
+  my ($self, $mailbox, $recurse) = @_;
+  my $rc;
+  my $msg;
+  if ($recurse == 1) {
+    ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s RECURSIVE', $mailbox);
+  } else {
+    ($rc, $msg) = $self->send('', '', 'RECONSTRUCT %s', $mailbox);
+  }
+  $self->{error} = $msg;
+  if ($rc eq "OK") {
+    $rc = 1;
+  } else {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      my ($refserver, $box) = $self->fromURL($1);
+      my $port = 143;
 
-        if($refserver =~ /:/) {
-          $refserver =~ /([^:]+):(\d+)/;
-          $refserver = $1; $port = $2;
-        }
-
-        my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
-          or die "cyradm: cannot connect to $refserver\n";
-        $cyradm->addcallback({-trigger => 'EOF',
-                              -callback => \&_cb_ref_eof,
-                              -rock => \$cyradm});
-        $cyradm->authenticate(@{$self->_getauthopts()})
-          or die "cyradm: cannot authenticate to $refserver\n";
-
-        my $ret = $cyradm->reconstruct($mailbox,$recurse);
-        $self->{error} = $cyradm->{error};
-        $cyradm = undef;
-        return $ret;
-      } else {
-        $rc = 0;
+      if ($refserver =~ /:/) {
+        $refserver =~ /([^:]+):(\d+)/;
+        $refserver = $1;
+        $port      = $2;
       }
+
+      my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
+        or die "cyradm: cannot connect to $refserver\n";
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
+        or die "cyradm: cannot authenticate to $refserver\n";
+
+      my $ret = $cyradm->reconstruct($mailbox, $recurse);
+      $self->{error} = $cyradm->{error};
+      $cyradm = undef;
+      return $ret;
+    } else {
+      $rc = 0;
     }
-    return $rc;
+  }
+  return $rc;
 }
 
 sub createmailbox {
   my ($self, $mbx, $partition, $opts) = @_;
-  my $cmd = "CREATE %s";
+  my $cmd  = "CREATE %s";
   my @args = ();
-  # RFC 3501 + cyrus:    CREATE mailbox [partition]
-  # RFC 4466 + RFC 6154: CREATE mailbox ([PARTITION partition ]USE (special-use))
-  if (defined ($$opts{'-specialuse'})) {
-    if($self->{support_create_special_use}) {
-      if (defined ($partition)) {
-        $cmd .= " (PARTITION %a USE (%a))" ;
+ # RFC 3501 + cyrus:    CREATE mailbox [partition]
+ # RFC 4466 + RFC 6154: CREATE mailbox ([PARTITION partition ]USE (special-use))
+  if (defined($$opts{'-specialuse'})) {
+    if ($self->{support_create_special_use}) {
+      if (defined($partition)) {
+        $cmd .= " (PARTITION %a USE (%a))";
         push @args, ($partition, $$opts{'-specialuse'});
       } else {
-        $cmd .= " (USE (%a))" ;
+        $cmd .= " (USE (%a))";
         push @args, $$opts{'-specialuse'};
       }
     } else {
       $self->{error} = "Remote does not support CREATE-SPECIAL-USE.";
       return undef;
     }
-  } elsif (defined ($partition)) {
+  } elsif (defined($partition)) {
     $cmd .= " %a";
     push @args, $partition;
   }
@@ -216,21 +222,24 @@ sub createmailbox {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->createmailbox($box);
@@ -245,26 +254,29 @@ sub createmailbox {
 
 sub deletemailbox {
   my ($self, $mbx) = @_;
-  my ($rc, $msg) = $self->send('', '', 'DELETE %s', $mbx);
+  my ($rc,   $msg) = $self->send('', '', 'DELETE %s', $mbx);
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->deletemailbox($box);
@@ -288,24 +300,27 @@ sub deleteaclmailbox {
     if ($rc eq 'OK') {
       $cnt++;
     } else {
-      if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
         my ($refserver, $box) = $self->fromURL($1);
         my $port = 143;
 
-        if($refserver =~ /:/) {
+        if ($refserver =~ /:/) {
           $refserver =~ /([^:]+):(\d+)/;
-          $refserver = $1; $port = $2;
+          $refserver = $1;
+          $port      = $2;
         }
 
         my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
           or die "cyradm: cannot connect to $refserver\n";
-        $cyradm->addcallback({-trigger => 'EOF',
-                              -callback => \&_cb_ref_eof,
-                              -rock => \$cyradm});
-        $cyradm->authenticate(@{$self->_getauthopts()})
+        $cyradm->addcallback({
+          -trigger  => 'EOF',
+          -callback => \&_cb_ref_eof,
+          -rock     => \$cyradm
+        });
+        $cyradm->authenticate(@{ $self->_getauthopts() })
           or die "cyradm: cannot authenticate to $refserver\n";
 
-        $cnt += $cyradm->deleteaclmailbox($mbx,$acl);
+        $cnt += $cyradm->deleteaclmailbox($mbx, $acl);
 
         $res .= "\n" if $res ne '';
         $res .= $acl . ': ' . $cyradm->{error};
@@ -330,17 +345,19 @@ sub deleteaclmailbox {
 sub listaclmailbox {
   my ($self, $mbx) = @_;
   my %info = ();
-  $self->addcallback({-trigger => 'ACL',
-                      -callback => sub {
-                        my %d = @_;
-                        return unless $d{-text} =~ s/^\"*\Q$mbx\E\"*\s+//;
-                        while ($d{-text} =~ s/(\S+)\s+(\S+)\s*//) {
-                          $d{-rock}{$1} = $2;
-                        }
-                      },
-                      -rock => \%info});
+  $self->addcallback({
+    -trigger  => 'ACL',
+    -callback => sub {
+      my %d = @_;
+      return unless $d{-text} =~ s/^\"*\Q$mbx\E\"*\s+//;
+      while ($d{-text} =~ s/(\S+)\s+(\S+)\s*//) {
+        $d{-rock}{$1} = $2;
+      }
+    },
+    -rock => \%info
+  });
   my ($rc, $msg) = $self->send('', '', 'GETACL %s', $mbx);
-  $self->addcallback({-trigger => 'ACL'});
+  $self->addcallback({ -trigger => 'ACL' });
   if ($rc eq 'OK') {
     $self->{error} = undef;
     %info;
@@ -358,7 +375,7 @@ sub listmailbox {
   my $list_cmd;
   my @list_sel;
   my @list_ret;
-  if($self->{support_referrals}) {
+  if ($self->{support_referrals}) {
     if ($self->{support_list_extended}) {
       $list_cmd = 'LIST';
       push @list_sel, "REMOTE";
@@ -369,15 +386,21 @@ sub listmailbox {
     $list_cmd = 'LIST';
   }
 
-  if(defined ($$opts{'-sel-special-use'}) && !$self->{support_list_special_use}) {
+  if (defined($$opts{'-sel-special-use'}) && !$self->{support_list_special_use})
+  {
     $self->{error} = "Remote does not support SPECIAL-USE.";
     return undef;
   }
 
-  if((defined ($$opts{'-sel-special-use'}) ||
-      defined ($$opts{'-sel-recursivematch'}) ||
-      defined ($$opts{'-sel-subscribed'}))
-     && !$self->{support_list_extended}) {
+  if (
+    (
+         defined($$opts{'-sel-special-use'})
+      || defined($$opts{'-sel-recursivematch'})
+      || defined($$opts{'-sel-subscribed'})
+    )
+    && !$self->{support_list_extended}
+    )
+  {
     $self->{error} = "Remote does not support LIST-EXTENDED.";
     return undef;
   }
@@ -388,16 +411,16 @@ sub listmailbox {
     #  option (or only with REMOTE), as it only makes sense when other
     #  selection options are also used."
     push @list_sel, "RECURSIVEMATCH"
-      if defined ($$opts{'-sel-recursivematch'});
+      if defined($$opts{'-sel-recursivematch'});
 
     push @list_sel, "SUBSCRIBED"
-      if defined ($$opts{'-sel-subscribed'});
+      if defined($$opts{'-sel-subscribed'});
 
-    if($self->{support_list_special_use}) {
+    if ($self->{support_list_special_use}) {
       # always return special-use flags
       push @list_ret, "SPECIAL-USE";
       push @list_sel, "SPECIAL-USE"
-        if defined ($$opts{'-sel-special-use'});
+        if defined($$opts{'-sel-special-use'});
     }
   }
 
@@ -408,61 +431,64 @@ sub listmailbox {
   #
   # This should never trigger: MAILBOX-REFERRALS and SPECIAL-USE but no
   # LIST-EXTENDED.
-  if ($list_cmd eq "RLIST" && (scalar (@list_ret) > 0 || scalar (@list_sel) > 0)) {
-    $self->{error} = "Invalid capabilities: MAILBOX-REFERRALS and SPECIAL-USE but no LIST-EXTENDED.";
+  if ($list_cmd eq "RLIST" && (scalar(@list_ret) > 0 || scalar(@list_sel) > 0))
+  {
+    $self->{error}
+      = "Invalid capabilities: MAILBOX-REFERRALS and SPECIAL-USE but no LIST-EXTENDED.";
     return undef;
   }
 
-  $self->addcallback({-trigger => 'LIST',
-                      -callback => sub {
-                        my %d = @_;
-                        next unless $d{-text} =~ s/^\(([^\)]*)\) //;
-                        my $attrs = $1;
-                        my $sep = '';
-                        my $mbox;
-                        my $extended;
-                        # NIL or (attrs) "sep" "str"
-                        if ($d{-text} =~ /^N/) {
-                          return if $d{-text} !~ s/^NIL//;
-                        }
-                        elsif ($d{-text} =~ s/\"\\?(.)\"//) {
-                          $sep = $1;
-                        }
-                        return unless $d{-text} =~ s/^ //;
-                        if ($d{-text} =~ /{\d+}(.*)/) {
-                          # cope with literals (?)
-                          (undef, $mbox) = split(/\n/, $d{-text});
-                        } elsif ($d{-text} =~ /^\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
-                          ($mbox = $1) =~ s/\\(.)/$1/g;
-                        } else {
-                          $d{-text} =~ s/^([]!\#-[^-~]+)//;
-                          $mbox = $1;
-                        }
-                        if ($d{-text} =~ s/^ \(("{0,1}[^" ]+"{0,1} \("[^"]*"\))\)//) {
-                          # RFC 5258: mbox-list-extended =  "(" [mbox-list-extended-item
-                          #              *(SP mbox-list-extended-item)] ")"
-                          $extended = $1;
-                        }
-                        push @{$d{-rock}}, [$mbox, $attrs, $sep, $extended];
-                      },
-                      -rock => \@info});
+  $self->addcallback({
+    -trigger  => 'LIST',
+    -callback => sub {
+      my %d = @_;
+      next unless $d{-text} =~ s/^\(([^\)]*)\) //;
+      my $attrs = $1;
+      my $sep   = '';
+      my $mbox;
+      my $extended;
+      # NIL or (attrs) "sep" "str"
+      if ($d{-text} =~ /^N/) {
+        return if $d{-text} !~ s/^NIL//;
+      } elsif ($d{-text} =~ s/\"\\?(.)\"//) {
+        $sep = $1;
+      }
+      return unless $d{-text} =~ s/^ //;
+      if ($d{-text} =~ /{\d+}(.*)/) {
+        # cope with literals (?)
+        (undef, $mbox) = split(/\n/, $d{-text});
+      } elsif ($d{-text} =~ /^\"(([^\\\"]*\\)*[^\\\"]*)\"/) {
+        ($mbox = $1) =~ s/\\(.)/$1/g;
+      } else {
+        $d{-text} =~ s/^([]!\#-[^-~]+)//;
+        $mbox = $1;
+      }
+      if ($d{-text} =~ s/^ \(("{0,1}[^" ]+"{0,1} \("[^"]*"\))\)//) {
+        # RFC 5258: mbox-list-extended =  "(" [mbox-list-extended-item
+        #              *(SP mbox-list-extended-item)] ")"
+        $extended = $1;
+      }
+      push @{ $d{-rock} }, [ $mbox, $attrs, $sep, $extended ];
+    },
+    -rock => \@info
+  });
 
   # list =      "LIST" [SP list-select-opts] SP mailbox SP mbox-or-pat
   #             [SP list-return-opts]
   my @args = ();
-  my $cmd = $list_cmd;
-  if (scalar (@list_sel) > 0) {
+  my $cmd  = $list_cmd;
+  if (scalar(@list_sel) > 0) {
     $cmd .= " (%a)";
-    push @args, join (" ", @list_sel);
+    push @args, join(" ", @list_sel);
   }
   $cmd .= " %s %s";
   push @args, ($ref, $pat);
-  if (scalar (@list_ret) > 0) {
+  if (scalar(@list_ret) > 0) {
     $cmd .= " RETURN (%a)";
-    push @args, join (" ", @list_ret);
+    push @args, join(" ", @list_ret);
   }
   my ($rc, $msg) = $self->send('', '', $cmd, @args);
-  $self->addcallback({-trigger => $list_cmd});
+  $self->addcallback({ -trigger => $list_cmd });
   if ($rc eq 'OK') {
     $self->{error} = undef;
     @info;
@@ -478,37 +504,38 @@ sub listsubscribed {
   $ref ||= $pat;
   my @info = ();
   my $list_cmd;
-  if($self->{support_referrals}) {
+  if ($self->{support_referrals}) {
     $list_cmd = 'RLSUB';
   } else {
     $list_cmd = 'LSUB';
   }
-  $self->addcallback({-trigger => 'LSUB',
-                      -callback => sub {
-                        my %d = @_;
-                        next unless $d{-text} =~ s/^\(([^\)]*)\) //;
-                        my $attrs = $1;
-                        my $sep = '';
-                        # NIL or (attrs) "sep" "str"
-                        if ($d{-text} =~ /^N/) {
-                          return if $d{-text} !~ s/^NIL//;
-                        }
-                        elsif ($d{-text} =~ s/\"\\?(.)\"//) {
-                          $sep = $1;
-                        }
-                        return unless $d{-text} =~ s/^ //;
-                        my $mbox;
-                        if ($d{-text} =~ /\"(([^\\\"]*\\.)*[^\\\"]*)\"/) {
-                          ($mbox = $1) =~ s/\\(.)/$1/g;
-                        } else {
-                          $d{-text} =~ /^([]!\#-[^-~]+)/;
-                          $mbox = $1;
-                        }
-                        push @{$d{-rock}}, [$mbox, $attrs, $sep];
-                      },
-                      -rock => \@info});
+  $self->addcallback({
+    -trigger  => 'LSUB',
+    -callback => sub {
+      my %d = @_;
+      next unless $d{-text} =~ s/^\(([^\)]*)\) //;
+      my $attrs = $1;
+      my $sep   = '';
+      # NIL or (attrs) "sep" "str"
+      if ($d{-text} =~ /^N/) {
+        return if $d{-text} !~ s/^NIL//;
+      } elsif ($d{-text} =~ s/\"\\?(.)\"//) {
+        $sep = $1;
+      }
+      return unless $d{-text} =~ s/^ //;
+      my $mbox;
+      if ($d{-text} =~ /\"(([^\\\"]*\\.)*[^\\\"]*)\"/) {
+        ($mbox = $1) =~ s/\\(.)/$1/g;
+      } else {
+        $d{-text} =~ /^([]!\#-[^-~]+)/;
+        $mbox = $1;
+      }
+      push @{ $d{-rock} }, [ $mbox, $attrs, $sep ];
+    },
+    -rock => \@info
+  });
   my ($rc, $msg) = $self->send('', '', "$list_cmd %s %s", $pat, $ref);
-  $self->addcallback({-trigger => $list_cmd});
+  $self->addcallback({ -trigger => $list_cmd });
   if ($rc eq 'OK') {
     $self->{error} = undef;
     @info;
@@ -522,35 +549,40 @@ sub listsubscribed {
 sub listquota {
   my ($self, $root) = @_;
   my @info = ();
-  $self->addcallback({-trigger => 'QUOTA',
-                      -callback => sub {
-                        my %d = @_;
-                        next unless
-                          $d{-text} =~ s/^\S+.* \((\S*) *?(\S*) *?(\S*)\)//;
-                        push @{$d{-rock}}, $1, [$2, $3];
-                      },
-                      -rock => \@info});
+  $self->addcallback({
+    -trigger  => 'QUOTA',
+    -callback => sub {
+      my %d = @_;
+      next
+        unless $d{-text} =~ s/^\S+.* \((\S*) *?(\S*) *?(\S*)\)//;
+      push @{ $d{-rock} }, $1, [ $2, $3 ];
+    },
+    -rock => \@info
+  });
   my ($rc, $msg) = $self->send('', '', 'GETQUOTA %s', $root);
-  $self->addcallback({-trigger => 'QUOTA'});
+  $self->addcallback({ -trigger => 'QUOTA' });
   if ($rc eq 'OK') {
     $self->{error} = undef;
     @info;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my @ret = $cyradm->listquota($root);
@@ -567,48 +599,57 @@ sub listquota {
 
 sub listquotaroot {
   my ($self, $root) = @_;
-  my $qr = '';
+  my $qr   = '';
   my @info = ();
-  $self->addcallback({-trigger => 'QUOTAROOT',
-                      -callback => sub {
-                        my %d = @_;
-                        return unless ( $d{-text} =~ /^\"[^\"]+\" \"([^\"]+)\"/ or
-                                       $d{-text} =~ /^\"[^\"]+\" (\S+)/ or
-                                       $d{-text} =~ /[^\"]\S+ \"([^\"]+)\"/ or
-                                       $d{-text} =~ /^[^\"]\S+ (\S+)/
-                                       );
-                        ${$d{-rock}} = $1;
-                      },
-                      -rock => \$qr},
-                     {-trigger => 'QUOTA',
-                      -callback => sub {
-                        my %d = @_;
-                        return unless
-                          $d{-text} =~ s/\((\S+) (\S+) (\S+)\)$//;
-                        push @{$d{-rock}}, $1, [$2, $3];
-                      },
-                      -rock => \@info});
+  $self->addcallback(
+    {
+      -trigger  => 'QUOTAROOT',
+      -callback => sub {
+        my %d = @_;
+        return
+          unless ($d{-text} =~ /^\"[^\"]+\" \"([^\"]+)\"/
+          or $d{-text} =~ /^\"[^\"]+\" (\S+)/
+          or $d{-text} =~ /[^\"]\S+ \"([^\"]+)\"/
+          or $d{-text} =~ /^[^\"]\S+ (\S+)/);
+        ${ $d{-rock} } = $1;
+      },
+      -rock => \$qr
+    },
+    {
+      -trigger  => 'QUOTA',
+      -callback => sub {
+        my %d = @_;
+        return
+          unless $d{-text} =~ s/\((\S+) (\S+) (\S+)\)$//;
+        push @{ $d{-rock} }, $1, [ $2, $3 ];
+      },
+      -rock => \@info
+    }
+  );
   my ($rc, $msg) = $self->send('', '', 'GETQUOTAROOT %s', $root);
-  $self->addcallback({-trigger => 'QUOTA'}, {-trigger => 'QUOTAROOT'});
+  $self->addcallback({ -trigger => 'QUOTA' }, { -trigger => 'QUOTAROOT' });
   if ($rc eq 'OK') {
     $self->{error} = undef;
     ($qr, @info);
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my @ret = $cyradm->listquotaroot($root);
@@ -626,48 +667,53 @@ sub listquotaroot {
 sub renamemailbox {
   my ($self, $src, $dest, $ptn) = @_;
 
-  $self->addcallback({-trigger => 'NO',
-                      -callback => sub {
-                        print $_ . "\n";
-                      }});
+  $self->addcallback({
+    -trigger  => 'NO',
+    -callback => sub {
+      print $_ . "\n";
+    }
+  });
 
   my ($rc, $msg);
   if ($ptn) {
     ($rc, $msg) = $self->send('', '', 'RENAME %s %s %a', $src, $dest, $ptn);
-  }
-  else {
+  } else {
     ($rc, $msg) = $self->send('', '', 'RENAME %s %s', $src, $dest);
   }
 
-  $self->addcallback({-trigger => 'NO'});
+  $self->addcallback({ -trigger => 'NO' });
 
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} &&
-       $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\s+([^\]\s]+)\]|) {
+    if ( $self->{support_referrals}
+      && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\s+([^\]\s]+)\]|)
+    {
       # We need two referrals for this to be valid
-      my ($refserver, $box) = $self->fromURL($1);
+      my ($refserver,  $box)  = $self->fromURL($1);
       my ($refserver2, $nbox) = $self->fromURL($2);
       my $port = 143;
 
-      if(!($refserver eq $refserver2)) {
+      if (!($refserver eq $refserver2)) {
         $self->{error} = "Inter-server referral.  Not implemented.";
         return 1;
       }
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->renamemailbox($box, $box, $nbox);
@@ -683,15 +729,17 @@ sub renamemailbox {
 sub xfermailbox {
   my ($self, $mbox, $server, $ptn) = @_;
 
-  $self->addcallback({-trigger => 'NO',
-                      -callback => sub {
-                        print $_ . "\n";
-                      }});
+  $self->addcallback({
+    -trigger  => 'NO',
+    -callback => sub {
+      print $_ . "\n";
+    }
+  });
 
-  my ($rc, $msg) = $self->send('', '', 'XFER %s %s%a%a', $mbox, $server,
-                               $ptn ? ' ' : $ptn, $ptn);
+  my ($rc, $msg) = $self->send('', '', 'XFER %s %s%a%a',
+    $mbox, $server, $ptn ? ' ' : $ptn, $ptn);
 
-  $self->addcallback({-trigger => 'NO'});
+  $self->addcallback({ -trigger => 'NO' });
 
   if ($rc eq 'OK') {
     $self->{error} = undef;
@@ -705,13 +753,15 @@ sub xfermailbox {
 
 # hm.  this list can't be confused with valid ACL values as of 1.6.19, except
 # for "all".  sigh.
-my %aclalias = (none => '',
-                read => 'lrs',
-                post => 'lrsp',
-                append => 'lrsip',
-                write => 'lrswipkxte',
-                delete => 'lrxte',
-                all => 'lrswipkxtea');
+my %aclalias = (
+  none   => '',
+  read   => 'lrs',
+  post   => 'lrsp',
+  append => 'lrsip',
+  write  => 'lrswipkxte',
+  delete => 'lrxte',
+  all    => 'lrswipkxtea'
+);
 
 sub setaclmailbox {
   my ($self, $mbx, %acl) = @_;
@@ -719,30 +769,33 @@ sub setaclmailbox {
   my $res = '';
   my ($rc, $msg);
   foreach my $id (keys %acl) {
-    $acl{$id} = $aclalias{$acl{$id}} if defined $aclalias{$acl{$id}};
+    $acl{$id} = $aclalias{ $acl{$id} } if defined $aclalias{ $acl{$id} };
     ($rc, $msg) = $self->send('', '', 'SETACL %s %s %s', $mbx, $id, $acl{$id});
     if ($rc eq 'OK') {
       $cnt++;
     } else {
-      if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+      if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
         my ($refserver, $box) = $self->fromURL($1);
         my $port = 143;
 
-        if($refserver =~ /:/) {
+        if ($refserver =~ /:/) {
           $refserver =~ /([^:]+):(\d+)/;
-          $refserver = $1; $port = $2;
+          $refserver = $1;
+          $port      = $2;
         }
 
         my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
           or die "cyradm: cannot connect to $refserver\n";
-        $cyradm->addcallback({-trigger => 'EOF',
-                              -callback => \&_cb_ref_eof,
-                              -rock => \$cyradm});
-        $cyradm->authenticate(@{$self->_getauthopts()})
+        $cyradm->addcallback({
+          -trigger  => 'EOF',
+          -callback => \&_cb_ref_eof,
+          -rock     => \$cyradm
+        });
+        $cyradm->authenticate(@{ $self->_getauthopts() })
           or die "cyradm: cannot authenticate to $refserver\n";
 
         my $ret = $cyradm->setaclmailbox($mbx, %acl);
-        if(defined($ret)) {
+        if (defined($ret)) {
           $cnt++;
           $rc = 'OK';
         } else {
@@ -769,12 +822,12 @@ sub setquota {
   my ($self, $mbx, %quota) = @_;
   foreach my $id (keys %quota) {
     if ($id !~ /^[]!\#-[^-~]+$/) {
-        $self->{error} = $id . ': not an atom';
-        return undef;
+      $self->{error} = $id . ': not an atom';
+      return undef;
     }
     if ($quota{$id} !~ /^\d+$/) {
-        $self->{error} = $id . ': ' . $quota{$id} . ': not a number';
-        return undef;
+      $self->{error} = $id . ': ' . $quota{$id} . ': not a number';
+      return undef;
     }
   }
   my ($rc, $msg) = $self->send('', '', 'SETQUOTA %s (%v)', $mbx, \%quota);
@@ -782,21 +835,24 @@ sub setquota {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->setquota($mbx, %quota);
@@ -809,15 +865,14 @@ sub setquota {
   }
 }
 
-
 # map protocol name to user visible name
 sub _attribname2access {
   my $k = shift;
 
-  if ($k eq 'value.priv' ) {
-     return 'private';
+  if ($k eq 'value.priv') {
+    return 'private';
   } elsif ($k eq 'value.shared') {
-     return 'shared';
+    return 'shared';
   } else {
     return $k;
   }
@@ -826,63 +881,67 @@ sub _attribname2access {
 sub mboxconfig {
   my ($self, $mailbox, $entry, $value, $private) = @_;
 
-  my %values = ( "comment" => "/comment",
-                 "expire" => "/vendor/cmu/cyrus-imapd/expire",
-                 "news2mail" => "/vendor/cmu/cyrus-imapd/news2mail",
-                 "sharedseen" => "/vendor/cmu/cyrus-imapd/sharedseen",
-                 "sieve" => "/vendor/cmu/cyrus-imapd/sieve",
-                 "squat" => "/vendor/cmu/cyrus-imapd/squat",
-                 "pop3showafter" => "/vendor/cmu/cyrus-imapd/pop3showafter" );
+  my %values = (
+    "comment"       => "/comment",
+    "expire"        => "/vendor/cmu/cyrus-imapd/expire",
+    "news2mail"     => "/vendor/cmu/cyrus-imapd/news2mail",
+    "sharedseen"    => "/vendor/cmu/cyrus-imapd/sharedseen",
+    "sieve"         => "/vendor/cmu/cyrus-imapd/sieve",
+    "squat"         => "/vendor/cmu/cyrus-imapd/squat",
+    "pop3showafter" => "/vendor/cmu/cyrus-imapd/pop3showafter"
+  );
 
-  if(!$self->{support_metadata}) {
+  if (!$self->{support_metadata}) {
     $self->{error} = "Remote does not support METADATA.";
     return undef;
   }
 
-  if(exists($values{$entry})) {
+  if (exists($values{$entry})) {
     $entry = $values{$entry};
   } else {
-    $self->{error} = "Unknown parameter $entry" unless substr($entry,0,1) eq "/";
+    $self->{error} = "Unknown parameter $entry"
+      unless substr($entry, 0, 1) eq "/";
   }
 
   my ($rc, $msg);
 
-  $value = undef if($value eq "none");
-  if (defined ($private)) {
+  $value = undef if ($value eq "none");
+  if (defined($private)) {
     $entry = "/private" . $entry;
   } else {
     $entry = "/shared" . $entry;
   }
 
-  if(defined($value)) {
-    ($rc, $msg) = $self->send('', '',
-                              'SETMETADATA %q (%q %q)',
-                              $mailbox, $entry, $value);
+  if (defined($value)) {
+    ($rc, $msg)
+      = $self->send('', '', 'SETMETADATA %q (%q %q)', $mailbox, $entry, $value);
   } else {
-    ($rc, $msg) = $self->send('', '',
-                              'SETMETADATA %q (%q NIL)',
-                              $mailbox, $entry);
+    ($rc, $msg)
+      = $self->send('', '', 'SETMETADATA %q (%q NIL)', $mailbox, $entry);
   }
 
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->mboxconfig($mailbox, $entry, $value);
@@ -897,34 +956,33 @@ sub mboxconfig {
 sub setinfoserver {
   my ($self, $entry, $value) = @_;
 
-  if(!$self->{support_metadata}) {
+  if (!$self->{support_metadata}) {
     $self->{error} = "Remote does not support METADATA.";
     return undef;
   }
 
-  my %values = ( "comment" => "/comment",
-                 "motd" => "/motd",
-                 "admin" => "/admin",
-                 "shutdown" => "/vendor/cmu/cyrus-imapd/shutdown",
-                 "expire" => "/vendor/cmu/cyrus-imapd/expire",
-                 "squat" => "/vendor/cmu/cyrus-imapd/squat");
+  my %values = (
+    "comment"  => "/comment",
+    "motd"     => "/motd",
+    "admin"    => "/admin",
+    "shutdown" => "/vendor/cmu/cyrus-imapd/shutdown",
+    "expire"   => "/vendor/cmu/cyrus-imapd/expire",
+    "squat"    => "/vendor/cmu/cyrus-imapd/squat"
+  );
 
   $entry = $values{$entry} if (exists($values{$entry}));
 
-  $value = undef if($value eq "none");
+  $value = undef if ($value eq "none");
 
   my ($rc, $msg);
 
   $entry = "/shared" . $entry;
 
-  if(defined($value)) {
-    ($rc, $msg) = $self->send('', '',
-                              "SETMETADATA \"\" (%q %q)",
-                              $entry, $value);
+  if (defined($value)) {
+    ($rc, $msg)
+      = $self->send('', '', "SETMETADATA \"\" (%q %q)", $entry, $value);
   } else {
-    ($rc, $msg) = $self->send('', '',
-                              "SETMETADATA \"\" (%q NIL)",
-                              $entry);
+    ($rc, $msg) = $self->send('', '', "SETMETADATA \"\" (%q NIL)", $entry);
   }
 
   if ($rc eq 'OK') {
@@ -938,124 +996,125 @@ sub setinfoserver {
 *setinfo = *setinfoserver;
 
 sub getmetadata {
-  my $self = shift;
-  my $box = shift;
+  my $self    = shift;
+  my $box     = shift;
   my @entries = @_;
 
-  if(!defined($box)) {
+  if (!defined($box)) {
     $box = "";
   }
 
-  if(!$self->{support_metadata}) {
+  if (!$self->{support_metadata}) {
     $self->{error} = "Remote does not support METADATA.";
     return undef;
   }
 
   my %info = ();
-  $self->addcallback({-trigger => 'METADATA',
-                      -callback => sub {
-                        my %d = @_;
-                        my $text = $d{-text};
+  $self->addcallback({
+    -trigger  => 'METADATA',
+    -callback => sub {
+      my %d    = @_;
+      my $text = $d{-text};
 
-                        # There were several draft iterations of this,
-                        # but we only support the latest form command.
-                        # Still, we might encounter entry-value pairs
-                        # with nstring or literal8 values, possibly
-                        # mixed in the same response.
-                        # XXX Known bug:
-                        # We support single nstring and literal8 entry
-                        # value pairs, but only multiple nstring pairs.
-                        if ($text =~
-                                /^\s*\"?([^\(]*?)\"?\s+\(((\"?[^"\{]+\"?\s+\"?[^"\)\{]+\"?\s*)+)\)/) {
-                            my $mdbox = $1;
-                            my $pairs = $2;
-                            while ($pairs =~ /\"?([^"\{]+)\"?\s+\"?([^"\)\{]+)\"?/g) {
-                                my $mdkey = $1;
-                                my $mdvalue = $2;
-                                if($mdbox ne "") {
-                                    $mdkey = "/mailbox/$mdkey";
-                                    if ($mdkey =~ /private/) {
-                                        $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
-                                    } elsif ($mdkey =~ /shared/) {
-                                        $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
-                                    }
-                                } else {
-                                    $mdkey = "/server/$mdkey";
-                                    if ($mdkey =~ /private/) {
-                                        $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
-                                    } elsif ($mdkey =~ /shared/) {
-                                        $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
-                                    }
-                                }
-                            }
-                        }
-                        elsif ($text =~
-                                /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*)\"?\s+\"?([^"\)\{]*)\"?\)/) {
-                            my $mdbox = $1;
-                            my $mdkey = $2;
-                            my $mdvalue = $3;
-                            if($mdbox ne "") {
-                                $mdkey = "/mailbox/$mdkey";
-                                if ($mdkey =~ /private/) {
-                                    $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
-                                } elsif ($mdkey =~ /shared/) {
-                                    $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
-                                }
-                          } else {
-                                $mdkey = "/server/$mdkey";
-                                if ($mdkey =~ /private/) {
-                                    $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
-                                } elsif ($mdkey =~ /shared/) {
-                                    $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
-                                }
-                            }
-                        }  elsif ($text =~
-                                /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*?)\"?\s+\{(.*)\}\r\n/) {
-                          my $mdbox = $1;
-                          my $mdkey = $2;
-                          my $len = $3;
-                          $text =~ s/^\s*\"?([^\(]*?)\"?\s+\(\"?([^"]*)\"?\s+\{(.*)\}\r\n//s;
-                          my $mdvalue = substr($text, 0, $len);
-                          # Single annotation (literal style),
-                          # possibly multiple values -- multiple
-                          # values not tested.
-                          if($mdbox ne "") {
-                              $mdkey = "/mailbox/$mdkey";
-                              if ($mdkey =~ /private/) {
-                                  $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
-                              } elsif ($mdkey =~ /shared/) {
-                                  $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
-                              }
-                          } else {
-                              $mdkey = "/server/$mdkey";
-                              if ($mdkey =~ /private/) {
-                                  $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
-                              } elsif ($mdkey =~ /shared/) {
-                                  $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
-                              }
-                          }
-                        } else {
-                            ; # XXX: unrecognized line, how to notify caller?
-                          1;
-                        }
-                      },
-                      -rock => \%info});
+      # There were several draft iterations of this,
+      # but we only support the latest form command.
+      # Still, we might encounter entry-value pairs
+      # with nstring or literal8 values, possibly
+      # mixed in the same response.
+      # XXX Known bug:
+      # We support single nstring and literal8 entry
+      # value pairs, but only multiple nstring pairs.
+      if ($text =~
+        /^\s*\"?([^\(]*?)\"?\s+\(((\"?[^"\{]+\"?\s+\"?[^"\)\{]+\"?\s*)+)\)/)
+      {
+        my $mdbox = $1;
+        my $pairs = $2;
+        while ($pairs =~ /\"?([^"\{]+)\"?\s+\"?([^"\)\{]+)\"?/g) {
+          my $mdkey   = $1;
+          my $mdvalue = $2;
+          if ($mdbox ne "") {
+            $mdkey = "/mailbox/$mdkey";
+            if ($mdkey =~ /private/) {
+              $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+            } elsif ($mdkey =~ /shared/) {
+              $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+            }
+          } else {
+            $mdkey = "/server/$mdkey";
+            if ($mdkey =~ /private/) {
+              $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+            } elsif ($mdkey =~ /shared/) {
+              $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+            }
+          }
+        }
+      } elsif ($text =~
+        /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*)\"?\s+\"?([^"\)\{]*)\"?\)/)
+      {
+        my $mdbox   = $1;
+        my $mdkey   = $2;
+        my $mdvalue = $3;
+        if ($mdbox ne "") {
+          $mdkey = "/mailbox/$mdkey";
+          if ($mdkey =~ /private/) {
+            $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+          } elsif ($mdkey =~ /shared/) {
+            $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+          }
+        } else {
+          $mdkey = "/server/$mdkey";
+          if ($mdkey =~ /private/) {
+            $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+          } elsif ($mdkey =~ /shared/) {
+            $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+          }
+        }
+      } elsif (
+        $text =~ /^\s*\"?([^\(]*?)\"?\s+\(\"?([^"\{]*?)\"?\s+\{(.*)\}\r\n/)
+      {
+        my $mdbox = $1;
+        my $mdkey = $2;
+        my $len   = $3;
+        $text =~ s/^\s*\"?([^\(]*?)\"?\s+\(\"?([^"]*)\"?\s+\{(.*)\}\r\n//s;
+        my $mdvalue = substr($text, 0, $len);
+        # Single annotation (literal style),
+        # possibly multiple values -- multiple
+        # values not tested.
+        if ($mdbox ne "") {
+          $mdkey = "/mailbox/$mdkey";
+          if ($mdkey =~ /private/) {
+            $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+          } elsif ($mdkey =~ /shared/) {
+            $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+          }
+        } else {
+          $mdkey = "/server/$mdkey";
+          if ($mdkey =~ /private/) {
+            $d{-rock}->{"$mdbox"}->{'private'}->{$mdkey} = $mdvalue;
+          } elsif ($mdkey =~ /shared/) {
+            $d{-rock}->{"$mdbox"}->{'shared'}->{$mdkey} = $mdvalue;
+          }
+        }
+      } else {
+        ; # XXX: unrecognized line, how to notify caller?
+        1;
+      }
+    },
+    -rock => \%info
+  });
 
   # send getmetadata "/mailbox/name/* or /private/* and /shared/*"
-  my($rc, $msg);
-  if(scalar(@entries)) {
+  my ($rc, $msg);
+  if (scalar(@entries)) {
     foreach my $annot (@entries) {
-      ($rc, $msg) = $self->send('', '', "GETMETADATA %q (%q)",
-                                $box, $annot);
-      last if($rc ne 'OK');
+      ($rc, $msg) = $self->send('', '', "GETMETADATA %q (%q)", $box, $annot);
+      last if ($rc ne 'OK');
     }
   } else {
-    ($rc, $msg) = $self->send('', '', "GETMETADATA %q (\"/private/*\")",
-                              $box);
-    ($rc, $msg) = $self->send('', '', "GETMETADATA %q (\"/shared/*\")",
-                              $box);
+    ($rc, $msg) = $self->send('', '', "GETMETADATA %q (\"/private/*\")", $box);
+    ($rc, $msg) = $self->send('', '', "GETMETADATA %q (\"/shared/*\")",  $box);
   }
-  $self->addcallback({-trigger => 'METADATA'});
+  $self->addcallback({ -trigger => 'METADATA' });
   if ($rc eq 'OK') {
     $self->{error} = undef;
     %info;
@@ -1067,81 +1126,84 @@ sub getmetadata {
 *info = *getmetadata;
 
 sub getinfo {
-  my $self = shift;
-  my $box = shift;
+  my $self    = shift;
+  my $box     = shift;
   my @entries = @_;
   my @myentries;
 
-  if(scalar(@entries)) {
-      foreach my $annot (@entries) {
-          push @myentries, '/private' . $annot;
-          push @myentries, '/shared' . $annot;
-      }
+  if (scalar(@entries)) {
+    foreach my $annot (@entries) {
+      push @myentries, '/private' . $annot;
+      push @myentries, '/shared' . $annot;
+    }
   }
   return $self->getmetadata($box, @myentries);
 }
 *info = *getinfo;
 
-
 sub setmetadata {
   my ($self, $mailbox, $entry, $value, $private) = @_;
 
-  my %values = ( "comment" => "/private/comment",
-                 "expire" => "/shared/vendor/cmu/cyrus-imapd/expire",
-                 "news2mail" => "/shared/vendor/cmu/cyrus-imapd/news2mail",
-                 "sharedseen" => "/shared/vendor/cmu/cyrus-imapd/sharedseen",
-                 "sieve" => "/shared/vendor/cmu/cyrus-imapd/sieve",
-                 "specialuse" => "/private/specialuse",
-                 "squat" => "/shared/vendor/cmu/cyrus-imapd/squat",
-                 "pop3showafter" => "/shared/vendor/cmu/cyrus-imapd/pop3showafter" );
+  my %values = (
+    "comment"       => "/private/comment",
+    "expire"        => "/shared/vendor/cmu/cyrus-imapd/expire",
+    "news2mail"     => "/shared/vendor/cmu/cyrus-imapd/news2mail",
+    "sharedseen"    => "/shared/vendor/cmu/cyrus-imapd/sharedseen",
+    "sieve"         => "/shared/vendor/cmu/cyrus-imapd/sieve",
+    "specialuse"    => "/private/specialuse",
+    "squat"         => "/shared/vendor/cmu/cyrus-imapd/squat",
+    "pop3showafter" => "/shared/vendor/cmu/cyrus-imapd/pop3showafter"
+  );
 
-  if(!$self->{support_metadata}) {
+  if (!$self->{support_metadata}) {
     $self->{error} = "Remote does not support METADATA.";
     return undef;
   }
 
-  if(exists($values{$entry})) {
+  if (exists($values{$entry})) {
     $entry = $values{$entry};
   } else {
-    $self->{error} = "Unknown parameter $entry" unless substr($entry,0,1) eq "/";
+    $self->{error} = "Unknown parameter $entry"
+      unless substr($entry, 0, 1) eq "/";
   }
 
   my ($rc, $msg);
 
-  $value = undef if($value eq "none");
-  if (defined ($private)) {
+  $value = undef if ($value eq "none");
+  if (defined($private)) {
     $entry =~ s/^\/shared\//\/private\//i;
   }
 
-  if(defined($value)) {
-    ($rc, $msg) = $self->send('', '',
-                              "SETMETADATA %q (%q %q)",
-                              $mailbox, $entry, $value);
+  if (defined($value)) {
+    ($rc, $msg)
+      = $self->send('', '', "SETMETADATA %q (%q %q)", $mailbox, $entry, $value);
   } else {
-    ($rc, $msg) = $self->send('', '',
-                              "SETMETADATA %q (%q NIL)",
-                              $mailbox, $entry);
+    ($rc, $msg)
+      = $self->send('', '', "SETMETADATA %q (%q NIL)", $mailbox, $entry);
   }
 
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->mboxconfig($mailbox, $entry, $value);
@@ -1156,26 +1218,29 @@ sub setmetadata {
 
 sub subscribemailbox {
   my ($self, $mbx) = @_;
-  my ($rc, $msg) = $self->send('', '', 'SUBSCRIBE %s', $mbx);
+  my ($rc,   $msg) = $self->send('', '', 'SUBSCRIBE %s', $mbx);
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->subscribemailbox($box);
@@ -1191,26 +1256,29 @@ sub subscribemailbox {
 
 sub unsubscribemailbox {
   my ($self, $mbx) = @_;
-  my ($rc, $msg) = $self->send('', '', 'UNSUBSCRIBE %s', $mbx);
+  my ($rc,   $msg) = $self->send('', '', 'UNSUBSCRIBE %s', $mbx);
   if ($rc eq 'OK') {
     $self->{error} = undef;
     1;
   } else {
-    if($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
+    if ($self->{support_referrals} && $msg =~ m|^\[REFERRAL\s+([^\]\s]+)\]|) {
       my ($refserver, $box) = $self->fromURL($1);
       my $port = 143;
 
-      if($refserver =~ /:/) {
+      if ($refserver =~ /:/) {
         $refserver =~ /([^:]+):(\d+)/;
-        $refserver = $1; $port = $2;
+        $refserver = $1;
+        $port      = $2;
       }
 
       my $cyradm = Cyrus::IMAP::Admin->new($refserver, $port)
         or die "cyradm: cannot connect to $refserver\n";
-      $cyradm->addcallback({-trigger => 'EOF',
-                            -callback => \&_cb_ref_eof,
-                            -rock => \$cyradm});
-      $cyradm->authenticate(@{$self->_getauthopts()})
+      $cyradm->addcallback({
+        -trigger  => 'EOF',
+        -callback => \&_cb_ref_eof,
+        -rock     => \$cyradm
+      });
+      $cyradm->authenticate(@{ $self->_getauthopts() })
         or die "cyradm: cannot authenticate to $refserver\n";
 
       my $ret = $cyradm->unsubscribemailbox($box);

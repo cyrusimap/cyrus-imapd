@@ -44,9 +44,9 @@ use warnings;
 
 package Cyrus::Annotator::Message;
 
-use MIME::Base64 qw(decode_base64);
+use MIME::Base64      qw(decode_base64);
 use MIME::QuotedPrint qw(decode_qp);
-use Encode qw(decode);
+use Encode            qw(decode);
 
 our $VERSION = '1.00';
 
@@ -102,41 +102,41 @@ Takes the following args:
 =cut
 
 sub new {
-    my $class = shift;
-    my %args = @_;
+  my $class = shift;
+  my %args  = @_;
 
-    my %flags;
-    my %annots;
+  my %flags;
+  my %annots;
 
-    my $fs = $args{FLAGS} || [];
-    my $as = $args{ANNOTATIONS} || [];
+  my $fs = $args{FLAGS}       || [];
+  my $as = $args{ANNOTATIONS} || [];
 
-    for my $name (@$fs) {
-        $flags{$name} = {
-            value => 1,
-            orig => 1,
-        };
-    }
+  for my $name (@$fs) {
+    $flags{$name} = {
+      value => 1,
+      orig  => 1,
+    };
+  }
 
-    while (my $entry = shift @$as) {
-        my $rest = shift @$as;
-        my ($type, $value) = @$rest;
-        $annots{$entry}{$type} = {
-            value => $value,
-            orig => $value,
-        };
-    }
+  while (my $entry = shift @$as) {
+    my $rest = shift @$as;
+    my ($type, $value) = @$rest;
+    $annots{$entry}{$type} = {
+      value => $value,
+      orig  => $value,
+    };
+  }
 
-    my $self = bless {
-        filename => $args{FILENAME},
-        bodystructure => $args{BODYSTRUCTURE},
-        guid => $args{GUID},
-        header => $args{HEADER},
-        flag => \%flags,
-        annot => \%annots,
-    }, ref($class) || $class;
+  my $self = bless {
+    filename      => $args{FILENAME},
+    bodystructure => $args{BODYSTRUCTURE},
+    guid          => $args{GUID},
+    header        => $args{HEADER},
+    flag          => \%flags,
+    annot         => \%annots,
+    },
+    ref($class) || $class;
 }
-
 
 =item I<fh()>
 
@@ -146,18 +146,18 @@ of the full message.
 =cut
 
 sub fh {
-    my $self = shift;
+  my $self = shift;
 
-    unless ($self->{fh}) {
-        die "Need a filename" unless $self->{filename};
-        require "IO/File.pm";
-        $self->{fh} = IO::File->new($self->{filename}, 'r');
-    }
+  unless ($self->{fh}) {
+    die "Need a filename" unless $self->{filename};
+    require "IO/File.pm";
+    $self->{fh} = IO::File->new($self->{filename}, 'r');
+  }
 
-    # Move back to start of message
-    seek $self->{fh}, 0, 0;
+  # Move back to start of message
+  seek $self->{fh}, 0, 0;
 
-    return $self->{fh};
+  return $self->{fh};
 }
 
 =item I<decode_part($Part, $Content)>
@@ -168,36 +168,35 @@ encoding and charset.
 =cut
 
 sub decode_part {
-    my $self = shift;
-    my ($Part, $Content) = @_;
+  my $self = shift;
+  my ($Part, $Content) = @_;
 
-    if (lc $Part->{'Content-Transfer-Encoding'} eq 'base64') {
-        # remove trailing partial value
-        $Content =~ tr{[A-Za-z0-9+/=]}{}cd;
-        my $extra = length($Content) % 4;
-        if ($extra) {
-            # warn "stripping $extra chars " . length($Content);
-            $Content = substr($Content, 0, -$extra);
-        }
-        $Content = decode_base64($Content);
+  if (lc $Part->{'Content-Transfer-Encoding'} eq 'base64') {
+    # remove trailing partial value
+    $Content =~ tr{[A-Za-z0-9+/=]}{}cd;
+    my $extra = length($Content) % 4;
+    if ($extra) {
+      # warn "stripping $extra chars " . length($Content);
+      $Content = substr($Content, 0, -$extra);
     }
-    elsif (lc $Part->{'Content-Transfer-Encoding'} eq 'quoted-printable') {
-        # remove trailing partial value
-        $Content =~ s/=.?$//;
-        $Content = decode_qp($Content);
-    }
+    $Content = decode_base64($Content);
+  } elsif (lc $Part->{'Content-Transfer-Encoding'} eq 'quoted-printable') {
+    # remove trailing partial value
+    $Content =~ s/=.?$//;
+    $Content = decode_qp($Content);
+  }
 
-    my $charset = lc($Part->{'Content-Type'}{charset} || 'iso-8859-1');
+  my $charset = lc($Part->{'Content-Type'}{charset} || 'iso-8859-1');
 
-    # If no charset is present, it defaults to ascii. But some systems
-    #  send 8-bit data. For them, assume iso-8859-1, ascii is a subset anyway
-    $charset = 'iso-8859-1'
-        if $charset eq 'ascii' || $charset eq 'us-ascii';
+  # If no charset is present, it defaults to ascii. But some systems
+  #  send 8-bit data. For them, assume iso-8859-1, ascii is a subset anyway
+  $charset = 'iso-8859-1'
+    if $charset eq 'ascii' || $charset eq 'us-ascii';
 
-    # Fix up some bogus formatted iso charsets
-    $charset =~ s/^(iso)[\-_]?(\d+)[\-_](\d+)[\-_]?\w*/$1-$2-$3/i;
+  # Fix up some bogus formatted iso charsets
+  $charset =~ s/^(iso)[\-_]?(\d+)[\-_](\d+)[\-_]?\w*/$1-$2-$3/i;
 
-    return eval { decode($charset, $Content) } || decode('iso-8859-1', $Content);
+  return eval { decode($charset, $Content) } || decode('iso-8859-1', $Content);
 }
 
 =item I<read_part_content($Part, $nbytes)>
@@ -210,34 +209,34 @@ If no 'nbytes' is passed, read the entire part.
 =cut
 
 sub read_part_content {
-    my $self = shift;
-    my ($Part, $nbytes) = @_;
+  my $self = shift;
+  my ($Part, $nbytes) = @_;
 
-    unless ($Part) {
-        $Part = $self->bodystructure();
-    }
+  unless ($Part) {
+    $Part = $self->bodystructure();
+  }
 
-    my $fh = $self->fh();
+  my $fh = $self->fh();
 
-    die "No Offset for part"
-        unless defined $Part->{Offset};
-    die "No Size for part"
-        unless defined $Part->{Size};
+  die "No Offset for part"
+    unless defined $Part->{Offset};
+  die "No Size for part"
+    unless defined $Part->{Size};
 
-    if (!defined($nbytes) || $Part->{Size} < $nbytes) {
-        $nbytes = $Part->{Size};
-    }
+  if (!defined($nbytes) || $Part->{Size} < $nbytes) {
+    $nbytes = $Part->{Size};
+  }
 
-    seek $fh, $Part->{Offset}, 0
-        or die "Cannot seek: $!";
+  seek $fh, $Part->{Offset}, 0
+    or die "Cannot seek: $!";
 
-    my $Content = '';
+  my $Content = '';
 
-    # Could be 0 length body, only die on undef (real error)
-    my $r = read($fh, $Content, $nbytes);
-    die "Cannot read: $!" if !defined $r;
+  # Could be 0 length body, only die on undef (real error)
+  my $r = read($fh, $Content, $nbytes);
+  die "Cannot read: $!" if !defined $r;
 
-    return $self->decode_part($Part, $Content);
+  return $self->decode_part($Part, $Content);
 }
 
 =item I<header()>
@@ -247,14 +246,14 @@ returns a Mail::Header object containing all the headers of the message.
 =cut
 
 sub header {
-    my $self = shift;
+  my $self = shift;
 
-    unless ($self->{header}) {
-        require "Mail/Header.pm";
-        $self->{header} = Mail::Header->new($self->fh());
-    }
+  unless ($self->{header}) {
+    require "Mail/Header.pm";
+    $self->{header} = Mail::Header->new($self->fh());
+  }
 
-    return $self->{header};
+  return $self->{header};
 }
 
 =item I<bodystructure()>
@@ -336,41 +335,40 @@ For example:
 =cut
 
 sub bodystructure {
-   my $self = shift;
-   return $self->{bodystructure};
+  my $self = shift;
+  return $self->{bodystructure};
 }
 
-
 sub get_flag {
-    my $self = shift;
-    my ($name) = @_;
+  my $self = shift;
+  my ($name) = @_;
 
-    return $self->{flag}{$name}{value};
+  return $self->{flag}{$name}{value};
 }
 
 sub get_flags {
-    my $self = shift;
-    return grep { $self->{flag}{$_}{value} } keys %{$self->{flag}};
+  my $self = shift;
+  return grep { $self->{flag}{$_}{value} } keys %{ $self->{flag} };
 }
 
 sub set_flag_value {
-    my $self = shift;
-    my ($name, $value) = @_;
-    $self->{flag}{$name}{orig} = 0
-        unless exists $self->{flag}{$name}{orig};
-    $self->{flag}{$name}{value} = $value;
+  my $self = shift;
+  my ($name, $value) = @_;
+  $self->{flag}{$name}{orig} = 0
+    unless exists $self->{flag}{$name}{orig};
+  $self->{flag}{$name}{value} = $value;
 }
 
 sub set_flag {
-    my $self = shift;
-    my ($name) = @_;
-    $self->set_flag_value($name, 1);
+  my $self = shift;
+  my ($name) = @_;
+  $self->set_flag_value($name, 1);
 }
 
 sub clear_flag {
-    my $self = shift;
-    my ($name) = @_;
-    $self->set_flag_value($name, 0);
+  my $self = shift;
+  my ($name) = @_;
+  $self->set_flag_value($name, 0);
 }
 
 =item I<get_shared_annotation($entry)>
@@ -396,55 +394,55 @@ For example:
 =cut
 
 sub get_annotation {
-    my $self = shift;
-    my ($entry, $type) = @_;
+  my $self = shift;
+  my ($entry, $type) = @_;
 
-    return $self->{annot}{$entry}{$type}{value};
+  return $self->{annot}{$entry}{$type}{value};
 }
 
 sub set_annotation {
-    my $self = shift;
-    my ($entry, $type, $value) = @_;
-    $value = '' unless defined $value;
-    $self->{annot}{$entry}{$type}{orig} = ''
-        unless exists $self->{annot}{$entry}{$type}{orig};
-    $self->{annot}{$entry}{$type}{value} = $value;
+  my $self = shift;
+  my ($entry, $type, $value) = @_;
+  $value = '' unless defined $value;
+  $self->{annot}{$entry}{$type}{orig} = ''
+    unless exists $self->{annot}{$entry}{$type}{orig};
+  $self->{annot}{$entry}{$type}{value} = $value;
 }
 
 sub get_shared_annotation {
-    my $self = shift;
-    my ($entry) = @_;
-    return $self->get_annotation($entry, 'value.shared');
+  my $self = shift;
+  my ($entry) = @_;
+  return $self->get_annotation($entry, 'value.shared');
 }
 
 sub set_shared_annotation {
-    my $self = shift;
-    my ($entry, $value) = @_;
-    return $self->set_annotation($entry, 'value.shared', $value);
+  my $self = shift;
+  my ($entry, $value) = @_;
+  return $self->set_annotation($entry, 'value.shared', $value);
 }
 
 sub clear_shared_annotation {
-    my $self = shift;
-    my ($entry) = @_;
-    return $self->set_annotation($entry, 'value.shared', '');
+  my $self = shift;
+  my ($entry) = @_;
+  return $self->set_annotation($entry, 'value.shared', '');
 }
 
 sub get_private_annotation {
-    my $self = shift;
-    my ($entry) = @_;
-    return $self->get_annotation($entry, 'value.private');
+  my $self = shift;
+  my ($entry) = @_;
+  return $self->get_annotation($entry, 'value.private');
 }
 
 sub set_private_annotation {
-    my $self = shift;
-    my ($entry, $value) = @_;
-    return $self->set_annotation($entry, 'value.private', $value);
+  my $self = shift;
+  my ($entry, $value) = @_;
+  return $self->set_annotation($entry, 'value.private', $value);
 }
 
 sub clear_private_annotation {
-    my $self = shift;
-    my ($entry) = @_;
-    return $self->set_annotation($entry, 'value.private', '');
+  my $self = shift;
+  my ($entry) = @_;
+  return $self->set_annotation($entry, 'value.private', '');
 }
 
 =item I<get_changed()>
@@ -456,35 +454,34 @@ returns two arrayrefs - [['flagname', 'bool']] and [['entry', 'type', 'value']],
 =cut
 
 sub get_changed {
-    my $self = shift;
-    my @flags;
-    my @annots;
+  my $self = shift;
+  my @flags;
+  my @annots;
 
-    foreach my $name (sort keys %{$self->{flag}}) {
-        my $item = $self->{flag}{$name};
-        push @flags, [$name, $item->{value}]
-            unless $item->{value} == $item->{orig};
+  foreach my $name (sort keys %{ $self->{flag} }) {
+    my $item = $self->{flag}{$name};
+    push @flags, [ $name, $item->{value} ]
+      unless $item->{value} == $item->{orig};
+  }
+
+  foreach my $entry (sort keys %{ $self->{annot} }) {
+    foreach my $type (sort keys %{ $self->{annot}{$entry} }) {
+      my $item = $self->{annot}{$entry}{$type};
+      push @annots, [ $entry, $type, $item->{value} ]
+        unless is_eq($item->{value}, $item->{orig});
     }
+  }
 
-    foreach my $entry (sort keys %{$self->{annot}}) {
-        foreach my $type (sort keys %{$self->{annot}{$entry}}) {
-            my $item = $self->{annot}{$entry}{$type};
-            push @annots, [$entry, $type, $item->{value}]
-                unless is_eq($item->{value}, $item->{orig});
-        }
-    }
-
-    return (\@flags, \@annots);
+  return (\@flags, \@annots);
 }
 
 sub is_eq {
-    my ($l, $r) = @_;
-    if (defined $l && defined $r) {
-        return $l eq $r;
-    }
-    else {
-        return !defined $l && !defined $r;
-    }
+  my ($l, $r) = @_;
+  if (defined $l && defined $r) {
+    return $l eq $r;
+  } else {
+    return !defined $l && !defined $r;
+  }
 }
 
 =back

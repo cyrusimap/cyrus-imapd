@@ -49,169 +49,164 @@ use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
 
-sub new
-{
-    my ($class, @args) = @_;
+sub new {
+  my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set('conversations' => 'yes');
-    $config->set_bits('httpmodules', 'jmap');
+  my $config = Cassandane::Config->default()->clone();
+  $config->set('conversations' => 'yes');
+  $config->set_bits('httpmodules', 'jmap');
 
-    return $class->SUPER::new({
-        config => $config,
-        httpmurder => 1,
-        jmap => 1,
-        adminstore => 1
-    }, @args);
+  return $class->SUPER::new(
+    {
+      config     => $config,
+      httpmurder => 1,
+      jmap       => 1,
+      adminstore => 1
+    },
+    @args
+  );
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
 sub test_aaa_setup
-    :needs_component_murder
-{
-    my ($self) = @_;
+  : needs_component_murder {
+  my ($self) = @_;
 
-    # does everything set up and tear down cleanly?
-    $self->assert(1);
+  # does everything set up and tear down cleanly?
+  $self->assert(1);
 }
 
 # XXX This can't pass because we don't support multiple murder services
 # XXX at once, but renaming out the "bogus" and running it, and it failing,
 # XXX proves the infrastructure to prevent requesting both works.
 sub bogustest_aaa_imapjmap_setup
-    :needs_component_murder
-    :IMAPMurder
-{
-    my ($self) = @_;
+  : needs_component_murder
+  : IMAPMurder {
+  my ($self) = @_;
 
-    # does everything set up and tear down cleanly?
-    $self->assert(1);
+  # does everything set up and tear down cleanly?
+  $self->assert(1);
 }
 
 sub test_frontend_commands
-    :needs_component_murder :needs_component_jmap :min_version_3_5
-{
-    my ($self) = @_;
-    my $result;
+  : needs_component_murder : needs_component_jmap : min_version_3_5 {
+  my ($self) = @_;
+  my $result;
 
-    my $frontend_svc = $self->{frontend}->get_service("http");
-    my $frontend_host = $frontend_svc->host();
-    my $frontend_port = $frontend_svc->port();
-    my $proxy_re = qr{
+  my $frontend_svc  = $self->{frontend}->get_service("http");
+  my $frontend_host = $frontend_svc->host();
+  my $frontend_port = $frontend_svc->port();
+  my $proxy_re      = qr{
         \b
         ( localhost | $frontend_host )
         : $frontend_port
         \b
     }x;
 
-    my $frontend_jmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $frontend_host,
-        port => $frontend_port,
-        scheme => 'http',
-        url => '/jmap/',
-    );
+  my $frontend_jmap = Mail::JMAPTalk->new(
+    user     => 'cassandane',
+    password => 'pass',
+    host     => $frontend_host,
+    port     => $frontend_port,
+    scheme   => 'http',
+    url      => '/jmap/',
+  );
 
-    # upload a blob
-    my ($resp, $data) = $frontend_jmap->Upload("some test", "text/plain");
+  # upload a blob
+  my ($resp, $data) = $frontend_jmap->Upload("some test", "text/plain");
 
-    # request should have been proxied
-    $self->assert_matches($proxy_re, $resp->{headers}{via});
+  # request should have been proxied
+  $self->assert_matches($proxy_re, $resp->{headers}{via});
 
-    # download the same blob
-    $resp = $frontend_jmap->Download({ accept => 'text/plain' },
-                                     'cassandane', $data->{blobId});
+  # download the same blob
+  $resp = $frontend_jmap->Download({ accept => 'text/plain' },
+    'cassandane', $data->{blobId});
 
-    # request should have been proxied
-    $self->assert_matches($proxy_re, $resp->{headers}{via});
+  # request should have been proxied
+  $self->assert_matches($proxy_re, $resp->{headers}{via});
 
-    # content should match
-    $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
-    $self->assert_str_equals('some test', $resp->{content});
+  # content should match
+  $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
+  $self->assert_str_equals('some test',  $resp->{content});
 
-    # XXX test other commands
+  # XXX test other commands
 }
 
 sub test_backend1_commands
-    :needs_component_murder :needs_component_jmap :min_version_3_5
-{
-    my ($self) = @_;
-    my $result;
+  : needs_component_murder : needs_component_jmap : min_version_3_5 {
+  my ($self) = @_;
+  my $result;
 
-    my $backend1_svc = $self->{instance}->get_service("http");
-    my $backend1_host = $backend1_svc->host();
-    my $backend1_port = $backend1_svc->port();
+  my $backend1_svc  = $self->{instance}->get_service("http");
+  my $backend1_host = $backend1_svc->host();
+  my $backend1_port = $backend1_svc->port();
 
-    my $backend1_jmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $backend1_host,
-        port => $backend1_port,
-        scheme => 'http',
-        url => '/jmap/',
-    );
+  my $backend1_jmap = Mail::JMAPTalk->new(
+    user     => 'cassandane',
+    password => 'pass',
+    host     => $backend1_host,
+    port     => $backend1_port,
+    scheme   => 'http',
+    url      => '/jmap/',
+  );
 
-    # upload a blob
-    my ($resp, $data) = $backend1_jmap->Upload("some test", "text/plain");
+  # upload a blob
+  my ($resp, $data) = $backend1_jmap->Upload("some test", "text/plain");
 
-    # request should not have been proxied
-    $self->assert_null($resp->{headers}{via});
+  # request should not have been proxied
+  $self->assert_null($resp->{headers}{via});
 
-    # download the same blob
-    $resp = $backend1_jmap->Download({ accept => 'text/plain' },
-                                     'cassandane', $data->{blobId});
+  # download the same blob
+  $resp = $backend1_jmap->Download({ accept => 'text/plain' },
+    'cassandane', $data->{blobId});
 
-    # request should not have been proxied
-    $self->assert_null($resp->{headers}{via});
+  # request should not have been proxied
+  $self->assert_null($resp->{headers}{via});
 
-    # content should match
-    $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
-    $self->assert_str_equals('some test', $resp->{content});
+  # content should match
+  $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
+  $self->assert_str_equals('some test',  $resp->{content});
 
-    # XXX test other commands
+  # XXX test other commands
 }
 
 sub test_backend2_commands
-    :needs_component_murder :needs_component_jmap :min_version_3_5
-{
-    my ($self) = @_;
-    my $result;
+  : needs_component_murder : needs_component_jmap : min_version_3_5 {
+  my ($self) = @_;
+  my $result;
 
-    my $backend2_svc = $self->{backend2}->get_service("http");
-    my $backend2_host = $backend2_svc->host();
-    my $backend2_port = $backend2_svc->port();
+  my $backend2_svc  = $self->{backend2}->get_service("http");
+  my $backend2_host = $backend2_svc->host();
+  my $backend2_port = $backend2_svc->port();
 
-    my $backend2_jmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $backend2_host,
-        port => $backend2_port,
-        scheme => 'http',
-        url => '/jmap/',
-    );
+  my $backend2_jmap = Mail::JMAPTalk->new(
+    user     => 'cassandane',
+    password => 'pass',
+    host     => $backend2_host,
+    port     => $backend2_port,
+    scheme   => 'http',
+    url      => '/jmap/',
+  );
 
-    # try to upload a blob
-    my ($resp, $data) = $backend2_jmap->Upload("some test", "text/plain");
+  # try to upload a blob
+  my ($resp, $data) = $backend2_jmap->Upload("some test", "text/plain");
 
-    # user doesn't exist on this backend, so upload url should not exist
-    $self->assert_num_equals(404, $resp->{status});
-    $self->assert_str_equals('Not Found', $resp->{reason});
+  # user doesn't exist on this backend, so upload url should not exist
+  $self->assert_num_equals(404, $resp->{status});
+  $self->assert_str_equals('Not Found', $resp->{reason});
 
-    $self->assert_null($data);
+  $self->assert_null($data);
 
-#    # XXX test other commands
+  #    # XXX test other commands
 }
 
 1;

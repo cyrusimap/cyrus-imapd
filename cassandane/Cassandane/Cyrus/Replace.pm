@@ -50,78 +50,75 @@ use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 
-sub new
-{
-    my $class = shift;
-    return  $class->SUPER::new({adminstore => 1}, @_);
+sub new {
+  my $class = shift;
+  return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
 sub test_replace_same_mailbox
-    :min_version_3_9
-{
-    my ($self) = @_;
+  : min_version_3_9 {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    my %exp;
-    $exp{A} = $self->make_message("Message A", store => $self->{store});
-    $self->check_messages(\%exp);
+  my %exp;
+  $exp{A} = $self->make_message("Message A", store => $self->{store});
+  $self->check_messages(\%exp);
 
-    $talk->select('INBOX');
+  $talk->select('INBOX');
 
-    %exp = ();
-    $exp{B} = $self->{gen}->generate(subject => "Message B");
+  %exp = ();
+  $exp{B} = $self->{gen}->generate(subject => "Message B");
 
-    # REPLACE
-    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX",
-                     { Literal => $exp{B}->as_string() });
-    $self->check_messages(\%exp);
+  # REPLACE
+  $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX",
+    { Literal => $exp{B}->as_string() });
+  $self->check_messages(\%exp);
 
-    %exp = ();
-    $exp{C} = $self->{gen}->generate(subject => "Message C");
+  %exp = ();
+  $exp{C} = $self->{gen}->generate(subject => "Message C");
 
-    # UID REPLACE
-    $talk->_imap_cmd('UID', 0, '', 'REPLACE', "2", "INBOX",
-                     "(\\flagged)", " 7-Feb-1994 22:43:04 -0800",
-                     { Literal => $exp{C}->as_string() });
-    $self->check_messages(\%exp);
+  # UID REPLACE
+  $talk->_imap_cmd(
+    'UID', 0, '', 'REPLACE', "2", "INBOX", "(\\flagged)",
+    " 7-Feb-1994 22:43:04 -0800",
+    { Literal => $exp{C}->as_string() }
+  );
+  $self->check_messages(\%exp);
 }
 
 sub test_replace_different_mailbox
-    :min_version_3_9
-{
-    my ($self) = @_;
+  : min_version_3_9 {
+  my ($self) = @_;
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    my %exp;
-    $exp{A} = $self->make_message("Message A", store => $self->{store});
-    $self->check_messages(\%exp);
+  my %exp;
+  $exp{A} = $self->make_message("Message A", store => $self->{store});
+  $self->check_messages(\%exp);
 
-    $talk->create("INBOX.foo");
-    $talk->select('INBOX');
+  $talk->create("INBOX.foo");
+  $talk->select('INBOX');
 
-    %exp = ();
-    $exp{B} = $self->{gen}->generate(subject => "Message B", uid => 1);
+  %exp = ();
+  $exp{B} = $self->{gen}->generate(subject => "Message B", uid => 1);
 
-    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX.foo",
-                     { Literal => $exp{B}->as_string() });
-    $self->check_messages({});
+  $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX.foo",
+    { Literal => $exp{B}->as_string() });
+  $self->check_messages({});
 
-    $self->{store}->set_folder("INBOX.foo");
-    $self->check_messages(\%exp);
+  $self->{store}->set_folder("INBOX.foo");
+  $self->check_messages(\%exp);
 }
 
 1;

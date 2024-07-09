@@ -44,12 +44,12 @@ use DateTime;
 use POSIX qw(strftime);
 
 use Exporter ();
-our @ISA = qw(Exporter);
+our @ISA    = qw(Exporter);
 our @EXPORT = qw(
-    &from_iso8601 &to_iso8601
-    &from_rfc822 &to_rfc822
-    &from_rfc3501 &to_rfc3501
-    );
+  &from_iso8601 &to_iso8601
+  &from_rfc822 &to_rfc822
+  &from_rfc3501 &to_rfc3501
+);
 
 #
 # Construct and return a DateTime object using a string in the
@@ -62,42 +62,40 @@ our @EXPORT = qw(
 # The optional Z suffix indicates Zulu (UTC aka GMT)
 # time, otherwise localtime is assumed.
 #
-sub from_iso8601($)
-{
-    my ($s) = @_;
-    my ($year, $mon, $day, $hour, $min, $sec, $zulu) =
-        ($s =~ m/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
-    return unless defined $sec;
-    return if ($year < 1970 || $year > 2037);
-    return if ($mon < 1 || $mon > 12);
-    return if ($day < 1 || $day > 31);
-    return if ($hour < 0 || $hour > 23);
-    return if ($min < 0 || $min > 59);
-    return if ($sec < 0 || $sec > 60);  # allow for leap second
+sub from_iso8601($) {
+  my ($s) = @_;
+  my ($year, $mon, $day, $hour, $min, $sec, $zulu)
+    = ($s =~ m/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
+  return unless defined $sec;
+  return if ($year < 1970 || $year > 2037);
+  return if ($mon < 1     || $mon > 12);
+  return if ($day < 1     || $day > 31);
+  return if ($hour < 0    || $hour > 23);
+  return if ($min < 0     || $min > 59);
+  return if ($sec < 0     || $sec > 60);   # allow for leap second
 
-#     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u\n",
-#       $s, $year, $mon, $day, $hour, $min, $sec;
+  #     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u\n",
+  #       $s, $year, $mon, $day, $hour, $min, $sec;
 
-    my $tz = ($zulu ? 'GMT' : 'local');
-    return DateTime->new(
-                year => $year,
-                month => $mon,
-                day => $day,
-                hour => $hour,
-                minute => $min,
-                second => $sec,
-                time_zone => $tz
-            );
+  my $tz = ($zulu ? 'GMT' : 'local');
+  return DateTime->new(
+    year      => $year,
+    month     => $mon,
+    day       => $day,
+    hour      => $hour,
+    minute    => $min,
+    second    => $sec,
+    time_zone => $tz
+  );
 }
 
 #
 # Given a DateTime, generate and return a string in ISO8601
 # combined basic format.
 #
-sub to_iso8601($)
-{
-    my ($dt) = @_;
-    return strftime("%Y%m%dT%H%M%SZ", gmtime($dt->epoch));
+sub to_iso8601($) {
+  my ($dt) = @_;
+  return strftime("%Y%m%dT%H%M%SZ", gmtime($dt->epoch));
 }
 
 # Brief sanity test for parse_iso8601_datetime
@@ -107,44 +105,25 @@ sub to_iso8601($)
 #     unless (from_iso8601('20101014T161952Z') == 1287073192);
 
 our %rfc822_months = (
-    Jan => 1,
-    Feb => 2,
-    Mar => 3,
-    Apr => 4,
-    May => 5,
-    Jun => 6,
-    Jul => 7,
-    Aug => 8,
-    Sep => 9,
-    Oct => 10,
-    Nov => 11,
-    Dec => 12
-    );
+  Jan => 1,
+  Feb => 2,
+  Mar => 3,
+  Apr => 4,
+  May => 5,
+  Jun => 6,
+  Jul => 7,
+  Aug => 8,
+  Sep => 9,
+  Oct => 10,
+  Nov => 11,
+  Dec => 12
+);
 our @rfc822_months = (
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
-    );
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+);
 
-our @rfc822_days = (
-    'Sun',
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun'
-    );
+our @rfc822_days = ('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun');
 
 #
 # Construct and return a DateTime object using a string in the
@@ -152,56 +131,54 @@ our @rfc822_days = (
 # the internet email message format.
 # Example: Tue, 05 Oct 2010 11:19:52 +1100
 #
-sub from_rfc822($)
-{
-    my ($s) = @_;
-    my ($wdayn, $day, $mon, $year, $hour, $min, $sec, $tzsign, $tzhour, $tzmin) =
-        ($s =~ m/^([A-Z][a-z][a-z]), (\d+) ([A-Z][a-z][a-z]) (\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/);
-    return unless defined $tzmin;
-    return if ($year < 1970 || $year > 2037);
-    $mon = $rfc822_months{$mon};
-    return unless defined $mon;
-    return if ($day < 1 || $day > 31);
-    return if ($hour < 0 || $hour > 23);
-    return if ($min < 0 || $min > 59);
-    return if ($sec < 0 || $sec > 60);  # allow for leap second
-    return if ($tzhour < 0 || $tzhour > 23);
-    return if ($tzmin < 0 || $tzmin > 59);
+sub from_rfc822($) {
+  my ($s) = @_;
+  my ($wdayn, $day, $mon, $year, $hour, $min, $sec, $tzsign, $tzhour, $tzmin)
+    = ($s =~
+      m/^([A-Z][a-z][a-z]), (\d+) ([A-Z][a-z][a-z]) (\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/
+    );
+  return unless defined $tzmin;
+  return if ($year < 1970 || $year > 2037);
+  $mon = $rfc822_months{$mon};
+  return unless defined $mon;
+  return if ($day < 1    || $day > 31);
+  return if ($hour < 0   || $hour > 23);
+  return if ($min < 0    || $min > 59);
+  return if ($sec < 0    || $sec > 60);   # allow for leap second
+  return if ($tzhour < 0 || $tzhour > 23);
+  return if ($tzmin < 0  || $tzmin > 59);
 
 #     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u tzsign=%s tzhour=%u tzmin=%u\n",
 #       $s, $year, $mon, $day, $hour, $min, $sec, $tzsign, $tzhour, $tzmin;
 
-    return DateTime->new(
-                year => $year,
-                month => $mon,
-                day => $day,
-                hour => $hour,
-                minute => $min,
-                second => $sec,
-                time_zone => "$tzsign$tzhour$tzmin"
-            );
+  return DateTime->new(
+    year      => $year,
+    month     => $mon,
+    day       => $day,
+    hour      => $hour,
+    minute    => $min,
+    second    => $sec,
+    time_zone => "$tzsign$tzhour$tzmin"
+  );
 }
 
 #
 # Given a DateTime, generate and return a string in RFC822 format.
 #
-sub to_rfc822($)
-{
-    my ($dt) = @_;
+sub to_rfc822($) {
+  my ($dt) = @_;
 
-    # We can't mix DateTime methods and strftime, because other parts of
-    # Cassandane foolishly construct DateTime using the 'from_epoch' but
-    # not the 'time_zone' parameters, resulting in a DT object in the
-    # UTC timezone instead of local.  But conversely strftime() doesn't
-    # have a portable way to emit the fixed (non-local-specific) strings
-    # that the RFC expects.
-    my @lt = localtime($dt->epoch);
-    return strftime($rfc822_days[$lt[6]] .
-                    ", %d " .
-                    $rfc822_months[$lt[4]] .
-                    " %Y %T %z", @lt);
+  # We can't mix DateTime methods and strftime, because other parts of
+  # Cassandane foolishly construct DateTime using the 'from_epoch' but
+  # not the 'time_zone' parameters, resulting in a DT object in the
+  # UTC timezone instead of local.  But conversely strftime() doesn't
+  # have a portable way to emit the fixed (non-local-specific) strings
+  # that the RFC expects.
+  my @lt = localtime($dt->epoch);
+  return strftime(
+    $rfc822_days[ $lt[6] ] . ", %d " . $rfc822_months[ $lt[4] ] . " %Y %T %z",
+    @lt);
 }
-
 
 # die "Woops, from_rfc822 is broken"
 #     unless (from_rfc822('Fri, 15 Oct 2010 03:19:52 +1100') == 1287073192);
@@ -211,34 +188,35 @@ sub to_rfc822($)
 # format defined in RFC3501 which defines the IMAP protocol.
 # Example: " 5-Oct-2010 09:19:52 +1100" (note leading space)
 #
-sub from_rfc3501($)
-{
-    my ($s) = @_;
-    my ($day, $mon, $year, $hour, $min, $sec, $tzsign, $tzhour, $tzmin) =
-        ($s =~ m/^\s*(\d+)-([A-Z][a-z][a-z])-(\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/);
-    return unless defined $tzmin;
-    return if ($year < 1970 || $year > 2037);
-    $mon = $rfc822_months{$mon};
-    return unless defined $mon;
-    return if ($day < 1 || $day > 31);
-    return if ($hour < 0 || $hour > 23);
-    return if ($min < 0 || $min > 59);
-    return if ($sec < 0 || $sec > 60);  # allow for leap second
-    return if ($tzhour < 0 || $tzhour > 23);
-    return if ($tzmin < 0 || $tzmin > 59);
+sub from_rfc3501($) {
+  my ($s) = @_;
+  my ($day, $mon, $year, $hour, $min, $sec, $tzsign, $tzhour, $tzmin)
+    = ($s =~
+      m/^\s*(\d+)-([A-Z][a-z][a-z])-(\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/
+    );
+  return unless defined $tzmin;
+  return if ($year < 1970 || $year > 2037);
+  $mon = $rfc822_months{$mon};
+  return unless defined $mon;
+  return if ($day < 1    || $day > 31);
+  return if ($hour < 0   || $hour > 23);
+  return if ($min < 0    || $min > 59);
+  return if ($sec < 0    || $sec > 60);   # allow for leap second
+  return if ($tzhour < 0 || $tzhour > 23);
+  return if ($tzmin < 0  || $tzmin > 59);
 
 #     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u tzsign=%s tzhour=%u tzmin=%u\n",
 #       $s, $year, $mon, $day, $hour, $min, $sec, $tzsign, $tzhour, $tzmin;
 
-    return DateTime->new(
-                year => $year,
-                month => $mon,
-                day => $day,
-                hour => $hour,
-                minute => $min,
-                second => $sec,
-                time_zone => "$tzsign$tzhour$tzmin"
-            );
+  return DateTime->new(
+    year      => $year,
+    month     => $mon,
+    day       => $day,
+    hour      => $hour,
+    minute    => $min,
+    second    => $sec,
+    time_zone => "$tzsign$tzhour$tzmin"
+  );
 }
 
 # die "Woops, from_rfc3501 is broken"
@@ -247,15 +225,11 @@ sub from_rfc3501($)
 #
 # Given a DateTime, generate and return a string in RFC3501 format.
 #
-sub to_rfc3501($)
-{
-    my ($dt) = @_;
+sub to_rfc3501($) {
+  my ($dt) = @_;
 
-    my @lt = localtime($dt->epoch);
-    return strftime("%e-"
-                    . $rfc822_months[$lt[4]]
-                    . "-%Y %T %z",
-                    @lt);
+  my @lt = localtime($dt->epoch);
+  return strftime("%e-" . $rfc822_months[ $lt[4] ] . "-%Y %T %z", @lt);
 }
 
 1;

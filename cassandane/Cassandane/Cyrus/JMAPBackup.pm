@@ -56,41 +56,44 @@ use Cassandane::Util::Log;
 
 use charnames ':full';
 
-sub new
-{
-    my ($class, @args) = @_;
+sub new {
+  my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
-                 caldav_historical_age => -1,
-                 conversations => 'yes',
-                 httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no',
-                 notesmailbox => 'Notes',
-                 jmap_nonstandard_extensions => 'yes');
+  my $config = Cassandane::Config->default()->clone();
+  $config->set(
+    caldav_realm                => 'Cassandane',
+    caldav_historical_age       => -1,
+    conversations               => 'yes',
+    httpmodules                 => 'carddav caldav jmap',
+    httpallowcompress           => 'no',
+    notesmailbox                => 'Notes',
+    jmap_nonstandard_extensions => 'yes'
+  );
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        adminstore => 1,
-        services => [ 'imap', 'http' ]
-    }, @args);
+  return $class->SUPER::new(
+    {
+      config     => $config,
+      jmap       => 1,
+      adminstore => 1,
+      services   => [ 'imap', 'http' ]
+    },
+    @args
+  );
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:principals',
-        'https://cyrusimap.org/ns/jmap/backup',
-        'https://cyrusimap.org/ns/jmap/contacts',
-        'https://cyrusimap.org/ns/jmap/calendars',
-        'https://cyrusimap.org/ns/jmap/notes',
-    ]);
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
+  $self->{jmap}->DefaultUsing([
+    'urn:ietf:params:jmap:core',
+    'urn:ietf:params:jmap:mail',
+    'urn:ietf:params:jmap:calendars',
+    'urn:ietf:params:jmap:principals',
+    'https://cyrusimap.org/ns/jmap/backup',
+    'https://cyrusimap.org/ns/jmap/contacts',
+    'https://cyrusimap.org/ns/jmap/calendars',
+    'https://cyrusimap.org/ns/jmap/notes',
+  ]);
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPBackup';

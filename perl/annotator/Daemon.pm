@@ -42,6 +42,7 @@
 
 use warnings;
 use strict;
+
 package Cyrus::Annotator::Daemon;
 use base qw(Net::Server);
 # use Data::Dumper;
@@ -52,12 +53,12 @@ use Encode qw(decode);
 
 our $VERSION = '1.00';
 
-use constant USER  => 'cyrus';
-use constant GROUP => 'mail';
-use constant RUNPREFIX  => '/var/run/annotatord';
-use constant APPNAME => 'annotatord';
-use constant PIDFILE => RUNPREFIX . '.pid';
-use constant SOCKPATH => RUNPREFIX . '.socket';
+use constant USER      => 'cyrus';
+use constant GROUP     => 'mail';
+use constant RUNPREFIX => '/var/run/annotatord';
+use constant APPNAME   => 'annotatord';
+use constant PIDFILE   => RUNPREFIX . '.pid';
+use constant SOCKPATH  => RUNPREFIX . '.socket';
 
 # Levels are: LOG_DEBUG (7), LOG_INFO (6), *LOG_NOTICE (5), LOG_WARNING (4), LOG_ERR (3)
 use constant LOG_LEVEL => LOG_INFO;
@@ -107,30 +108,29 @@ Cyrus::Annotator::Daemon has the following methods.
 =cut
 
 my @default_args = (
-    personality => 'Net::Server',
-    appname => APPNAME,
+  personality => 'Net::Server',
+  appname     => APPNAME,
 
-    user => USER,
-    group => GROUP,
-    pid_file => PIDFILE,
-    background => 1,
-    size_limit => 256,
+  user       => USER,
+  group      => GROUP,
+  pid_file   => PIDFILE,
+  background => 1,
+  size_limit => 256,
 
-    syslog_level => LOG_LEVEL,
-    syslog_facility => LOG_LOCAL6,
-    syslog_ident => APPNAME,
-    log_file => 'Sys::Syslog',
+  syslog_level    => LOG_LEVEL,
+  syslog_facility => LOG_LOCAL6,
+  syslog_ident    => APPNAME,
+  log_file        => 'Sys::Syslog',
 
-    proto => 'unix',
-    port => SOCKPATH . '|SOCK_STREAM|unix'
+  proto => 'unix',
+  port  => SOCKPATH . '|SOCK_STREAM|unix'
 );
 
-sub new
-{
-    my ($class, @args) = @_;
-    my $self = $class->SUPER::new(@args);
+sub new {
+  my ($class, @args) = @_;
+  my $self = $class->SUPER::new(@args);
 
-    return $self;
+  return $self;
 }
 
 =item I<run(...options...)>
@@ -162,13 +162,11 @@ socket bound to I</var/run/annotatord.socket>.
 
 =cut
 
-sub run
-{
-    my ($class, @args) = @_;
-    my %aa = (@default_args, @args);
-    return $class->SUPER::run(%aa);
+sub run {
+  my ($class, @args) = @_;
+  my %aa = (@default_args, @args);
+  return $class->SUPER::run(%aa);
 }
-
 
 # Can pass a file handle or string
 # Returns two item list of ($ParsedData, $Remainder)
@@ -279,13 +277,13 @@ sub _dlist_parse {
         die "Unexpected end of line in IMAP response : '$Line'";
       }
       # Otherwise fine, we're about to exit anyway
+
+    } else {
+      die "Error parsing atom in IMAP response : '"
+        . substr($Line, pos($Line), 100) . "'";
     }
 
-    else {
-      die "Error parsing atom in IMAP response : '" . substr($Line, pos($Line), 100) . "'";
-    }
-
-  # Repeat while we're within brackets
+    # Repeat while we're within brackets
   } while (scalar @AtomStack);
 
   my $Remainder = substr($Line, pos($Line));
@@ -295,18 +293,18 @@ sub _dlist_parse {
 
 sub _parse_list_to_hash {
   my $ContentHashList = shift || [];
-  my $Recursive = shift;
+  my $Recursive       = shift;
 
-  ref($ContentHashList) eq 'ARRAY' || return { };
+  ref($ContentHashList) eq 'ARRAY' || return {};
 
   my %Res;
   while (@$ContentHashList) {
     my ($Param, $Val) = (shift @$ContentHashList, shift @$ContentHashList);
 
-    $Val = _parse_list_to_hash($Val, $Recursive-1)
+    $Val = _parse_list_to_hash($Val, $Recursive - 1)
       if (ref($Val) && $Recursive);
 
-    $Res{lc($Param)} = $Val;
+    $Res{ lc($Param) } = $Val;
   }
 
   return \%Res;
@@ -326,7 +324,8 @@ sub _parse_bodystructure {
     my ($Part, @SubParts);
     for ($Part = 1; ref($Bs->[0]); $Part++) {
       my $SubPartNum = ($PartNum ? $PartNum . "." : "") . $Part;
-      my $Res = _parse_bodystructure(shift(@$Bs), $IncludeRaw, $DecodeUTF8, $SubPartNum, 1);
+      my $Res = _parse_bodystructure(shift(@$Bs), $IncludeRaw, $DecodeUTF8,
+        $SubPartNum, 1);
       push @SubParts, $Res;
     }
 
@@ -340,7 +339,7 @@ sub _parse_bodystructure {
       'Content-Language',    shift(@$Bs),
       'Content-Location',    shift(@$Bs),
       # Shouldn't be anything after this. Add as remainder if there is
-      'Remainder',           $Bs
+      'Remainder', $Bs
     );
   }
 
@@ -357,36 +356,39 @@ sub _parse_bodystructure {
 
     # Pull out special fields for 'text' or 'message/rfc822' types
     if ($MimeType eq 'text') {
-      %Res = (
-        'Lines',   splice(@$Bs, 5, 1)
-      );
+      %Res = ('Lines', splice(@$Bs, 5, 1));
     } elsif ($MimeType eq 'message' && $MimeSubtype eq 'rfc822') {
 
       # message/rfc822 includes the messages envelope and bodystructure
       my @MsgParts = splice(@$Bs, 5, 3);
       %Res = (
-        'Message-Envelope',       _parse_envelope(shift(@MsgParts), $IncludeRaw, $DecodeUTF8),
-        'Message-Bodystructure',  _parse_bodystructure(shift(@MsgParts), $IncludeRaw, $DecodeUTF8, $PartNum),
-        'Message-Lines',          shift(@MsgParts)
+        'Message-Envelope',
+        _parse_envelope(shift(@MsgParts), $IncludeRaw, $DecodeUTF8),
+        'Message-Bodystructure',
+        _parse_bodystructure(
+          shift(@MsgParts), $IncludeRaw, $DecodeUTF8, $PartNum
+        ),
+        'Message-Lines',
+        shift(@MsgParts)
       );
     }
 
     # All normal mime-entities have these parts
     %Res = (
       %Res,
-      'MIME-Type',                  $MimeType,
-      'MIME-Subtype',               $MimeSubtype,
-      'Content-Type',               _parse_list_to_hash(shift(@$Bs)),
-      'Content-ID',                 shift(@$Bs),
-      'Content-Description',        shift(@$Bs),
-      'Content-Transfer-Encoding',  shift(@$Bs),
-      'Size',                       shift(@$Bs),
-      'Content-MD5',                shift(@$Bs),
-      'Content-Disposition',        _parse_list_to_hash(shift(@$Bs), 1),
-      'Content-Language',           shift(@$Bs),
-      'Content-Location',           shift(@$Bs),
+      'MIME-Type',                 $MimeType,
+      'MIME-Subtype',              $MimeSubtype,
+      'Content-Type',              _parse_list_to_hash(shift(@$Bs)),
+      'Content-ID',                shift(@$Bs),
+      'Content-Description',       shift(@$Bs),
+      'Content-Transfer-Encoding', shift(@$Bs),
+      'Size',                      shift(@$Bs),
+      'Content-MD5',               shift(@$Bs),
+      'Content-Disposition',       _parse_list_to_hash(shift(@$Bs), 1),
+      'Content-Language',          shift(@$Bs),
+      'Content-Location',          shift(@$Bs),
       # Shouldn't be anything after this. Add as remainder if there is
-      'Remainder',                  $Bs
+      'Remainder', $Bs
     );
 
     # Extra information for the annotation callout - gnb 20110420
@@ -394,7 +396,7 @@ sub _parse_bodystructure {
     if ($Extra) {
       $Extra = _parse_list_to_hash($Extra, 0);
       # Make casing consistent for users
-      $Res{Offset} = $Extra->{offset};
+      $Res{Offset}     = $Extra->{offset};
       $Res{HeaderSize} = $Extra->{headersize};
     }
 
@@ -409,7 +411,7 @@ sub _parse_bodystructure {
 
 # Regexps used to determine if header is MIME encoded (we remove . from
 #  especials because of dumb ANSI_X3.4-1968 encoding)
-my $RFC2047Token = qr/[^\x00-\x1f\(\)\<\>\@\,\;\:\"\/\[\]\?\=\ ]+/;
+my $RFC2047Token         = qr/[^\x00-\x1f\(\)\<\>\@\,\;\:\"\/\[\]\?\=\ ]+/;
 my $NeedDecodeUTF8Regexp = qr/=\?$RFC2047Token\?$RFC2047Token\?[^\?]*\?=/;
 
 sub _parse_envelope {
@@ -417,30 +419,43 @@ sub _parse_envelope {
 
   # Check envelope assumption
   scalar(@$Env) == 10
-    || die "IMAPTalk: Wrong number of fields in envelope structure " . Dumper($Env);
+    || die "IMAPTalk: Wrong number of fields in envelope structure "
+    . Dumper($Env);
 
-  _decode_utf8($Env->[1]) if $DecodeUTF8 && defined($Env->[1]) && $Env->[1] =~ $NeedDecodeUTF8Regexp;
+  _decode_utf8($Env->[1])
+    if $DecodeUTF8 && defined($Env->[1]) && $Env->[1] =~ $NeedDecodeUTF8Regexp;
 
   # Setup hash directly from envelope structure
   my %Res = (
-    'Date',        $Env->[0],
-    'Subject',     $Env->[1],
-    'From',        _parse_email_address($Env->[2], $DecodeUTF8),
-    'Sender',      _parse_email_address($Env->[3], $DecodeUTF8),
-    'Reply-To',    _parse_email_address($Env->[4], $DecodeUTF8),
-    'To',          _parse_email_address($Env->[5], $DecodeUTF8),
-    'Cc',          _parse_email_address($Env->[6], $DecodeUTF8),
-    'Bcc',         _parse_email_address($Env->[7], $DecodeUTF8),
-    ($IncludeRaw ? (
-      'From-Raw',    $Env->[2],
-      'Sender-Raw',  $Env->[3],
-      'Reply-To-Raw',$Env->[4],
-      'To-Raw',      $Env->[5],
-      'Cc-Raw',      $Env->[6],
-      'Bcc-Raw',     $Env->[7],
-    ) : ()),
-    'In-Reply-To', $Env->[8],
-    'Message-ID',  $Env->[9]
+    'Date',
+    $Env->[0],
+    'Subject',
+    $Env->[1],
+    'From',
+    _parse_email_address($Env->[2], $DecodeUTF8),
+    'Sender',
+    _parse_email_address($Env->[3], $DecodeUTF8),
+    'Reply-To',
+    _parse_email_address($Env->[4], $DecodeUTF8),
+    'To',
+    _parse_email_address($Env->[5], $DecodeUTF8),
+    'Cc',
+    _parse_email_address($Env->[6], $DecodeUTF8),
+    'Bcc',
+    _parse_email_address($Env->[7], $DecodeUTF8),
+    (
+      $IncludeRaw
+      ? (
+        'From-Raw',     $Env->[2], 'Sender-Raw', $Env->[3],
+        'Reply-To-Raw', $Env->[4], 'To-Raw',     $Env->[5],
+        'Cc-Raw',       $Env->[6], 'Bcc-Raw',    $Env->[7],
+        )
+      : ()
+    ),
+    'In-Reply-To',
+    $Env->[8],
+    'Message-ID',
+    $Env->[9]
   );
 
   return \%Res;
@@ -448,15 +463,16 @@ sub _parse_envelope {
 
 sub _parse_email_address {
   my $EmailAddressList = shift || [];
-  my $DecodeUTF8 = shift;
+  my $DecodeUTF8       = shift;
 
   # Email addresses always come as a list of addresses (possibly in groups)
-  my @EmailGroups = ([ undef ]);
+  my @EmailGroups = ([undef]);
   foreach my $Adr (@$EmailAddressList) {
 
     # Check address assumption
     scalar(@$Adr) == 4
-      || die "IMAPTalk: Wrong number of fields in email address structure " . Dumper($Adr);
+      || die "IMAPTalk: Wrong number of fields in email address structure "
+      . Dumper($Adr);
 
     # No hostname is start/end of group
     if (!defined $Adr->[0] && !defined $Adr->[3]) {
@@ -465,26 +481,27 @@ sub _parse_email_address {
     }
 
     # Build 'ename@ecorp.com' part
-    my $EmailStr = (defined $Adr->[2] ? $Adr->[2] : '')
-                 . '@'
-                 . (defined $Adr->[3] ? $Adr->[3] : '');
-    # If the email address has a name, add it at the start and put <> around address
+    my $EmailStr = (defined $Adr->[2] ? $Adr->[2] : '') . '@'
+      . (defined $Adr->[3] ? $Adr->[3] : '');
+# If the email address has a name, add it at the start and put <> around address
     if (defined $Adr->[0] and $Adr->[0] ne '') {
-      _decode_utf8($Adr->[0]) if $DecodeUTF8 && $Adr->[0] =~ $NeedDecodeUTF8Regexp;
+      _decode_utf8($Adr->[0])
+        if $DecodeUTF8 && $Adr->[0] =~ $NeedDecodeUTF8Regexp;
       # Strip any existing \"'s
       $Adr->[0] =~ s/\"//g;
       $EmailStr = '"' . $Adr->[0] . '" <' . $EmailStr . '>';
     }
 
-    push @{$EmailGroups[-1]}, $EmailStr;
+    push @{ $EmailGroups[-1] }, $EmailStr;
   }
 
-  # Join the results with commas between each address, and "groupname: adrs ;" for groups
+# Join the results with commas between each address, and "groupname: adrs ;" for groups
   for (@EmailGroups) {
     my $GroupName = shift @$_;
     ($_ = undef), next if !defined $GroupName && !@$_;
     my $EmailAdrs = join ", ", @$_;
-    $_ = defined($GroupName) ? $GroupName . ': ' . $EmailAdrs . ';' : $EmailAdrs;
+    $_
+      = defined($GroupName) ? $GroupName . ': ' . $EmailAdrs . ';' : $EmailAdrs;
   }
 
   return join " ", grep { defined $_ } @EmailGroups;
@@ -498,91 +515,86 @@ sub _decode_utf8 {
   eval { $_[0] = decode('MIME-Header', $_[0]); };
 }
 
-sub _read_args
-{
-    my $Nbytes;
-    my $Data = '';
+sub _read_args {
+  my $Nbytes;
+  my $Data = '';
 
-    for (;;) {
-        $Nbytes = readline STDIN;
-        last unless defined $Nbytes;
-        chomp $Nbytes;
-        $Nbytes = 0 + $Nbytes;
-#       printf "nbytes=%d\n", $nbytes;
-        last if (!$Nbytes);
-        read STDIN, $Data, $Nbytes, length($Data);
-    }
+  for (;;) {
+    $Nbytes = readline STDIN;
+    last unless defined $Nbytes;
+    chomp $Nbytes;
+    $Nbytes = 0 + $Nbytes;
+    #       printf "nbytes=%d\n", $nbytes;
+    last if (!$Nbytes);
+    read STDIN, $Data, $Nbytes, length($Data);
+  }
 
-    return $Data;
+  return $Data;
 }
 
-sub _format_string
-{
-    my ($s) = @_;
+sub _format_string {
+  my ($s) = @_;
 
-    return "NIL" unless defined $s;
+  return "NIL" unless defined $s;
 
-    my $len = length($s);
+  my $len = length($s);
 
-    if ($len > 1024 || $s =~ m/[\\"\012\015\200-\377]/) {
-        # don't try to quote this, use a literal
-        return "{$len}\r\n$s";
-    }
-    else {
-        return "\"$s\"";
-    }
+  if ($len > 1024 || $s =~ m/[\\"\012\015\200-\377]/) {
+    # don't try to quote this, use a literal
+    return "{$len}\r\n$s";
+  } else {
+    return "\"$s\"";
+  }
 }
 
-sub _emit_results
-{
-    my ($self, $message) = @_;
-    my @results;
-    my $sep = '';
+sub _emit_results {
+  my ($self, $message) = @_;
+  my @results;
+  my $sep = '';
 
-    my ($flags, $annots) = $message->get_changed();
+  my ($flags, $annots) = $message->get_changed();
 
-    foreach my $a (@$annots) {
-        my ($entry, $type, $value) = @$a;
-        my $format_val = _format_string($value);
-        push @results, "ANNOTATION ($entry ($type $format_val))";
-    }
+  foreach my $a (@$annots) {
+    my ($entry, $type, $value) = @$a;
+    my $format_val = _format_string($value);
+    push @results, "ANNOTATION ($entry ($type $format_val))";
+  }
 
-    foreach my $f (@$flags) {
-        my ($name, $set) = @$f;
-        my $op = $set ? "+FLAGS" : "-FLAGS";
-        push @results, "$op $name";
-    }
+  foreach my $f (@$flags) {
+    my ($name, $set) = @$f;
+    my $op = $set ? "+FLAGS" : "-FLAGS";
+    push @results, "$op $name";
+  }
 
-    print "(" . join(' ', @results) . ")\n";
+  print "(" . join(' ', @results) . ")\n";
 }
 
-sub process_request
-{
-    my ($self) = @_;
+sub process_request {
+  my ($self) = @_;
 
-    eval {
-        $self->log(3, "Reading request");
-        my $ArgsString = _read_args();
-        die "Failed to read args" unless $ArgsString;
+  eval {
+    $self->log(3, "Reading request");
+    my $ArgsString = _read_args();
+    die "Failed to read args" unless $ArgsString;
 
-        my ($ArgsList, $Remainder) = _dlist_parse($ArgsString);
-        die "Failed to parse args $ArgsString" unless $ArgsList;
+    my ($ArgsList, $Remainder) = _dlist_parse($ArgsString);
+    die "Failed to parse args $ArgsString" unless $ArgsList;
 
-        my %ArgsHash = @$ArgsList;
+    my %ArgsHash = @$ArgsList;
 
-        # parse the argshash out here
-        $ArgsHash{BODYSTRUCTURE} = _parse_bodystructure(delete $ArgsHash{BODY});
+    # parse the argshash out here
+    $ArgsHash{BODYSTRUCTURE} = _parse_bodystructure(delete $ArgsHash{BODY});
 
-        my $message = Cyrus::Annotator::Message->new(%ArgsHash);
+    my $message = Cyrus::Annotator::Message->new(%ArgsHash);
 
-        $self->annotate_message($message);
+    $self->annotate_message($message);
 
-        $self->log(3, "Emitting result");
-        $self->_emit_results($message);
-    };
-    if ($@) {
-        $self->log(2, "Caught and ignored error: $@");
-    }
+    $self->log(3, "Emitting result");
+    $self->_emit_results($message);
+  };
+  if ($@) {
+    $self->log(2, "Caught and ignored error: $@");
+  }
 }
 
 =item I<annotate_message($message)>
@@ -599,20 +611,18 @@ examined, and on which flags and annotations can be set.
 
 =cut
 
-sub annotate_message
-{
-    my ($self, $message) = @_;
+sub annotate_message {
+  my ($self, $message) = @_;
 
-    die "Please define an annotate_message() sub";
+  die "Please define an annotate_message() sub";
 }
 
-sub post_configure
-{
-    my ($self) = @_;
+sub post_configure {
+  my ($self) = @_;
 
-    unlink(SOCKPATH);
+  unlink(SOCKPATH);
 
-    $self->SUPER::post_configure();
+  $self->SUPER::post_configure();
 }
 
 =back

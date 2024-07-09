@@ -55,7 +55,7 @@ use strict;
 use warnings;
 use vars qw(@ISA @EXPORT);
 
-@ISA = qw(Exporter);
+@ISA    = qw(Exporter);
 @EXPORT = qw(print_netstring get_netstring);
 
 sub print_netstring {
@@ -66,22 +66,22 @@ sub print_netstring {
 
   my $size = length $data;
 
-  print $fh "$size:$data,"
+  print $fh "$size:$data,";
 }
 
 sub get_netstring {
   my $fh = shift;
 
-  my($r, $ns);
-  my $s = "";
+  my ($r, $ns);
+  my $s   = "";
   my $len = 0;
 
   # read the length
   for (;;) {
     defined($r = read($fh, $s, 1)) or return undef;
 
-    return "" if !$r;
-    last if $s eq ":";
+    return ""    if !$r;
+    last         if $s eq ":";
     return undef if $s !~ /^[0-9]$/;
 
     $len = 10 * $len + $s;
@@ -97,7 +97,7 @@ sub get_netstring {
 
   # read the trailing comma
   defined($r = read($fh, $s, 1)) or return undef;
-  return "" if !$r;
+  return ""    if !$r;
   return undef if $s ne ",";
 
   return $ns;

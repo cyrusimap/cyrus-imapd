@@ -45,56 +45,54 @@ use Cassandane::Cassini;
 use Cassandane::Util::Log;
 
 sub new {
-    my $class = shift;
-    my %params = @_;
-    my $self = {};
+  my $class  = shift;
+  my %params = @_;
+  my $self   = {};
 
-    my $cassini = Cassandane::Cassini->instance();
+  my $cassini = Cassandane::Cassini->instance();
 
-    my $prefix = $cassini->val("cyrus default", 'prefix', '/usr/cyrus');
-    $prefix = $params{cyrus_prefix}
-        if defined $params{cyrus_prefix};
+  my $prefix = $cassini->val("cyrus default", 'prefix', '/usr/cyrus');
+  $prefix = $params{cyrus_prefix}
+    if defined $params{cyrus_prefix};
 
-    my $destdir = $cassini->val("cyrus default", 'destdir', '');
-    $destdir = $params{cyrus_destdir}
-        if defined $params{cyrus_destdir};
+  my $destdir = $cassini->val("cyrus default", 'destdir', '');
+  $destdir = $params{cyrus_destdir}
+    if defined $params{cyrus_destdir};
 
-    $self->{data} = _read_buildinfo($destdir, $prefix);
+  $self->{data} = _read_buildinfo($destdir, $prefix);
 
-    return bless $self, $class;
+  return bless $self, $class;
 }
 
-sub _read_buildinfo
-{
-    my ($destdir, $prefix) = @_;
+sub _read_buildinfo {
+  my ($destdir, $prefix) = @_;
 
-    my $cyr_buildinfo;
-    foreach my $bindir (qw(sbin cyrus/bin)) {
-        my $p = "$destdir$prefix/$bindir/cyr_buildinfo";
-        if (-x $p) {
-            $cyr_buildinfo = $p;
-            last;
-        }
+  my $cyr_buildinfo;
+  foreach my $bindir (qw(sbin cyrus/bin)) {
+    my $p = "$destdir$prefix/$bindir/cyr_buildinfo";
+    if (-x $p) {
+      $cyr_buildinfo = $p;
+      last;
     }
+  }
 
-    if (not defined $cyr_buildinfo) {
-        xlog "Couldn't find cyr_buildinfo: ".
-             "don't know what features Cyrus supports";
-        return;
-    }
+  if (not defined $cyr_buildinfo) {
+    xlog "Couldn't find cyr_buildinfo: "
+      . "don't know what features Cyrus supports";
+    return;
+  }
 
-    my $jsondata = qx($cyr_buildinfo);
-    return if not $jsondata;
+  my $jsondata = qx($cyr_buildinfo);
+  return if not $jsondata;
 
-    return JSON::decode_json($jsondata);
+  return JSON::decode_json($jsondata);
 }
 
-sub get
-{
-    my ($self, $category, $key) = @_;
+sub get {
+  my ($self, $category, $key) = @_;
 
-    return if not exists $self->{data}->{$category}->{$key};
-    return $self->{data}->{$category}->{$key};
+  return if not exists $self->{data}->{$category}->{$key};
+  return $self->{data}->{$category}->{$key};
 }
 
 1;

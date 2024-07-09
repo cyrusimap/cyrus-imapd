@@ -58,82 +58,81 @@ use Cassandane::Util::Slurp;
 
 use charnames ':full';
 
-sub new
-{
-    my ($class, @args) = @_;
+sub new {
+  my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(carddav_realm => 'Cassandane',
-                 conversations => 'yes',
-                 httpmodules => 'carddav jmap',
-                 httpallowcompress => 'no',
-                 vcard_max_size => 100000,
-                 jmap_nonstandard_extensions => 'yes');
+  my $config = Cassandane::Config->default()->clone();
+  $config->set(
+    carddav_realm               => 'Cassandane',
+    conversations               => 'yes',
+    httpmodules                 => 'carddav jmap',
+    httpallowcompress           => 'no',
+    vcard_max_size              => 100000,
+    jmap_nonstandard_extensions => 'yes'
+  );
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        adminstore => 1,
-        services => [ 'imap', 'http' ]
-    }, @args);
-}
-
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'https://cyrusimap.org/ns/jmap/contacts',
-        'https://cyrusimap.org/ns/jmap/debug',
-    ]);
-
-    my $buildinfo = Cassandane::BuildInfo->new();
-    if ($buildinfo->get('dependency', 'icalvcard')) {
-        $self->{jmap}->AddUsing('urn:ietf:params:jmap:contacts');
-    }
-}
-
-sub normalize_jscard
-{
-    my ($jscard) = @_;
-
-    if ($jscard->{vCardProps}) {
-        my @sorted = sort { $a->[0] cmp $b->[0] } @{$jscard->{vCardProps}};
-        $jscard->{vCardProps} = \@sorted;
-    }
-
-    if (not exists $jscard->{kind}) {
-        $jscard->{kind} = 'individual';
-    }
-
-    if (not exists $jscard->{'cyrusimap.org:importance'}) {
-        $jscard->{'cyrusimap.org:importance'} = '0';
-    }
-}
-
-sub _set_quotaroot
-{
-    my ($self, $quotaroot) = @_;
-    $self->{quotaroot} = $quotaroot;
-}
-
-sub _set_quotalimits
-{
-    my ($self, %resources) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
-    my @quotalist;
-    foreach my $resource (keys %resources)
+  return $class->SUPER::new(
     {
-        my $limit = $resources{$resource}
-            or die "No limit specified for $resource";
-        push(@quotalist, uc($resource), $limit);
-    }
-    $self->{limits}->{$quotaroot} = { @quotalist };
-    $admintalk->setquota($quotaroot, \@quotalist);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+      config     => $config,
+      jmap       => 1,
+      adminstore => 1,
+      services   => [ 'imap', 'http' ]
+    },
+    @args
+  );
+}
+
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
+  $self->{jmap}->DefaultUsing([
+    'urn:ietf:params:jmap:core',
+    'https://cyrusimap.org/ns/jmap/contacts',
+    'https://cyrusimap.org/ns/jmap/debug',
+  ]);
+
+  my $buildinfo = Cassandane::BuildInfo->new();
+  if ($buildinfo->get('dependency', 'icalvcard')) {
+    $self->{jmap}->AddUsing('urn:ietf:params:jmap:contacts');
+  }
+}
+
+sub normalize_jscard {
+  my ($jscard) = @_;
+
+  if ($jscard->{vCardProps}) {
+    my @sorted = sort { $a->[0] cmp $b->[0] } @{ $jscard->{vCardProps} };
+    $jscard->{vCardProps} = \@sorted;
+  }
+
+  if (not exists $jscard->{kind}) {
+    $jscard->{kind} = 'individual';
+  }
+
+  if (not exists $jscard->{'cyrusimap.org:importance'}) {
+    $jscard->{'cyrusimap.org:importance'} = '0';
+  }
+}
+
+sub _set_quotaroot {
+  my ($self, $quotaroot) = @_;
+  $self->{quotaroot} = $quotaroot;
+}
+
+sub _set_quotalimits {
+  my ($self, %resources) = @_;
+  my $admintalk = $self->{adminstore}->get_client();
+
+  my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
+  my @quotalist;
+  foreach my $resource (keys %resources) {
+    my $limit = $resources{$resource}
+      or die "No limit specified for $resource";
+    push(@quotalist, uc($resource), $limit);
+  }
+  $self->{limits}->{$quotaroot} = {@quotalist};
+  $admintalk->setquota($quotaroot, \@quotalist);
+  $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPContacts';

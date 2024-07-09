@@ -51,352 +51,321 @@ my $default;
 # XXX Once these repositories are merged, we'll be able to automate keeping
 # XXX this synchronised...
 my %bitfields = (
-    'calendar_component_set' => 'VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL',
-    'event_extra_params' => 'bodyStructure clientAddress diskUsed flagNames messageContent messageSize messages modseq service timestamp uidnext vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId vnd.fastmail.sessionId vnd.fastmail.convExists vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid vnd.cmu.threadid vnd.cmu.visibleUsers',
-    'event_groups' => 'message quota flags access mailbox subscription calendar applepushservice jmap',
-    'httpmodules' => 'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
-    'metapartition_files' => 'header index cache expunge squat annotations lock dav archivecache',
-    'newsaddheaders' => 'to replyto',
-    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery vnd.cyrus.imip snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.implicit_keep_target',
+  'calendar_component_set' =>
+    'VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL',
+  'event_extra_params' =>
+    'bodyStructure clientAddress diskUsed flagNames messageContent messageSize messages modseq service timestamp uidnext vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId vnd.fastmail.sessionId vnd.fastmail.convExists vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid vnd.cmu.threadid vnd.cmu.visibleUsers',
+  'event_groups' =>
+    'message quota flags access mailbox subscription calendar applepushservice jmap',
+  'httpmodules' =>
+    'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
+  'metapartition_files' =>
+    'header index cache expunge squat annotations lock dav archivecache',
+  'newsaddheaders'   => 'to replyto',
+  'sieve_extensions' =>
+    'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery vnd.cyrus.imip snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.implicit_keep_target',
 );
 my $bitfields_fixed = 0;
 
-sub init_bitfields
-{
-    if (!$bitfields_fixed) {
-        while (my ($key, $allvalues) = each %bitfields) {
-            $bitfields{$key} = {};
-            foreach my $v (split /\s/, $allvalues) {
-                $bitfields{$key}->{$v} = 1;
-            }
-        }
-        $bitfields_fixed = 1;
+sub init_bitfields {
+  if (!$bitfields_fixed) {
+    while (my ($key, $allvalues) = each %bitfields) {
+      $bitfields{$key} = {};
+      foreach my $v (split /\s/, $allvalues) {
+        $bitfields{$key}->{$v} = 1;
+      }
     }
+    $bitfields_fixed = 1;
+  }
 }
 
-sub new
-{
-    my $class = shift;
+sub new {
+  my $class = shift;
 
-    init_bitfields();
+  init_bitfields();
 
-    my $self = {
-        parent => undef,
-        variables => {},
-        params => {},
-    };
+  my $self = {
+    parent    => undef,
+    variables => {},
+    params    => {},
+  };
 
-    bless $self, $class;
+  bless $self, $class;
 
-    # any arguments are initial params, process them properly
-    $self->set(@_);
+  # any arguments are initial params, process them properly
+  $self->set(@_);
 
-    return $self;
+  return $self;
 }
 
-sub default
-{
-    if (!defined($default)) {
-        $default = Cassandane::Config->new(
-            admins => 'admin mailproxy mupduser repluser',
-            rfc3028_strict => 'no',
-            configdirectory => '@basedir@/conf',
-            syslog_prefix => '@name@',
-            sievedir => '@basedir@/conf/sieve',
-            defaultpartition => 'default',
-            defaultdomain => 'defdomain',
-            'partition-default' => '@basedir@/data',
-            sasl_mech_list => 'PLAIN LOGIN',
-            allowplaintext => 'yes',
-            # for debugging - see cassandane.ini.example
-            debug_command => '@prefix@/utils/gdbtramp %s %d',
-            # everyone should be running this
-            improved_mboxlist_sort => 'yes',
-            # default changed, we want to be explicit about it
-            unixhierarchysep => 'no',
-            # let's hear all about it
-            auditlog => 'yes',
-            chatty => 'yes',
-            debug => 'yes',
-            httpprettytelemetry => 'yes',
-        );
-        my $defs = Cassandane::Cassini->instance()->get_section('config');
-        $default->set(%$defs);
-    }
+sub default {
+  if (!defined($default)) {
+    $default = Cassandane::Config->new(
+      admins              => 'admin mailproxy mupduser repluser',
+      rfc3028_strict      => 'no',
+      configdirectory     => '@basedir@/conf',
+      syslog_prefix       => '@name@',
+      sievedir            => '@basedir@/conf/sieve',
+      defaultpartition    => 'default',
+      defaultdomain       => 'defdomain',
+      'partition-default' => '@basedir@/data',
+      sasl_mech_list      => 'PLAIN LOGIN',
+      allowplaintext      => 'yes',
+      # for debugging - see cassandane.ini.example
+      debug_command => '@prefix@/utils/gdbtramp %s %d',
+      # everyone should be running this
+      improved_mboxlist_sort => 'yes',
+      # default changed, we want to be explicit about it
+      unixhierarchysep => 'no',
+      # let's hear all about it
+      auditlog            => 'yes',
+      chatty              => 'yes',
+      debug               => 'yes',
+      httpprettytelemetry => 'yes',
+    );
+    my $defs = Cassandane::Cassini->instance()->get_section('config');
+    $default->set(%$defs);
+  }
 
-    return $default;
+  return $default;
 }
 
-sub clone
-{
-    my ($self) = @_;
+sub clone {
+  my ($self) = @_;
 
-    my $child = Cassandane::Config->new();
-    $child->{parent} = $self;
-    return $child;
+  my $child = Cassandane::Config->new();
+  $child->{parent} = $self;
+  return $child;
 }
 
-sub _explode_bit_string
-{
-    my ($s) = @_;
-    return split / /, $s;
+sub _explode_bit_string {
+  my ($s) = @_;
+  return split / /, $s;
 }
 
-sub set
-{
-    my ($self, %nv) = @_;
-    while (my ($n, $v) = each %nv)
-    {
-        if (exists $bitfields{$n}) {
-            # it's a bitfield, set exactly what's given (clearing others)
-            if (ref $v eq 'ARRAY') {
-                $self->clear_all_bits($n);
-                $self->set_bits($n, @{$v});
-            }
-            elsif (ref $v eq q{}) {
-                $self->clear_all_bits($n);
-                $self->set_bits($n, _explode_bit_string($v));
-            }
-            else {
-                die "don't know what to do with value '$v'";
-            }
-        }
-        else {
-            $self->{params}->{$n} = $v;
-        }
-    }
-}
-
-sub set_bits
-{
-    my ($self, $name, @bits) = @_;
-
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    # explode space-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
-        @bits = _explode_bit_string($bits[0]);
-    }
-
-    foreach my $bit (@bits) {
-        die "$bit is not a $name value"
-            if not exists $bitfields{$name}->{$bit};
-
-        $self->{params}->{$name}->{$bit} = 1;
-    }
-}
-
-sub clear_bits
-{
-    my ($self, $name, @bits) = @_;
-
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    # explode space-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
-        @bits = _explode_bit_string($bits[0]);
-    }
-
-    foreach my $bit (@bits) {
-        die "$bit is not a $name value"
-            if not exists $bitfields{$name}->{$bit};
-
-        $self->{params}->{$name}->{$bit} = 0;
-    }
-}
-
-sub clear_all_bits
-{
-    my ($self, $name) = @_;
-
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    $self->{params}->{$name}->{$_} = 0 for keys %{$bitfields{$name}};
-}
-
-sub get
-{
-    my ($self, $n) = @_;
+sub set {
+  my ($self, %nv) = @_;
+  while (my ($n, $v) = each %nv) {
     if (exists $bitfields{$n}) {
-        my %bits;
-        while (defined $self) {
-            if (exists $self->{params}->{$n}) {
-                while (my ($bit, $val) = each %{$self->{params}->{$n}}) {
-                    $bits{$bit} //= $val;
-                }
-            }
-            $self = $self->{parent};
-        }
-        my @v = grep { $bits{$_} } sort keys %bits;
-        return wantarray ? @v : join q{ }, @v;
+      # it's a bitfield, set exactly what's given (clearing others)
+      if (ref $v eq 'ARRAY') {
+        $self->clear_all_bits($n);
+        $self->set_bits($n, @{$v});
+      } elsif (ref $v eq q{}) {
+        $self->clear_all_bits($n);
+        $self->set_bits($n, _explode_bit_string($v));
+      } else {
+        die "don't know what to do with value '$v'";
+      }
+    } else {
+      $self->{params}->{$n} = $v;
     }
-    else {
-        while (defined $self)
-        {
-            return $self->{params}->{$n}
-                if exists $self->{params}->{$n};
-            $self = $self->{parent};
-        }
-    }
-    return undef;
+  }
 }
 
-sub get_bit
-{
-    my ($self, $name, $bit) = @_;
+sub set_bits {
+  my ($self, $name, @bits) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-    die "$bit is not a $name value" if not exists $bitfields{$name}->{$bit};
+  die "$name is not a bitfield option" if not exists $bitfields{$name};
 
+  # explode space-delimited list as only bit
+  if (scalar @bits == 1 && $bits[0] =~ m/ /) {
+    @bits = _explode_bit_string($bits[0]);
+  }
+
+  foreach my $bit (@bits) {
+    die "$bit is not a $name value"
+      if not exists $bitfields{$name}->{$bit};
+
+    $self->{params}->{$name}->{$bit} = 1;
+  }
+}
+
+sub clear_bits {
+  my ($self, $name, @bits) = @_;
+
+  die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+  # explode space-delimited list as only bit
+  if (scalar @bits == 1 && $bits[0] =~ m/ /) {
+    @bits = _explode_bit_string($bits[0]);
+  }
+
+  foreach my $bit (@bits) {
+    die "$bit is not a $name value"
+      if not exists $bitfields{$name}->{$bit};
+
+    $self->{params}->{$name}->{$bit} = 0;
+  }
+}
+
+sub clear_all_bits {
+  my ($self, $name) = @_;
+
+  die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+  $self->{params}->{$name}->{$_} = 0 for keys %{ $bitfields{$name} };
+}
+
+sub get {
+  my ($self, $n) = @_;
+  if (exists $bitfields{$n}) {
+    my %bits;
     while (defined $self) {
-        return $self->{params}->{$name}->{$bit}
-            if exists $self->{params}->{$name}->{$bit};
-        $self = $self->{parent};
-    }
-    return undef;
-}
-
-sub get_bool
-{
-    my ($self, $n, $def) = @_;
-
-    die "bitfield $n cannot be boolean" if exists $bitfields{$n};
-
-    $def = 'no' if !defined $def;
-    my $v = $self->get($n);
-    $v = $def if !defined $v;
-
-    return 1 if ($v =~ m/^yes$/i);
-    return 1 if ($v =~ m/^true$/i);
-    return 1 if ($v =~ m/^on$/i);
-    return 1 if ($v =~ m/^1$/);
-
-    return 0 if ($v =~ m/^no$/i);
-    return 0 if ($v =~ m/^false$/i);
-    return 0 if ($v =~ m/^off$/i);
-    return 0 if ($v =~ m/^0$/);
-
-    die "Bad boolean \"$v\"";
-}
-
-sub set_variables
-{
-    my ($self, %nv) = @_;
-    while (my ($n, $v) = each %nv)
-    {
-        $self->{variables}->{$n} = $v;
-    }
-}
-
-sub _get_variable
-{
-    my ($self, $n) = @_;
-    $n =~ s/@//g;
-    while (defined $self)
-    {
-        return $self->{variables}->{$n}
-            if exists $self->{variables}->{$n};
-        $self = $self->{parent};
-    }
-    die "Variable $n not defined";
-}
-
-sub substitute
-{
-    my ($self, $s) = @_;
-
-    return unless defined $s;
-    my $r = '';
-    while (defined $s)
-    {
-        my ($pre, $ref, $post) = ($s =~ m/(.*)(@[a-z]+@)(.*)/);
-        if (defined $ref)
-        {
-            $r .= $pre . $self->_get_variable($ref);
-            $s = $post;
+      if (exists $self->{params}->{$n}) {
+        while (my ($bit, $val) = each %{ $self->{params}->{$n} }) {
+          $bits{$bit} //= $val;
         }
-        else
-        {
-            $r .= $s;
-            last;
-        }
+      }
+      $self = $self->{parent};
     }
-    return $r;
-}
-
-sub _flatten
-{
-    my ($self) = @_;
-    my %nv;
-    for (my $conf = $self ; defined $conf ; $conf = $conf->{parent})
-    {
-        foreach my $n (keys %{$conf->{params}})
-        {
-            if (exists $bitfields{$n}) {
-                # no variable substitution on bitfields
-                while (my ($bit, $val) = each %{$conf->{params}->{$n}}) {
-                    $nv{$n}->{$bit} //= $val;
-                }
-            }
-            else {
-                $nv{$n} = $self->substitute($conf->{params}->{$n})
-                    unless exists $nv{$n};
-            }
-        }
+    my @v = grep { $bits{$_} } sort keys %bits;
+    return wantarray ? @v : join q{ }, @v;
+  } else {
+    while (defined $self) {
+      return $self->{params}->{$n}
+        if exists $self->{params}->{$n};
+      $self = $self->{parent};
     }
-    return \%nv;
+  }
+  return undef;
 }
 
-sub generate
-{
-    my ($self, $filename) = @_;
-    my $nv = $self->_flatten();
+sub get_bit {
+  my ($self, $name, $bit) = @_;
 
-    open CONF,'>',$filename
-        or die "Cannot open $filename for writing: $!";
-    while (my ($n, $v) = each %$nv)
-    {
-        next unless defined $v;
-        if (exists $bitfields{$n}) {
-            my @bits = grep { $nv->{$n}->{$_} } sort keys %{$nv->{$n}};
-            print CONF "$n: " . join(q{ }, @bits) . "\n";
-        }
-        else {
-            print CONF "$n: $v\n";
-        }
+  die "$name is not a bitfield option" if not exists $bitfields{$name};
+  die "$bit is not a $name value"      if not exists $bitfields{$name}->{$bit};
+
+  while (defined $self) {
+    return $self->{params}->{$name}->{$bit}
+      if exists $self->{params}->{$name}->{$bit};
+    $self = $self->{parent};
+  }
+  return undef;
+}
+
+sub get_bool {
+  my ($self, $n, $def) = @_;
+
+  die "bitfield $n cannot be boolean" if exists $bitfields{$n};
+
+  $def = 'no' if !defined $def;
+  my $v = $self->get($n);
+  $v = $def if !defined $v;
+
+  return 1 if ($v =~ m/^yes$/i);
+  return 1 if ($v =~ m/^true$/i);
+  return 1 if ($v =~ m/^on$/i);
+  return 1 if ($v =~ m/^1$/);
+
+  return 0 if ($v =~ m/^no$/i);
+  return 0 if ($v =~ m/^false$/i);
+  return 0 if ($v =~ m/^off$/i);
+  return 0 if ($v =~ m/^0$/);
+
+  die "Bad boolean \"$v\"";
+}
+
+sub set_variables {
+  my ($self, %nv) = @_;
+  while (my ($n, $v) = each %nv) {
+    $self->{variables}->{$n} = $v;
+  }
+}
+
+sub _get_variable {
+  my ($self, $n) = @_;
+  $n =~ s/@//g;
+  while (defined $self) {
+    return $self->{variables}->{$n}
+      if exists $self->{variables}->{$n};
+    $self = $self->{parent};
+  }
+  die "Variable $n not defined";
+}
+
+sub substitute {
+  my ($self, $s) = @_;
+
+  return unless defined $s;
+  my $r = '';
+  while (defined $s) {
+    my ($pre, $ref, $post) = ($s =~ m/(.*)(@[a-z]+@)(.*)/);
+    if (defined $ref) {
+      $r .= $pre . $self->_get_variable($ref);
+      $s = $post;
+    } else {
+      $r .= $s;
+      last;
     }
-    close CONF;
+  }
+  return $r;
 }
 
-sub is_bitfield
-{
-    my ($name) = @_;
-
-    init_bitfields();
-
-    return defined $bitfields{$name};
+sub _flatten {
+  my ($self) = @_;
+  my %nv;
+  for (my $conf = $self; defined $conf; $conf = $conf->{parent}) {
+    foreach my $n (keys %{ $conf->{params} }) {
+      if (exists $bitfields{$n}) {
+        # no variable substitution on bitfields
+        while (my ($bit, $val) = each %{ $conf->{params}->{$n} }) {
+          $nv{$n}->{$bit} //= $val;
+        }
+      } else {
+        $nv{$n} = $self->substitute($conf->{params}->{$n})
+          unless exists $nv{$n};
+      }
+    }
+  }
+  return \%nv;
 }
 
-sub is_bitfield_bit
-{
-    my ($name, $value) = @_;
+sub generate {
+  my ($self, $filename) = @_;
+  my $nv = $self->_flatten();
 
-    init_bitfields();
-
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    return defined $bitfields{$name}->{$value};
+  open CONF, '>', $filename
+    or die "Cannot open $filename for writing: $!";
+  while (my ($n, $v) = each %$nv) {
+    next unless defined $v;
+    if (exists $bitfields{$n}) {
+      my @bits = grep { $nv->{$n}->{$_} } sort keys %{ $nv->{$n} };
+      print CONF "$n: " . join(q{ }, @bits) . "\n";
+    } else {
+      print CONF "$n: $v\n";
+    }
+  }
+  close CONF;
 }
 
-sub get_bitfield_bits
-{
-    my ($name) = @_;
+sub is_bitfield {
+  my ($name) = @_;
 
-    init_bitfields();
+  init_bitfields();
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+  return defined $bitfields{$name};
+}
 
-    return sort keys %{$bitfields{$name}};
+sub is_bitfield_bit {
+  my ($name, $value) = @_;
+
+  init_bitfields();
+
+  die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+  return defined $bitfields{$name}->{$value};
+}
+
+sub get_bitfield_bits {
+  my ($name) = @_;
+
+  init_bitfields();
+
+  die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+  return sort keys %{ $bitfields{$name} };
 }
 
 1;
