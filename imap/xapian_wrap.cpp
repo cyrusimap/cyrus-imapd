@@ -78,8 +78,9 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
  * Version 14: adds SLOT_INDEXVERSION to documents
  * Version 15: receives indexed header fields and text in original format (rather than search form)
  * Version 16: indexes entire addr-spec as a single value.  Prevents cross-matching localparts and domains
+ * Version 17: normalizes text using libicu's NFKC with CaseFolding. Default stemmer keeps using lowercase Cyrus Search Form.
  */
-#define XAPIAN_DB_CURRENT_VERSION 16
+#define XAPIAN_DB_CURRENT_VERSION 17
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 5
 
 static std::set<int> read_db_versions(const Xapian::Database &database)
@@ -1996,66 +1997,115 @@ static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, c
     return q;
 }
 
-static Xapian::Query *
-xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *str)
+static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
+                                                      int partnum,
+                                                      const char *str,
+                                                      int convert_flags)
 {
     const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
+
+    charset_t utf8 = charset_lookupname("utf-8");
+    char *mystr = charset_convert(str, utf8, convert_flags);
+    charset_free(&utf8);
+    if (!mystr) return NULL;
+
+    static Xapian::Query *q = NULL;
 
     try {
         // Handle special value search parts.
         if (partnum == SEARCH_PART_LANGUAGE) {
-            return query_new_language(db, prefix, str);
+            q = query_new_language(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_PRIORITY) {
-            return query_new_priority(db, prefix, str);
+            q = query_new_priority(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_LISTID) {
-            return query_new_listid(db, prefix, str);
+            q = query_new_listid(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_FROM ||
                  partnum == SEARCH_PART_TO ||
                  partnum == SEARCH_PART_CC ||
                  partnum == SEARCH_PART_BCC ||
                  partnum == SEARCH_PART_DELIVEREDTO) {
-            return query_new_email(db, prefix, str);
+            q = query_new_email(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_TYPE) {
-            return query_new_type(db, prefix, str);
+            q = query_new_type(db, prefix, mystr);
         }
+        else {
+            // Match unstructured search parts
+            int need_word_break = 0;
+            for (const unsigned char *p = (const unsigned char *)mystr; *p; p++) {
+                // Use ICU word break for Thaana codepage (0780) or higher.
+                if (*p > 221) {
+                    need_word_break = 1;
+                    break;
+                }
+            }
 
-        // Match unstructured search parts
-
-        static Xapian::Query *q = NULL;
-
-        int need_word_break = 0;
-        for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
-            // Use ICU word break for Thaana codepage (0780) or higher.
-            if (*p > 221) {
-                need_word_break = 1;
-                break;
+            if (need_word_break) {
+                q = xapian_query_new_match_word_break(db, mystr, prefix);
+            }
+            else {
+                Xapian::TermGenerator::stem_strategy stem_strategy =
+                    get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
+                q = query_new_textmatch(db, mystr, prefix, stem_strategy);
+            }
+            if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
+                delete q;
+                q = NULL;
             }
         }
 
-        if (need_word_break) {
-            q = xapian_query_new_match_word_break(db, str, prefix);
-        }
-        else {
-            Xapian::TermGenerator::stem_strategy stem_strategy =
-                get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
-            q = query_new_textmatch(db, str, prefix, stem_strategy);
-        }
-        if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
-            delete q;
-            q = NULL;
-        }
-
-        return q;
     } catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
                          "exception=<%s>",
                          err.get_description().c_str());
-        return 0;
     }
+
+    free(mystr);
+    return q;
+}
+
+static bool query_terms_eq(const Xapian::Query *qa, const Xapian::Query *qb)
+{
+    if (qa == nullptr) {
+        return qb == nullptr;
+    }
+    else if (qb == nullptr) {
+        return qa == nullptr;
+    }
+
+    if (qa->get_type() != qb->get_type()) {
+        return false;
+    }
+
+    Xapian::TermIterator ta = qa->get_unique_terms_begin();
+    Xapian::TermIterator tb = qb->get_unique_terms_begin();
+    Xapian::TermIterator ta_end = qa->get_unique_terms_end();
+    Xapian::TermIterator tb_end = qb->get_unique_terms_end();
+
+    for ( ; ta != ta_end && tb != tb_end; ++ta, ++tb) {
+        if (*ta != *tb) return false;
+    }
+
+    if (ta != ta_end || tb != tb_end) {
+        return false;
+    }
+
+    if (qa->get_num_subqueries() != qb->get_num_subqueries()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < qa->get_num_subqueries(); i++) {
+        const Xapian::Query subqa = qa->get_subquery(i);
+        const Xapian::Query subqb = qb->get_subquery(i);
+        if (!query_terms_eq(&subqa, &subqb)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 EXPORTED xapian_query_t *
@@ -2080,21 +2130,50 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
                 db->paths->c_str());
     }
 
-    Xapian::Query *q = xapian_query_new_match_internal(db, partnum, str);
-    if (min_version < 15) {
-        /* Older versions indexed header fields in Cyrus search form */
-        charset_t utf8 = charset_lookupname("utf-8");
-        char *mystr = charset_convert(str, utf8, charset_flags);
-        if (mystr) {
-            Xapian::Query *qq = xapian_query_new_match_internal(db, partnum, mystr);
-            if (qq && q) {
-                *q |= *qq;
-                delete qq;
-            }
-            else if (!q) q = qq;
+    int max_version = *db->db_versions->rbegin();
+
+    Xapian::Query *q = NULL;
+    if (max_version >= 17) {
+        // Versions 17 and above normalize terms using NFKC with CaseFolding.
+        q = xapian_query_new_match_internal(db, partnum, str,
+                CHARSET_UNORM_NFKC_CF | CHARSET_KEEPCASE | CHARSET_MIME_UTF8);
+    }
+
+    Xapian::Query *q_v16 = NULL;
+    if (min_version <= 16) {
+        /* Version 16 and earlier did not normalize unstemmed terms
+         * and stemmed terms using Cyrus Search Form, a custom NFC. */
+        q_v16 = xapian_query_new_match_internal(db, partnum, str,
+                CHARSET_KEEPCASE | CHARSET_MIME_UTF8);
+        if (query_terms_eq(q, q_v16)) {
+            delete q_v16;
+            q_v16 = NULL;
         }
-        free(mystr);
-        charset_free(&utf8);
+    }
+
+    Xapian::Query *q_v14 = NULL;
+    if (min_version <= 14) {
+        /* Version 14 and earlier indexed header fields in Cyrus search form */
+        q_v14 = xapian_query_new_match_internal(db, partnum, str, charset_flags);
+        if (query_terms_eq(q, q_v14)) {
+            delete q_v14;
+            q_v14 = NULL;
+        }
+    }
+
+    // Combine queries to support legacy indexes.
+    if (q && q_v14) {
+        *q |= *q_v14;
+    }
+    else if (q_v14) {
+        q = q_v14;
+    }
+
+    if (q && q_v16) {
+        *q |= *q_v16;
+    }
+    else if (q_v16) {
+        q = q_v16;
     }
 
     return (xapian_query_t*) q;
