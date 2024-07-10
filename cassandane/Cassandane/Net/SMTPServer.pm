@@ -54,8 +54,8 @@ sub new_connection {
 }
 
 sub helo {
-    my ($Self) = @_;
-    $Self->mylog("SMTP: HELO");
+    my ($Self, $Host) = @_;
+    $Self->mylog("SMTP: HELO $Host");
     return if $Self->override('helo');
     $Self->send_client_resp(250, "localhost",
                             "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES");
