@@ -1,0 +1,16 @@
+Description:
+
+Changes the SMTP client EHLO hostname from "localhost" to the `client_bind_name` config option, if set and enabled, or `servername` otherwise.
+
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None
+
+GitHub issue:
+
+4960

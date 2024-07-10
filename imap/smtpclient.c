@@ -102,10 +102,13 @@ enum {
     SMTPCLIENT_CAPA_JMAPID    = (1 << 10),
 };
 
+static const char *smtpclient_ehlo_hostname = NULL;
+
 static struct protocol_t smtp_protocol =
 { "smtp", "smtp", TYPE_STD,
   { { { 0, "220 " },
-      { "EHLO", "localhost", "250 ", NULL,
+        // EHLO hostname will be set in smtpclient_open().
+      { "EHLO", NULL, "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
         { { "AUTH", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
@@ -143,6 +146,31 @@ static void smtpclient_logerror(smtpclient_t *sm, const char *cmd, int r);
 
 EXPORTED int smtpclient_open(smtpclient_t **smp)
 {
+    if (!smtpclient_ehlo_hostname) {
+        if (config_getswitch(IMAPOPT_CLIENT_BIND)) {
+            smtpclient_ehlo_hostname =
+                config_getstring(IMAPOPT_CLIENT_BIND_NAME);
+        }
+        if (!smtpclient_ehlo_hostname) {
+            smtpclient_ehlo_hostname = config_getstring(IMAPOPT_SERVERNAME);
+        }
+        if (!smtpclient_ehlo_hostname) {
+            xsyslog(LOG_ERR,
+                    "can not determine EHLO hostname, "
+                    "either client_bind/client_bind_name or servername option must be set",
+                    NULL);
+            return IMAP_INTERNAL;
+        }
+        if (smtp_protocol.type == TYPE_STD &&
+            !strcasecmpsafe(smtp_protocol.u.std.capa_cmd.cmd, "EHLO")) {
+            smtp_protocol.u.std.capa_cmd.arg = smtpclient_ehlo_hostname;
+        }
+        else {
+            xsyslog(LOG_ERR, "unexpected smtp_protocol value", NULL);
+            return IMAP_INTERNAL;
+        }
+    }
+
     int r = 0;
     const char *backend = config_getstring(IMAPOPT_SMTP_BACKEND);
 
@@ -366,7 +394,7 @@ static int smtpclient_ehlo(smtpclient_t *sm)
     int r = 0;
 
     /* Say EHLO */
-    buf_setcstr(&sm->buf, "EHLO localhost\r\n");
+    buf_printf(&sm->buf, "EHLO %s\r\n", smtpclient_ehlo_hostname);
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
