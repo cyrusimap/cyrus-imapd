@@ -2,12 +2,11 @@
 use Cassandane::Tiny;
 
 sub test_caldavcreate
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 }

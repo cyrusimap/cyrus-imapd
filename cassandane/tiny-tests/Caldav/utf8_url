@@ -2,19 +2,18 @@
 use Cassandane::Tiny;
 
 sub test_utf8_url
-    :min_version_3_9 :needs_component_httpd
-{
-    my ($self) = @_;
+  : min_version_3_9 : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $uid = "%E2%98%83";  # percent-encoded ☃";
-    my $href = $CalDAV->request_url('') . "/$CalendarId/$uid.ics";
+  my $uid  = "%E2%98%83"; # percent-encoded ☃";
+  my $href = $CalDAV->request_url('') . "/$CalendarId/$uid.ics";
 
-    my $event = <<EOF;
+  my $event = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -31,21 +30,28 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my %headers = (
-        'Content-Type' => 'text/calendar; charset=utf-8',
-        'Authorization' => $CalDAV->auth_header());
+  my %headers = (
+    'Content-Type'  => 'text/calendar; charset=utf-8',
+    'Authorization' => $CalDAV->auth_header()
+  );
 
-    utf8::encode($event);
+  utf8::encode($event);
 
-    # This will fail if the UTF-8 resource name isn't handled properly
-    my $res = $CalDAV->{ua}->request('PUT', $href, {
-        headers => \%headers,
-        content => $event
-    });
-    $self->assert_str_equals('201', $res->{status});
+  # This will fail if the UTF-8 resource name isn't handled properly
+  my $res = $CalDAV->{ua}->request(
+    'PUT', $href,
+    {
+      headers => \%headers,
+      content => $event
+    }
+  );
+  $self->assert_str_equals('201', $res->{status});
 
-    $res = $CalDAV->{ua}->request('GET', $href, {
-        headers => \%headers
-    });
-    $self->assert_str_equals('200', $res->{status});
+  $res = $CalDAV->{ua}->request(
+    'GET', $href,
+    {
+      headers => \%headers
+    }
+  );
+  $self->assert_str_equals('200', $res->{status});
 }

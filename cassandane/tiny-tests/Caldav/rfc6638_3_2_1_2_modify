@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_rfc6638_3_2_1_2_modify
-    :needs_component_httpd
-{
-    my ($self) = @_;
-    my $CalDAV = $self->{caldav};
+  : needs_component_httpd {
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'test' });
+  $self->assert_not_null($CalendarId);
 
   # 4 x 4 matrix:
   #   +---------------+-----------------------------------------------+
@@ -30,305 +29,357 @@ sub test_rfc6638_3_2_1_2_modify
   #   |   |           |           | ADD       |           |           |
   #   +---+-----------+-----------+-----------+-----------+-----------+
 
-    xlog $self, "<Absent> / <Removed>";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "<Absent> / <Removed>";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "<Absent> / SERVER";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "<Absent> / SERVER";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
-        { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
-        );
-    }
+    $self->assert_caldav_notified(
+      {
+        recipient => "test1\@example.com",
+        is_update => JSON::false,
+        method    => 'REQUEST'
+      },
+    );
+  }
 
-    xlog $self, "<Absent> / CLIENT";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "<Absent> / CLIENT";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "<Absent> / NONE";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "<Absent> / NONE";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "SERVER / <Removed>";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "SERVER / <Removed>";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
-            { recipient => "test1\@example.com", method => 'CANCEL' },
-        );
-    }
+    $self->assert_caldav_notified(
+      { recipient => "test1\@example.com", method => 'CANCEL' },);
+  }
 
-    xlog $self, "SERVER / SERVER";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "SERVER / SERVER";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
-            { recipient => "test1\@example.com", is_update => JSON::true },
-        );
-    }
+    $self->assert_caldav_notified(
+      { recipient => "test1\@example.com", is_update => JSON::true },);
+  }
 
-    xlog $self, "SERVER / CLIENT";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "SERVER / CLIENT";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
-            { recipient => "test1\@example.com", method => 'CANCEL' },
-        );
-    }
+    $self->assert_caldav_notified(
+      { recipient => "test1\@example.com", method => 'CANCEL' },);
+  }
 
-    xlog $self, "SERVER / NONE";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "SERVER / NONE";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
-            { recipient => "test1\@example.com", method => 'CANCEL' },
-        );
-    }
+    $self->assert_caldav_notified(
+      { recipient => "test1\@example.com", method => 'CANCEL' },);
+  }
 
-    xlog $self, "CLIENT / <Removed>";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "CLIENT / <Removed>";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "CLIENT / SERVER";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "CLIENT / SERVER";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        # XXX - should be a new request is_update => true
-        $self->assert_caldav_notified(
-            #{ recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
-            { recipient => "test1\@example.com", method => 'REQUEST' },
-        );
-    }
+    # XXX - should be a new request is_update => true
+    $self->assert_caldav_notified(
+#{ recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
+      { recipient => "test1\@example.com", method => 'REQUEST' },
+    );
+  }
 
-    xlog $self, "CLIENT / CLIENT";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "CLIENT / CLIENT";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "CLIENT / NONE";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "CLIENT / NONE";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "NONE / <Removed>";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "NONE / <Removed>";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "NONE / SERVER";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "NONE / SERVER";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        # XXX - should be a new request is_update => true
-        $self->assert_caldav_notified(
-            #{ recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
-            { recipient => "test1\@example.com", method => 'REQUEST' },
-        );
-    }
+    # XXX - should be a new request is_update => true
+    $self->assert_caldav_notified(
+#{ recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
+      { recipient => "test1\@example.com", method => 'REQUEST' },
+    );
+  }
 
-    xlog $self, "NONE / CLIENT";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "NONE / CLIENT";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    xlog $self, "NONE / NONE";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "NONE / NONE";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update");
+    $self->{instance}->getnotify();
+    $self->_put_event(
+      $CalendarId,
+      uuid  => $uuid,
+      lines => <<EOF, summary => "update");
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
-    }
+    $self->assert_caldav_notified();
+  }
 
-    # XXX - check that the SCHEDULE-STATUS property is set correctly...
+  # XXX - check that the SCHEDULE-STATUS property is set correctly...
 
-    xlog $self, "Forbidden organizer change";
-    {
-        my $uuid = $CalDAV->genuuid();
-        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+  xlog $self, "Forbidden organizer change";
+  {
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->{instance}->getnotify();
-        eval { $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "update"); };
+    $self->{instance}->getnotify();
+    eval {
+      $self->_put_event(
+        $CalendarId,
+        uuid  => $uuid,
+        lines => <<EOF, summary => "update"); };
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-        my $err = $@;
-        $self->assert_matches(qr/allowed-attendee-scheduling-object-change/, $err);
-    }
+    my $err = $@;
+    $self->assert_matches(qr/allowed-attendee-scheduling-object-change/, $err);
+  }
 }

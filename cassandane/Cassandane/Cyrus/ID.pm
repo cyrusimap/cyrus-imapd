@@ -47,53 +47,49 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
-sub new
-{
-    my $class = shift;
-    return $class->SUPER::new({ }, @_);
+sub new {
+  my $class = shift;
+  return $class->SUPER::new({}, @_);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
-sub test_cmd_id
-{
-    my ($self) = @_;
+sub test_cmd_id {
+  my ($self) = @_;
 
-    # Purge any syslog lines before this test runs.
-    $self->{instance}->getsyslog();
+  # Purge any syslog lines before this test runs.
+  $self->{instance}->getsyslog();
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    return if not $imaptalk->capability()->{id};
+  return if not $imaptalk->capability()->{id};
 
-    my $res = $imaptalk->id(name => "cassandane");
-    xlog $self, Dumper $res;
+  my $res = $imaptalk->id(name => "cassandane");
+  xlog $self, Dumper $res;
 
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    # should have logged some timer output, which should include the sess id,
-    # and since we sent a client id via IMAP ID, we should get that, too!
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # make sure that the connection is ended so that imapd reset happens
-        $imaptalk->logout();
-        undef $imaptalk;
+  # should have logged some timer output, which should include the sess id,
+  # and since we sent a client id via IMAP ID, we should get that, too!
+  if ($self->{instance}->{have_syslog_replacement}) {
+    # make sure that the connection is ended so that imapd reset happens
+    $imaptalk->logout();
+    undef $imaptalk;
 
-        my @behavior_lines = $self->{instance}->getsyslog(qr/session ended/);
+    my @behavior_lines = $self->{instance}->getsyslog(qr/session ended/);
 
-        $self->assert_num_gte(1, scalar @behavior_lines);
+    $self->assert_num_gte(1, scalar @behavior_lines);
 
-        $self->assert_matches(qr/\bid\.name=<cassandane>/, $_) for @behavior_lines;
-    }
+    $self->assert_matches(qr/\bid\.name=<cassandane>/, $_) for @behavior_lines;
+  }
 }
 
 1;

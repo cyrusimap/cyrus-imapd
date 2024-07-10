@@ -2,23 +2,23 @@
 use Cassandane::Tiny;
 
 sub test_imip_invite_single_then_master
-    :needs_component_sieve :needs_component_httpd :min_version_3_7
-    :want_service_http
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_httpd : min_version_3_7
+  : want_service_http {
+  my ($self) = @_;
 
-    my $IMAP = $self->{store}->get_client();
-    $self->{store}->_select();
-    $self->assert_num_equals(1, $IMAP->uid());
-    $self->{store}->set_fetch_attributes(qw(uid flags));
+  my $IMAP = $self->{store}->get_client();
+  $self->{store}->_select();
+  $self->assert_num_equals(1, $IMAP->uid());
+  $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Create calendar user";
-    my $CalDAV = $self->{caldav};
-    my $CalendarId = 'Default';
-    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+  xlog $self, "Create calendar user";
+  my $CalDAV     = $self->{caldav};
+  my $CalendarId = 'Default';
+  my $uuid       = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :outcome "outcome";
@@ -27,9 +27,9 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    my $imip = <<EOF;
+  my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -58,26 +58,26 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP invite";
-    my $msg = Cassandane::Message->new(raw => $imip);
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver iMIP invite";
+  my $msg = Cassandane::Message->new(raw => $imip);
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Check that the event made it to calendar";
-    my $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_null($events->[0]{recurrenceRule});
-    $self->assert_not_null($events->[0]{recurrenceOverrides});
+  xlog $self, "Check that the event made it to calendar";
+  my $events = $CalDAV->GetEvents($CalendarId);
+  $self->assert_equals(1, scalar @$events);
+  $self->assert_str_equals($uuid, $events->[0]{uid});
+  $self->assert_null($events->[0]{recurrenceRule});
+  $self->assert_not_null($events->[0]{recurrenceOverrides});
 
-    xlog $self, "Get and accept the event";
-    my $href = $events->[0]{href};
-    my $response = $CalDAV->Request('GET', $href);
-    my $ical = $response->{content};
-    $ical =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
+  xlog $self, "Get and accept the event";
+  my $href     = $events->[0]{href};
+  my $response = $CalDAV->Request('GET', $href);
+  my $ical     = $response->{content};
+  $ical =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
 
-    $CalDAV->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
-    $imip = <<EOF;
+  $imip = <<EOF;
 Date: Thu, 24 Sep 2021 09:06:18 -0400
 From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -106,16 +106,18 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP update";
-    $msg = Cassandane::Message->new(raw => $imip);
-    $self->{instance}->deliver($msg);
+  xlog $self, "Deliver iMIP update";
+  $msg = Cassandane::Message->new(raw => $imip);
+  $self->{instance}->deliver($msg);
 
-    xlog $self, "Check that the standalone instance was dropped from the calendar";
-    $events = $CalDAV->GetEvents($CalendarId);
+  xlog $self,
+    "Check that the standalone instance was dropped from the calendar";
+  $events = $CalDAV->GetEvents($CalendarId);
 
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_not_null($events->[0]{recurrenceRule});
-    $self->assert_null($events->[0]{recurrenceOverrides});
-    $self->assert_str_equals('needs-action', $events->[0]{participants}{'cassandane@example.com'}{scheduleStatus});    
+  $self->assert_equals(1, scalar @$events);
+  $self->assert_str_equals($uuid, $events->[0]{uid});
+  $self->assert_not_null($events->[0]{recurrenceRule});
+  $self->assert_null($events->[0]{recurrenceOverrides});
+  $self->assert_str_equals('needs-action',
+    $events->[0]{participants}{'cassandane@example.com'}{scheduleStatus});
 }

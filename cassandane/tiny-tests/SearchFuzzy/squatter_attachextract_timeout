@@ -2,68 +2,68 @@
 use Cassandane::Tiny;
 
 sub test_squatter_attachextract_timeout
-    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
-{
-    my ($self) = @_;
-    my $instance = $self->{instance};
-    my $imap = $self->{store}->get_client();
+  : min_version_3_9 : needs_search_xapian : SearchAttachmentExtractor :
+  NoCheckSyslog {
+  my ($self)   = @_;
+  my $instance = $self->{instance};
+  my $imap     = $self->{store}->get_client();
 
-    my $tracedir = tempdir (DIR => $instance->{basedir} . "/tmp");
+  my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
 
-    # SearchAttachmentExtractor magic configures Cyrus to
-    # wait at most 3 seconds for a response from extractor
+  # SearchAttachmentExtractor magic configures Cyrus to
+  # wait at most 3 seconds for a response from extractor
 
-    $self->start_echo_extractor(
-        tracedir => $tracedir,
-        response_delay_seconds => [5], # timeout on first request only
-    );
+  $self->start_echo_extractor(
+    tracedir               => $tracedir,
+    response_delay_seconds => [5],      # timeout on first request only
+  );
 
-    xlog $self, "Make message with attachment";
-    $self->make_message("msg1",
-        mime_type => "multipart/related",
-        mime_boundary => "123456789abcdef",
-        body => ""
-        ."\r\n--123456789abcdef\r\n"
-        ."Content-Type: text/plain\r\n"
-        ."\r\n"
-        ."bodyterm"
-        ."\r\n--123456789abcdef\r\n"
-        ."Content-Type: application/pdf\r\n"
-        ."\r\n"
-        ."attachterm"
-        ."\r\n--123456789abcdef--\r\n");
+  xlog $self, "Make message with attachment";
+  $self->make_message(
+    "msg1",
+    mime_type     => "multipart/related",
+    mime_boundary => "123456789abcdef",
+    body          => ""
+      . "\r\n--123456789abcdef\r\n"
+      . "Content-Type: text/plain\r\n" . "\r\n"
+      . "bodyterm"
+      . "\r\n--123456789abcdef\r\n"
+      . "Content-Type: application/pdf\r\n" . "\r\n"
+      . "attachterm"
+      . "\r\n--123456789abcdef--\r\n"
+  );
 
-    xlog $self, "Run squatter (allowing partials)";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-p');
+  xlog $self, "Run squatter (allowing partials)";
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter', '-v', '-p');
 
-    xlog "Assert text body is indexed";
-    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1], $uids);
+  xlog "Assert text body is indexed";
+  my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+  $self->assert_deep_equals([1], $uids);
 
-    xlog "Assert attachement is not indexed";
-    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([], $uids);
+  xlog "Assert attachement is not indexed";
+  $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+  $self->assert_deep_equals([], $uids);
 
-    xlog "Assert extractor got called once";
-    my @tracefiles = glob($tracedir."/*");
-    $self->assert_num_equals(1, scalar @tracefiles);
-    $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+  xlog "Assert extractor got called once";
+  my @tracefiles = glob($tracedir . "/*");
+  $self->assert_num_equals(1, scalar @tracefiles);
+  $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
 
-    xlog $self, "Rerun squatter for partials";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-i', '-P');
+  xlog $self, "Rerun squatter for partials";
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter', '-v', '-i', '-P');
 
-    xlog "Assert text body is indexed";
-    $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1], $uids);
+  xlog "Assert text body is indexed";
+  $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+  $self->assert_deep_equals([1], $uids);
 
-    xlog "Assert attachement is indexed";
-    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([1], $uids);
+  xlog "Assert attachement is indexed";
+  $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+  $self->assert_deep_equals([1], $uids);
 
-    xlog "Assert extractor got called three times";
-    @tracefiles = glob($tracedir."/*");
-    $self->assert_num_equals(3, scalar @tracefiles);
-    $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
-    $self->assert_matches(qr/req2_GET_/, $tracefiles[1]);
-    $self->assert_matches(qr/req3_PUT_/, $tracefiles[2]);
+  xlog "Assert extractor got called three times";
+  @tracefiles = glob($tracedir . "/*");
+  $self->assert_num_equals(3, scalar @tracefiles);
+  $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+  $self->assert_matches(qr/req2_GET_/, $tracefiles[1]);
+  $self->assert_matches(qr/req3_PUT_/, $tracefiles[2]);
 }

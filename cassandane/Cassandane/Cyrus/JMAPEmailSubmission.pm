@@ -48,7 +48,7 @@ use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
-use Cwd qw(abs_path getcwd);
+use Cwd          qw(abs_path getcwd);
 use URI;
 
 use lib '.';
@@ -57,67 +57,68 @@ use Cassandane::Util::Log;
 
 use charnames ':full';
 
-sub new
-{
-    my ($class, @args) = @_;
+sub new {
+  my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
-                 conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
-                 event_groups => 'mailbox message flags calendar applepushservice jmap',
-                 jmapsubmission_deleteonsend => 'no',
-                 httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+  my $config = Cassandane::Config->default()->clone();
+  $config->set(
+    caldav_realm                => 'Cassandane',
+    conversations               => 'yes',
+    conversations_counted_flags =>
+      "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+    event_groups => 'mailbox message flags calendar applepushservice jmap',
+    jmapsubmission_deleteonsend => 'no',
+    httpmodules                 => 'carddav caldav jmap',
+    httpallowcompress           => 'no'
+  );
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        adminstore => 1,
-        services => [ 'imap', 'http' ]
-    }, @args);
-}
-
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-    ]);
-}
-
-sub skip_check
-{
-    my ($self) = @_;
-
-    # XXX skip tests that would hang in verbose mode for now -- see
-    # XXX detailed comment at MaxMessages::put_submission
-    if (get_verbose()
-        && $self->{_name} eq 'test_emailsubmission_set_futurerelease')
+  return $class->SUPER::new(
     {
-        return 'test would hang in verbose mode';
-    }
-
-    return undef;
+      config     => $config,
+      jmap       => 1,
+      adminstore => 1,
+      services   => [ 'imap', 'http' ]
+    },
+    @args
+  );
 }
 
-sub getinbox
-{
-    my ($self, $args) = @_;
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
+  $self->{jmap}->DefaultUsing([
+    'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail',
+    'urn:ietf:params:jmap:submission',
+  ]);
+}
 
-    $args = {} unless $args;
+sub skip_check {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
+  # XXX skip tests that would hang in verbose mode for now -- see
+  # XXX detailed comment at MaxMessages::put_submission
+  if (get_verbose()
+    && $self->{_name} eq 'test_emailsubmission_set_futurerelease')
+  {
+    return 'test would hang in verbose mode';
+  }
 
-    xlog $self, "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', $args, "R1"]]);
-    $self->assert_not_null($res);
+  return undef;
+}
 
-    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    return $m{"Inbox"};
+sub getinbox {
+  my ($self, $args) = @_;
+
+  $args = {} unless $args;
+
+  my $jmap = $self->{jmap};
+
+  xlog $self, "get existing mailboxes";
+  my $res = $jmap->CallMethods([ [ 'Mailbox/get', $args, "R1" ] ]);
+  $self->assert_not_null($res);
+
+  my %m = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  return $m{"Inbox"};
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPEmailSubmission';

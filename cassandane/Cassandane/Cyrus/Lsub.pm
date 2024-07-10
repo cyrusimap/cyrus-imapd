@@ -46,179 +46,124 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 
-sub new
-{
-    my $class = shift;
-    return $class->SUPER::new({ adminstore => 1 }, @_);
+sub new {
+  my $class = shift;
+  return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 
-    my $admintalk = $self->{adminstore}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    # Right - let's create ourselves some users and subscriptions
-    # sub folders of the main user
-    $admintalk->create("user.cassandane.asub");
-    $admintalk->create("user.cassandane.asub.deeper");
+  # Right - let's create ourselves some users and subscriptions
+  # sub folders of the main user
+  $admintalk->create("user.cassandane.asub");
+  $admintalk->create("user.cassandane.asub.deeper");
 
-    # sub folders of another user - one is subscribable
-    $self->{instance}->create_user("other",
-                                   subdirs => [ 'sub', ['sub', 'folder'] ]);
-    $admintalk->setacl("user.other.sub.folder", "cassandane", "lrs");
+  # sub folders of another user - one is subscribable
+  $self->{instance}
+    ->create_user("other", subdirs => [ 'sub', [ 'sub', 'folder' ] ]);
+  $admintalk->setacl("user.other.sub.folder", "cassandane", "lrs");
 
-    my $usertalk = $self->{store}->get_client();
-    $usertalk->subscribe("INBOX");
-    $usertalk->subscribe("INBOX.asub");
-    $usertalk->subscribe("user.other.sub.folder");
+  my $usertalk = $self->{store}->get_client();
+  $usertalk->subscribe("INBOX");
+  $usertalk->subscribe("INBOX.asub");
+  $usertalk->subscribe("user.other.sub.folder");
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
 #
 # Test LSUB behaviour
 #
 sub test_lsub_toplevel
-    :NoAltNameSpace
-{
-    my ($self) = @_;
+  : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    my $alldata = $imaptalk->lsub("", "*");
-    $self->assert_deep_equals($alldata, [
-          [
-            [
-              '\\HasChildren'
-            ],
-            '.',
-            'INBOX'
-          ],
-          [
-            [],
-            '.',
-            'INBOX.asub'
-          ],
-          [
-            [],
-            '.',
-            'user.other.sub.folder'
-          ]
-    ], "LSUB all data mismatch: "  . Dumper($alldata));
+  my $alldata = $imaptalk->lsub("", "*");
+  $self->assert_deep_equals(
+    $alldata,
+    [
+      [ ['\\HasChildren'], '.', 'INBOX' ],
+      [ [],                '.', 'INBOX.asub' ],
+      [ [],                '.', 'user.other.sub.folder' ]
+    ],
+    "LSUB all data mismatch: " . Dumper($alldata)
+  );
 
-    my $topdata = $imaptalk->lsub("", "%");
-    $self->assert_deep_equals($topdata, [
-          [
-            [
-              '\\HasChildren'
-            ],
-            '.',
-            'INBOX'
-          ],
-          [
-            [
-              '\\Noselect',
-              '\\HasChildren'
-            ],
-            '.',
-            'user'
-          ],
-    ], "LSUB top data mismatch:" . Dumper($topdata));
+  my $topdata = $imaptalk->lsub("", "%");
+  $self->assert_deep_equals(
+    $topdata,
+    [
+      [ ['\\HasChildren'],                 '.', 'INBOX' ],
+      [ [ '\\Noselect', '\\HasChildren' ], '.', 'user' ],
+    ],
+    "LSUB top data mismatch:" . Dumper($topdata)
+  );
 }
 
-sub test_lsub_delete
-{
-    my ($self) = @_;
+sub test_lsub_delete {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.deltest") || die;
-    $imaptalk->create("INBOX.deltest.sub1") || die;
-    $imaptalk->create("INBOX.deltest.sub2") || die;
-    $imaptalk->subscribe("INBOX.deltest") || die;
-    $imaptalk->subscribe("INBOX.deltest.sub2") || die;
-    my $subdata = $imaptalk->lsub("INBOX.deltest", "*");
-    $self->assert_deep_equals($subdata, [
-          [
-            [
-              '\\HasChildren'
-            ],
-            '.',
-            'INBOX.deltest'
-          ],
-          [
-            [],
-            '.',
-            'INBOX.deltest.sub2'
-          ],
-    ], "LSUB deltest setup mismatch: " . Dumper($subdata));
+  $imaptalk->create("INBOX.deltest")         || die;
+  $imaptalk->create("INBOX.deltest.sub1")    || die;
+  $imaptalk->create("INBOX.deltest.sub2")    || die;
+  $imaptalk->subscribe("INBOX.deltest")      || die;
+  $imaptalk->subscribe("INBOX.deltest.sub2") || die;
+  my $subdata = $imaptalk->lsub("INBOX.deltest", "*");
+  $self->assert_deep_equals(
+    $subdata,
+    [
+      [ ['\\HasChildren'], '.', 'INBOX.deltest' ],
+      [ [],                '.', 'INBOX.deltest.sub2' ],
+    ],
+    "LSUB deltest setup mismatch: " . Dumper($subdata)
+  );
 
-    $imaptalk->delete("INBOX.deltest.sub2");
-    my $onedata = $imaptalk->lsub("INBOX.deltest", "*");
-    $self->assert_deep_equals($onedata, [
-          [
-            [
-              '\\HasChildren'
-            ],
-            '.',
-            'INBOX.deltest'
-          ],
-    ], "LSUB deltest.sub2 after delete mismatch: " . Dumper($onedata));
+  $imaptalk->delete("INBOX.deltest.sub2");
+  my $onedata = $imaptalk->lsub("INBOX.deltest", "*");
+  $self->assert_deep_equals(
+    $onedata,
+    [ [ ['\\HasChildren'], '.', 'INBOX.deltest' ], ],
+    "LSUB deltest.sub2 after delete mismatch: " . Dumper($onedata)
+  );
 }
 
 sub test_lsub_extrachild
-    :NoAltNameSpace
-{
-    my ($self) = @_;
+  : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.Test") || die;
-    $imaptalk->create("INBOX.Test.Sub") || die;
-    $imaptalk->create("INBOX.Test Foo") || die;
-    $imaptalk->create("INBOX.Test Bar") || die;
-    $imaptalk->subscribe("INBOX.Test") || die;
-    $imaptalk->subscribe("INBOX.Test.Sub") || die;
-    $imaptalk->subscribe("INBOX.Test Foo") || die;
-    $imaptalk->delete("INBOX.Test.Sub") || die;
-    my $subdata = $imaptalk->lsub("", "*");
-    $self->assert_deep_equals($subdata, [
-          [
-            [
-              '\\HasChildren'
-            ],
-            '.',
-            'INBOX'
-          ],
-          [
-            [
-              '\\HasChildren'
-            ],
-            '.',
-            'INBOX.Test'
-          ],
-          [
-            [],
-            '.',
-            'INBOX.Test Foo'
-          ],
-          [
-            [],
-            '.',
-            'INBOX.asub'
-          ],
-          [
-            [],
-            '.',
-            'user.other.sub.folder'
-          ],
-    ], "LSUB extrachild mismatch: " . Dumper($subdata));
+  $imaptalk->create("INBOX.Test")        || die;
+  $imaptalk->create("INBOX.Test.Sub")    || die;
+  $imaptalk->create("INBOX.Test Foo")    || die;
+  $imaptalk->create("INBOX.Test Bar")    || die;
+  $imaptalk->subscribe("INBOX.Test")     || die;
+  $imaptalk->subscribe("INBOX.Test.Sub") || die;
+  $imaptalk->subscribe("INBOX.Test Foo") || die;
+  $imaptalk->delete("INBOX.Test.Sub")    || die;
+  my $subdata = $imaptalk->lsub("", "*");
+  $self->assert_deep_equals(
+    $subdata,
+    [
+      [ ['\\HasChildren'], '.', 'INBOX' ],
+      [ ['\\HasChildren'], '.', 'INBOX.Test' ],
+      [ [],                '.', 'INBOX.Test Foo' ],
+      [ [],                '.', 'INBOX.asub' ],
+      [ [],                '.', 'user.other.sub.folder' ],
+    ],
+    "LSUB extrachild mismatch: " . Dumper($subdata)
+  );
 }
 
 1;

@@ -2,14 +2,15 @@
 use Cassandane::Tiny;
 
 sub test_email_get_hasattachment
-    :min_version_3_5 :needs_component_sieve :needs_component_jmap :AltNamespace
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  : min_version_3_5 : needs_component_sieve : needs_component_jmap :
+  AltNamespace {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
 
-    $imap->create("matches") or die;
-    $self->{instance}->install_sieve_script(<<'EOF'
+  $imap->create("matches") or die;
+  $self->{instance}->install_sieve_script(
+    <<'EOF'
 require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
 if
   allof( not string :is "${stop}" "Y",
@@ -23,9 +24,9 @@ if
   fileinto "matches";
 }
 EOF
-    );
+  );
 
-    my $rawMessage = <<'EOF';
+  my $rawMessage = <<'EOF';
 From: from@local
 To: to@local
 Subject: test
@@ -53,24 +54,28 @@ Sent from my supercalifragilisticexpialidocious device
 
 --e523eb44-40ae-463e-9261-2f935700196d--
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
+  $rawMessage =~ s/\r?\n/\r\n/gs;
 
-    my $msg = Cassandane::Message->new();
-    $msg->set_lines(split /\n/, $rawMessage);
-    $self->{instance}->deliver($msg);
+  my $msg = Cassandane::Message->new();
+  $msg->set_lines(split /\n/, $rawMessage);
+  $self->{instance}->deliver($msg);
 
-    my $res = $jmap->CallMethods([
-        ['Email/query', { }, 'R1'],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids'
-            },
-            properties => ['hasAttachment'],
-        }, 'R2'],
-    ]);
+  my $res = $jmap->CallMethods([
+    [ 'Email/query', {}, 'R1' ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => ['hasAttachment'],
+      },
+      'R2'
+    ],
+  ]);
 
-    $self->assert_num_equals(1, $imap->message_count('matches'));
-    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{hasAttachment});
+  $self->assert_num_equals(1, $imap->message_count('matches'));
+  $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{hasAttachment});
 }

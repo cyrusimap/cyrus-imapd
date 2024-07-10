@@ -2,43 +2,55 @@
 use Cassandane::Tiny;
 
 sub test_contact_set_apple_countrycode
-    :min_version_3_5 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_5 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $res = $jmap->CallMethods([
-        ['Contact/set', {
-            create => {
-                contact1 => {
-                    lastName => "Smith",
-                    addresses => [{
-                        type => "work",
-                        label => "xyz",
-                        street => "2 Example Avenue",
-                        locality => "Anytown",
-                        region => "NY",
-                        postcode => "01111",
-                        country => "USA",
-                        countryCode => "us"
-                    }, {
-                        type => "work",
-                        street => "Beispielstrasse 2",
-                        locality => 'IrgendwoStadt',
-                        region => 'IrgendwoLand',
-                        postcode => '00000',
-                        country => "Germany",
-                        countryCode => 'DE',
-                    }],
-                },
-            },
-        }, 'R1'],
-        ['Contact/get', {
-            ids => ['#contact1'],
-            properties => ['addresses'],
-        }, 'R2'],
-    ]);
-    $self->assert_str_equals('us', $res->[1][1]{list}[0]{addresses}[0]{countryCode});
-    $self->assert_str_equals('xyz', $res->[1][1]{list}[0]{addresses}[0]{label});
-    $self->assert_str_equals('de', $res->[1][1]{list}[0]{addresses}[1]{countryCode});
+  my $res = $jmap->CallMethods([
+    [
+      'Contact/set',
+      {
+        create => {
+          contact1 => {
+            lastName  => "Smith",
+            addresses => [
+              {
+                type        => "work",
+                label       => "xyz",
+                street      => "2 Example Avenue",
+                locality    => "Anytown",
+                region      => "NY",
+                postcode    => "01111",
+                country     => "USA",
+                countryCode => "us"
+              },
+              {
+                type        => "work",
+                street      => "Beispielstrasse 2",
+                locality    => 'IrgendwoStadt',
+                region      => 'IrgendwoLand',
+                postcode    => '00000',
+                country     => "Germany",
+                countryCode => 'DE',
+              }
+            ],
+          },
+        },
+      },
+      'R1'
+    ],
+    [
+      'Contact/get',
+      {
+        ids        => ['#contact1'],
+        properties => ['addresses'],
+      },
+      'R2'
+    ],
+  ]);
+  $self->assert_str_equals('us',
+    $res->[1][1]{list}[0]{addresses}[0]{countryCode});
+  $self->assert_str_equals('xyz', $res->[1][1]{list}[0]{addresses}[0]{label});
+  $self->assert_str_equals('de',
+    $res->[1][1]{list}[0]{addresses}[1]{countryCode});
 }

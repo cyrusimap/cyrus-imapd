@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_email_get_bodyvalues_crlf
-    :min_version_3_9 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  : min_version_3_9 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
 
-    my $mimeMsg = <<'EOF';
+  my $mimeMsg = <<'EOF';
 From: <from@local>
 To: to@local
 Bcc: bcc@local
@@ -22,23 +21,27 @@ one
 two
 three
 EOF
-    $mimeMsg =~ s/\r?\n/\r\n/gs;
-    $mimeMsg =~ s/\r\n$//;
-    $imap->append('INBOX', $mimeMsg) || die $@;
+  $mimeMsg =~ s/\r?\n/\r\n/gs;
+  $mimeMsg =~ s/\r\n$//;
+  $imap->append('INBOX', $mimeMsg) || die $@;
 
-    $res = $jmap->CallMethods([
-        ['Email/query', { }, 'R1'],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids'
-            },
-            properties => ['bodyValues'],
-            fetchAllBodyValues => JSON::true,
-        }, 'R2'],
-    ]);
+  $res = $jmap->CallMethods([
+    [ 'Email/query', {}, 'R1' ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties         => ['bodyValues'],
+        fetchAllBodyValues => JSON::true,
+      },
+      'R2'
+    ],
+  ]);
 
-    $self->assert_str_equals("one\ntwo\nthree",
-        $res->[1][1]{list}[0]{bodyValues}{1}{value});
+  $self->assert_str_equals("one\ntwo\nthree",
+    $res->[1][1]{list}[0]{bodyValues}{1}{value});
 }

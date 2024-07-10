@@ -2,27 +2,27 @@
 use Cassandane::Tiny;
 
 sub test_enotify
-    :needs_component_sieve :min_version_3_2
-{
-    my ($self) = @_;
+  : needs_component_sieve : min_version_3_2 {
+  my ($self) = @_;
 
-    $self->{instance}->install_sieve_script(<<'EOF'
+  $self->{instance}->install_sieve_script(
+    <<'EOF'
 require ["enotify"];
 
 notify "https://cyrusimap.org/notifiers/updatecal";
 notify :message "Hello World!" "mailto:foo@example.com";
 EOF
-        );
+  );
 
-    xlog $self, "Deliver a message";
-    my $msg1 = $self->{gen}->generate(subject => "Message 1");
-    $self->{instance}->deliver($msg1);
+  xlog $self, "Deliver a message";
+  my $msg1 = $self->{gen}->generate(subject => "Message 1");
+  $self->{instance}->deliver($msg1);
 
-    my $data = $self->{instance}->getnotify();
-    my ($updatecal) = grep { $_->{METHOD} eq 'updatecal' } @$data;
-    my ($mailto) = grep { $_->{METHOD} eq 'mailto' } @$data;
+  my $data        = $self->{instance}->getnotify();
+  my ($updatecal) = grep { $_->{METHOD} eq 'updatecal' } @$data;
+  my ($mailto)    = grep { $_->{METHOD} eq 'mailto' } @$data;
 
-    $self->assert_not_null($updatecal);
-    $self->assert_not_null($mailto);
-    $self->assert_matches(qr/Hello World!/, $mailto->{MESSAGE});
+  $self->assert_not_null($updatecal);
+  $self->assert_not_null($mailto);
+  $self->assert_matches(qr/Hello World!/, $mailto->{MESSAGE});
 }

@@ -2,71 +2,93 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_protected_move_parent
-    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_3 : needs_component_jmap : NoAltNameSpace {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    xlog "create protected and unprotected roles";
-    my $res = $jmap->CallMethods([
-        ['Mailbox/set', {
-            create => {
-                mboxA => {
-                    name => 'A',
-                    role => 'drafts',
-                },
-                mboxB => {
-                    name => 'B',
-                    role => 'xspecialuse',
-                },
-                mboxC => {
-                    name => 'C',
-                },
-            },
-        }, "R2"],
-        ['Mailbox/get', {
-            properties => ['role', 'name'],
-        }, 'R3'],
-    ]);
-    my $mboxA = $res->[0][1]{created}{mboxA}{id};
-    $self->assert_not_null($mboxA);
-    my $mboxB = $res->[0][1]{created}{mboxB}{id};
-    $self->assert_not_null($mboxB);
-    my $mboxC = $res->[0][1]{created}{mboxC}{id};
-    $self->assert_not_null($mboxC);
-    xlog "move protected and unprotected roles in one method";
-    $res = $jmap->CallMethods([
-        ['Mailbox/set', {
-            update => {
-                $mboxA => {
-                    parentId => $mboxC,
-                },
-                $mboxB => {
-                    parentId => $mboxC,
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxA}{type});
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxB}{type});
+  xlog "create protected and unprotected roles";
+  my $res = $jmap->CallMethods([
+    [
+      'Mailbox/set',
+      {
+        create => {
+          mboxA => {
+            name => 'A',
+            role => 'drafts',
+          },
+          mboxB => {
+            name => 'B',
+            role => 'xspecialuse',
+          },
+          mboxC => {
+            name => 'C',
+          },
+        },
+      },
+      "R2"
+    ],
+    [
+      'Mailbox/get',
+      {
+        properties => [ 'role', 'name' ],
+      },
+      'R3'
+    ],
+  ]);
+  my $mboxA = $res->[0][1]{created}{mboxA}{id};
+  $self->assert_not_null($mboxA);
+  my $mboxB = $res->[0][1]{created}{mboxB}{id};
+  $self->assert_not_null($mboxB);
+  my $mboxC = $res->[0][1]{created}{mboxC}{id};
+  $self->assert_not_null($mboxC);
+  xlog "move protected and unprotected roles in one method";
+  $res = $jmap->CallMethods([
+    [
+      'Mailbox/set',
+      {
+        update => {
+          $mboxA => {
+            parentId => $mboxC,
+          },
+          $mboxB => {
+            parentId => $mboxC,
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert_str_equals('invalidProperties',
+    $res->[0][1]{notUpdated}{$mboxA}{type});
+  $self->assert_str_equals('invalidProperties',
+    $res->[0][1]{notUpdated}{$mboxB}{type});
 
-    xlog "move protected and unprotected roles in separate method";
-    $res = $jmap->CallMethods([
-        ['Mailbox/set', {
-            update => {
-                $mboxA => {
-                    parentId => $mboxC,
-                },
-            },
-        }, 'R1'],
-        ['Mailbox/set', {
-            update => {
-                $mboxB => {
-                    parentId => $mboxC,
-                },
-            },
-        }, 'R2'],
-    ]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxA}{type});
-    $self->assert(exists $res->[1][1]{updated}{$mboxB});
+  xlog "move protected and unprotected roles in separate method";
+  $res = $jmap->CallMethods([
+    [
+      'Mailbox/set',
+      {
+        update => {
+          $mboxA => {
+            parentId => $mboxC,
+          },
+        },
+      },
+      'R1'
+    ],
+    [
+      'Mailbox/set',
+      {
+        update => {
+          $mboxB => {
+            parentId => $mboxC,
+          },
+        },
+      },
+      'R2'
+    ],
+  ]);
+  $self->assert_str_equals('invalidProperties',
+    $res->[0][1]{notUpdated}{$mboxA}{type});
+  $self->assert(exists $res->[1][1]{updated}{$mboxB});
 }

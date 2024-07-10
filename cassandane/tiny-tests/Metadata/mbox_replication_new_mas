@@ -2,52 +2,51 @@
 use Cassandane::Tiny;
 
 sub test_mbox_replication_new_mas
-    :needs_component_replication
-{
-    my ($self) = @_;
+  : needs_component_replication {
+  my ($self) = @_;
 
-    xlog $self, "testing replication of mailbox scope annotations";
-    xlog $self, "case new_mas: new message appears, on master only";
+  xlog $self, "testing replication of mailbox scope annotations";
+  xlog $self, "case new_mas: new message appears, on master only";
 
-    xlog $self, "need a master and replica pair";
-    $self->assert_not_null($self->{replica});
-    my $master_store = $self->{master_store};
-    my $replica_store = $self->{replica_store};
-    my $master_talk = $master_store->get_client();
-    my $replica_talk = $replica_store->get_client();
+  xlog $self, "need a master and replica pair";
+  $self->assert_not_null($self->{replica});
+  my $master_store  = $self->{master_store};
+  my $replica_store = $self->{replica_store};
+  my $master_talk   = $master_store->get_client();
+  my $replica_talk  = $replica_store->get_client();
 
-    my $folder = 'INBOX';
-    my $entry = '/private/comment';
-    my $value1 = "Hello World";
-    my $res;
+  my $folder = 'INBOX';
+  my $entry  = '/private/comment';
+  my $value1 = "Hello World";
+  my $res;
 
-    xlog $self, "store an annotation";
-    $master_talk->setmetadata($folder, $entry, $value1);
-    $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
+  xlog $self, "store an annotation";
+  $master_talk->setmetadata($folder, $entry, $value1);
+  $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
 
-    xlog $self, "Before replication, annotation is present on the master";
-    $res = $master_talk->getmetadata($folder, $entry);
-    $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
+  xlog $self, "Before replication, annotation is present on the master";
+  $res = $master_talk->getmetadata($folder, $entry);
+  $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
+  $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
 
-    xlog $self, "Before replication, annotation is missing from the replica";
-    $res = $replica_talk->getmetadata($folder, $entry);
-    $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => undef } }, $res);
+  xlog $self, "Before replication, annotation is missing from the replica";
+  $res = $replica_talk->getmetadata($folder, $entry);
+  $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
+  $self->assert_deep_equals({ $folder => { $entry => undef } }, $res);
 
-    xlog $self, "run replication";
-    $self->run_replication();
-    $self->check_replication('cassandane');
-    $master_talk = $master_store->get_client();
-    $replica_talk = $replica_store->get_client();
+  xlog $self, "run replication";
+  $self->run_replication();
+  $self->check_replication('cassandane');
+  $master_talk  = $master_store->get_client();
+  $replica_talk = $replica_store->get_client();
 
-    xlog $self, "After replication, annotation is still present on the master";
-    $res = $master_talk->getmetadata($folder, $entry);
-    $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
+  xlog $self, "After replication, annotation is still present on the master";
+  $res = $master_talk->getmetadata($folder, $entry);
+  $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
+  $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
 
-    xlog $self, "After replication, annotation is now present on the replica";
-    $res = $replica_talk->getmetadata($folder, $entry);
-    $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
+  xlog $self, "After replication, annotation is now present on the replica";
+  $res = $replica_talk->getmetadata($folder, $entry);
+  $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
+  $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
 }

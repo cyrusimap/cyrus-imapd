@@ -2,17 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_outlook_compatible_xlist_empty_mailbox
-    :UnixHierarchySep
-{
-    my ($self) = @_;
+  : UnixHierarchySep {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    my $data = $imaptalk->xlist("", "");
+  my $data = $imaptalk->xlist("", "");
 
-    $self->assert(ref $data, "expected list response, got scalar: $data");
+  $self->assert(ref $data, "expected list response, got scalar: $data");
 
-    $self->assert_mailbox_structure($data, '/', {
-        '' => [ '\\Noselect' ],
-    });
+  $self->assert_mailbox_structure(
+    $data, '/',
+    {
+      '' => ['\\Noselect'],
+    }
+  );
 }

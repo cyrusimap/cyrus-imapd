@@ -2,19 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_get_control_char
-    :min_version_3_9 :needs_component_httpd :needs_ical_ctrl :MagicPlus
-{
-    my ($self) = @_;
+  : min_version_3_9 : needs_component_httpd : needs_ical_ctrl : MagicPlus {
+  my ($self) = @_;
 
-    my $caldav = $self->{caldav};
-    my $plusstore = $self->{instance}->get_service('imap'
-        )->create_store(username => 'cassandane+dav');
-    my $imap = $plusstore->get_client();
+  my $caldav    = $self->{caldav};
+  my $plusstore = $self->{instance}->get_service(
+    'imap'
+  )->create_store(username => 'cassandane+dav');
+  my $imap = $plusstore->get_client();
 
-    # Assert that CONTROL chars are omitted when reading
-    # iCalendar data from disk.
+  # Assert that CONTROL chars are omitted when reading
+  # iCalendar data from disk.
 
-    my $mimeMsg = <<EOF;
+  my $mimeMsg = <<EOF;
 User-Agent: Net-DAVTalk/0.01
 From: <cassandane\@local>
 Subject: test
@@ -44,9 +44,10 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $mimeMsg =~ s/\r?\n/\r\n/gs;
-    $imap->append('#calendars.Default', $mimeMsg) || die $@;
+  $mimeMsg =~ s/\r?\n/\r\n/gs;
+  $imap->append('#calendars.Default', $mimeMsg) || die $@;
 
-    my $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
-    $self->assert_matches(qr/DESCRIPTION:ctrl/, $res->{content});
+  my $res = $caldav->Request('GET',
+    '/dav/calendars/user/cassandane/Default/test.ics');
+  $self->assert_matches(qr/DESCRIPTION:ctrl/, $res->{content});
 }

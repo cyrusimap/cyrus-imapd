@@ -7,80 +7,76 @@ use Cassandane::Tiny;
 # Note: this needs the Mail::IMAPTalk install to have commit
 # "Alert reponse is remainder of line, put that in the response code"
 #
-sub test_motd
-{
-    my ($self) = @_;
+sub test_motd {
+  my ($self) = @_;
 
-    xlog $self, "testing /shared/motd";
+  xlog $self, "testing /shared/motd";
 
-    my $imaptalk = $self->{store}->get_client();
-    my $res;
-    my $entry = '/shared/motd';
-    my $value1 = "Hello World this is a value";
+  my $imaptalk = $self->{store}->get_client();
+  my $res;
+  my $entry  = '/shared/motd';
+  my $value1 = "Hello World this is a value";
 
-    xlog $self, "No ALERT was received when we connected";
-    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
-    $self->assert_null($imaptalk->get_response_code('alert'));
+  xlog $self, "No ALERT was received when we connected";
+  $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+  $self->assert_null($imaptalk->get_response_code('alert'));
 
-    xlog $self, "initial value is NIL";
-    $res = $imaptalk->getmetadata("", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $self->assert_deep_equals({
-        "" => { $entry => undef }
-    }, $res);
+  xlog $self, "initial value is NIL";
+  $res = $imaptalk->getmetadata("", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $self->assert_deep_equals(
+    {
+      "" => { $entry => undef }
+    },
+    $res
+  );
 
-    xlog $self, "cannot set the value as ordinary user";
-    $imaptalk->setmetadata("", $entry, $value1);
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
+  xlog $self, "cannot set the value as ordinary user";
+  $imaptalk->setmetadata("", $entry, $value1);
+  $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+  $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
 
-    xlog $self, "can set the value as admin";
-    $imaptalk = $self->{adminstore}->get_client();
-    $imaptalk->setmetadata("", $entry, $value1);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  xlog $self, "can set the value as admin";
+  $imaptalk = $self->{adminstore}->get_client();
+  $imaptalk->setmetadata("", $entry, $value1);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog $self, "can get the set value back";
-    $res = $imaptalk->getmetadata("", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    my $expected = {
-            "" => { $entry => $value1 }
-    };
-    $self->assert_deep_equals($expected, $res);
+  xlog $self, "can get the set value back";
+  $res = $imaptalk->getmetadata("", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  my $expected = { "" => { $entry => $value1 } };
+  $self->assert_deep_equals($expected, $res);
 
-    xlog $self, "a new connection will get an ALERT with the motd value";
-    $self->{adminstore}->disconnect();
-    $imaptalk = $self->{adminstore}->get_client();
-    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
-    my $alert = $imaptalk->get_response_code('alert');
-    $self->assert_not_null($alert);
-    $self->assert_str_equals($value1, $alert);
+  xlog $self, "a new connection will get an ALERT with the motd value";
+  $self->{adminstore}->disconnect();
+  $imaptalk = $self->{adminstore}->get_client();
+  $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+  my $alert = $imaptalk->get_response_code('alert');
+  $self->assert_not_null($alert);
+  $self->assert_str_equals($value1, $alert);
 
-    xlog $self, "the annot gives the same value in the new connection";
-    $res = $imaptalk->getmetadata("", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $expected = {
-            "" => { $entry => $value1 }
-    };
-    $self->assert_deep_equals($expected, $res);
+  xlog $self, "the annot gives the same value in the new connection";
+  $res = $imaptalk->getmetadata("", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $expected = { "" => { $entry => $value1 } };
+  $self->assert_deep_equals($expected, $res);
 
-    xlog $self, "can delete value";
-    $imaptalk->setmetadata("", $entry, undef);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  xlog $self, "can delete value";
+  $imaptalk->setmetadata("", $entry, undef);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    $res = $imaptalk->getmetadata("", $entry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_not_null($res);
-    $expected = {
-            "" => { $entry => undef }
-    };
-    $self->assert_deep_equals($expected, $res);
+  $res = $imaptalk->getmetadata("", $entry);
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_not_null($res);
+  $expected = { "" => { $entry => undef } };
+  $self->assert_deep_equals($expected, $res);
 
-    xlog $self, "a new connection no longer gets an ALERT";
-    $self->{adminstore}->disconnect();
-    $imaptalk = $self->{adminstore}->get_client();
-    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
-    $self->assert_null($imaptalk->get_response_code('alert'));
+  xlog $self, "a new connection no longer gets an ALERT";
+  $self->{adminstore}->disconnect();
+  $imaptalk = $self->{adminstore}->get_client();
+  $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+  $self->assert_null($imaptalk->get_response_code('alert'));
 }

@@ -3,69 +3,67 @@ use Cassandane::Tiny;
 
 # Test races between quota -f and updates to mailboxes
 sub test_quota_f_vs_update
-    :NoAltNameSpace
-{
-    my ($self) = @_;
+  : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $basefolder = "user.cassandane";
-    my @folders = qw(a b c d e);
-    my $msg;
-    my $expected;
+  my $basefolder = "user.cassandane";
+  my @folders    = qw(a b c d e);
+  my $msg;
+  my $expected;
 
-    xlog $self, "Set up a large but limited quota";
-    $self->_set_quotaroot($basefolder);
-    $self->_set_limits(storage => 1000000);
-    $self->_check_usages(storage => 0);
-    my $talk = $self->{store}->get_client();
+  xlog $self, "Set up a large but limited quota";
+  $self->_set_quotaroot($basefolder);
+  $self->_set_limits(storage => 1000000);
+  $self->_check_usages(storage => 0);
+  my $talk = $self->{store}->get_client();
 
-    xlog $self, "Create some sub folders";
-    for my $f (@folders)
-    {
-        $talk->create("$basefolder.$f") || die "Failed $@";
-        $self->{store}->set_folder("$basefolder.$f");
-        $msg = $self->make_message("Cassandane $f",
-                                      extra_lines => 2000+rand(5000));
-        $expected += length($msg->as_string());
-    }
-    # unselect so quota -f can lock the mailboxes
-    $talk->unselect();
-
-    xlog $self, "Check that we have some quota usage";
-    $self->_check_usages(storage => int($expected/1024));
-
-    xlog $self, "Start a quota -f scan";
-    $self->{instance}->quota_Z_go($basefolder);
-    $self->{instance}->quota_Z_go("$basefolder.a");
-    $self->{instance}->quota_Z_go("$basefolder.b");
-    my (@bits) = $self->{instance}->run_command({ cyrus => 1, background => 1 },
-        'quota', '-Z', '-f', $basefolder);
-
-    # waiting for quota -f to ensure that
-    # a) the -Z mechanism is working and
-    # b) quota -f has at least initialised and started scanning.
-    $self->{instance}->quota_Z_wait("$basefolder.b");
-
-    # quota -f is now waiting to be allowed to proceed to "c"
-
-    xlog $self, "Mailbox update behind the scan";
-    $self->{store}->set_folder("$basefolder.b");
-    $msg = $self->make_message("Cassandane b UPDATE",
-                                  extra_lines => 2000+rand(3000));
+  xlog $self, "Create some sub folders";
+  for my $f (@folders) {
+    $talk->create("$basefolder.$f") || die "Failed $@";
+    $self->{store}->set_folder("$basefolder.$f");
+    $msg
+      = $self->make_message("Cassandane $f", extra_lines => 2000 + rand(5000));
     $expected += length($msg->as_string());
+  }
+  # unselect so quota -f can lock the mailboxes
+  $talk->unselect();
 
-    xlog $self, "Mailbox update in front of the scan";
-    $self->{store}->set_folder("$basefolder.d");
-    $msg = $self->make_message("Cassandane d UPDATE",
-                                  extra_lines => 2000+rand(3000));
-    $expected += length($msg->as_string());
+  xlog $self, "Check that we have some quota usage";
+  $self->_check_usages(storage => int($expected / 1024));
 
-    xlog $self, "Let quota -f continue and finish";
-    $self->{instance}->quota_Z_go("$basefolder.c");
-    $self->{instance}->quota_Z_go("$basefolder.d");
-    $self->{instance}->quota_Z_go("$basefolder.e");
-    $self->{instance}->quota_Z_wait("$basefolder.e");
-    $self->{instance}->reap_command(@bits);
+  xlog $self, "Start a quota -f scan";
+  $self->{instance}->quota_Z_go($basefolder);
+  $self->{instance}->quota_Z_go("$basefolder.a");
+  $self->{instance}->quota_Z_go("$basefolder.b");
+  my (@bits) = $self->{instance}->run_command({ cyrus => 1, background => 1 },
+    'quota', '-Z', '-f', $basefolder);
 
-    xlog $self, "Check that we have the correct quota usage";
-    $self->_check_usages(storage => int($expected/1024));
+  # waiting for quota -f to ensure that
+  # a) the -Z mechanism is working and
+  # b) quota -f has at least initialised and started scanning.
+  $self->{instance}->quota_Z_wait("$basefolder.b");
+
+  # quota -f is now waiting to be allowed to proceed to "c"
+
+  xlog $self, "Mailbox update behind the scan";
+  $self->{store}->set_folder("$basefolder.b");
+  $msg = $self->make_message("Cassandane b UPDATE",
+    extra_lines => 2000 + rand(3000));
+  $expected += length($msg->as_string());
+
+  xlog $self, "Mailbox update in front of the scan";
+  $self->{store}->set_folder("$basefolder.d");
+  $msg = $self->make_message("Cassandane d UPDATE",
+    extra_lines => 2000 + rand(3000));
+  $expected += length($msg->as_string());
+
+  xlog $self, "Let quota -f continue and finish";
+  $self->{instance}->quota_Z_go("$basefolder.c");
+  $self->{instance}->quota_Z_go("$basefolder.d");
+  $self->{instance}->quota_Z_go("$basefolder.e");
+  $self->{instance}->quota_Z_wait("$basefolder.e");
+  $self->{instance}->reap_command(@bits);
+
+  xlog $self, "Check that we have the correct quota usage";
+  $self->_check_usages(storage => int($expected / 1024));
 }

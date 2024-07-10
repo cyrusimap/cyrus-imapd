@@ -2,91 +2,90 @@
 use Cassandane::Tiny;
 
 sub test_using_annotstorage_msg_copy_deimm
-    :ImmediateDelete
-{
-    my ($self) = @_;
+  : ImmediateDelete {
+  my ($self) = @_;
 
-    xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
-    xlog $self, "and original folder is deleted, delete_mode=immediate version";
-    xlog $self, "(BZ3527)";
+  xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+  xlog $self, "and original folder is deleted, delete_mode=immediate version";
+  xlog $self, "(BZ3527)";
 
-    my $entry = '/comment';
-    my $attrib = 'value.priv';
-    my $from_folder = 'INBOX.from';
-    my $to_folder = 'INBOX.to';
+  my $entry       = '/comment';
+  my $attrib      = 'value.priv';
+  my $from_folder = 'INBOX.from';
+  my $to_folder   = 'INBOX.to';
 
-    xlog $self, "Check the delete mode is \"immediate\"";
-    my $delete_mode = $self->{instance}->{config}->get('delete_mode');
-    $self->assert_str_equals('immediate', $delete_mode);
+  xlog $self, "Check the delete mode is \"immediate\"";
+  my $delete_mode = $self->{instance}->{config}->get('delete_mode');
+  $self->assert_str_equals('immediate', $delete_mode);
 
-    $self->_set_quotaroot('user.cassandane');
-    xlog $self, "set ourselves a basic limit";
-    $self->_set_limits($self->res_annot_storage => 100000);
-    $self->_check_usages($self->res_annot_storage => 0);
-    my $talk = $self->{store}->get_client();
+  $self->_set_quotaroot('user.cassandane');
+  xlog $self, "set ourselves a basic limit";
+  $self->_set_limits($self->res_annot_storage => 100000);
+  $self->_check_usages($self->res_annot_storage => 0);
+  my $talk = $self->{store}->get_client();
 
-    my $store = $self->{store};
-    $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+  my $store = $self->{store};
+  $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog $self, "Create subfolders to copy from and to";
-    $talk = $store->get_client();
-    $talk->create($from_folder)
-        or die "Cannot create mailbox $from_folder: $@";
-    $talk->create($to_folder)
-        or die "Cannot create mailbox $to_folder: $@";
+  xlog $self, "Create subfolders to copy from and to";
+  $talk = $store->get_client();
+  $talk->create($from_folder)
+    or die "Cannot create mailbox $from_folder: $@";
+  $talk->create($to_folder)
+    or die "Cannot create mailbox $to_folder: $@";
 
-    $store->set_folder($from_folder);
+  $store->set_folder($from_folder);
 
-    xlog $self, "Append some messages and store annotations";
-    my %exp;
-    my $expected = 0;
-    my $uid = 1;
-    for (1..20)
-    {
-        my $data = $self->make_random_data(10);
-        my $msg = $self->make_message("Message $uid");
-        $msg->set_attribute('uid', $uid);
-        $msg->set_annotation($entry, $attrib, $data);
-        $exp{$uid} = $msg;
-        $talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
-        $expected += length($data);
-        $uid++;
-    }
+  xlog $self, "Append some messages and store annotations";
+  my %exp;
+  my $expected = 0;
+  my $uid      = 1;
+  for (1 .. 20) {
+    my $data = $self->make_random_data(10);
+    my $msg  = $self->make_message("Message $uid");
+    $msg->set_attribute('uid', $uid);
+    $msg->set_annotation($entry, $attrib, $data);
+    $exp{$uid} = $msg;
+    $talk->store('' . $uid, 'annotation',
+      [ $entry, [ $attrib, { Quote => $data } ] ]);
+    $expected += length($data);
+    $uid++;
+  }
 
-    xlog $self, "Check the annotations are there";
-    $self->check_messages(\%exp);
-    xlog $self, "Check the quota usage is correct";
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+  xlog $self, "Check the annotations are there";
+  $self->check_messages(\%exp);
+  xlog $self, "Check the quota usage is correct";
+  $self->_check_usages($self->res_annot_storage => int($expected / 1024));
 
-    xlog $self, "COPY the messages";
-    $talk = $store->get_client();
-    $talk->copy('1:*', $to_folder);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "COPY the messages";
+  $talk = $store->get_client();
+  $talk->copy('1:*', $to_folder);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog $self, "Messages are now in the destination folder";
-    $store->set_folder($to_folder);
-    $store->_select();
-    $self->check_messages(\%exp);
+  xlog $self, "Messages are now in the destination folder";
+  $store->set_folder($to_folder);
+  $store->_select();
+  $self->check_messages(\%exp);
 
-    xlog $self, "Check the quota usage is now doubled";
-    $self->_check_usages($self->res_annot_storage => int(2*$expected/1024));
+  xlog $self, "Check the quota usage is now doubled";
+  $self->_check_usages($self->res_annot_storage => int(2 * $expected / 1024));
 
-    xlog $self, "Messages are still in the origin folder";
-    $store->set_folder($from_folder);
-    $store->_select();
-    $self->check_messages(\%exp);
+  xlog $self, "Messages are still in the origin folder";
+  $store->set_folder($from_folder);
+  $store->_select();
+  $self->check_messages(\%exp);
 
-    xlog $self, "Delete the origin folder";
-    $talk = $store->get_client();
-    $talk->unselect();
-    $talk->delete($from_folder)
-        or die "Cannot delete folder $from_folder: $@";
+  xlog $self, "Delete the origin folder";
+  $talk = $store->get_client();
+  $talk->unselect();
+  $talk->delete($from_folder)
+    or die "Cannot delete folder $from_folder: $@";
 
-    xlog $self, "Messages are still in the destination folder";
-    $store->set_folder($to_folder);
-    $store->_select();
-    $self->check_messages(\%exp);
+  xlog $self, "Messages are still in the destination folder";
+  $store->set_folder($to_folder);
+  $store->_select();
+  $self->check_messages(\%exp);
 
-    xlog $self, "Check the quota usage is back to single";
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+  xlog $self, "Check the quota usage is back to single";
+  $self->_check_usages($self->res_annot_storage => int($expected / 1024));
 }

@@ -2,52 +2,53 @@
 use Cassandane::Tiny;
 
 sub test_skipdiacrit
-    :min_version_3_0 :needs_search_xapian
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_search_xapian {
+  my ($self) = @_;
 
-    # Set up test messages
-    my $body = "Die Trauben gären.";
-    xlog $self, "Generate and index test messages.";
-    my %params = (
-        mime_charset => "utf-8",
-        body => $body
-    );
-    $self->make_message("1", %params) || die;
-    $body = "Gemüse schonend garen.";
-    %params = (
-        mime_charset => "utf-8",
-        body => $body
-    );
-    $self->make_message("2", %params) || die;
+  # Set up test messages
+  my $body = "Die Trauben gären.";
+  xlog $self, "Generate and index test messages.";
+  my %params = (
+    mime_charset => "utf-8",
+    body         => $body
+  );
+  $self->make_message("1", %params) || die;
+  $body   = "Gemüse schonend garen.";
+  %params = (
+    mime_charset => "utf-8",
+    body         => $body
+  );
+  $self->make_message("2", %params) || die;
 
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    # Connect to IMAP
-    xlog $self, "Select INBOX";
-    my $r = $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
-    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+  # Connect to IMAP
+  xlog $self, "Select INBOX";
+  my $r           = $talk->select("INBOX") || die;
+  my $uidvalidity = $talk->get_response_code('uidvalidity');
+  my $uids        = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog $self, 'Search for "garen"';
-    $r = $talk->search(
-        "charset", "utf-8", "fuzzy", ["text", { Quote => "garen" }],
+  xlog $self, 'Search for "garen"';
+  $r
+    = $talk->search("charset", "utf-8", "fuzzy",
+    [ "text", { Quote => "garen" } ],
     ) || die;
-    if ($self->{skipdiacrit}) {
-        $self->assert_num_equals(2, scalar @$r);
-    } else {
-        $self->assert_num_equals(1, scalar @$r);
-    }
+  if ($self->{skipdiacrit}) {
+    $self->assert_num_equals(2, scalar @$r);
+  } else {
+    $self->assert_num_equals(1, scalar @$r);
+  }
 
-    xlog $self, 'Search for "gären"';
-    $r = $talk->search(
-        "charset", "utf-8", "fuzzy", ["text", { Quote => "gären" }],
+  xlog $self, 'Search for "gären"';
+  $r
+    = $talk->search("charset", "utf-8", "fuzzy",
+    [ "text", { Quote => "gären" } ],
     ) || die;
-    if ($self->{skipdiacrit}) {
-        $self->assert_num_equals(2, scalar @$r);
-    } else {
-        $self->assert_num_equals(1, scalar @$r);
-    }
+  if ($self->{skipdiacrit}) {
+    $self->assert_num_equals(2, scalar @$r);
+  } else {
+    $self->assert_num_equals(1, scalar @$r);
+  }
 }

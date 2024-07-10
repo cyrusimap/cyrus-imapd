@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_sieve_replication_stale
-    :needs_component_sieve :needs_component_replication
-{
-    my ($self) = @_;
+  : needs_component_sieve : needs_component_replication {
+  my ($self) = @_;
 
-    my $user = 'cassandane';
-    my $scriptname = 'test1';
-    my $scriptoldcontent = <<'EOF';
+  my $user             = 'cassandane';
+  my $scriptname       = 'test1';
+  my $scriptoldcontent = <<'EOF';
 require ["reject","fileinto"];
 if address :is :all "From" "autoreject@example.org"
 {
@@ -16,7 +15,7 @@ if address :is :all "From" "autoreject@example.org"
 }
 EOF
 
-    my $scriptnewcontent = <<'EOF';
+  my $scriptnewcontent = <<'EOF';
 require ["reject","fileinto"];
 if address :is :all "From" "autoreject@example.org"
 {
@@ -24,45 +23,47 @@ if address :is :all "From" "autoreject@example.org"
 }
 EOF
 
-    # first, verify that script does not exist on master or replica
-    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname, 0);
-    $self->assert_sieve_noactive($self->{instance}, $user);
+  # first, verify that script does not exist on master or replica
+  $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname, 0);
+  $self->assert_sieve_noactive($self->{instance}, $user);
 
-    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname, 0);
-    $self->assert_sieve_noactive($self->{replica}, $user);
+  $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname, 0);
+  $self->assert_sieve_noactive($self->{replica}, $user);
 
-    # then, install "old" script on replica...
-    $self->{replica}->install_sieve_script($scriptoldcontent, name=>$scriptname);
+  # then, install "old" script on replica...
+  $self->{replica}
+    ->install_sieve_script($scriptoldcontent, name => $scriptname);
 
-    # ... and "new" script on master, a little later
-    sleep 2;
-    $self->{instance}->install_sieve_script($scriptnewcontent, name=>$scriptname);
+  # ... and "new" script on master, a little later
+  sleep 2;
+  $self->{instance}
+    ->install_sieve_script($scriptnewcontent, name => $scriptname);
 
-    # then, verify that different sieve script content exists at each end
-    $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 0);
-    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
-    $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
-                                $scriptnewcontent);
+  # then, verify that different sieve script content exists at each end
+  $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 0);
+  $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+  $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
+    $scriptnewcontent);
 
-    $self->assert_sieve_exists($self->{replica}, $user, $scriptname, 0);
-    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
-    $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
-                                $scriptoldcontent);
+  $self->assert_sieve_exists($self->{replica}, $user, $scriptname, 0);
+  $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+  $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
+    $scriptoldcontent);
 
-    # then, run replication,
-    # the one that exists on replica is different to and older than the one
-    # on master, so it will be replaced with the one from master
-    $self->run_replication();
-    $self->check_replication('cassandane');
+  # then, run replication,
+  # the one that exists on replica is different to and older than the one
+  # on master, so it will be replaced with the one from master
+  $self->run_replication();
+  $self->check_replication('cassandane');
 
-    # then, verify that scripts are in expected state
-    $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 1);
-    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
-    $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
-                                $scriptnewcontent);
+  # then, verify that scripts are in expected state
+  $self->assert_sieve_exists($self->{instance}, $user, $scriptname, 1);
+  $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+  $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
+    $scriptnewcontent);
 
-    $self->assert_sieve_exists($self->{replica}, $user, $scriptname, 1);
-    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
-    $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
-                                $scriptnewcontent);
+  $self->assert_sieve_exists($self->{replica}, $user, $scriptname, 1);
+  $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+  $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
+    $scriptnewcontent);
 }

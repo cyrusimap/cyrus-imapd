@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_email_get_encoding_utf8
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_1 : needs_component_sieve : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    # Some clients erroneously declare encoding to be UTF-8.
-    my $email = <<'EOF';
+  # Some clients erroneously declare encoding to be UTF-8.
+  my $email = <<'EOF';
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
 Subject: test email
@@ -19,30 +18,41 @@ Content-Transfer-Encoding: UTF-8
 
 This is a test.
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
-    my $data = $jmap->Upload($email, "message/rfc822");
-    my $blobid = $data->{blobId};
-    my $inboxid = $self->getinbox()->{id};
+  $email =~ s/\r?\n/\r\n/gs;
+  my $data    = $jmap->Upload($email, "message/rfc822");
+  my $blobid  = $data->{blobId};
+  my $inboxid = $self->getinbox()->{id};
 
-    xlog $self, "import and get email from blob $blobid";
-    my $res = $jmap->CallMethods([['Email/import', {
+  xlog $self, "import and get email from blob $blobid";
+  my $res = $jmap->CallMethods([
+    [
+      'Email/import',
+      {
         emails => {
-            "1" => {
-                blobId => $blobid,
-                mailboxIds => {$inboxid =>  JSON::true},
-            },
+          "1" => {
+            blobId     => $blobid,
+            mailboxIds => { $inboxid => JSON::true },
+          },
         },
-    }, "R1"], ["Email/get", {
-        ids => ["#1"],
-        properties => ['bodyStructure', 'bodyValues'],
+      },
+      "R1"
+    ],
+    [
+      "Email/get",
+      {
+        ids                => ["#1"],
+        properties         => [ 'bodyStructure', 'bodyValues' ],
         fetchAllBodyValues => JSON::true,
-    }, "R2" ]]);
+      },
+      "R2"
+    ]
+  ]);
 
-    $self->assert_str_equals("Email/import", $res->[0][0]);
-    $self->assert_str_equals("Email/get", $res->[1][0]);
+  $self->assert_str_equals("Email/import", $res->[0][0]);
+  $self->assert_str_equals("Email/get",    $res->[1][0]);
 
-    my $msg = $res->[1][1]{list}[0];
-    my $partId = $msg->{bodyStructure}{partId};
-    my $bodyValue = $msg->{bodyValues}{$partId};
-    $self->assert_str_equals("This is a test.\n", $bodyValue->{value});
+  my $msg       = $res->[1][1]{list}[0];
+  my $partId    = $msg->{bodyStructure}{partId};
+  my $bodyValue = $msg->{bodyValues}{$partId};
+  $self->assert_str_equals("This is a test.\n", $bodyValue->{value});
 }

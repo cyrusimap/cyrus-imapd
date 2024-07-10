@@ -2,12 +2,11 @@
 use Cassandane::Tiny;
 
 sub test_carddavcreate
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CardDAV = $self->{carddav};
+  my $CardDAV = $self->{carddav};
 
-    my $Id = $CardDAV->NewAddressBook('foo');
-    $self->assert_not_null($Id);
+  my $Id = $CardDAV->NewAddressBook('foo');
+  $self->assert_not_null($Id);
 }

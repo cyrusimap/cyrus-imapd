@@ -2,12 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_discard_match_on_body_text
-    :needs_component_sieve
-{
-    my ($self) = @_;
+  : needs_component_sieve {
+  my ($self) = @_;
 
-    xlog $self, "Install the sieve script";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install the sieve script";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body"];
 
 if body :text :contains "One-Click Additions" {
@@ -15,9 +15,9 @@ if body :text :contains "One-Click Additions" {
   stop;
 }
 EOF
-    );
+  );
 
-    my $raw = << 'EOF';
+  my $raw = << 'EOF';
 Date: Wed, 16 May 2018 22:06:18 -0700
 From: Some Person <some@person.com>
 To: foo/bar <foo@bar.com>
@@ -132,12 +132,12 @@ END:VEVENT
 END:VCALENDAR
 ------=_Part_91374_1856076643.1527870431792--
 EOF
-    xlog $self, "Deliver a message";
-    my $msg1 = Cassandane::Message->new(raw => $raw);
-    $self->{instance}->deliver($msg1);
+  xlog $self, "Deliver a message";
+  my $msg1 = Cassandane::Message->new(raw => $raw);
+  $self->{instance}->deliver($msg1);
 
-    # should fail to deliver and NOT appear in INBOX
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->select("INBOX");
-    $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
+  # should fail to deliver and NOT appear in INBOX
+  my $imaptalk = $self->{store}->get_client();
+  $imaptalk->select("INBOX");
+  $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
 }

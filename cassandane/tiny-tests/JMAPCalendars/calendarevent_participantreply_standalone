@@ -2,149 +2,164 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_participantreply_standalone
-    :min_version_3_7 :needs_component_jmap :NoStartInstances
-{
-    my ($self) = @_;
+  : min_version_3_7 : needs_component_jmap : NoStartInstances {
+  my ($self) = @_;
 
-    my $instance = $self->{instance};
-    $instance->{config}->set(defaultdomain => 'internal');
-    $instance->{config}->set(calendar_user_address_set => 'internal');
+  my $instance = $self->{instance};
+  $instance->{config}->set(defaultdomain             => 'internal');
+  $instance->{config}->set(calendar_user_address_set => 'internal');
 
-    $self->_start_instances();
-    $self->_setup_http_service_objects();
+  $self->_start_instances();
+  $self->_setup_http_service_objects();
 
-    my $jmap = $self->{jmap};
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'urn:ietf:params:jmap:principals',
-        'urn:ietf:params:jmap:calendars:preferences',
-        'https://cyrusimap.org/ns/jmap/calendars',
-        'https://cyrusimap.org/ns/jmap/debug',
-    ]);
+  my $jmap = $self->{jmap};
+  $jmap->DefaultUsing([
+    'urn:ietf:params:jmap:core',
+    'urn:ietf:params:jmap:calendars',
+    'urn:ietf:params:jmap:principals',
+    'urn:ietf:params:jmap:calendars:preferences',
+    'https://cyrusimap.org/ns/jmap/calendars',
+    'https://cyrusimap.org/ns/jmap/debug',
+  ]);
 
-    my $participants = {
-        "org" => {
-            "name" => "Cassandane",
-            roles => {
-                'owner' => JSON::true,
+  my $participants = {
+    "org" => {
+      "name" => "Cassandane",
+      roles  => {
+        'owner' => JSON::true,
+      },
+      sendTo => {
+        imip => 'cassandane@example.com',
+      },
+    },
+    "att" => {
+      "name" => "Bugs Bunny",
+      roles  => {
+        'attendee' => JSON::true,
+      },
+      sendTo => {
+        imip => 'bugs@looneytunes.com',
+      },
+    },
+  };
+
+  # clean notification cache
+  $self->{instance}->getnotify();
+
+  xlog "Create scheduled standalone instance";
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        create => {
+          instance1 => {
+            calendarIds => {
+              'Default' => JSON::true,
             },
-            sendTo => {
-                imip => 'cassandane@example.com',
-            },
+            '@type'              => 'Event',
+            uid                  => 'event1uid',
+            title                => 'instance1',
+            start                => '2021-01-01T11:11:11',
+            timeZone             => 'Europe/Berlin',
+            duration             => 'PT1H',
+            recurrenceId         => '2021-01-01T01:01:01',
+            recurrenceIdTimeZone => 'Europe/London',
+            participants         => $participants,
+          },
         },
-        "att" => {
-            "name" => "Bugs Bunny",
-            roles => {
-                'attendee' => JSON::true,
-            },
-            sendTo => {
-                imip => 'bugs@looneytunes.com',
-            },
-        },
-    };
+      },
+      'R1'
+    ],
+  ]);
+  my $id = $res->[0][1]{created}{instance1}{id};
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  xlog $self, "verify invitation sent from organizer to attendees";
+  my $data  = $self->{instance}->getnotify();
+  my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+  my $imip  = $imips[0];
+  $self->assert_not_null($imip);
 
-    xlog "Create scheduled standalone instance";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                instance1 => {
-                    calendarIds => {
-                        'Default' => JSON::true,
-                    },
-                    '@type' => 'Event',
-                    uid => 'event1uid',
-                    title => 'instance1',
-                    start => '2021-01-01T11:11:11',
-                    timeZone => 'Europe/Berlin',
-                    duration => 'PT1H',
-                    recurrenceId => '2021-01-01T01:01:01',
-                    recurrenceIdTimeZone => 'Europe/London',
-                    participants => $participants,
-                },
-            },
-        }, 'R1'],
-    ]);
-    my $id = $res->[0][1]{created}{instance1}{id};
+  my $payload = decode_json($imip->{MESSAGE});
+  my $ical    = $payload->{ical};
 
-    xlog $self, "verify invitation sent from organizer to attendees";
-    my $data = $self->{instance}->getnotify();
-    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
-    my $imip = $imips[0];
-    $self->assert_not_null($imip);
+  $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+  $self->assert_str_equals("bugs\@looneytunes.com",   $payload->{recipient});
+  $self->assert($ical =~ "METHOD:REQUEST");
+  $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
 
-    my $payload = decode_json($imip->{MESSAGE});
-    my $ical = $payload->{ical};
+  xlog $self, "set attendee status";
+  $res = $jmap->CallMethods([ [
+    'CalendarEvent/participantReply',
+    {
+      eventId          => $id,
+      participantEmail => "bugs\@looneytunes.com",
+      updates          => {
+        participationStatus => "accepted"
+      }
+    },
+    "R2"
+  ] ]);
 
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "PARTSTAT=NEEDS-ACTION");
+  xlog $self, "verify reply sent from attendee to organizer";
+  $data  = $self->{instance}->getnotify();
+  @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+  $imip  = $imips[0];
+  $self->assert_not_null($imip);
 
-    xlog $self, "set attendee status";
-    $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
-        eventId => $id,
-        participantEmail => "bugs\@looneytunes.com",
-        updates => {
-            participationStatus => "accepted"
+  $payload = decode_json($imip->{MESSAGE});
+  $ical    = $payload->{ical};
+
+  $self->assert_str_equals("bugs\@looneytunes.com",   $payload->{sender});
+  $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
+  $self->assert($ical =~ "METHOD:REPLY");
+  $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+
+  xlog $self, "verify updated request sent from organizer to attendee";
+  $imip = $imips[1];
+  $self->assert_not_null($imip);
+
+  $payload = decode_json($imip->{MESSAGE});
+  $ical    = $payload->{ical};
+
+  $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
+  $self->assert_str_equals("bugs\@looneytunes.com",   $payload->{recipient});
+  $self->assert($ical =~ "METHOD:REQUEST");
+  $self->assert($ical =~ "PARTSTAT=ACCEPTED");
+
+  my ($maj, $min) = Cassandane::Instance->get_version();
+  if ($maj > 3 || ($maj == 3 && $min >= 9)) {
+    xlog $self, "verify no other update requests from organizer";
+    $imip = $imips[2];
+    $self->assert_null($imip);
+
+    xlog $self, "actually update attendee status on the event";
+    $res = $jmap->CallMethods([ [
+      'CalendarEvent/set',
+      {
+        update => {
+          $id => { "participants/att/participationStatus" => "accepted" }
         }
-    }, "R2"]]);
+      },
+      "R1"
+    ] ]);
 
-    xlog $self, "verify reply sent from attendee to organizer";
-    $data = $self->{instance}->getnotify();
+    xlog $self, "set attendee status again";
+    $res = $jmap->CallMethods([ [
+      'CalendarEvent/participantReply',
+      {
+        eventId          => $id,
+        participantEmail => "bugs\@looneytunes.com",
+        updates          => {
+          participationStatus => "accepted"
+        }
+      },
+      "R2"
+    ] ]);
+    $self->assert_str_equals("2.0", $res->[0][1]{scheduleStatus});
+
+    xlog $self, "verify that NO iMIP messages are sent to organizer/attendee";
+    $data  = $self->{instance}->getnotify();
     @imips = grep { $_->{METHOD} eq 'imip' } @$data;
-    $imip = $imips[0];
-    $self->assert_not_null($imip);
-
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
-
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{sender});
-    $self->assert_str_equals("cassandane\@example.com", $payload->{recipient});
-    $self->assert($ical =~ "METHOD:REPLY");
-    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
-
-    xlog $self, "verify updated request sent from organizer to attendee";
-    $imip = $imips[1];
-    $self->assert_not_null($imip);
-
-    $payload = decode_json($imip->{MESSAGE});
-    $ical = $payload->{ical};
-
-    $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
-    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
-    $self->assert($ical =~ "METHOD:REQUEST");
-    $self->assert($ical =~ "PARTSTAT=ACCEPTED");
-
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj > 3 || ($maj == 3 && $min >= 9)) {
-        xlog $self, "verify no other update requests from organizer";
-        $imip = $imips[2];
-        $self->assert_null($imip);
-
-        xlog $self, "actually update attendee status on the event";
-        $res = $jmap->CallMethods([['CalendarEvent/set', {
-            update => {
-                $id => { "participants/att/participationStatus" => "accepted" }
-            }
-        }, "R1"]]);
-
-        xlog $self, "set attendee status again";
-        $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
-            eventId => $id,
-            participantEmail => "bugs\@looneytunes.com",
-            updates => {
-                participationStatus => "accepted"
-            }
-        }, "R2"]]);
-        $self->assert_str_equals("2.0", $res->[0][1]{scheduleStatus});
-
-        xlog $self, "verify that NO iMIP messages are sent to organizer/attendee";
-        $data = $self->{instance}->getnotify();
-        @imips = grep { $_->{METHOD} eq 'imip' } @$data;
-        $self->assert_null($imips);
-    }
+    $self->assert_null($imips);
+  }
 }

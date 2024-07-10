@@ -2,13 +2,14 @@
 use Cassandane::Tiny;
 
 sub test_calendareventnotification_imip
-    :needs_component_sieve :needs_component_httpd :needs_component_jmap :min_version_3_5
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : needs_component_sieve : needs_component_httpd : needs_component_jmap :
+  min_version_3_5 {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :deletecanceled :outcome "outcome";
@@ -17,11 +18,11 @@ if body :content "text/calendar" :contains "\nMETHOD:" {
     }
 }
 EOF
-    );
+  );
 
-    # CREATE
+  # CREATE
 
-    my $imip = <<'EOF';
+  my $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -49,28 +50,28 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP invite";
-    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+  xlog $self, "Deliver iMIP invite";
+  $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', { properties => ['id'] }, 'R1'],
-        ['CalendarEventNotification/get', { }, 'R2'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+  my $res = $jmap->CallMethods([
+    [ 'CalendarEvent/get',             { properties => ['id'] }, 'R1' ],
+    [ 'CalendarEventNotification/get', {},                       'R2' ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{list} });
+  $self->assert_num_equals(1, scalar @{ $res->[1][1]{list} });
 
-    $self->assert_str_equals('sender@example.net',
-        $res->[1][1]{list}[0]{changedBy}{email});
-    $self->assert_str_equals('Sally Sender',
-        $res->[1][1]{list}[0]{changedBy}{name});
-    $self->assert_str_equals('created', $res->[1][1]{list}[0]{type});
+  $self->assert_str_equals('sender@example.net',
+    $res->[1][1]{list}[0]{changedBy}{email});
+  $self->assert_str_equals('Sally Sender',
+    $res->[1][1]{list}[0]{changedBy}{name});
+  $self->assert_str_equals('created', $res->[1][1]{list}[0]{type});
 
-    my $state = $res->[1][1]{state};
-    $self->assert_not_null($state);
+  my $state = $res->[1][1]{state};
+  $self->assert_not_null($state);
 
-    # UPDATE
+  # UPDATE
 
-    $imip = <<'EOF';
+  $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -98,38 +99,46 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP update";
-    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+  xlog $self, "Deliver iMIP update";
+  $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', { properties => ['id'] }, 'R1'],
-        ['CalendarEventNotification/changes', {
-            sinceState => $state },
-        'R2'],
-        ['CalendarEventNotification/get', {
-            '#ids' => {
-                resultOf => 'R2',
-                name => 'CalendarEventNotification/changes',
-                path => '/created'
-            },
-        }, 'R3'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+  $res = $jmap->CallMethods([
+    [ 'CalendarEvent/get', { properties => ['id'] }, 'R1' ],
+    [
+      'CalendarEventNotification/changes',
+      {
+        sinceState => $state
+      },
+      'R2'
+    ],
+    [
+      'CalendarEventNotification/get',
+      {
+        '#ids' => {
+          resultOf => 'R2',
+          name     => 'CalendarEventNotification/changes',
+          path     => '/created'
+        },
+      },
+      'R3'
+    ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{list} });
 
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
+  $self->assert_num_equals(1, scalar @{ $res->[2][1]{list} });
 
-    $self->assert_str_equals('sender@example.net',
-        $res->[2][1]{list}[0]{changedBy}{email});
-    $self->assert_str_equals('Sally Sender',
-        $res->[2][1]{list}[0]{changedBy}{name});
-    $self->assert_str_equals('updated', $res->[2][1]{list}[0]{type});
+  $self->assert_str_equals('sender@example.net',
+    $res->[2][1]{list}[0]{changedBy}{email});
+  $self->assert_str_equals('Sally Sender',
+    $res->[2][1]{list}[0]{changedBy}{name});
+  $self->assert_str_equals('updated', $res->[2][1]{list}[0]{type});
 
-    $state = $res->[2][1]{state};
-    $self->assert_not_null($state);
+  $state = $res->[2][1]{state};
+  $self->assert_not_null($state);
 
-    # DELETE
+  # DELETE
 
-    $imip = <<'EOF';
+  $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 10:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -157,30 +166,42 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog $self, "Deliver iMIP cancellation";
-    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+  xlog $self, "Deliver iMIP cancellation";
+  $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['id']
-        }, 'R1'],
-        ['CalendarEventNotification/changes', {
-            sinceState => $state },
-        'R2'],
-        ['CalendarEventNotification/get', {
-            '#ids' => {
-                resultOf => 'R2',
-                name => 'CalendarEventNotification/changes',
-                path => '/created'
-            },
-        }, 'R3'],
-    ]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => ['id']
+      },
+      'R1'
+    ],
+    [
+      'CalendarEventNotification/changes',
+      {
+        sinceState => $state
+      },
+      'R2'
+    ],
+    [
+      'CalendarEventNotification/get',
+      {
+        '#ids' => {
+          resultOf => 'R2',
+          name     => 'CalendarEventNotification/changes',
+          path     => '/created'
+        },
+      },
+      'R3'
+    ],
+  ]);
+  $self->assert_num_equals(0, scalar @{ $res->[0][1]{list} });
+  $self->assert_num_equals(1, scalar @{ $res->[2][1]{list} });
 
-    $self->assert_str_equals('sender@example.net',
-        $res->[2][1]{list}[0]{changedBy}{email});
-    $self->assert_str_equals('Sally Sender',
-        $res->[2][1]{list}[0]{changedBy}{name});
-    $self->assert_str_equals('destroyed', $res->[2][1]{list}[0]{type});
+  $self->assert_str_equals('sender@example.net',
+    $res->[2][1]{list}[0]{changedBy}{email});
+  $self->assert_str_equals('Sally Sender',
+    $res->[2][1]{list}[0]{changedBy}{name});
+  $self->assert_str_equals('destroyed', $res->[2][1]{list}[0]{type});
 }

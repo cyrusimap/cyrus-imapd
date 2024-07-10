@@ -2,84 +2,34 @@
 use Cassandane::Tiny;
 
 sub test_imap_list_notes
-    :min_version_3_1 :needs_component_sieve
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : min_version_3_1 : needs_component_sieve
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "create mailboxes";
-    $imaptalk->create("INBOX.Foo") || die;
-    $imaptalk->create("INBOX.Foo.Hi") || die;
-    $imaptalk->create("INBOX.A") || die;
-    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))");
-    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
-    $imaptalk->create("INBOX.Important", "(USE (\\Important))");
-    $imaptalk->create("INBOX.Notes", "(USE (\\XNotes))");
+  xlog $self, "create mailboxes";
+  $imaptalk->create("INBOX.Foo")    || die;
+  $imaptalk->create("INBOX.Foo.Hi") || die;
+  $imaptalk->create("INBOX.A")      || die;
+  $imaptalk->create("INBOX.Junk",      "(USE (\\Junk))");
+  $imaptalk->create("INBOX.Trash",     "(USE (\\Trash))");
+  $imaptalk->create("INBOX.Important", "(USE (\\Important))");
+  $imaptalk->create("INBOX.Notes",     "(USE (\\XNotes))");
 
-    my $data = $imaptalk->list('', '*');
-    $self->assert_deep_equals([
-  [
+  my $data = $imaptalk->list('', '*');
+  $self->assert_deep_equals(
     [
-      '\\HasChildren',
+      [ [ '\\HasChildren', ],                  '.', 'INBOX', ],
+      [ [ '\\HasNoChildren', ],                '.', 'INBOX.A', ],
+      [ [ '\\HasChildren', ],                  '.', 'INBOX.Foo', ],
+      [ [ '\\HasNoChildren', ],                '.', 'INBOX.Foo.Hi', ],
+      [ [ '\\HasNoChildren', '\\Important', ], '.', 'INBOX.Important', ],
+      [ [ '\\HasNoChildren', '\\Junk', ],      '.', 'INBOX.Junk', ],
+      [ [ '\\HasNoChildren', '\\XNotes', ],    '.', 'INBOX.Notes', ],
+      [ [ '\\HasNoChildren', '\\Trash', ],     '.', 'INBOX.Trash', ],
     ],
-    '.',
-    'INBOX',
-  ],
-  [
-    [
-      '\\HasNoChildren',
-    ],
-    '.',
-    'INBOX.A',
-  ],
-  [
-    [
-      '\\HasChildren',
-    ],
-    '.',
-    'INBOX.Foo',
-  ],
-  [
-    [
-      '\\HasNoChildren',
-    ],
-    '.',
-    'INBOX.Foo.Hi',
-  ],
-  [
-    [
-      '\\HasNoChildren',
-      '\\Important',
-    ],
-    '.',
-    'INBOX.Important',
-  ],
-  [
-    [
-      '\\HasNoChildren',
-      '\\Junk',
-    ],
-    '.',
-    'INBOX.Junk',
-  ],
-  [
-    [
-      '\\HasNoChildren',
-      '\\XNotes',
-    ],
-    '.',
-    'INBOX.Notes',
-  ],
-  [
-    [
-      '\\HasNoChildren',
-      '\\Trash',
-    ],
-    '.',
-    'INBOX.Trash',
-  ],
-], $data);
+    $data
+  );
 
 }

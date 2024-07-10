@@ -602,7 +602,7 @@ SKIPPED VERSION 11 - Fastmail internal only
 my $VersionFormats = {
   9 => {
     HeaderSize => 96,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -647,7 +647,7 @@ EOF
   },
   10 => {
     HeaderSize => 96,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -691,7 +691,7 @@ EOF
   },
   11 => {
     HeaderSize => 96,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -737,7 +737,7 @@ EOF
   },
   12 => {
     HeaderSize => 128,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -790,7 +790,7 @@ EOF
   },
   13 => {
     HeaderSize => 128,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -844,7 +844,7 @@ EOF
   },
   14 => {
     HeaderSize => 160,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -906,7 +906,7 @@ EOF
   },
   15 => {
     HeaderSize => 160,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -968,7 +968,7 @@ EOF
   },
   16 => {
     HeaderSize => 160,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -1030,7 +1030,7 @@ EOF
   },
   17 => {
     HeaderSize => 160,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -1092,7 +1092,7 @@ EOF
   },
   18 => {
     HeaderSize => 160,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -1152,7 +1152,7 @@ EOF
   },
   19 => {
     HeaderSize => 160,
-    _make_fields('Header',<<EOF),
+    _make_fields('Header', <<EOF),
 Generation            int32  4
 Format                int32  4
 MinorVersion          int32  4
@@ -1213,11 +1213,11 @@ EOF
 };
 
 my %SystemFlagMap = (
-   0 => "\\Answered",
-   1 => "\\Flagged",
-   2 => "\\Deleted",
-   3 => "\\Draft",
-   4 => "\\Seen",
+  0  => "\\Answered",
+  1  => "\\Flagged",
+  2  => "\\Deleted",
+  3  => "\\Draft",
+  4  => "\\Seen",
   26 => "\\Snoozed",
   27 => "[SPLITCONVERSATION]",
   28 => "[NEEDS-CLEANUP]",
@@ -1241,8 +1241,8 @@ sub _make_fields {
   foreach my $line (@lines) {
     my ($Name, $Type, $Size) = split /\s+/, $line;
 
-    push @names, $Name;
-    push @items, [$Name, $Type, $Size, $Num, $Pos];
+    push @names,     $Name;
+    push @items,     [ $Name, $Type, $Size, $Num, $Pos ];
     push @packitems, _make_pack($Type, $Size);
 
     $Pos += $Size;
@@ -1250,26 +1250,23 @@ sub _make_fields {
   }
 
   return (
-    $prefix . 'Names' => { map { $names[$_] => $_ } 0..$#names },
+    $prefix . 'Names'  => { map { $names[$_] => $_ } 0 .. $#names },
     $prefix . 'Fields' => \@items,
-    $prefix . 'Pack' => join("", @packitems),
+    $prefix . 'Pack'   => join("", @packitems),
   );
 }
 
 # build the pack/unpack expression for a single field
 sub _make_pack {
   my $format = shift;
-  my $size = shift;
+  my $size   = shift;
   if ($format eq 'int32' or $format eq 'time_t') {
     return 'N';
-  }
-  elsif ($format eq 'int64') { # ignore start..
+  } elsif ($format eq 'int64') { # ignore start..
     return 'x[N]N';
-  }
-  elsif ($format eq 'bitmap') {
+  } elsif ($format eq 'bitmap') {
     return 'B' . (8 * $size);
-  }
-  elsif ($format eq 'hex') {
+  } elsif ($format eq 'hex') {
     return 'H' . (2 * $size);
   }
 }
@@ -1302,7 +1299,7 @@ Causes of death:
 =cut
 
 sub new {
-  my $class = shift;
+  my $class  = shift;
   my $handle = shift;
 
   my $buf;
@@ -1323,12 +1320,13 @@ sub new {
   sysread($handle, $buf, $frm->{HeaderSize} - 12, 12);
   my $Self = bless {
     @_,
-    version => $version,
-    handle => $handle,
-    format => $frm,
+    version   => $version,
+    handle    => $handle,
+    format    => $frm,
     rawheader => $buf,
-    recno => 0,
-  }, ref($class) || $class;
+    recno     => 0,
+    },
+    ref($class) || $class;
 
   $Self->{header} = $Self->_header_b2h($buf);
   die "Unable to parse header" unless $Self->{header};
@@ -1348,19 +1346,20 @@ calls $class->new() with the filehandle.
 =cut
 
 sub new_file {
-  my $class = shift;
+  my $class    = shift;
   my $filename = shift;
   my $lockopts = shift;
 
   my $fh;
   if ($lockopts) {
-    require 'IO/File/fcntl.pm' || die "can't lock without IO::File::fcntl module";
+    require 'IO/File/fcntl.pm'
+      || die "can't lock without IO::File::fcntl module";
     $lockopts = ['lock_ex'] unless ref($lockopts) eq 'ARRAY';
-    $fh = IO::File::fcntl->new($filename, '+<', @$lockopts)
-          || die "Can't open $filename for locked read: $!";
+    $fh       = IO::File::fcntl->new($filename, '+<', @$lockopts)
+      || die "Can't open $filename for locked read: $!";
   } else {
     $fh = IO::File->new("< $filename")
-          || die "Can't open $filename for read: $!";
+      || die "Can't open $filename for read: $!";
   }
 
   return $class->new($fh, @_);
@@ -1375,7 +1374,7 @@ the write_record function and set header fields on the new object.
 =cut
 
 sub new_empty {
-  my $class = shift;
+  my $class   = shift;
   my $version = shift;
 
   # check that the version is supported
@@ -1385,8 +1384,9 @@ sub new_empty {
   my $Self = bless {
     @_,
     version => $version,
-    format => $frm,
-  }, ref($class) || $class;
+    format  => $frm,
+    },
+    ref($class) || $class;
 
   return $Self;
 }
@@ -1402,16 +1402,16 @@ new LastUpdated.
 =cut
 
 sub stream_copy {
-  my $Self = shift;
-  my $outfh = shift;
+  my $Self   = shift;
+  my $outfh  = shift;
   my $decide = shift;
-  my %Opts = @_;
+  my %Opts   = @_;
 
   my $out = $Self->new_empty($Opts{version} || $Self->{version});
 
   my $newheader = $Self->header_copy();
   if ($Opts{headerfields}) {
-    foreach my $field (keys %{$Opts{headerfields}}) {
+    foreach my $field (keys %{ $Opts{headerfields} }) {
       $newheader->{$field} = $Opts{headerfields}{$field};
     }
   }
@@ -1420,7 +1420,7 @@ sub stream_copy {
   $newheader->{NumRecords} = 0;
   # Important!  Otherwise you get versions out of skew!
   $newheader->{MinorVersion} = $out->{version};
-  $newheader->{RecordSize} = $out->{format}{RecordSize};
+  $newheader->{RecordSize}   = $out->{format}{RecordSize};
   $out->write_header($outfh, $newheader);
 
   $Self->reset();
@@ -1460,7 +1460,7 @@ Returns the raw packed header as it is on disk.
 =cut
 
 sub header {
-  my $Self = shift;
+  my $Self  = shift;
   my $Field = shift;
 
   if ($Field) {
@@ -1496,7 +1496,7 @@ make destructive changes without affecting the original.
 sub header_copy {
   my $Self = shift;
   my $orig = $Self->{header};
-  return { %$orig };
+  return {%$orig};
 }
 
 =item $index->reset($num)
@@ -1510,10 +1510,12 @@ Requires the input filehandle to be seekable.
 
 sub reset {
   my $Self = shift;
-  my $num = shift || 0;
+  my $num  = shift || 0;
 
-  my $NumRecords = $Self->{header}{MinorVersion} < 12 ?
-                   $Self->{header}{Exists} : $Self->{header}{NumRecords};
+  my $NumRecords
+    = $Self->{header}{MinorVersion} < 12
+    ? $Self->{header}{Exists}
+    : $Self->{header}{NumRecords};
 
   die "Invalid record $num (must be >= 0 and <= $NumRecords"
     unless ($num >= 0 and $num <= $NumRecords);
@@ -1580,8 +1582,10 @@ sub next_record_raw {
   delete $Self->{checksum_failure};
 
   # use direct access for speed
-  my $NumRecords = $Self->{header}{MinorVersion} < 12 ?
-                   $Self->{header}{Exists} : $Self->{header}{NumRecords};
+  my $NumRecords
+    = $Self->{header}{MinorVersion} < 12
+    ? $Self->{header}{Exists}
+    : $Self->{header}{NumRecords};
   my $RecordSize = $Self->{header}{RecordSize};
 
   return undef unless $RecordSize;
@@ -1592,8 +1596,7 @@ sub next_record_raw {
     # rewrite if passed so save the allocation cost
     $Self->{recno}++;
     return $Self->{rawrecord};
-  }
-  else {
+  } else {
     delete $Self->{rawrecord};
     return undef; # no more records!
   }
@@ -1627,7 +1630,7 @@ returns undef, because there's no such concept in the datastructure.
 =cut
 
 sub record {
-  my $Self = shift;
+  my $Self  = shift;
   my $Field = shift;
 
   my $record = $Self->record_hash();
@@ -1642,14 +1645,14 @@ sub record {
 }
 
 sub system_flags {
-  my $Self = shift;
+  my $Self  = shift;
   my $Field = shift;
 
   my @sfdata = reverse split //, $Self->record('SystemFlags');
   my %hash;
-  foreach my $key (0..$#sfdata) {
+  foreach my $key (0 .. $#sfdata) {
     next unless $sfdata[$key];
-    $hash{$SystemFlagMap{$key} || $key} = $key;
+    $hash{ $SystemFlagMap{$key} || $key } = $key;
   }
 
   if ($Field) {
@@ -1661,24 +1664,24 @@ sub system_flags {
 
 # arg is a Cyrus::HeaderFile to give us names for user flags
 sub flagslist {
-  my $Self = shift;
+  my $Self   = shift;
   my $Header = shift;
   my @flags;
 
   # 32 bit sets
   my @sfdata = reverse split //, $Self->record('SystemFlags');
-  foreach my $i (0..$#sfdata) {
+  foreach my $i (0 .. $#sfdata) {
     next unless $sfdata[$i];
     push @flags, $SystemFlagMap{$i} || $i;
   }
 
   if ($Header) {
     my $userflags = $Header->header('Flags');
-    my @ufdata = split //, $Self->record('UserFlags');
+    my @ufdata    = split //, $Self->record('UserFlags');
     foreach my $base (0, 32, 64, 96) {
-      foreach my $i (0..31) {
-        my $f = $userflags->[$base+31-$i];
-        push @flags, $f if ($f and $ufdata[$base+$i]);
+      foreach my $i (0 .. 31) {
+        my $f = $userflags->[ $base + 31 - $i ];
+        push @flags, $f if ($f and $ufdata[ $base + $i ]);
       }
     }
   }
@@ -1703,8 +1706,8 @@ sub record_array {
 }
 
 sub record_raw {
-   my $Self = shift;
-   return $Self->{rawrecord};
+  my $Self = shift;
+  return $Self->{rawrecord};
 }
 
 =item $index->field_number($Field)
@@ -1715,7 +1718,7 @@ if there isn't one.
 =cut
 
 sub field_number {
-  my $Self = shift;
+  my $Self  = shift;
   my $Field = shift;
   my $names = $Self->{format}{RecordNames};
   die "No such record field $Field\n" unless exists $names->{$Field};
@@ -1731,8 +1734,8 @@ $header can be in array, hash or buffer format
 =cut
 
 sub write_header {
-  my $Self = shift;
-  my $fh = shift;
+  my $Self   = shift;
+  my $fh     = shift;
   my $header = shift;
 
   my $buf = $Self->_make_header($header);
@@ -1749,11 +1752,13 @@ Also seeks back to the header and rewrites it with exists incremented by one.
 =cut
 
 sub append_record {
-  my $Self = shift;
+  my $Self   = shift;
   my $record = shift;
 
-  my $NumRecords = $Self->{header}{MinorVersion} < 12 ?
-                   $Self->{header}{Exists} : $Self->{header}{NumRecords};
+  my $NumRecords
+    = $Self->{header}{MinorVersion} < 12
+    ? $Self->{header}{Exists}
+    : $Self->{header}{NumRecords};
 
   $Self->reset($NumRecords);
   $Self->write_record($Self->{handle}, $record);
@@ -1766,7 +1771,7 @@ sub append_record {
 }
 
 sub rewrite_header {
-  my $Self = shift;
+  my $Self   = shift;
   my $header = shift || $Self->header();
 
   sysseek($Self->{handle}, 0, 0);
@@ -1782,9 +1787,9 @@ Rewrite the record at position given by $num with the record (hash, array or buf
 =cut
 
 sub rewrite_record {
-  my $Self = shift;
+  my $Self   = shift;
   my $record = shift;
-  my $num = @_ ? shift : ($Self->{recno} - 1);
+  my $num    = @_ ? shift : ($Self->{recno} - 1);
 
   $Self->reset($num);
 
@@ -1801,10 +1806,10 @@ XXX - $num support not done yet
 =cut
 
 sub write_record {
-  my $Self = shift;
-  my $fh = shift;
+  my $Self   = shift;
+  my $fh     = shift;
   my $record = shift;
-  my $num = shift; # XXX - seek?
+  my $num    = shift; # XXX - seek?
 
   my $buf = $Self->_make_record($record);
 
@@ -1818,22 +1823,22 @@ XXX - broken anyway.  The purpose of this function is to allow multiple index fi
 =cut
 
 sub merge_indexes {
-  my $Self = shift;
+  my $Self   = shift;
   my $target = shift;
   my @extras = shift;
 
   # copy the current header first
   my $targetpos = tell($target);
-  my $header = $Self->header();
+  my $header    = $Self->header();
   # reset some stuff
-  $header->{NumRecords} = 0;
+  $header->{NumRecords}     = 0;
   $header->{LastAppenddate} = 0;
-  $header->{LastUid} = 0;
-  $header->{QuotaUsed} = 0;
-  $header->{Deleted} = 0;
-  $header->{Answered} = 0;
-  $header->{Flagged} = 0;
-  $header->{HighestModseq} = 0;
+  $header->{LastUid}        = 0;
+  $header->{QuotaUsed}      = 0;
+  $header->{Deleted}        = 0;
+  $header->{Answered}       = 0;
+  $header->{Flagged}        = 0;
+  $header->{HighestModseq}  = 0;
   $Self->write_header($target, $header);
 
   my @all = ($Self, @extras);
@@ -1847,7 +1852,7 @@ sub merge_indexes {
     my $higheruid;
 
     # read the first record of all lists
-    foreach my $n (0..$#all) {
+    foreach my $n (0 .. $#all) {
       next unless $records[$n];
       if ($records[$n]{Uid} == $nextuid) {
         # algorithm: keep most recently modified
@@ -1900,19 +1905,19 @@ process the records, and then re-parse them back into a binary index file.
 =cut
 
 sub header_dump {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = $Self->header_array();
   return join(' ', @$array);
 }
 
 sub header_longdump {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = $Self->header_array();
   my @data;
   my $frm = $Self->{format}{HeaderFields};
-  foreach my $field (0..$#$frm) {
+  foreach my $field (0 .. $#$frm) {
     my $name = $frm->[$field][0];
-    my $val = $array->[$field];
+    my $val  = $array->[$field];
     $val = sprintf("%08x", $val) if $name =~ m/Crc$/;
     push @data, "$name: $val";
   }
@@ -1920,26 +1925,26 @@ sub header_longdump {
 }
 
 sub header_undump {
-  my $Self = shift;
+  my $Self   = shift;
   my $string = shift;
-  my @items = split ' ', $string;
+  my @items  = split ' ', $string;
   return \@items;
 }
 
 sub record_dump {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = $Self->record_array();
   return join(' ', @$array);
 }
 
 sub record_longdump {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = $Self->record_array();
   my @data;
   my $frm = $Self->{format}{RecordFields};
-  foreach my $field (0..$#$frm) {
+  foreach my $field (0 .. $#$frm) {
     my $name = $frm->[$field][0];
-    my $val = $array->[$field];
+    my $val  = $array->[$field];
     $val = sprintf("%08x", $val) if $name =~ m/Crc$/;
     push @data, "$name: $val";
   }
@@ -1947,9 +1952,9 @@ sub record_longdump {
 }
 
 sub record_undump {
-  my $Self = shift;
+  my $Self   = shift;
   my $string = shift;
-  my @items = split ' ', $string;
+  my @items  = split ' ', $string;
   return \@items;
 }
 
@@ -1957,7 +1962,7 @@ sub record_undump {
 
 sub _make_header {
   my $Self = shift;
-  my $ds = shift;
+  my $ds   = shift;
 
   my $ref = ref($ds);
 
@@ -1975,7 +1980,7 @@ sub _make_header {
 
 sub _make_record {
   my $Self = shift;
-  my $ds = shift;
+  my $ds   = shift;
 
   my $ref = ref($ds);
 
@@ -1996,27 +2001,28 @@ sub _make_record {
 
 sub _header_b2h {
   my $Self = shift;
-  my $buf = shift;
+  my $buf  = shift;
   return undef unless $buf;
 
   my $array = $Self->_header_b2a($buf);
-  my $hash = $Self->_header_a2h($array);
+  my $hash  = $Self->_header_a2h($array);
 
   return $hash;
 }
 
 sub _header_b2a {
   my $Self = shift;
-  my $buf = shift;
+  my $buf  = shift;
   return undef unless $buf;
 
   my @array = unpack($Self->{format}{HeaderPack}, $buf);
 
   # check checksum match!
   if ($Self->{version} >= 11) {
-    my $Header = $Self->{format}{HeaderFields}[$Self->{format}{HeaderNames}{HeaderCrc}];
+    my $Header = $Self->{format}{HeaderFields}
+      [ $Self->{format}{HeaderNames}{HeaderCrc} ];
     my $crc = crc32(substr($buf, 0, $Header->[4]));
-    if ($array[$Header->[3]] != $crc) {
+    if ($array[ $Header->[3] ] != $crc) {
       $Self->{checksum_failure} = 1;
       warn "Header CRC Failure $array[$Header->[3]] != $crc";
       die "Header CRC Failure $array[$Header->[3]] != $crc"
@@ -2033,20 +2039,21 @@ sub _header_h2b {
   return undef unless $hash;
 
   my $array = $Self->_header_h2a($hash);
-  my $buf = $Self->_header_a2b($array);
+  my $buf   = $Self->_header_a2b($array);
 
   return $buf;
 }
 
 sub _header_a2b {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = shift;
   return undef unless $array;
 
   my $buf = pack($Self->{format}{HeaderPack}, @$array);
 
   if ($Self->{version} >= 11) {
-    my $Header = $Self->{format}{HeaderFields}[$Self->{format}{HeaderNames}{HeaderCrc}];
+    my $Header = $Self->{format}{HeaderFields}
+      [ $Self->{format}{HeaderNames}{HeaderCrc} ];
     my $crc = crc32(substr($buf, 0, $Header->[4]));
     substr($buf, $Header->[4]) = pack('N', $crc);
   }
@@ -2055,14 +2062,14 @@ sub _header_a2b {
 }
 
 sub _header_a2h {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = shift;
   return undef unless $array;
 
   my %res;
   my $frm = $Self->{format}{HeaderFields};
-  for (0..$#$frm) {
-    $res{$frm->[$_][0]} = $array->[$_];
+  for (0 .. $#$frm) {
+    $res{ $frm->[$_][0] } = $array->[$_];
   }
 
   return \%res;
@@ -2075,8 +2082,8 @@ sub _header_h2a {
 
   my @array;
   my $frm = $Self->{format}{HeaderFields};
-  for (0..$#$frm) {
-    $array[$_] = $hash->{$frm->[$_][0]};
+  for (0 .. $#$frm) {
+    $array[$_] = $hash->{ $frm->[$_][0] };
   }
 
   return \@array;
@@ -2091,20 +2098,21 @@ sub _record_h2b {
   return undef unless $hash;
 
   my $array = $Self->_record_h2a($hash);
-  my $buf = $Self->_record_a2b($array);
+  my $buf   = $Self->_record_a2b($array);
 
   return $buf;
 }
 
 sub _record_a2b {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = shift;
   return undef unless $array;
 
   my $buf = pack($Self->{format}{RecordPack}, @$array);
 
   if ($Self->{version} >= 11) {
-    my $Record = $Self->{format}{RecordFields}[$Self->{format}{RecordNames}{RecordCrc}];
+    my $Record = $Self->{format}{RecordFields}
+      [ $Self->{format}{RecordNames}{RecordCrc} ];
     my $crc = crc32(substr($buf, 0, $Record->[4]));
     substr($buf, $Record->[4]) = pack('N', $crc);
   }
@@ -2114,27 +2122,28 @@ sub _record_a2b {
 
 sub _record_b2h {
   my $Self = shift;
-  my $buf = shift;
+  my $buf  = shift;
   return undef unless $buf;
 
   my $array = $Self->_record_b2a($buf);
-  my $hash = $Self->_record_a2h($array);
+  my $hash  = $Self->_record_a2h($array);
 
   return $hash;
 }
 
 sub _record_b2a {
   my $Self = shift;
-  my $buf = shift;
+  my $buf  = shift;
   return undef unless $buf;
 
   my @array = unpack($Self->{format}{RecordPack}, $buf);
 
   # check checksum match!
   if ($Self->{version} >= 11) {
-    my $Record = $Self->{format}{RecordFields}[$Self->{format}{RecordNames}{RecordCrc}];
+    my $Record = $Self->{format}{RecordFields}
+      [ $Self->{format}{RecordNames}{RecordCrc} ];
     my $crc = crc32(substr($buf, 0, $Record->[4]));
-    if ($array[$Record->[3]] != $crc) {
+    if ($array[ $Record->[3] ] != $crc) {
       $Self->{checksum_failure} = 1;
       warn "Record CRC Failure ($Self->{recno}) $array[$Record->[3]] != $crc";
       die "Record CRC Failure ($Self->{recno}) $array[$Record->[3]] != $crc"
@@ -2146,14 +2155,14 @@ sub _record_b2a {
 }
 
 sub _record_a2h {
-  my $Self = shift;
+  my $Self  = shift;
   my $array = shift;
   return undef unless $array;
 
   my %res;
   my $frm = $Self->{format}{RecordFields};
-  for (0..$#$frm) {
-    $res{$frm->[$_][0]} = $array->[$_];
+  for (0 .. $#$frm) {
+    $res{ $frm->[$_][0] } = $array->[$_];
   }
 
   return \%res;
@@ -2166,8 +2175,8 @@ sub _record_h2a {
 
   my @array;
   my $frm = $Self->{format}{RecordFields};
-  for (0..$#$frm) {
-    $array[$_] = $hash->{$frm->[$_][0]};
+  for (0 .. $#$frm) {
+    $array[$_] = $hash->{ $frm->[$_][0] };
   }
 
   return \@array;

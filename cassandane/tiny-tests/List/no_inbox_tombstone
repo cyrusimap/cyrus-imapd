@@ -2,43 +2,42 @@
 use Cassandane::Tiny;
 
 sub test_no_inbox_tombstone
-    :UnixHierarchySep :ReverseACLs :AllowMoves
-{
-    my ($self) = @_;
+  : UnixHierarchySep : ReverseACLs : AllowMoves {
+  my ($self) = @_;
 
-    my $admintalk = $self->{adminstore}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    $admintalk->rename("user/cassandane", "user/cassandane-old");
-    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+  $admintalk->rename("user/cassandane", "user/cassandane-old");
+  $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
-    my $tombstone_name = 'user.cassandane';
+  my $tombstone_name = 'user.cassandane';
 
-    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
-    $self->assert_matches(qr{d}, $mailboxesdb->{$tombstone_name}->{mbtype});
+  my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+  $self->assert_matches(qr{d}, $mailboxesdb->{$tombstone_name}->{mbtype});
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    # basic list
-    my $data = $imaptalk->list("", "*");
-    $self->assert_mailbox_structure($data, '/', {});
+  # basic list
+  my $data = $imaptalk->list("", "*");
+  $self->assert_mailbox_structure($data, '/', {});
 
-    # basic xlist
-    $data = $imaptalk->xlist("", "*");
-    $self->assert_str_equals('ok', $data); # no mailboxes listed
+  # basic xlist
+  $data = $imaptalk->xlist("", "*");
+  $self->assert_str_equals('ok', $data); # no mailboxes listed
 
-    # partial match list
-    $data = $imaptalk->list("", "INB*");
-    $self->assert_mailbox_structure($data, '/', {});
+  # partial match list
+  $data = $imaptalk->list("", "INB*");
+  $self->assert_mailbox_structure($data, '/', {});
 
-    # partial match xlist
-    $data = $imaptalk->xlist("", "INB*");
-    $self->assert_str_equals('ok', $data); # no mailboxes listed
+  # partial match xlist
+  $data = $imaptalk->xlist("", "INB*");
+  $self->assert_str_equals('ok', $data); # no mailboxes listed
 
-    # direct list
-    $data = $imaptalk->list("", "INBOX");
-    $self->assert_mailbox_structure($data, '/', {});
+  # direct list
+  $data = $imaptalk->list("", "INBOX");
+  $self->assert_mailbox_structure($data, '/', {});
 
-    # direct xlist
-    $data = $imaptalk->xlist("", "INBOX");
-    $self->assert_str_equals('ok', $data); # no mailboxes listed
+  # direct xlist
+  $data = $imaptalk->xlist("", "INBOX");
+  $self->assert_str_equals('ok', $data); # no mailboxes listed
 }

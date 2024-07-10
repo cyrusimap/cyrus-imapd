@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_allday_sametz
-    :min_version_3_0 :needs_component_calalarmd
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_component_calalarmd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $tz = <<EOF;
+  my $tz = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -31,33 +30,33 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $tz});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo', timeZone => $tz });
+  $self->assert_not_null($CalendarId);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Australia/Brisbane');
-    # bump everything forward so a slow run (say: valgrind)
-    # doesn't cause things to magically fire...
-    $now->add(DateTime::Duration->new(seconds => 300));
+  my $now = DateTime->now();
+  $now->set_time_zone('Australia/Brisbane');
+  # bump everything forward so a slow run (say: valgrind)
+  # doesn't cause things to magically fire...
+  $now->add(DateTime::Duration->new(seconds => 300));
 
-    # define the event to start in 2 days
-    # (need to go 2 days out to account for the timezone of the testing location,
-    #  otherwise we may store the event locally AFTER the adjusted alarm trigger)
-    my $startdt = $now->clone();
-    $startdt->add(DateTime::Duration->new(days => 2));
-    $startdt->truncate(to => 'day');
-    my $start = $startdt->strftime('%Y%m%d');
+  # define the event to start in 2 days
+  # (need to go 2 days out to account for the timezone of the testing location,
+  #  otherwise we may store the event locally AFTER the adjusted alarm trigger)
+  my $startdt = $now->clone();
+  $startdt->add(DateTime::Duration->new(days => 2));
+  $startdt->truncate(to => 'day');
+  my $start = $startdt->strftime('%Y%m%d');
 
-    my $enddt = $startdt->clone();
-    $enddt->add(DateTime::Duration->new(days => 1));
-    my $end = $enddt->strftime('%Y%m%d');
+  my $enddt = $startdt->clone();
+  $enddt->add(DateTime::Duration->new(days => 1));
+  my $end = $enddt->strftime('%Y%m%d');
 
-    # set the trigger to notify us at the start of the event
-    my $trigger="PT0S";
+  # set the trigger to notify us at the start of the event
+  my $trigger = "PT0S";
 
-    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -81,12 +80,14 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch() + 60 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $startdt->epoch() + 60);
 
-    $self->assert_alarms({summary => 'allday', start => $start, timezone => 'Australia/Brisbane'});
+  $self->assert_alarms(
+    { summary => 'allday', start => $start, timezone => 'Australia/Brisbane' });
 }

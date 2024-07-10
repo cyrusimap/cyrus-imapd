@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_floating_differenttz
-    :min_version_3_0 :needs_component_calalarmd
-{
-    my ($self) = @_;
-    return if not $self->{test_calalarmd};
+  : min_version_3_0 : needs_component_calalarmd {
+  my ($self) = @_;
+  return if not $self->{test_calalarmd};
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $tz = <<EOF;
+  my $tz = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -32,34 +31,34 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $tz});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo', timeZone => $tz });
+  $self->assert_not_null($CalendarId);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Australia/Sydney');
-    # bump everything forward so a slow run (say: valgrind)
-    # doesn't cause things to magically fire...
-    $now->add(DateTime::Duration->new(seconds => 300));
+  my $now = DateTime->now();
+  $now->set_time_zone('Australia/Sydney');
+  # bump everything forward so a slow run (say: valgrind)
+  # doesn't cause things to magically fire...
+  $now->add(DateTime::Duration->new(seconds => 300));
 
-    my $syd = DateTime::TimeZone->new( name => 'Australia/Sydney' );
-    my $ny = DateTime::TimeZone->new( name => 'America/New_York' );
-    my $offset = $syd->offset_for_datetime($now) - $ny->offset_for_datetime($now);
+  my $syd    = DateTime::TimeZone->new(name => 'Australia/Sydney');
+  my $ny     = DateTime::TimeZone->new(name => 'America/New_York');
+  my $offset = $syd->offset_for_datetime($now) - $ny->offset_for_datetime($now);
 
-    # define the event to start in a few seconds
-    my $startdt = $now->clone();
-    $startdt->add(DateTime::Duration->new(seconds => 2));
-    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+  # define the event to start in a few seconds
+  my $startdt = $now->clone();
+  $startdt->add(DateTime::Duration->new(seconds => 2));
+  my $start = $startdt->strftime('%Y%m%dT%H%M%S');
 
-    my $enddt = $startdt->clone();
-    $enddt->add(DateTime::Duration->new(seconds => 15));
-    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+  my $enddt = $startdt->clone();
+  $enddt->add(DateTime::Duration->new(seconds => 15));
+  my $end = $enddt->strftime('%Y%m%dT%H%M%S');
 
-    # set the trigger to notify us at the start of the event
-    my $trigger="PT0S";
+  # set the trigger to notify us at the start of the event
+  my $trigger = "PT0S";
 
-    my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "95989f3d-575f-4828-9610-6f16b9d54d04";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -83,19 +82,22 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60);
 
-    # no alarms
-    $self->assert_alarms();
+  # no alarms
+  $self->assert_alarms();
 
-    # trigger processing in New York
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 + $offset );
+  # trigger processing in New York
+  $self->{instance}->run_command({ cyrus => 1 },
+    'calalarmd', '-t' => $now->epoch() + 60 + $offset);
 
-    # alarm fires
-    $self->assert_alarms({summary => 'Floating', timezone => 'America/New_York', start => $start});
+  # alarm fires
+  $self->assert_alarms(
+    { summary => 'Floating', timezone => 'America/New_York', start => $start });
 }

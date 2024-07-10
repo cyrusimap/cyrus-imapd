@@ -45,15 +45,15 @@ use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
 
-sub new
-{
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
-    return $self;
+sub new {
+  my $class = shift;
+  my $self  = $class->SUPER::new(@_);
+  return $self;
 }
 
 my $mustache;
-Cassandane::Unit::TestCase::parameter(\$mustache, 'walrus', 'toothbrush', 'waxed');
+Cassandane::Unit::TestCase::parameter(\$mustache, 'walrus', 'toothbrush',
+  'waxed');
 
 my $nose;
 Cassandane::Unit::TestCase::parameter(\$nose, 'roman');
@@ -61,9 +61,8 @@ Cassandane::Unit::TestCase::parameter(\$nose, 'roman');
 my $eyes;
 Cassandane::Unit::TestCase::parameter(\$eyes, 'brown', 'cat');
 
-sub test_face
-{
-    xlog "XXX face: mustache=$mustache eyes=$eyes nose=$nose";
+sub test_face {
+  xlog "XXX face: mustache=$mustache eyes=$eyes nose=$nose";
 }
 
 1;

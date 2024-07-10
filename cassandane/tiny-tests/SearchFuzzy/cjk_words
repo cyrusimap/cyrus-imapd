@@ -2,88 +2,88 @@
 use Cassandane::Tiny;
 
 sub test_cjk_words
-    :min_version_3_0 :needs_search_xapian
-    :needs_search_xapian_cjk_tokens(words)
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_search_xapian
+  : needs_search_xapian_cjk_tokens(words) {
+  my ($self) = @_;
 
-    xlog $self, "Generate and index test messages.";
+  xlog $self, "Generate and index test messages.";
 
-use utf8;
-    my $body = "明末時已經有香港地方的概念";
-no utf8;
-    $body = encode_base64(encode('UTF-8', $body));
-    $body =~ s/\r?\n/\r\n/gs;
-    my %params = (
-        mime_charset => "utf-8",
-        mime_encoding => 'base64',
-        body => $body,
-    );
-    $self->make_message("1", %params) || die;
+  use utf8;
+  my $body = "明末時已經有香港地方的概念";
+  no utf8;
+  $body = encode_base64(encode('UTF-8', $body));
+  $body =~ s/\r?\n/\r\n/gs;
+  my %params = (
+    mime_charset  => "utf-8",
+    mime_encoding => 'base64',
+    body          => $body,
+  );
+  $self->make_message("1", %params) || die;
 
-    # Splits into the words: "み, 円, 月額, 申込
-use utf8;
-    $body = "申込み！月額円";
-no utf8;
-    $body = encode_base64(encode('UTF-8', $body));
-    $body =~ s/\r?\n/\r\n/gs;
-    %params = (
-        mime_charset => "utf-8",
-        mime_encoding => 'base64',
-        body => $body,
-    );
-    $self->make_message("2", %params) || die;
+  # Splits into the words: "み, 円, 月額, 申込
+  use utf8;
+  $body = "申込み！月額円";
+  no utf8;
+  $body = encode_base64(encode('UTF-8', $body));
+  $body =~ s/\r?\n/\r\n/gs;
+  %params = (
+    mime_charset  => "utf-8",
+    mime_encoding => 'base64',
+    body          => $body,
+  );
+  $self->make_message("2", %params) || die;
 
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+  $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    # Connect to IMAP
-    xlog $self, "Select INBOX";
-    my $r = $talk->select("INBOX") || die;
-    my $uidvalidity = $talk->get_response_code('uidvalidity');
-    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+  # Connect to IMAP
+  xlog $self, "Select INBOX";
+  my $r           = $talk->select("INBOX") || die;
+  my $uidvalidity = $talk->get_response_code('uidvalidity');
+  my $uids        = $talk->search('1:*', 'NOT', 'DELETED');
 
-    my $term;
-    # Search for a two-character CJK word
-use utf8;
-    $term = "已經";
-no utf8;
-    xlog $self, "Get snippets for FUZZY text \"$term\"";
-    $r = $self->get_snippets('INBOX', $uids, { text => $term });
-    $self->assert_num_not_equals(index($r->{snippets}[0][3], "<mark>$term</mark>"), -1);
+  my $term;
+  # Search for a two-character CJK word
+  use utf8;
+  $term = "已經";
+  no utf8;
+  xlog $self, "Get snippets for FUZZY text \"$term\"";
+  $r = $self->get_snippets('INBOX', $uids, { text => $term });
+  $self->assert_num_not_equals(
+    index($r->{snippets}[0][3], "<mark>$term</mark>"), -1);
 
-    # Search for the CJK words 明末 and 時, note that the
-    # word order is reversed to the original message
-use utf8;
-    $term = "時明末";
-no utf8;
-    xlog $self, "Get snippets for FUZZY text \"$term\"";
-    $r = $self->get_snippets('INBOX', $uids, { text => $term });
-    $self->assert_num_equals(scalar @{$r->{snippets}}, 1);
+  # Search for the CJK words 明末 and 時, note that the
+  # word order is reversed to the original message
+  use utf8;
+  $term = "時明末";
+  no utf8;
+  xlog $self, "Get snippets for FUZZY text \"$term\"";
+  $r = $self->get_snippets('INBOX', $uids, { text => $term });
+  $self->assert_num_equals(scalar @{ $r->{snippets} }, 1);
 
-    # Search for the partial CJK word 月
-use utf8;
-    $term = "月";
-no utf8;
-    xlog $self, "Get snippets for FUZZY text \"$term\"";
-    $r = $self->get_snippets('INBOX', $uids, { text => $term });
-    $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
+  # Search for the partial CJK word 月
+  use utf8;
+  $term = "月";
+  no utf8;
+  xlog $self, "Get snippets for FUZZY text \"$term\"";
+  $r = $self->get_snippets('INBOX', $uids, { text => $term });
+  $self->assert_num_equals(scalar @{ $r->{snippets} }, 0);
 
-    # Search for the interleaved, partial CJK word 額申
-use utf8;
-    $term = "額申";
-no utf8;
-    xlog $self, "Get snippets for FUZZY text \"$term\"";
-    $r = $self->get_snippets('INBOX', $uids, { text => $term });
-    $self->assert_num_equals(scalar @{$r->{snippets}}, 0);
+  # Search for the interleaved, partial CJK word 額申
+  use utf8;
+  $term = "額申";
+  no utf8;
+  xlog $self, "Get snippets for FUZZY text \"$term\"";
+  $r = $self->get_snippets('INBOX', $uids, { text => $term });
+  $self->assert_num_equals(scalar @{ $r->{snippets} }, 0);
 
-    # Search for three of four words: "み, 月額, 申込",
-    # in different order than the original.
-use utf8;
-    $term = "月額み申込";
-no utf8;
-    xlog $self, "Get snippets for FUZZY text \"$term\"";
-    $r = $self->get_snippets('INBOX', $uids, { text => $term });
-    $self->assert_num_equals(scalar @{$r->{snippets}}, 1);
+  # Search for three of four words: "み, 月額, 申込",
+  # in different order than the original.
+  use utf8;
+  $term = "月額み申込";
+  no utf8;
+  xlog $self, "Get snippets for FUZZY text \"$term\"";
+  $r = $self->get_snippets('INBOX', $uids, { text => $term });
+  $self->assert_num_equals(scalar @{ $r->{snippets} }, 1);
 }

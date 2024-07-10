@@ -50,22 +50,19 @@ use Cassandane::Util::Slurp;
 use Cassandane::Service;
 use Cassandane::Config;
 
-sub new
-{
-    my $class = shift;
-    return $class->SUPER::new({ replica => 1, adminstore => 1 }, @_);
+sub new {
+  my $class = shift;
+  return $class->SUPER::new({ replica => 1, adminstore => 1 }, @_);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 }
 
-sub tear_down
-{
-    my ($self) = @_;
-    $self->SUPER::tear_down();
+sub tear_down {
+  my ($self) = @_;
+  $self->SUPER::tear_down();
 }
 
 # XXX need a test for version 10 mailbox without guids in it!
@@ -76,28 +73,26 @@ sub tear_down
 #* delete the message from the replica (with expunge_mode default or expunge_mode immediate... try both)
 #* run sync_client on the master again and make sure it successfully syncs up
 
-sub assert_user_sub_exists
-{
-    my ($self, $instance, $user) = @_;
+sub assert_user_sub_exists {
+  my ($self, $instance, $user) = @_;
 
-    my $subs = $instance->get_conf_user_file($user, 'sub');
-    $self->assert_not_null($subs);
+  my $subs = $instance->get_conf_user_file($user, 'sub');
+  $self->assert_not_null($subs);
 
-    xlog $self, "Looking for subscriptions file $subs";
+  xlog $self, "Looking for subscriptions file $subs";
 
-    $self->assert_file_test($subs, '-f');
+  $self->assert_file_test($subs, '-f');
 }
 
-sub assert_user_sub_not_exists
-{
-    my ($self, $instance, $user) = @_;
+sub assert_user_sub_not_exists {
+  my ($self, $instance, $user) = @_;
 
-    my $subs = $instance->get_conf_user_file($user, 'sub');
-    return unless $subs;  # user might not exist
+  my $subs = $instance->get_conf_user_file($user, 'sub');
+  return unless $subs; # user might not exist
 
-    xlog $self, "Looking for subscriptions file $subs";
+  xlog $self, "Looking for subscriptions file $subs";
 
-    $self->assert_not_file_test($subs, '-f');
+  $self->assert_not_file_test($subs, '-f');
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/Replication';

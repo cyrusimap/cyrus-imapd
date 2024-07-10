@@ -2,53 +2,68 @@
 use Cassandane::Tiny;
 
 sub test_rfc6638_3_2_1_1_create
-    :needs_component_httpd
-{
-    my ($self) = @_;
-    my $CalDAV = $self->{caldav};
+  : needs_component_httpd {
+  my ($self) = @_;
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'test' });
+  $self->assert_not_null($CalendarId);
 
-    xlog $self, "default schedule agent -> REQUEST";
-    $self->_put_event($CalendarId, lines => <<EOF);
+  xlog $self, "default schedule agent -> REQUEST";
+  $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-    $self->assert_caldav_notified(
-        { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
-        { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
-    );
+  $self->assert_caldav_notified(
+    {
+      recipient => "test1\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST'
+    },
+    {
+      recipient => "test2\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST'
+    },
+  );
 
-    xlog $self, "schedule agent SERVER -> REQUEST";
-    $self->_put_event($CalendarId, lines => <<EOF);
+  xlog $self, "schedule agent SERVER -> REQUEST";
+  $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=SERVER:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=SERVER:MAILTO:test2\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-    $self->assert_caldav_notified(
-        { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
-        { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
-    );
+  $self->assert_caldav_notified(
+    {
+      recipient => "test1\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST'
+    },
+    {
+      recipient => "test2\@example.com",
+      is_update => JSON::false,
+      method    => 'REQUEST'
+    },
+  );
 
-    xlog $self, "schedule agent CLIENT -> nothing";
-    $self->_put_event($CalendarId, lines => <<EOF);
+  xlog $self, "schedule agent CLIENT -> nothing";
+  $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test2\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-    $self->assert_caldav_notified();
+  $self->assert_caldav_notified();
 
-    xlog $self, "schedule agent NONE -> nothing";
-    $self->_put_event($CalendarId, lines => <<EOF);
+  xlog $self, "schedule agent NONE -> nothing";
+  $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test2\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-    $self->assert_caldav_notified();
+  $self->assert_caldav_notified();
 }

@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_ignore_dead_standalone_instance
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    my $ical = <<'EOF';
+  my $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -28,18 +27,23 @@ UID:889i-uid1@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
-    $caldav->Request('PUT',
-        '/dav/calendars/user/cassandane/Default/test.ics',
-        $ical, 'Content-Type' => 'text/calendar');
+  $caldav->Request(
+    'PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+    $ical, 'Content-Type' => 'text/calendar'
+  );
 
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['title', 'recurrenceOverrides'],
-        }, 'R1'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => [ 'title', 'recurrenceOverrides' ],
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{list} });
 
-    $ical = <<'EOF';
+  $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -85,18 +89,26 @@ UID:889i-uid1@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
-    $caldav->Request('PUT',
-        '/dav/calendars/user/cassandane/Default/test.ics',
-        $ical, 'Content-Type' => 'text/calendar');
+  $caldav->Request(
+    'PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+    $ical, 'Content-Type' => 'text/calendar'
+  );
 
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['title', 'recurrenceOverrides'],
-        }, 'R1'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_str_equals('Party', $res->[0][1]{list}[0]{title});
-    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{list}[0]{recurrenceOverrides}});
-    $self->assert_not_null($res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-19T14:30:00'});
-    $self->assert_not_null($res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-23T14:30:00'});
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => [ 'title', 'recurrenceOverrides' ],
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert_num_equals(1, scalar @{ $res->[0][1]{list} });
+  $self->assert_str_equals('Party', $res->[0][1]{list}[0]{title});
+  $self->assert_num_equals(2,
+    scalar keys %{ $res->[0][1]{list}[0]{recurrenceOverrides} });
+  $self->assert_not_null(
+    $res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-19T14:30:00'});
+  $self->assert_not_null(
+    $res->[0][1]{list}[0]{recurrenceOverrides}{'1996-09-23T14:30:00'});
 }

@@ -2,26 +2,25 @@
 use Cassandane::Tiny;
 
 sub test_contact_update_grouped_property
-    :min_version_3_9 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_9 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $service = $self->{instance}->get_service("http");
-    $ENV{DEBUGDAV} = 1;
-    my $carddav = Net::CardDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+  my $service = $self->{instance}->get_service("http");
+  $ENV{DEBUGDAV} = 1;
+  my $carddav = Net::CardDAVTalk->new(
+    user      => 'cassandane',
+    password  => 'pass',
+    host      => $service->host(),
+    port      => $service->port(),
+    scheme    => 'http',
+    url       => '/',
+    expandurl => 1,
+  );
 
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
-    my $card = <<EOF;
+  my $id   = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+  my $href = "Default/$id.vcf";
+  my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
 UID:$id
@@ -35,32 +34,31 @@ CATEGORIES:cat1,cat2
 END:VCARD
 EOF
 
-    $card =~ s/\r?\n/\r\n/gs;
-    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+  $card =~ s/\r?\n/\r\n/gs;
+  $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
-    my $res = $jmap->CallMethods([
-        ['Contact/get', {
-        }, 'R1']
-    ]);
+  my $res = $jmap->CallMethods([ [ 'Contact/get', {}, 'R1' ] ]);
 
-    $self->assert_equals("Bubba Gump Shrimp Co.",
-                         $res->[0][1]{list}[0]{company});
+  $self->assert_equals("Bubba Gump Shrimp Co.", $res->[0][1]{list}[0]{company});
 
-    $res = $jmap->CallMethods([
-        ['Contact/set', {
-            update => {$id => { company => "BGSCO" }}
-        }, "R1"],
-        ['Contact/get', {
-        }, 'R2']
-    ]);
+  $res = $jmap->CallMethods([
+    [
+      'Contact/set',
+      {
+        update => { $id => { company => "BGSCO" } }
+      },
+      "R1"
+    ],
+    [ 'Contact/get', {}, 'R2' ]
+  ]);
 
-    $self->assert_equals("BGSCO", $res->[1][1]{list}[0]{company});
+  $self->assert_equals("BGSCO", $res->[1][1]{list}[0]{company});
 
-    $res = $carddav->Request('GET', $href);
+  $res = $carddav->Request('GET', $href);
 
-    my $newcard = $res->{content};
-    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+  my $newcard = $res->{content};
+  $newcard =~ s/\r?\n[ \t]+//gs; # unfold long properties
 
-    $self->assert_matches(qr/\nITEM1.ORG:BGSCO/, $newcard);
-    $self->assert_does_not_match(qr/\nORG:/, $newcard);
+  $self->assert_matches(qr/\nITEM1.ORG:BGSCO/, $newcard);
+  $self->assert_does_not_match(qr/\nORG:/, $newcard);
 }

@@ -2,18 +2,17 @@
 use Cassandane::Tiny;
 
 sub test_event_move
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $uuid1 = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
-    my $href = "$CalendarId/$uuid1.ics";
-    my $card1 = <<EOF;
+  my $uuid1 = "d4643cf9-4552-4a3e-8d6c-5f318bcc5b79";
+  my $href  = "$CalendarId/$uuid1.ics";
+  my $card1 = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -31,12 +30,12 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card1, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card1, 'Content-Type' => 'text/calendar');
 
-    my $DestCal = $CalDAV->GetCalendar($CalendarId);
+  my $DestCal = $CalDAV->GetCalendar($CalendarId);
 
-    my $uuid2 = "event2\@example.com";
-    my $card2 = <<EOF;
+  my $uuid2 = "event2\@example.com";
+  my $card2 = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Example Corp.//CalDAV Client//EN
@@ -57,24 +56,27 @@ END:VALARM
 END:VEVENT
 END:VCALENDAR
 EOF
-    $href = "Default/$uuid2.ics";
+  $href = "Default/$uuid2.ics";
 
-    $CalDAV->Request('PUT', $href, $card2, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card2, 'Content-Type' => 'text/calendar');
 
-    my $SrcCal = $CalDAV->GetCalendar('Default');
+  my $SrcCal = $CalDAV->GetCalendar('Default');
 
-    $CalDAV->MoveEvent($href, $CalendarId);
+  $CalDAV->MoveEvent($href, $CalendarId);
 
-    my ($adds, $removes, $errors) = $CalDAV->SyncEvents('Default', syncToken => $SrcCal->{syncToken});
-    $self->assert_deep_equals([], $adds);
-    $self->assert_equals(1, scalar @$removes);
-    $self->assert_str_equals("/dav/calendars/user/cassandane/" . $href, $removes->[0]);
-    $self->assert_deep_equals([], $errors);
+  my ($adds, $removes, $errors)
+    = $CalDAV->SyncEvents('Default', syncToken => $SrcCal->{syncToken});
+  $self->assert_deep_equals([], $adds);
+  $self->assert_equals(1, scalar @$removes);
+  $self->assert_str_equals("/dav/calendars/user/cassandane/" . $href,
+    $removes->[0]);
+  $self->assert_deep_equals([], $errors);
 
-    ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $DestCal->{syncToken});
+  ($adds, $removes, $errors)
+    = $CalDAV->SyncEvents($CalendarId, syncToken => $DestCal->{syncToken});
 
-    $self->assert_equals(1, scalar @$adds);
-    $self->assert_str_equals($adds->[0]{uid}, $uuid2);
-    $self->assert_deep_equals([], $removes);
-    $self->assert_deep_equals([], $errors);
+  $self->assert_equals(1, scalar @$adds);
+  $self->assert_str_equals($adds->[0]{uid}, $uuid2);
+  $self->assert_deep_equals([], $removes);
+  $self->assert_deep_equals([], $errors);
 }

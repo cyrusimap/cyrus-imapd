@@ -4,163 +4,171 @@ use Cassandane::Tiny;
 use DBI;
 
 sub test_admin_rewrite_calendarevent_privacy
-    :needs_component_jmap :min_version_3_7
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : needs_component_jmap : min_version_3_7 {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my @using = qw(
+  my @using = qw(
     urn:ietf:params:jmap:core
     urn:ietf:params:jmap:calendars
     https://cyrusimap.org/ns/jmap/admin
     https://cyrusimap.org/ns/jmap/calendars
     https://cyrusimap.org/ns/jmap/debug
     https://cyrusimap.org/ns/jmap/performance
-);
+  );
 
-    xlog $self, "Make sure regular user can't call Admin method";
-    $res = $jmap->CallMethods([
-        ['Admin/rewriteCalendarEventPrivacy', {}, 'R1'],
-    ], \@using);
-    $self->assert_str_equals('accountNotSupportedByMethod',
-        $res->[0][1]{type});
+  xlog $self, "Make sure regular user can't call Admin method";
+  $res
+    = $jmap->CallMethods([ [ 'Admin/rewriteCalendarEventPrivacy', {}, 'R1' ], ],
+    \@using);
+  $self->assert_str_equals('accountNotSupportedByMethod', $res->[0][1]{type});
 
-    my $event1Uid = '40d11f36-245b-4a03-8034-df25f38f9f61';
+  my $event1Uid = '40d11f36-245b-4a03-8034-df25f38f9f61';
 
-    xlog $self, "create two calendar events";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                event1 => {
-                    calendarIds => {
-                        Default => JSON::true,
-                    },
-                    uid => $event1Uid,
-                    title => 'event1',
-                    start => '2020-01-01T09:00:00',
-                    timeZone => 'Europe/Vienna',
-                    duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
-                    participants => {
-                        cassandane => {
-                            roles => {
-                                'owner' => JSON::true,
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
-                        },
-                        attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:attendee1@example.com',
-                            },
-                        },
-                    },
+  xlog $self, "create two calendar events";
+  my $res = $jmap->CallMethods(
+    [
+      [
+        'CalendarEvent/set',
+        {
+          create => {
+            event1 => {
+              calendarIds => {
+                Default => JSON::true,
+              },
+              uid      => $event1Uid,
+              title    => 'event1',
+              start    => '2020-01-01T09:00:00',
+              timeZone => 'Europe/Vienna',
+              duration => 'PT1H',
+              replyTo  => {
+                imip => 'mailto:cassandane@example.com',
+              },
+              participants => {
+                cassandane => {
+                  roles => {
+                    'owner'    => JSON::true,
+                    'attendee' => JSON::true,
+                  },
+                  sendTo => {
+                    imip => 'mailto:cassandane@example.com',
+                  },
                 },
-                event2 => {
-                    calendarIds => {
-                        Default => JSON::true,
-                    },
-                    uid => '6b18a778-5827-49b9-a2f1-4f67d7be2b6b',
-                    title => 'event2',
-                    start => '2020-02-02T09:00:00',
-                    timeZone => 'Europe/Vienna',
-                    duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
-                    participants => {
-                        cassandane => {
-                            roles => {
-                                'owner' => JSON::true,
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
-                        },
-                        attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:attendee1@example.com',
-                            },
-                        },
-                    },
+                attendee1 => {
+                  roles => {
+                    'attendee' => JSON::true,
+                  },
+                  sendTo => {
+                    imip => 'mailto:attendee1@example.com',
+                  },
                 },
-
+              },
             },
-        }, 'R1'],
-    ], \@using);
-    $self->assert_not_null($res->[0][1]{created}{event1});
-    $self->assert_not_null($res->[0][1]{created}{event2});
-    my $state = $res->[0][1]{newState};
-    $self->assert_not_null($state);
+            event2 => {
+              calendarIds => {
+                Default => JSON::true,
+              },
+              uid      => '6b18a778-5827-49b9-a2f1-4f67d7be2b6b',
+              title    => 'event2',
+              start    => '2020-02-02T09:00:00',
+              timeZone => 'Europe/Vienna',
+              duration => 'PT1H',
+              replyTo  => {
+                imip => 'mailto:cassandane@example.com',
+              },
+              participants => {
+                cassandane => {
+                  roles => {
+                    'owner'    => JSON::true,
+                    'attendee' => JSON::true,
+                  },
+                  sendTo => {
+                    imip => 'mailto:cassandane@example.com',
+                  },
+                },
+                attendee1 => {
+                  roles => {
+                    'attendee' => JSON::true,
+                  },
+                  sendTo => {
+                    imip => 'mailto:attendee1@example.com',
+                  },
+                },
+              },
+            },
 
-    my $http = $self->{instance}->get_service("http");
-    my $adminJmap = Mail::JMAPTalk->new(
-        user => 'admin',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
-    $adminJmap->DefaultUsing(\@using);
+          },
+        },
+        'R1'
+      ],
+    ],
+    \@using
+  );
+  $self->assert_not_null($res->[0][1]{created}{event1});
+  $self->assert_not_null($res->[0][1]{created}{event2});
+  my $state = $res->[0][1]{newState};
+  $self->assert_not_null($state);
 
+  my $http      = $self->{instance}->get_service("http");
+  my $adminJmap = Mail::JMAPTalk->new(
+    user     => 'admin',
+    password => 'pass',
+    host     => $http->host(),
+    port     => $http->port(),
+    scheme   => 'http',
+    url      => '/jmap/',
+  );
+  $adminJmap->DefaultUsing(\@using);
 
-    my $dirs = ($self->{instance}->run_mbpath(-u => 'cassandane'));
-    my $db = DBI->connect("dbi:SQLite:dbname=$dirs->{user}{dav}","","");
+  my $dirs = ($self->{instance}->run_mbpath(-u => 'cassandane'));
+  my $db   = DBI->connect("dbi:SQLite:dbname=$dirs->{user}{dav}", "", "");
 
-    xlog $self, "Make sure no calendar event is marked private";
-    my $selectStmt = $db->prepare(
-        "SELECT rowid FROM ical_objs WHERE comp_flags >= 1024");
-    $selectStmt->execute();
-    $self->assert_null($selectStmt->fetch());
+  xlog $self, "Make sure no calendar event is marked private";
+  my $selectStmt
+    = $db->prepare("SELECT rowid FROM ical_objs WHERE comp_flags >= 1024");
+  $selectStmt->execute();
+  $self->assert_null($selectStmt->fetch());
 
-    xlog $self, "Manually mark one calendar event private";
-    my $updateStmt = $db->prepare(
-        "UPDATE ical_objs SET comp_flags = 1024 WHERE ical_uid = '$event1Uid'");
-    $res = $updateStmt->execute();
-    $self->assert_num_equals(1, $res);
+  xlog $self, "Manually mark one calendar event private";
+  my $updateStmt = $db->prepare(
+    "UPDATE ical_objs SET comp_flags = 1024 WHERE ical_uid = '$event1Uid'");
+  $res = $updateStmt->execute();
+  $self->assert_num_equals(1, $res);
 
-    xlog $self, "Clear notifications";
-    $self->{instance}->getnotify();
+  xlog $self, "Clear notifications";
+  $self->{instance}->getnotify();
 
-    xlog $self, "Rewrite calendar event privacy as admin";
-    $res = $adminJmap->CallMethods([
-        ['Admin/rewriteCalendarEventPrivacy', {}, 'R1'],
-    ]);
-    $self->assert_num_equals(1,
-        scalar keys %{$res->[0][1]{rewritten}{cassandane}});
-    $self->assert_null($res->[0][1]{notRewritten});
+  xlog $self, "Rewrite calendar event privacy as admin";
+  $res = $adminJmap->CallMethods([
+    [ 'Admin/rewriteCalendarEventPrivacy', {}, 'R1' ], ]);
+  $self->assert_num_equals(1,
+    scalar keys %{ $res->[0][1]{rewritten}{cassandane} });
+  $self->assert_null($res->[0][1]{notRewritten});
 
-    xlog $self, "Make sure no calendar event is marked private";
-    $selectStmt->execute();
-    $self->assert_null($selectStmt->fetch());
+  xlog $self, "Make sure no calendar event is marked private";
+  $selectStmt->execute();
+  $self->assert_null($selectStmt->fetch());
 
-    xlog $self, "Assert no iMIP notifications are sent";
-    my $data = $self->{instance}->getnotify();
-    $self->assert_num_equals(0, scalar grep { $_->{METHOD} eq 'imip' } @$data);
+  xlog $self, "Assert no iMIP notifications are sent";
+  my $data = $self->{instance}->getnotify();
+  $self->assert_num_equals(0, scalar grep { $_->{METHOD} eq 'imip' } @$data);
 
-    xlog $self, "Assert new event message is sent to pusher";
-    my @newevent = grep {
-        $_->{METHOD} eq 'pusher' and $_->{MESSAGE} =~ '{"event":"MessageNew"'
-    } @$data;
-    $self->assert_num_equals(1, scalar @newevent);
+  xlog $self, "Assert new event message is sent to pusher";
+  my @newevent = grep {
+    $_->{METHOD} eq 'pusher' and $_->{MESSAGE} =~ '{"event":"MessageNew"'
+  } @$data;
+  $self->assert_num_equals(1, scalar @newevent);
 
-    xlog $self, "Assert CalendarEvent state changed";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            ids => [],
-        }, 'R1']
-    ], \@using);
-    $self->assert_str_not_equals($state, $res->[0][1]{state});
+  xlog $self, "Assert CalendarEvent state changed";
+  $res = $jmap->CallMethods(
+    [ [
+      'CalendarEvent/get',
+      {
+        ids => [],
+      },
+      'R1'
+    ] ],
+    \@using
+  );
+  $self->assert_str_not_equals($state, $res->[0][1]{state});
 }

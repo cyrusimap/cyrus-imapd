@@ -2,38 +2,45 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_cycle_in_update
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
+  : min_version_3_1 : needs_component_jmap {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $imaptalk = $self->{store}->get_client();
+  my $jmap     = $self->{jmap};
+  my $imaptalk = $self->{store}->get_client();
 
-    # Create and get mailbox tree.
-    $imaptalk->create("INBOX.A") or die;
-    $imaptalk->create("INBOX.B") or die;
-    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
-    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    my ($idA, $idB) = ($m{"A"}{id}, $m{"B"}{id});
+  # Create and get mailbox tree.
+  $imaptalk->create("INBOX.A") or die;
+  $imaptalk->create("INBOX.B") or die;
+  my $res = $jmap->CallMethods([ [ 'Mailbox/get', {}, "R1" ] ]);
+  my %m   = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  my ($idA, $idB) = ($m{"A"}{id}, $m{"B"}{id});
 
-    # Introduce a cycle in the mailbox tree. Since both
-    # operations could create the cycle, one operation must
-    # fail and the other succeed. It's not deterministic
-    # which will, resulting in mailboxes (A, A.B) or (B, B.A).
-    $res = $jmap->CallMethods([['Mailbox/set', {
-        update => {
-            $idB => {
-                parentId => $idA,
-            },
-            $idA => {
-                parentId => $idB,
-            },
+  # Introduce a cycle in the mailbox tree. Since both
+  # operations could create the cycle, one operation must
+  # fail and the other succeed. It's not deterministic
+  # which will, resulting in mailboxes (A, A.B) or (B, B.A).
+  $res = $jmap->CallMethods([ [
+    'Mailbox/set',
+    {
+      update => {
+        $idB => {
+          parentId => $idA,
         },
-    }, "R1"]]);
-    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{notUpdated}});
-    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
-    $self->assert(
-        (exists $res->[0][1]{notUpdated}{$idA} and exists $res->[0][1]{updated}{$idB}) or
-        (exists $res->[0][1]{notUpdated}{$idB} and exists $res->[0][1]{updated}{$idA})
-    );
+        $idA => {
+          parentId => $idB,
+        },
+      },
+    },
+    "R1"
+  ] ]);
+  $self->assert_num_equals(1, scalar keys %{ $res->[0][1]{notUpdated} });
+  $self->assert_num_equals(1, scalar keys %{ $res->[0][1]{updated} });
+  $self->assert(
+    (
+            exists $res->[0][1]{notUpdated}{$idA}
+        and exists $res->[0][1]{updated}{$idB}
+    )
+      or (exists $res->[0][1]{notUpdated}{$idB}
+      and exists $res->[0][1]{updated}{$idA})
+  );
 }

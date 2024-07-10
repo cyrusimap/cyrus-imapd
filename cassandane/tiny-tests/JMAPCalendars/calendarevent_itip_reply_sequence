@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_itip_reply_sequence
-    :needs_component_httpd :needs_component_jmap :min_version_3_5
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : needs_component_httpd : needs_component_jmap : min_version_3_5 {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog "PUT event for invitee";
-    my $ical = <<'EOF';
+  xlog "PUT event for invitee";
+  my $ical = <<'EOF';
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -28,42 +27,53 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;X-JMAP-ID=cassandane:MAILTO:cassandane@
 END:VEVENT
 END:VCALENDAR
 EOF
-    $caldav->Request('PUT',
-        '/dav/calendars/user/cassandane/Default/testitip.ics',
-        $ical, 'Content-Type' => 'text/calendar');
+  $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/testitip.ics',
+    $ical, 'Content-Type' => 'text/calendar');
 
-    xlog "Assert sequence number";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['id', 'sequence']
-        }, 'R1'],
-    ]);
-    $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
-    my $eventId = $res->[0][1]{list}[0]{id};
+  xlog "Assert sequence number";
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => [ 'id', 'sequence' ]
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
+  my $eventId = $res->[0][1]{list}[0]{id};
 
-    xlog "Update invitee's participant";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            sendSchedulingMessages => JSON::true,
-            update => {
-                $eventId => {
-                    'participants/cassandane/expectReply' => JSON::false,
-                    'participants/cassandane/participationStatus' => 'accepted',
-                    'participants/cassandane/scheduleSequence' => 1,
-                    'participants/cassandane/scheduleUpdated' => '2022-01-20T14:56:36Z',
-                },
+  xlog "Update invitee's participant";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        sendSchedulingMessages => JSON::true,
+        update                 => {
+          $eventId => {
+            'participants/cassandane/expectReply'         => JSON::false,
+            'participants/cassandane/participationStatus' => 'accepted',
+            'participants/cassandane/scheduleSequence'    => 1,
+            'participants/cassandane/scheduleUpdated' => '2022-01-20T14:56:36Z',
+          },
 
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_null($res->[0][1]{updated}{$eventId}{sequence});
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$eventId});
+  $self->assert_null($res->[0][1]{updated}{$eventId}{sequence});
 
-    xlog "Assert sequence number did not increase";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            properties => ['id', 'sequence']
-        }, 'R1'],
-    ]);
-    $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
+  xlog "Assert sequence number did not increase";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/get',
+      {
+        properties => [ 'id', 'sequence' ]
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert_num_equals(1, $res->[0][1]{list}[0]{sequence});
 }

@@ -2,43 +2,50 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_virtuallocation_xprop
-    :needs_component_httpd :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : needs_component_httpd : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $virtualLocations = {
-        vl1 => {
-            '@type' => 'VirtualLocation',
-            "example.com:foo" => "bar",
-            "example.com:bar" => {
-                "baz" => JSON::true,
+  my $virtualLocations = {
+    vl1 => {
+      '@type'           => 'VirtualLocation',
+      "example.com:foo" => "bar",
+      "example.com:bar" => {
+        "baz" => JSON::true,
+      },
+      uri => 'https://example.com/v/e1ea21ce03a9',
+    },
+  };
+
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        create => {
+          event1 => {
+            calendarIds => {
+              Default => JSON::true,
             },
-            uri => 'https://example.com/v/e1ea21ce03a9',
+            '@type'          => 'Event',
+            title            => 'test',
+            start            => '2024-04-29T09:00:00',
+            timeZone         => 'Europe/Berlin',
+            virtualLocations => $virtualLocations,
+          },
         },
-    };
+      },
+      'R1'
+    ],
+    [
+      'CalendarEvent/get',
+      {
+        ids        => ['#event1'],
+        properties => ['virtualLocations'],
+      },
+      'R2'
+    ],
+  ]);
 
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                event1 => {
-                    calendarIds => {
-                        Default => JSON::true,
-                    },
-                    '@type' => 'Event',
-                    title => 'test',
-                    start => '2024-04-29T09:00:00',
-                    timeZone => 'Europe/Berlin',
-                    virtualLocations => $virtualLocations,
-                },
-            },
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            ids => ['#event1'],
-            properties => ['virtualLocations'],
-        }, 'R2'],
-    ]);
-
-    $self->assert_deep_equals($virtualLocations,
-        $res->[1][1]{list}[0]{virtualLocations});
+  $self->assert_deep_equals($virtualLocations,
+    $res->[1][1]{list}[0]{virtualLocations});
 }

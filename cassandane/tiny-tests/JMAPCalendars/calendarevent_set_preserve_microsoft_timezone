@@ -2,14 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_preserve_microsoft_timezone
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $caldav = $self->{caldav};
 
-    xlog "Create event with Microsoft timezone via CalDAV";
-    my $ical = <<EOF;
+  xlog "Create event with Microsoft timezone via CalDAV";
+  my $ical = <<EOF;
 BEGIN:VCALENDAR
 PRODID:Microsoft Exchange Server 2010
 VERSION:2.0
@@ -38,61 +37,71 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    my $ics = '/dav/calendars/user/cassandane/Default/test.ics';
-    $caldav->Request('PUT', $ics, $ical, 'Content-Type' => 'text/calendar');
+  my $ics = '/dav/calendars/user/cassandane/Default/test.ics';
+  $caldav->Request('PUT', $ics, $ical, 'Content-Type' => 'text/calendar');
 
-    xlog "Assert timeZone is mapped to IANA timezone";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/query', {
-        }, 'R1'],
-        ['CalendarEvent/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'CalendarEvent/query',
-                path => '/ids'
-            },
-            properties => ['timeZone'],
-        }, 'R2'],
-    ]);
-    my $eventId = $res->[1][1]{list}[0]{id};
-    $self->assert_not_null($eventId);
-    $self->assert_str_equals('Australia/Sydney', $res->[1][1]{list}[0]{timeZone});
+  xlog "Assert timeZone is mapped to IANA timezone";
+  my $res = $jmap->CallMethods([
+    [ 'CalendarEvent/query', {}, 'R1' ],
+    [
+      'CalendarEvent/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'CalendarEvent/query',
+          path     => '/ids'
+        },
+        properties => ['timeZone'],
+      },
+      'R2'
+    ],
+  ]);
+  my $eventId = $res->[1][1]{list}[0]{id};
+  $self->assert_not_null($eventId);
+  $self->assert_str_equals('Australia/Sydney', $res->[1][1]{list}[0]{timeZone});
 
-    xlog "Update event title, keep timeZone untouched";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    title => 'updatedTitle',
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
+  xlog "Update event title, keep timeZone untouched";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        update => {
+          $eventId => {
+            title => 'updatedTitle',
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog "Assert VTIMEZONE is kept";
-    $res = $caldav->Request('GET', $ics);
-    $self->assert($res->{content} =~
-        m/DTSTART;TZID=AUS Eastern Standard Time:20220412T080000/);
-    $self->assert($res->{content} =~
-        m/TZID:AUS Eastern Standard Time/);
+  xlog "Assert VTIMEZONE is kept";
+  $res = $caldav->Request('GET', $ics);
+  $self->assert($res->{content} =~
+      m/DTSTART;TZID=AUS Eastern Standard Time:20220412T080000/);
+  $self->assert($res->{content} =~ m/TZID:AUS Eastern Standard Time/);
 
-    xlog "Update event timeZone to IANA identifier";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    timeZone => 'Europe/London',
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
+  xlog "Update event timeZone to IANA identifier";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        update => {
+          $eventId => {
+            timeZone => 'Europe/London',
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog "Assert VTIMEZONE got replaced";
-    $res = $caldav->Request('GET', $ics);
-    $self->assert(not $res->{content} =~
-        m/DTSTART;TZID=AUS Eastern Standard Time:20220412T080000/);
-    $self->assert(not $res->{content} =~
-        m/TZID:AUS Eastern Standard Time/);
+  xlog "Assert VTIMEZONE got replaced";
+  $res = $caldav->Request('GET', $ics);
+  $self->assert(
+    not $res->{content} =~
+      m/DTSTART;TZID=AUS Eastern Standard Time:20220412T080000/);
+  $self->assert(not $res->{content} =~ m/TZID:AUS Eastern Standard Time/);
 }

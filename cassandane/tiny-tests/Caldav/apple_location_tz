@@ -2,18 +2,17 @@
 use Cassandane::Tiny;
 
 sub test_apple_location_tz
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -53,11 +52,11 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    my $response = $CalDAV->Request('GET', $href);
+  my $response = $CalDAV->Request('GET', $href);
 
-    my $newcard = $response->{content};
+  my $newcard = $response->{content};
 
-    $self->assert_matches(qr/geo:-37.810551,144.962840/, $newcard);
+  $self->assert_matches(qr/geo:-37.810551,144.962840/, $newcard);
 }

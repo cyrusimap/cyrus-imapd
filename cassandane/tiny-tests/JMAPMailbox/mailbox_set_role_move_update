@@ -2,56 +2,74 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_role_move_update
-    :min_version_3_3 :needs_component_jmap :NoAltNameSpace
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_3 : needs_component_jmap : NoAltNameSpace {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    my $res = $jmap->CallMethods([
-        ['Mailbox/get', {
-            properties => ['role', 'name'],
-        }, 'R1'],
-        ['Mailbox/set', {
-            create => {
-                mboxA => {
-                    name => 'A',
-                    role => 'trash',
-                },
-                mboxB => {
-                    name => 'B',
-                },
-            },
-        }, "R2"],
-    ]);
-    my $inbox = $res->[0][1]{list}[0]{id};
-    $self->assert_not_null($inbox);
-    my $mboxA = $res->[1][1]{created}{mboxA}{id};
-    $self->assert_not_null($mboxA);
-    my $mboxB = $res->[1][1]{created}{mboxB}{id};
-    $self->assert_not_null($mboxB);
+  my $res = $jmap->CallMethods([
+    [
+      'Mailbox/get',
+      {
+        properties => [ 'role', 'name' ],
+      },
+      'R1'
+    ],
+    [
+      'Mailbox/set',
+      {
+        create => {
+          mboxA => {
+            name => 'A',
+            role => 'trash',
+          },
+          mboxB => {
+            name => 'B',
+          },
+        },
+      },
+      "R2"
+    ],
+  ]);
+  my $inbox = $res->[0][1]{list}[0]{id};
+  $self->assert_not_null($inbox);
+  my $mboxA = $res->[1][1]{created}{mboxA}{id};
+  $self->assert_not_null($mboxA);
+  my $mboxB = $res->[1][1]{created}{mboxB}{id};
+  $self->assert_not_null($mboxB);
 
-    xlog "move trash role by update";
-    $res = $jmap->CallMethods([
-        ['Mailbox/set', {
-            update => {
-                $mboxA => {
-                    role => undef,
-                },
-                $mboxB => {
-                    role => 'trash',
-                },
-            },
-        }, "R1"],
-        ['Mailbox/get', {
-            properties => ['role', 'name'],
-        }, 'R2'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$mboxA});
-    $self->assert(exists $res->[0][1]{updated}{$mboxB});
-    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
-    $self->assert_deep_equals({
-        $inbox => 'inbox',
-        $mboxA => undef,
-        $mboxB => 'trash',
-    }, \%roleByMbox);
+  xlog "move trash role by update";
+  $res = $jmap->CallMethods([
+    [
+      'Mailbox/set',
+      {
+        update => {
+          $mboxA => {
+            role => undef,
+          },
+          $mboxB => {
+            role => 'trash',
+          },
+        },
+      },
+      "R1"
+    ],
+    [
+      'Mailbox/get',
+      {
+        properties => [ 'role', 'name' ],
+      },
+      'R2'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$mboxA});
+  $self->assert(exists $res->[0][1]{updated}{$mboxB});
+  my %roleByMbox = map { $_->{id} => $_->{role} } @{ $res->[1][1]{list} };
+  $self->assert_deep_equals(
+    {
+      $inbox => 'inbox',
+      $mboxA => undef,
+      $mboxB => 'trash',
+    },
+    \%roleByMbox
+  );
 }

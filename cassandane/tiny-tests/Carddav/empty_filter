@@ -2,16 +2,15 @@
 use Cassandane::Tiny;
 
 sub test_empty_filter
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CardDAV = $self->{carddav};
-    my $Id = $CardDAV->NewAddressBook('foo');
-    $self->assert_not_null($Id);
-    $self->assert_str_equals($Id, 'foo');
+  my $CardDAV = $self->{carddav};
+  my $Id      = $CardDAV->NewAddressBook('foo');
+  $self->assert_not_null($Id);
+  $self->assert_str_equals($Id, 'foo');
 
-    my $xml = <<EOF;
+  my $xml = <<EOF;
 <C:addressbook-query xmlns:D="DAV:"
                     xmlns:C="urn:ietf:params:xml:ns:carddav">
     <D:prop>
@@ -22,7 +21,7 @@ sub test_empty_filter
 </C:addressbook-query>
 EOF
 
-    my $Str = <<EOF;
+  my $Str = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
 N:Gump;Forrest;;Mr.
@@ -33,11 +32,15 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
+  my $VCard = Net::CardDAVTalk::VCard->new_fromstring($Str);
 
-    $CardDAV->NewContact($Id, $VCard);
+  $CardDAV->NewContact($Id, $VCard);
 
-    my $res = $CardDAV->Request('REPORT', "/dav/addressbooks/user/cassandane/$Id", $xml, Depth => 0, 'Content-Type' => 'text/xml');
+  my $res = $CardDAV->Request(
+    'REPORT', "/dav/addressbooks/user/cassandane/$Id", $xml,
+    Depth          => 0,
+    'Content-Type' => 'text/xml'
+  );
 
-    $self->assert_not_null($res->{"{DAV:}response"});
+  $self->assert_not_null($res->{"{DAV:}response"});
 }

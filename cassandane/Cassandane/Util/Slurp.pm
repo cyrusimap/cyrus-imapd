@@ -46,17 +46,16 @@ use lib '.';
 
 our @EXPORT = qw(&slurp_file);
 
-sub slurp_file
-{
-    my ($filename) = @_;
+sub slurp_file {
+  my ($filename) = @_;
 
-    local $/;
-    open my $f, '<', $filename
-        or die "Cannot open $filename for reading: $!\n";
-    my $str = <$f>;
-    close $f;
+  local $/;
+  open my $f, '<', $filename
+    or die "Cannot open $filename for reading: $!\n";
+  my $str = <$f>;
+  close $f;
 
-    return $str;
+  return $str;
 }
 
 1;

@@ -2,71 +2,69 @@
 use Cassandane::Tiny;
 
 sub test_search
-    :min_version_3_9
-{
-    my ($self) = @_;
+  : min_version_3_9 {
+  my ($self) = @_;
 
-    my $imaptalk = $self->{store}->get_client();
+  my $imaptalk = $self->{store}->get_client();
 
-    xlog $self, "append some messages";
-    my %exp;
-    my $N = 10;
-    for (1..$N)
-    {
-        my $msg = $self->make_message("Message $_");
-        $exp{$_} = $msg;
-    }
-    xlog $self, "check the messages got there";
-    $self->check_messages(\%exp);
+  xlog $self, "append some messages";
+  my %exp;
+  my $N = 10;
+  for (1 .. $N) {
+    my $msg = $self->make_message("Message $_");
+    $exp{$_} = $msg;
+  }
+  xlog $self, "check the messages got there";
+  $self->check_messages(\%exp);
 
-    xlog $self, "delete the 1st and 6th";
-    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  xlog $self, "delete the 1st and 6th";
+  $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog $self, "SEARCH";
-    $res = $imaptalk->search('not', 'deleted');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(8, scalar @{$res});
-    $self->assert_num_equals(2, $res->[0]);
-    $self->assert_num_equals(3, $res->[1]);
-    $self->assert_num_equals(4, $res->[2]);
-    $self->assert_num_equals(5, $res->[3]);
-    $self->assert_num_equals(7, $res->[4]);
-    $self->assert_num_equals(8, $res->[5]);
-    $self->assert_num_equals(9, $res->[6]);
-    $self->assert_num_equals(10, $res->[7]);
+  xlog $self, "SEARCH";
+  $res = $imaptalk->search('not', 'deleted');
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_num_equals(8,  scalar @{$res});
+  $self->assert_num_equals(2,  $res->[0]);
+  $self->assert_num_equals(3,  $res->[1]);
+  $self->assert_num_equals(4,  $res->[2]);
+  $self->assert_num_equals(5,  $res->[3]);
+  $self->assert_num_equals(7,  $res->[4]);
+  $self->assert_num_equals(8,  $res->[5]);
+  $self->assert_num_equals(9,  $res->[6]);
+  $self->assert_num_equals(10, $res->[7]);
 
-    xlog $self, "ENABLE UIDONLY";
-    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
-    $self->assert_num_equals(1, $res->{uidonly});
+  xlog $self, "ENABLE UIDONLY";
+  $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+  $self->assert_num_equals(1, $res->{uidonly});
 
-    xlog $self, "attempt SEARCH";
-    $res = $imaptalk->search('not', 'deleted');
-    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
-    # get_response_code() doesn't (yet) handle [UIDREQUIRED]
-    $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
+  xlog $self, "attempt SEARCH";
+  $res = $imaptalk->search('not', 'deleted');
+  $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+  # get_response_code() doesn't (yet) handle [UIDREQUIRED]
+  $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
-    xlog $self, "attempt UID SEARCH with msgnos";
-    $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', '1:10');
-    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+  xlog $self, "attempt UID SEARCH with msgnos";
+  $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', '1:10');
+  $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 
-    xlog $self, "UID SEARCH";
-    $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', 'not', 'deleted');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(8, scalar @{$res});
-    $self->assert_num_equals(2, $res->[0]);
-    $self->assert_num_equals(3, $res->[1]);
-    $self->assert_num_equals(4, $res->[2]);
-    $self->assert_num_equals(5, $res->[3]);
-    $self->assert_num_equals(7, $res->[4]);
-    $self->assert_num_equals(8, $res->[5]);
-    $self->assert_num_equals(9, $res->[6]);
-    $self->assert_num_equals(10, $res->[7]);
+  xlog $self, "UID SEARCH";
+  $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', 'not', 'deleted');
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_num_equals(8,  scalar @{$res});
+  $self->assert_num_equals(2,  $res->[0]);
+  $self->assert_num_equals(3,  $res->[1]);
+  $self->assert_num_equals(4,  $res->[2]);
+  $self->assert_num_equals(5,  $res->[3]);
+  $self->assert_num_equals(7,  $res->[4]);
+  $self->assert_num_equals(8,  $res->[5]);
+  $self->assert_num_equals(9,  $res->[6]);
+  $self->assert_num_equals(10, $res->[7]);
 
-    xlog $self, "UID SEARCH with UIDs";
-    $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', 'uid', '1:10');
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(10, scalar @{$res});
+  xlog $self, "UID SEARCH with UIDs";
+  $res = $imaptalk->_imap_cmd('UID SEARCH', 1, 'search', 'uid', '1:10');
+  $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+  $self->assert_num_equals(10, scalar @{$res});
 }
 
 1;

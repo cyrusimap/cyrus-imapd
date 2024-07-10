@@ -2,84 +2,91 @@
 use Cassandane::Tiny;
 
 sub test_itip_request_tzid_change
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $uid = 'event1uid',
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $uid    = 'event1uid',
 
     xlog "Clear notifications";
-    $self->{instance}->getnotify();
+  $self->{instance}->getnotify();
 
-    xlog "Create scheduled event";
-    my $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            create => {
-                event => {
-                    calendarIds => {
-                        'Default' => JSON::true,
-                    },
-                    '@type' => 'Event',
-                    uid => $uid,
-                    title => 'event',
-                    start => '2021-01-01T15:30:00',
-                    timeZone => 'Europe/Berlin',
-                    duration => 'PT1H',
-                    recurrenceRules => [{
-                        frequency => 'daily',
-                        count => 30,
-                    }],
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
-                    participants => {
-                        cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
-                            participationStatus => 'needs-action',
-                            expectReply => JSON::true,
-                        },
-                    },
-                },
+  xlog "Create scheduled event";
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        create => {
+          event => {
+            calendarIds => {
+              'Default' => JSON::true,
             },
-        }, 'R1'],
-    ]);
-    my $eventId = $res->[0][1]{created}{event}{id};
-    $self->assert_not_null($eventId);
-
-    xlog "Assert that iTIP notification is sent";
-    my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $self->assert_not_null($notif);
-    my $notif_payload = decode_json($notif->{MESSAGE});
-    my $expect_id = encode_eventid($uid);
-    $self->assert_str_equals($expect_id, $notif_payload->{id});
-    $self->assert_str_equals('REQUEST', $notif_payload->{method});
-
-    xlog "Clear notifications";
-    $self->{instance}->getnotify();
-
-    xlog "Update time zone of scheduled event";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            update => {
-                $eventId => {
-                    timeZone => 'America/New_York',
-                },
+            '@type'         => 'Event',
+            uid             => $uid,
+            title           => 'event',
+            start           => '2021-01-01T15:30:00',
+            timeZone        => 'Europe/Berlin',
+            duration        => 'PT1H',
+            recurrenceRules => [ {
+              frequency => 'daily',
+              count     => 30,
+            } ],
+            replyTo => {
+              imip => 'mailto:cassandane@example.com',
             },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
+            participants => {
+              cassandane => {
+                roles => {
+                  attendee => JSON::true,
+                },
+                sendTo => {
+                  imip => 'mailto:someone@example.com',
+                },
+                participationStatus => 'needs-action',
+                expectReply         => JSON::true,
+              },
+            },
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  my $eventId = $res->[0][1]{created}{event}{id};
+  $self->assert_not_null($eventId);
 
-    xlog "Assert that iTIP notification is sent";
-    $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $self->assert_not_null($notif);
-    $notif_payload = decode_json($notif->{MESSAGE});
-    $self->assert_str_equals($expect_id, $notif_payload->{id});
-    $self->assert_str_equals('REQUEST', $notif_payload->{method});
+  xlog "Assert that iTIP notification is sent";
+  my $data = $self->{instance}->getnotify();
+  my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+  $self->assert_not_null($notif);
+  my $notif_payload = decode_json($notif->{MESSAGE});
+  my $expect_id     = encode_eventid($uid);
+  $self->assert_str_equals($expect_id, $notif_payload->{id});
+  $self->assert_str_equals('REQUEST',  $notif_payload->{method});
+
+  xlog "Clear notifications";
+  $self->{instance}->getnotify();
+
+  xlog "Update time zone of scheduled event";
+  $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        update => {
+          $eventId => {
+            timeZone => 'America/New_York',
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+  xlog "Assert that iTIP notification is sent";
+  $data = $self->{instance}->getnotify();
+  ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+  $self->assert_not_null($notif);
+  $notif_payload = decode_json($notif->{MESSAGE});
+  $self->assert_str_equals($expect_id, $notif_payload->{id});
+  $self->assert_str_equals('REQUEST',  $notif_payload->{method});
 }

@@ -2,33 +2,35 @@
 use Cassandane::Tiny;
 
 sub test_quota_f_unixhs
-    :UnixHierarchySep
-{
-    my ($self) = @_;
+  : UnixHierarchySep {
+  my ($self) = @_;
 
-    my $admintalk = $self->{adminstore}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    xlog $self, "set ourselves a basic usage quota";
-    $self->_set_limits(
-        quotaroot => 'user/cassandane',
-        storage => 100000,
-        message => 50000,
-        $self->res_annot_storage => 10000,
-    );
-    $self->_check_usages(
-        quotaroot => 'user/cassandane',
-        storage => 0,
-        message => 0,
-        $self->res_annot_storage => 0,
-    );
+  xlog $self, "set ourselves a basic usage quota";
+  $self->_set_limits(
+    quotaroot                => 'user/cassandane',
+    storage                  => 100000,
+    message                  => 50000,
+    $self->res_annot_storage => 10000,
+  );
+  $self->_check_usages(
+    quotaroot                => 'user/cassandane',
+    storage                  => 0,
+    message                  => 0,
+    $self->res_annot_storage => 0,
+  );
 
-    xlog $self, "run quota -f";
-    my @data = $self->{instance}->run_command({
-        cyrus => 1,
-        redirects => { stdout => $self->{instance}{basedir} . '/quota.out' },
-    }, 'quota', '-f');
+  xlog $self, "run quota -f";
+  my @data = $self->{instance}->run_command(
+    {
+      cyrus     => 1,
+      redirects => { stdout => $self->{instance}{basedir} . '/quota.out' },
+    },
+    'quota', '-f'
+  );
 
-    my $str = slurp_file($self->{instance}{basedir} . '/quota.out');
+  my $str = slurp_file($self->{instance}{basedir} . '/quota.out');
 
-    $self->assert_matches(qr{STORAGE user/cassandane}, $str);
+  $self->assert_matches(qr{STORAGE user/cassandane}, $str);
 }

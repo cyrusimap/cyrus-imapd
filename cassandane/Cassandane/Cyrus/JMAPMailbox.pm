@@ -48,7 +48,7 @@ use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
-use Cwd qw(abs_path getcwd);
+use Cwd          qw(abs_path getcwd);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -59,95 +59,110 @@ use Cyrus::DList;
 
 use charnames ':full';
 
-sub new
-{
-    my ($class, @args) = @_;
+sub new {
+  my ($class, @args) = @_;
 
-    my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
-                 conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
-                 httpmodules => 'carddav caldav jmap',
-                 specialuse_extra => '\\XSpecialUse \\XChats \\XTemplates \\XNotes',
-                 notesmailbox => 'Notes',
-                 httpallowcompress => 'no');
+  my $config = Cassandane::Config->default()->clone();
+  $config->set(
+    caldav_realm                => 'Cassandane',
+    conversations               => 'yes',
+    conversations_counted_flags =>
+      "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+    httpmodules       => 'carddav caldav jmap',
+    specialuse_extra  => '\\XSpecialUse \\XChats \\XTemplates \\XNotes',
+    notesmailbox      => 'Notes',
+    httpallowcompress => 'no'
+  );
 
-    return $class->SUPER::new({
-        config => $config,
-        jmap => 1,
-        adminstore => 1,
-        services => [ 'imap', 'http' ]
-    }, @args);
+  return $class->SUPER::new(
+    {
+      config     => $config,
+      jmap       => 1,
+      adminstore => 1,
+      services   => [ 'imap', 'http' ]
+    },
+    @args
+  );
 }
 
-sub setup_default_using
-{
-    my ($self) = @_;
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-    ]);
+sub setup_default_using {
+  my ($self) = @_;
+  $self->{jmap}->DefaultUsing([
+    'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail', ]);
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
+sub set_up {
+  my ($self) = @_;
+  $self->SUPER::set_up();
 
-    if ($self->{jmap}) {
-        $self->setup_default_using();
-    }
-    # n.b. tests that use :NoStartInstances will need to call
-    # $self->setup_default_using() themselves!
+  if ($self->{jmap}) {
+    $self->setup_default_using();
+  }
+  # n.b. tests that use :NoStartInstances will need to call
+  # $self->setup_default_using() themselves!
 }
 
-sub getinbox
-{
-    my ($self, $args) = @_;
+sub getinbox {
+  my ($self, $args) = @_;
 
-    $args = {} unless $args;
+  $args = {} unless $args;
 
-    my $jmap = $self->{jmap};
+  my $jmap = $self->{jmap};
 
-    xlog $self, "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', $args, "R1"]]);
-    $self->assert_not_null($res);
+  xlog $self, "get existing mailboxes";
+  my $res = $jmap->CallMethods([ [ 'Mailbox/get', $args, "R1" ] ]);
+  $self->assert_not_null($res);
 
-    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    return $m{"Inbox"};
+  my %m = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  return $m{"Inbox"};
 }
 
 sub _check_one_count {
-    my $self = shift;
-    my $want = shift;
-    my $have = shift;
-    my $name = shift;
-    $self->assert_num_equals($want, $have);
+  my $self = shift;
+  my $want = shift;
+  my $have = shift;
+  my $name = shift;
+  $self->assert_num_equals($want, $have);
 }
 
-sub _check_counts
-{
-    my $self = shift;
-    my $name = shift;
-    my %expect = @_;
+sub _check_counts {
+  my $self   = shift;
+  my $name   = shift;
+  my %expect = @_;
 
-    my $jmap = $self->{jmap};
+  my $jmap = $self->{jmap};
 
-    my $res = $jmap->CallMethods([['Mailbox/get', {}, 'R']]);
+  my $res = $jmap->CallMethods([ [ 'Mailbox/get', {}, 'R' ] ]);
 
-    #  "totalEmails": 3,
-    #  "unreadEmails": 1,
-    #  "totalThreads": 3,
-    #  "unreadThreads": 1,
+  #  "totalEmails": 3,
+  #  "unreadEmails": 1,
+  #  "totalThreads": 3,
+  #  "unreadThreads": 1,
 
-    for my $folder (@{$res->[0][1]{list}}) {
-        my $want = $expect{$folder->{name}};
-        next unless $want;
-        $self->_check_one_count($want->[0], $folder->{totalEmails}, "$folder->{name} totalEmails");
-        $self->_check_one_count($want->[1], $folder->{unreadEmails}, "$folder->{name} unreadEmails");
-        $self->_check_one_count($want->[2], $folder->{totalThreads}, "$folder->{name} totalThreads");
-        $self->_check_one_count($want->[3], $folder->{unreadThreads}, "$folder->{name} unreadThreads");
-    }
+  for my $folder (@{ $res->[0][1]{list} }) {
+    my $want = $expect{ $folder->{name} };
+    next unless $want;
+    $self->_check_one_count(
+      $want->[0],
+      $folder->{totalEmails},
+      "$folder->{name} totalEmails"
+    );
+    $self->_check_one_count(
+      $want->[1],
+      $folder->{unreadEmails},
+      "$folder->{name} unreadEmails"
+    );
+    $self->_check_one_count(
+      $want->[2],
+      $folder->{totalThreads},
+      "$folder->{name} totalThreads"
+    );
+    $self->_check_one_count(
+      $want->[3],
+      $folder->{unreadThreads},
+      "$folder->{name} unreadThreads"
+    );
+  }
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPMailbox';

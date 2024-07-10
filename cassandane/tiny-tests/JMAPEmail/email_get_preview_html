@@ -2,26 +2,31 @@
 use Cassandane::Tiny;
 
 sub test_email_get_preview_html
-    :min_version_3_7 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_7 : needs_component_jmap {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    $self->make_message('test', mime_type => 'text/html',
-        body => 'hello<br><p>world</p>!');
+  $self->make_message(
+    'test',
+    mime_type => 'text/html',
+    body      => 'hello<br><p>world</p>!'
+  );
 
-    my $res = $jmap->CallMethods([
-        ['Email/query', {}, 'R1'],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids'
-            },
-            properties => ['preview'],
-        }, 'R2']
-    ]);
+  my $res = $jmap->CallMethods([
+    [ 'Email/query', {}, 'R1' ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => ['preview'],
+      },
+      'R2'
+    ]
+  ]);
 
-    $self->assert_str_equals("hello world !",
-        $res->[1][1]{list}[0]->{preview});
+  $self->assert_str_equals("hello world !", $res->[1][1]{list}[0]->{preview});
 }

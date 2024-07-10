@@ -2,20 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_order
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
+  : min_version_3_1 : needs_component_jmap {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
+  my $jmap = $self->{jmap};
 
-    # Assert mailboxes are created in the right order.
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-        },
-        content => '{
+  # Assert mailboxes are created in the right order.
+  my $RawRequest = {
+    headers => {
+      'Authorization' => $jmap->auth_header(),
+      'Content-Type'  => 'application/json',
+      'Accept'        => 'application/json',
+    },
+    content => '{
             "using" : ["urn:ietf:params:jmap:mail"],
             "methodCalls" : [["Mailbox/set", {
                 "create" : {
@@ -31,27 +30,30 @@ sub test_mailbox_set_order
                 }
             }, "R1"]]
         }',
-    };
-    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert($RawResponse->{success});
+  };
+  my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
+  if ($ENV{DEBUGJMAP}) {
+    warn "JMAP " . Dumper($RawRequest, $RawResponse);
+  }
+  $self->assert($RawResponse->{success});
 
-    my $res = eval { decode_json($RawResponse->{content}) };
-    $res = $res->{methodResponses};
-    $self->assert_not_null($res->[0][1]{created}{A});
-    $self->assert_not_null($res->[0][1]{created}{B});
-    $self->assert_not_null($res->[0][1]{created}{C});
+  my $res = eval { decode_json($RawResponse->{content}) };
+  $res = $res->{methodResponses};
+  $self->assert_not_null($res->[0][1]{created}{A});
+  $self->assert_not_null($res->[0][1]{created}{B});
+  $self->assert_not_null($res->[0][1]{created}{C});
 
-    # Assert mailboxes are destroyed in the right order.
-    $res = $jmap->CallMethods([['Mailbox/set', {
-        destroy => [
-            $res->[0][1]{created}{A}{id},
-            $res->[0][1]{created}{B}{id},
-            $res->[0][1]{created}{C}{id},
-        ]
-    }, "R1"]]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_null($res->[0][1]{notDestroyed});
+  # Assert mailboxes are destroyed in the right order.
+  $res = $jmap->CallMethods([ [
+    'Mailbox/set',
+    {
+      destroy => [
+        $res->[0][1]{created}{A}{id}, $res->[0][1]{created}{B}{id},
+        $res->[0][1]{created}{C}{id},
+      ]
+    },
+    "R1"
+  ] ]);
+  $self->assert_num_equals(3, scalar @{ $res->[0][1]{destroyed} });
+  $self->assert_null($res->[0][1]{notDestroyed});
 }

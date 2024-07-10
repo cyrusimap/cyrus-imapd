@@ -2,12 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_nested_tests_and_discard
-    :needs_component_sieve
-{
-    my ($self) = @_;
+  : needs_component_sieve {
+  my ($self) = @_;
 
-    xlog $self, "Install a sieve script discarding all mail";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script discarding all mail";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 if anyof (false,
           allof (not false,
                  true)
@@ -16,14 +16,14 @@ if anyof (false,
   stop;
 }
 EOF
-    );
+  );
 
-    xlog $self, "Attempt to deliver a message";
-    my $msg1 = $self->{gen}->generate(subject => "Message 1");
-    $self->{instance}->deliver($msg1);
+  xlog $self, "Attempt to deliver a message";
+  my $msg1 = $self->{gen}->generate(subject => "Message 1");
+  $self->{instance}->deliver($msg1);
 
-    # should fail to deliver and NOT appear in INBOX
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->select("INBOX");
-    $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
+  # should fail to deliver and NOT appear in INBOX
+  my $imaptalk = $self->{store}->get_client();
+  $imaptalk->select("INBOX");
+  $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
 }

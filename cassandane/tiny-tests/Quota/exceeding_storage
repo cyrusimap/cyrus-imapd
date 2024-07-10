@@ -1,57 +1,55 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_exceeding_storage
-{
-    my ($self) = @_;
+sub test_exceeding_storage {
+  my ($self) = @_;
 
-    xlog $self, "test exceeding the STORAGE quota limit";
+  xlog $self, "test exceeding the STORAGE quota limit";
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    xlog $self, "set a low limit";
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(storage => 210);
-    $self->_check_usages(storage => 0);
+  xlog $self, "set a low limit";
+  $self->_set_quotaroot('user.cassandane');
+  $self->_set_limits(storage => 210);
+  $self->_check_usages(storage => 0);
 
-    xlog $self, "adding messages to get just below the limit";
-    my %msgs;
-    my $slack = 200 * 1024;
-    my $n = 1;
-    my $expected = 0;
-    while ($slack > 1000)
-    {
-        my $nlines = int(($slack - 640) / 23);
-        $nlines = 1000 if ($nlines > 1000);
+  xlog $self, "adding messages to get just below the limit";
+  my %msgs;
+  my $slack    = 200 * 1024;
+  my $n        = 1;
+  my $expected = 0;
+  while ($slack > 1000) {
+    my $nlines = int(($slack - 640) / 23);
+    $nlines = 1000 if ($nlines > 1000);
 
-        my $msg = $self->make_message("Message $n",
-                                      extra_lines => $nlines);
-        my $len = length($msg->as_string());
-        $slack -= $len;
-        $expected += $len;
-        xlog $self, "added $len bytes of message";
-        $msgs{$n} = $msg;
-        $n++;
-    }
-    xlog $self, "check that the messages are all in the mailbox";
-    $self->check_messages(\%msgs);
-    xlog $self, "check that the usage is just below the limit";
-    $self->_check_usages(storage => int($expected/1024));
-    $self->_check_smmap('cassandane', 'OK');
+    my $msg = $self->make_message("Message $n", extra_lines => $nlines);
+    my $len = length($msg->as_string());
+    $slack    -= $len;
+    $expected += $len;
+    xlog $self, "added $len bytes of message";
+    $msgs{$n} = $msg;
+    $n++;
+  }
+  xlog $self, "check that the messages are all in the mailbox";
+  $self->check_messages(\%msgs);
+  xlog $self, "check that the usage is just below the limit";
+  $self->_check_usages(storage => int($expected / 1024));
+  $self->_check_smmap('cassandane', 'OK');
 
-    xlog $self, "add a message that exceeds the limit";
-    my $nlines = int(($slack - 640) / 23) * 2;
-    $nlines = 500 if ($nlines < 500);
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+  xlog $self, "add a message that exceeds the limit";
+  my $nlines = int(($slack - 640) / 23) * 2;
+  $nlines = 500 if ($nlines < 500);
+  $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    my $overmsg = eval { $self->make_message("Message $n", extra_lines => $nlines) };
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
-    $self->assert($talk->get_last_error() =~ m/over quota/i);
+  my $overmsg
+    = eval { $self->make_message("Message $n", extra_lines => $nlines) };
+  $self->assert_str_equals('no', $talk->get_last_completion_response());
+  $self->assert($talk->get_last_error() =~ m/over quota/i);
 
-    xlog $self, "check that the exceeding message is not in the mailbox";
-    $self->check_messages(\%msgs);
+  xlog $self, "check that the exceeding message is not in the mailbox";
+  $self->check_messages(\%msgs);
 
-    xlog $self, "check that the quota usage is still the same";
-    $self->_check_usages(storage => int($expected/1024));
-    $self->_check_smmap('cassandane', 'OK');
+  xlog $self, "check that the quota usage is still the same";
+  $self->_check_usages(storage => int($expected / 1024));
+  $self->_check_smmap('cassandane', 'OK');
 }

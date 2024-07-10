@@ -39,7 +39,7 @@ See examples/index_uids.pl for some usage
 # #define NUM_CACHE_FIELDS 10
 
 our $NUM_CACHE_FIELDS = 10;
-our @NAMES = qw(
+our @NAMES            = qw(
   ENVELOPE
   BODYSTRUCTURE
   BODY
@@ -55,7 +55,7 @@ our @NAMES = qw(
 # PUBLIC API
 
 sub new {
-  my $class = shift;
+  my $class  = shift;
   my $handle = shift;
 
   # read header
@@ -63,23 +63,24 @@ sub new {
   # XXX - check for success!
   sysread($handle, $buf, 4);
   my $version = unpack('N', $buf);
-  my $Self = bless { version => $version, handle => $handle, offset => 4 }, ref($class) || $class;
+  my $Self    = bless { version => $version, handle => $handle, offset => 4 },
+    ref($class) || $class;
   return $Self;
 }
 
 sub new_file {
-  my $class = shift;
-  my $file = shift;
+  my $class    = shift;
+  my $file     = shift;
   my $lockopts = shift;
 
   my $fh;
   if ($lockopts) {
     $lockopts = ['lock_ex'] unless ref($lockopts) eq 'ARRAY';
-    $fh = IO::File::fcntl->new($file, '+<', @$lockopts)
-          || die "Can't open $file for locked read: $!";
+    $fh       = IO::File::fcntl->new($file, '+<', @$lockopts)
+      || die "Can't open $file for locked read: $!";
   } else {
     $fh = IO::File->new("< $file")
-          || die "Can't open $file for read: $!";
+      || die "Can't open $file for read: $!";
   }
 
   return $class->new($fh);
@@ -91,19 +92,19 @@ sub next_record {
 
   my @record;
   my $size = 0;
-  for (1..$NUM_CACHE_FIELDS) {
+  for (1 .. $NUM_CACHE_FIELDS) {
     sysread($Self->{handle}, $buf, 4);
     return undef unless $buf;
-    my $num = unpack('N', $buf);
+    my $num   = unpack('N', $buf);
     my $bytes = $num;
     $bytes += 4 - $num % 4 if $num % 4; # offsets are multiple of 4 bytes
     sysread($Self->{handle}, $buf, $bytes);
-    push @record, [$num, $bytes, $buf];
+    push @record, [ $num, $bytes, $buf ];
     $size += $bytes + 4;
   }
 
   my $ret = {
-    size => $size,
+    size    => $size,
     records => \@record,
   };
 
@@ -114,7 +115,7 @@ sub next_record {
 }
 
 sub record {
-  my $Self = shift;
+  my $Self  = shift;
   my $Field = shift;
 
   return undef unless ($Self->{record});
@@ -147,18 +148,18 @@ sub dump {
 
 sub dump_record {
   my $Self = shift;
-  my $rec = shift || $Self->{record};
+  my $rec  = shift || $Self->{record};
   return unless $rec;
   print Dump($rec->{records});
 }
 
 sub print_record {
   my $Self = shift;
-  my $rec = shift || $Self->{record};
+  my $rec  = shift || $Self->{record};
   return unless $rec;
-  foreach my $rnum (0..$NUM_CACHE_FIELDS-1) {
+  foreach my $rnum (0 .. $NUM_CACHE_FIELDS - 1) {
     my $record = $rec->{records}[$rnum];
-    my $str = substr($record->[2], 0, $record->[0]);
+    my $str    = substr($record->[2], 0, $record->[0]);
     if ($rnum == 3) { # section
       my @items = unpack('N*', $str);
       $str = parse_section(0, \@items);
@@ -168,14 +169,14 @@ sub print_record {
 }
 
 sub parse_section {
-  my $part = shift;
-  my $items = shift;
+  my $part      = shift;
+  my $items     = shift;
   my $num_parts = shift @$items;
   if ($num_parts == 0) {
     return "$part:()";
   }
   my $ret = "$part:(" . parse_item($items);
-  my $n = 1;
+  my $n   = 1;
   while ($n < $num_parts) {
     my $subpart = $part ? "$part.$n" : $n;
     $ret .= " " . parse_item($items);
@@ -192,13 +193,14 @@ sub parse_section {
 }
 
 sub parse_item {
-  my $items = shift;
-  my $header_offset = shift @$items;
-  my $header_size = shift @$items;
+  my $items          = shift;
+  my $header_offset  = shift @$items;
+  my $header_size    = shift @$items;
   my $content_offset = shift @$items;
-  my $content_size = shift @$items;
-  my $encoding = shift @$items;
-  return "($header_offset:$header_size $content_offset:$content_size $encoding)";
+  my $content_size   = shift @$items;
+  my $encoding       = shift @$items;
+  return
+    "($header_offset:$header_size $content_offset:$content_size $encoding)";
 }
 
 =head1 AUTHOR AND COPYRIGHT

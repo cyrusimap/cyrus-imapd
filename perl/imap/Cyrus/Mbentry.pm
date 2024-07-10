@@ -6,22 +6,27 @@ use Cyrus::Mbname;
 use Types::Standard qw(HashRef Value Int Bool Any);
 
 # XXX: unused so far
-use constant USER_ACL => 'lrswipcdn';
+use constant USER_ACL  => 'lrswipcdn';
 use constant ADMIN_ACL => 'lrswipcdan';
-use constant ANY_ACL => 'p';
+use constant ANY_ACL   => 'p';
 
 has intname => (isa => Value, is => 'rw');
-has name => (isa => Any, is => 'ro', lazy => 1, default => sub { Cyrus::Mbname->new_dbname(shift->intname) });
+has name => (
+  isa     => Any,
+  is      => 'ro',
+  lazy    => 1,
+  default => sub { Cyrus::Mbname->new_dbname(shift->intname) }
+);
 
-has is_uuid => (isa => Bool, is => 'ro');
-has acls => (isa => HashRef, is => 'rw');
-has createdmodseq => (isa => Int, is => 'rw');
-has foldermodseq => (isa => Int, is => 'rw');
-has mtime => (isa => Int, is => 'rw');
-has partition => (isa => Value, is => 'rw');
-has type => (isa => Value, is => 'rw');
-has uniqueid => (isa => Value, is => 'rw');
-has uidvalidity => (isa => Int, is => 'rw');
+has is_uuid       => (isa => Bool,    is => 'ro');
+has acls          => (isa => HashRef, is => 'rw');
+has createdmodseq => (isa => Int,     is => 'rw');
+has foldermodseq  => (isa => Int,     is => 'rw');
+has mtime         => (isa => Int,     is => 'rw');
+has partition     => (isa => Value,   is => 'rw');
+has type          => (isa => Value,   is => 'rw');
+has uniqueid      => (isa => Value,   is => 'rw');
+has uidvalidity   => (isa => Int,     is => 'rw');
 
 sub _parse_dlist {
   my ($self, $name, $details) = @_;
@@ -32,15 +37,15 @@ sub _parse_dlist {
   }
   if ($name =~ m/^I/) {
     $self->{uniqueid} = substr($name, 1);
-    $self->{is_uuid} = 1;
+    $self->{is_uuid}  = 1;
   }
   $self->{intname} = $name;
-  $self->{type} = 'e';
-  foreach my $item (@{$dlist->{data}}) {
+  $self->{type}    = 'e';
+  foreach my $item (@{ $dlist->{data} }) {
     if ($item->{key} eq 'A') {
       my %acls;
-      foreach my $sub (@{$item->{data}}) {
-        $acls{$sub->{key}} = $sub->{data};
+      foreach my $sub (@{ $item->{data} }) {
+        $acls{ $sub->{key} } = $sub->{data};
       }
       $self->{acls} = \%acls;
     }
@@ -51,9 +56,9 @@ sub _parse_dlist {
       $self->{foldermodseq} = $item->{data};
     }
     if ($item->{key} eq 'H') {
-      for my $histitem (@{$item->{data}}) {
+      for my $histitem (@{ $item->{data} }) {
         my %hist;
-        for my $field (@{$histitem->{data}}) {
+        for my $field (@{ $histitem->{data} }) {
           if ($field->{key} eq 'F') {
             $hist{foldermodseq} = $field->{data};
           }
@@ -61,10 +66,11 @@ sub _parse_dlist {
             $hist{mtime} = $field->{data};
           }
           if ($field->{key} eq 'N') {
-            $hist{name} = Cyrus::Mbname->new_dbname("N$field->{data}")->intname();
+            $hist{name}
+              = Cyrus::Mbname->new_dbname("N$field->{data}")->intname();
           }
         }
-        push @{$item->{name_history}}, \%hist;
+        push @{ $item->{name_history} }, \%hist;
       }
     }
     if ($item->{key} eq 'M') {
@@ -92,7 +98,7 @@ sub _parse_dlist {
 sub parse {
   my $Proto = shift;
   my $Class = ref($Proto) || $Proto;
-  my $Self = {};
+  my $Self  = {};
   bless($Self, $Class);
 
   my ($MailboxName, $MailboxDetails) = @_;
@@ -105,18 +111,18 @@ sub parse {
   if ($MailboxDetails =~ s/^\((.*?)\) //) {
     my $named = $1;
     my %named = split / /, $named;
-    $Self->{uniqueid} = $named{uniqueid} if exists $named{uniqueid};
+    $Self->{uniqueid}   = $named{uniqueid}   if exists $named{uniqueid};
     $Self->{specialuse} = $named{specialuse} if exists $named{specialuse};
     # XXX - the rest
   }
   # XXX - it's mbtype, not "flag" - though it's also always 0...
   my ($Flag, $Partition, $ACLs) = ($MailboxDetails =~ /^(\d) (\w+) (.*)/);
   $Flag == 0 || die "Unexpected flag: $Flag";
-  my %ACLs = split("\t",$ACLs);
-  $Self->{type} = 'e';
+  my %ACLs = split("\t", $ACLs);
+  $Self->{type}      = 'e';
   $Self->{partition} = $Partition;
-  $Self->{acls} = \%ACLs;
-  $Self->{name} = $MailboxName;
+  $Self->{acls}      = \%ACLs;
+  $Self->{name}      = $MailboxName;
 
   return $Self;
 }
@@ -124,29 +130,32 @@ sub parse {
 sub FormatDBOld {
   my $Self = shift;
   my %named;
-  $named{uniqueid} = $Self->{uniqueid} if exists $Self->{uniqueid};
+  $named{uniqueid}   = $Self->{uniqueid}   if exists $Self->{uniqueid};
   $named{specialuse} = $Self->{specialuse} if exists $Self->{specialuse};
   my $str = '';
   if (%named) {
     $str = '(' . join(" ", map { "$_ $named{$_}" } sort keys %named) . ') ';
   }
-  return $str . "0 " . $Self->{partition} . " " . join("\t", %{$Self->{acls}}) . "\t";
+  return
+      $str . "0 "
+    . $Self->{partition} . " "
+    . join("\t", %{ $Self->{acls} }) . "\t";
 }
 
 sub has_type {
   my $self = shift;
-  my $arg = shift;
+  my $arg  = shift;
   return $self->type =~ m/$arg/;
 }
 
 # convenience functions
-sub is_tombstone { shift->has_type('d') }
+sub is_tombstone    { shift->has_type('d') }
 sub is_intermediate { shift->has_type('i') }
 
 # mbname wrappers
 
-sub username { shift->name->username }
-sub userfolder { shift->name->userfolder }
+sub username    { shift->name->username }
+sub userfolder  { shift->name->userfolder }
 sub adminfolder { shift->name->adminfolder }
 
 1;

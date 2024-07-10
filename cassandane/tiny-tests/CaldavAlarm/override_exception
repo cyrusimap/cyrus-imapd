@@ -2,50 +2,49 @@
 use Cassandane::Tiny;
 
 sub test_override_exception
-    :min_version_3_0 :needs_component_calalarmd
-{
-    my ($self) = @_;
+  : min_version_3_0 : needs_component_calalarmd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $now = DateTime->now();
-    $now->set_time_zone('Australia/Sydney');
-    # bump everything forward so a slow run (say: valgrind)
-    # doesn't cause things to magically fire...
-    $now->add(DateTime::Duration->new(seconds => 300));
+  my $now = DateTime->now();
+  $now->set_time_zone('Australia/Sydney');
+  # bump everything forward so a slow run (say: valgrind)
+  # doesn't cause things to magically fire...
+  $now->add(DateTime::Duration->new(seconds => 300));
 
-    # define an event that started almost an hour ago and repeats hourly
-    my $startdt = $now->clone();
-    $startdt->subtract(DateTime::Duration->new(minutes => 59, seconds => 55));
-    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+  # define an event that started almost an hour ago and repeats hourly
+  my $startdt = $now->clone();
+  $startdt->subtract(DateTime::Duration->new(minutes => 59, seconds => 55));
+  my $start = $startdt->strftime('%Y%m%dT%H%M%S');
 
-    my $enddt = $startdt->clone();
-    $enddt->add(DateTime::Duration->new(seconds => 15));
-    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+  my $enddt = $startdt->clone();
+  $enddt->add(DateTime::Duration->new(seconds => 15));
+  my $end = $enddt->strftime('%Y%m%dT%H%M%S');
 
-    # the next event will start in a few seconds
-    my $recuriddt = $now->clone();
-    $recuriddt->add(DateTime::Duration->new(seconds => 5));
-    my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
+  # the next event will start in a few seconds
+  my $recuriddt = $now->clone();
+  $recuriddt->add(DateTime::Duration->new(seconds => 5));
+  my $recurid = $recuriddt->strftime('%Y%m%dT%H%M%S');
 
-    # but it starts a few seconds after the regular start
-    my $rstartdt = $now->clone();
-    $rstartdt->add(DateTime::Duration->new(seconds => 15));
-    my $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
+  # but it starts a few seconds after the regular start
+  my $rstartdt = $now->clone();
+  $rstartdt->add(DateTime::Duration->new(seconds => 15));
+  my $recurstart = $rstartdt->strftime('%Y%m%dT%H%M%S');
 
-    my $renddt = $rstartdt->clone();
-    $renddt->add(DateTime::Duration->new(seconds => 15));
-    my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
+  my $renddt = $rstartdt->clone();
+  $renddt->add(DateTime::Duration->new(seconds => 15));
+  my $recurend = $renddt->strftime('%Y%m%dT%H%M%S');
 
-    # set the trigger to notify us at the start of the event
-    my $trigger="PT0S";
+  # set the trigger to notify us at the start of the event
+  my $trigger = "PT0S";
 
-    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
-    my $href = "$CalendarId/$uuid.ics";
-    my $card = <<EOF;
+  my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+  my $href = "$CalendarId/$uuid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
@@ -102,13 +101,14 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    # clean notification cache
-    $self->{instance}->getnotify();
+  # clean notification cache
+  $self->{instance}->getnotify();
 
-    # trigger processing of alarms
-    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+  # trigger processing of alarms
+  $self->{instance}
+    ->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60);
 
-    $self->assert_alarms({summary => 'exception', start => $recurstart});
+  $self->assert_alarms({ summary => 'exception', start => $recurstart });
 }

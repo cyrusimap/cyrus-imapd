@@ -2,69 +2,80 @@
 use Cassandane::Tiny;
 
 sub test_virtdomains_return_subscribed_noaltns
-    :VirtDomains :UnixHierarchySep :NoAltNameSpace
-{
-    my ($self) = @_;
+  : VirtDomains : UnixHierarchySep : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $admintalk = $self->{adminstore}->get_client();
-    $admintalk->create("user/foo\@example.com");
+  my $admintalk = $self->{adminstore}->get_client();
+  $admintalk->create("user/foo\@example.com");
 
-    my $foostore = $self->{instance}->get_service('imap')->create_store(
-                        username => "foo\@example.com");
-    my $footalk = $foostore->get_client();
+  my $foostore = $self->{instance}->get_service('imap')
+    ->create_store(username => "foo\@example.com");
+  my $footalk = $foostore->get_client();
 
-    $footalk->create("INBOX/Drafts");
-    $footalk->create("INBOX/Sent");
-    $footalk->create("INBOX/Trash");
+  $footalk->create("INBOX/Drafts");
+  $footalk->create("INBOX/Sent");
+  $footalk->create("INBOX/Trash");
 
-    $footalk->subscribe("INBOX");
-    $footalk->subscribe("INBOX/Drafts");
-    $footalk->subscribe("INBOX/Sent");
-    $footalk->subscribe("INBOX/Trash");
+  $footalk->subscribe("INBOX");
+  $footalk->subscribe("INBOX/Drafts");
+  $footalk->subscribe("INBOX/Sent");
+  $footalk->subscribe("INBOX/Trash");
 
-    $footalk->setmetadata("INBOX/Drafts", "/private/specialuse", "\\Drafts");
-    $self->assert_equals('ok', $footalk->get_last_completion_response());
+  $footalk->setmetadata("INBOX/Drafts", "/private/specialuse", "\\Drafts");
+  $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    $footalk->setmetadata("INBOX/Sent", "/private/specialuse", "\\Sent");
-    $self->assert_equals('ok', $footalk->get_last_completion_response());
+  $footalk->setmetadata("INBOX/Sent", "/private/specialuse", "\\Sent");
+  $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
-                                    'RETURN', [qw(SUBSCRIBED)]);
+  my $specialuse
+    = $footalk->list([qw( SPECIAL-USE )], "", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog $self, Dumper $specialuse;
-    $self->assert_mailbox_structure($specialuse, '/', {
-        'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
-        'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
-    });
+  xlog $self, Dumper $specialuse;
+  $self->assert_mailbox_structure(
+    $specialuse,
+    '/',
+    {
+      'INBOX/Sent'   => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+      'INBOX/Drafts' => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+    }
+  );
 
-    $admintalk->create("user/bar\@example.com");
-    $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
-    $admintalk->setacl("user/bar/shared-folder\@example.com",
-                       'foo@example.com' => 'lrswipkxtecd');
-    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+  $admintalk->create("user/bar\@example.com");
+  $admintalk->create("user/bar/shared-folder\@example.com")
+    ; # yay bogus domaining
+  $admintalk->setacl(
+    "user/bar/shared-folder\@example.com",
+    'foo@example.com' => 'lrswipkxtecd'
+  );
+  $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
-    $footalk->subscribe("user/bar/shared-folder");
-    $self->assert_equals('ok', $footalk->get_last_completion_response());
+  $footalk->subscribe("user/bar/shared-folder");
+  $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    $admintalk->create("another-namespace\@example.com");
-    $admintalk->create("another-namespace/folder\@example.com");
-    $admintalk->setacl("another-namespace/folder\@example.com",
-                       'foo@example.com' => 'lrswipkxtecd');
-    $self->assert_equals('ok', $admintalk->get_last_completion_response());
+  $admintalk->create("another-namespace\@example.com");
+  $admintalk->create("another-namespace/folder\@example.com");
+  $admintalk->setacl(
+    "another-namespace/folder\@example.com",
+    'foo@example.com' => 'lrswipkxtecd'
+  );
+  $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
-    $footalk->subscribe("another-namespace/folder");
-    $self->assert_equals('ok', $footalk->get_last_completion_response());
+  $footalk->subscribe("another-namespace/folder");
+  $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
+  my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog $self, Dumper $alldata;
-    $self->assert_mailbox_structure($alldata, '/', {
-        'INBOX'         => [qw( \\HasChildren \\Subscribed )],
-        'INBOX/Drafts'  => [qw( \\HasNoChildren \\Subscribed )],
-        'INBOX/Sent'    => [qw( \\HasNoChildren \\Subscribed )],
-        'INBOX/Trash'   => [qw( \\HasNoChildren \\Subscribed )],
-        'user/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
-        'another-namespace' => [qw( \\HasChildren ) ],
-        'another-namespace/folder' => [qw( \\HasNoChildren \\Subscribed )],
-    });
+  xlog $self, Dumper $alldata;
+  $self->assert_mailbox_structure(
+    $alldata, '/',
+    {
+      'INBOX'                    => [qw( \\HasChildren \\Subscribed )],
+      'INBOX/Drafts'             => [qw( \\HasNoChildren \\Subscribed )],
+      'INBOX/Sent'               => [qw( \\HasNoChildren \\Subscribed )],
+      'INBOX/Trash'              => [qw( \\HasNoChildren \\Subscribed )],
+      'user/bar/shared-folder'   => [qw( \\HasNoChildren \\Subscribed )],
+      'another-namespace'        => [qw( \\HasChildren )],
+      'another-namespace/folder' => [qw( \\HasNoChildren \\Subscribed )],
+    }
+  );
 }

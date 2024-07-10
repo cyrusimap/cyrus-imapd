@@ -3,40 +3,46 @@ use Cassandane::Tiny;
 use Data::UUID;
 
 sub test_itip_ignore_invalid_timezone
-    :min_version_3_9 :needs_component_jmap :needs_component_sieve
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
+  : min_version_3_9 : needs_component_jmap : needs_component_sieve {
+  my ($self) = @_;
+  my $jmap = $self->{jmap};
 
-    xlog $self, "Install a sieve script to process iMIP";
-    $self->{instance}->install_sieve_script(<<EOF
+  xlog $self, "Install a sieve script to process iMIP";
+  $self->{instance}->install_sieve_script(
+    <<EOF
 require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
     processimip :outcome "outcome";
 }
 EOF
-    );
+  );
 
-    my @testCases = ({
-        tzid => 'UTC', # can handle as 'Etc/UTC'
-        wantAdded => 1,
-    }, {
-        tzid => 'Europe/Vienna', # already is IANA name
-        wantAdded => 1,
-    }, {
-        tzid => 'Pacific Standard Time', # can map to IANA name
-        wantAdded => 1,
-    }, {
-        tzid => 'Foo', # can't map to IANA, reject
-        wantAdded => 0,
-    });
+  my @testCases = (
+    {
+      tzid      => 'UTC', # can handle as 'Etc/UTC'
+      wantAdded => 1,
+    },
+    {
+      tzid      => 'Europe/Vienna', # already is IANA name
+      wantAdded => 1,
+    },
+    {
+      tzid      => 'Pacific Standard Time', # can map to IANA name
+      wantAdded => 1,
+    },
+    {
+      tzid      => 'Foo',                   # can't map to IANA, reject
+      wantAdded => 0,
+    }
+  );
 
-    for my $tc (@testCases) {
+  for my $tc (@testCases) {
 
-        my $uid = (Data::UUID->new)->create_str();
+    my $uid = (Data::UUID->new)->create_str();
 
-        xlog $self, "Send iMIP message with invalid VTIMEZONE having name $tc->{tzid}";
-        my $imip = <<"EOF";
+    xlog $self,
+      "Send iMIP message with invalid VTIMEZONE having name $tc->{tzid}";
+    my $imip = <<"EOF";
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender\@example.net>
 To: Cassandane <cassandane\@example.com>
@@ -66,18 +72,20 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-        $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
-        my $res = $jmap->CallMethods([
-            ['CalendarEvent/get', {
-                ids => [encode_eventid($uid)]
-            }, 'R1']
-        ]);
+    my $res = $jmap->CallMethods([ [
+      'CalendarEvent/get',
+      {
+        ids => [ encode_eventid($uid) ]
+      },
+      'R1'
+    ] ]);
 
-        if ($tc->{wantAdded}) {
-            $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-        } else {
-            $self->assert_num_equals(1, scalar @{$res->[0][1]{notFound}});
-        }
+    if ($tc->{wantAdded}) {
+      $self->assert_num_equals(1, scalar @{ $res->[0][1]{list} });
+    } else {
+      $self->assert_num_equals(1, scalar @{ $res->[0][1]{notFound} });
     }
+  }
 }

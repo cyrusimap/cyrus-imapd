@@ -45,7 +45,7 @@ use vars qw($VERSION @ISA);
 
 require DynaLoader;
 
-@ISA = qw(DynaLoader);
+@ISA     = qw(DynaLoader);
 $VERSION = '1.00';
 
 bootstrap Cyrus::IMAP $VERSION;
@@ -84,41 +84,37 @@ sub send {
     if ($2 eq 'a') {
       # atom
       $res .= scalar shift(@rest);
-    }
-    elsif ($2 eq 'q') {
+    } elsif ($2 eq 'q') {
       # qstring
       $res .= $self->_qstringize(shift(@rest));
-    }
-    elsif ($2 eq 's') {
+    } elsif ($2 eq 's') {
       # astring
       $res .= $self->_stringize(shift(@rest));
-    }
-    elsif ($2 eq 'd') {
+    } elsif ($2 eq 'd') {
       # decimal
       $res .= (0 + scalar shift(@rest));
-    }
-    elsif ($2 eq 'u') {
+    } elsif ($2 eq 'u') {
       # unsigned decimal; perl cares not for C lossage...
       $res .= (0 + scalar shift(@rest));
-    }
-    elsif ($2 eq 'v') {
+    } elsif ($2 eq 'v') {
       # #astring
       my $spc = '';
       if (ref($rest[0]) =~ /(^|=)HASH($|\()/) {
-        my %vals = %{shift(@rest)};
+        my %vals = %{ shift(@rest) };
         foreach (keys %vals) {
-          $res .= $self->_stringize($_) . ' ' .
-                  $self->_stringize($vals{$_}) . $spc;
+          $res
+            .= $self->_stringize($_) . ' '
+            . $self->_stringize($vals{$_})
+            . $spc;
           $spc = ' ';
         }
       } else {
-        foreach (@{shift(@rest)}) {
+        foreach (@{ shift(@rest) }) {
           $res .= $self->_stringize($_) . $spc;
           $spc = ' ';
         }
       }
-    }
-    else {
+    } else {
       # anything else (NB: we respect %B being labeled "internal only")
       # NB: unlike the C version, we do not fail when handed an unknown escape
       $res .= $2;
@@ -131,15 +127,21 @@ sub send {
 
 sub _cc {
   my $res = 2;
-  local($^W) = 0;
+  local ($^W) = 0;
   if (length($_[0]) >= 1024) {
     0;
   } else {
-    foreach (map {unpack 'C', $_} split(//, $_[0])) {
-      if ($_==0 || $_==10 || $_==13 || $_==34 || $_==92 || $_>=128) {
+    foreach (map { unpack 'C', $_ } split(//, $_[0])) {
+      if ($_ == 0 || $_ == 10 || $_ == 13 || $_ == 34 || $_ == 92 || $_ >= 128)
+      {
         $res = 0;
-      }
-      elsif ($_<33 || $_==37 || $_==40 || $_==41 || $_==42 || $_==123) {
+      } elsif ($_ < 33
+        || $_ == 37
+        || $_ == 40
+        || $_ == 41
+        || $_ == 42
+        || $_ == 123)
+      {
         $res = 1 if $res == 2;
       }
     }
@@ -153,15 +155,14 @@ sub _qstringize {
   my $cc = _cc($str);
 
   if ($cc) {
-      # would be needed except imclient devolves to a LITERAL in this case.
-      #$str =~ s/([\\\"])/\\$1/g;
-      '"' . $str . '"';
-  }
-  else {
-      # right now we assume LITERAL+ on the part of the server, since
-      # we have no better way of dealing with literals.
-      # sorry!
-      "{" . length($str) . "+}\r\n" . $str;
+    # would be needed except imclient devolves to a LITERAL in this case.
+    #$str =~ s/([\\\"])/\\$1/g;
+    '"' . $str . '"';
+  } else {
+    # right now we assume LITERAL+ on the part of the server, since
+    # we have no better way of dealing with literals.
+    # sorry!
+    "{" . length($str) . "+}\r\n" . $str;
   }
 }
 
@@ -172,18 +173,16 @@ sub _stringize {
   my $nz = ($str ne '');
 
   if ($nz && $cc == 2) {
-      $str;
-  }
-  elsif ($cc) {
-      # would be needed except imclient devolves to a LITERAL in this case.
-      #$str =~ s/([\\\"])/\\$1/g;
-      '"' . $str . '"';
-  }
-  else {
-      # right now we assume LITERAL+ on the part of the server, since
-      # we have no better way of dealing with literals.
-      # sorry!
-      "{" . length($str) . "+}\r\n" . $str;
+    $str;
+  } elsif ($cc) {
+    # would be needed except imclient devolves to a LITERAL in this case.
+    #$str =~ s/([\\\"])/\\$1/g;
+    '"' . $str . '"';
+  } else {
+    # right now we assume LITERAL+ on the part of the server, since
+    # we have no better way of dealing with literals.
+    # sorry!
+    "{" . length($str) . "+}\r\n" . $str;
   }
 }
 
@@ -193,83 +192,97 @@ sub _stringize {
 # also take the opportunity to add a hash-based interface.
 #
 sub authenticate {
-  my ($self, $first) = @_;
-  my (%opts, $rc);
+  my ($self,     $first) = @_;
+  my (%opts,     $rc);
   my ($starttls, $logindisabled, $availmechs) = (0, 0, "");
 
-  if (defined $first &&
-      $first =~ /^-\w+|Mechanism|Service|Authz|User|Minssf|Maxssf|Password|Tlskey|Notls|CAfile|CApath$/) {
+  if (defined $first
+    && $first =~
+    /^-\w+|Mechanism|Service|Authz|User|Minssf|Maxssf|Password|Tlskey|Notls|CAfile|CApath$/
+    )
+  {
     (undef, %opts) = @_;
-    foreach (qw(mechanism service authz user minssf maxssf password tlskey notls cafile capath)) {
-      $opts{'-' . $_} = $opts{ucfirst($_)} if !defined($opts{'-' . $_});
+    foreach (
+      qw(mechanism service authz user minssf maxssf password tlskey notls cafile capath)
+      )
+    {
+      $opts{ '-' . $_ } = $opts{ ucfirst($_) } if !defined($opts{ '-' . $_ });
     }
   } else {
-    (undef, $opts{-mechanism}, $opts{-service}, $opts{-authz}, $opts{-user},
-     $opts{-minssf}, $opts{-maxssf}, $opts{-password},
-     $opts{-tlskey}, $opts{-notls}, $opts{-cafile}, $opts{-capath}) = @_;
+    (
+      undef,          $opts{-mechanism}, $opts{-service}, $opts{-authz},
+      $opts{-user},   $opts{-minssf},    $opts{-maxssf},  $opts{-password},
+      $opts{-tlskey}, $opts{-notls},     $opts{-cafile},  $opts{-capath}
+    ) = @_;
   }
 
-  $opts{-cafile} = "" if !defined($opts{-cafile});
-  $opts{-capath} = "" if !defined($opts{-capath});
+  $opts{-cafile}  = ""     if !defined($opts{-cafile});
+  $opts{-capath}  = ""     if !defined($opts{-capath});
   $opts{-service} = "imap" if !defined($opts{-service});
-  $opts{-minssf} = 0 if !defined($opts{-minssf});
-  $opts{-maxssf} = 10000 if !defined($opts{-maxssf});
-  $opts{-user} = $ENV{USER} || $ENV{LOGNAME} || (getpwuid($<))[0]
+  $opts{-minssf}  = 0      if !defined($opts{-minssf});
+  $opts{-maxssf}  = 10000  if !defined($opts{-maxssf});
+  $opts{-user}    = $ENV{USER} || $ENV{LOGNAME} || (getpwuid($<))[0]
     if !defined($opts{-user});
   $opts{-authz} = "" if (!defined($opts{-authz}));
   $rc = 0;
 
   # Fetch all relevant capabilities
-  $self->addcallback({-trigger => 'CAPABILITY',
-                      -callback => sub {my %a = @_;
-                                        map {
-                                            $starttls = 1
-                                                if /^STARTTLS$/i;
-                                            $logindisabled = 1
-                                                if /^LOGINDISABLED$/i;
-                                            $availmechs .= $_ . ' '
-                                                if s/^AUTH=//;
-                                        }
-                                        split(/ /, $a{-text})}});
+  $self->addcallback({
+    -trigger  => 'CAPABILITY',
+    -callback => sub {
+      my %a = @_;
+      map {
+        $starttls = 1
+          if /^STARTTLS$/i;
+        $logindisabled = 1
+          if /^LOGINDISABLED$/i;
+        $availmechs .= $_ . ' '
+          if s/^AUTH=//;
+        }
+        split(/ /, $a{-text});
+    }
+  });
   $self->send(undef, undef, 'CAPABILITY');
 
   $opts{-mechanism} = $availmechs if !defined($opts{-mechanism});
 
   # Do STARTTLS if given a TLS key, OR
   # if the specified SASL mech isn't available and LOGINDISABLED
-  if (defined($opts{-tlskey}) ||
-      (!($availmechs =~ /(\b|^)$opts{-mechanism}($|\b)/i) && $logindisabled)) {
-      if (!havetls() || !$starttls) {
-          if ($logindisabled) {
-              warn "Login disabled.\n"
-          } else {
-              warn "TLS disabled.\n";
-          }
-          return undef;
+  if (defined($opts{-tlskey})
+    || (!($availmechs =~ /(\b|^)$opts{-mechanism}($|\b)/i) && $logindisabled))
+  {
+    if (!havetls() || !$starttls) {
+      if ($logindisabled) {
+        warn "Login disabled.\n";
+      } else {
+        warn "TLS disabled.\n";
       }
+      return undef;
+    }
 
-      if (!defined($opts{-tlskey})) {
-          $opts{-tlskey} = "";
-      }
-      if (!defined($opts{-cafile})) {
-          $opts{-cafile} = "";
-      }
-      if (!defined($opts{-capath})) {
-          $opts{-capath} = "";
-      }
-      if ($opts{-notls}) {
-          $opts{-tlskey} = undef;
-      }
+    if (!defined($opts{-tlskey})) {
+      $opts{-tlskey} = "";
+    }
+    if (!defined($opts{-cafile})) {
+      $opts{-cafile} = "";
+    }
+    if (!defined($opts{-capath})) {
+      $opts{-capath} = "";
+    }
+    if ($opts{-notls}) {
+      $opts{-tlskey} = undef;
+    }
 
-      $self->_starttls($opts{-tlskey}, $opts{-tlskey}, $opts{-cafile}, $opts{-capath});
+    $self->_starttls($opts{-tlskey}, $opts{-tlskey}, $opts{-cafile},
+      $opts{-capath});
 
-      # Refetch all relevant capabilities
-      ($starttls, $logindisabled, $availmechs) = (0, 0, "");
-      $self->send(undef, undef, 'CAPABILITY');
-      $opts{-mechanism} = $availmechs if ($opts{-mechanism} eq '');
+    # Refetch all relevant capabilities
+    ($starttls, $logindisabled, $availmechs) = (0, 0, "");
+    $self->send(undef, undef, 'CAPABILITY');
+    $opts{-mechanism} = $availmechs if ($opts{-mechanism} eq '');
   }
 
-  $self->addcallback({-trigger => 'CAPABILITY'});
+  $self->addcallback({ -trigger => 'CAPABILITY' });
 
   if (lc($opts{-mechanism}) ne 'login') {
     # This seems to be the only way to avoid a
@@ -277,9 +290,10 @@ sub authenticate {
     # when $opts{-password} is uninitialized (which may well be ok for e.g.
     # the GSSAPI mechanism).
     no warnings 'uninitialized';
-    $rc = $self->_authenticate($opts{-mechanism}, $opts{-service},
-                               $opts{-authz}, $opts{-user}, $opts{-password},
-                               $opts{-minssf}, $opts{-maxssf});
+    $rc = $self->_authenticate(
+      $opts{-mechanism}, $opts{-service}, $opts{-authz}, $opts{-user},
+      $opts{-password},  $opts{-minssf},  $opts{-maxssf}
+    );
   }
 
   if (!$rc && $logindisabled) {
@@ -294,28 +308,29 @@ sub authenticate {
 
   $opts{-mechanism} ||= 'plain';
   if (!$rc && $opts{-mechanism} =~ /(\b|^)(plain|login)($|\b)/i) {
-    $opts{-user} = getlogin if !defined($opts{-user});
+    $opts{-user} = getlogin          if !defined($opts{-user});
     $opts{-user} = (getpwuid($<))[0] if !defined($opts{-user});
-    $opts{-user} = "nobody" if !defined($opts{-user});
+    $opts{-user} = "nobody"          if !defined($opts{-user});
     # claimed to be a SASL bug:  "AUTHENTICATE PLAIN" fails.  in any case, we
     # also should provide a way to talk to pre-SASL Cyrus or even (shock
     # horror) non-Cyrus IMAP servers...
     # suck...
     if (!defined($opts{-password})) {
-      my $tty = (IO::File->new('/dev/tty', O_RDWR) ||
-                 *STDERR || *STDIN || *STDOUT);
+      my $tty
+        = (IO::File->new('/dev/tty', O_RDWR) || *STDERR || *STDIN || *STDOUT);
       $tty->autoflush(1);
       $tty->print("IMAP Password: ");
       my $ostty;
       chomp($ostty = `stty -g`);
-      system "stty -echo -icanon min 1 time 0 2>/dev/null || " .
-             "stty -echo cbreak";
+      system "stty -echo -icanon min 1 time 0 2>/dev/null || "
+        . "stty -echo cbreak";
       chomp($opts{-password} = $tty->getline);
       $tty->print("\013\010");
       system "stty $ostty";
     }
-    my ($kw, $text) = $self->send(undef, undef, 'LOGIN %s %s',
-                                  $opts{-user}, $opts{-password});
+    my ($kw, $text)
+      = $self->send(undef, undef, 'LOGIN %s %s',
+      $opts{-user}, $opts{-password});
     $opts{-password} = "\0" x length($opts{-password});
     if ($kw eq 'OK') {
       $rc = 1;

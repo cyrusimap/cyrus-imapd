@@ -2,23 +2,22 @@
 use Cassandane::Tiny;
 
 sub test_num_folders_delete_delayed
-    :DelayedDelete
-{
-    my ($self) = @_;
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(storage => 12345, $self->res_mailbox => 500);
+  : DelayedDelete {
+  my ($self) = @_;
+  $self->_set_quotaroot('user.cassandane');
+  $self->_set_limits(storage => 12345, $self->res_mailbox => 500);
 
-    my $talk = $self->{store}->get_client();
+  my $talk = $self->{store}->get_client();
 
-    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+  $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
-    $self->_check_usages(storage => 0, $self->res_mailbox => 2);
+  $self->_check_usages(storage => 0, $self->res_mailbox => 2);
 
-    $talk->create("INBOX.another");
+  $talk->create("INBOX.another");
 
-    $self->_check_usages(storage => 0, $self->res_mailbox => 3);
+  $self->_check_usages(storage => 0, $self->res_mailbox => 3);
 
-    $talk->delete("INBOX.another");
+  $talk->delete("INBOX.another");
 
-    $self->_check_usages(storage => 0, $self->res_mailbox => 2);
+  $self->_check_usages(storage => 0, $self->res_mailbox => 2);
 }

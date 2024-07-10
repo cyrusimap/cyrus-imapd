@@ -106,6 +106,7 @@ use warnings;
 Pass to $Self->log($Level, "%s", $Msg)
 
 =cut
+
 sub xmtplog {
   # $_[0]->log($_[1], '%s', $_[2]);
   $_[0]->log($_[1] * 2, $_[2]);
@@ -116,13 +117,14 @@ sub xmtplog {
 Catch configure options
 
 =cut
+
 sub post_configure_hook {
   my ($Self, $Xmtp, $Srv) = ($_[0], $_[0]->{xmtp} ||= {}, $_[0]->{server});
 
   # In old versions of Net::Server, parameters passed to "run" could
   # be accessed with $Self->{server}->{configure_args}.
   # In new versions they are available directly in $Self->{server}
-  my $Config = $Srv->{configure_args};
+  my $Config  = $Srv->{configure_args};
   my %Options = $Config ? @{$Config} : %{$Srv};
 
   # Get config options
@@ -131,7 +133,7 @@ sub post_configure_hook {
 
   # Set timeout for each transaction
   $Xmtp->{XmtpTimeout} = $Options{xmtp_timeout} || 300;
-  $Xmtp->{CmdTimeout} = $Options{cmd_timeout} || 30;
+  $Xmtp->{CmdTimeout}  = $Options{cmd_timeout}  || 30;
   $Xmtp->{DataTimeout} = $Options{data_timeout} || 60;
 
   $Xmtp->{MaxMessages} = $Options{max_messages} || 0;
@@ -139,10 +141,10 @@ sub post_configure_hook {
   $Xmtp->{TmpDir} = $Options{xmtp_tmp_dir} || '/tmp';
 
   # Set personality regexp match
-  my $Personality = $Xmtp->{Personality};
+  my $Personality   = $Xmtp->{Personality};
   my $PersonalityRE = qr/helo|ehlo/i;
   if ($Personality) {
-    $PersonalityRE = qr/lhlo/i if $Personality eq 'lmtp';
+    $PersonalityRE = qr/lhlo/i           if $Personality eq 'lmtp';
     $PersonalityRE = qr/helo|ehlo|lhlo/i if $Personality eq 'both';
   }
   $Xmtp->{PersonalityRE} = $PersonalityRE;
@@ -154,6 +156,7 @@ sub post_configure_hook {
 Called after ownership chage. Create dir to hold spool files.
 
 =cut
+
 sub pre_loop_hook {
   my ($Self, $Xmtp, $Srv) = ($_[0], $_[0]->{xmtp}, $_[0]->{server});
 
@@ -171,6 +174,7 @@ sub pre_loop_hook {
 Called when a new child is forked. Create temp spool file
 
 =cut
+
 sub child_init_hook {
   my ($Self, $Xmtp, $Srv) = ($_[0], $_[0]->{xmtp}, $_[0]->{server});
 
@@ -188,7 +192,8 @@ sub child_init_hook {
   # Create temporary spool file for this child
   if ($Xmtp->{StoreMsg}) {
     my $TmpDir = $Xmtp->{TmpDir};
-    my ($Fh, $Filename) = tempfile(DIR => $TmpDir, UNLINK => 1, SUFFIX => '.xmtp');
+    my ($Fh, $Filename)
+      = tempfile(DIR => $TmpDir, UNLINK => 1, SUFFIX => '.xmtp');
     bless $Fh, "IO::File";
 
     # Same in server properties
@@ -207,6 +212,7 @@ If running in debug non-forking mode, then child_init_hook()
 won't be called, so we try calling it now
 
 =cut
+
 sub post_accept_hook {
   $_[0]->child_init_hook();
 }
@@ -216,34 +222,35 @@ sub post_accept_hook {
 Process a new accepted connection from a client
 
 =cut
+
 sub process_request {
   my ($Self, $Xmtp, $Srv) = ($_[0], $_[0]->{xmtp}, $_[0]->{server});
 
   eval {
 
-  $Self->start_request();
+    $Self->start_request();
 
-  $Self->ClearAlarm();
+    $Self->ClearAlarm();
 
-  # Reset any existing state
-  $Self->reset_state();
+    # Reset any existing state
+    $Self->reset_state();
 
-  # Notify of new client connection
-  $Self->new_connection();
-  $Self->xmtplog(2, "New connection");
+    # Notify of new client connection
+    $Self->new_connection();
+    $Self->xmtplog(2, "New connection");
 
-  # Setup timeout handler (after new_connection, which might
-  #  change $SIG{ALRM} itself)
-  $SIG{ALRM} = sub {
-    my ($Package, $Filename, $Line, $Sub) = caller(0);
-    my $LastCmd = $Xmtp->{LastCmd} || '';
-    die "Timeout: State=$LastCmd; In=${Sub}; Line=$Line";
-  };
+    # Setup timeout handler (after new_connection, which might
+    #  change $SIG{ALRM} itself)
+    $SIG{ALRM} = sub {
+      my ($Package, $Filename, $Line, $Sub) = caller(0);
+      my $LastCmd = $Xmtp->{LastCmd} || '';
+      die "Timeout: State=$LastCmd; In=${Sub}; Line=$Line";
+    };
 
-  # Do all the connection work
-  $Self->HandleConnection();
+    # Do all the connection work
+    $Self->HandleConnection();
 
-  alarm(0);
+    alarm(0);
   };
 
   if (my $Err = $@) {
@@ -382,7 +389,7 @@ sub HandleModeData {
 
       return $Self->HandleEndOfData() ? 0 : 1;
 
-    # Otherwise handle header/mime/data line
+      # Otherwise handle header/mime/data line
     } else {
 
       # Un-dot-stuff
@@ -392,7 +399,7 @@ sub HandleModeData {
       if (!$HandleMime) {
         $Self->output_body($Fh, $_) if $Fh;
 
-      # Handle MIME phases ... {{{
+        # Handle MIME phases ... {{{
       } else {
 
         if ($InHeader) {
@@ -403,27 +410,28 @@ sub HandleModeData {
 
           # End of headers
           if ($_ eq "\n") {
-            $MessageHdrs = $Self->ProcessHeaders(\$HeadBuffer, \@Boundaries, $MessageHdrs);
+            $MessageHdrs
+              = $Self->ProcessHeaders(\$HeadBuffer, \@Boundaries, $MessageHdrs);
             $Self->end_headers(\$HeadBuffer);
 
             $Self->output_headers($Fh, $HeadBuffer) if $Fh;
             $HeadBuffer = '';
 
-            # If message/rfc822 attachment, then we're immediately into headers again
+       # If message/rfc822 attachment, then we're immediately into headers again
             if (!$MessageHdrs) {
-              $InHeader = 0;
+              $InHeader     = 0;
               $DoBodyBuffer = $Self->begin_body();
             }
           }
 
-        # In 'body' type section
+          # In 'body' type section
         } else {
 
           # Found boundary string?
           if (@Boundaries && /$Boundaries[-1]->[1]/) {
             $Self->end_body(\$BodyBuffer);
             $Self->output_body($Fh, $BodyBuffer) if $Fh && $DoBodyBuffer;
-            $BodyBuffer = '';
+            $BodyBuffer   = '';
             $DoBodyBuffer = 0;
 
             # Use previous boundary match
@@ -467,11 +475,11 @@ sub HandleModeData {
 
     }
 
-  # Main while loop
+    # Main while loop
   }
 
   # EOF on input, done/exit mode
-  return 0
+  return 0;
 }
 
 sub ProcessHeaders {
@@ -479,8 +487,10 @@ sub ProcessHeaders {
 
   # Loop through and list all headers (minus \n)
   my @Headers;
-  while ($$HeadBuffer =~ /\G([^\s:]+)(:[ \t]*(?:\n[ \t]+)*)([^\n]*(?:\n[ \t]+[^\n]*)*)\n/gc) {
-    push @Headers, [ $1, $2, $3 ]
+  while ($$HeadBuffer =~
+    /\G([^\s:]+)(:[ \t]*(?:\n[ \t]+)*)([^\n]*(?:\n[ \t]+[^\n]*)*)\n/gc)
+  {
+    push @Headers, [ $1, $2, $3 ];
   }
   my ($Remainder) = $$HeadBuffer =~ /\G(.*)$/s;
 
@@ -490,7 +500,7 @@ sub ProcessHeaders {
 
   # Callback for each header (use counter because add_header() might be called)
   for (my $i = 0; $i < @Headers; $i++) {
-    $Self->HandleHeader(@{$Headers[$i]}, $Boundaries, $MsgHeaders);
+    $Self->HandleHeader(@{ $Headers[$i] }, $Boundaries, $MsgHeaders);
   }
 
   # Callback with all headers
@@ -500,7 +510,8 @@ sub ProcessHeaders {
   delete @$Self{qw(HeaderList HeaderMap)};
 
   # Build headers again
-  $$HeadBuffer = join "", map { !defined $_->[2] ? "" : join("", @$_, "\n") } @Headers;
+  $$HeadBuffer = join "",
+    map { !defined $_->[2] ? "" : join("", @$_, "\n") } @Headers;
   $$HeadBuffer .= $Remainder;
 
   # Extract new MIME boundary details in content-type headers
@@ -519,7 +530,8 @@ sub ProcessHeaders {
 }
 
 sub HandleHeader {
-  my ($Self, $HeaderName, $HeaderSep, $HeaderValue, $Boundaries, $MsgHeaders) = @_;
+  my ($Self, $HeaderName, $HeaderSep, $HeaderValue, $Boundaries, $MsgHeaders)
+    = @_;
 
   # Process existing header
   if ($HeaderName) {
@@ -575,14 +587,16 @@ sub HandleEndOfData {
 }
 
 sub ClearAlarm {
-  my ($Self, $Xmtp) = ($_[0], $_[0]->{xmtp}); shift;
+  my ($Self, $Xmtp) = ($_[0], $_[0]->{xmtp});
+  shift;
   alarm(0);
-  $Xmtp->{TotalTime} = $Xmtp->{XmtpTimeout};
+  $Xmtp->{TotalTime}   = $Xmtp->{XmtpTimeout};
   $Xmtp->{PrevTimeout} = undef;
 }
 
 sub ScheduleAlarm {
-  my ($Self, $Xmtp) = ($_[0], $_[0]->{xmtp}); shift;
+  my ($Self, $Xmtp) = ($_[0], $_[0]->{xmtp});
+  shift;
   my $Timeout = shift;
 
   # Total time left for transaction
@@ -600,7 +614,7 @@ sub ScheduleAlarm {
     $TotalTime -= $Used;
     $TotalTime = 1 if $TotalTime < 1;
 
-  # No previous timeout value, but there is now
+    # No previous timeout value, but there is now
   } else {
     $Xmtp->{PrevTimeout} = $Timeout;
   }
@@ -622,8 +636,8 @@ sub add_header {
   my ($Self, $Header, $Value) = @_;
 
   my $Data = [ $Header, ": ", $Value ];
-  push @{$Self->{HeaderList}}, $Data;
-  $Self->{HeaderMap}->{lc $Header} = $Data;
+  push @{ $Self->{HeaderList} }, $Data;
+  $Self->{HeaderMap}->{ lc $Header } = $Data;
 }
 
 # Callback prototypes {{{
@@ -640,40 +654,40 @@ sub reset_state {
   $Xmtp->{LastCmd} = "EOD Done";
 }
 
-sub start_request   { undef; }
-sub end_request     { undef; }
+sub start_request { undef; }
+sub end_request   { undef; }
 
-sub new_connection  { undef; }
-sub helo            { undef; }
-sub noop            { $_[0]->send_client_resp(250, "250 2.0.0 ok"); }
-sub mail_from       { undef; }
-sub rcpt_to         { undef; }
-sub rset            { undef; }
-sub unknown         { undef; }
-sub quit            { undef; }
+sub new_connection   { undef; }
+sub helo             { undef; }
+sub noop             { $_[0]->send_client_resp(250, "250 2.0.0 ok"); }
+sub mail_from        { undef; }
+sub rcpt_to          { undef; }
+sub rset             { undef; }
+sub unknown          { undef; }
+sub quit             { undef; }
 sub close_connection { undef; }
 
-sub begin_data      { undef; }
-sub end_data        { undef; }
-sub header          { undef; }
-sub data_line       { undef; }
+sub begin_data { undef; }
+sub end_data   { undef; }
+sub header     { undef; }
+sub data_line  { undef; }
 
-sub begin_headers   { undef; }
-sub end_headers     { undef; }
-sub all_headers     { undef; }
-sub begin_body      { undef; }
-sub end_body        { undef; }
+sub begin_headers { undef; }
+sub end_headers   { undef; }
+sub all_headers   { undef; }
+sub begin_body    { undef; }
+sub end_body      { undef; }
 
-sub uuenc_begin     { undef; }
-sub uuenc_end       { undef; }
-sub binhex_begin    { undef; }
-sub binhex_end      { undef; }
+sub uuenc_begin  { undef; }
+sub uuenc_end    { undef; }
+sub binhex_begin { undef; }
+sub binhex_end   { undef; }
 
-sub output_headers  { print {$_[1]} $_[2]; }
-sub output_body     { print {$_[1]} $_[2]; }
+sub output_headers { print { $_[1] } $_[2]; }
+sub output_body    { print { $_[1] } $_[2]; }
 
-sub timeout         { undef; }
-sub error           { undef; }
+sub timeout { undef; }
+sub error   { undef; }
 # }}}
 
 =item I<send_client_resp($Self, $Code, $Msg)>
@@ -681,6 +695,7 @@ sub error           { undef; }
 Send back to the connected client the given code and message
 
 =cut
+
 sub send_client_resp {
   my ($Self, $Code, @MsgLines) = @_;
   while (@MsgLines > 1) {

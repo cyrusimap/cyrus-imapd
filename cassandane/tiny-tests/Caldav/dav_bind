@@ -2,37 +2,37 @@
 use Cassandane::Tiny;
 
 sub test_dav_bind
-    :min_version_3_9 :needs_component_httpd
-{
-    my ($self) = @_;
+  : min_version_3_9 : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $admintalk = $self->{adminstore}->get_client();
+  my $admintalk = $self->{adminstore}->get_client();
 
-    $admintalk->create("user.manifold");
-    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
-    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+  $admintalk->create("user.manifold");
+  $admintalk->setacl("user.manifold", admin    => 'lrswipkxtecdan');
+  $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
 
-    my $service = $self->{instance}->get_service("http");
-    my $mantalk = Net::CalDAVTalk->new(
-        user => "manifold",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+  my $service = $self->{instance}->get_service("http");
+  my $mantalk = Net::CalDAVTalk->new(
+    user      => "manifold",
+    password  => 'pass',
+    host      => $service->host(),
+    port      => $service->port(),
+    scheme    => 'http',
+    url       => '/',
+    expandurl => 1,
+  );
 
-    xlog $self, "create calendar";
-    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
-    $self->assert_not_null($CalendarId);
+  xlog $self, "create calendar";
+  my $CalendarId = $mantalk->NewCalendar({ name => 'Manifold Calendar' });
+  $self->assert_not_null($CalendarId);
 
-    xlog $self, "share to user (without 'k' or 'x')";
-    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrspwiten');
+  xlog $self, "share to user (without 'k' or 'x')";
+  $admintalk->setacl("user.manifold.#calendars.$CalendarId",
+    "cassandane" => 'lrspwiten');
 
-    my $propfindXml = <<EOF;
+  my $propfindXml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
 <D:propfind xmlns:D="DAV:">
   <D:prop>
@@ -41,10 +41,12 @@ sub test_dav_bind
 </D:propfind>
 EOF
 
-    # Assert that {DAV:}bind and {DAV:}unbind are present.
-    my $res = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/manifold.". $CalendarId,
-                               $propfindXml, 'Content-Type' => 'text/xml');
-    my $text = Dumper($res);
-    $self->assert_matches(qr/{DAV:}bind/, $text);
-    $self->assert_matches(qr/{DAV:}unbind/, $text);
+  # Assert that {DAV:}bind and {DAV:}unbind are present.
+  my $res
+    = $CalDAV->Request('PROPFIND',
+    "/dav/calendars/user/cassandane/manifold." . $CalendarId,
+    $propfindXml, 'Content-Type' => 'text/xml');
+  my $text = Dumper($res);
+  $self->assert_matches(qr/{DAV:}bind/,   $text);
+  $self->assert_matches(qr/{DAV:}unbind/, $text);
 }

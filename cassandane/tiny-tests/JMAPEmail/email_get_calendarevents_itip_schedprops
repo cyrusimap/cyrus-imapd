@@ -2,21 +2,21 @@
 use Cassandane::Tiny;
 
 sub test_email_get_calendarevents_itip_schedprops
-    :min_version_3_5 :needs_component_jmap :JMAPExtensions
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
-    my ($maj, $min) = Cassandane::Instance->get_version();
+  : min_version_3_5 : needs_component_jmap : JMAPExtensions {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
+  my ($maj, $min) = Cassandane::Instance->get_version();
 
-    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
-    # calendarEvents property
-    my @using = @{ $jmap->DefaultUsing() };
-    push @using, 'https://cyrusimap.org/ns/jmap/mail';
-    $jmap->DefaultUsing(\@using);
+  # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+  # calendarEvents property
+  my @using = @{ $jmap->DefaultUsing() };
+  push @using, 'https://cyrusimap.org/ns/jmap/mail';
+  $jmap->DefaultUsing(\@using);
 
-    my @testCases = ({
-        ical => <<'EOF',
+  my @testCases = (
+    {
+      ical => <<'EOF',
 BEGIN:VCALENDAR
 PRODID:-//Google Inc//Google Calendar 70.9054//EN
 VERSION:2.0
@@ -41,12 +41,13 @@ TRANSP:OPAQUE
 END:VEVENT
 END:VCALENDAR
 EOF
-        wantMethod => 'reply',
-        wantScheduleUpdated => '2021-08-02T03:22:34Z',
-        wantScheduleSequence => 3,
-        wantParticipationComment => 'Hello, World!',
-    }, {
-        ical => <<'EOF',
+      wantMethod               => 'reply',
+      wantScheduleUpdated      => '2021-08-02T03:22:34Z',
+      wantScheduleSequence     => 3,
+      wantParticipationComment => 'Hello, World!',
+    },
+    {
+      ical => <<'EOF',
 BEGIN:VCALENDAR
 METHOD:REPLY
 PRODID:Microsoft Exchange Server 2010
@@ -89,12 +90,13 @@ X-MICROSOFT-DISALLOW-COUNTER:FALSE
 END:VEVENT
 END:VCALENDAR
 EOF
-        wantMethod => 'reply',
-        wantScheduleUpdated => '2021-08-02T03:24:46Z',
-        wantScheduleSequence => 5,
-        wantParticipationComment => "A comment.\n",
-    }, {
-        ical => <<'EOF',
+      wantMethod               => 'reply',
+      wantScheduleUpdated      => '2021-08-02T03:24:46Z',
+      wantScheduleSequence     => 5,
+      wantParticipationComment => "A comment.\n",
+    },
+    {
+      ical => <<'EOF',
 BEGIN:VCALENDAR
 PRODID:-//Google Inc//Google Calendar 70.9054//EN
 VERSION:2.0
@@ -120,67 +122,78 @@ TRANSP:OPAQUE
 END:VEVENT
 END:VCALENDAR
 EOF
-        sinceVersion => ['3','7'],
-        wantMethod => 'counter',
-        wantScheduleUpdated => '2021-08-02T03:22:34Z',
-        wantScheduleSequence => 3,
-        wantParticipationComment => 'A counter comment',
-    });
-
-    foreach my $i (0 .. $#testCases) {
-        my $tc = $testCases[$i];
-
-        # skip tests for older Cyrus versions
-        next if $tc->{sinceVersion} &&
-            ($maj le $tc->{sinceVersion}[0] ||
-            ($maj eq $tc->{sinceVersion}[0] &&
-                $min le $tc->{sinceVersion}[1]));
-
-        $tc->{ical} =~ s/\r?\n/\r\n/gs;
-        $self->make_message("test$i",
-            mime_type => 'multipart/related',
-            mime_boundary => 'boundary',
-            body => ""
-            . "\r\n--boundary\r\n"
-            . "Content-Type: text/plain\r\n"
-            . "\r\n"
-            . "test"
-            . "\r\n--boundary\r\n"
-            . "Content-Type: text/calendar;charset=utf-8\r\n"
-            . "\r\n"
-            . $tc->{ical}
-            . "\r\n--boundary--\r\n"
-        ) || die;
-        $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
-        my $res = $jmap->CallMethods([
-            ['Email/query', {
-                sort => [{
-                    property => 'subject',
-                    isAscending => JSON::false,
-                }],
-                limit => 1,
-            }, "R1"],
-            ['Email/get', {
-                '#ids' => {
-                    resultOf => 'R1',
-                    name => 'Email/query',
-                    path => '/ids'
-                },
-                properties => ['calendarEvents'],
-            }, 'R2' ],
-        ]);
-
-        my $event = (values %{$res->[1][1]{list}[0]{calendarEvents}})[0][0];
-        $self->assert_not_null($event);
-        $self->assert_str_equals($tc->{wantMethod}, $event->{method});
-
-        my @attendees = grep { exists $_->{roles}{attendee} } values %{$event->{participants}};
-        $self->assert_num_equals(1, scalar @attendees);
-        $self->assert_str_equals($tc->{wantScheduleUpdated},
-            $attendees[0]->{scheduleUpdated});
-        $self->assert_num_equals($tc->{wantScheduleSequence},
-            $attendees[0]->{scheduleSequence});
-        $self->assert_str_equals($tc->{wantParticipationComment},
-            $attendees[0]->{participationComment});
+      sinceVersion             => [ '3', '7' ],
+      wantMethod               => 'counter',
+      wantScheduleUpdated      => '2021-08-02T03:22:34Z',
+      wantScheduleSequence     => 3,
+      wantParticipationComment => 'A counter comment',
     }
+  );
+
+  foreach my $i (0 .. $#testCases) {
+    my $tc = $testCases[$i];
+
+    # skip tests for older Cyrus versions
+    next
+      if $tc->{sinceVersion}
+      && (
+      $maj le $tc->{sinceVersion}[0]
+      || ( $maj eq $tc->{sinceVersion}[0]
+        && $min le $tc->{sinceVersion}[1])
+      );
+
+    $tc->{ical} =~ s/\r?\n/\r\n/gs;
+    $self->make_message(
+      "test$i",
+      mime_type     => 'multipart/related',
+      mime_boundary => 'boundary',
+      body          => ""
+        . "\r\n--boundary\r\n"
+        . "Content-Type: text/plain\r\n" . "\r\n" . "test"
+        . "\r\n--boundary\r\n"
+        . "Content-Type: text/calendar;charset=utf-8\r\n" . "\r\n"
+        . $tc->{ical}
+        . "\r\n--boundary--\r\n"
+    ) || die;
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter', '-i');
+    my $res = $jmap->CallMethods([
+      [
+        'Email/query',
+        {
+          sort => [ {
+            property    => 'subject',
+            isAscending => JSON::false,
+          } ],
+          limit => 1,
+        },
+        "R1"
+      ],
+      [
+        'Email/get',
+        {
+          '#ids' => {
+            resultOf => 'R1',
+            name     => 'Email/query',
+            path     => '/ids'
+          },
+          properties => ['calendarEvents'],
+        },
+        'R2'
+      ],
+    ]);
+
+    my $event = (values %{ $res->[1][1]{list}[0]{calendarEvents} })[0][0];
+    $self->assert_not_null($event);
+    $self->assert_str_equals($tc->{wantMethod}, $event->{method});
+
+    my @attendees = grep { exists $_->{roles}{attendee} }
+      values %{ $event->{participants} };
+    $self->assert_num_equals(1, scalar @attendees);
+    $self->assert_str_equals($tc->{wantScheduleUpdated},
+      $attendees[0]->{scheduleUpdated});
+    $self->assert_num_equals($tc->{wantScheduleSequence},
+      $attendees[0]->{scheduleSequence});
+    $self->assert_str_equals($tc->{wantParticipationComment},
+      $attendees[0]->{participationComment});
+  }
 }

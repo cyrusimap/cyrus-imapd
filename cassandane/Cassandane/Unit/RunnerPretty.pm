@@ -44,206 +44,196 @@ use warnings;
 use lib '.';
 use base qw(Cassandane::Unit::Runner);
 
-sub new
-{
-    my ($class, $params, @args) = @_;
-    my $self = $class->SUPER::new(@args);
-    if ($params->{quiet}) {
-        # if we're in quiet ("prettier") mode, write detailed error/failure
-        # reports to $rootdir/reports (if we can) rather than terminal
-        $self->{_quiet} = 1;
+sub new {
+  my ($class, $params, @args) = @_;
+  my $self = $class->SUPER::new(@args);
+  if ($params->{quiet}) {
+    # if we're in quiet ("prettier") mode, write detailed error/failure
+    # reports to $rootdir/reports (if we can) rather than terminal
+    $self->{_quiet} = 1;
 
-        my $cassini = Cassandane::Cassini->instance();
-        my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-        my $quiet_report_file = "$rootdir/reports";
+    my $cassini = Cassandane::Cassini->instance();
+    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+    my $quiet_report_file = "$rootdir/reports";
 
-        $self->{_quiet_report_fh} = IO::File->new($quiet_report_file, 'w');
-        # if we can't write there, just don't do it
+    $self->{_quiet_report_fh} = IO::File->new($quiet_report_file, 'w');
+    # if we can't write there, just don't do it
+  }
+  return $self;
+}
+
+sub ansi {
+  my ($self, $codes, @args) = @_;
+  my $isatty = -t $self->print_stream;
+
+  my $ansi;
+
+  $ansi .= "\e[" . join(',', @{$codes}) . 'm' if $isatty;
+  $ansi .= join('', @args);
+  $ansi .= "\e[0m" if $isatty;
+
+  return $ansi;
+}
+
+sub start_test {
+  my $self = shift;
+  my $test = shift;
+  # prevent the default action which is to print "."
+}
+
+sub add_pass {
+  my $self = shift;
+  my $test = shift;
+
+  my $line = sprintf "%s %s\n", $self->ansi([32], '[  OK  ]'), _getname($test);
+  $self->_print($line);
+}
+
+sub add_error {
+  my $self = shift;
+  my $test = shift;
+
+  $self->record_failed($test);
+
+  my $line = sprintf "%s %s\n", $self->ansi([31], '[ERROR ]'), _getname($test);
+  $self->_print($line);
+}
+
+sub add_failure {
+  my $self = shift;
+  my $test = shift;
+
+  $self->record_failed($test);
+  my $line = sprintf "%s %s\n", $self->ansi([33], '[FAILED]'), _getname($test);
+  $self->_print($line);
+}
+
+sub _getname {
+  my $test  = shift;
+  my $suite = ref($test);
+  $suite =~ s/^Cassandane:://;
+
+  my $testname = $test->{"Test::Unit::TestCase_name"};
+  $testname =~ s/^test_//;
+
+  return "$suite.$testname";
+}
+
+sub _prettytest {
+  my $test = shift;
+  die "WEIRD TEST $test" unless $test =~ m/^test_(.*)\((.*)\)$/;
+  my $item  = $1;
+  my $suite = $2;
+  $suite =~ s/^Cassandane::Cyrus:://;
+  return "$suite.$item";
+}
+
+sub print_errors {
+  my $self = shift;
+
+  my $saved_output_stream;
+  if ($self->{_quiet}) {
+    if ($self->{_quiet_report_fh}) {
+      $saved_output_stream = $self->{_Print_stream};
+      $self->{_Print_stream} = $self->{_quiet_report_fh};
+    } else {
+      return;
     }
-    return $self;
+  }
+
+  my ($result) = @_;
+  return unless my $error_count = $result->error_count();
+  my $msg = "\nThere "
+    . (
+    $error_count == 1
+    ? "was 1 error"
+    : "were $error_count errors"
+    ) . ":\n";
+  $self->_print($msg);
+
+  my $i = 0;
+  for my $e (@{ $result->errors() }) {
+    my ($test, $errors) = split(/\n/, $e->to_string(), 2);
+    chomp $errors;
+    my $prettytest = _prettytest($test);
+    $self->_print("\n") if $i++;
+    $self->_print($self->ansi([31], "$i) $prettytest") . "\n$errors\n");
+    $self->_print("\nAnnotations:\n", $e->object->annotations())
+      if $e->object->annotations();
+  }
+
+  if ($saved_output_stream) {
+    $self->{_Print_stream} = $saved_output_stream;
+  }
 }
 
-sub ansi
-{
-    my ($self, $codes, @args) = @_;
-    my $isatty = -t $self->print_stream;
+sub print_failures {
+  my $self = shift;
 
-    my $ansi;
-
-    $ansi .= "\e[" . join(',', @{$codes}) . 'm' if $isatty;
-    $ansi .= join ('', @args);
-    $ansi .= "\e[0m" if $isatty;
-
-    return $ansi;
-}
-
-sub start_test
-{
-    my $self = shift;
-    my $test = shift;
-    # prevent the default action which is to print "."
-}
-
-sub add_pass
-{
-    my $self = shift;
-    my $test = shift;
-
-    my $line = sprintf "%s %s\n",
-                       $self->ansi([32], '[  OK  ]'),
-                       _getname($test);
-    $self->_print($line);
-}
-
-sub add_error
-{
-    my $self = shift;
-    my $test = shift;
-
-    $self->record_failed($test);
-
-    my $line = sprintf "%s %s\n",
-                       $self->ansi([31], '[ERROR ]'),
-                       _getname($test);
-    $self->_print($line);
-}
-
-sub add_failure
-{
-    my $self = shift;
-    my $test = shift;
-
-    $self->record_failed($test);
-    my $line = sprintf "%s %s\n",
-                       $self->ansi([33], '[FAILED]'),
-                       _getname($test);
-    $self->_print($line);
-}
-
-sub _getname
-{
-    my $test = shift;
-    my $suite = ref($test);
-    $suite =~ s/^Cassandane:://;
-
-    my $testname = $test->{"Test::Unit::TestCase_name"};
-    $testname =~ s/^test_//;
-
-    return "$suite.$testname";
-}
-
-sub _prettytest
-{
-    my $test = shift;
-    die "WEIRD TEST $test" unless $test =~ m/^test_(.*)\((.*)\)$/;
-    my $item = $1;
-    my $suite = $2;
-    $suite =~ s/^Cassandane::Cyrus:://;
-    return "$suite.$item";
-}
-
-sub print_errors
-{
-    my $self = shift;
-
-    my $saved_output_stream;
-    if ($self->{_quiet}) {
-        if ($self->{_quiet_report_fh}) {
-            $saved_output_stream = $self->{_Print_stream};
-            $self->{_Print_stream} = $self->{_quiet_report_fh};
-        }
-        else {
-            return;
-        }
+  my $saved_output_stream;
+  if ($self->{_quiet}) {
+    if ($self->{_quiet_report_fh}) {
+      $saved_output_stream = $self->{_Print_stream};
+      $self->{_Print_stream} = $self->{_quiet_report_fh};
+    } else {
+      return;
     }
+  }
 
-    my ($result) = @_;
-    return unless my $error_count = $result->error_count();
-    my $msg = "\nThere " .
-              ($error_count == 1 ?
-                "was 1 error"
-              : "were $error_count errors") .
-              ":\n";
-    $self->_print($msg);
+  my ($result) = @_;
+  return unless my $failure_count = $result->failure_count;
+  my $msg = "\nThere "
+    . (
+    $failure_count == 1
+    ? "was 1 failure"
+    : "were $failure_count failures"
+    ) . ":\n";
+  $self->_print($msg);
 
-    my $i = 0;
-    for my $e (@{$result->errors()}) {
-        my ($test, $errors) = split(/\n/, $e->to_string(), 2);
-        chomp $errors;
-        my $prettytest = _prettytest($test);
-        $self->_print("\n") if $i++;
-        $self->_print($self->ansi([31], "$i) $prettytest") . "\n$errors\n");
-        $self->_print("\nAnnotations:\n", $e->object->annotations())
-          if $e->object->annotations();
-    }
+  my $i = 0;
+  for my $f (@{ $result->failures() }) {
+    my ($test, $failures) = split(/\n/, $f->to_string(), 2);
+    chomp $failures;
+    my $prettytest = _prettytest($test);
+    $self->_print("\n") if $i++;
+    $self->_print($self->ansi([33], "$i) $prettytest") . "\n$failures\n");
+    $self->_print("\nAnnotations:\n", $f->object->annotations())
+      if $f->object->annotations();
+  }
 
-    if ($saved_output_stream) {
-        $self->{_Print_stream} = $saved_output_stream;
-    }
-}
-
-sub print_failures
-{
-    my $self = shift;
-
-    my $saved_output_stream;
-    if ($self->{_quiet}) {
-        if ($self->{_quiet_report_fh}) {
-            $saved_output_stream = $self->{_Print_stream};
-            $self->{_Print_stream} = $self->{_quiet_report_fh};
-        }
-        else {
-            return;
-        }
-    }
-
-    my ($result) = @_;
-    return unless my $failure_count = $result->failure_count;
-    my $msg = "\nThere " .
-              ($failure_count == 1 ?
-                "was 1 failure"
-              : "were $failure_count failures") .
-              ":\n";
-    $self->_print($msg);
-
-    my $i = 0;
-    for my $f (@{$result->failures()}) {
-        my ($test, $failures) = split(/\n/, $f->to_string(), 2);
-        chomp $failures;
-        my $prettytest = _prettytest($test);
-        $self->_print("\n") if $i++;
-        $self->_print($self->ansi([33], "$i) $prettytest") . "\n$failures\n");
-        $self->_print("\nAnnotations:\n", $f->object->annotations())
-          if $f->object->annotations();
-    }
-
-    if ($saved_output_stream) {
-        $self->{_Print_stream} = $saved_output_stream;
-    }
+  if ($saved_output_stream) {
+    $self->{_Print_stream} = $saved_output_stream;
+  }
 }
 
 sub print_header {
-    my $self = shift;
-    my ($result) = @_;
-    if ($result->was_successful()) {
-        $self->_print("\n",
-                      $self->ansi([32], "OK"),
-                      " (", $result->run_count(), " tests)\n");
-    } else {
-        my $failure_count = $result->failure_count()
-                          ? $self->ansi([33], $result->failure_count)
-                          : "0";
-        my $error_count = $result->error_count()
-                        ? $self->ansi([31], $result->error_count)
-                        : "0";
+  my $self = shift;
+  my ($result) = @_;
+  if ($result->was_successful()) {
+    $self->_print("\n", $self->ansi([32], "OK"),
+      " (", $result->run_count(), " tests)\n");
+  } else {
+    my $failure_count
+      = $result->failure_count()
+      ? $self->ansi([33], $result->failure_count)
+      : "0";
+    my $error_count
+      = $result->error_count()
+      ? $self->ansi([31], $result->error_count)
+      : "0";
 
-        $self->_print("\n", $self->ansi([31], "!!!FAILURES!!!"), "\n",
-                      "Test Results:\n",
-                      "Run: ", $result->run_count(),
-                      ", Failures: $failure_count",
-                      ", Errors: $error_count",
-                      "\n");
-    }
+    $self->_print(
+      "\n",
+      $self->ansi([31], "!!!FAILURES!!!"),
+      "\n",
+      "Test Results:\n",
+      "Run: ",
+      $result->run_count(),
+      ", Failures: $failure_count",
+      ", Errors: $error_count",
+      "\n"
+    );
+  }
 }
 
 1;

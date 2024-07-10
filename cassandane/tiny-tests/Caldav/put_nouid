@@ -2,17 +2,16 @@
 use Cassandane::Tiny;
 
 sub test_put_nouid
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    my $href = "$CalendarId/nouid.ics";
-    my $card = <<EOF;
+  my $href = "$CalendarId/nouid.ics";
+  my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -29,7 +28,9 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    eval { $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar') };
-    my $Err = $@;
-    $self->assert_matches(qr/valid-calendar-object-resource/, $Err);
+  eval {
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  };
+  my $Err = $@;
+  $self->assert_matches(qr/valid-calendar-object-resource/, $Err);
 }

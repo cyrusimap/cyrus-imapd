@@ -2,12 +2,11 @@
 use Cassandane::Tiny;
 
 sub test_tspecial_resource_name
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $carddav = $self->{carddav};
-    my $card = <<EOF;
+  my $carddav = $self->{carddav};
+  my $card    = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
 UID:123456789
@@ -19,8 +18,8 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $href = "Default/()<>@,;:\"[]?=.vcf";
-    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
-    my $res = $carddav->Request('GET', $href);
-    $self->assert_matches(qr/\r\nUID:123456789\r\n/, $res->{content});
+  my $href = "Default/()<>@,;:\"[]?=.vcf";
+  $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+  my $res = $carddav->Request('GET', $href);
+  $self->assert_matches(qr/\r\nUID:123456789\r\n/, $res->{content});
 }

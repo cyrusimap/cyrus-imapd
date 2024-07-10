@@ -2,31 +2,30 @@
 use Cassandane::Tiny;
 
 sub test_rename
-    :needs_component_httpd
-{
-    my ($self) = @_;
+  : needs_component_httpd {
+  my ($self) = @_;
 
-    my $CalDAV = $self->{caldav};
+  my $CalDAV = $self->{caldav};
 
-    xlog $self, "create calendar";
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+  xlog $self, "create calendar";
+  my $CalendarId = $CalDAV->NewCalendar({ name => 'foo' });
+  $self->assert_not_null($CalendarId);
 
-    xlog $self, "fetch again";
-    my $Calendar = $CalDAV->GetCalendar($CalendarId);
-    $self->assert_not_null($Calendar);
+  xlog $self, "fetch again";
+  my $Calendar = $CalDAV->GetCalendar($CalendarId);
+  $self->assert_not_null($Calendar);
 
-    xlog $self, "check name matches";
-    $self->assert_str_equals('foo', $Calendar->{name});
+  xlog $self, "check name matches";
+  $self->assert_str_equals('foo', $Calendar->{name});
 
-    xlog $self, "change name";
-    my $NewId = $CalDAV->UpdateCalendar({ id => $CalendarId, name => 'bar'});
-    $self->assert_str_equals($CalendarId, $NewId);
+  xlog $self, "change name";
+  my $NewId = $CalDAV->UpdateCalendar({ id => $CalendarId, name => 'bar' });
+  $self->assert_str_equals($CalendarId, $NewId);
 
-    xlog $self, "fetch again";
-    my $NewCalendar = $CalDAV->GetCalendar($NewId);
-    $self->assert_not_null($NewCalendar);
+  xlog $self, "fetch again";
+  my $NewCalendar = $CalDAV->GetCalendar($NewId);
+  $self->assert_not_null($NewCalendar);
 
-    xlog $self, "check new name stuck";
-    $self->assert_str_equals('bar', $NewCalendar->{name});
+  xlog $self, "check new name stuck";
+  $self->assert_str_equals('bar', $NewCalendar->{name});
 }

@@ -2,67 +2,80 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_intermediary_move_child
-    :min_version_3_1 :max_version_3_4 :needs_component_jmap :NoAltNameSpace
-{
-    my ($self) = @_;
+  : min_version_3_1 : max_version_3_4 : needs_component_jmap : NoAltNameSpace {
+  my ($self) = @_;
 
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+  my $jmap = $self->{jmap};
+  my $imap = $self->{store}->get_client();
 
-    xlog $self, "Create mailboxes";
-    $imap->create("INBOX.i1.i2.foo") or die;
-    $imap->create("INBOX.i1.i3.bar") or die;
-    my $res = $jmap->CallMethods([
-        ['Mailbox/get', {
-            properties => ['name', 'parentId'],
-        }, "R1"]
-    ]);
-    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    my $mboxIdFoo = $mboxByName{'foo'}->{id};
-    my $mboxId1 = $mboxByName{'i1'}->{id};
-    my $mboxId2 = $mboxByName{'i2'}->{id};
-    my $mboxId3 = $mboxByName{'i3'}->{id};
-    my $mboxIdBar = $mboxByName{'bar'}->{id};
-    my $state = $res->[0][1]{state};
+  xlog $self, "Create mailboxes";
+  $imap->create("INBOX.i1.i2.foo") or die;
+  $imap->create("INBOX.i1.i3.bar") or die;
+  my $res = $jmap->CallMethods([ [
+    'Mailbox/get',
+    {
+      properties => [ 'name', 'parentId' ],
+    },
+    "R1"
+  ] ]);
+  my %mboxByName = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  my $mboxIdFoo  = $mboxByName{'foo'}->{id};
+  my $mboxId1    = $mboxByName{'i1'}->{id};
+  my $mboxId2    = $mboxByName{'i2'}->{id};
+  my $mboxId3    = $mboxByName{'i3'}->{id};
+  my $mboxIdBar  = $mboxByName{'bar'}->{id};
+  my $state      = $res->[0][1]{state};
 
-    xlog $self, "Move child of intermediary to another intermediary";
-    $res = $jmap->CallMethods([
-        ['Mailbox/set', {
-            update => {
-                $mboxIdBar => {
-                    parentId => $mboxId2,
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$mboxIdBar});
-    $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $state = $res->[0][1]{newState};
+  xlog $self, "Move child of intermediary to another intermediary";
+  $res = $jmap->CallMethods([
+    [
+      'Mailbox/set',
+      {
+        update => {
+          $mboxIdBar => {
+            parentId => $mboxId2,
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+  $self->assert(exists $res->[0][1]{updated}{$mboxIdBar});
+  $self->assert_str_not_equals($state, $res->[0][1]{newState});
+  $state = $res->[0][1]{newState};
 
-    xlog $self, "Assert mailbox tree and changes";
-    $res = $jmap->CallMethods([
-        ['Mailbox/get', {
-            properties => ['name', 'parentId'],
-        }, "R1"],
-        ['Mailbox/changes', {
-            sinceState => $state,
-        }, 'R2'],
-    ]);
+  xlog $self, "Assert mailbox tree and changes";
+  $res = $jmap->CallMethods([
+    [
+      'Mailbox/get',
+      {
+        properties => [ 'name', 'parentId' ],
+      },
+      "R1"
+    ],
+    [
+      'Mailbox/changes',
+      {
+        sinceState => $state,
+      },
+      'R2'
+    ],
+  ]);
 
-    # All intermediaries without real children are gone.
-    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(5, scalar keys %mboxByName);
-    $self->assert_not_null($mboxByName{'Inbox'});
-    $self->assert_not_null($mboxByName{'i1'});
-    $self->assert_not_null($mboxByName{'i2'});
-    $self->assert_not_null($mboxByName{'foo'});
-    $self->assert_not_null($mboxByName{'bar'});
-    $self->assert_null($mboxByName{i1}->{parentId});
-    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
-    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{foo}->{parentId});
-    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+  # All intermediaries without real children are gone.
+  %mboxByName = map { $_->{name} => $_ } @{ $res->[0][1]{list} };
+  $self->assert_num_equals(5, scalar keys %mboxByName);
+  $self->assert_not_null($mboxByName{'Inbox'});
+  $self->assert_not_null($mboxByName{'i1'});
+  $self->assert_not_null($mboxByName{'i2'});
+  $self->assert_not_null($mboxByName{'foo'});
+  $self->assert_not_null($mboxByName{'bar'});
+  $self->assert_null($mboxByName{i1}->{parentId});
+  $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+  $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{foo}->{parentId});
+  $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
 
-    # But Mailbox/changes reports the implicitly destroyed mailboxes.
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{destroyed}});
-    $self->assert_str_equals($mboxId3, $res->[1][1]{destroyed}[0]);
+  # But Mailbox/changes reports the implicitly destroyed mailboxes.
+  $self->assert_num_equals(1, scalar @{ $res->[1][1]{destroyed} });
+  $self->assert_str_equals($mboxId3, $res->[1][1]{destroyed}[0]);
 }

@@ -2,13 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_card_get_disable_uri_as_blobid
-    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-    my $carddav = $self->{carddav};
+  : min_version_3_9 : needs_component_jmap : needs_dependency_icalvcard {
+  my ($self)  = @_;
+  my $jmap    = $self->{jmap};
+  my $carddav = $self->{carddav};
 
-    my $vcard = <<'EOF';
+  my $vcard = <<'EOF';
 BEGIN:VCARD
 VERSION:4.0
 UID:85b5d651-1cde-43d9-901d-7059d67807f9
@@ -17,23 +16,31 @@ PHOTO;PROP-ID=photo1:data:image/x-bla;base64,YmxhYmxhCg=
 CREATED:20230823T133154Z
 END:VCARD
 EOF
-    $vcard =~ s/\r?\n/\r\n/gs;
-    $carddav->Request('PUT', 'Default/test.vcf', $vcard,
-        'Content-Type' => 'text/vcard');
+  $vcard =~ s/\r?\n/\r\n/gs;
+  $carddav->Request('PUT', 'Default/test.vcf', $vcard,
+    'Content-Type' => 'text/vcard');
 
-    my $res = $jmap->CallMethods([
-        ['ContactCard/get', {
-            properties => ['media'],
-        }, 'R1'],
-        ['ContactCard/get', {
-            properties => ['media'],
-            disableUriAsBlobId => JSON::true,
-        }, 'R2'],
-    ]);
+  my $res = $jmap->CallMethods([
+    [
+      'ContactCard/get',
+      {
+        properties => ['media'],
+      },
+      'R1'
+    ],
+    [
+      'ContactCard/get',
+      {
+        properties         => ['media'],
+        disableUriAsBlobId => JSON::true,
+      },
+      'R2'
+    ],
+  ]);
 
-    $self->assert_not_null($res->[0][1]{list}[0]{media}{photo1}{blobId});
-    $self->assert_null($res->[0][1]{list}[0]{media}{photo1}{uri});
+  $self->assert_not_null($res->[0][1]{list}[0]{media}{photo1}{blobId});
+  $self->assert_null($res->[0][1]{list}[0]{media}{photo1}{uri});
 
-    $self->assert_null($res->[1][1]{list}[0]{media}{photo1}{blobId});
-    $self->assert_not_null($res->[1][1]{list}[0]{media}{photo1}{uri});
+  $self->assert_null($res->[1][1]{list}[0]{media}{photo1}{blobId});
+  $self->assert_not_null($res->[1][1]{list}[0]{media}{photo1}{uri});
 }

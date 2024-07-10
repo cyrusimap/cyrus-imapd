@@ -7,13 +7,13 @@ use Moo;
 use Types::Standard qw(ArrayRef Value Int);
 
 # internal data structure (real things)
-has boxes => (is => 'rw', isa => ArrayRef);
-has localpart => (is => 'rw', isa => Value);
-has domain => (is => 'rw', isa => Value);
+has boxes      => (is => 'rw', isa => ArrayRef);
+has localpart  => (is => 'rw', isa => Value);
+has domain     => (is => 'rw', isa => Value);
 has is_deleted => (is => 'rw', isa => Int);
 
 sub new_intname {
-  my $class = shift;
+  my $class   = shift;
   my $intname = shift;
 
   my %self;
@@ -42,7 +42,7 @@ sub new_intname {
 }
 
 sub new_dbname {
-  my $class = shift;
+  my $class  = shift;
   my $dbname = shift;
 
   # allow 'N' for new-style keys, an 'R' for 'RESTORED' domain
@@ -74,9 +74,9 @@ sub new_dbname {
 }
 
 sub new_userfolder {
-  my $class = shift;
+  my $class    = shift;
   my $username = shift;
-  my $folder = shift;
+  my $folder   = shift;
 
   my %self;
   if ($username =~ s/\@(.*)//) {
@@ -97,30 +97,27 @@ sub new_userfolder {
 
     if ($boxes[0] eq 'INBOX') {
       shift @boxes;
-    }
 
-    elsif($boxes[0] eq 'user') {
+    } elsif ($boxes[0] eq 'user') {
       shift @boxes;
       $self{localpart} = shift @boxes;
-    }
 
-    else {
+    } else {
       die "Unknown top-level $boxes[0]";
     }
 
     $self{boxes} = \@boxes;
-  }
-  else {
-    $self{boxes} = [];  # INBOX
+  } else {
+    $self{boxes} = []; # INBOX
   }
 
   return bless \%self, ref($class) || $class;
 }
 
 sub new_extuserfolder {
-  my $class = shift;
+  my $class    = shift;
   my $username = shift;
-  my $folder = shift;
+  my $folder   = shift;
 
   my %self;
   if ($username =~ s/\@(.*)//) {
@@ -138,19 +135,16 @@ sub new_extuserfolder {
 
     if (@boxes == 1 and $boxes[0] eq 'INBOX') {
       shift @boxes;
-    }
 
-    elsif($boxes[0] eq 'user') {
+    } elsif ($boxes[0] eq 'user') {
       shift @boxes;
       $self{localpart} = shift @boxes;
-    }
 
-    else {
+    } else {
       $self{boxes} = \@boxes;
     }
-  }
-  else {
-    $self{boxes} = [];  # INBOX
+  } else {
+    $self{boxes} = []; # INBOX
   }
 
   return bless \%self, ref($class) || $class;
@@ -158,7 +152,7 @@ sub new_extuserfolder {
 
 sub new_adminfolder {
   # this is basically new_intname, but with the domain on the end...
-  my $class = shift;
+  my $class       = shift;
   my $adminfolder = shift;
 
   my %self;
@@ -191,12 +185,12 @@ sub new_adminfolder {
 
 sub intname {
   my $self = shift;
-  my $res = '';
+  my $res  = '';
   if ($self->{domain}) {
     $res .= $self->{domain} . '!';
   }
 
-  my @boxes = @{$self->{boxes}||[]};
+  my @boxes = @{ $self->{boxes} || [] };
 
   if ($self->{localpart}) {
     unshift @boxes, $self->{localpart};
@@ -215,12 +209,12 @@ sub intname {
 
 sub adminfolder {
   my $self = shift;
-  my $res = '';
+  my $res  = '';
   if ($self->{domain}) {
     $res = '@' . $self->{domain};
   }
 
-  my @boxes = @{$self->{boxes}||[]};
+  my @boxes = @{ $self->{boxes} || [] };
 
   if ($self->{localpart}) {
     unshift @boxes, $self->{localpart};
@@ -239,12 +233,12 @@ sub adminfolder {
 
 sub dbname {
   my $self = shift;
-  my $res = '';
+  my $res  = '';
   if ($self->{domain}) {
     $res .= $self->{domain} . "\x1d";
   }
 
-  my @boxes = @{$self->{boxes}||[]};
+  my @boxes = @{ $self->{boxes} || [] };
 
   if ($self->{localpart}) {
     unshift @boxes, $self->{localpart};
@@ -262,7 +256,7 @@ sub dbname {
 sub userfolder {
   my $self = shift;
 
-  my @boxes = @{$self->{boxes}||[]};
+  my @boxes = @{ $self->{boxes} || [] };
 
   s/\./\^/g for @boxes;
 
@@ -279,8 +273,9 @@ sub userfolder {
 sub extuserfolder {
   my $self = shift;
 
-  die "Not a userfolder" unless ($self->{localpart} and not $self->{is_deleted});
-  my @boxes = @{$self->{boxes}||[]};
+  die "Not a userfolder"
+    unless ($self->{localpart} and not $self->{is_deleted});
+  my @boxes = @{ $self->{boxes} || [] };
 
   return 'INBOX' unless @boxes;
 
@@ -292,7 +287,9 @@ sub extuserfolder {
 sub username {
   my $self = shift;
   return unless $self->{localpart};
-  return $self->{domain} ? "$self->{localpart}\@$self->{domain}" : $self->{localpart};
+  return $self->{domain}
+    ? "$self->{localpart}\@$self->{domain}"
+    : $self->{localpart};
 }
 
 1;

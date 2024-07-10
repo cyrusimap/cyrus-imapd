@@ -48,50 +48,50 @@ use File::Temp;
 
 sub new_kvlist {
   my $class = shift;
-  my $key = shift;
+  my $key   = shift;
 
   return bless {
     type => 'kvlist',
-    key => $key,
+    key  => $key,
     data => [],
-  }, ref($class) || $class;
+    },
+    ref($class) || $class;
 }
 
 sub new_list {
   my $class = shift;
-  my $key = shift;
+  my $key   = shift;
 
   return bless {
     type => 'list',
-    key => $key,
+    key  => $key,
     data => [],
-  }, ref($class) || $class;
+    },
+    ref($class) || $class;
 }
 
 sub new_perl {
   my $class = shift;
-  my $key = shift;
-  my $val = shift;
-  my $Self = $class->new_list(undef);
+  my $key   = shift;
+  my $val   = shift;
+  my $Self  = $class->new_list(undef);
   $Self->add_perl($key, $val);
   return $Self->{data}[0];
 }
 
 sub add_perl {
   my $Self = shift;
-  my $key = shift;
-  my $val = shift;
+  my $key  = shift;
+  my $val  = shift;
 
   if (not ref($val)) {
     $Self->add_atom($key, $val);
-  }
 
-  elsif (ref($val) eq 'ARRAY') {
+  } elsif (ref($val) eq 'ARRAY') {
     my $child = $Self->add_list($key);
     $child->add_perl(undef, $_) for @$val;
-  }
 
-  elsif (ref($val) eq 'HASH') {
+  } elsif (ref($val) eq 'HASH') {
     my $child = $Self->add_kvlist($key);
     my $order = delete $val->{__kvlist_order};
 
@@ -103,91 +103,88 @@ sub add_perl {
     }
 
     $child->add_perl($_, $val->{$_}) for sort keys %$val;
-  }
 
-  elsif (ref($val) eq 'REF') {
+  } elsif (ref($val) eq 'REF') {
     my $item = $$val;
     if (ref($item) eq 'ARRAY') {
       $Self->add_file($key, @$item);
     } else {
       die "Unknown file format " . ref($item);
     }
-  }
 
-  else {
+  } else {
     die "UNKNOWN $key " . ref($val);
   }
 }
 
 sub add_list {
   my $Self = shift;
-  my $key = shift;
+  my $key  = shift;
 
   die unless $Self->{type} =~ m/list/;
 
   my $res = bless {
     type => 'list',
-    key => $key,
+    key  => $key,
     data => [],
   };
-  push @{$Self->{data}}, $res;
+  push @{ $Self->{data} }, $res;
 
   return $res;
 }
-  
 
 sub add_kvlist {
   my $Self = shift;
-  my $key = shift;
+  my $key  = shift;
 
   die unless $Self->{type} =~ m/list/;
 
   my $res = bless {
     type => 'kvlist',
-    key => $key,
+    key  => $key,
     data => [],
   };
-  push @{$Self->{data}}, $res;
+  push @{ $Self->{data} }, $res;
 
   return $res;
 }
 
 sub add_file {
-  my $Self = shift;
-  my $key = shift;
+  my $Self      = shift;
+  my $key       = shift;
   my $partition = shift;
-  my $guid = shift;
-  my $size = shift;
-  my $value = shift;
+  my $guid      = shift;
+  my $size      = shift;
+  my $value     = shift;
 
   die unless $Self->{type} =~ m/list/;
 
   my $res = bless {
-    type => 'file',
-    key => $key,
+    type      => 'file',
+    key       => $key,
     partition => $partition,
-    guid => $guid,
-    size => $size,
-    data => $value,
+    guid      => $guid,
+    size      => $size,
+    data      => $value,
   };
-  push @{$Self->{data}}, $res;
+  push @{ $Self->{data} }, $res;
 
   return $res;
 }
 
 sub add_atom {
-  my $Self = shift;
-  my $key = shift;
+  my $Self  = shift;
+  my $key   = shift;
   my $value = shift;
 
   die unless $Self->{type} =~ m/list/;
 
   my $res = bless {
     type => 'atom',
-    key => $key,
+    key  => $key,
     data => $value,
   };
-  push @{$Self->{data}}, $res;
+  push @{ $Self->{data} }, $res;
 
   return $res;
 }
@@ -217,8 +214,8 @@ sub _getword {
 
 # Great - custom magic
 sub _parse_string {
-  my $Self = shift;
-  my $ref = shift;
+  my $Self     = shift;
+  my $ref      = shift;
   my $parsekey = shift;
 
   my $key = '';
@@ -237,19 +234,17 @@ sub _parse_string {
       $Child->_parse_string($ref, 0);
       $$ref =~ s/^\s+//;
     }
-  }
 
-  elsif ($$ref =~ s/^\%//) {
+  } elsif ($$ref =~ s/^\%//) {
     # kvlist
     if ($$ref =~ s/^\(//) {
       die unless $$ref;
       my $Child = $Self->add_kvlist($key);
-      while (not ($$ref =~ s/^\)//)) {
+      while (not($$ref =~ s/^\)//)) {
         $Child->_parse_string($ref, 1);
         $$ref =~ s/^\s+//;
       }
-    }
-    elsif ($$ref =~ s/^\{//) {
+    } elsif ($$ref =~ s/^\{//) {
       die unless $$ref;
       my $partition = _getword($ref);
       die "No partition" unless length($partition);
@@ -263,18 +258,17 @@ sub _parse_string {
       my $content = substr($$ref, 0, $size, '');
       $Self->add_file($key, $partition, $guid, $size, $content);
     }
-  }
-  else {
+  } else {
     my $content = _getastring($ref);
     $Self->add_atom($key, $content);
   }
 }
 
 sub parse_string {
-  my $class = shift;
-  my $string = shift;
+  my $class    = shift;
+  my $string   = shift;
   my $parsekey = shift;
-  my $base = $class->new_list();
+  my $base     = $class->new_list();
   $base->_parse_string(\$string, $parsekey);
   return $base->{data}[0];
 }
@@ -299,18 +293,16 @@ sub as_string {
   my $Self = shift;
 
   if ($Self->{type} eq 'kvlist') {
-    my @items = map { _printastring($_->{key}) => $_->as_string() } @{$Self->{data}};
+    my @items
+      = map { _printastring($_->{key}) => $_->as_string() } @{ $Self->{data} };
     return '%(' . join(' ', @items) . ')';
-  }
-  elsif ($Self->{type} eq 'list') {
-    my @items = map { $_->as_string() } @{$Self->{data}};
+  } elsif ($Self->{type} eq 'list') {
+    my @items = map { $_->as_string() } @{ $Self->{data} };
     return '(' . join(' ', @items) . ')';
-  }
-  elsif ($Self->{type} eq 'file') {
+  } elsif ($Self->{type} eq 'file') {
     my @items = ($Self->{partition}, $Self->{guid}, $Self->{size});
-    return '%{' . join (' ', @items) . "}\r\n" . $Self->{data};
-  }
-  else {
+    return '%{' . join(' ', @items) . "}\r\n" . $Self->{data};
+  } else {
     return _printastring($Self->{data});
   }
 }
@@ -322,21 +314,18 @@ sub as_perl {
     my $kvlist = {};
     my @order;
 
-    foreach my $datum (@{$Self->{data}}) {
+    foreach my $datum (@{ $Self->{data} }) {
       push @order, $datum->{key};
-      $kvlist->{$datum->{key}} = $datum->as_perl();
+      $kvlist->{ $datum->{key} } = $datum->as_perl();
     }
 
-    $kvlist->{__kvlist_order} = [ @order ];
+    $kvlist->{__kvlist_order} = [@order];
     return $kvlist;
-  }
-  elsif ($Self->{type} eq 'list') {
-    return [ map { $_->as_perl() } @{$Self->{data}} ];
-  }
-  elsif ($Self->{type} eq 'file') {
+  } elsif ($Self->{type} eq 'list') {
+    return [ map { $_->as_perl() } @{ $Self->{data} } ];
+  } elsif ($Self->{type} eq 'file') {
     return \[ $Self->{partition}, $Self->{guid}, $Self->{size}, $Self->{data} ];
-  }
-  else {
+  } else {
     return $Self->{data};
   }
 }
@@ -346,33 +335,32 @@ sub anyevent_read_type {
 
   my %obj;
   %obj = (
-    data => '',
+    data    => '',
     getline => sub {
       if ($_[1] =~ m/(\d+)\+?\}$/) {
         my $length = $1;
         $obj{data} .= $_[1] . $_[2];
         # compatible with both file literals and regular literals
         $_[0]->unshift_read(chunk => $length, $obj{getliteral});
-      }
-      else {
+      } else {
         my $dlist = Cyrus::DList->parse_string($obj{data} . $_[1], $parsekey);
         $cb->($handle, $dlist);
         %obj = (); # drop refs
       }
-      1
+      1;
     },
     getliteral => sub {
       $obj{data} .= $_[1];
-      $_[0]->unshift_read (line => $obj{getline});
-      1
+      $_[0]->unshift_read(line => $obj{getline});
+      1;
     },
   );
 
   return sub {
-    $_[0]->unshift_read (line => $obj{getline});
-    1
+    $_[0]->unshift_read(line => $obj{getline});
+    1;
   };
-};
+}
 
 sub anyevent_write_type {
   my ($handle, $dlist, $printkey) = @_;
