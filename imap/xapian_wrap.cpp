@@ -939,7 +939,6 @@ static std::string parse_listid(const char *str)
 
     /* Normalize list-id */
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     return val;
 }
 
@@ -950,7 +949,6 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
     /* Normalize list-id */
     std::string val = parse_listid(buf_cstring(part));
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     if (val.empty()) {
         syslog(LOG_DEBUG, "Xapian: not a valid list-id: %s",
                 buf_cstring(part));
@@ -964,9 +962,8 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
 static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
     std::string prefix(get_term_prefix(partnum));
-    std::string lpart = Xapian::Unicode::tolower(buf_cstring(part));
     struct address_itr itr;
-    address_itr_init(&itr, lpart.c_str(), 0);
+    address_itr_init(&itr, buf_cstring(part), 0);
 
     const struct address *addr;
     while ((addr = address_itr_next(&itr))) {
@@ -2693,4 +2690,13 @@ EXPORTED void xapian_doc_close(xapian_doc_t *doc)
     delete doc->termgen;
     delete doc->doc;
     free(doc);
+}
+
+EXPORTED int xapian_charset_flags(int flags)
+{
+    return (flags |
+            CHARSET_KEEPCASE |
+            CHARSET_MIME_UTF8 |
+            CHARSET_UNORM_NFKC_CF) &
+        ~CHARSET_SKIPDIACRIT;
 }

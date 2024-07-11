@@ -5436,6 +5436,7 @@ struct getsearchtext_rock
     search_text_receiver_t *receiver;
     int indexed_headers;
     int charset_flags;
+    charset_conv_t *conv;
     const strarray_t *partids;
     int snippet_iteration; /* 0..no snippet, 1..first run, 2..second run */
     strarray_t striphtml; /* strip HTML from these plain text body part ids */
@@ -5443,8 +5444,8 @@ struct getsearchtext_rock
     int flags;
 };
 
-static void stuff_part(search_text_receiver_t *receiver,
-                       int part, const struct buf *buf)
+static void stuff_converted_part(search_text_receiver_t *receiver,
+                                 int part, const struct buf *buf)
 {
     // don't try to index a zero length part
     if (!buf_len(buf)) return;
@@ -5456,6 +5457,19 @@ static void stuff_part(search_text_receiver_t *receiver,
     receiver->begin_part(receiver, part);
     receiver->append_text(receiver, buf);
     receiver->end_part(receiver, part);
+}
+
+static void stuff_part(search_text_receiver_t *receiver,
+                       charset_conv_t *conv,
+                       int part, const struct buf *buf)
+{
+    struct buf tmp = BUF_INITIALIZER;
+    const char *s = charset_conv_convert(conv, buf_cstring(buf));
+    if (s) {
+        buf_init_ro_cstr(&tmp, s);
+        stuff_converted_part(receiver, part, &tmp);
+    }
+    buf_free(&tmp);
 }
 
 static int extract_cb(const struct buf *text, void *rock)
@@ -5516,7 +5530,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
         if ((prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY))) {
             if ((s = icalproperty_get_summary(prop))) {
                 buf_setcstr(&buf, s);
-                stuff_part(str->receiver, SEARCH_PART_SUBJECT, &buf);
+                stuff_part(str->receiver, str->conv, SEARCH_PART_SUBJECT, &buf);
                 buf_reset(&buf);
             }
         }
@@ -5533,7 +5547,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
                 } else {
                     buf_setcstr(&buf, s);
                 }
-                stuff_part(str->receiver, SEARCH_PART_FROM, &buf);
+                stuff_part(str->receiver, str->conv, SEARCH_PART_FROM, &buf);
                 buf_reset(&buf);
             }
         }
@@ -5558,7 +5572,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
             }
         }
         if (buf.len) {
-            stuff_part(str->receiver, SEARCH_PART_TO, &buf);
+            stuff_part(str->receiver, str->conv, SEARCH_PART_TO, &buf);
             buf_reset(&buf);
         }
 
@@ -5566,7 +5580,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
         if ((prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY))) {
             if ((s = icalproperty_get_location(prop))) {
                 buf_setcstr(&buf, s);
-                stuff_part(str->receiver, SEARCH_PART_LOCATION, &buf);
+                stuff_part(str->receiver, str->conv, SEARCH_PART_LOCATION, &buf);
                 buf_reset(&buf);
             }
         }
@@ -5847,7 +5861,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             /* Only index the headers of the top message */
             q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
             buf_init_ro_cstr(&text, q);
-            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
+            stuff_converted_part(str->receiver, SEARCH_PART_HEADERS, &text);
             free(q);
             buf_free(&text);
             str->indexed_headers = 1;
@@ -5861,7 +5875,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 if (!strcmp(param->attribute, "FILENAME")) {
                     char *tmp = charset_decode_mimeheader(param->value, str->charset_flags);
                     buf_init_ro_cstr(&text, tmp);
-                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                    stuff_converted_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
                     buf_free(&text);
                     free(tmp);
                 }
@@ -5871,7 +5885,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                     if (xval) {
                         char *tmp = charset_decode_mimeheader(xval, str->charset_flags|CHARSET_MIME_UTF8);
                         buf_init_ro_cstr(&text, tmp);
-                        stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                        stuff_converted_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
                         buf_free(&text);
                         free(tmp);
                         free(xval);
@@ -5885,7 +5899,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 continue;
             char *tmp = charset_decode_mimeheader(param->value, str->charset_flags);
             buf_init_ro_cstr(&text, tmp);
-            stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+            stuff_converted_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
             buf_free(&text);
             free(tmp);
         }
@@ -6085,6 +6099,7 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     int format = MESSAGE_SEARCH;
     strarray_t types = STRARRAY_INITIALIZER;
     const char *type = NULL, *subtype = NULL;
+    charset_t utf8 = charset_lookupname("utf-8");
     int i;
     int r;
 
@@ -6117,6 +6132,8 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
         format = MESSAGE_SNIPPET;
     }
 
+    str.conv = charset_conv_new(utf8, str.charset_flags);
+
     /* Search receiver can override message field conversion */
     if (receiver->index_message_format) {
         format = receiver->index_message_format(format,
@@ -6125,43 +6142,41 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 
     /* Extract headers */
     if (!message_get_field(msg, "From", format, &buf))
-        stuff_part(receiver, SEARCH_PART_FROM, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_FROM, &buf);
 
     if (!message_get_field(msg, "To", format, &buf))
-        stuff_part(receiver, SEARCH_PART_TO, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_TO, &buf);
 
     if (!message_get_field(msg, "Cc", format, &buf))
-        stuff_part(receiver, SEARCH_PART_CC, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_CC, &buf);
 
     if (!message_get_field(msg, "Bcc", format, &buf))
-        stuff_part(receiver, SEARCH_PART_BCC, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_BCC, &buf);
 
     if (!message_get_field(msg, "Subject", format, &buf))
-        stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_SUBJECT, &buf);
 
     if (!message_get_field(msg, "List-Id", format, &buf))
-        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_LISTID, &buf);
 
     if (!message_get_field(msg, "Mailing-List", format, &buf))
-        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_LISTID, &buf);
 
     if (!message_get_field(msg, "Mailing-List", format, &buf))
-        stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_LISTID, &buf);
 
     if (!message_get_deliveredto(msg, &buf))
-        stuff_part(receiver, SEARCH_PART_DELIVEREDTO, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_DELIVEREDTO, &buf);
 
     if (!message_get_priority(msg, &buf))
-        stuff_part(receiver, SEARCH_PART_PRIORITY, &buf);
+        stuff_part(receiver, str.conv, SEARCH_PART_PRIORITY, &buf);
 
     if (!message_get_leaf_types(msg, &types) && types.count) {
         for (i = 0 ; i < types.count ; i+= 2) {
-            receiver->begin_part(receiver, SEARCH_PART_TYPE);
             buf_setcstr(&buf, types.data[i]);
             buf_putc(&buf, '/');
             buf_appendcstr(&buf, types.data[i+1]);
-            receiver->append_text(receiver, &buf);
-            receiver->end_part(receiver, SEARCH_PART_TYPE);
+            stuff_part(receiver, str.conv, SEARCH_PART_TYPE, &buf);
         }
     }
 
@@ -6214,6 +6229,8 @@ done:
     buf_free(&buf);
     strarray_fini(&types);
     strarray_fini(&str.striphtml);
+    charset_conv_free(&str.conv);
+    charset_free(&utf8);
 
     return r;
 }
