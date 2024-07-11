@@ -589,7 +589,7 @@ static int _matchmime_tr_audit_mailbox(search_text_receiver_t *rx __attribute__(
 
 static int _matchmime_tr_index_charset_flags(int base_flags)
 {
-    return base_flags | CHARSET_KEEPCASE;
+    return xapian_charset_flags(base_flags);
 }
 
 static int _matchmime_tr_index_message_format(int format __attribute__((unused)),

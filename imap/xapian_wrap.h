@@ -116,4 +116,6 @@ extern void xapian_doc_close(xapian_doc_t *doc);
 
 extern const char *xapian_version_string();
 
+extern int xapian_charset_flags(int flags);
+
 #endif
