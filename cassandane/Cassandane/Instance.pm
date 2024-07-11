@@ -729,6 +729,11 @@ sub _generate_imapd_conf
                 smtp_backend => 'host',
                 smtp_host => $self->{smtphost},
             );
+            if (not defined $config->get("servername")) {
+                # smtpclient needs client_bind_name or servername,
+                # falls back to servername if client_bind isn't set.
+                $config->set(servername => "127.0.0.1");
+            }
         }
     }
     else {
