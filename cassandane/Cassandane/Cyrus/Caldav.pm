@@ -138,6 +138,21 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub skip_check
+{
+    my ($self) = @_;
+
+    # XXX skip tests that would hang in verbose mode for now -- see
+    # XXX detailed comment at MaxMessages::put_submission
+    if (get_verbose()
+        && $self->{_name} eq 'test_imip_quote_cn')
+    {
+        return 'test would hang in verbose mode';
+    }
+
+    return undef;
+}
+
 sub _all_keys_match
 {
     my $a = shift;
