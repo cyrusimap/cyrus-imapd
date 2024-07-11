@@ -376,6 +376,11 @@ extern modseq_t msg_modseq(const message_t *m);
 extern uint32_t msg_msgno(const message_t *m);
 extern const struct message_guid *msg_guid(const message_t *m);
 
+/* Find a message-id looking thingy in a string.  Returns a pointer to the
+ * alloc'd id and the remaining string is returned in the **loc parameter.
+ */
+extern char *message_iter_msgid(char *str, char **rem);
+
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 #endif /* INCLUDED_MESSAGE_H */

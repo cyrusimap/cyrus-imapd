@@ -6760,7 +6760,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
     buf_reset(&buf);
 
     /* get msgid */
-    msgdata->msgid = find_msgid(envtokens[ENV_MSGID], NULL);
+    msgdata->msgid = message_iter_msgid(envtokens[ENV_MSGID], NULL);
      /* if we don't have one, create one */
     if (!msgdata->msgid) {
         buf_printf(&buf, "<Empty-ID: %u>", msgdata->msgno);
@@ -6782,14 +6782,14 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
         /* find references */
         refstr = buf.s;
         massage_header(refstr);
-        while ((ref = find_msgid(refstr, &refstr)) != NULL)
+        while ((ref = message_iter_msgid(refstr, &refstr)) != NULL)
             strarray_appendm(&msgdata->ref, ref);
     }
 
     /* if we have no references, try in-reply-to */
     if (!msgdata->ref.count) {
         /* get in-reply-to id */
-        in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], NULL);
+        in_reply_to = message_iter_msgid(envtokens[ENV_INREPLYTO], NULL);
         /* if we have an in-reply-to id, make it the ref */
         if (in_reply_to)
             strarray_appendm(&msgdata->ref, in_reply_to);
