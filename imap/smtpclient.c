@@ -152,7 +152,7 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
                 config_getstring(IMAPOPT_CLIENT_BIND_NAME);
         }
         if (!smtpclient_ehlo_hostname) {
-            smtpclient_ehlo_hostname = config_getstring(IMAPOPT_SERVERNAME);
+            smtpclient_ehlo_hostname = config_servername;
         }
         if (!smtpclient_ehlo_hostname) {
             xsyslog(LOG_ERR,
