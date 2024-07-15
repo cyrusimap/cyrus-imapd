@@ -27,7 +27,7 @@ sub test_card_get_v4
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
-UID:$id
+UID;VALUE=TEXT:$id
 KIND:individual
 FN:Simon Perreault
 N:Perreault;Simon;;;ing. jr
@@ -50,7 +50,7 @@ foo.TZ:America/Montreal
 URL;PROP-ID=L1;TYPE=home:http://nomis80.org
 PHOTO;PROP-ID=P1:data:image/jpeg;base64,c29tZSBwaG90bw==
 LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
-SOUND;VALUE=X;PROP-ID=S1:data:audio/mpeg;base64,c29tZSBzb3VuZA==
+SOUND;VALUE=URI;PROP-ID=S1:data:audio/mpeg;base64,c29tZSBzb3VuZA==
 IMPP;PROP-ID=OS1;PREF=1:xmpp:simon\@example.com
 SOCIALPROFILE;PROP-ID=OS2;SERVICE-TYPE=Mastodon;USERNAME="Simon P.":https://example.com/\@simon
 REV:20230422T194639Z
