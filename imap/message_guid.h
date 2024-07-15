@@ -43,6 +43,7 @@
 #ifndef MESSAGE_GUID_H
 #define MESSAGE_GUID_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Public interface */
