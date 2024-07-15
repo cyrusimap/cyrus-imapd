@@ -393,7 +393,7 @@ static struct capa_struct base_capabilities[] = {
     { "ACL",                   CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
     { "ANNOTATE-EXPERIMENT-1", CAPA_POSTAUTH,           { 0 } }, /* RFC 5257 */
     { "APPENDLIMIT=",          CAPA_POSTAUTH|CAPA_VALUE,         /* RFC 7889 */
-      { .value = { "%2$" PRIi64, .i64p = &maxmsgsize } }      },
+      { .value = { "%1$s%2$" PRIi64, .i64p = &maxmsgsize } }  },
     { "AUTH=",                 CAPA_OMNIAUTH|CAPA_COMPLEX,       /* RFC 9051 */
       { .complex = &capa_auth }                               },
     { "BINARY",                CAPA_POSTAUTH,           { 0 } }, /* RFC 3516 */
