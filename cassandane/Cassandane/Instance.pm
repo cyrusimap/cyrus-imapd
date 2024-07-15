@@ -681,6 +681,7 @@ sub _build_skeleton
         'data',
         'meta',
         'run',
+        'smtpd',
         'tmp',
     );
     foreach my $sd (@subdirs)
@@ -694,6 +695,10 @@ sub _build_skeleton
 sub _generate_imapd_conf
 {
     my ($self, $config, $prefix) = @_;
+
+    # Be very careful about setting $config options in this
+    # function.  Anything that is set here cannot be varied
+    # per test!
 
     if (defined $self->{services}->{http}) {
         my $davhost = $self->{services}->{http}->host;
@@ -721,7 +726,6 @@ sub _generate_imapd_conf
         event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
-        $config->set(imipnotifier => 'imip');
         $config->set_bits('event_groups', 'mailbox message flags calendar');
 
         if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
@@ -1117,6 +1121,9 @@ sub _start_smtpd
             port => $port,
             max_servers => 3, # default is 50, yikes
             control_file => "$basedir/conf/smtpd.json",
+            xmtp_tmp_dir => "$basedir/tmp/",
+            store_msg => 1,
+            messages_dir => "$basedir/smtpd/",
         });
         $smtpd->run() or die;
         exit 0; # Never reached

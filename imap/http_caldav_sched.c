@@ -181,11 +181,51 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 struct address_t {
     const char *addr;
     const char *name;
-    char *qpname;
     const char *role;
     const char *partstat;
     struct address_t *next;
 };
+
+static const char *format_address(struct buf *buf, const char *name, const char *addr)
+{
+    assert(addr);
+
+    char *encoded_name = NULL;
+    if (name) {
+        encoded_name = charset_encode_mimeheader(name, 0, 0);
+        if (encoded_name && strncmp(encoded_name, "=?", 2) &&
+            strcspn(encoded_name, MIME_TSPECIALS) < strlen(encoded_name)) {
+            /* Need to quote this name */
+            struct buf mybuf = BUF_INITIALIZER;
+            buf_putc(&mybuf, '"');
+            for (const char *c = encoded_name; *c; c++) {
+                if ((*c == '"' || *c == '\\') &&
+                    (c == encoded_name || c[-1] != '\\')) {
+                    buf_putc(&mybuf, '\\');
+                }
+                buf_putc(&mybuf, *c);
+            }
+            buf_putc(&mybuf, '"');
+            free(encoded_name);
+            encoded_name = buf_release(&mybuf);
+        }
+    }
+
+    buf_reset(buf);
+    if (encoded_name) {
+        buf_appendcstr(buf, encoded_name);
+        buf_putc(buf, ' ');
+        buf_putc(buf, '<');
+        buf_appendcstr(buf, addr);
+        buf_putc(buf, '>');
+    }
+    else {
+        buf_appendcstr(buf, addr);
+    }
+
+    free(encoded_name);
+    return buf_cstring(buf);
+}
 
 static void add_address(struct address_t **recipients, icalproperty *prop,
                         const char* (*icalproperty_get_address)(icalproperty *))
@@ -201,10 +241,8 @@ static void add_address(struct address_t **recipients, icalproperty *prop,
     new = xzmalloc(sizeof(struct address_t));
     new->addr = address;
     param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-    if (param) {
+    if (param)
         new->name = icalparameter_get_cn(param);
-        new->qpname = charset_encode_mimeheader(new->name, 0, 0);
-    }
     param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
     if (param)
         new->role = icalparameter_enum_to_string(icalparameter_get_role(param));
@@ -335,14 +373,14 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     }
 
     /* Create multipart/mixed + multipart/alternative iMIP message */
-    buf_printf(&msgbuf, "From: %s <%s>\r\n",
-            originator->qpname ? originator->qpname : "", sender);
+    buf_printf(&msgbuf, "From: %s\r\n",
+            format_address(&tmpbuf, originator->name, sender));
 
     for (recip = recipients; recip; recip = recip->next) {
         if (strcmp(recip->addr, sender) &&
             (!recipient || !strcasecmp(recip->addr, recipient))) {
-            buf_printf(&msgbuf, "To: %s <%s>\r\n",
-                    recip->qpname ? recip->qpname : "", recip->addr);
+            buf_printf(&msgbuf, "To: %s\r\n",
+                    format_address(&tmpbuf, recip->name, recip->addr));
         }
     }
 
@@ -589,12 +627,10 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
   done:
     buf_free(&msgbuf);
     buf_free(&tmpbuf);
-    free(originator->qpname);
     free(originator);
     do {
         struct address_t *freeme = recipients;
         recipients = recipients->next;
-        free(freeme->qpname);
         free(freeme);
     } while (recipients);
 
