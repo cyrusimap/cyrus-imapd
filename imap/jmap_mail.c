@@ -1384,8 +1384,7 @@ static void _email_search_perf_attr(const search_attr_t *attr, strarray_t *perf_
 
 static void _email_search_string(search_expr_t *parent,
                                  const char *s,
-                                 const char *name,
-                                 strarray_t *perf_filters)
+                                 const char *name)
 {
     search_expr_t *e;
     const search_attr_t *attr = search_attr_find(name);
@@ -1397,17 +1396,15 @@ static void _email_search_string(search_expr_t *parent,
     e = search_expr_new(parent, op);
     e->attr = attr;
     e->value.s = xstrdup(s);
-    _email_search_perf_attr(attr, perf_filters);
 }
 
-static void _email_search_type(search_expr_t *parent, const char *s, strarray_t *perf_filters)
+static void _email_search_type(search_expr_t *parent, const char *s)
 {
     if (!strcasecmp(s, "email") || !strcasecmp(s, "message/rfc822")) {
         // XXX these do not get indexed in Xapian
         search_expr_t *e = search_expr_new(parent, SEOP_MATCH);
         e->attr = search_attr_find("contenttype");
         e->value.s = xstrdup("message/rfc822");
-        _email_search_perf_attr(e->attr, perf_filters);
         return;
     }
 
@@ -1473,8 +1470,6 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
         e->attr = attr;
         e->value.s = val;
     }
-    _email_search_perf_attr(attr, perf_filters);
-
     strarray_fini(&types);
 }
 
@@ -1863,8 +1858,7 @@ static search_attr_t *emailsearch_jmapseen_new(void)
 static void _email_search_keyword(search_expr_t *parent,
                                   const char *keyword,
                                   const char *userid,
-                                  ptrarray_t *search_attrs,
-                                  strarray_t *perf_filters)
+                                  ptrarray_t *search_attrs)
 {
     search_expr_t *e;
     if (!strcasecmp(keyword, "$Seen")) {
@@ -1905,11 +1899,9 @@ static void _email_search_keyword(search_expr_t *parent,
         e->attr = search_attr_find("keyword");
         e->value.s = xstrdup(keyword);
     }
-    _email_search_perf_attr(e->attr, perf_filters);
 }
 
-static void _email_search_threadkeyword(search_expr_t *parent, const char *keyword,
-                                        int matchall, strarray_t *perf_filters)
+static void _email_search_threadkeyword(search_expr_t *parent, const char *keyword, int matchall)
 {
     const char *flag = jmap_keyword_to_imap(keyword);
     if (!flag) return;
@@ -1920,14 +1912,12 @@ static void _email_search_threadkeyword(search_expr_t *parent, const char *keywo
     search_expr_t *e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find(matchall ? "allconvflags" : "convflags");
     e->value.s = xstrdup(flag);
-    _email_search_perf_attr(e->attr, perf_filters);
 }
 
 static void _email_search_contactgroup(search_expr_t *parent,
                                        const char *groupid,
                                        const char *attrname,
-                                       hash_table *contactgroups,
-                                       strarray_t *perf_filters)
+                                       hash_table *contactgroups)
 {
     if (!contactgroups || !contactgroups->size) return;
 
@@ -1956,7 +1946,6 @@ static void _email_search_contactgroup(search_expr_t *parent,
     search_expr_t *e = search_expr_new(parent, SEOP_FUZZYMATCH);
     e->attr = attr;
     e->value.list = val;
-    _email_search_perf_attr(e->attr, perf_filters);
 }
 
 /* ====================================================================== */
@@ -2371,8 +2360,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                                              search_expr_t *parent,
                                              hash_table *contactgroups,
                                              int want_expunged,
-                                             ptrarray_t *search_attrs,
-                                             strarray_t *perf_filters)
+                                             ptrarray_t *search_attrs)
 {
     search_expr_t *this;
     json_t *val;
@@ -2413,8 +2401,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         json_array_foreach(conditions, i, val) {
             if (json_object_size(val)) {
                 search_expr_t *e = is_not ? search_expr_new(this, SEOP_NOT) : this;
-                _email_buildsearchexpr(req, val, e, contactgroups, want_expunged,
-                        search_attrs, perf_filters);
+                _email_buildsearchexpr(req, val, e, contactgroups, want_expunged, search_attrs);
             }
         }
 
@@ -2441,67 +2428,64 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             e = search_expr_new(this, SEOP_GE);
             e->attr = search_attr_find("internaldate");
             e->value.u = t;
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "before")))) {
             time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_LE);
             e->attr = search_attr_find("internaldate");
             e->value.u = t;
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "body")))) {
-            _email_search_string(this, s, "body", perf_filters);
+            _email_search_string(this, s, "body");
         }
         if ((s = json_string_value(json_object_get(filter, "cc")))) {
-            _email_search_string(this, s, "cc", perf_filters);
+            _email_search_string(this, s, "cc");
         }
         if ((s = json_string_value(json_object_get(filter, "bcc")))) {
-            _email_search_string(this, s, "bcc", perf_filters);
+            _email_search_string(this, s, "bcc");
         }
         if ((s = json_string_value(json_object_get(filter, "deliveredTo")))) {
             /* non-standard */
-            _email_search_string(this, s, "deliveredto", perf_filters);
+            _email_search_string(this, s, "deliveredto");
         }
         if ((s = json_string_value(json_object_get(filter, "from")))) {
-            _email_search_string(this, s, "from", perf_filters);
+            _email_search_string(this, s, "from");
         }
         if (json_is_true(json_object_get(filter, "fromAnyContact"))) {
-            _email_search_contactgroup(this, "", "fromlist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, "", "fromlist", contactgroups);
         }
         if (json_is_true(json_object_get(filter, "toAnyContact"))) {
-            _email_search_contactgroup(this, "", "tolist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, "", "tolist", contactgroups);
         }
         if (json_is_true(json_object_get(filter, "ccAnyContact"))) {
-            _email_search_contactgroup(this, "", "cclist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, "", "cclist", contactgroups);
         }
         if (json_is_true(json_object_get(filter, "bccAnyContact"))) {
-            _email_search_contactgroup(this, "", "bcclist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, "", "bcclist", contactgroups);
         }
         if ((s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
-            _email_search_contactgroup(this, s, "fromlist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, s, "fromlist", contactgroups);
         }
         if ((s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
-            _email_search_contactgroup(this, s, "tolist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, s, "tolist", contactgroups);
         }
         if ((s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
-            _email_search_contactgroup(this, s, "cclist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, s, "cclist", contactgroups);
         }
         if ((s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
-            _email_search_contactgroup(this, s, "bcclist", contactgroups, perf_filters);
+            _email_search_contactgroup(this, s, "bcclist", contactgroups);
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_false() ? search_expr_new(this, SEOP_NOT) : this;
             e = search_expr_new(e, SEOP_MATCH);
             e->attr = search_attr_find("keyword");
             e->value.s = xstrdup(JMAP_HAS_ATTACHMENT_FLAG);
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "attachmentName")))) {
-            _email_search_string(this, s, "attachmentname", perf_filters);
+            _email_search_string(this, s, "attachmentname");
         }
         if ((s = json_string_value(json_object_get(filter, "attachmentType")))) {
-            _email_search_type(this, s, perf_filters);
+            _email_search_type(this, s);
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *hdr = NULL, *str = "", *cmp = NULL;
@@ -2528,8 +2512,6 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                 &emailsearch_headermatch_attr_cached :
                 &emailsearch_headermatch_attr_uncached;
             e->value.v = jmap_headermatch_new(hdr, str, cmp);
-
-            _email_search_perf_attr(e->attr, perf_filters);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "inMailbox")))) {
@@ -2541,7 +2523,6 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                 search_expr_t *e = search_expr_new(this, SEOP_MATCH);
                 e->attr = &emailsearch_folders_attr;
                 e->value.v = v;
-                strarray_add(perf_filters, "mailbox");
             }
             else {
                 e = search_expr_new(this, SEOP_FALSE);
@@ -2556,7 +2537,6 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                 search_expr_t *e = search_expr_new(this, SEOP_MATCH);
                 e->attr = &emailsearch_folders_attr;
                 e->value.v = v;
-                strarray_add(perf_filters, "mailbox");
             }
             else {
                 e = search_expr_new(this, SEOP_TRUE);
@@ -2564,61 +2544,57 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
 
         if (JNOTNULL((val = json_object_get(filter, "allInThreadHaveKeyword")))) {
-            _email_search_threadkeyword(this, json_string_value(val), 1, perf_filters);
+            _email_search_threadkeyword(this, json_string_value(val), 1);
         }
         if (JNOTNULL((val = json_object_get(filter, "someInThreadHaveKeyword")))) {
-            _email_search_threadkeyword(this, json_string_value(val), 0, perf_filters);
+            _email_search_threadkeyword(this, json_string_value(val), 0);
         }
         if (JNOTNULL((val = json_object_get(filter, "noneInThreadHaveKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_threadkeyword(e, json_string_value(val), 0, perf_filters);
+            _email_search_threadkeyword(e, json_string_value(val), 0);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
-            _email_search_keyword(this, json_string_value(val), req->userid, search_attrs, perf_filters);
+            _email_search_keyword(this, json_string_value(val), req->userid, search_attrs);
         }
         if (JNOTNULL((val = json_object_get(filter, "notKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_keyword(e, json_string_value(val), req->userid, search_attrs, perf_filters);
+            _email_search_keyword(e, json_string_value(val), req->userid, search_attrs);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
             e = search_expr_new(this, SEOP_LE);
             e->attr = search_attr_find("size");
             e->value.u = json_integer_value(val);
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "minSize")))) {
             e = search_expr_new(this, SEOP_GE);
             e->attr = search_attr_find("size");
             e->value.u = json_integer_value(val);
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "sinceEmailState")))) {
             /* non-standard */
             e = search_expr_new(this, SEOP_GT);
             e->attr = search_attr_find("modseq");
             e->value.u = atomodseq_t(s);
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "subject")))) {
-            _email_search_string(this, s, "subject", perf_filters);
+            _email_search_string(this, s, "subject");
         }
         if ((s = json_string_value(json_object_get(filter, "text")))) {
-            _email_search_string(this, s, "text", perf_filters);
+            _email_search_string(this, s, "text");
         }
         if ((s = json_string_value(json_object_get(filter, "attachmentBody")))) {
-            _email_search_string(this, s, "attachmentbody", perf_filters);
+            _email_search_string(this, s, "attachmentbody");
         }
         if ((s = json_string_value(json_object_get(filter, "to")))) {
-            _email_search_string(this, s, "to", perf_filters);
+            _email_search_string(this, s, "to");
         }
         if ((s = json_string_value(json_object_get(filter, "language")))) {
             /* non-standard */
             search_expr_t *e = search_expr_new(this, SEOP_FUZZYMATCH);
             e->attr = search_attr_find("language");
             e->value.s = xstrdup(s);
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if (JNOTNULL(val = json_object_get(filter, "isHighPriority"))) {
             /* non-standard */
@@ -2627,7 +2603,6 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             search_expr_t *e = search_expr_new(parent, SEOP_FUZZYMATCH);
             e->attr = search_attr_find("priority");
             e->value.s = xstrdup("1");
-            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "listId")))) {
             /* non-standard */
@@ -2639,7 +2614,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                 buf_putc(&buf, '>');
                 val = buf_cstring(&buf);
             }
-            _email_search_string(this, val, "listid", perf_filters);
+            _email_search_string(this, val, "listid");
             buf_free(&buf);
         }
     }
@@ -2766,7 +2741,6 @@ struct emailsearch {
     search_expr_t *expr_dnf;
     search_expr_t *expr_orig;
     struct sortcrit *sort;
-    strarray_t perf_filters;
     int sort_savedate;
     int is_imapfolder;
     ptrarray_t attrs; // list of heap-allocated search_attr_t
@@ -2784,7 +2758,6 @@ static void emailsearch_fini(struct emailsearch *search)
     search_expr_free(search->expr_dnf);
     search_expr_free(search->expr_orig);
     freesortcrit(search->sort);
-    strarray_fini(&search->perf_filters);
 
     search_attr_t *attr;
     while ((attr = ptrarray_pop(&search->attrs))) {
@@ -3039,8 +3012,7 @@ static void emailsearch_init(struct emailsearch *search,
     memset(search, 0, sizeof(struct emailsearch));
 
     search->expr_orig = _email_buildsearchexpr(req, filter, NULL,
-            contactgroups, want_expunged,
-            &search->attrs, &search->perf_filters);
+            contactgroups, want_expunged, &search->attrs);
     if (!search->expr_orig) return;
     search_expr_detrivialise(&search->expr_orig);
 
@@ -4353,17 +4325,6 @@ static int emailquery_search(jmap_req_t *req,
             contactgroups, 0, q->want_partids, 0, errp);
     if (*errp) goto done;
 
-    /* set search cost info */
-    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
-        int i;
-        json_t *jfilters = json_array();
-        for (i = 0; i < strarray_size(&search.perf_filters); i++) {
-            const char *cost = strarray_nth(&search.perf_filters, i);
-            json_array_append_new(jfilters, json_string(cost));
-        }
-        json_object_set_new(req->perf_details, "filters", jfilters);
-    }
-
     /* Try to fetch matching guids directly from Xapian */
     int is_guidsearch = 0;
     if (!q->disable_guidsearch && !q->want_partids) {
@@ -4383,6 +4344,34 @@ static int emailquery_search(jmap_req_t *req,
     qr->is_mutable = emailsearch_is_mutable(&search);
     qr->is_imapfoldersearch = search.is_imapfolder;
     qr->is_guidsearch = is_guidsearch;
+
+    /* set search cost info */
+    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
+        strarray_t perf_filters = STRARRAY_INITIALIZER;
+        ptrarray_t exprs = PTRARRAY_INITIALIZER;
+        if (search.expr_orig) {
+            ptrarray_push(&exprs, search.expr_orig);
+        }
+        search_expr_t *e;
+        while ((e = ptrarray_pop(&exprs))) {
+            if (e->attr) {
+                _email_search_perf_attr(e->attr, &perf_filters);
+            }
+            for (search_expr_t *c = e->children; c; c = c->next) {
+                ptrarray_push(&exprs, c);
+            }
+        }
+        ptrarray_fini(&exprs);
+
+        int i;
+        json_t *jfilters = json_array();
+        for (i = 0; i < strarray_size(&perf_filters); i++) {
+            const char *cost = strarray_nth(&perf_filters, i);
+            json_array_append_new(jfilters, json_string(cost));
+        }
+        json_object_set_new(req->perf_details, "filters", jfilters);
+        strarray_fini(&perf_filters);
+    }
 
 done:
     emailsearch_fini(&search);
@@ -5799,7 +5788,6 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     static search_snippet_markup_t markup = { "<mark>", "</mark>", "..." };
     strarray_t partids = STRARRAY_INITIALIZER;
 
-    strarray_t perf_filters = STRARRAY_INITIALIZER;
     ptrarray_t search_attrs = PTRARRAY_INITIALIZER;
 
     *snippets = json_array();
@@ -5830,7 +5818,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     /* Build searchargs */
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _email_buildsearchexpr(req, filter, NULL, NULL, 0, &search_attrs, &perf_filters);
+    searchargs->root = _email_buildsearchexpr(req, filter, NULL, NULL, 0, &search_attrs);
 
     /* Build the search query */
     memset(&init, 0, sizeof(init));
@@ -5963,7 +5951,6 @@ done:
     if (mboxname) free(mboxname);
     mailbox_close(&mbox);
     if (searchargs) freesearchargs(searchargs);
-    strarray_fini(&perf_filters);
     if (ptrarray_size(&search_attrs)) {
         search_attr_t *attr;
         while ((attr = ptrarray_pop(&search_attrs))) {
