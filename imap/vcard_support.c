@@ -182,7 +182,7 @@ static size_t _prop_decode_value(const char *data,
 
         for (sig = image_signatures; sig->mediatype; sig++) {
             int i;
-            for (i = 0; sig->magic[i].len && i < 2; i++) {
+            for (i = 0; i < 2 && sig->magic[i].len; i++) {
                 if (size - sig->magic[i].offset <= sig->magic[i].len ||
                     memcmp(decbuf + sig->magic[i].offset,
                            sig->magic[i].data, sig->magic[i].len)) {

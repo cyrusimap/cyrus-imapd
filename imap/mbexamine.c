@@ -598,20 +598,24 @@ static int do_compare(struct findall_data *data, void *rock)
             r = record ? mailbox_cacherecord(mailbox, record) : -1;
 
             citem = r ? &empty_buf : cacheitem_buf(record, CACHE_FROM);
-            printf("   From: %-50.*s", (int) MIN(citem->len, 50), citem->s);
+            printf("   From: %-50.*s",
+                   (int) MIN(buf_len(citem), 50), buf_cstring(citem));
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
                 citem = cacheitem_buf(&fs_record, CACHE_FROM);
-                printf("\t%-50.*s", (int) MIN(citem->len, 50), citem->s);
+                printf("\t%-50.*s",
+                       (int) MIN(buf_len(citem), 50), buf_cstring(citem));
             }
             printf("\n");
 
             citem = r ? &empty_buf : cacheitem_buf(record, CACHE_SUBJECT);
-            printf("   Subj: %-50.*s", (int) MIN(citem->len, 50), citem->s);
+            printf("   Subj: %-50.*s",
+                   (int) MIN(buf_len(citem), 50), buf_cstring(citem));
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
                 citem = cacheitem_buf(&fs_record, CACHE_SUBJECT);
-                printf("\t%-50.*s", (int) MIN(citem->len, 50), citem->s);
+                printf("\t%-50.*s",
+                       (int) MIN(buf_len(citem), 50), buf_cstring(citem));
             }
             printf("\n");
             printf("\n");
