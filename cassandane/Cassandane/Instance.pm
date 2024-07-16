@@ -533,10 +533,10 @@ sub _find_binary
 
     my $base = $self->{cyrus_destdir} . $self->{cyrus_prefix};
 
-    if ($name eq 'delve') {
+    if ($name =~ m/xapian-.*$/) {
         my $lib = `ldd $base/libexec/imapd` || die "can't ldd imapd";
         $lib =~ m{(/\S+)/lib/libxapian-([0-9.]+)\.so};
-        return "$1/bin/xapian-delve-$2";
+        return "$1/bin/$name-$2";
     }
 
     foreach (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
@@ -571,7 +571,7 @@ sub _binary
     my $cassini = Cassandane::Cassini->instance();
 
     if ($cassini->bool_val('valgrind', 'enabled') &&
-        !($name =~ m/delve$/) &&
+        !($name =~ m/xapian.*$/) &&
         !($name =~ m/\.pl$/) &&
         !($name =~ m/^\//))
     {
@@ -1958,7 +1958,7 @@ sub _fork_command
     {
         push(@cmd, $self->_binary($binary), '-C', $self->_imapd_conf());
     }
-    elsif ($binary eq 'delve') {
+    elsif ($binary =~ m/xapian.*$/) {
         push(@cmd, $self->_binary($binary));
     }
     else {

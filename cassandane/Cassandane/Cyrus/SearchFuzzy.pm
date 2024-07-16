@@ -198,7 +198,7 @@ sub get_snippets
 sub run_delve {
     my ($self, $dir, @args) = @_;
     my $basedir = $self->{instance}->{basedir};
-    my @myargs = ('delve');
+    my @myargs = ('xapian-delve');
     push(@myargs, @args);
     push(@myargs, $dir);
     $self->{instance}->run_command({redirects => {stdout => "$basedir/delve.out"}}, @myargs);
