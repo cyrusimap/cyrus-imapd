@@ -347,6 +347,14 @@ static json_t *buildinfo()
     json_object_set_new(version, "ZONEINFO_VERSION",
                                  json_integer(ZONEINFO_VERSION));
 
+#if defined __USE_FORTIFY_LEVEL && __USE_FORTIFY_LEVEL > 0
+    json_object_set_new(version, "FORTIFY_LEVEL",
+                                 json_integer(__USE_FORTIFY_LEVEL));
+#else
+    json_object_set_new(version, "FORTIFY_LEVEL",
+                                 json_integer(0));
+#endif
+
     /* Whew ... */
     return buildconf;
 }
