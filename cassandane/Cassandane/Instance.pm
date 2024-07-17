@@ -1145,7 +1145,8 @@ sub _start_smtpd
             my $self = shift;
             xlog "killing smtpd $smtppid";
             kill(15, $smtppid);
-            waitpid($smtppid, 0);
+            my $r = waitpid($smtppid, 0);
+            xlog "waitpid $smtppid returned $r";
         };
     }
     else {
