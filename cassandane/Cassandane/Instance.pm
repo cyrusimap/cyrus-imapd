@@ -1250,6 +1250,9 @@ sub start
         }
     }
 
+    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
+                                                    $self->{cyrus_prefix});
+
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
         $created = 1;
@@ -1257,8 +1260,6 @@ sub start
         $self->_build_skeleton();
         # TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
         # TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
-        $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
-                                                        $self->{cyrus_prefix});
 
         # the main imapd.conf
         $self->_generate_imapd_conf($self->{config});
@@ -2318,6 +2319,13 @@ sub setup_syslog_replacement
 
     if (not(-e 'utils/syslog.so') || not(-e 'utils/syslog_probe')) {
         xlog "utils/syslog.so not found (do you need to run 'make'?)";
+        xlog "tests will not examine syslog output";
+        $self->{have_syslog_replacement} = 0;
+        return;
+    }
+
+    if ($self->{buildinfo}->get('version', 'FORTIFY_LEVEL')) {
+        xlog "Cyrus was built with -D_FORTIFY_SOURCE";
         xlog "tests will not examine syslog output";
         $self->{have_syslog_replacement} = 0;
         return;
