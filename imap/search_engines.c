@@ -127,7 +127,10 @@ EXPORTED const char *search_part_as_string(int part)
         "ATTACHMENTBODY",
         "DELIVEREDTO",
         "LANGUAGE",
-        "PRIORITY"
+        "PRIORITY",
+        "MESSAGEID",
+        "REFERENCES",
+        "INREPLYTO"
     };
 
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);

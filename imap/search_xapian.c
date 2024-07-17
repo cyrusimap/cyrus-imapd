@@ -2082,6 +2082,13 @@ static void free_internalised(void *internalised)
     if (on) opnode_delete(on);
 }
 
+static unsigned min_index_version(search_builder_t *bx)
+{
+    xapian_builder_t *bb = (xapian_builder_t *)bx;
+    if (!bb->lock.db) return 0;
+    return xapian_db_min_index_version(bb->lock.db);
+}
+
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     int r = check_config(NULL);
@@ -2097,6 +2104,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->super.get_internalised = get_internalised;
     bb->super.run = run;
     bb->super.run_guidsearch = run_guidsearch;
+    bb->super.min_index_version = min_index_version;
 
     bb->mailbox = mailbox;
     bb->opts = opts;
@@ -4295,7 +4303,10 @@ out:
 
 static int can_match(enum search_op matchop, int partnum)
 {
-    return matchop == SEOP_FUZZYMATCH && partnum != SEARCH_PART_NONE;
+    return (matchop == SEOP_FUZZYMATCH && partnum != SEARCH_PART_NONE) ||
+           (matchop == SEOP_MATCH && (partnum == SEARCH_PART_MESSAGEID ||
+                                      partnum == SEARCH_PART_REFERENCES ||
+                                      partnum == SEARCH_PART_INREPLYTO));
 }
 
 const struct search_engine xapian_search_engine = {

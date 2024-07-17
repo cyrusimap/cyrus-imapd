@@ -1,0 +1,177 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_references_inreplyto
+  : needs_component_jmap : JMAPExtensions : needs_component_sieve {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/performance');
+
+    xlog $self, "Assert 'inReplyTo' and 'references' filter conditions";
+
+    my $res = $jmap->CallMethods([ [
+        'Email/set',
+        {
+            create => {
+                email1 => {
+                    'header:references' => '<refA@local> <refB@local>',
+                    mailboxIds          => { '$inbox' => JSON::true },
+                    from                => [ { email => 'foo@local' } ],
+                    to                  => [ { email => 'bar@local' } ],
+                    subject             => 'test1',
+                    bodyStructure       => {
+                        type   => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    }
+                },
+                email2 => {
+                    'header:in-reply-to' => '<replytoA@local>',
+                    mailboxIds           => { '$inbox' => JSON::true },
+                    from                 => [ { email => 'foo@local' } ],
+                    to                   => [ { email => 'bar@local' } ],
+                    subject              => 'test2',
+                    bodyStructure        => {
+                        type   => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    }
+                }
+            }
+        },
+        'createEmail'
+    ] ]);
+    my $email1Id = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($email1Id);
+    my $email2Id = $res->[0][1]{created}{email2}{id};
+    $self->assert_not_null($email2Id);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        [
+            'Email/query',
+            {
+                filter => {
+                    references => 'refA@local',
+                },
+            },
+            'R1'
+        ],
+        [
+            'Email/query',
+            {
+                filter => {
+                    header => [ 'references', 'refA@local' ],
+                },
+            },
+            'R2'
+        ],
+        [
+            'Email/query',
+            {
+                filter => {
+                    references => 'refB@local',
+                },
+            },
+            'R3'
+        ],
+        [
+            'Email/query',
+            {
+                filter => {
+                    inReplyTo => 'replytoA@local',
+                },
+            },
+            'R4'
+        ],
+    ]);
+    $self->assert_deep_equals([$email1Id], $res->[0][1]{ids});
+    $self->assert_deep_equals(['xapian'],  $res->[0][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+
+    $self->assert_deep_equals([$email1Id], $res->[1][1]{ids});
+    $self->assert_deep_equals(['cache'],   $res->[1][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+
+    $self->assert_deep_equals([$email1Id], $res->[2][1]{ids});
+    $self->assert_deep_equals(['xapian'],  $res->[2][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
+
+    $self->assert_deep_equals([$email2Id], $res->[3][1]{ids});
+    $self->assert_deep_equals(['xapian'],  $res->[3][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::true, $res->[3][1]{performance}{details}{isGuidSearch});
+
+    xlog $self, "Assert 'inReplyTo' and 'references' filters in Sieve";
+
+    $imap->create("matches") or die;
+    $self->{instance}->install_sieve_script(
+        <<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "operator" : "OR",
+    "conditions": [{
+      "references": "refC@local"
+    }, {
+      "inReplyTo": "replyToC@local"
+    }]
+  }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    );
+
+    $mime = <<'EOF';
+From: foo@local
+To: bar@local
+Message-Id: <091e0683cc1a@example.com>
+References: <refC@local>
+Subject: sievetest1
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+    $self->assert_num_equals(1, $imap->message_count('matches'));
+
+    $mime = <<'EOF';
+From: foo@local
+To: bar@local
+Message-Id: <2931db203612@example.com>
+In-Reply-To: <replyToC@local>
+Subject: sievetest2
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+    $self->assert_num_equals(2, $imap->message_count('matches'));
+}

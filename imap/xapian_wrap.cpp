@@ -573,7 +573,10 @@ static const char *get_term_prefix(int partnum)
         "XAB",               /* ATTACHMENTBODY */
         "XDT",               /* DELIVEREDTO */
         "XI",                /* LANGUAGE */
-        "XP"                 /* PRIORITY */
+        "XP",                /* PRIORITY */
+        "XMM",               /* MESSAGEID */
+        "XMR",               /* REFERENCES */
+        "XMI",               /* INREPLYTO */
     };
 
     return term_prefixes[partnum];
@@ -598,7 +601,10 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int partnum)
         Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
         Xapian::TermGenerator::STEM_NONE,  /* DELIVEREDTO */
         Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
-        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
+        Xapian::TermGenerator::STEM_NONE,  /* PRIORITY */
+        Xapian::TermGenerator::STEM_NONE,  /* MESSAGEID */
+        Xapian::TermGenerator::STEM_NONE,  /* REFERENCES */
+        Xapian::TermGenerator::STEM_NONE,  /* INREPLYTO */
     };
 
     return stem_strategy[partnum];
@@ -1086,6 +1092,13 @@ static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
     return 0;
 }
 
+static int add_msgid_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+{
+    std::string prefix(get_term_prefix(partnum));
+    add_boolean_nterm(*dbw->document, prefix + buf_cstring(part));
+    return 0;
+}
+
 static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
     const char *prefix = get_term_prefix(partnum);
@@ -1189,6 +1202,11 @@ EXPORTED int xapian_dbw_doc_part(xapian_dbw_t *dbw,
                 break;
             case SEARCH_PART_TYPE:
                 r = add_type_part(dbw, part, partnum);
+                break;
+            case SEARCH_PART_INREPLYTO:
+            case SEARCH_PART_MESSAGEID:
+            case SEARCH_PART_REFERENCES:
+                r = add_msgid_part(dbw, part, partnum);
                 break;
             default:
                 r = add_text_part(dbw, part, partnum);
@@ -1314,7 +1332,7 @@ struct xapian_db
     const Xapian::Stopper* default_stopper;
     std::set<std::string> *stem_languages;
     Xapian::QueryParser *parser;
-    std::set<int> *db_versions;
+    std::set<unsigned> *db_versions;
     xapian_dbw_t *dbw;
 };
 
@@ -1373,7 +1391,7 @@ EXPORTED int xapian_db_open(const char **paths, xapian_db_t **dbp)
                 goto done;
             }
             if (!db->db_versions)
-                db->db_versions = new std::set<int>;
+                db->db_versions = new std::set<unsigned>;
             db->db_versions->insert(db_versions.begin(), db_versions.end());
             // Check for experimental v4 indexes, they were bogus.
             if (db_versions.find(4) != db_versions.end()) {
@@ -1423,7 +1441,7 @@ EXPORTED int xapian_db_opendbw(struct xapian_dbw *dbw, xapian_db_t **dbp)
 
     db->dbw = dbw;
     db->database = dbw->database;
-    db->db_versions = new std::set<int>();
+    db->db_versions = new std::set<unsigned>();
     std::set<int> dbw_versions = read_db_versions(*dbw->database);
     db->db_versions->insert(dbw_versions.begin(), dbw_versions.end());
     db->subdbs = new std::vector<Xapian::Database>;
@@ -1458,6 +1476,12 @@ EXPORTED void xapian_db_close(xapian_db_t *db)
                          "exception=<%s>",
                          err.get_description().c_str());
     }
+}
+
+EXPORTED unsigned xapian_db_min_index_version(xapian_db_t *db)
+{
+    auto it = db->db_versions->begin();
+    return it != db->db_versions->end() ? *it : XAPIAN_DB_CURRENT_VERSION;
 }
 
 EXPORTED int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
@@ -1594,6 +1618,13 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
     }
 
     return q;
+}
+
+static Xapian::Query *query_new_messageid(const xapian_db_t *db __attribute__((unused)),
+                                          const char *prefix,
+                                          const char *str)
+{
+    return new Xapian::Query(std::string(prefix) + str);
 }
 
 static Xapian::Query *query_new_email(const xapian_db_t *db,
@@ -1962,6 +1993,11 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
         }
         else if (partnum == SEARCH_PART_TYPE) {
             q = query_new_type(db, prefix, mystr);
+        }
+        else if (partnum == SEARCH_PART_INREPLYTO ||
+                partnum == SEARCH_PART_MESSAGEID ||
+                partnum == SEARCH_PART_REFERENCES) {
+            q = query_new_messageid(db, prefix, mystr);
         }
         else {
             // Match unstructured search parts

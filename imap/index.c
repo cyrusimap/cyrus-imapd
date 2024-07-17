@@ -6090,6 +6090,29 @@ static int find_striphtml_parts(message_t *msg, strarray_t *striphtml)
     return 0;
 }
 
+static void extract_msgids(search_text_receiver_t *receiver,
+                           charset_conv_t *conv,
+                           int part, struct buf *buf)
+{
+    char *val = xstrdup(buf_cstring(buf));
+    massage_header(val);
+
+    char *msgids = val;
+    char *msgid;
+    while ((msgid = message_iter_msgid(msgids, &msgids)) != NULL) {
+        // Remove the enclosing angle brackets, if any.
+        buf_setcstr(buf, *msgid == '<' ? msgid + 1 : msgid);
+        if (buf_len(buf) && buf_base(buf)[buf_len(buf)-1] == '>') {
+            buf_truncate(buf, -1);
+        }
+        // Index that message id.
+        stuff_part(receiver, conv, part, buf);
+        free(msgid);
+    }
+
+    free(val);
+}
+
 EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                                  search_text_receiver_t *receiver,
                                  int flags)
@@ -6170,6 +6193,15 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 
     if (!message_get_priority(msg, &buf))
         stuff_part(receiver, str.conv, SEARCH_PART_PRIORITY, &buf);
+
+    if (!message_get_messageid(msg, &buf))
+        extract_msgids(receiver, str.conv, SEARCH_PART_MESSAGEID, &buf);
+
+    if (!message_get_references(msg, &buf))
+        extract_msgids(receiver, str.conv, SEARCH_PART_REFERENCES, &buf);
+
+    if (!message_get_inreplyto(msg, &buf))
+        extract_msgids(receiver, str.conv, SEARCH_PART_INREPLYTO, &buf);
 
     if (!message_get_leaf_types(msg, &types) && types.count) {
         for (i = 0 ; i < types.count ; i+= 2) {

@@ -90,6 +90,7 @@
 #include "sync_log.h"
 #include "times.h"
 #include "util.h"
+#include "xapian_wrap.h"
 #include "xmalloc.h"
 #include "xsha1.h"
 #include "xstrnchr.h"
@@ -2617,6 +2618,27 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             _email_search_string(this, val, "listid");
             buf_free(&buf);
         }
+        if ((s = json_string_value(json_object_get(filter, "messageId")))) {
+            const search_attr_t *attr = search_attr_find("message-id");
+            assert(attr);
+            e = search_expr_new(this, SEOP_MATCH);
+            e->attr = attr;
+            e->value.s = xstrdup(s);
+        }
+        if ((s = json_string_value(json_object_get(filter, "references")))) {
+            const search_attr_t *attr = search_attr_find_field("references");
+            assert(attr);
+            e = search_expr_new(this, SEOP_MATCH);
+            e->attr = attr;
+            e->value.s = xstrdup(s);
+        }
+        if ((s = json_string_value(json_object_get(filter, "inReplyTo")))) {
+            const search_attr_t *attr = search_attr_find_field("in-reply-to");
+            assert(attr);
+            e = search_expr_new(this, SEOP_MATCH);
+            e->attr = attr;
+            e->value.s = xstrdup(s);
+        }
     }
 
     return this;
@@ -3671,7 +3693,8 @@ static inline void guidsearch_hash_expr(const search_expr_t *e, struct buf *buf)
 static int guidsearch_rank_clause(struct conversations_state *cstate,
                                   const search_expr_t *e,
                                   struct buf *nonxapian_hash,
-                                  int *use_dnf)
+                                  int *use_dnf,
+                                  unsigned *need_xapian_index_version)
 {
     assert(e->op != SEOP_OR);
 
@@ -3688,7 +3711,7 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 strarray_t child_hashes = STRARRAY_INITIALIZER;
                 for (child = e->children ; child ; child = child->next) {
                     int childrank = guidsearch_rank_clause(cstate, child,
-                            nonxapian_hash, use_dnf);
+                            nonxapian_hash, use_dnf, need_xapian_index_version);
                     if (childrank == -1) {
                         return -1;
                     }
@@ -3777,6 +3800,12 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                     }
                 }
             }
+            else if (e->attr == search_attr_find("message-id") ||
+                     e->attr == search_attr_find_field("references") ||
+                     e->attr == search_attr_find_field("in-reply-to")) {
+                *need_xapian_index_version = 17;
+                return 2;
+            }
             // any other MATCH is unsupported
             else return -1;
         case SEOP_TRUE:
@@ -3793,7 +3822,8 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
 
 static int guidsearch_rank_expr(struct conversations_state *cstate,
                                 const search_expr_t *e,
-                                int *use_dnf)
+                                int *use_dnf,
+                                unsigned *need_xapian_index_version)
 {
     if (!e) return 0;
 
@@ -3812,14 +3842,16 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
          * criteria across the DNF clauses. */
         struct buf hash0 = BUF_INITIALIZER, hash = BUF_INITIALIZER;
         search_expr_t *child = e->children;
-        int rank = guidsearch_rank_clause(cstate, child, &hash0, use_dnf);
+        int rank = guidsearch_rank_clause(cstate, child, &hash0,
+                use_dnf, need_xapian_index_version);
 
         if (rank == 1 || rank == -1) {
             rank = -1;
         }
         else {
             for (child = child->next ; child; child = child->next) {
-                int childrank = guidsearch_rank_clause(cstate, child, &hash, use_dnf);
+                int childrank = guidsearch_rank_clause(cstate, child, &hash,
+                        use_dnf, need_xapian_index_version);
                 if (childrank == 1 || childrank == -1 || buf_cmp(&hash0, &hash)) {
                     rank = -1;
                     break;
@@ -3831,7 +3863,7 @@ static int guidsearch_rank_expr(struct conversations_state *cstate,
         buf_free(&hash);
         return rank;
     }
-    return guidsearch_rank_clause(cstate, e, NULL, use_dnf);
+    return guidsearch_rank_clause(cstate, e, NULL, use_dnf, need_xapian_index_version);
 }
 
 static int is_guidsearch_sort(struct sortcrit *sort)
@@ -3921,9 +3953,60 @@ static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec,
     return 0;
 }
 
-static int guidsearch_run_xapian(jmap_req_t *req, struct emailsearch *search,
+static int guidsearch_run_xapian(search_builder_t *bx,
+                                 struct conversations_state *cstate,
+                                 search_expr_t *expr,
                                  struct guidsearch_query *gsq)
 {
+
+    search_build_query(bx, expr);
+    int r = bx->run_guidsearch(bx, guidsearch_run_xapian_cb, gsq);
+    bv_fini(&gsq->readable_folders);
+    if (r && r != IMAP_OK_COMPLETED) return r;
+    r = 0;
+    gsq->collapsed_len = gsq->total;
+
+    if (!gsq->total) return 0;
+
+    /* Evaluate non-Xapian expressions */
+    size_t i, j;
+    for (i = 0, j = 0; i < gsq->total; i++) {
+        struct guidsearch_match *match = gsq->matches + i;
+        if (guidsearch_expr_eval(cstate, gsq->matchexpr, match)) {
+            if (i != j) {
+                // shallow-move match to its new slot
+                gsq->matches[j] = *match;
+                memset(match, 0, sizeof(struct guidsearch_match));
+            }
+            j++;
+        }
+        else {
+            guidsearch_match_fini(match);
+        }
+    }
+    gsq->total = gsq->collapsed_len = j;
+
+    return 0;
+}
+
+static void free_search_value_string(union search_value *v,
+        struct search_attr **attr __attribute__((unused)))
+{
+    free(v->s);
+    v->s = NULL;
+}
+
+static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
+                          struct guidsearch_query *gsq)
+{
+    int use_dnf = 0;
+    unsigned need_xapian_index_version = 0;
+    int exprrank = guidsearch_rank_expr(req->cstate, search->expr_dnf,
+            &use_dnf, &need_xapian_index_version);
+    if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
+        return IMAP_SEARCH_NOT_SUPPORTED;
+    }
+
     search_builder_t *bx = NULL;
     struct mailbox *mbox = NULL;
     mbname_t *mbname = mbname_from_userid(req->accountid);
@@ -3944,50 +4027,19 @@ static int guidsearch_run_xapian(jmap_req_t *req, struct emailsearch *search,
         goto done;
     }
 
-    search_build_query(bx, search->expr_orig);
-    r = bx->run_guidsearch(bx, guidsearch_run_xapian_cb, gsq);
-    bv_fini(&gsq->readable_folders);
-    if (r && r != IMAP_OK_COMPLETED) goto done;
-    r = 0;
-    gsq->collapsed_len = gsq->total;
-
-    if (!gsq->total) goto done;
-
-    /* Evaluate non-Xapian expressions */
-    size_t i, j;
-    for (i = 0, j = 0; i < gsq->total; i++) {
-        struct guidsearch_match *match = gsq->matches + i;
-        if (guidsearch_expr_eval(req->cstate, gsq->matchexpr, match)) {
-            if (i != j) {
-                // shallow-move match to its new slot
-                gsq->matches[j] = *match;
-                memset(match, 0, sizeof(struct guidsearch_match));
-            }
-            j++;
-        }
-        else {
-            guidsearch_match_fini(match);
+    // Check the required index version.
+    if (need_xapian_index_version > 0) {
+        if (!bx->min_index_version ||
+            bx->min_index_version(bx) < need_xapian_index_version) {
+            xsyslog(LOG_DEBUG,
+                    "xapian index version is less than required minimum"
+                    "for this query - falling back to uidsearch",
+                    "need_xapian_index_version=<%d>",
+                    need_xapian_index_version);
+            r = IMAP_SEARCH_NOT_SUPPORTED;
+            goto done;
         }
     }
-    gsq->total = gsq->collapsed_len = j;
-
-done:
-    if (bx) search_end_search(bx);
-    mailbox_close(&mbox);
-    mbname_free(&mbname);
-    return r;
-}
-
-static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
-                          struct guidsearch_query *gsq)
-{
-    int use_dnf = 0;
-    int exprrank = guidsearch_rank_expr(req->cstate, search->expr_dnf, &use_dnf);
-    if (exprrank < 2 || !is_guidsearch_sort(search->sort)) {
-        return IMAP_SEARCH_NOT_SUPPORTED;
-    }
-
-    search_expr_t *expr = use_dnf ? search->expr_dnf : search->expr_orig;
 
     /* Determine readable folders for userid */
     uint32_t numfolders = conversations_num_folders(req->cstate);
@@ -4033,6 +4085,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         }
 
         int need_folders = 0;
+        search_expr_t *expr = use_dnf ? search->expr_dnf : search->expr_orig;
         gsq->matchexpr = guidsearch_expr_build(req->cstate, NULL, expr,
                                                &foldernum_by_mboxname,
                                                &need_folders);
@@ -4040,8 +4093,92 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         free_hash_table(&foldernum_by_mboxname, NULL);
     }
 
+    // replace cache-backed message-id attributes with Xapian-backed ones
+    static search_attr_t xapian_messageid_attr = {
+        "xapian-messageid",
+        SEA_FUZZABLE,
+        SEARCH_PART_MESSAGEID,
+        SEARCH_COST_BODY,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        free_search_value_string,
+        NULL,
+        NULL,
+        NULL
+    };
+
+    static search_attr_t xapian_references_attr = {
+        "xapian-references",
+        SEA_FUZZABLE,
+        SEARCH_PART_REFERENCES,
+        SEARCH_COST_BODY,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        free_search_value_string,
+        NULL,
+        NULL,
+        NULL
+    };
+
+    static search_attr_t xapian_inreplyto_attr = {
+        "xapian-inreplyto",
+        SEA_FUZZABLE,
+        SEARCH_PART_INREPLYTO,
+        SEARCH_COST_BODY,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        free_search_value_string,
+        NULL,
+        NULL,
+        NULL
+    };
+
+    ptrarray_t exprs = PTRARRAY_INITIALIZER;
+    ptrarray_push(&exprs, search->expr_orig);
+    search_expr_t *e;
+
+    const search_attr_t *search_messageid_attr = search_attr_find("message-id");
+    const search_attr_t *search_references_attr = search_attr_find_field("references");
+    const search_attr_t *search_inreplyto_attr = search_attr_find_field("in-reply-to");
+
+    while ((e = ptrarray_pop(&exprs))) {
+        if (e->attr == search_messageid_attr) {
+            e->attr = &xapian_messageid_attr;
+        }
+        else if (e->attr == search_references_attr) {
+            e->attr = &xapian_references_attr;
+        }
+        else if (e->attr == search_inreplyto_attr) {
+            e->attr = &xapian_inreplyto_attr;
+        }
+        for (search_expr_t *c = e->children; c; c = c->next)
+            ptrarray_push(&exprs, c);
+    }
+    ptrarray_fini(&exprs);
+
     /* Run query */
-    return guidsearch_run_xapian(req, search, gsq);
+    r = guidsearch_run_xapian(bx, req->cstate, search->expr_orig, gsq);
+
+done:
+    mailbox_close(&mbox);
+    mbname_free(&mbname);
+    if (bx) search_end_search(bx);
+    return r;
 }
 
 static void guidsearch_sort(jmap_req_t *req __attribute__((unused)),

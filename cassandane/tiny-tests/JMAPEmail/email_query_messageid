@@ -1,0 +1,124 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_messageid
+  : needs_component_jmap : JMAPExtensions : needs_component_sieve {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/performance');
+
+    my $mime = <<'EOF';
+From: from@local
+To: to@local
+Message-ID: <Foo@EXAMPLE.com>
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    xlog $self, "Assert 'messageId' filter condition";
+
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+    ]);
+    my $emailId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($emailId);
+
+    my $res = $jmap->CallMethods([
+        [
+            'Email/query',
+            {
+                filter => {
+                    messageId => 'foo@example.com',
+                },
+            },
+            'R1'
+        ],
+        [
+            'Email/query',
+            {
+                filter => {
+                    header => [ 'message-id', 'foo@example.com' ],
+                },
+            },
+            'R2'
+        ],
+    ]);
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_deep_equals(['xapian'], $res->[0][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailId], $res->[1][1]{ids});
+    $self->assert_deep_equals(['cache'],  $res->[1][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+
+    xlog $self, "Assert 'messageId' filter in Sieve";
+
+    $imap->create("matches") or die;
+    $self->{instance}->install_sieve_script(
+        <<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "messageId" : "bar@example.com"
+  }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    );
+
+    $mime = <<'EOF';
+From: from2@local
+To: to2@local
+Message-ID: <BAR@example.com>
+Subject: test2
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+    $self->assert_num_equals(1, $imap->message_count('matches'));
+
+    xlog $self, "Assert 'messageId' filter on legacy index version falls back to cache";
+
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+    my $xdbpath = $xapdirs->{t1} . "/xapian";
+    $self->{instance}->run_command(
+        {},
+        'xapian-metadata', 'set', $xdbpath, 'cyrus.db_version', '16,17'
+    );
+    $res = $jmap->CallMethods([
+        [
+            'Email/query',
+            {
+                filter => {
+                    messageId => 'foo@example.com',
+                },
+            },
+            'R1'
+        ],
+    ]);
+    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_deep_equals(['cache'],  $res->[0][1]{performance}{details}{filters});
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+}
