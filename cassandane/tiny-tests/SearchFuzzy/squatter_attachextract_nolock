@@ -44,22 +44,31 @@ sub test_squatter_attachextract_nolock
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
 
     xlog $self, "Inspect syslog and extractor trace files";
-    my @log = $self->{instance}->getsyslog(qr/squatter\[\d+\]: (released|reacquired) mailbox lock/);
+    my $released_timestamp = undef;
+    my $reacquired_timestamp = undef;
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @log = $self->{instance}->getsyslog(
+            qr/squatter\[\d+\]: (released|reacquired) mailbox lock/);
 
-    my ($released_timestamp) = ($log[0] =~ /released.+unixepoch=<(\d+)>/);
-    $self->assert_not_null($released_timestamp);
+        ($released_timestamp) = ($log[0] =~ /released.+unixepoch=<(\d+)>/);
+        $self->assert_not_null($released_timestamp);
+
+        ($reacquired_timestamp) = ($log[1] =~ /reacquired.+unixepoch=<(\d+)>/);
+        $self->assert_not_null($reacquired_timestamp);
+    }
 
     my @tracefiles = glob($tracedir."/*_PUT_*");
     $self->assert_num_equals(1, scalar @tracefiles);
     my $extractor_timestamp = stat($tracefiles[0])->ctime;
     $self->assert_not_null($extractor_timestamp);
 
-    my ($reacquired_timestamp) = ($log[1] =~ /reacquired.+unixepoch=<(\d+)>/);
-    $self->assert_not_null($reacquired_timestamp);
-
     xlog $self, "Assert extractor got called without mailbox lock";
-    $self->assert_num_lt($extractor_timestamp, $released_timestamp);
-    $self->assert_num_lt($reacquired_timestamp, $extractor_timestamp);
+    if (defined $released_timestamp) {
+        $self->assert_num_lt($extractor_timestamp, $released_timestamp);
+    }
+    if (defined $reacquired_timestamp) {
+        $self->assert_num_lt($reacquired_timestamp, $extractor_timestamp);
+    }
 
     xlog $self, "Assert terms actually got indexed";
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
