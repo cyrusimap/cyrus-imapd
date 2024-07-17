@@ -5040,6 +5040,16 @@ EXPORTED int message_get_deliveredto(message_t *m, struct buf *buf)
     return r;
 }
 
+EXPORTED int message_get_inreplyto(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "in-reply-to", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_references(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "references", MESSAGE_RAW, buf);
+}
+
 EXPORTED int message_get_cc(message_t *m, struct buf *buf)
 {
     return message_get_field(m, "cc", MESSAGE_RAW, buf);

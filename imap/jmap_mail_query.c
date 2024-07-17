@@ -1003,8 +1003,20 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ATTACHMENTBODY, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
+    if ((match = json_string_value(json_object_get(filter, "inReplyTo")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_INREPLYTO, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
     if ((match = json_string_value(json_object_get(filter, "listId")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_LISTID, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "messageId")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_MESSAGEID, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "references")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_REFERENCES, match);
         if (xq) ptrarray_append(&xqs, xq);
     }
     if (JNOTNULL(jval = json_object_get(filter, "isHighPriority"))) {

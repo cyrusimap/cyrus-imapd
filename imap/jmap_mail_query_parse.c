@@ -176,7 +176,22 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
+        else if (have_mail_extension && !strcmp(field, "inReplyTo")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
         else if (have_mail_extension && !strcmp(field, "listId")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
+        else if (have_mail_extension && !strcmp(field, "messageId")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
+        else if (have_mail_extension && !strcmp(field, "references")) {
             if (!json_is_string(arg)) {
                 ctx->invalid_field(field, ctx->rock);
             }
