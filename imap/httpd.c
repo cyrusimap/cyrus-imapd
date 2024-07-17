@@ -3035,7 +3035,7 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     int i, size;
-    time_t now;
+    time_t now = 0;
     char datestr[30];
     const char **hdr;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
