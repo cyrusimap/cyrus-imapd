@@ -3779,25 +3779,18 @@ static int extract_convdata(struct conversations_state *state,
         msubj_oldstyle = buf_release(&msubject);
     }
     else {
-        message_get_field(msg, "rawheaders", MESSAGE_DECODED, &buf);
-        char *c_subj = buf_release(&buf);
-        strarray_set(&want, 0, "subject");
-        message_pruneheader(c_subj, &want, 0);
-        if (!strncasecmp(c_subj, "subject:", 8)) {
-            size_t len = strlen(c_subj);
-            if (c_subj[len-1] == '\n')
-                c_subj[len-1] = '\0';
+        message_get_field(msg, "subject", MESSAGE_SNIPPET, &buf);
+        buf_trim(&buf);
+        if (buf_len(&buf)) {
+            struct buf tmp = BUF_INITIALIZER;
+            buf_copy(&tmp, &buf);
+            conversation_normalise_subject(&tmp);
+            msubj = buf_release(&tmp);
 
-            const char *subj = c_subj + 8;
-            buf_setcstr(&buf, subj);
-            conversation_normalise_subject(&buf);
-            msubj = buf_release(&buf);
-
-            buf_setcstr(&buf, subj);
-            oldstyle_normalise_subject(&buf);
-            msubj_oldstyle = buf_release(&buf);
+            buf_copy(&tmp, &buf);
+            oldstyle_normalise_subject(&tmp);
+            msubj_oldstyle = buf_release(&tmp);
         }
-        free(c_subj);
     }
     *msubjp = msubj;
 
