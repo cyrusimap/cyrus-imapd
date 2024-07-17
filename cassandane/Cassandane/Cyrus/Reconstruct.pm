@@ -298,9 +298,11 @@ sub test_reconstruct_snoozed
     # this reconstruct should change things back!
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
-    $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
+        $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
+    }
 
     xlog $self, "check that the values are changed back";
     $fh = IO::File->new($file, "+<");
@@ -538,13 +540,17 @@ sub test_reconstruct_uniqueid_from_header_uuidmb
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 },
                                    'reconstruct', '-P', $cyrus_header);
-    my $syslog = join(q{}, $self->{instance}->getsyslog());
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join(q{}, $self->{instance}->getsyslog());
 
-    # should have still existed in cyrus.header
-    $self->assert_does_not_match(qr{mailbox header had no uniqueid}, $syslog);
+        # should have still existed in cyrus.header
+        $self->assert_does_not_match(qr{mailbox header had no uniqueid},
+                                     $syslog);
 
-    # expect to find the log line
-    $self->assert_matches(qr{setting mbentry uniqueid from header}, $syslog);
+        # expect to find the log line
+        $self->assert_matches(qr{setting mbentry uniqueid from header},
+                              $syslog);
+    }
 
     # bring service back up
     $self->{instance}->start();
