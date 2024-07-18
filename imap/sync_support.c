@@ -6018,10 +6018,6 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
     if (r) return r;
 
-    // we know the remote state, so cache it
-    r = sync_cache(sync_cs, local->name, kin);
-    if (r) return r;
-
     kl = kin->head;
 
     if (!kl) {
