@@ -2039,6 +2039,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         struct dlist *rl = dlist_newlist(kl, "RECORD");
         modseq_t modseq = remote ? remote->highestmodseq : 0;
 
+        // this will hold the annotations db open for all the prints
+        mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, /*astate*/NULL);
+
         iter = mailbox_iter_init(mailbox, modseq, 0);
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
@@ -6013,10 +6016,6 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     dlist_free(&kl);
 
     r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
-    if (r) return r;
-
-    // we know the remote state, so cache it
-    r = sync_cache(sync_cs, local->name, kin);
     if (r) return r;
 
     kl = kin->head;
