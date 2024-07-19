@@ -1186,7 +1186,6 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
 {
     int r;
     struct find_rock frock;
-    mbentry_t *mbentry = NULL;
 
     init_internal();
 
@@ -1212,35 +1211,50 @@ static int annotatemore_findall_full(const char *pattern, /* internal */
         pattern = "";
     }
 
-    if (mailbox || mboxname) {
-        if (mailbox) mboxname = mailbox_name(mailbox);
-        r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        if (r) goto out;
-    }
-
-    r = _annotate_getdb(mbentry ? mbentry->uniqueid : NULL, mailbox, uid, 0, &frock.d);
-    if (r) {
+    // cheaper if we have a mailbox, don't need to look up the uniqueid or duplicate the mbentry
+    if (mailbox) {
+        mboxname = mailbox_name(mailbox);
+        r = _annotate_getdb(mailbox_uniqueid(mailbox), mailbox, uid, 0, &frock.d);
         if (r == CYRUSDB_NOTFOUND)
             r = 0;
+        if (r) goto out;
+        struct findall_data data = { .mbentry = mailbox_mbentry(mailbox), .is_exactmatch = 1 };
+        r = _findall(&data, &frock);
+        goto out;
+    }
+    else if (mboxname) {
+        // we need to resolve the uniqueid if only given an mboxname
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+        if (r) goto out;
+        r = _annotate_getdb(mbentry->uniqueid, NULL, uid, 0, &frock.d);
+        if (r == CYRUSDB_NOTFOUND)
+            r = 0;
+        if (r) goto cleanup;
+        struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
+        r = _findall(&data, &frock);
+cleanup:
+        mboxlist_entry_free(&mbentry);
+        goto out;
+    }
+ 
+    // not per message annotations, so use the mailbox
+    r = _annotate_getdb(NULL, NULL, /*uid*/0, 0, &frock.d);
+    if (r == CYRUSDB_NOTFOUND)
+        r = 0;
+    if (r) goto out;
+
+    if (pattern && *pattern) {
+        /* Mailbox pattern */
+        r = mboxlist_findall(NULL, pattern, 1, NULL, NULL, &_findall, &frock);
         goto out;
     }
 
-    if (mbentry) {
-        struct findall_data data = { .mbentry = mbentry, .is_exactmatch = 1 };
-        r = _findall(&data, &frock);
-    }
-    else if (!*pattern) {
-        /* Server entries */
-        struct findall_data data = { .mbentry = NULL, .is_exactmatch = 1 };
-        r = _findall(&data, &frock);
-    }
-    else {
-        /* Mailbox pattern */
-        r = mboxlist_findall(NULL, pattern, 1, NULL, NULL, &_findall, &frock);
-    }
+    /* Server entries */
+    struct findall_data data = { .mbentry = NULL, .is_exactmatch = 1 };
+    r = _findall(&data, &frock);
 
 out:
-    mboxlist_entry_free(&mbentry);
     glob_free(&frock.eglob);
     annotate_putdb(&frock.d);
 
