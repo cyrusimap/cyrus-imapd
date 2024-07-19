@@ -127,10 +127,17 @@ static void usage(void)
     exit(-1);
 }
 
+struct fix_rock {
+    char *inboxname;
+    char *inboxid;
+};
+
 /* Callback for use by process_mboxlist */
-static int fixmbox(const mbentry_t *mbentry,
-                   void *rock __attribute__((unused)))
+static int fixmbox(const mbentry_t *mbentry, void *rock)
 {
+    struct fix_rock *frock = (struct fix_rock *) rock;
+    struct mailbox *mailbox = NULL;
+    mbentry_t *copy = NULL;
     int r, r2;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
@@ -160,17 +167,12 @@ static int fixmbox(const mbentry_t *mbentry,
             buf_free(&buf);
             free(userid);
         }
-        mbentry_t *copy = mboxlist_entry_copy(mbentry);
+        mbentry = copy = mboxlist_entry_copy(mbentry);
         xzfree(copy->legacy_specialuse);
-        mboxlist_updatelock(copy, /*localonly*/1);
-        mboxlist_entry_free(&copy);
     }
 
     /* make sure every local mbentry has a uniqueid!  */
     if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
-        struct mailbox *mailbox = NULL;
-        mbentry_t *copy = NULL;
-
         r = mailbox_open_from_mbe(mbentry, &mailbox);
         if (r) {
             /* XXX what does it mean if there's an mbentry, but the mailbox
@@ -189,35 +191,55 @@ static int fixmbox(const mbentry_t *mbentry,
                               mbentry->name, mailbox->h.uniqueid);
         }
 
-        copy = mboxlist_entry_copy(mbentry);
+        if (!copy) mbentry = copy = mboxlist_entry_copy(mbentry);
         copy->uniqueid = xstrdup(mailbox->h.uniqueid);
         xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
                           "mboxname=<%s> newuniqueid=<%s>",
                           copy->name, copy->uniqueid);
 
-        r = mboxlist_updatelock(copy, /*localonly*/1);
-        if (r) {
-            xsyslog(LOG_ERR, "failed to update mboxlist",
-                             "mboxname=<%s> error=<%s>",
-                             mbentry->name, error_message(r));
-            r2 = mailbox_abort(mailbox);
-            if (r2) {
-                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
-            }
-        }
-        else {
-            r2 = mailbox_commit(mailbox);
-            if (r2) {
-                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
-            }
-        }
-        mailbox_close(&mailbox);
-        mboxlist_entry_free(&copy);
-
 skip_uniqueid:
         ;   /* hush "label at end of compound statement" warning */
+    }
+
+    if (mboxname_isusermailbox(mbentry->name, 1)) {
+        free(frock->inboxname);
+        free(frock->inboxid);
+        frock->inboxname = xstrdup(mbentry->name);
+        frock->inboxid = xstrdup(mbentry->uniqueid);
+    }
+    if (!mbentry->inboxid && frock->inboxname &&
+        mboxname_is_prefix(mbentry->name, frock->inboxname)) {
+        xsyslog(LOG_INFO, "mbentry had no inboxid, setting from inbox",
+                          "mboxname=<%s> inboxname=<%s> inboxid=<%s>",
+                          mbentry->name, frock->inboxname, frock->inboxid);
+        if (!copy) mbentry = copy = mboxlist_entry_copy(mbentry);
+        copy->inboxid = xstrdup(frock->inboxid);
+    }
+
+    if (copy) {
+        r = mboxlist_updatelock(copy, /*localonly*/1);
+        mboxlist_entry_free(&copy);
+
+        if (mailbox) {
+            if (r) {
+                xsyslog(LOG_ERR, "failed to update mboxlist",
+                                 "mboxname=<%s> error=<%s>",
+                                 mbentry->name, error_message(r));
+                r2 = mailbox_abort(mailbox);
+                if (r2) {
+                    xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                                     "error=<%s>", cyrusdb_strerror(r2));
+                }
+            }
+            else {
+                r2 = mailbox_commit(mailbox);
+                if (r2) {
+                    xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                                     "error=<%s>", cyrusdb_strerror(r2));
+                }
+            }
+            mailbox_close(&mailbox);
+        }
     }
 
     return 0;
@@ -229,7 +251,10 @@ static void process_mboxlist(int *upgraded)
     mboxlist_upgrade(upgraded);
 
     /* run fixmbox across all mboxlist entries */
-    mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
+    struct fix_rock frock = { 0 };
+    mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
+    free(frock.inboxname);
+    free(frock.inboxid);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
