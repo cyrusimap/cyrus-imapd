@@ -44,6 +44,7 @@
 #include <config.h>
 
 #include <errno.h>
+#include <sys/utsname.h>
 
 #include "acl.h"
 #include "append.h"
@@ -205,6 +206,24 @@ static void jmap_init(struct buf *serverinfo)
                 json_pack("{s:s s:b}",
                           "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
                           "supportsPush", jmap_push_poll));
+    }
+
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+        struct utsname buf;
+
+        uname(&buf);
+        json_object_set_new(my_jmap_settings.server_capabilities,
+                            JMAP_URN_CORE_INFO,
+                            json_pack("{s:{s:s s:s} s:{s:s s:s} s:{s:s s:s}}",
+                                      "apiBackend",
+                                      "name", "Cyrus JMAP",
+                                      "version", CYRUS_VERSION,
+                                      "product",
+                                      "name", "Cyrus JMAP",
+                                      "version", CYRUS_VERSION,
+                                      "environment",
+                                      "name", buf.sysname,
+                                      "version", buf.release));
     }
 }
 
