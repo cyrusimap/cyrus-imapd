@@ -5567,12 +5567,17 @@ done:
 static int copy_remote(struct mailbox *mailbox, uint32_t uid,
                        struct dlist *kr, struct sync_msgid_list *part_list)
 {
-    struct index_record record;
     struct dlist *ki;
     int r;
-    struct sync_annot_list *annots = NULL;
 
     for (ki = kr->head; ki; ki = ki->next) {
+        struct sync_annot_list *annots = NULL;
+        struct index_record record;
+        uint32_t itemuid = 0;
+
+        dlist_getnum32(ki, "UID", &itemuid);
+        if (itemuid != uid) continue;
+
         r = parse_upload(ki, mailbox, &record, &annots);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: parse_upload failed",
@@ -5580,19 +5585,16 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
                              uid);
             return r;
         }
-        if (record.uid == uid) {
-            /* choose the destination UID */
-            record.uid = mailbox->i.last_uid + 1;
+        /* choose the destination UID */
+        record.uid = mailbox->i.last_uid + 1;
 
-            /* append the file */
-            r = sync_append_copyfile(mailbox, &record, annots, part_list);
+        /* append the file */
+        r = sync_append_copyfile(mailbox, &record, annots, part_list);
 
-            sync_annot_list_free(&annots);
-
-            return r;
-        }
         sync_annot_list_free(&annots);
+        return r;
     }
+
     /* not finding the record is an error! (should never happen) */
     xsyslog(LOG_ERR, "IOERROR: couldn't find index record",
                      "uid=<%u>",
