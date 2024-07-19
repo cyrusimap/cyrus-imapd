@@ -588,6 +588,7 @@ extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
 /* reading details */
+extern const struct mboxlist_entry *mailbox_mbentry(const struct mailbox *mailbox);
 extern const char *mailbox_name(const struct mailbox *mailbox);
 extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
