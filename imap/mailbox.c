@@ -1122,6 +1122,11 @@ EXPORTED int mailbox_open_from_mbe(const mbentry_t *mbe, struct mailbox **mailbo
                                  mbe, mailboxptr);
 }
 
+EXPORTED const mbentry_t *mailbox_mbentry(const struct mailbox *mailbox)
+{
+    return mailbox->mbentry;
+}
+
 EXPORTED const char *mailbox_name(const struct mailbox *mailbox)
 {
     return mailbox->mbentry->name;
