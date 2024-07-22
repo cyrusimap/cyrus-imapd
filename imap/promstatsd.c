@@ -69,15 +69,33 @@
 #include "imap/prometheus.h"
 #include "imap/quota.h"
 
+static void do_collate_service_report(struct buf *buf);
+static void do_collate_usage_report(struct buf *buf);
+
 /* globals so that shut_down() can clean up */
-static struct buf report_buf = BUF_INITIALIZER;
-static struct mappedfile *report_file = NULL;
+static struct {
+    const char *fname;
+    const char *desc;
+    void (*collate_fn)(struct buf *);
+    struct mappedfile *mf;
+    struct buf buf;
+} reports[] = {
+    { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
+      NULL, BUF_INITIALIZER },
+    { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
+      NULL, BUF_INITIALIZER },
+};
+const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
 
 static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
-    mappedfile_close(&report_file);
-    buf_free(&report_buf);
+    unsigned i;
+
+    for (i = 0; i < n_reports; i++) {
+        mappedfile_close(&reports[i].mf);
+        buf_free(&reports[i].buf);
+    }
     cyrus_done();
     exit(ec);
 }
@@ -145,7 +163,9 @@ enum promdir_foreach_mode {
     PROMDIR_FOREACH_DONEPROCS,
 };
 typedef int promdir_foreach_cb(const struct prom_stats *stats, void *rock);
-static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode mode, void *rock)
+static int promdir_foreach(promdir_foreach_cb *proc,
+                           enum promdir_foreach_mode mode,
+                           void *rock)
 {
     const char *basedir;
     DIR *dh;
@@ -242,7 +262,7 @@ static void format_metric(const char *key __attribute__((unused)),
                             stats->metrics[fmrock->metric].last_updated);
 }
 
-static void do_collate_report(struct buf *buf)
+static void do_collate_service_report(struct buf *buf)
 {
     hash_table all_stats = HASH_TABLE_INITIALIZER;
     char *doneprocs_lock_fname;
@@ -552,13 +572,14 @@ static void format_usage_quota_commitment(struct buf *buf,
     }
 }
 
-static void do_collate_usage(struct buf *buf)
+static void do_collate_usage_report(struct buf *buf)
 {
     hash_table h = HASH_TABLE_INITIALIZER;
     strarray_t *partition_names = NULL;
     int r;
     int64_t starttime;
 
+    buf_reset(buf);
     construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
 
     starttime = now_ms();
@@ -629,8 +650,6 @@ int main(int argc, char **argv)
 
     const char *alt_config = NULL;
     int call_debugger = 0;
-    char *report_fname = NULL;
-    struct mappedfile *report_file = NULL;
     const char *p;
     int cleanup = 0;
     int debugmode = 0;
@@ -639,6 +658,7 @@ int main(int argc, char **argv)
     int oneshot = 0;
     int opt;
     int r;
+    unsigned i;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -725,17 +745,22 @@ int main(int argc, char **argv)
     if (frequency <= 0)
         frequency = 10;
 
-    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
-    syslog(LOG_DEBUG, "updating %s every %d seconds", report_fname, frequency);
+    for (i = 0; i < n_reports; i++) {
+        char *fname = strconcat(prometheus_stats_dir(),
+                                reports[i].fname,
+                                NULL);
+        syslog(LOG_DEBUG, "updating %s every %d seconds",
+                          fname, frequency);
 
-    xunlink(report_fname);
-    r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
-    free(report_fname);
-    if (r) fatal("couldn't open report file", EX_IOERR);
+        xunlink(fname);
+        r = mappedfile_open(&reports[i].mf, fname,
+                            MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+        free(fname);
+        if (r) fatal("couldn't open report file", EX_IOERR);
+    }
 
     for (;;) {
         int sig;
-        int64_t starttime;
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
@@ -750,17 +775,15 @@ int main(int argc, char **argv)
             shut_down(0);
         }
 
-        starttime = now_ms();
-        do_collate_report(&report_buf);
-        syslog(LOG_DEBUG, "collated service report in %f seconds",
-                (now_ms() - starttime) / 1000.0);
+        for (i = 0; i < n_reports; i++) {
+            int64_t starttime = now_ms();
 
-        starttime = now_ms();
-        do_collate_usage(&report_buf);
-        syslog(LOG_DEBUG, "collated usage report in %f seconds",
-                (now_ms() - starttime) / 1000.0);
-
-        do_write_report(report_file, &report_buf);
+            reports[i].collate_fn(&reports[i].buf);
+            syslog(LOG_DEBUG, "collated %s report in %f seconds",
+                              reports[i].desc,
+                              (now_ms() - starttime) / 1000.0);
+            do_write_report(reports[i].mf, &reports[i].buf);
+        }
 
         if (oneshot) {
             shut_down(0);
