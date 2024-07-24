@@ -795,7 +795,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     if (jmap_wantprop(rock->get->props, "defaultAlertsWithTime") ||
         jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime")) {
 
-        json_t *with_time, *without_time;
+        json_t *with_time = NULL, *without_time = NULL;
         getcalendar_defaultalerts(mbentry->name, req->userid,
                 &with_time, &without_time);
 

@@ -567,13 +567,16 @@ sub test_auditlog_size
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
     xlog $self, "Check the correct size was auditlogged";
-    my @appends = $self->{instance}->getsyslog(qr/auditlog: append .* uid=<1>/);
-    $self->assert_num_equals(1, scalar @appends);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @appends = $self->{instance}->getsyslog(
+            qr/auditlog: append .* uid=<1>/);
+        $self->assert_num_equals(1, scalar @appends);
 
-    # delivery will add some headers, so it will be larger
-    my $expected_size = $msgs{1}->size();
-    my ($actual_size) = $appends[0] =~ m/ size=<([0-9]+)>/;
-    $self->assert_num_gte($expected_size, $actual_size);
+        # delivery will add some headers, so it will be larger
+        my $expected_size = $msgs{1}->size();
+        my ($actual_size) = $appends[0] =~ m/ size=<([0-9]+)>/;
+        $self->assert_num_gte($expected_size, $actual_size);
+    }
 }
 
 1;

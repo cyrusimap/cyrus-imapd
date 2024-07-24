@@ -177,15 +177,17 @@ sub test_recover_uniqueid_from_header_legacymb
     # ctl_cyrusdb -r should find and fix the missing uniqueid
     $self->{instance}->getsyslog();
     $self->{instance}->start();
-    my $syslog = join(q{}, $self->{instance}->getsyslog());
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join(q{}, $self->{instance}->getsyslog());
 
-    # should have still existed in cyrus.header
-    $self->assert_does_not_match(
-        qr{mailbox header had no uniqueid, creating one}, $syslog);
+        # should have still existed in cyrus.header
+        $self->assert_does_not_match(
+            qr{mailbox header had no uniqueid, creating one}, $syslog);
 
-    # expect to find the log line
-    $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
-                          $syslog);
+        # expect to find the log line
+        $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
+                              $syslog);
+    }
 
     # header should have the same uniqueid as before
     my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
@@ -274,15 +276,17 @@ sub test_recover_create_missing_uniqueid_legacymb
     # ctl_cyrusdb -r should find and fix the missing uniqueid
     $self->{instance}->getsyslog();
     $self->{instance}->start();
-    my $syslog = join(q{}, $self->{instance}->getsyslog());
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join(q{}, $self->{instance}->getsyslog());
 
-    # expect to find it was missing in the header
-    $self->assert_matches(qr{mailbox header had no uniqueid, creating one},
-                          $syslog);
+        # expect to find it was missing in the header
+        $self->assert_matches(qr{mailbox header had no uniqueid, creating one},
+                              $syslog);
 
-    # expect to find it was missing from mbentry
-    $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
-                          $syslog);
+        # expect to find it was missing from mbentry
+        $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
+                              $syslog);
+    }
 
     # should not be the same uniqueid as before
     $imaptalk = $self->{store}->get_client();
