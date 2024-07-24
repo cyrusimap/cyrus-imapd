@@ -10925,7 +10925,7 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
 
             // Set charset for plain text EmailBodyValues if required
             if (!part->charset && part->part_id &&
-                !strcasecmp(media_subtype, "plain") &&
+                // XXX !strcasecmp(media_subtype, "plain") &&
                 (body_flags & MIMEBODY_HAS_NON_ASCII)) {
                 part->charset = xstrdup("utf-8");
             }

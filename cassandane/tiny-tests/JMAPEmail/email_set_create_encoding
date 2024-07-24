@@ -284,6 +284,14 @@ sub test_email_set_create_encoding
         },
         wantEncoding => 'quoted-printable',
         wantContentType => 'text/html',
+    }, {
+        desc => 'text/html UTF-8 without charset from EmailBodyValue',
+        bodyValue => "some \N{TOMATO} utf-8",
+        bodyStructure => {
+            type => 'text/html',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/html; charset=utf-8'
     });
 
     my @rfc822Tests = ({
