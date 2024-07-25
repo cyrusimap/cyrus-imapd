@@ -257,10 +257,30 @@ static const char *_synclock_name(const char *hostname, const char *userid)
     return buf_cstring(&buf);
 }
 
+static int sync_skipuser(struct sync_client_state *sync_cs,
+                          const char *userid)
+{
+    static char buf[MAX_MAILBOX_PATH];
+    struct stat sbuf;
+
+    if (sync_cs->channel) {
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync/%s/skipuser-%s",
+                 config_dir, sync_cs->channel, userid);
+    }
+    else {
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync/skipuser-%s",
+                 config_dir, userid);
+    }
+
+    return !stat(buf, &sbuf); // if zero, file exists, so skip user
+}
 
 static struct mboxlock *sync_lock(struct sync_client_state *sync_cs,
                                   const char *userid)
 {
+    if (sync_skipuser(sync_cs, userid))
+        return NULL;
+
     const char *name = _synclock_name(sync_cs->servername, userid);
     struct mboxlock *lock = NULL;
     int flags = LOCK_EXCLUSIVE;
