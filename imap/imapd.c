@@ -492,7 +492,6 @@ static struct capa_struct base_capabilities[] = {
     { "MUPDATE=",              CAPA_OMNIAUTH|CAPA_VALUE,         /* CY */
       { .value = { "mupdate://%1$s/", .strp = &config_mupdate_server } } },
     { "NO_ATOMIC_RENAME",      CAPA_POSTAUTH,           { 0 } }, /* CY */
-    { "SCAN",                  CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "SORT=MODSEQ",           CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "SORT=UID",              CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "THREAD=REFS",           CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-morg-inthread */
@@ -896,7 +895,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s"
-                        "%s%s",
+                        "%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -926,7 +925,6 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_uidonly     ? " uidonly=<1>"      : "",
                         client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
 
-                        client_behavior.did_scan        ? " scan=<1>"         : "",
                         client_behavior.did_xlist       ? " xlist=<1>"        : "");
 }
 
@@ -2423,25 +2421,6 @@ static void cmdloop(void)
                 cmd_status(tag.s, arg1.s);
 
                 prometheus_increment(CYRUS_IMAP_STATUS_TOTAL);
-            }
-            else if (!strcmp(cmd.s, "Scan")) {
-                struct listargs listargs;
-
-                c = getastring(imapd_in, imapd_out, &arg1);
-                if (c != ' ') goto missingargs;
-                c = getastring(imapd_in, imapd_out, &arg2);
-                if (c != ' ') goto missingargs;
-                c = getastring(imapd_in, imapd_out, &arg3);
-                if (!IS_EOL(c, imapd_in)) goto extraargs;
-
-                memset(&listargs, 0, sizeof(struct listargs));
-                listargs.ref = arg1.s;
-                strarray_append(&listargs.pat, arg2.s);
-                listargs.scan = arg3.s;
-
-                cmd_list(tag.s, &listargs);
-
-                prometheus_increment(CYRUS_IMAP_SCAN_TOTAL);
             }
             else if (!strcmp(cmd.s, "Syncapply")) {
                 if (!imapd_userisadmin) goto badcmd;
@@ -4195,7 +4174,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
     const char *origname = name;
     struct listargs listargs = {
         LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
-        "", STRARRAY_INITIALIZER, NULL, 0, {0}, STRARRAY_INITIALIZER, NULL
+        "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
     };
 
     if (client_capa & CAPA_IMAP4REV2) {
@@ -4693,7 +4672,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     const char *origname = name;
     struct listargs listargs = {
         LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
-        "", STRARRAY_INITIALIZER, NULL, 0, {0}, STRARRAY_INITIALIZER, NULL
+        "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
     };
 
     memset(&init, 0, sizeof(struct index_init));
@@ -6987,7 +6966,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     const char *origname = name;
     struct listargs listargs = {
         LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
-        "", STRARRAY_INITIALIZER, NULL, 0, {0}, STRARRAY_INITIALIZER, NULL
+        "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
     };
 
     /* We don't care about trailing hierarchy delimiters. */
@@ -7767,7 +7746,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
     const char *orig_newname = newname;
     struct listargs listargs = {
         LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
-        "", STRARRAY_INITIALIZER, NULL, 0, {0}, STRARRAY_INITIALIZER, NULL
+        "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
     };
 
     if (location && !imapd_userisadmin) {
@@ -8511,8 +8490,6 @@ static void cmd_list(char *tag, struct listargs *listargs)
 
     if (listargs->cmd == LIST_CMD_XLIST)
         client_behavior.did_xlist = 1;
-    else if (listargs->scan)
-        client_behavior.did_scan = 1;
 
     if (listargs->sel & LIST_SEL_REMOTE) {
         if (!config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS)) {
@@ -13169,50 +13146,6 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         }
     }
 
-    else if (listargs->scan) {
-        /* SCAN mailbox for content */
-
-        if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
-            /* currently selected mailbox */
-            if (index_refresh(imapd_index) ||
-                !index_scan(imapd_index, listargs->scan)) {
-                return; /* no matching messages */
-            }
-        }
-        else {
-            /* other local mailbox */
-            struct index_state *state;
-            struct index_init init;
-            int doclose = 0;
-
-            memset(&init, 0, sizeof(struct index_init));
-            init.userid = imapd_userid;
-            init.authstate = imapd_authstate;
-            init.out = imapd_out;
-            init.examine_mode = 1;
-
-            r = index_open(mbentry->name, &init, &state);
-
-            if (!r)
-                doclose = 1;
-
-            if (!r && !index_hasrights(state, ACL_READ)) {
-                r = (imapd_userisadmin || index_hasrights(state, ACL_LOOKUP)) ?
-                    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-            }
-
-            if (!r) {
-                if (!index_scan(state, listargs->scan)) {
-                    r = -1;  /* no matching messages */
-                }
-            }
-
-            if (doclose) index_close(&state);
-
-            if (r) return;
-        }
-    }
-
     /* figure out \Has(No)Children if necessary
        This is mainly used for LIST (SUBSCRIBED) RETURN (CHILDREN)
     */
@@ -13416,9 +13349,8 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
             /* already proxied to this backend server */
             return 0;
         }
-        if (listargs->scan ||
-            (listargs->ret &
-             (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA))) {
+        if (listargs->ret &
+            (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA)) {
             /* remote mailbox that we need to fetch metadata from */
             struct backend *s;
 
@@ -13432,21 +13364,8 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
 
                 proxy_gentag(mytag, sizeof(mytag));
 
-                if (listargs->scan) {
-                    /* Send SCAN command to backend */
-                    prot_printf(s->out, "%s Scan {%tu+}\r\n%s {%tu+}\r\n%s"
-                                " {%tu+}\r\n%s\r\n",
-                                mytag, strlen(listargs->ref), listargs->ref,
-                                strlen(listargs->pat.data[0]),
-                                listargs->pat.data[0],
-                                strlen(listargs->scan), listargs->scan);
-
-                    pipe_until_tag(s, mytag, 0);
-                }
-                else {
-                    /* Send LIST command to backend */
-                    list_data_remote(s, mytag, listargs, rock->subs);
-                }
+                /* Send LIST command to backend */
+                list_data_remote(s, mytag, listargs, rock->subs);
             }
 
             return 0;
