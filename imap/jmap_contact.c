@@ -650,6 +650,11 @@ static const jmap_property_t contact_props[] = {
         NULL,
         0
     },
+    {
+        "vCardProps",
+        NULL,
+        0
+    },
 
     /* FM extensions */
     {
@@ -1474,6 +1479,75 @@ static const char *_servicetype(const char *type)
     return type;
 }
 
+static json_t *vcardprop_from_vcard_entry(struct vparse_entry *entry)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    // Make jCard property.
+    json_t *vprop = json_array();
+
+    // Element 1: Property name.
+    buf_setcstr(&buf, entry->name);
+    json_array_append_new(vprop, json_string(buf_lcase(&buf)));
+
+    // Element 2: Parameters.
+    json_t *vparams = json_object();
+    for (struct vparse_param *param = entry->params; param;
+         param = param->next) {
+        if (strcasecmp(param->name, "value") && param->value) {
+            buf_setcstr(&buf, param->name);
+            json_object_set_new(vparams, buf_lcase(&buf),
+                                json_string(param->value));
+        }
+    }
+
+    if (entry->group) {
+        // Set this after arbitrary parameters so that we overwrite
+        // any bogus GROUP parameter set in the vCard property.
+        buf_setcstr(&buf, entry->group);
+        json_object_set_new(vparams, "group", json_string(buf_lcase(&buf)));
+    }
+    json_array_append_new(vprop, vparams);
+
+    // Element 3: Value type.
+    const char *value = NULL;
+    for (struct vparse_param *param = entry->params; param;
+         param = param->next) {
+        if (!strcasecmp(param->name, "value")) {
+            value = param->value;
+            break;
+        }
+    }
+    json_array_append_new(vprop, json_string(value ? value : "unknown"));
+
+    // Element 4 and more: Property value.
+    if (entry->multivaluesep) {
+        // It's highly unlikely we'll encounter an unknown x-property
+        // for which we do know the multi-value separator. But even if
+        // we do, we can't rely on knowing it when we convert that
+        // jCard property value back to vCard.
+        // Instead, we'll join the multiple values by their separator
+        // and set a single string value in jCard, as these vCardProps
+        // are for internal use anyway.
+        buf_reset(&buf);
+        for (int i = 0; i < strarray_size(entry->v.values); i++) {
+            if (i)
+                buf_putc(&buf, entry->multivaluesep);
+            buf_appendcstr(&buf, strarray_nth(entry->v.values, i));
+        }
+        json_array_append_new(vprop, json_string(buf_cstring(&buf)));
+    }
+    else if (entry->v.value) {
+        json_array_append_new(vprop, json_string(entry->v.value));
+    }
+    if (json_array_size(vprop) == 3) {
+        json_array_append_new(vprop, json_string(""));
+    }
+
+    buf_free(&buf);
+    return vprop;
+}
+
 /* Convert the VCARD card to jmap properties */
 static json_t *jmap_contact_from_vcard(const char *userid,
                                        struct vparse_card *card,
@@ -1790,6 +1864,22 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 // it is single-valued in practice.
                 json_object_set_new(obj, "phoneticCompany",
                         jmap_utf8string(entry->v.value));
+            }
+        }
+        else if (!strncasecmp(entry->name, "x-", 2)) {
+            // Preserve unknown x-properties as RFC 7095 jCard.
+            json_t *vcardprops = json_object_get(obj, "vCardProps");
+            if (!vcardprops) {
+                vcardprops = json_array();
+                json_object_set_new(obj, "vCardProps", vcardprops);
+            }
+
+            json_t *vprop = vcardprop_from_vcard_entry(entry);
+            if (vprop) {
+                json_array_append_new(vcardprops, vprop);
+            }
+            else if (!json_array_size(vcardprops)) {
+                json_object_del(obj, "vCardProps");
             }
         }
     }
@@ -3706,6 +3796,57 @@ static void _make_fn(struct vparse_card *card)
     free(fn);
 }
 
+static int vcardprop_to_vcard(json_t *vprop, struct vparse_card *card, int reject_iana)
+{
+    // Validate that it's a sane jCard value.
+    int is_valid = json_array_size(vprop) == 4 &&
+                   json_is_string(json_array_get(vprop, 0)) &&
+                   json_is_object(json_array_get(vprop, 1)) &&
+                   json_is_string(json_array_get(vprop, 2)) &&
+                   json_is_string(json_array_get(vprop, 3));
+
+    if (!is_valid)
+        return -1;
+
+
+    // Check if this is a X-property or IANA name.
+    if (reject_iana &&
+        strncasecmp("X-", json_string_value(json_array_get(vprop, 0)), 2))
+        return -1;
+
+    // Validate parameter object.
+    const char *group = NULL;
+    const char *pname;
+    json_t *pval;
+    json_object_foreach(json_array_get(vprop, 1), pname, pval) {
+        if (!json_is_string(pval)) {
+            return -1;
+        }
+        if (!strcasecmp(pname, "group"))
+            group = json_string_value(pval);
+    }
+
+    // Set vCard property.
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_setcstr(&buf, json_string_value(json_array_get(vprop, 0)));
+    buf_ucase(&buf);
+    struct vparse_entry *entry =
+        vparse_add_entry(card, group, buf_cstring(&buf),
+                         json_string_value(json_array_get(vprop, 3)));
+
+    json_object_foreach(json_array_get(vprop, 1), pname, pval) {
+        if (strcasecmp(pname, "group")) {
+            buf_setcstr(&buf, pname);
+            buf_ucase(&buf);
+            vparse_add_param(entry, buf_cstring(&buf), json_string_value(pval));
+        }
+    }
+
+    buf_free(&buf);
+    return 0;
+}
+
 static int _json_to_card(struct jmap_req *req,
                          struct carddav_data *cdata,
                          const char *mboxname,
@@ -3963,6 +4104,24 @@ static int _json_to_card(struct jmap_req *req,
                 }
             }
             else if (!pname || JNOTNULL(jval)) {
+                json_array_append_new(invalid, json_string(key));
+            }
+        }
+        else if (!strcmp(key, "vCardProps")) {
+            if (json_is_array(jval)) {
+                size_t i;
+                json_t *vprop;
+                json_array_foreach(jval, i, vprop) {
+                    if (vcardprop_to_vcard(vprop, card, /*reject_iana*/1) < 0) {
+                        // Report erroneous jCard property.
+                        buf_reset(&buf);
+                        buf_printf(&buf, "%s/%zu", key, i);
+                        json_array_append_new(invalid,
+                                              json_string(buf_cstring(&buf)));
+                    }
+                }
+            }
+            else {
                 json_array_append_new(invalid, json_string(key));
             }
         }
