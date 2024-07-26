@@ -325,8 +325,8 @@ HIDDEN int jmap_email_hasattachment(const struct body *part,
                 !strcmp(part->subtype, "PDF"))) {
         return 1;
     }
-    else if ((!strcmp(part->type, "MESSAGE") &&
-                !strcmp(part->subtype, "RFC822"))) {
+    else if (!strcmp(part->type, "MESSAGE")) {
+        // any message/* is an attachment
         return 1;
     }
     else if ((!strcmp(part->type, "TEXT") &&
@@ -589,7 +589,7 @@ static int _matchmime_tr_audit_mailbox(search_text_receiver_t *rx __attribute__(
 
 static int _matchmime_tr_index_charset_flags(int base_flags)
 {
-    return base_flags | CHARSET_KEEPCASE;
+    return xapian_charset_flags(base_flags);
 }
 
 static int _matchmime_tr_index_message_format(int format __attribute__((unused)),
@@ -1003,8 +1003,20 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ATTACHMENTBODY, match);
         ptrarray_append(&xqs, MATCHMIME_XQ_OR_MATCHALL(xq));
     }
+    if ((match = json_string_value(json_object_get(filter, "inReplyTo")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_INREPLYTO, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
     if ((match = json_string_value(json_object_get(filter, "listId")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_LISTID, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "messageId")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_MESSAGEID, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "references")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_REFERENCES, match);
         if (xq) ptrarray_append(&xqs, xq);
     }
     if (JNOTNULL(jval = json_object_get(filter, "isHighPriority"))) {

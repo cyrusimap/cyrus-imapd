@@ -88,6 +88,7 @@ struct search_builder {
     int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
     /* XXX - guidsearch is a hack for speeding up JMAP email queries */
     int (*run_guidsearch)(search_builder_t *, search_hitguid_cb_t proc, void *rock);
+    unsigned (*min_index_version)(search_builder_t*);
 };
 
 typedef struct search_snippet_markup {

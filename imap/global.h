@@ -151,7 +151,6 @@ struct saslprops_t {
 
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
-extern char *find_msgid(char *, char **);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,
                                   const char **localip, const char **remoteip);

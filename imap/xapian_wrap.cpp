@@ -78,8 +78,9 @@ static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char 
  * Version 14: adds SLOT_INDEXVERSION to documents
  * Version 15: receives indexed header fields and text in original format (rather than search form)
  * Version 16: indexes entire addr-spec as a single value.  Prevents cross-matching localparts and domains
+ * Version 17: normalizes text using libicu's NFKC with CaseFolding. Default stemmer keeps using lowercase Cyrus Search Form.
  */
-#define XAPIAN_DB_CURRENT_VERSION 16
+#define XAPIAN_DB_CURRENT_VERSION 17
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 5
 
 static std::set<int> read_db_versions(const Xapian::Database &database)
@@ -546,7 +547,7 @@ EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
 
 /* ====================================================================== */
 
-static const char *get_term_prefix(int db_version, int partnum)
+static const char *get_term_prefix(int partnum)
 {
     /*
      * We use term prefixes to store terms per search part.
@@ -572,32 +573,16 @@ static const char *get_term_prefix(int db_version, int partnum)
         "XAB",               /* ATTACHMENTBODY */
         "XDT",               /* DELIVEREDTO */
         "XI",                /* LANGUAGE */
-        "XP"                 /* PRIORITY */
+        "XP",                /* PRIORITY */
+        "XMM",               /* MESSAGEID */
+        "XMR",               /* REFERENCES */
+        "XMI",               /* INREPLYTO */
     };
 
-    static const char * const term_prefixes_v0[SEARCH_NUM_PARTS] = {
-        NULL,               /* ANY */
-        "F",                /* FROM */
-        "T",                /* TO */
-        "C",                /* CC */
-        "B",                /* BCC */
-        "S",                /* SUBJECT */
-        "L",                /* LISTID */
-        "Y",                /* TYPE */
-        "H",                /* HEADERS */
-        "D",                /* BODY */
-        "O",                /* LOCATION */
-        "A",                /* ATTACHMENTNAME */
-        "AB",               /* ATTACHMENTBODY */
-        "E",                /* DELIVEREDTO */
-        NULL,               /* LANGUAGE */
-        NULL                /* PRIORITY */
-    };
-
-    return db_version > 0 ? term_prefixes[partnum] : term_prefixes_v0[partnum];
+    return term_prefixes[partnum];
 }
 
-static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, int partnum)
+static Xapian::TermGenerator::stem_strategy get_stem_strategy(int partnum)
 {
     static Xapian::TermGenerator::stem_strategy stem_strategy[SEARCH_NUM_PARTS] = {
         // Version 2 and higher
@@ -616,57 +601,13 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
         Xapian::TermGenerator::STEM_NONE,  /* DELIVEREDTO */
         Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
-        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
+        Xapian::TermGenerator::STEM_NONE,  /* PRIORITY */
+        Xapian::TermGenerator::STEM_NONE,  /* MESSAGEID */
+        Xapian::TermGenerator::STEM_NONE,  /* REFERENCES */
+        Xapian::TermGenerator::STEM_NONE,  /* INREPLYTO */
     };
 
-    static Xapian::TermGenerator::stem_strategy stem_strategy_v1[SEARCH_NUM_PARTS] = {
-        // Version 1: Stem bodies using STEM_SOME with stopwords
-        Xapian::TermGenerator::STEM_NONE,  /* ANY */
-        Xapian::TermGenerator::STEM_ALL,   /* FROM */
-        Xapian::TermGenerator::STEM_ALL,   /* TO */
-        Xapian::TermGenerator::STEM_ALL,   /* CC */
-        Xapian::TermGenerator::STEM_ALL,   /* BCC */
-        Xapian::TermGenerator::STEM_ALL,   /* SUBJECT */
-        Xapian::TermGenerator::STEM_ALL,   /* LISTID */
-        Xapian::TermGenerator::STEM_ALL,   /* TYPE */
-        Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
-        Xapian::TermGenerator::STEM_SOME,  /* BODY */
-        Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
-        Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
-        Xapian::TermGenerator::STEM_SOME,  /* ATTACHMENTBODY */
-        Xapian::TermGenerator::STEM_ALL,   /* DELIVEREDTO */
-        Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
-        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
-    };
-
-    static Xapian::TermGenerator::stem_strategy stem_strategy_v0[SEARCH_NUM_PARTS] = {
-        // Version 0: Initial version
-        Xapian::TermGenerator::STEM_NONE,  /* ANY */
-        Xapian::TermGenerator::STEM_ALL,   /* FROM */
-        Xapian::TermGenerator::STEM_ALL,   /* TO */
-        Xapian::TermGenerator::STEM_ALL,   /* CC */
-        Xapian::TermGenerator::STEM_ALL,   /* BCC */
-        Xapian::TermGenerator::STEM_ALL,   /* SUBJECT */
-        Xapian::TermGenerator::STEM_ALL,   /* LISTID */
-        Xapian::TermGenerator::STEM_ALL,   /* TYPE */
-        Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
-        Xapian::TermGenerator::STEM_ALL,   /* BODY */
-        Xapian::TermGenerator::STEM_ALL,   /* LOCATION */
-        Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTNAME */
-        Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTBODY */
-        Xapian::TermGenerator::STEM_ALL,   /* DELIVEREDTO */
-        Xapian::TermGenerator::STEM_NONE,  /* LANGUAGE */
-        Xapian::TermGenerator::STEM_NONE   /* PRIORITY */
-    };
-
-    switch (db_version) {
-        case 0:
-            return stem_strategy_v0[partnum];
-        case 1:
-            return stem_strategy_v1[partnum];
-        default:
-            return stem_strategy[partnum];
-    }
+    return stem_strategy[partnum];
 }
 
 /* For all db paths in sources that are not using the latest database
@@ -931,7 +872,7 @@ EXPORTED int xapian_dbw_begin_doc(xapian_dbw_t *dbw,
 
 static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
+    std::string prefix(get_term_prefix(partnum));
     std::string val = parse_langcode(buf_cstring(part));
     if (val.empty()) {
         syslog(LOG_INFO, "Xapian: not a valid ISO 639 code: %s",
@@ -954,7 +895,7 @@ static std::string parse_priority(const char *str)
 
 static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
+    std::string prefix(get_term_prefix(partnum));
     if (buf_len(part)) {
         std::string val = parse_priority(buf_cstring(part));
         if (val.empty()) {
@@ -1004,20 +945,18 @@ static std::string parse_listid(const char *str)
 
     /* Normalize list-id */
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     return val;
 }
 
 static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
+    std::string prefix(get_term_prefix(partnum));
 
     /* Normalize list-id */
     std::string val = parse_listid(buf_cstring(part));
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
     if (val.empty()) {
-        syslog(LOG_WARNING, "Xapian: not a valid list-id: %s",
+        syslog(LOG_DEBUG, "Xapian: not a valid list-id: %s",
                 buf_cstring(part));
         return 0;
     }
@@ -1028,10 +967,9 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
 
 static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
-    std::string lpart = Xapian::Unicode::tolower(buf_cstring(part));
+    std::string prefix(get_term_prefix(partnum));
     struct address_itr itr;
-    address_itr_init(&itr, lpart.c_str(), 0);
+    address_itr_init(&itr, buf_cstring(part), 0);
 
     const struct address *addr;
     while ((addr = address_itr_next(&itr))) {
@@ -1059,30 +997,48 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             dbw->term_generator->index_text(Xapian::Utf8Iterator(val), 1, prefix);
         }
         if (addr->domain && strcmp(addr->domain, "unspecified-domain")) {
-            // index reversed domain
-            std::string val;
-            strarray_t *sa = strarray_split(addr->domain, ".", 0);
-            val.reserve(buf_len(part));
-            for (int i = strarray_size(sa) - 1; i >= 0; i--) {
-                val.append(strarray_nth(sa, i));
-                if (i > 0) {
-                    val.append(1, '.');
-                }
-            }
-            strarray_free(sa);
-            add_boolean_nterm(*dbw->document, prefix + "D" + val);
-            // index individual terms
-            dbw->term_generator->set_stemmer(Xapian::Stem());
-            dbw->term_generator->set_stopper(NULL);
-            dbw->term_generator->index_text(Xapian::Utf8Iterator(addr->domain,
-                        strlen(addr->domain)), 1, prefix);
-        }
+            char *utf8_domain = charset_idna_to_utf8(addr->domain);
+            char *puny_domain = charset_idna_to_ascii(addr->domain);
 
-        // index entire addr-spec
-        char *a = address_get_all(addr, /*canon_domain*/1);
-        if (a) {
-            add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
-            free(a);
+            const char *domains[3] = {
+                addr->domain, utf8_domain, puny_domain
+            };
+
+            for (size_t i = 0; i < 3; i++) {
+                if (!domains[i] || (i && !strcasecmp(addr->domain, domains[i])))
+                    continue;
+
+                struct address myaddr = *addr;
+                myaddr.domain = domains[i];
+
+                // index entire addr-spec
+                char *a = address_get_all(&myaddr, /*canon_domain*/1);
+                if (a) {
+                    add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
+                    free(a);
+                }
+
+                // index reversed domain
+                std::string revdomain;
+                strarray_t *sa = strarray_split(myaddr.domain, ".", 0);
+                for (int i = strarray_size(sa) - 1; i >= 0; i--) {
+                    revdomain.append(strarray_nth(sa, i));
+                    if (i > 0) {
+                        revdomain.append(1, '.');
+                    }
+                }
+                strarray_free(sa);
+                add_boolean_nterm(*dbw->document, prefix + "D" + revdomain);
+
+                // index individual terms
+                dbw->term_generator->set_stemmer(Xapian::Stem());
+                dbw->term_generator->set_stopper(NULL);
+                dbw->term_generator->index_text(
+                    Xapian::Utf8Iterator(myaddr.domain), 1, prefix);
+            }
+
+            free(utf8_domain);
+            free(puny_domain);
         }
     }
 
@@ -1122,7 +1078,7 @@ static std::pair<std::string, std::string> parse_content_type(const char *str)
 
 static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    std::string prefix(get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum));
+    std::string prefix(get_term_prefix(partnum));
     std::pair<std::string, std::string> ct = parse_content_type(buf_cstring(part));
     if (!ct.first.empty()) {
         add_boolean_nterm(*dbw->document, prefix + "T" + ct.first);
@@ -1136,14 +1092,21 @@ static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
     return 0;
 }
 
+static int add_msgid_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+{
+    std::string prefix(get_term_prefix(partnum));
+    add_boolean_nterm(*dbw->document, prefix + buf_cstring(part));
+    return 0;
+}
+
 static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 {
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
+    const char *prefix = get_term_prefix(partnum);
     int r = 0;
 
     // Index text.
     Xapian::TermGenerator::stem_strategy stem_strategy =
-        get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
+        get_stem_strategy(partnum);
     dbw->term_generator->set_stemming_strategy(stem_strategy);
 
     if (stem_strategy != Xapian::TermGenerator::STEM_NONE) {
@@ -1213,7 +1176,7 @@ EXPORTED int xapian_dbw_doc_part(xapian_dbw_t *dbw,
 {
     int r = 0;
 
-    if (!get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum)) {
+    if (!get_term_prefix(partnum)) {
         syslog(LOG_ERR, "xapian_wrapper: no prefix for partnum %d", partnum);
         return IMAP_INTERNAL;
     }
@@ -1239,6 +1202,11 @@ EXPORTED int xapian_dbw_doc_part(xapian_dbw_t *dbw,
                 break;
             case SEARCH_PART_TYPE:
                 r = add_type_part(dbw, part, partnum);
+                break;
+            case SEARCH_PART_INREPLYTO:
+            case SEARCH_PART_MESSAGEID:
+            case SEARCH_PART_REFERENCES:
+                r = add_msgid_part(dbw, part, partnum);
                 break;
             default:
                 r = add_text_part(dbw, part, partnum);
@@ -1274,7 +1242,7 @@ EXPORTED int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
                 std::string iso_lang = *it;
                 if (iso_lang.compare("en")) {
                     try {
-                        const char *tp = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, SEARCH_PART_SUBJECT);
+                        const char *tp = get_term_prefix(SEARCH_PART_SUBJECT);
                         std::string prefix = lang_prefix(iso_lang, tp);
                         dbw->term_generator->set_stemmer(get_stemmer(iso_lang));
                         dbw->term_generator->set_stopper(get_stopper(iso_lang));
@@ -1364,7 +1332,7 @@ struct xapian_db
     const Xapian::Stopper* default_stopper;
     std::set<std::string> *stem_languages;
     Xapian::QueryParser *parser;
-    std::set<int> *db_versions;
+    std::set<unsigned> *db_versions;
     xapian_dbw_t *dbw;
 };
 
@@ -1423,7 +1391,7 @@ EXPORTED int xapian_db_open(const char **paths, xapian_db_t **dbp)
                 goto done;
             }
             if (!db->db_versions)
-                db->db_versions = new std::set<int>;
+                db->db_versions = new std::set<unsigned>;
             db->db_versions->insert(db_versions.begin(), db_versions.end());
             // Check for experimental v4 indexes, they were bogus.
             if (db_versions.find(4) != db_versions.end()) {
@@ -1473,7 +1441,7 @@ EXPORTED int xapian_db_opendbw(struct xapian_dbw *dbw, xapian_db_t **dbp)
 
     db->dbw = dbw;
     db->database = dbw->database;
-    db->db_versions = new std::set<int>();
+    db->db_versions = new std::set<unsigned>();
     std::set<int> dbw_versions = read_db_versions(*dbw->database);
     db->db_versions->insert(dbw_versions.begin(), dbw_versions.end());
     db->subdbs = new std::vector<Xapian::Database>;
@@ -1508,6 +1476,12 @@ EXPORTED void xapian_db_close(xapian_db_t *db)
                          "exception=<%s>",
                          err.get_description().c_str());
     }
+}
+
+EXPORTED unsigned xapian_db_min_index_version(xapian_db_t *db)
+{
+    auto it = db->db_versions->begin();
+    return it != db->db_versions->end() ? *it : XAPIAN_DB_CURRENT_VERSION;
 }
 
 EXPORTED int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
@@ -1646,159 +1620,226 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
     return q;
 }
 
+static Xapian::Query *query_new_messageid(const xapian_db_t *db __attribute__((unused)),
+                                          const char *prefix,
+                                          const char *str)
+{
+    return new Xapian::Query(std::string(prefix) + str);
+}
+
 static Xapian::Query *query_new_email(const xapian_db_t *db,
                                       const char *_prefix,
-                                      const char *str)
+                                      const char *searchstr)
 {
     std::string prefix(_prefix);
 
-    unsigned qpflags = Xapian::QueryParser::FLAG_PHRASE |
-                       Xapian::QueryParser::FLAG_WILDCARD;
+    unsigned queryflags =
+        Xapian::QueryParser::FLAG_PHRASE | Xapian::QueryParser::FLAG_WILDCARD;
 
     db->parser->set_stemmer(Xapian::Stem());
     db->parser->set_stopper(NULL);
     db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
 
-    std::string mystr = Xapian::Unicode::tolower(str);
-    str = mystr.c_str();
+    std::string str = Xapian::Unicode::tolower(searchstr);
+    size_t atsign_pos = str.find('@');
 
-    const char *atsign = strchr(str, '@');
-
-    if (!atsign) {
-        // query free text
-        return new Xapian::Query{db->parser->parse_query(str, qpflags, prefix)};
+    if (atsign_pos == std::string::npos || atsign_pos == str.length() - 1) {
+        // query free text only
+        return new Xapian::Query{
+            db->parser->parse_query(searchstr, queryflags, prefix)};
     }
 
-    Xapian::Query q = Xapian::Query::MatchNothing;
+    // Transform query string into an email address.
+    std::string email;
 
-    // query name and mailbox (unless just searching for '@domain')
-    if (atsign > str) {
-        struct address *addr = NULL;
-        parseaddr_list(str, &addr);
-        if (addr && addr->name) {
-            Xapian::Query qq = db->parser->parse_query(addr->name, qpflags, prefix + 'N');
-            if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                q &= qq;
-            }
-            else q = qq;
+    // Form local part, optionally preceeded by name.
+    bool have_localpart = false;
+    bool wildcard_localpart = false;
+
+    if (atsign_pos) {
+        email.append(str, 0, atsign_pos);
+    }
+
+    if (!email.empty() && email[email.length() - 1] == '*') {
+        wildcard_localpart = true;
+        email.erase(email.length() - 1, 1);
+    }
+
+    if (!email.empty() && email[email.length() - 1] != '<') {
+        have_localpart = true;
+    }
+    else {
+        if (!email.empty())
+            email.append(1, '<');
+        email.append("xlocalpart");
+    }
+
+    email.append(1, '@');
+
+    // Form domain part.
+    bool have_domain = false;
+    bool wildcard_domain = false;
+    bool subdomain_only = false;
+    std::string domain(str, atsign_pos + 1);
+
+    if (domain.length() && domain[0] == '*') {
+        wildcard_domain = true;
+        domain.erase(0, 1);
+        if (domain.length() && domain[0] == '.') {
+            subdomain_only = true;
+            domain.erase(0, 1);
         }
-        if (addr && addr->mailbox) {
-            // strip the domain from the mailbox
-            std::string mail(addr->mailbox);
-            mail.erase(std::remove_if(mail.begin(), mail.end(), isspace), mail.end());
-            int wildcard = mail[mail.size()-1] == '*';
-            if (wildcard) {
-                mail.resize(mail.size()-1);
-            }
-            if (!mail.empty()) {
-                std::string term(prefix + 'L' + mail);
-                Xapian::Query qq = wildcard ?
-                    Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
-                    Xapian::Query(term);
-                if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                    q &= qq;
+    }
+
+    if (domain.length() && domain[0] != '>') {
+        have_domain = true;
+        email.append(domain);
+    }
+    else {
+        email.append("xdomain");
+        if (domain.length())
+            email.append(1, '>');
+    }
+
+    // Parse email address.
+    struct address *addr = NULL;
+    parseaddr_list(email.c_str(), &addr);
+
+    if (!addr) {
+        Xapian::Query q = Xapian::Query::MatchNothing;
+        if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
+            // query in legacy format
+            q |= db->parser->parse_query(searchstr, queryflags, prefix);
+        }
+        return new Xapian::Query(q);
+    }
+
+    // Build query
+    if (!have_localpart)
+        addr->mailbox = NULL;
+
+    if (!have_domain)
+        addr->domain = NULL;
+
+    // Build query.
+    std::vector<Xapian::Query> queries;
+
+    if (addr->name) {
+        queries.push_back(
+                db->parser->parse_query(addr->name, queryflags, prefix + 'N'));
+    }
+
+    if (addr->domain) {
+        char *utf8_domain = charset_idna_to_utf8(addr->domain);
+        char *puny_domain = charset_idna_to_ascii(addr->domain);
+
+        const char *domains[3] = {addr->domain, utf8_domain, puny_domain};
+
+        std::vector<Xapian::Query> domain_queries;
+
+        for (size_t i = 0; i < 3; i++) {
+            if (!domains[i] || (i && !strcasecmp(addr->domain, domains[i])))
+                continue;
+
+            struct address myaddr = *addr;
+            myaddr.domain = domains[i];
+
+            if (myaddr.mailbox && !wildcard_localpart && !wildcard_domain) {
+                // Query complete email addresses with A prefix
+                Xapian::Query q = Xapian::Query::MatchNothing;
+                char *a = address_get_all(&myaddr, /*canon_domain*/ 1);
+                if (a) {
+                    std::string term(prefix + 'A' + std::string(a));
+                    q = Xapian::Query(term);
                 }
-                else q = qq;
-            }
-        }
-        // ignore @domain - it's being handled below
-        if (addr) parseaddr_free(addr);
-    }
+                free(a);
 
-    // query domain
-    if (atsign[1]) {
-        std::string domain;
-        const char *dstart = atsign + 1;
-        bool wildcard = *dstart == '*';
-        if (wildcard) dstart++;
-        const char *dend;
-        for (dend = dstart; *dend; dend++) {
-            char c = *dend;
-            if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':') {
-                continue;
-            }
-            else if (c == '.' && (dend-1 == dstart || dend[-2] != '.')) {
-                continue;
+                if (db->db_versions->lower_bound(16) !=
+                        db->db_versions->begin()) {
+                    // Database version 15 did not index complete addresses
+                    // with A prefix, but rather indexed localpart and domain
+                    // separately, using L and D prefixes.
+                    // This is buggy, as a query for 'foo@bar.com' would
+                    // return a message if it has at least one recipient
+                    // with localpart 'foo' and another recipient has
+                    // domain 'bar.com'.
+                    q = Xapian::Query(
+                            Xapian::Query::OP_OR, q,
+                            Xapian::Query(
+                                Xapian::Query::OP_AND,
+                                Xapian::Query(
+                                    Xapian::Query::OP_VALUE_LE,
+                                    Xapian::valueno(SLOT_INDEXVERSION),
+                                    std::string("15")),
+                                Xapian::Query(Xapian::Query::OP_AND,
+                                    Xapian::Query(prefix + 'L' +
+                                        myaddr.mailbox),
+                                    Xapian::Query(prefix + 'D' +
+                                        myaddr.mailbox))));
+                }
+
+                domain_queries.push_back(q);
             }
             else {
-                break;
-            }
-        }
-        if (dend > dstart) {
-            strarray_t *sa = strarray_nsplit(dstart, dend - dstart, ".", 0);
-            for (int i = strarray_size(sa) - 1; i >= 0; i--) {
-                domain.append(strarray_nth(sa, i));
-                if (i > 0) {
-                    domain.append(1, '.');
+                // Query domain-only and wildcard domains using D prefix.
+                std::string revdomain;
+                strarray_t *sa = strarray_split(myaddr.domain, ".", 0);
+                for (int i = strarray_size(sa) - 1; i >= 0; i--) {
+                    revdomain.append(strarray_nth(sa, i));
+                    if (i > 0) {
+                        revdomain.append(1, '.');
+                    }
+                }
+                strarray_free(sa);
+                if (revdomain.length() && subdomain_only) {
+                    revdomain.append(1, '.');
+                }
+                if (!revdomain.empty()) {
+                    std::string term(prefix + 'D' + revdomain);
+                    Xapian::Query q =
+                        wildcard_domain
+                        ? Xapian::Query(Xapian::Query::OP_WILDCARD,
+                                term)
+                        : Xapian::Query(term);
+                    domain_queries.push_back(q);
                 }
             }
-            strarray_free(sa);
-            if (*dstart == '.') {
-                domain.append(1, '.');
-            }
         }
-        if (!domain.empty()) {
-            std::string term(prefix + 'D' + domain);
-            Xapian::Query qq = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term) :
-                                          Xapian::Query(term);
-            {
-                // FIXME - temporarily also search for '@' prefix
-                std::string term2(prefix + '@' + domain);
-                Xapian::Query qq2 = wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, term2) :
-                                               Xapian::Query(term2);
-                qq |= qq2;
-            }
-            if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                q &= qq;
-            }
-            else q = qq;
+
+        if (!domain_queries.empty()) {
+            queries.push_back(Xapian::Query(Xapian::Query::OP_OR,
+                        domain_queries.begin(),
+                        domain_queries.end()));
         }
+
+        free(utf8_domain);
+        free(puny_domain);
+
     }
 
-    if (q.get_type() == q.LEAF_MATCH_ALL) {
-        q = Xapian::Query::MatchNothing;
+    if (addr->mailbox && (!addr->domain || wildcard_domain || wildcard_localpart)) {
+        // If we can't query with the A prefix, then query with L prefix.
+        std::string term(prefix + 'L' + addr->mailbox);
+        queries.push_back(
+                wildcard_localpart
+                ? Xapian::Query(Xapian::Query::OP_WILDCARD, term)
+                : Xapian::Query(term));
     }
 
-    // query in legacy format as well!
+    // Build return value.
+    Xapian::Query q = Xapian::Query::MatchNothing;
+
+    if (!queries.empty()) {
+        q |= Xapian::Query(Xapian::Query::OP_AND, queries.begin(),
+                queries.end());
+    }
+
     if (db->db_versions->lower_bound(12) != db->db_versions->begin()) {
-        q |= db->parser->parse_query(str, qpflags, prefix);
+        // query in legacy format as well
+        q |= db->parser->parse_query(searchstr, queryflags, prefix);
     }
 
-    // query localpart@domain (ONLY if no wildcards)
-    if ((atsign > str) && atsign[1] && !strchr(str, '*')) {
-        struct address *addr = NULL;
-
-        parseaddr_list(str, &addr);
-        if (addr) {
-            char *a = address_get_all(addr, /*canon_domain*/1);
-            if (a) {
-                // query 'A' term for index >= 16
-                std::string term(prefix + 'A' + std::string(a));
-                Xapian::Query qq =
-                    Xapian::Query(Xapian::Query::OP_AND,
-                                  Xapian::Query(Xapian::Query::OP_VALUE_GE,
-                                                Xapian::valueno(SLOT_INDEXVERSION),
-                                                std::string("16")),
-                                  Xapian::Query(term));
-                if (q.get_type() != q.LEAF_MATCH_NOTHING) {
-                    // otherwise, query 'L' + 'D' terms (as per above)
-                    Xapian::Query qq2 =
-                        Xapian::Query(Xapian::Query::OP_AND,
-                                      Xapian::Query(Xapian::Query::OP_VALUE_LE,
-                                                    Xapian::valueno(SLOT_INDEXVERSION),
-                                                    std::string("15")),
-                                      q);
-                    qq |= qq2;
-                }
-
-                q = qq;
-            }
-
-            parseaddr_free(addr);
-            free(a);
-        }
-    }
-
+    parseaddr_free(addr);
     return new Xapian::Query(q);
 }
 
@@ -1918,66 +1959,120 @@ static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, c
     return q;
 }
 
-static Xapian::Query *
-xapian_query_new_match_internal(const xapian_db_t *db, int partnum, const char *str)
+static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
+                                                      int partnum,
+                                                      const char *str,
+                                                      int convert_flags)
 {
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
+    const char *prefix = get_term_prefix(partnum);
+
+    charset_t utf8 = charset_lookupname("utf-8");
+    char *mystr = charset_convert(str, utf8, convert_flags);
+    charset_free(&utf8);
+    if (!mystr) return NULL;
+
+    static Xapian::Query *q = NULL;
 
     try {
         // Handle special value search parts.
         if (partnum == SEARCH_PART_LANGUAGE) {
-            return query_new_language(db, prefix, str);
+            q = query_new_language(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_PRIORITY) {
-            return query_new_priority(db, prefix, str);
+            q = query_new_priority(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_LISTID) {
-            return query_new_listid(db, prefix, str);
+            q = query_new_listid(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_FROM ||
                  partnum == SEARCH_PART_TO ||
                  partnum == SEARCH_PART_CC ||
                  partnum == SEARCH_PART_BCC ||
                  partnum == SEARCH_PART_DELIVEREDTO) {
-            return query_new_email(db, prefix, str);
+            q = query_new_email(db, prefix, mystr);
         }
         else if (partnum == SEARCH_PART_TYPE) {
-            return query_new_type(db, prefix, str);
+            q = query_new_type(db, prefix, mystr);
         }
+        else if (partnum == SEARCH_PART_INREPLYTO ||
+                partnum == SEARCH_PART_MESSAGEID ||
+                partnum == SEARCH_PART_REFERENCES) {
+            q = query_new_messageid(db, prefix, mystr);
+        }
+        else {
+            // Match unstructured search parts
+            int need_word_break = 0;
+            for (const unsigned char *p = (const unsigned char *)mystr; *p; p++) {
+                // Use ICU word break for Thaana codepage (0780) or higher.
+                if (*p > 221) {
+                    need_word_break = 1;
+                    break;
+                }
+            }
 
-        // Match unstructured search parts
-
-        static Xapian::Query *q = NULL;
-
-        int need_word_break = 0;
-        for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
-            // Use ICU word break for Thaana codepage (0780) or higher.
-            if (*p > 221) {
-                need_word_break = 1;
-                break;
+            if (need_word_break) {
+                q = xapian_query_new_match_word_break(db, mystr, prefix);
+            }
+            else {
+                Xapian::TermGenerator::stem_strategy stem_strategy =
+                    get_stem_strategy(partnum);
+                q = query_new_textmatch(db, mystr, prefix, stem_strategy);
+            }
+            if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
+                delete q;
+                q = NULL;
             }
         }
 
-        if (need_word_break) {
-            q = xapian_query_new_match_word_break(db, str, prefix);
-        }
-        else {
-            Xapian::TermGenerator::stem_strategy stem_strategy =
-                get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
-            q = query_new_textmatch(db, str, prefix, stem_strategy);
-        }
-        if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
-            delete q;
-            q = NULL;
-        }
-
-        return q;
     } catch (const Xapian::Error &err) {
         xsyslog(LOG_ERR, "IOERROR: caught exception",
                          "exception=<%s>",
                          err.get_description().c_str());
-        return 0;
     }
+
+    free(mystr);
+    return q;
+}
+
+static bool query_terms_eq(const Xapian::Query *qa, const Xapian::Query *qb)
+{
+    if (qa == nullptr) {
+        return qb == nullptr;
+    }
+    else if (qb == nullptr) {
+        return qa == nullptr;
+    }
+
+    if (qa->get_type() != qb->get_type()) {
+        return false;
+    }
+
+    Xapian::TermIterator ta = qa->get_unique_terms_begin();
+    Xapian::TermIterator tb = qb->get_unique_terms_begin();
+    Xapian::TermIterator ta_end = qa->get_unique_terms_end();
+    Xapian::TermIterator tb_end = qb->get_unique_terms_end();
+
+    for ( ; ta != ta_end && tb != tb_end; ++ta, ++tb) {
+        if (*ta != *tb) return false;
+    }
+
+    if (ta != ta_end || tb != tb_end) {
+        return false;
+    }
+
+    if (qa->get_num_subqueries() != qb->get_num_subqueries()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < qa->get_num_subqueries(); i++) {
+        const Xapian::Query subqa = qa->get_subquery(i);
+        const Xapian::Query subqb = qb->get_subquery(i);
+        if (!query_terms_eq(&subqa, &subqb)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 EXPORTED xapian_query_t *
@@ -1988,7 +2083,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         return NULL;
     }
 
-    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
+    const char *prefix = get_term_prefix(partnum);
     if (!prefix) {
         return NULL;
     }
@@ -2002,21 +2097,50 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
                 db->paths->c_str());
     }
 
-    Xapian::Query *q = xapian_query_new_match_internal(db, partnum, str);
-    if (min_version < 15) {
-        /* Older versions indexed header fields in Cyrus search form */
-        charset_t utf8 = charset_lookupname("utf-8");
-        char *mystr = charset_convert(str, utf8, charset_flags);
-        if (mystr) {
-            Xapian::Query *qq = xapian_query_new_match_internal(db, partnum, mystr);
-            if (qq && q) {
-                *q |= *qq;
-                delete qq;
-            }
-            else if (!q) q = qq;
+    int max_version = *db->db_versions->rbegin();
+
+    Xapian::Query *q = NULL;
+    if (max_version >= 17) {
+        // Versions 17 and above normalize terms using NFKC with CaseFolding.
+        q = xapian_query_new_match_internal(db, partnum, str,
+                CHARSET_UNORM_NFKC_CF | CHARSET_KEEPCASE | CHARSET_MIME_UTF8);
+    }
+
+    Xapian::Query *q_v16 = NULL;
+    if (min_version <= 16) {
+        /* Version 16 and earlier did not normalize unstemmed terms
+         * and stemmed terms using Cyrus Search Form, a custom NFC. */
+        q_v16 = xapian_query_new_match_internal(db, partnum, str,
+                CHARSET_KEEPCASE | CHARSET_MIME_UTF8);
+        if (query_terms_eq(q, q_v16)) {
+            delete q_v16;
+            q_v16 = NULL;
         }
-        free(mystr);
-        charset_free(&utf8);
+    }
+
+    Xapian::Query *q_v14 = NULL;
+    if (min_version <= 14) {
+        /* Version 14 and earlier indexed header fields in Cyrus search form */
+        q_v14 = xapian_query_new_match_internal(db, partnum, str, charset_flags);
+        if (query_terms_eq(q, q_v14)) {
+            delete q_v14;
+            q_v14 = NULL;
+        }
+    }
+
+    // Combine queries to support legacy indexes.
+    if (q && q_v14) {
+        *q |= *q_v14;
+    }
+    else if (q_v14) {
+        q = q_v14;
+    }
+
+    if (q && q_v16) {
+        *q |= *q_v16;
+    }
+    else if (q_v16) {
+        q = q_v16;
     }
 
     return (xapian_query_t*) q;
@@ -2602,4 +2726,13 @@ EXPORTED void xapian_doc_close(xapian_doc_t *doc)
     delete doc->termgen;
     delete doc->doc;
     free(doc);
+}
+
+EXPORTED int xapian_charset_flags(int flags)
+{
+    return (flags |
+            CHARSET_KEEPCASE |
+            CHARSET_MIME_UTF8 |
+            CHARSET_UNORM_NFKC_CF) &
+        ~CHARSET_SKIPDIACRIT;
 }

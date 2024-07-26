@@ -64,6 +64,22 @@
 #include <unicode/ustring.h>
 #include <unicode/utf8.h>
 
+// for internationalized domain parsing
+static UIDNA *global_uidna = NULL;
+
+EXPORTED void charset_lib_init(void)
+{
+}
+
+EXPORTED void charset_lib_done(void)
+{
+    if (global_uidna) {
+        uidna_close(global_uidna);
+        global_uidna = NULL;
+    }
+}
+
+
 #define U_REPLACEMENT   0xfffd
 
 #define unicode_isvalid(c) \
@@ -2156,7 +2172,165 @@ static void convert_ncleanup(struct convert_rock *rock, int n, int is_free) {
 }
 #define convert_free(rock) convert_ncleanup(rock, 0, 1)
 
+struct ucharbuf {
+    UChar *s;
+    int32_t len;
+    int32_t alloc;
+};
+
+static void ucharbuf_reserve(struct ucharbuf *ubuf, int32_t nchar)
+{
+
+    if (ubuf->alloc >= nchar || nchar == 0)
+        return;
+
+    if (nchar <= 8)
+        nchar = 8;
+    else if (nchar <= 16)
+        nchar = 16;
+    else if (nchar <= 32)
+        nchar = 32;
+    else if (nchar <= 64)
+        nchar = 64;
+    else if (nchar <= 128)
+        nchar = 128;
+    else if (nchar <= 256)
+        nchar = 256;
+    else if (nchar <= 512)
+        nchar = 512;
+
+    ubuf->s = xrealloc(ubuf->s, nchar * sizeof(UChar));
+    ubuf->alloc = nchar;
+}
+
+static bool ucharbuf_putc32(struct ucharbuf *ubuf, uint32_t c)
+{
+    ucharbuf_reserve(ubuf, ubuf->len + U16_MAX_LENGTH);
+
+    UBool is_error = false;
+    int32_t newlen = ubuf->len;
+    U16_APPEND(ubuf->s, newlen, ubuf->alloc, c, is_error);
+    ubuf->len = newlen;
+
+    return is_error == false;
+}
+
+static void ucharbuf_reset(struct ucharbuf *ubuf)
+{
+    ubuf->len = 0;
+}
+
+static void ucharbuf_fini(struct ucharbuf *ubuf)
+{
+    free(ubuf->s);
+    ubuf->alloc = 0;
+    ubuf->len = 0;
+}
+
+struct unorm_state {
+    const UNormalizer2 *unorm;
+    struct ucharbuf buf;
+    struct ucharbuf out;
+};
+
+static int unorm_flush(struct convert_rock *rock)
+{
+    struct unorm_state *state = rock->state;
+
+    assert(state->out.len == 0);
+
+    if (state->buf.len) {
+        // Normalize buffered codepoints.
+        UErrorCode err = U_ZERO_ERROR;
+        int32_t outlen =
+            unorm2_normalize(state->unorm, state->buf.s, state->buf.len,
+                             state->out.s, state->out.alloc, &err);
+        if (err == U_BUFFER_OVERFLOW_ERROR) {
+            err = U_ZERO_ERROR;
+            ucharbuf_reserve(&state->out, outlen);
+            outlen =
+                unorm2_normalize(state->unorm, state->buf.s, state->buf.len,
+                                 state->out.s, state->out.alloc, &err);
+        }
+        assert(U_SUCCESS(err));
+
+        state->out.len = outlen;
+        state->buf.len = 0;
+    }
+
+    if (state->out.len) {
+        // Flush output buffer.
+        int32_t i = 0;
+        const UChar *us = state->out.s;
+        while (i < state->out.len) {
+            UChar32 c;
+            U16_NEXT_OR_FFFD(us, i, state->out.len, c);
+            convert_putc(rock->next, c);
+        }
+        state->out.len = 0;
+    }
+
+    return 0;
+}
+
+static void unorm_convert(struct convert_rock *rock, uint32_t c)
+{
+    struct unorm_state *state = rock->state;
+
+    if (0 == unorm2_getCombiningClass(state->unorm, c)) {
+        // This is what Unicode TR15 refers to as a 'starter'.
+        // Normalize and flush previously buffered codepoints.
+        unorm_flush(rock);
+    }
+
+    if (!ucharbuf_putc32(&state->buf, c)) {
+        // This can only fail if c isn't a valid codepoint.
+        // Flush what we got and pass c through.
+        unorm_flush(rock);
+        convert_putc(rock->next, c);
+    }
+}
+
+static void unorm_cleanup(struct convert_rock *rock, int is_free)
+{
+    if (!rock || !rock->state) return;
+
+    struct unorm_state *state = rock->state;
+    if (is_free) {
+        ucharbuf_fini(&state->buf);
+        ucharbuf_fini(&state->out);
+        free(state);
+        free(rock);
+    }
+    else {
+        ucharbuf_reset(&state->buf);
+        ucharbuf_reset(&state->out);
+    }
+}
+
 /* converter initialisation routines */
+
+static struct convert_rock *unorm_init(struct convert_rock *next, int flags)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct unorm_state *state = xzmalloc(sizeof(struct unorm_state));
+
+    UErrorCode err = U_ZERO_ERROR;
+    state->unorm = flags & CHARSET_UNORM_NFKC_CF
+        ? unorm2_getNFKCCasefoldInstance(&err)
+        : unorm2_getNFCInstance(&err);
+    assert(U_SUCCESS(err));
+
+    ucharbuf_reserve(&state->buf, 8);
+    ucharbuf_reserve(&state->out, 8);
+
+    rock->f = unorm_convert;
+    rock->flush = unorm_flush;
+    rock->cleanup = unorm_cleanup;
+    rock->next = next;
+    rock->state = state;
+    return rock;
+}
 
 static struct convert_rock *qp_init(int isheader, struct convert_rock *next)
 {
@@ -2204,6 +2378,11 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
         rock->f = uni2searchform;
     rock->state = s;
     rock->next = next;
+
+    if (flags & (CHARSET_UNORM_NFC|CHARSET_UNORM_NFKC_CF)) {
+        rock = unorm_init(rock, flags);
+    }
+
     return rock;
 }
 
@@ -2321,174 +2500,6 @@ struct convert_rock *striphtml_init(int flags, struct convert_rock *next)
     rock->f = striphtml2uni;
     rock->cleanup = striphtml_cleanup;
     rock->next = next;
-    return rock;
-}
-
-struct unorm_state {
-    const UNormalizer2 *unorm;
-    UChar *u16buf;
-    int32_t u16cap;
-    UChar32 *u32buf;
-    int32_t u32cap;
-    int32_t u32len;
-    int32_t spanlen;
-};
-
-static void unorm_append(struct unorm_state *st, uint32_t c)
-{
-    if (st->u32len == st->u32cap) {
-        st->u32cap += 8;
-        st->u32buf = xrealloc(st->u32buf, sizeof(UChar32) * st->u32cap);
-    }
-    if (!st->spanlen && !unorm2_getCombiningClass(st->unorm, c)) {
-        /* End of the first span of composable codepoints */
-        st->spanlen = st->u32len;
-    }
-    st->u32buf[st->u32len++] = c;
-}
-
-static void unorm_drain(struct convert_rock *rock, int is_flush)
-{
-    struct unorm_state *st = rock->state;
-
-    /* Have we reached the end of a composable span? */
-    if (!st->spanlen) {
-        if (!is_flush) {
-            return;
-        }
-        st->spanlen = st->u32len;
-    }
-    if (!st->spanlen) return;
-
-    /* Insertion-sort span by combining class */
-    int i;
-    for (i = 1; i < st->spanlen; i++) {
-        UChar32 c = st->u32buf[i];
-        int j = i - 1;
-        while (j >= 0) {
-            if (unorm2_getCombiningClass(st->unorm, st->u32buf[j]) <=
-                    unorm2_getCombiningClass(st->unorm, c)) {
-                break;
-            }
-            st->u32buf[j+1] = st->u32buf[j];
-            j = j - 1;
-        }
-        st->u32buf[j+1] = c;
-    }
-
-    /* Emit composed codepoints in span */
-    UChar32 u1 = st->u32buf[0];
-    for (i = 1; i < st->spanlen; i++) {
-        UChar32 u2 = unorm2_composePair(st->unorm, u1, st->u32buf[i]);
-        if (u2 < 0) {
-            convert_putc(rock->next, u1);
-            u1 = st->u32buf[i];
-        }
-        else u1 = u2;
-    }
-    convert_putc(rock->next, u1);
-
-    /* Keep any remaining code points */
-    int j;
-    for (i = 0, j = st->spanlen; j < st->u32len; j++) {
-        st->u32buf[i++] = st->u32buf[j];
-    }
-    st->u32len -= st->spanlen;
-    st->spanlen = 0;
-    for (i = 0; i < st->u32len; i++) {
-        if (!unorm2_getCombiningClass(st->unorm, st->u32buf[i])) {
-            st->spanlen = i;
-            break;
-        }
-    }
-
-    /* In case of flush, drain all we got */
-    if (is_flush && st->u32len) {
-        unorm_drain(rock, is_flush);
-    }
-}
-
-static void unorm_cleanup(struct convert_rock *rock, int is_free)
-{
-    if (!rock || !rock->state) return;
-
-    struct unorm_state *st = rock->state;
-    if (is_free) {
-        free(st->u16buf);
-        free(st->u32buf);
-        free(st);
-        free(rock);
-    }
-    else {
-        int32_t i;
-        for (i = 0; i < st->u16cap; i++) {
-            st->u16buf[i] = 0;
-        }
-        for (i = 0; i < st->u32cap; i++) {
-            st->u32buf[i] = 0;
-        }
-        st->u32len = 0;
-    }
-}
-
-static int unorm_flush(struct convert_rock *rock)
-{
-    unorm_drain(rock, 1);
-    return 0;
-}
-
-static void unorm_convert(struct convert_rock *rock, uint32_t c)
-{
-    struct unorm_state *st = rock->state;
-    UErrorCode err = U_ZERO_ERROR;
-
-    int32_t len = unorm2_getDecomposition(st->unorm, c, NULL, 0, &err);
-
-    if (len > 0) {
-        /* Decompose c into NFD */
-        if (len > st->u16cap) {
-            st->u16buf = xrealloc(st->u16buf, sizeof(UChar) * len);
-            st->u16cap = len;
-        }
-        err = U_ZERO_ERROR;
-        unorm2_getDecomposition(st->unorm, c, st->u16buf, st->u16cap, &err);
-        /* Append NFD codepoints */
-        if (U_SUCCESS(err)) {
-            int32_t i = 0;
-            while (i < len) {
-                U16_NEXT(st->u16buf, i, len, c);
-                unorm_append(st, c);
-            }
-        }
-    }
-
-    if (len < 0 || U_FAILURE(err)) {
-        /* Append verbatim */
-        unorm_append(st, c);
-    }
-
-    unorm_drain(rock, 0);
-}
-
-static struct convert_rock *unorm_init(struct convert_rock *next)
-{
-    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-
-    struct unorm_state *st = xzmalloc(sizeof(struct unorm_state));
-    UErrorCode err = U_ZERO_ERROR;
-    st->unorm = unorm2_getNFCInstance(&err);
-    assert(U_SUCCESS(err));
-
-    st->u16cap = 8;
-    st->u16buf = xmalloc(sizeof(UChar) * st->u16cap);
-    st->u32cap = 8;
-    st->u32buf = xmalloc(sizeof(UChar32) * st->u32cap);
-
-    rock->f = unorm_convert;
-    rock->flush = unorm_flush;
-    rock->cleanup = unorm_cleanup;
-    rock->next = next;
-    rock->state = st;
     return rock;
 }
 
@@ -2717,9 +2728,6 @@ EXPORTED charset_conv_t *charset_conv_new(charset_t charset, int flags)
     tobuffer = buffer_initm(0, &conv->dst);
     input = convert_init(conv->utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
-    if (flags & CHARSET_UNORM_NFC) {
-        input = unorm_init(input);
-    }
     input = convert_init(conv->charset, 1/*to_uni*/, input);
 
     conv->input = input;
@@ -4449,15 +4457,15 @@ const char QSTRINGCHAR[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
-                                       const char *name, const char *value)
+EXPORTED void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                        const char *name, const char *value)
 {
     struct buf valbuf = BUF_INITIALIZER;
     int is_qstring = 1;
     const char *p;
     char *xvalue = NULL;
-
-    cur_len += strlen(name) + 4;
+    unsigned extended = flags & CHARSET_PARAM_XENCODE;
+    size_t before_val_len = buf_len(buf) + strlen(name) + 4;
 
     /* Check if param value can be encoded as quoted string */
     for (p = value; *p && is_qstring; p++) {
@@ -4480,7 +4488,7 @@ EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur
     }
     else if (!extended &&
              (!is_qstring ||
-              cur_len + buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH)) {
+              before_val_len + buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH)) {
         /* RFC 2047 encode */
         xvalue = charset_encode_mimeheader(value, 0, /*qpencode*/1);
     }
@@ -4489,7 +4497,8 @@ EXPORTED void charset_write_mime_param(struct buf *buf, int extended, size_t cur
     }
 
     /* Attempt to stuff param in one line */
-    if (cur_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH) {
+    if (!(flags & CHARSET_PARAM_NEWLINE) &&
+        before_val_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH) {
         if (extended && !is_qstring)
             buf_printf(buf, "; %s*=%s", name, xvalue);
         else
@@ -4623,36 +4632,51 @@ EXPORTED char *unicode_casemap(const char *s, ssize_t slen)
     return out;
 }
 
-EXPORTED const char *charset_idna_to_ascii(struct buf *dst, const char *domain)
+static char *domain_to_x(const char *domain,
+                         int32_t (*conv)(
+                             const UIDNA *,
+                             const char *,
+                             int32_t,
+                             char *,
+                             int32_t,
+                             UIDNAInfo *,
+                             UErrorCode *))
 {
-    buf_reset(dst);
+    if (!global_uidna) {
+        UErrorCode uerr = U_ZERO_ERROR;
+        global_uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
+        if (U_FAILURE(uerr)) {
+            xsyslog(LOG_ERR, "could not initialize ICU IDNA", "err=<%s>",
+                    u_errorName(uerr));
+            global_uidna = NULL;
+            return NULL;
+        }
+    }
 
-    UErrorCode uerr = U_ZERO_ERROR;
-    UIDNA *uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
-    if (U_FAILURE(uerr))
-        goto done;
+    char *result = NULL;
 
     UIDNAInfo uinfo = UIDNA_INFO_INITIALIZER;
-    uerr = U_ZERO_ERROR;
-    int32_t out_len = uidna_nameToASCII_UTF8(
-        uidna, domain, -1, dst->s, dst->alloc, &uinfo, &uerr);
-
-    if (uerr == U_BUFFER_OVERFLOW_ERROR) {
-        buf_ensure(dst, out_len);
+    UErrorCode uerr = U_ZERO_ERROR;
+    int32_t len = conv(global_uidna, domain, -1, NULL, 0, &uinfo, &uerr);
+    if (!uinfo.errors && uerr == U_BUFFER_OVERFLOW_ERROR && len) {
+        result = xmalloc(len + 1);
         UIDNAInfo uinfo2 = UIDNA_INFO_INITIALIZER;
         uerr = U_ZERO_ERROR;
-        out_len = uidna_nameToASCII_UTF8(uidna, domain, -1, dst->s, dst->alloc,
-                                         &uinfo2, &uerr);
-        buf_truncate(dst, out_len);
-        uinfo = uinfo2;
+        conv(global_uidna, domain, -1, result, len, &uinfo2, &uerr);
+        result[len] = '\0';
+        if (U_FAILURE(uerr) || uinfo2.errors)
+            xzfree(result);
     }
 
-    if (U_FAILURE(uerr) || uinfo.errors) {
-        buf_reset(dst);
-        goto done;
-    }
+    return result;
+}
 
-done:
-    uidna_close(uidna);
-    return buf_cstringnull_ifempty(dst);
+EXPORTED char *charset_idna_to_utf8(const char *domain)
+{
+    return domain_to_x(domain, uidna_nameToUnicodeUTF8);
+}
+
+EXPORTED char *charset_idna_to_ascii(const char *domain)
+{
+    return domain_to_x(domain, uidna_nameToASCII_UTF8);
 }

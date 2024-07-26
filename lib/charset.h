@@ -60,11 +60,13 @@
 #define CHARSET_TRIMWS (1<<10)
 #define CHARSET_UNORM_NFC (1<<11)
 #define CHARSET_KEEP_ANGLEURI (1<<12)
+#define CHARSET_UNORM_NFKC_CF (1<<13)
 
 #define CHARSET_UNKNOWN_CHARSET (NULL)
 
 /* RFC 5322, 2.1.1 */
 #define MIME_MAX_HEADER_LENGTH 78
+#define MIME_MAX_LINE_LENGTH 998
 
 #include "util.h"
 #include "xsha1.h"
@@ -194,13 +196,12 @@ struct char_counts {
  * in the first INT32_MAX bytes of data. */
 extern struct char_counts charset_count_validutf8(const char *data, size_t datalen);
 
-/* Encode and append a MIME parameter 'name' and 'value' to 'buf'.
- * RFC 2231 encoding is used if 'extended' != 0.  Otherwise RFC 2047 'Q' is used.
- * 'cur_len' specifies the current length of the header field which is used
- * in determining if/when to insert folding whitespace before the parameter.
- */
-extern void charset_write_mime_param(struct buf *buf, int extended, size_t cur_len,
-                                     const char *name, const char *value);
+/* Encode and append a MIME parameter 'name' and 'value' to 'buf' */
+#define CHARSET_PARAM_QENCODE 0 // use RFC 2047 encoding
+#define CHARSET_PARAM_XENCODE 1 // use RFC 2231 encoding
+#define CHARSET_PARAM_NEWLINE (1<<1) // force newline before parameter
+extern void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                      const char *name, const char *value);
 
 /* Transform the UTF-8 string 's' of length 'len' into
  * a titlecased, canonicalized, NULL-terminated UTF-8 string
@@ -212,15 +213,10 @@ extern void charset_write_mime_param(struct buf *buf, int extended, size_t cur_l
  */
 extern char *unicode_casemap(const char *s, ssize_t len);
 
-/*
- * Convert the string contained in domain using the ToASCII operation
- * for Internationalized Domain Names (RFC 5890).
- * Replaces the contents in 'ascii' buffer with the conversion result, or
- * with the empty string if the domain is not a valid domain name.
- *
- * Returns the zero-terminated conversion result contained in 'ascii', or
- * NULL on error.
- */
-extern const char *charset_idna_to_ascii(struct buf *ascii, const char *domain);
+extern char *charset_idna_to_utf8(const char *domain);
+extern char *charset_idna_to_ascii(const char *domain);
+
+extern void charset_lib_init(void);
+extern void charset_lib_done(void);
 
 #endif /* INCLUDED_CHARSET_H */

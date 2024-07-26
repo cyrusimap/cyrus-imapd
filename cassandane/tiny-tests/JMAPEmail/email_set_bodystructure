@@ -50,9 +50,14 @@ sub test_email_set_bodystructure
     my $data = $jmap->Upload($binary, "image/gif");
     my $dataBlobId = $data->{blobId};
 
+    xlog $self, "Upload a text blob";
+    $data = $jmap->Upload("hello world", "text/plain");
+    my $textBlobId = $data->{blobId};
+
     $self->assert_not_null($emailBlobId);
     $self->assert_not_null($embeddedEmailBlobId);
     $self->assert_not_null($dataBlobId);
+    $self->assert_not_null($textBlobId);
 
     my $bodyStructure = {
         type => "multipart/alternative",
@@ -67,7 +72,7 @@ sub test_email_set_bodystructure
                 blobId => $dataBlobId,
             }, {
                 # No type set
-                blobId => $dataBlobId,
+                blobId => $textBlobId,
             }, {
                 type => 'message/rfc822',
                 blobId => $emailBlobId,
@@ -109,7 +114,7 @@ sub test_email_set_bodystructure
     $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[2]{blobId});
     # Default type is text/plain if no Content-Type header is set
     $self->assert_str_equals('text/plain', $gotBodyStructure->{subParts}[3]{type});
-    $self->assert_str_equals($dataBlobId, $gotBodyStructure->{subParts}[3]{blobId});
+    $self->assert_str_equals($textBlobId, $gotBodyStructure->{subParts}[3]{blobId});
     $self->assert_str_equals('message/rfc822', $gotBodyStructure->{subParts}[4]{type});
     $self->assert_str_equals($emailBlobId, $gotBodyStructure->{subParts}[4]{blobId});
 }
