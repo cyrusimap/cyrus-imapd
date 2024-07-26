@@ -3955,6 +3955,7 @@ static int _json_to_card(struct jmap_req *req,
                 pname = "X-PHONETIC-ORG";
 
             if (json_is_string(jval) && pname) {
+                vparse_delete_entries(card, NULL, pname);
                 buf_setcstr(&buf, json_string_value(jval));
                 buf_trim(&buf);
                 if (buf_len(&buf)) {
