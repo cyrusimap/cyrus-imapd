@@ -1594,7 +1594,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
                             propdef = NULL;
                         }
                     }
-                    if (!propdef) {
+                    if (!propdef || (propdef->flags & JMAP_PROP_REJECT_GET)) {
                         jmap_parser_push_index(parser, "properties", i, name);
                         jmap_parser_invalid(parser, NULL);
                         jmap_parser_pop(parser);
@@ -1704,6 +1704,9 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
             json_array_append_new(invalid, json_string(path));
         }
         else if (prop->capability && !jmap_is_using(req, prop->capability)) {
+            json_array_append_new(invalid, json_string(path));
+        }
+        else if (prop->flags & JMAP_PROP_REJECT_SET) {
             json_array_append_new(invalid, json_string(path));
         }
         else if (id) {
