@@ -653,7 +653,7 @@ static const jmap_property_t contact_props[] = {
     {
         "vCardProps",
         NULL,
-        0
+        JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
     },
 
     /* FM extensions */
