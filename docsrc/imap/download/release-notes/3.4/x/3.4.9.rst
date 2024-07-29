@@ -1,0 +1,21 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.9 Release Notes
+==============================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.9/cyrus-imapd-3.4.9.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.9/cyrus-imapd-3.4.9.tar.gz.sig
+
+.. _relnotes-3.4.9-changes:
+
+Changes since 3.4.8
+===================
+
+Bug fixes
+---------
+
+* Fixed :issue:`4903`: httpd crashing on CalDAV
+* Fixed :issue:`4932`: LITERAL+ broken in mupdate
