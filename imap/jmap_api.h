@@ -332,7 +332,9 @@ enum {
     JMAP_PROP_SERVER_SET = (1<<0),
     JMAP_PROP_IMMUTABLE  = (1<<1),
     JMAP_PROP_SKIP_GET   = (1<<2), // skip in Foo/get if not requested by client
-    JMAP_PROP_ALWAYS_GET = (1<<3)  // always include in Foo/get
+    JMAP_PROP_ALWAYS_GET = (1<<3), // always include in Foo/get
+    JMAP_PROP_REJECT_GET = (1<<4), // reject as unknown in Foo/get
+    JMAP_PROP_REJECT_SET = (1<<5)  // reject as unknown in Foo/set
 };
 
 extern const jmap_property_t *jmap_property_find(const char *name,
