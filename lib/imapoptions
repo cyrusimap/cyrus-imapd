@@ -1468,6 +1468,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_group_base", "", STRING, "2.3.17" }
 /* LDAP base dn for ldap_group_filter. */
 
+{ "ldap_groupmember_attribute", "member", STRING, "UNRELEASED" }
+/* Specify a field within groups with a list of members. */
+
 { "ldap_group_filter", "(cn=%u)", STRING, "2.3.17" }
 /* Specify a filter that searches for group identifiers.
    See ldap_filter for more options. */

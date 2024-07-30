@@ -92,7 +92,28 @@ sub set_up
                 $res = Plack::Response->new(200);
                 $res->content_type('application/json');
                 $res->body(encode_json({ otheruser => [ "group:group co",
-                                                        "group:group c" ] }));
+                                                        "group:group o" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group c') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group c' => [ "cassandane" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group co') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group co' => [ "cassandane",
+                                                               "otheruser" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:group o') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:group o' => [ "otheruser" ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:foo') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:foo' => [ ] }));
+            } elsif ($req->query_parameters->{id} eq 'group:this group name has spaces') {
+                $res = Plack::Response->new(200);
+                $res->content_type('application/json');
+                $res->body(encode_json({ 'group:this group name has spaces' => [ ] }));
             } else {
                 $res = Plack::Response->new(404);
             }
@@ -220,7 +241,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :ReverseACLs :min_version_3_7 :NoAltNamespace
+    :ReverseACLs :min_version_3_7 :NoAltNamespace :Conversations
 {
     my ($self) = @_;
 
@@ -231,10 +252,15 @@ sub test_list_groupaccess_racl
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
 
+    my $precounters = $self->{store}->get_counters();
+
     $admintalk->setacl("user.otheruser.groupaccess",
                        "group:group co", "lrswipkxtecdn");
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
+
+    my $postcounters = $self->{store}->get_counters();
+    $self->assert_num_not_equals($precounters->{raclmodseq}, $postcounters->{raclmodseq}, "RACL modseq changed");
 
     if (get_verbose()) {
         $self->{instance}->run_command(
