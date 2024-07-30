@@ -4425,7 +4425,8 @@ err:
     return EOF;
 }
 
-static int parse_bodystructure_part(struct protstream *prot, struct body *body, const char *part_id)
+static int parse_bodystructure_part(struct protstream *prot, struct body *body,
+                                    const char *part_id, uint16_t cache_version)
 {
     int c;
     int r = 0;
@@ -4453,7 +4454,7 @@ badformat:
             buf_printf(&buf, "%d", body->numparts);
             char *part_id = buf_release(&buf);
             struct body *subbody = &body->subpart[body->numparts-1];
-            r = parse_bodystructure_part(prot, subbody, part_id);
+            r = parse_bodystructure_part(prot, subbody, part_id, cache_version);
             subbody->part_id = part_id;
             if (r) goto out;
 
@@ -4511,7 +4512,11 @@ badformat:
             body->content_lines = atoi(buf_cstring(&buf));
         }
 
-        else if (body_is_rfc822(body)) {
+        else if ((body_is_rfc822(body) && cache_version >= 13) ||
+                // Cache versions < 13 only handled message/rfc822.
+                 (!strcasecmp(body->type, "MESSAGE") &&
+                  !strcasecmp(body->subtype, "RFC822"))) {
+
             body->numparts = 1;
             body->subpart = xzmalloc(sizeof(struct body));
 
@@ -4520,7 +4525,7 @@ badformat:
             if (r) goto out;
 
             /* process body */
-            r = parse_bodystructure_part(prot, body->subpart, part_id);
+            r = parse_bodystructure_part(prot, body->subpart, part_id, cache_version);
             if (r) goto out;
 
             /* skip trailing space (parse_bs_part doesn't eat it) */
@@ -4584,7 +4589,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
         goto done;
     }
 
-    if (body_is_rfc822(body)) {
+    if ((body_is_rfc822(body) && cache_version >= 13) ||
+            // Cache versions < 13 only handled message/rfc822.
+            (!strcasecmp(body->type, "MESSAGE") &&
+             !strcasecmp(body->subtype, "RFC822"))) {
 
         if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 
@@ -4820,7 +4828,7 @@ static int message_parse_cbodystructure(message_t *m)
         return IMAP_MAILBOX_BADFORMAT;
 
     m->body = xzmalloc(sizeof(struct body));
-    r = parse_bodystructure_part(prot, m->body, NULL);
+    r = parse_bodystructure_part(prot, m->body, NULL, m->record.cache_version);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: error parsing body structure",
                          "mailbox=<%s> record_uid=<%u>, cacheitem=<%.*s>",
