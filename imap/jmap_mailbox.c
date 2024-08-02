@@ -669,8 +669,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "isSubscribed")) {
-        int is_subscribed =
-            sublist && strarray_find(sublist, mbentry->name, 0) >= 0;
+        int is_subscribed = strarray_contains(sublist, mbentry->name);
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
@@ -1141,9 +1140,9 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
         }
         if (JNOTNULL(filter->is_subscribed)) {
             int want_subscribed = json_boolean_value(filter->is_subscribed);
-            int is_subscribed = strarray_find(query->sublist, rec->mboxname, 0);
-            if (want_subscribed && is_subscribed < 0) return 0;
-            if (!want_subscribed && is_subscribed >= 0) return 0;
+            int is_subscribed = strarray_contains(query->sublist, rec->mboxname);
+            if (want_subscribed && !is_subscribed) return 0;
+            if (!want_subscribed && is_subscribed) return 0;
         }
         return 1;
     }
@@ -3584,7 +3583,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             int j;
             for (j = 0; j < strarray_size(specialuses); j++) {
                 const char *specialuse = strarray_nth(specialuses, j);
-                if (strarray_find(protected_uses, specialuse, 0) < 0) {
+                if (!strarray_contains(protected_uses, specialuse)) {
                     continue;
                 }
                 struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
@@ -3605,7 +3604,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             int j;
             for (j = 0; j < strarray_size(specialuses); j++) {
                 const char *specialuse = strarray_nth(specialuses, j);
-                if (strarray_find(protected_uses, specialuse, 0) >= 0) {
+                if (strarray_contains(protected_uses, specialuse)) {
                     strarray_add(&want_protected, specialuse);
                 }
             }
@@ -3669,7 +3668,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             continue;
         }
         const char *specialuse = strarray_nth(specialuses, 0);
-        if (strarray_find(&have_specialuses, specialuse, 0) >= 0) {
+        if (strarray_contains(&have_specialuses, specialuse)) {
             state->has_conflict = 1;
             buf_printf(&conflict_desc, "\nMailbox %s has specialuse %s, but at "
                     "least one other mailbox also has this specialuse.",
@@ -3682,7 +3681,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
     /* Validate: all protected preserved */
     for (i = 0; i < strarray_size(&want_protected); i++) {
         const char *protected = strarray_nth(&want_protected, i);
-        if (strarray_find(&have_specialuses, protected, 0) < 0) {
+        if (!strarray_contains(&have_specialuses, protected)) {
             if (buf_len(&conflict_desc))
                 buf_putc(&conflict_desc, ' ');
             buf_printf(&conflict_desc, "\nA mailbox had protected specialuse %s "

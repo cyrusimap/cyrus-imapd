@@ -5750,7 +5750,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     struct buf text = BUF_INITIALIZER;
     int r = 0;
 
-    if (isbody && partid && str->partids && strarray_find(str->partids, partid, 0) < 0) {
+    if (isbody && partid && str->partids && !strarray_contains(str->partids, partid)) {
         /* Skip part */
         return 0;
     }
@@ -5837,7 +5837,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             const char *mysubtype = subtype;
 
             if (!strcmpsafe(subtype, "PLAIN") && partid &&
-                    strarray_find(&str->striphtml, partid, 0) >= 0) {
+                    strarray_contains(&str->striphtml, partid)) {
                 /* Strip any HTML tags from plain text before indexing */
                 mycharset_flags &= ~(CHARSET_SKIPHTML|CHARSET_KEEPHTML);
                 /* Keep angle-bracketed URIs in text */
@@ -8402,7 +8402,7 @@ EXPORTED int insert_into_mailbox_allowed(struct mailbox *mailbox)
             strarray_t *specialuse =
                 strarray_split(buf_cstring(&attrib), NULL, 0);
 
-            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+            if (strarray_contains(specialuse, "\\Snoozed")) {
                 r = IMAP_MAILBOX_NOTSUPPORTED;
             }
             strarray_free(specialuse);

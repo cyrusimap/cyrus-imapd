@@ -196,7 +196,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
         case FILTER_SUBSCRIBED: {
             /* keyval is userid */
             strarray_t *sublist = mboxlist_sublist(keyval);
-            if (strarray_find(sublist, mbentry->name, 0) >= 0)
+            if (strarray_contains(sublist, mbentry->name))
                 notify = 1;
             strarray_free(sublist);
             break;

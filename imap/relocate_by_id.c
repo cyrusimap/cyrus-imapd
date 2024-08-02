@@ -243,7 +243,7 @@ int main(int argc, char **argv)
             /* Add data & archive paths */
             for (j = 0; datapath[j]; j++) {
                 path = datapath[j](partition, name, NULL, 0);
-                if (!path || strarray_find(oldpaths, path, 0) >= 0) continue;
+                if (!path || strarray_contains(oldpaths, path)) continue;
 
                 strarray_append(oldpaths, path);
                 strarray_append(newpaths,
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
             /* Add metadata paths */
             for (metafile = 0; metafile <= META_ARCHIVECACHE; metafile++) {
                 path = mboxname_metapath(partition, name, NULL, metafile, 0);
-                if (!path || strarray_find(oldpaths, path, 0) >= 0) continue;
+                if (!path || strarray_contains(oldpaths, path)) continue;
 
                 strarray_append(oldpaths, path);
                 strarray_append(newpaths,

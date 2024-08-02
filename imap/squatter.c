@@ -288,13 +288,13 @@ static int should_index(const char *name)
 
     // skip listed domains
     if (mbname_domain(mbname) && skip_domains &&
-        strarray_find(skip_domains, mbname_domain(mbname), 0) >= 0) {
+        strarray_contains(skip_domains, mbname_domain(mbname))) {
         ret = 0;
         goto done;
     }
 
     // skip listed users
-    if (userid && skip_users && strarray_find(skip_users, userid, 0) >= 0) {
+    if (userid && skip_users && strarray_contains(skip_users, userid)) {
         ret = 0;
         goto done;
     }

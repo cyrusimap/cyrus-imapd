@@ -1536,7 +1536,7 @@ envelope_err:
                 if (p) p[1] = '\0';
             }
 
-            if (strarray_find_case(interp->notifymethods, str, 0) == -1)
+            if (!strarray_contains_case(interp->notifymethods, str))
                 res = 0;
         }
 

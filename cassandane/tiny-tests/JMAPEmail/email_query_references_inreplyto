@@ -8,6 +8,7 @@ sub test_email_query_references_inreplyto
     my $imap   = $self->{store}->get_client();
 
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/performance');
 
     xlog $self, "Assert 'inReplyTo' and 'references' filter conditions";

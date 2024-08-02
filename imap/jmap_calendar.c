@@ -3094,7 +3094,7 @@ static void getcalendarevents_reduce_participants_internal(json_t *jparticipants
                 continue;
             }
 
-            if (strarray_find_case(schedule_addresses, uri + 7, 0) >= 0) {
+            if (strarray_contains_case(schedule_addresses, uri + 7)) {
                 json_object_set_new(keep_ids,
                         participant_id, json_true());
                 continue;
@@ -4161,7 +4161,7 @@ static int setcalendarevents_schedule(const char *sched_userid,
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
 
         /* Send scheduling message. */
-        if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
+        if (strarray_contains_case(schedule_addresses, organizer)) {
             /* Organizer scheduling object resource */
             sched_request(sched_userid, sched_userid, schedule_addresses, organizer,
                           oldical, newical, SCHED_MECH_JMAP_SET);
@@ -5206,7 +5206,7 @@ static void updateevent_bump_sequence(json_t *old_event,
     if (JNOTNULL(jreplyto)) {
         const char *addr = json_string_value(json_object_get(jreplyto, "imip"));
         if (addr && !strncasecmp(addr, "mailto:", 7) &&
-                strarray_find(schedule_addresses, addr + 7, 0) < 0) {
+                !strarray_contains(schedule_addresses, addr + 7)) {
             return;
         }
     }
@@ -5978,7 +5978,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
         if (!jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) ||
                 (cdata->organizer &&
-                 strarray_find(&schedule_addresses, cdata->organizer, 0) < 0)) {
+                 !strarray_contains(&schedule_addresses, cdata->organizer))) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }

@@ -1967,21 +1967,21 @@ static int submission_filter_match(void *vf, void *rock)
                 json_string_value(json_object_get(sfrock->submission,
                                                   "identityId"));
 
-            if (strarray_find(f->identityIds, identityId, 0) == -1) return 0;
+            if (!strarray_contains(f->identityIds, identityId)) return 0;
         }
         if (f->emailIds) {
             sfrock->emailId =
                 json_string_value(json_object_get(sfrock->submission,
                                                   "emailId"));
 
-            if (strarray_find(f->emailIds, sfrock->emailId, 0) == -1) return 0;
+            if (!strarray_contains(f->emailIds, sfrock->emailId)) return 0;
         }
         if (f->threadIds) {
             sfrock->threadId =
                 json_string_value(json_object_get(sfrock->submission,
                                                   "threadId"));
 
-            if (strarray_find(f->threadIds, sfrock->threadId, 0) == -1) return 0;
+            if (!strarray_contains(f->threadIds, sfrock->threadId)) return 0;
         }
     }
 

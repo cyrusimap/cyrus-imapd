@@ -825,7 +825,7 @@ static int _find_specialuse(const mbentry_t *mbentry, void *rock)
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
-        if (strarray_find_case(uses, d->use, 0) >= 0)
+        if (strarray_contains_case(uses, d->use))
             d->mboxname = xstrdup(mbentry->name);
         strarray_free(uses);
     }
@@ -1034,7 +1034,7 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
 {
     // not a group, just update it
     if (strncmp(acluser, "group:", 6)) {
-        if (strarray_find(touched_users, acluser, 0) >= 0) return 0;
+        if (strarray_contains(touched_users, acluser)) return 0;
         strarray_append(touched_users, acluser);
         return mboxlist_update_raclmodseq(acluser);
     }
@@ -1048,7 +1048,7 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
     int i;
     for (i = 0; i < strarray_size(members); i++) {
         const char *member = strarray_nth(members, i);
-        if (strarray_find(touched_users, member, 0) >= 0) continue;
+        if (strarray_contains(touched_users, member)) continue;
         strarray_append(touched_users, member);
         r = mboxlist_update_raclmodseq(member);
         if (r) break;
@@ -1087,7 +1087,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             const char *acluser = strarray_nth(oldusers, i);
             if (!strpbrk(strarray_nth(oldusers, i+1), "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
-            if (strarray_find(admins, acluser, 0) >= 0) continue;
+            if (strarray_contains(admins, acluser)) continue;
             if (user_can_read(newusers, acluser)) continue;
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
@@ -1101,7 +1101,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             const char *acluser = strarray_nth(newusers, i);
             if (!strpbrk(strarray_nth(newusers, i+1), "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
-            if (strarray_find(admins, acluser, 0) >= 0) continue;
+            if (strarray_contains(admins, acluser)) continue;
             if (user_can_read(oldusers, acluser)) continue;
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);

@@ -2663,7 +2663,7 @@ static int convert_foldermatch(search_expr_t *e,
 
     struct emailsearch_folders_value *val = e->value.v;
     const char *folder = strarray_nth(&val->foldernames, 0);
-    int is_preferred = strarray_find(preferred_folders, folder, 0) >= 0;
+    int is_preferred = strarray_contains(preferred_folders, folder);
     if (!is_preferred && only_preferred) {
         return 0;
     }
@@ -3788,7 +3788,7 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 else  {
                     // check if conversation flag is counted
                     if (cstate->counted_flags &&
-                        strarray_find_case(cstate->counted_flags, e->value.s, 0) >= 0) {
+                        strarray_contains_case(cstate->counted_flags, e->value.s)) {
                         if (nonxapian_hash) {
                             guidsearch_hash_expr(e, nonxapian_hash);
                         }
@@ -6049,7 +6049,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             const char *part_id;
             void *tmp;
             json_object_foreach_safe(jattachments, tmp, part_id, jmatch){
-                if (strarray_find(&partids, part_id, 0) < 0) {
+                if (!strarray_contains(&partids, part_id)) {
                     json_object_del(jattachments, part_id);
                 }
             }
@@ -8134,7 +8134,7 @@ static int _email_get_bodies(jmap_req_t *req,
             if (rawflags) {
                 strarray_t *flags = strarray_split(rawflags, NULL, 0);
                 if (flags &&
-                        strarray_find_case(flags, JMAP_HAS_ATTACHMENT_FLAG, 0) >= 0) {
+                        strarray_contains_case(flags, JMAP_HAS_ATTACHMENT_FLAG)) {
                     check_annotations = 1;
                 }
             }
@@ -12792,7 +12792,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             /* If trying to move a message in/out of $scheduled
                it better be in our scheduled email cache */
             if (!strcmpnull(scheduled_uniqueid, mbox_id) &&
-                strarray_find(req->scheduled_emails, update->email_id, 0) < 0) {
+                !strarray_contains(req->scheduled_emails, update->email_id)) {
                 is_valid = 0;
             }
 

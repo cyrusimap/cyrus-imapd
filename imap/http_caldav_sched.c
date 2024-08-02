@@ -1818,7 +1818,7 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
                 icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
             const char *recurid = "";
             if (prop) recurid = icalproperty_get_value_as_string(prop);
-            if (strarray_find(onrecurids, recurid, 0) < 0) continue;
+            if (!strarray_contains(onrecurids, recurid)) continue;
         }
 
         icalproperty *prop = icalcomponent_get_first_invitee(comp);
@@ -2647,7 +2647,7 @@ static void update_organizer_status(icalcomponent *ical, strarray_t *onrecurids,
                 icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
             const char *recurid = "";
             if (prop) recurid = icalproperty_get_value_as_string(prop);
-            if (strarray_find(onrecurids, recurid, 0) < 0) continue;
+            if (!strarray_contains(onrecurids, recurid)) continue;
         }
 
         icalproperty *prop =

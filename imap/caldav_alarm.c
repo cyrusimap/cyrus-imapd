@@ -538,7 +538,7 @@ static int process_alarm_cb(icalcomponent *comp,
         if (!attendee) continue;
         if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
-        if (strarray_find_case(&sched_addrs, attendee, 0) >= 0) {
+        if (strarray_contains_case(&sched_addrs, attendee)) {
             const char *partstat =
                 icalproperty_get_parameter_as_string(prop, "PARTSTAT");
 

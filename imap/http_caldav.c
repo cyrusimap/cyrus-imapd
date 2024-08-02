@@ -1079,7 +1079,7 @@ static int caldav_check_precond(struct transaction_t *txn,
                                                   txn->req_tgt.mbentry->name,
                                                   txn->req_tgt.userid,
                                                   &schedule_addresses);
-                    if (strarray_find(&schedule_addresses, cdata->organizer, 0) < 0) {
+                    if (!strarray_contains(&schedule_addresses, cdata->organizer)) {
                         precond = HTTP_FORBIDDEN;
                     }
                     strarray_fini(&schedule_addresses);
@@ -1531,7 +1531,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
         char *cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
         char *sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
             xstrdup(txn->req_tgt.userid) : NULL;
-        if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
+        if (strarray_contains_case(&schedule_addresses, cdata->organizer)) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
                 sched_request(cal_ownerid, sched_userid, &schedule_addresses,
@@ -3126,7 +3126,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         char *sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
             xstrdup(txn->req_tgt.userid) : NULL;
             
-        if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
+        if (strarray_contains_case(&schedule_addresses, cdata->organizer)) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, calendar))
                 sched_request(cal_ownerid, sched_userid, &schedule_addresses,
@@ -4100,7 +4100,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
                 xstrdup(txn->req_tgt.userid) : NULL;
 
-            if (strarray_find_case(&schedule_addresses, organizer, 0) >= 0) {
+            if (strarray_contains_case(&schedule_addresses, organizer)) {
                 /* Organizer scheduling object resource */
                 if (ret) {
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;

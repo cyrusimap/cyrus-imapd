@@ -1437,8 +1437,7 @@ static int search_list_match(message_t *m,
 
     r = getter(m, &buf);
     if (!r && buf.len) {
-        const char *val = buf_cstring(&buf);
-        r = (strarray_find(internal, val, 0) >= 0) ? 1 : 0;
+        r = strarray_contains(internal, buf_cstring(&buf)) ? 1 : 0;
     }
     else
         r = 0;

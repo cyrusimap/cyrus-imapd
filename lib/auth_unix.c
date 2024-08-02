@@ -78,7 +78,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
 
     if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
-    if (!strncmp(identifier, "group:", 6) && strarray_find(&auth_state->groups, identifier+6, 0) >= 0) return 2;
+    if (!strncmp(identifier, "group:", 6) && strarray_contains(&auth_state->groups, identifier+6)) return 2;
 
     return 0;
 }

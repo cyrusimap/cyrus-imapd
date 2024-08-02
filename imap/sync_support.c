@@ -3098,14 +3098,14 @@ int sync_apply_mailbox(struct dlist *kin,
         // add any new
         for (i = 0; i < strarray_size(usergroups); i++) {
             const char *group = strarray_nth(usergroups, i);
-            if (strarray_find(&mygroups, group, 0) >= 0) continue;
+            if (strarray_contains(&mygroups, group)) continue;
             r = mboxlist_set_usergroup(userid, group, /*add*/1, /*silent*/1);
             if (r) goto done;
         }
         // remove any old
         for (i = 0; i < strarray_size(&mygroups); i++) {
             const char *group = strarray_nth(&mygroups, i);
-            if (strarray_find(usergroups, group, 0) >= 0) continue;
+            if (strarray_contains(usergroups, group)) continue;
             r = mboxlist_set_usergroup(userid, group, /*add*/0, /*silent*/1);
             if (r) goto done;
         }
@@ -3466,7 +3466,7 @@ static int remove_cb(const char *sievedir, const char *fname,
             if (ext && !strcmp(ext, BYTECODE_SUFFIX)) {
                 namelen = ext - fname;
                 snprintf(path, sizeof(path), "%.*s", (int) namelen, fname);
-                if (strarray_find(list, path, 0) >= 0) {
+                if (strarray_contains(list, path)) {
                     /* Bytecode for an existing script - keep it */
                     return SIEVEDIR_OK;
                 }

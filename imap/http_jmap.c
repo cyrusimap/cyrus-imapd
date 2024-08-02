@@ -1509,7 +1509,7 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
                 const char *val = json_string_value(jval);
 
                 if (val &&
-                    strarray_find_case(httpd_log_headers, hdrname, 0) >= 0) {
+                    strarray_contains_case(httpd_log_headers, hdrname)) {
                     buf_printf(logbuf, "; %s=\"%s\"", hdrname, val);
                 }
             }
