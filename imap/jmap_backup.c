@@ -991,7 +991,7 @@ static int do_scheduling(jmap_req_t *req,
     caldav_get_schedule_addresses(req->txn->req_hdrs, mboxname,
                                   req->userid, schedule_addresses);
 
-    if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
+    if (strarray_contains_case(schedule_addresses, organizer)) {
         /* Organizer scheduling object resource */
         sched_request(req->userid, req->userid, schedule_addresses, organizer,
                       oldical, ical, SCHED_MECH_JMAP_RESTORE);

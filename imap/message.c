@@ -3835,7 +3835,7 @@ static int extract_convdata(struct conversations_state *state,
             msgid = lcase(msgid);
 
             /* already seen this one? */
-            if (strarray_find(msgidlist, msgid, 0) >= 0) {
+            if (strarray_contains(msgidlist, msgid)) {
                 free(msgid);
                 continue;
             }

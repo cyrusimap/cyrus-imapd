@@ -4556,7 +4556,7 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
                    if in the same mailbox and no data change */
                 syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
                        req->accountid, resource);
-                if (strarray_find_case(flags, "\\Flagged", 0) >= 0)
+                if (strarray_contains_case(flags, "\\Flagged"))
                     record.system_flags |= FLAG_FLAGGED;
                 else
                     record.system_flags &= ~FLAG_FLAGGED;

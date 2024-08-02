@@ -678,7 +678,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     }
 
     /* Process call stack */
-    do_perf = strarray_find(&using_capabilities, JMAP_PERFORMANCE_EXTENSION, 0) >= 0;
+    do_perf = strarray_contains(&using_capabilities, JMAP_PERFORMANCE_EXTENSION);
     json_t *mc;
     while ((mc = ptrarray_pop(&method_calls))) {
         /* Send provisional response, if necessary */
@@ -3120,7 +3120,7 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
 
 HIDDEN int jmap_is_using(jmap_req_t *req, const char *capa)
 {
-    return strarray_find(req->using_capabilities, capa, 0) >= 0;
+    return strarray_contains(req->using_capabilities, capa);
 }
 
 /*
@@ -3279,7 +3279,7 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", STRARRAY_TRIM);
-        if (strarray_find_case(uses, d->use, 0) >= 0) {
+        if (strarray_contains_case(uses, d->use)) {
             d->uniqueid = xstrdup(mbentry->uniqueid);
         }
         strarray_free(uses);

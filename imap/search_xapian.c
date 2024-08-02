@@ -205,8 +205,8 @@ static strarray_t *activefile_filter(const strarray_t *active, const strarray_t 
         struct activeitem *item = activeitem_parse(name);
         /* we want to compress anything which can't possibly exist as well
          * as anything which matches the filter tiers */
-        if (!item || strarray_find(tiers, item->tier, 0) >= 0
-                  || strarray_find(tiers, name, 0) >= 0
+        if (!item || strarray_contains(tiers, item->tier)
+                  || strarray_contains(tiers, name)
                   || !xapian_rootdir(item->tier, partition))
             strarray_append(res, name);
         activeitem_free(item);
@@ -3924,7 +3924,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
 
     /* are we going to change the first active?  We need to start indexing to
      * a new location! */
-    if (strarray_find(tochange, strarray_nth(active, 0), 0) >= 0) {
+    if (strarray_contains(tochange, strarray_nth(active, 0))) {
         /* always recalculate the first name once the destination is chosen,
         * because we may be compressing to the default tier for some reason */
         char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));

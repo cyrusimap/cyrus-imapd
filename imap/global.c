@@ -947,9 +947,7 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
 
 EXPORTED int capa_is_disabled(const char *str)
 {
-    if (!suppressed_capabilities) return 0;
-
-    return (strarray_find_case(suppressed_capabilities, str, 0) >= 0);
+    return strarray_contains_case(suppressed_capabilities, str);
 }
 
 /*

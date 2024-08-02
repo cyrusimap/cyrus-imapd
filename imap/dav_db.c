@@ -434,7 +434,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
             strarray_t *specialuse =
                 strarray_split(buf_cstring(&attrib), NULL, 0);
 
-            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+            if (strarray_contains(specialuse, "\\Snoozed")) {
                 addproc = &mailbox_add_email_alarms;
             }
             strarray_free(specialuse);

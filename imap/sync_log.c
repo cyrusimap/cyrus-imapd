@@ -173,7 +173,7 @@ static int sync_log_enabled(const char *channel)
         return 0;       /* entire mechanism is disabled */
     if (!sync_log_suppressed)
         return 1;       /* _suppress() wasn't called */
-    if (unsuppressable && strarray_find(unsuppressable, channel, 0) >= 0)
+    if (unsuppressable && strarray_contains(unsuppressable, channel))
         return 1;       /* channel is unsuppressable */
     return 0;           /* suppressed */
 }

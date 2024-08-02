@@ -496,7 +496,7 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
                 !!icalcomponent_get_x_property_by_name(old, "X-APPLE-DEFAULT-ALARM");
 
             int is_snoozed = old_uid &&
-                strarray_find(&related_uids, old_uid, 0) >= 0;
+                strarray_contains(&related_uids, old_uid);
 
             int is_acked = !!icalcomponent_get_first_property(old,
                     ICAL_ACKNOWLEDGED_PROPERTY);

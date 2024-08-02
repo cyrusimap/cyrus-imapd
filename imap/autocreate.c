@@ -838,7 +838,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         }
 
         /* subscribe if requested */
-        if (strarray_find(subscribe, name, 0) >= 0) {
+        if (strarray_contains(subscribe, name)) {
             r = mboxlist_changesub(foldername, userid, auth_state, 1, 1, 1, 1);
             if (!r) {
                 numsub++;

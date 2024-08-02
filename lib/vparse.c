@@ -188,7 +188,7 @@ repeat:
     r = _parse_param_key(state, &haseq);
     if (r) return r;
 
-    if (state->multiparam && strarray_find_case(state->multiparam, state->param->name, 0) >= 0)
+    if (state->multiparam && strarray_contains_case(state->multiparam, state->param->name))
         multiparam = 1;
 
     /* now get the value */
@@ -423,9 +423,9 @@ out:
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    if (state->multivalsemi && strarray_find_case(state->multivalsemi, state->entry->name, 0) >= 0)
+    if (state->multivalsemi && strarray_contains_case(state->multivalsemi, state->entry->name))
         return _parse_entry_multivalue(state, ';');
-    if (state->multivalcomma && strarray_find_case(state->multivalcomma, state->entry->name, 0) >= 0)
+    if (state->multivalcomma && strarray_contains_case(state->multivalcomma, state->entry->name))
         return _parse_entry_multivalue(state, ',');
 
     NOTESTART();

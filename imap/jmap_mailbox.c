@@ -669,8 +669,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "isSubscribed")) {
-        int is_subscribed =
-            sublist && strarray_find(sublist, mbentry->name, 0) >= 0;
+        int is_subscribed = strarray_contains(sublist, mbentry->name);
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
@@ -3605,7 +3604,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             int j;
             for (j = 0; j < strarray_size(specialuses); j++) {
                 const char *specialuse = strarray_nth(specialuses, j);
-                if (strarray_find(protected_uses, specialuse, 0) >= 0) {
+                if (strarray_contains(protected_uses, specialuse)) {
                     strarray_add(&want_protected, specialuse);
                 }
             }
@@ -3669,7 +3668,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             continue;
         }
         const char *specialuse = strarray_nth(specialuses, 0);
-        if (strarray_find(&have_specialuses, specialuse, 0) >= 0) {
+        if (strarray_contains(&have_specialuses, specialuse)) {
             state->has_conflict = 1;
             buf_printf(&conflict_desc, "\nMailbox %s has specialuse %s, but at "
                     "least one other mailbox also has this specialuse.",

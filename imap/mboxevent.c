@@ -246,7 +246,7 @@ EXPORTED int mboxevent_init(void)
     excluded_specialuse = strarray_split(options, NULL, 0);
 
     /* special meaning to disable event notification on all sub folders */
-    if (strarray_find_case(excluded_specialuse, "ALL", 0) >= 0)
+    if (strarray_contains_case(excluded_specialuse, "ALL"))
         enable_subfolder = 0;
 
     /* get event types's extra parameters */
@@ -322,7 +322,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
         for (i = 0; i < strarray_size(specialuse) ; i++) {
             const char *attribute = strarray_nth(specialuse, i);
-            if (strarray_find(excluded_specialuse, attribute, 0) >= 0) {
+            if (strarray_contains(excluded_specialuse, attribute)) {
                 enabled = 0;
                 goto done;
             }
@@ -704,7 +704,7 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
         if (event->type == EVENT_FLAGS_SET &&
             event->next &&
             event->next->type == EVENT_FLAGS_CLEAR &&
-            strarray_find_case(&event->next->flagnames, "\\Seen", 0) >= 0) {
+            strarray_contains_case(&event->next->flagnames, "\\Seen")) {
 
             struct mboxevent *other = event->next;
             // swap the outsides first

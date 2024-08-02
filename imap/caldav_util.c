@@ -328,7 +328,7 @@ static int validate_mayinvite(icalproperty *prop,
 
     const char *uri = icalproperty_get_attendee(prop);
     if (uri &&!strncasecmp(uri, "mailto:", 7) && sched_addrs &&
-            strarray_find(sched_addrs, uri + 7, 0) >= 0) {
+            strarray_contains(sched_addrs, uri + 7)) {
         /* User adds their own ATTENDEE */
         if (!(allow_propupdates & propupdate_inviteself))
             return HTTP_FORBIDDEN;
@@ -441,7 +441,7 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                 {
                     const char *uri = icalproperty_get_attendee(prop);
                     if (uri && !strncasecmp(uri, "mailto:", 7) && sched_addrs &&
-                            strarray_find(sched_addrs, uri + 7, 0) >= 0) {
+                            strarray_contains(sched_addrs, uri + 7)) {
                         /* User updates their own ATTENDEE */
                         if (!(allow_propupdates & propupdate_rsvp))
                             return HTTP_FORBIDDEN;
@@ -694,7 +694,7 @@ static int includes_attendee(icalcomponent *ical, const strarray_t *sched_addrs)
 
             const char *uri = icalproperty_get_attendee(prop);
             if (uri && !strncasecmp(uri, "mailto:", 7) &&
-                    strarray_find(sched_addrs, uri + 7, 0) >= 0)
+                    strarray_contains(sched_addrs, uri + 7))
                 return 1;
         }
     }
@@ -766,7 +766,7 @@ static int caldav_store_preprocess(struct transaction_t *txn,
     else if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
             (!cdata->organizer ||
              (schedule_addresses &&
-              strarray_find(schedule_addresses, cdata->organizer, 0) >= 0))) {
+              strarray_contains(schedule_addresses, cdata->organizer)))) {
         /* User may update resource whey they are organizer */
         allow_propupdates = propupdate_all;
     }

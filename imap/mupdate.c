@@ -1814,7 +1814,7 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
         /* Either there is not a prefix to test, or we matched it */
 
         if (!C->streaming_hosts ||
-            strarray_find(C->streaming_hosts, mbentry->server, 0) >= 0) {
+            strarray_contains(C->streaming_hosts, mbentry->server)) {
             switch (m->t) {
             case SET_ACTIVE:
                 prot_printf(C->pout,

@@ -3746,7 +3746,7 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
         }
 
         if (cur_attribs &&
-            (strarray_find_case(cur_attribs, strarray_nth(valid, j), 0) >= 0)) {
+            (strarray_contains_case(cur_attribs, strarray_nth(valid, j)))) {
             /* The mailbox has this specialuse attribute set already */
             skip_mbcheck = 1;
         }

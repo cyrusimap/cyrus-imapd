@@ -1677,7 +1677,7 @@ static int _mboxname_isspecialuse(const char *name, const char *specialuse)
         strarray_t *uses = strarray_split(buf_cstring(&attrib),
                                           " ", STRARRAY_TRIM);
 
-        if (strarray_find_case(uses, specialuse, 0) >= 0) {
+        if (strarray_contains_case(uses, specialuse)) {
             res = 1;
         }
         strarray_free(uses);

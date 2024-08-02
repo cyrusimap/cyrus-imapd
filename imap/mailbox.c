@@ -1201,7 +1201,7 @@ EXPORTED char *mailbox_visible_users(const struct mailbox *mailbox)
         // not admin or special name
         if (strcmp(name, "anyone")) goto done;
         if (strcmp(name, "anonymous")) goto done;
-        if (strarray_find(admins, name, 0) >= 0) goto done;
+        if (strarray_contains(admins, name)) goto done;
         // OK, this belongs
         if (strncmp(name, "group:", 6)) {
             strarray_appendm(&users, name);
@@ -1628,7 +1628,7 @@ static int _too_many_flags(const char *flag, int num)
     if (val) {
         strarray_t *flags = strarray_split(val, NULL, 0);
         // it's not too many if there's still space and it's an initial flag
-        if (strarray_find_case(flags, flag, 0) >= 0)
+        if (strarray_contains_case(flags, flag))
             too_many = 0;
         strarray_free(flags);
     }
