@@ -8,6 +8,7 @@ sub test_email_query_messageid
     my $imap   = $self->{store}->get_client();
 
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/performance');
 
     my $mime = <<'EOF';
