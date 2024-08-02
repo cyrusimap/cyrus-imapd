@@ -6049,7 +6049,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             const char *part_id;
             void *tmp;
             json_object_foreach_safe(jattachments, tmp, part_id, jmatch){
-                if (strarray_find(&partids, part_id, 0) < 0) {
+                if (!strarray_contains(&partids, part_id)) {
                     json_object_del(jattachments, part_id);
                 }
             }
@@ -12792,7 +12792,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             /* If trying to move a message in/out of $scheduled
                it better be in our scheduled email cache */
             if (!strcmpnull(scheduled_uniqueid, mbox_id) &&
-                strarray_find(req->scheduled_emails, update->email_id, 0) < 0) {
+                !strarray_contains(req->scheduled_emails, update->email_id)) {
                 is_valid = 0;
             }
 

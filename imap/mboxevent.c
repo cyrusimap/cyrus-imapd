@@ -830,23 +830,23 @@ EXPORTED void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_U
 
     /* add system flags */
     if (system_flags & FLAG_DELETED) {
-        if (strarray_find_case(excluded_flags, "\\Deleted", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Deleted"))
             strarray_add_case(&event->flagnames, "\\Deleted");
     }
     if (system_flags & FLAG_ANSWERED) {
-        if (strarray_find_case(excluded_flags, "\\Answered", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Answered"))
             strarray_add_case(&event->flagnames, "\\Answered");
     }
     if (system_flags & FLAG_FLAGGED) {
-        if (strarray_find_case(excluded_flags, "\\Flagged", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Flagged"))
             strarray_add_case(&event->flagnames, "\\Flagged");
     }
     if (system_flags & FLAG_DRAFT) {
-        if (strarray_find_case(excluded_flags, "\\Draft", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Draft"))
             strarray_add_case(&event->flagnames, "\\Draft");
     }
     if (system_flags & FLAG_SEEN) {
-        if (strarray_find_case(excluded_flags, "\\Seen", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Seen"))
             strarray_add_case(&event->flagnames, "\\Seen");
     }
 
@@ -858,7 +858,7 @@ EXPORTED void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_U
         if (!(flagnames[flag] && (flagmask & (1<<(flag & 31)))))
             continue;
 
-        if (strarray_find_case(excluded_flags, flagnames[flag], 0) < 0)
+        if (!strarray_contains_case(excluded_flags, flagnames[flag]))
             strarray_add_case(&event->flagnames, flagnames[flag]);
     }
 }

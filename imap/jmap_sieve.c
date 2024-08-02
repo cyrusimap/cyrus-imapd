@@ -1417,7 +1417,7 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
             strarray_t *haystack = strarray_split(buf_cstring(&attrib), " ", 0);
 
             for (i = 0; i < strarray_size(uses); i++) {
-                if (strarray_find_case(haystack, strarray_nth(uses, i), 0) < 0) {
+                if (!strarray_contains_case(haystack, strarray_nth(uses, i))) {
                     r = 0;
                     break;
                 }

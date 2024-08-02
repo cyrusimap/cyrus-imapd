@@ -2162,7 +2162,7 @@ static void prune_properties(vcardcomponent *vcard, strarray_t *partial)
 
         next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
 
-        if (strarray_find_case(partial, prop_name, 0) < 0) {
+        if (!strarray_contains_case(partial, prop_name)) {
             vcardcomponent_remove_property(vcard, prop);
             vcardproperty_free(prop);
         }
@@ -2269,7 +2269,7 @@ static void prune_properties(struct vparse_card *vcard, strarray_t *partial)
     while (*entryp) {
         struct vparse_entry *entry = *entryp;
 
-        if (strarray_find_case(partial, entry->name, 0) < 0) {
+        if (!strarray_contains_case(partial, entry->name)) {
             *entryp = entry->next;
             entry->next = NULL; /* so free doesn't walk the chain */
             vparse_free_entry(entry);

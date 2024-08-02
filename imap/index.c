@@ -5750,7 +5750,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     struct buf text = BUF_INITIALIZER;
     int r = 0;
 
-    if (isbody && partid && str->partids && strarray_find(str->partids, partid, 0) < 0) {
+    if (isbody && partid && str->partids && !strarray_contains(str->partids, partid)) {
         /* Skip part */
         return 0;
     }

@@ -1079,7 +1079,7 @@ static int caldav_check_precond(struct transaction_t *txn,
                                                   txn->req_tgt.mbentry->name,
                                                   txn->req_tgt.userid,
                                                   &schedule_addresses);
-                    if (strarray_find(&schedule_addresses, cdata->organizer, 0) < 0) {
+                    if (!strarray_contains(&schedule_addresses, cdata->organizer)) {
                         precond = HTTP_FORBIDDEN;
                     }
                     strarray_fini(&schedule_addresses);

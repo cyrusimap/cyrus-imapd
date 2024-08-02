@@ -3583,7 +3583,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             int j;
             for (j = 0; j < strarray_size(specialuses); j++) {
                 const char *specialuse = strarray_nth(specialuses, j);
-                if (strarray_find(protected_uses, specialuse, 0) < 0) {
+                if (!strarray_contains(protected_uses, specialuse)) {
                     continue;
                 }
                 struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
@@ -3681,7 +3681,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
     /* Validate: all protected preserved */
     for (i = 0; i < strarray_size(&want_protected); i++) {
         const char *protected = strarray_nth(&want_protected, i);
-        if (strarray_find(&have_specialuses, protected, 0) < 0) {
+        if (!strarray_contains(&have_specialuses, protected)) {
             if (buf_len(&conflict_desc))
                 buf_putc(&conflict_desc, ' ');
             buf_printf(&conflict_desc, "\nA mailbox had protected specialuse %s "

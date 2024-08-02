@@ -163,7 +163,7 @@ static int pick_scheddefault_cb(const mbentry_t *mbentry, void *vrock)
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) {
         mbname = mbname_from_intname(mbentry->name);
         const char *collname = strarray_nth(mbname_boxes(mbname), -1);
-        if (strarray_find(&rock->ignore, collname, 0) < 0) {
+        if (!strarray_contains(&rock->ignore, collname)) {
             if (mbentry->acl) {
                 // Must be writable by owner
                 const char *ownerid = mbname_userid(mbname);

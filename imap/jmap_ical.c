@@ -3587,7 +3587,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         if (!jstz->is_custom) continue;
 
         /* Skip orphaned timezones */
-        if (strarray_find(&want_tzids, jstzid, 0) < 0) {
+        if (!strarray_contains(&want_tzids, jstzid)) {
             continue;
         }
 
@@ -7498,7 +7498,7 @@ static void timezones_to_ical(icalcomponent *ical,
 
         jmap_parser_pop(parser);
 
-        if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
+        if (!strarray_contains(&custom_jstzids, jstzid)) {
             // this timezone is not referenced by any known property
             if (jmapctx && !jmapctx->to_ical.ignore_orphan_timezones) {
                 jmap_parser_invalid(parser, jstzid);
@@ -7682,7 +7682,7 @@ HIDDEN int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addres
                 if (!strncasecmp(orga, "mailto:", 7)) {
                     orga += 7;
                 }
-                if (strarray_find_case(schedule_addresses, orga, 0) < 0) {
+                if (!strarray_contains_case(schedule_addresses, orga)) {
                     return 0;
                 }
             }

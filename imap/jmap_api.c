@@ -699,7 +699,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
         /* Find the message processor */
         mp = find_methodproc(mname, &settings->methods);
-        if (!mp || strarray_find(&using_capabilities, mp->capability, 0) < 0) {
+        if (!mp || !strarray_contains(&using_capabilities, mp->capability)) {
             json_array_append_new(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             json_decref(args);

@@ -5206,7 +5206,7 @@ static void updateevent_bump_sequence(json_t *old_event,
     if (JNOTNULL(jreplyto)) {
         const char *addr = json_string_value(json_object_get(jreplyto, "imip"));
         if (addr && !strncasecmp(addr, "mailto:", 7) &&
-                strarray_find(schedule_addresses, addr + 7, 0) < 0) {
+                !strarray_contains(schedule_addresses, addr + 7)) {
             return;
         }
     }
@@ -5978,7 +5978,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
         if (!jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) ||
                 (cdata->organizer &&
-                 strarray_find(&schedule_addresses, cdata->organizer, 0) < 0)) {
+                 !strarray_contains(&schedule_addresses, cdata->organizer))) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
