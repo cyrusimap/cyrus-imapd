@@ -439,6 +439,8 @@ EXPORTED void strarray_uniq(strarray_t *sa)
 static int strarray_findg(const strarray_t *sa, const char *match, int starting,
                           int (*compare)(const char *, const char *))
 {
+    if (!sa) return -1;
+
     int i;
 
     for (i = starting ; i < sa->count ; i++)
