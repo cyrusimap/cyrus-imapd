@@ -3770,7 +3770,7 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
                 STRARRAY_TRIM
             );
 
-            if (strarray_find(forbidden, strarray_nth(valid, j), 0) != -1
+            if (strarray_contains(forbidden, strarray_nth(valid, j))
                 && mboxlist_haschildren(mboxname))
             {
                 r = IMAP_MAILBOX_HASCHILDREN;

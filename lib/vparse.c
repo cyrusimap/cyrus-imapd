@@ -1268,7 +1268,7 @@ EXPORTED int vparse_restriction_check(struct vparse_card *card)
                 }
 
                 /* Like-properties having the same ALTID only get counted once */
-                if (strarray_find(&altids[i], altid, 0) != -1) continue;
+                if (strarray_contains(&altids[i], altid)) continue;
 
                 strarray_append(&altids[i], altid);
                 counts[i]++;
