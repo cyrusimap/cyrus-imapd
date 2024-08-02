@@ -116,6 +116,8 @@ int strarray_find(const strarray_t *sa, const char *match,
                   int starting);
 int strarray_find_case(const strarray_t *sa, const char *match,
                        int starting);
+#define strarray_contains(sa, match) (strarray_find(sa, match, 0) >= 0)
+#define strarray_contains_case(sa, match) (strarray_find_case(sa, match, 0) >= 0)
 
 int strarray_intersect(const strarray_t *sa, const strarray_t *b);
 int strarray_intersect_case(const strarray_t *sa, const strarray_t *b);
