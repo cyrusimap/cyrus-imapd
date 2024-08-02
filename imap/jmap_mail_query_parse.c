@@ -54,7 +54,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                                              jmap_email_filter_parse_ctx_t *ctx)
 {
     const char *field, *s = NULL;
-    int have_mail_extension = strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0);
+    int have_mail_extension = strarray_contains(ctx->capabilities, JMAP_MAIL_EXTENSION);
     json_t *arg;
 
     json_object_foreach(filter, field, arg) {
