@@ -7635,7 +7635,9 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                 syslog(LOG_DEBUG, "scanned token %s to %d %u %llu %llu",
                        str, r, uidvalidity, syncmodseq, basemodseq);
                 /* Sanity check the token components */
-                if (r < 2 || r > 3 ||
+                if (*str == 0) {
+                    /* Initial sync - empty sync-token */
+                } else if (r < 2 || r > 3 ||
                     (uidvalidity != mailbox->i.uidvalidity) ||
                     (syncmodseq > highestmodseq)) {
                     fctx->txn->error.desc = "Invalid sync-token";
