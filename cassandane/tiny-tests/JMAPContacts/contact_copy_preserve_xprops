@@ -50,6 +50,8 @@ UID:0A8F88DE-1073-4D47-926F-0D535523FD15
 N:Smith;Hank;;
 FN:Hank Smith
 X-FOO;X-BAZ=Bam:Bar
+X-PHONETIC-FIRST-NAME:phoneticFirst
+X-PHONETIC-LAST-NAME:phoneticLast
 REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
@@ -98,4 +100,6 @@ EOF
 
     $card = $otherCarddav->Request('GET', $res->[0][1]{list}[0]{'x-href'});
     $self->assert_matches(qr/^X-FOO;X-BAZ=Bam:Bar\r$/m, $card->{content});
+    $self->assert_matches(qr/^X-PHONETIC-FIRST-NAME:phoneticFirst\r$/m, $card->{content});
+    $self->assert_matches(qr/^X-PHONETIC-LAST-NAME:phoneticLast\r$/m, $card->{content});
 }
