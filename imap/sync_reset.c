@@ -116,6 +116,9 @@ static int usage(const char *name)
 EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "sync_reset: %s\n", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

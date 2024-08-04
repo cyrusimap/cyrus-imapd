@@ -998,6 +998,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "fatals_abort", 0, SWITCH, "UNRELEASED" }
+/* If enabled, when fatal errors are detected, Cyrus will call abort()
+   to produce a core dump, unless the error was due to a misbehaving
+   client.  This is useful if you have the ability to debug a core dump.
+.PP
+   If not enabled (the default), the process will exit normally with
+   an error code. */
+
 { "flushseenstate", 1, SWITCH, "2.5.0", "2.5.0" }
 /* Deprecated. No longer used. */
 

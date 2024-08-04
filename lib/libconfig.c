@@ -91,6 +91,7 @@ EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
 EXPORTED toggle_debug_cb config_toggle_debug_cb = NULL;
 EXPORTED int config_debug_slowio = 0;
+EXPORTED int config_fatals_abort = 0;
 
 static int config_loaded;
 
@@ -663,6 +664,7 @@ EXPORTED void config_reset(void)
     config_debug = 0;
     config_toggle_debug_cb = NULL;
     config_debug_slowio = 0;
+    config_fatals_abort = 0;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -893,6 +895,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     /* do we want artificially-slow I/O ops */
     config_debug_slowio = config_getswitch(IMAPOPT_DEBUG_SLOWIO);
+
+    /* do we want to abort() on fatal errors */
+    config_fatals_abort = config_getswitch(IMAPOPT_FATALS_ABORT);
 }
 
 #define GROWSIZE 4096

@@ -60,9 +60,11 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include <sysexits.h>
 
 #include <string.h>
 
+#include "libconfig.h"
 #include "map.h"
 #include "times.h"
 
@@ -74,7 +76,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    exit(1);
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    exit(code);
 }
 
 static int load(int fd, bytecode_input_t ** d)
@@ -104,13 +108,15 @@ int main(int argc, char * argv[])
     bytecode_input_t *bc = NULL;
     int script_fd;
     int opt, usage_error = 0, gen_script = 0;
+    char *alt_config = NULL;
 
     unsigned long len;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "s";
+    static const char short_options[] = "C:s";
 
     static const struct option long_options[] = {
+        /* n.b. no long option for -C */
         { "as-sieve", no_argument, NULL, 's' },
 
         { 0, 0, 0, 0 },
@@ -120,6 +126,9 @@ int main(int argc, char * argv[])
                                     short_options, long_options, NULL)))
     {
         switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
         case 's':
             gen_script = 1;
             break;
@@ -142,6 +151,9 @@ int main(int argc, char * argv[])
         fprintf(stderr, "can not open script '%s'\n", argv[1]);
         exit(1);
     }
+
+    /* Load configuration file. */
+    config_read(alt_config, 0);
 
     len=load(script_fd,&bc);
     close(script_fd);
