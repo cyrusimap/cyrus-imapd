@@ -137,7 +137,8 @@ static void req_hdr_to_env(const char *name, const char *contents,
         if (exists) {
             /* Append value to existing value(s) */
             const char *next = strchr(exists + 1, '\t');
-            unsigned offset = next ? next - env_str : (unsigned) strlen(env_str);
+            unsigned offset = next ? (unsigned) (next - env_str)
+                                   : (unsigned) strlen(env_str);
 
             buf_insertcstr(environ, offset, ", ");
             buf_insertcstr(environ, offset + 2, contents);

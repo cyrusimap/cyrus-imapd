@@ -1125,6 +1125,9 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
 /* icalcomponent_foreach_recurrence() callback to find earliest/latest time */
 static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, void *rock)
 {
+    fprintf(stderr, "%s: entered\n", __func__);
+    fflush(stderr);
+
     struct icalperiodtype *period = (struct icalperiodtype *) rock;
     int is_date = icaltime_is_date(icalcomponent_get_mydtstart(comp));
     icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -1138,6 +1141,9 @@ static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, voi
 
     if (icaltime_compare(end, period->end) > 0)
         memcpy(&period->end, &end, sizeof(struct icaltimetype));
+
+    fprintf(stderr, "%s: period=<%s>\n", __func__, icalperiodtype_as_ical_string(*period));
+    fflush(stderr);
 }
 
 /* Determine the UTC time span of all components within ical of type kind. */
@@ -1152,19 +1158,30 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
     struct icalperiodtype span;
     icalcomponent *comp = icalcomponent_get_first_component(ical, kind);
     unsigned recurring = 0;
+    unsigned iprop = 0;
 
     /* Initialize span to be nothing */
     span.start = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
     span.end = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
     span.duration = icaldurationtype_null_duration();
+    fprintf(stderr, "%s: initialised span to be nothing: span=<%s>\n",
+                    __func__, icalperiodtype_as_ical_string(span));
+    fflush(stderr);
 
     do {
         struct icalperiodtype period;
         icalproperty *rrule;
         ptrarray_t detached_rrules = PTRARRAY_INITIALIZER;
 
+        fprintf(stderr, "%s: processing %uth component...\n", __func__, iprop++);
+        fflush(stderr);
+
         /* Get base dtstart and dtend */
         period = icalcomponent_get_utc_timespan(comp, kind, floating_tz);
+
+        fprintf(stderr, "%s: initialised period to period=<%s>\n",
+                        __func__, icalperiodtype_as_ical_string(period));
+        fflush(stderr);
 
         /* See if its a recurring event */
         rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
@@ -1173,64 +1190,128 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             icalcomponent_get_first_property(comp, ICAL_EXDATE_PROPERTY)) {
             /* Recurring - find widest time range that includes events */
             unsigned expand = recurring = 1;
+            unsigned irrule = 0;
 
             if (rrule) {
                 do {
+                    fprintf(stderr, "%s: expanding %uth rrule=<%s>\n",
+                                    __func__, irrule++,
+                                    icalproperty_as_ical_string(rrule));
+                    fflush(stderr);
+
                     struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
+                    fprintf(stderr, "%s: recur=<%s>\n",
+                                    __func__, icalrecurrencetype_as_string(&recur));
+                    fflush(stderr);
                     if (!icaltime_is_null_time(recur.until)) {
+                        fprintf(stderr, "%s: recur.until exists\n", __func__);
+                        fflush(stderr);
                         /* Recurrence ends - calculate dtend of last recurrence */
                         struct icaldurationtype duration;
                         icaltimezone *utc = icaltimezone_get_utc_timezone();
+                        fprintf(stderr, "%s: got utc timezone utc=<%s>\n",
+                                        __func__, icaltimezone_get_tzid(utc));
+                        fflush(stderr);
 
                         duration = icaltime_subtract(period.end, period.start);
+                        fprintf(stderr, "%s: calculated duration=<%s>\n",
+                                        __func__,
+                                        icaldurationtype_as_ical_string(duration));
+                        fflush(stderr);
                         icaltimetype end =
                             icaltime_add(icaltime_convert_to_zone(recur.until, utc),
                                     duration);
+                        fprintf(stderr, "%s: calculated end=<%s>\n",
+                                        __func__, icaltime_as_ical_string(end));
+                        fflush(stderr);
 
                         if (icaltime_compare(period.end, end) < 0)
                             period.end = end;
+
+                        fprintf(stderr, "%s: updated period=<%s>\n",
+                                        __func__, icalperiodtype_as_ical_string(period));
+                        fflush(stderr);
 
                         /* Do RDATE expansion only */
                         /* Temporarily remove RRULE to allow for expansion of
                          * remaining recurrences. */
                         icalcomponent_remove_property(comp, rrule);
                         ptrarray_append(&detached_rrules, rrule);
+
+                        fprintf(stderr, "%s: added rrule=<%s> to detached rrules\n",
+                                        __func__, icalproperty_as_ical_string(rrule));
+                        fflush(stderr);
                     }
                     else if (!recur.count) {
+                        fprintf(stderr, "%s: recur.count is 0, setting end of period to eternity\n", __func__);
+                        fflush(stderr);
                         /* Recurrence never ends - set end of span to eternity */
-                        span.end =
+                        period.end =
                             icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
 
                         /* Skip RRULE & RDATE expansion */
                         expand = 0;
+
+                        fprintf(stderr, "%s: period=<%s>\n", __func__, icalperiodtype_as_ical_string(period));
+                        fflush(stderr);
                     }
+                    fprintf(stderr, "%s: finished with this rrule, about to try next\n",
+                                    __func__);
+                    fflush(stderr);
                     rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
                 } while (expand && rrule);
+                fprintf(stderr, "%s: fininished expanding rrules\n", __func__);
+                fflush(stderr);
             }
 
             /* Expand (remaining) recurrences */
             if (expand) {
+                struct icaltimetype start, end;
+                fprintf(stderr, "%s: computing start/end for utc_timespan_cb\n", __func__);
+                fflush(stderr);
+                start = icaltime_from_timet_with_zone(caldav_epoch, 0, NULL);
+                end = icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+
+                fprintf(stderr, "%s: about to call utc_timespan_cb for each recurrence\n",
+                                __func__);
+                fprintf(stderr, "%s: with start=<%s> end=<%s>\n",
+                                __func__,
+                                icaltime_as_ical_string(start),
+                                icaltime_as_ical_string(end));
+                fflush(stderr);
                 icalcomponent_foreach_recurrence(
                         comp,
-                        icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
-                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
-                        utc_timespan_cb, &span);
+                        start,
+                        end,
+                        utc_timespan_cb, &period);
+                fprintf(stderr, "%s: finished calls to utc_timespan_cb\n", __func__);
+                fflush(stderr);
             }
 
             /* Add RRULEs back, if we had removed them before. */
             if (ptrarray_size(&detached_rrules)) {
+                fprintf(stderr, "%s: found %d detached rrules\n",
+                                __func__, ptrarray_size(&detached_rrules));
+                fflush(stderr);
                 /* Detach any remaining RRULEs, then add them in order */
                 for (rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
                      rrule;
                      rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+                    fprintf(stderr, "%s: detaching remaining rrule\n", __func__);
+                    fflush(stderr);
                     icalcomponent_remove_property(comp, rrule);
                     ptrarray_append(&detached_rrules, rrule);
                 }
                 int i;
                 for (i = 0; i < ptrarray_size(&detached_rrules); i++) {
+                    fprintf(stderr, "%s: adding back detached rrule\n", __func__);
+                    fflush(stderr);
                     rrule = ptrarray_nth(&detached_rrules, i);
                     icalcomponent_add_property(comp, rrule);
                 }
+                fprintf(stderr, "%s: finished adding back %d detached rrules\n",
+                                __func__, ptrarray_size(&detached_rrules));
+                fflush(stderr);
             }
 
             ptrarray_fini(&detached_rrules);
@@ -1243,6 +1324,9 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
         if (icaltime_compare(period.end, span.end) > 0)
             memcpy(&span.end, &period.end, sizeof(struct icaltimetype));
 
+        fprintf(stderr, "%s: finished component span=<%s>\n",
+                        __func__, icalperiodtype_as_ical_string(span));
+        fflush(stderr);
         /* Execute callback on this component */
         if (comp_cb) comp_cb(comp, cb_rock);
 
@@ -1250,6 +1334,9 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
 
     if (is_recurring) *is_recurring = recurring;
 
+    fprintf(stderr, "%s: finished, returning span=<%s>\n",
+                    __func__, icalperiodtype_as_ical_string(span));
+    fflush(stderr);
     return span;
 }
 

@@ -205,7 +205,7 @@ static int do_timestamp(const mbname_t *mbname)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
-        if (labs(record->internaldate - record->gmtime) < 86400)
+        if (llabs(record->internaldate - record->gmtime) < 86400)
             continue;
 
         struct index_record copyrecord = *record;

@@ -1506,7 +1506,8 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
     int do_close = 0;
 
     xsyslog(LOG_DEBUG, "JMAP eventSource push",
-            "accountid=<%s>, now=<%ld>, next_poll=<%ld>, next_ping=<%ld>",
+            "accountid=<%s>, now=<" TIME_T_FMT ">,"
+            " next_poll=<" TIME_T_FMT ">, next_ping=<" TIME_T_FMT ">",
             jpush->accountid, now, jpush->next_poll, jpush->next_ping);
 
     buf_reset(buf);
