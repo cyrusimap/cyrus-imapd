@@ -136,7 +136,7 @@ EXPORTED void telemetry_rusage(char *userid)
          * Some systems provide significantly more data, but POSIX
          * guarantees user & sys CPU time.
          */
-        syslog(LOG_NOTICE, "USAGE %s user: " TIME_T_FMT ".%.6d sys: " TIME_T_FMT ".%.6d", userid,
+        syslog(LOG_INFO, "USAGE %s user: " TIME_T_FMT ".%.6d sys: " TIME_T_FMT ".%.6d", userid,
                user.tv_sec, (int)user.tv_usec,
                sys.tv_sec, (int)sys.tv_usec);
 
