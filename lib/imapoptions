@@ -2156,17 +2156,26 @@ If all partitions are over that limit, this feature is not used anymore.
    used. */
 
 { "prometheus_enabled", 0, SWITCH, "3.1.2" }
-/* Whether tracking of service metrics for Prometheus is enabled. */
+/* Whether tracking of metrics for Prometheus is enabled. */
 
 { "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin"), "3.1.2" }
 /* Authentication level required to fetch Prometheus metrics. */
 
-{ "prometheus_update_freq", "10s", DURATION, "3.1.8" }
-/* Frequency in at which promstatsd should re-collate its statistics
-   report.  The minimum value is 1 second.
+{ "prometheus_update_freq", "10s", DURATION, "3.1.8", "UNRELEASED", "prometheus_service_update_freq" }
+/* Deprecated in favour of \fIprometheus_service_update_freq\fR
+   and \fIprometheus_master_update_freq\fR */
+
+{ "prometheus_service_update_freq", "10s", DURATION, "UNRELEASED" }
+/* Frequency in at which promstatsd should re-collate its service
+   statistics report.  The minimum value is 1 second.
 .PP
-   For backward compatibility, if no unit is specified, seconds is
-   assumed. */
+   If no unit is specified, seconds is assumed. */
+
+{ "prometheus_master_update_freq", NULL, DURATION, "UNRELEASED" }
+/* Frequency in at which master should re-collate its statistics report.
+   If not set, \fIprometheus_service_update_freq\fR is used.
+.PP
+   If no unit is specified, seconds is assumed. */
 
 { "prometheus_stats_dir", NULL, STRING, "3.1.2" }
 /* Directory to use for gathering prometheus statistics.  If specified,

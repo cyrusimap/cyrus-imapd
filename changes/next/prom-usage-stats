@@ -1,0 +1,20 @@
+Description:
+
+Increased granularity of Prometheus report frequency configuration.
+
+
+Config changes:
+
+prometheus_update_freq
+prometheus_service_update_freq
+prometheus_master_update_freq
+
+
+Upgrade instructions:
+
+None yet (FIXME)
+
+
+GitHub issue:
+
+None

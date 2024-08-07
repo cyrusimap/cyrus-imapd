@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **promstatsd** [ **-C** *config-file* ] [ **-v** ] [ **-f** *frequency* ] [ **-d** ]
+    **promstatsd** [ **-C** *config-file* ] [ **-v** ] [ **-f** *service-frequency* ] [ **-d** ]
 
     **promstatsd** [ **-C** *config-file* ] [ **-v** ] **-c**
 
@@ -36,11 +36,11 @@ the "/metrics" URL, if "prometheus" has been set in **httpmodules** in
 **promstatsd** |default-conf-text|
 
 In the first synopsis, **promstatsd** will run as a daemon, updating the
-report at the specified *frequency*.  If the optional **-f** *frequency*
-argument is not provided, the **prometheus_update_freq** from
-:cyrusman:`imapd.conf(5)` will be used, which defaults to 10 seconds.  This
-invocation should be run from the DAEMON section of :cyrusman:`cyrus.conf(5)`
-(see :ref:`promstatsd-examples` below).
+service report at the specified *service-frequency*.  If the optional
+**-f** *service-frequency* argument is not provided, the
+**prometheus_service_update_freq** from :cyrusman:`imapd.conf(5)` will be used,
+which defaults to 10 seconds.  This invocation should be run from the DAEMON
+section of :cyrusman:`cyrus.conf(5)` (see :ref:`promstatsd-examples` below).
 
 In the second synopsis, **promstatsd** will clean up all statistics files and
 exit.  The statistics Cyrus maintains are only valid while Cyrus is running,
@@ -80,11 +80,11 @@ Options
     Debug mode -- **promstatsd** will not background itself, for aid in
     debugging.
 
-.. option:: -f frequency
+.. option:: -f service-frequency
 
-    Update the report every *frequency* seconds.  If not specified, the
-    **prometheus_update_freq** from :cyrusman:`imapd.conf(5)` will be used,
-    which defaults to 10 seconds.
+    Update the service report every *service-frequency* seconds.  If not
+    specified, the **prometheus_service_update_freq** from
+    :cyrusman:`imapd.conf(5)` will be used, which defaults to 10 seconds.
 
 .. option:: -v
 

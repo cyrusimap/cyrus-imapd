@@ -59,7 +59,8 @@ sub new
     $config->set(prometheus_enabled => "yes");
     $config->set(httpmodules => "prometheus");
     $config->set(prometheus_need_auth => "none");
-    $config->set(prometheus_update_freq => 2);
+    $config->set(prometheus_service_update_freq => 2);
+    $config->set(prometheus_master_update_freq => 2);
 
     return $class->SUPER::new(
         { adminstore => 1,

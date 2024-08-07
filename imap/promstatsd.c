@@ -741,7 +741,7 @@ int main(int argc, char **argv)
     }
 
     if (frequency <= 0)
-        frequency = config_getduration(IMAPOPT_PROMETHEUS_UPDATE_FREQ, 's');
+        frequency = config_getduration(IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 's');
     if (frequency <= 0)
         frequency = 10;
 
