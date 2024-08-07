@@ -73,17 +73,23 @@ static void do_collate_service_report(struct buf *buf);
 static void do_collate_usage_report(struct buf *buf);
 
 /* globals so that shut_down() can clean up */
-static struct {
+static struct report {
     const char *fname;
     const char *desc;
     void (*collate_fn)(struct buf *);
+    enum imapopt freq_opt;
+    int default_frequency;
     struct mappedfile *mf;
     struct buf buf;
+    int frequency;
+    int64_t prev_report_time;
 } reports[] = {
     { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
-      NULL, BUF_INITIALIZER },
+      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 10,
+      NULL, BUF_INITIALIZER, 0, 0 },
     { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
-      NULL, BUF_INITIALIZER },
+      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ, 0,
+      NULL, BUF_INITIALIZER, 0, 0 },
 };
 const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
 
@@ -112,7 +118,7 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s [-C alt_config] [-v] [-f frequency] [-d]\n", argv0);
+    fprintf(stderr, "    %s [-C alt_config] [-v] [-f service_frequency] [-d]\n", argv0);
     fprintf(stderr, "    %s [-C alt_config] [-v] -c\n", argv0);
     exit(EX_USAGE);
 }
@@ -644,6 +650,11 @@ static void do_write_report(struct mappedfile *mf, const struct buf *report)
     mappedfile_unlock(mf);
 }
 
+static inline int report_due(const struct report *report, int64_t tick)
+{
+    return (report->prev_report_time + 1000 * report->frequency <= tick);
+}
+
 int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
@@ -654,8 +665,8 @@ int main(int argc, char **argv)
     int cleanup = 0;
     int debugmode = 0;
     int verbose = 0;
-    int frequency = 0;
     int oneshot = 0;
+    int min_frequency = INT_MAX;
     int opt;
     int r;
     unsigned i;
@@ -685,9 +696,9 @@ int main(int argc, char **argv)
             debugmode = 1;
             break;
 
-        case 'f': /* set frequency */
-            frequency = atoi(optarg);
-            if (frequency <= 0) usage();
+        case 'f': /* set service report frequency */
+            reports[0].frequency = atoi(optarg);
+            if (reports[0].frequency <= 0) usage();
             break;
 
         case 'v': /* verbose */
@@ -740,17 +751,25 @@ int main(int argc, char **argv)
         }
     }
 
-    if (frequency <= 0)
-        frequency = config_getduration(IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 's');
-    if (frequency <= 0)
-        frequency = 10;
-
     for (i = 0; i < n_reports; i++) {
         char *fname = strconcat(prometheus_stats_dir(),
                                 reports[i].fname,
                                 NULL);
-        syslog(LOG_DEBUG, "updating %s every %d seconds",
-                          fname, frequency);
+
+        if (reports[i].frequency <= 0)
+            reports[i].frequency = config_getduration(reports[i].freq_opt, 's');
+        if (reports[i].frequency <= 0)
+            reports[i].frequency = reports[i].default_frequency;
+
+        if (reports[i].frequency) {
+            syslog(LOG_DEBUG, "updating %s every %d seconds",
+                              fname, reports[i].frequency);
+            if (reports[i].frequency < min_frequency)
+                min_frequency = reports[i].frequency;
+        }
+        else {
+            syslog(LOG_DEBUG, "not updating %s due to frequency 0", fname);
+        }
 
         xunlink(fname);
         r = mappedfile_open(&reports[i].mf, fname,
@@ -758,9 +777,11 @@ int main(int argc, char **argv)
         free(fname);
         if (r) fatal("couldn't open report file", EX_IOERR);
     }
+    assert(min_frequency > 0 && min_frequency < INT_MAX);
 
     for (;;) {
         int sig;
+        int64_t tick, elapsed;
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
@@ -775,14 +796,19 @@ int main(int argc, char **argv)
             shut_down(0);
         }
 
+        tick = now_ms();
         for (i = 0; i < n_reports; i++) {
-            int64_t starttime = now_ms();
-
-            reports[i].collate_fn(&reports[i].buf);
-            syslog(LOG_DEBUG, "collated %s report in %f seconds",
-                              reports[i].desc,
-                              (now_ms() - starttime) / 1000.0);
-            do_write_report(reports[i].mf, &reports[i].buf);
+            if (reports[i].frequency
+                && (oneshot || report_due(&reports[i], tick)))
+            {
+                int64_t profile_starttime = now_ms();
+                reports[i].collate_fn(&reports[i].buf);
+                syslog(LOG_DEBUG, "collated %s report in %f seconds",
+                                  reports[i].desc,
+                                  (now_ms() - profile_starttime) / 1000.0);
+                do_write_report(reports[i].mf, &reports[i].buf);
+                reports[i].prev_report_time = tick;
+            }
         }
 
         if (oneshot) {
@@ -790,7 +816,14 @@ int main(int argc, char **argv)
         }
 
         /* then wait around a bit */
-        sleep(frequency); /* XXX substract elapsed time? */
+        /* XXX This isn't exactly right: if service is 10s and usage is 15s
+         * XXX we'll end up waking at 10s, 20s, 30s, 40s, and the usage report
+         * XXX will be on a lurching clock since 10 doesn't evenly divide 15.
+         * XXX Probably want to use greatest common divisor, but that would
+         * XXX become annoying to compute if we add a third report to the mix.
+         */
+        elapsed = now_ms() - tick;
+        sleep(min_frequency - elapsed / 1000);
     }
 
     /* NOTREACHED */

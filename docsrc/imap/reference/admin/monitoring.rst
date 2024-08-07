@@ -17,8 +17,8 @@ Setup
     * Set the `prometheus_enabled` setting in :cyrusman:`imapd.conf(5)` to "yes"
     * Add the `prometheus` module to your `httpmodules` in :cyrusman:`imapd.conf(5)`
     * Set the `prometheus_need_auth`, `prometheus_service_update_freq`,
-      `prometheus_master_update_freq`, and `prometheus_stats_dir` settings in
-      :cyrusman:`imapd.conf(5)` to taste
+      `prometheus_master_update_freq`, `prometheus_usage_update_freq`, and
+      `prometheus_stats_dir` settings in :cyrusman:`imapd.conf(5)` to taste
     * Add a job to run :cyrusman:`promstatsd(8)` to the DAEMON section of
       :cyrusman:`cyrus.conf(5)` (the actual daemon process)
     * Add a job to run ``promstatsd -c`` to the START section of :cyrusman:`cyrus.conf(5)`
@@ -43,6 +43,10 @@ Configuration options
     .. include:: /imap/reference/manpages/configs/imapd.conf.rst
         :start-after: startblob prometheus_master_update_freq
         :end-before: endblob prometheus_master_update_freq
+
+    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+        :start-after: startblob prometheus_usage_update_freq
+        :end-before: endblob prometheus_usage_update_freq
 
     .. include:: /imap/reference/manpages/configs/imapd.conf.rst
         :start-after: startblob prometheus_stats_dir

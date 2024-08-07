@@ -2162,8 +2162,9 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Authentication level required to fetch Prometheus metrics. */
 
 { "prometheus_update_freq", "10s", DURATION, "3.1.8", "UNRELEASED", "prometheus_service_update_freq" }
-/* Deprecated in favour of \fIprometheus_service_update_freq\fR
-   and \fIprometheus_master_update_freq\fR */
+/* Deprecated in favour of \fIprometheus_service_update_freq\fR,
+   \fIprometheus_master_update_freq\fR, and
+   \fIprometheus_usage_update_freq\fR. */
 
 { "prometheus_service_update_freq", "10s", DURATION, "UNRELEASED" }
 /* Frequency in at which promstatsd should re-collate its service
@@ -2174,6 +2175,15 @@ If all partitions are over that limit, this feature is not used anymore.
 { "prometheus_master_update_freq", NULL, DURATION, "UNRELEASED" }
 /* Frequency in at which master should re-collate its statistics report.
    If not set, \fIprometheus_service_update_freq\fR is used.
+.PP
+   If no unit is specified, seconds is assumed. */
+
+{ "prometheus_usage_update_freq", NULL, DURATION, "UNRELEASED" }
+/* Frequency in at which promstatsd should re-collate its usage
+   statistics report.  Note that this report is relatively expensive to
+   produce.  If not set, usage statistics are not reported.
+.PP
+   Best to make this a multiple of \fIprometheus_service_update_freq\fR.
 .PP
    If no unit is specified, seconds is assumed. */
 
