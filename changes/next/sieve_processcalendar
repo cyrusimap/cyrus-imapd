@@ -1,0 +1,21 @@
+
+Description:
+
+Adds support for the Sieve 'processcalendar' action, which supersedes
+the Cyrus-specific 'processimip' action.  See draft-ietf-extra-processimip.
+
+
+Config changes:
+
+The 'sieve_extensions' option SHOULD use the 'processcalendar' value
+instead of 'vnd.cyrus.imip', but both will be accepted.
+
+
+Upgrade instructions:
+
+None, as the Cyrus Sieve engine will continue to process existing
+bytecode containing the 'processimip' action.
+
+New/updated scripts SHOULD use 'processcalendar' in lieu of
+'processimip', but the Sieve parser/compiler will automatically
+translate the latter into the former.
