@@ -59,7 +59,9 @@ sub new
     $config->set(prometheus_enabled => "yes");
     $config->set(httpmodules => "prometheus");
     $config->set(prometheus_need_auth => "none");
-    $config->set(prometheus_update_freq => 2);
+    $config->set(prometheus_service_update_freq => 2);
+    $config->set(prometheus_master_update_freq => 2);
+    $config->set(prometheus_usage_update_freq => 2);
 
     return $class->SUPER::new(
         { adminstore => 1,
@@ -133,7 +135,7 @@ sub test_aaasetup
     $self->assert(1);
 }
 
-sub test_reportfile_exists
+sub test_service_reportfile_exists
     :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
@@ -144,11 +146,11 @@ sub test_reportfile_exists
     # and wait for a fresh report
     sleep 3;
 
-    my $reportfile_name = "$self->{instance}->{basedir}/conf/stats/report.txt";
+    my $fname = "$self->{instance}->{basedir}/conf/stats/service.txt";
 
-    $self->assert_file_test($reportfile_name, '-f');
+    $self->assert_file_test($fname, '-f');
 
-    my $report = parse_report(scalar read_file $reportfile_name);
+    my $report = parse_report(scalar read_file $fname);
 
     $self->assert(scalar keys %{$report});
     $self->assert(exists $report->{cyrus_imap_connections_total});

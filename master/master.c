@@ -2479,7 +2479,9 @@ static void init_prom_report(struct timeval now)
     const char *tmp;
 
     prom_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
-    prom_frequency = config_getduration(IMAPOPT_PROMETHEUS_UPDATE_FREQ, 's');
+    prom_frequency = config_getduration(IMAPOPT_PROMETHEUS_MASTER_UPDATE_FREQ, 's');
+    if (!prom_frequency)
+        prom_frequency = config_getduration(IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 's');
 
     if (prom_frequency < 1) prom_enabled = 0;
     if (!prom_enabled) return;
