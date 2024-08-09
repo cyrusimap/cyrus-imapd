@@ -1,8 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imip_publish
-    :needs_component_sieve :needs_component_httpd :min_version_3_7
+sub test_imip_publish_no_organizer_legacy
+    :needs_component_sieve :needs_component_httpd :min_version_3_9
     :want_service_http
 {
     my ($self) = @_;
@@ -19,9 +19,9 @@ sub test_imip_publish
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "processcalendar"];
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processcalendar :allowpublic :outcome "outcome";
+    processimip :outcome "outcome";
     if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
@@ -31,7 +31,6 @@ EOF
 
     my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
-From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
 Message-ID: <$uuid\@example.net>
 Content-Type: text/calendar; method=PUBLISH; component=VEVENT
@@ -50,7 +49,6 @@ SUMMARY:An Event
 DTSTART;TZID=America/New_York:20210923T153000
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
-ORGANIZER:
 END:VEVENT
 END:VCALENDAR
 EOF

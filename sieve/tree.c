@@ -320,9 +320,9 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_SNOOZE;
         break;
 
-    case B_PROCESSIMIP:
-        capability = "vnd.cyrus.imip";
-        supported = parse_script->support & SIEVE_CAPA_IMIP;
+    case B_PROCESSCAL:
+        capability = "processcal";
+        supported = parse_script->support & SIEVE_CAPA_PROCESSCAL;
         break;
 
     case B_IKEEP_TARGET:
@@ -558,10 +558,12 @@ void free_tree(commandlist_t *cl)
             free(cl->u.sn.tzid);
             break;
 
-        case B_PROCESSIMIP:
-            free(cl->u.imip.calendarid);
-            free(cl->u.imip.outcome_var);
-            free(cl->u.imip.errstr_var);
+        case B_PROCESSCAL:
+            strarray_free(cl->u.cal.addresses);
+            free(cl->u.cal.organizers);
+            free(cl->u.cal.calendarid);
+            free(cl->u.cal.outcome_var);
+            free(cl->u.cal.reason_var);
             break;
 
         case B_IKEEP_TARGET:

@@ -525,7 +525,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_UNMARK:
         case B_RETURN:
         case B_SNOOZE:
-        case B_PROCESSIMIP:
+        case B_PROCESSCAL:
         case B_IKEEP_TARGET:
             /* Spew the action parameters */
             ret = bc_params_emit(fd, &codep, stopcodep, bc);

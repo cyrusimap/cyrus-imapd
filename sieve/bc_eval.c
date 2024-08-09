@@ -2537,44 +2537,48 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             }
             break;
 
+        case B_PROCESSCAL:
         case B_PROCESSIMIP:
-            if (i->imip) {
-                sieve_imip_context_t imip_ctx = {
-                    !!cmd.u.imip.invites_only,
-                    !!cmd.u.imip.updates_only,
-                    !!cmd.u.imip.delete_canceled,
-                    cmd.u.imip.calendarid,
+            if (i->processcal) {
+                sieve_cal_context_t cal_ctx = {
+                    !!cmd.u.cal.allow_public,
+                    !!cmd.u.cal.invites_only,
+                    !!cmd.u.cal.updates_only,
+                    !!cmd.u.cal.delete_cancelled,
+                    cmd.u.cal.addresses,
+                    cmd.u.cal.organizers,
+                    cmd.u.cal.calendarid,
                     BUF_INITIALIZER,  // outcome
-                    BUF_INITIALIZER   // errstr
+                    BUF_INITIALIZER,  // reason
                 };
                 variable_list_t *vl;
 
-                res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
+                res = i->processcal(&cal_ctx, i->interp_context, sc, m, errmsg);
 
-                if (cmd.u.imip.outcome_var) {
-                    vl = varlist_select(variables, cmd.u.imip.outcome_var);
-
-                    if (!vl) {
-                        vl = varlist_extend(variables);
-                        vl->name = xstrdup(cmd.u.imip.outcome_var);
-                    }
-                    strarray_fini(vl->var);
-                    strarray_appendm(vl->var, buf_release(&imip_ctx.outcome));
-                }
-
-                if (cmd.u.imip.errstr_var) {
-                    vl = varlist_select(variables, cmd.u.imip.errstr_var);
+                if (cmd.u.cal.outcome_var) {
+                    vl = varlist_select(variables, cmd.u.cal.outcome_var);
 
                     if (!vl) {
                         vl = varlist_extend(variables);
-                        vl->name = xstrdup(cmd.u.imip.errstr_var);
+                        vl->name = xstrdup(cmd.u.cal.outcome_var);
                     }
                     strarray_fini(vl->var);
-                    strarray_appendm(vl->var, buf_release(&imip_ctx.errstr));
+                    strarray_appendm(vl->var, buf_release(&cal_ctx.outcome));
                 }
 
-                buf_free(&imip_ctx.outcome);
-                buf_free(&imip_ctx.errstr);
+                if (cmd.u.cal.reason_var) {
+                    vl = varlist_select(variables, cmd.u.cal.reason_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.cal.reason_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&cal_ctx.reason));
+                }
+
+                buf_free(&cal_ctx.outcome);
+                buf_free(&cal_ctx.reason);
             }
             else {
                 return SIEVE_RUN_ERROR;
