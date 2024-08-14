@@ -43,14 +43,39 @@
 #ifndef LIB_XSHA1_H
 #define LIB_XSHA1_H
 
+#if HAVE_CONFIG_H
 #include <config.h>
+#endif
 
-#include "lib/assert.h"
+#include <stdint.h>
+
+/* definitions and types needed by the internal libcyrus_min implementation */
+#define xSHA1_BLOCK_LENGTH   64
+#define xSHA1_DIGEST_LENGTH  20
+#define xSHA_DIGEST_LENGTH   (xSHA1_DIGEST_LENGTH)
+
+typedef uint32_t sha1_quadbyte; /* 4 byte type */
+typedef uint8_t sha1_byte;    /* single byte type */
+typedef struct _xSHA1_CTX {
+    sha1_quadbyte   state[5];
+    sha1_quadbyte   count[2];
+    sha1_byte       buffer[xSHA1_BLOCK_LENGTH];
+} xSHA1_CTX;
+
+int xSHA1Init(xSHA1_CTX* context);
+int xSHA1Update(xSHA1_CTX *context, const void *data, unsigned int len);
+int xSHA1Final(sha1_byte digest[xSHA1_DIGEST_LENGTH], xSHA1_CTX *context);
+
+unsigned char *xsha1_impl(const unsigned char *buf, unsigned long len,
+                          sha1_byte dest[xSHA1_DIGEST_LENGTH]);
 
 #ifdef HAVE_SSL
+/* if an SSL library is available, actually use its implementation instead */
 
 #include <openssl/sha.h>
 #include <openssl/evp.h>
+
+#include "assert.h"
 
 #ifndef SHA1_DIGEST_LENGTH
 #define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)
@@ -72,29 +97,17 @@
     } while(0);
 
 #else /* HAVE_SSL */
+/* otherwise, use libcyrus_min internal implementation */
 
-#include <stdint.h>
+#define SHA1_BLOCK_LENGTH   xSHA1_BLOCK_LENGTH
+#define SHA1_DIGEST_LENGTH  xSHA1_DIGEST_LENGTH
+#define SHA_DIGEST_LENGTH   xSHA_DIGEST_LENGTH
 
-typedef uint32_t sha1_quadbyte; /* 4 byte type */
-typedef uint8_t sha1_byte;    /* single byte type */
-
-#define SHA1_BLOCK_LENGTH   64
-#define SHA1_DIGEST_LENGTH  20
-#define SHA_DIGEST_LENGTH (SHA1_DIGEST_LENGTH)
-
-/* The SHA1 structure: */
-typedef struct _SHA1_CTX {
-    sha1_quadbyte   state[5];
-    sha1_quadbyte   count[2];
-    sha1_byte   buffer[SHA1_BLOCK_LENGTH];
-} SHA1_CTX;
-
-int SHA1Init(SHA1_CTX* context);
-int SHA1Update(SHA1_CTX *context, const void *data, unsigned int len);
-int SHA1Final(sha1_byte digest[SHA1_DIGEST_LENGTH], SHA1_CTX *context);
-
-unsigned char *xsha1(const unsigned char *buf, unsigned long len,
-              sha1_byte dest[SHA1_DIGEST_LENGTH]);
+#define SHA1_CTX            xSHA1_CTX
+#define SHA1Init(c)         xSHA1Init(c)
+#define SHA1Update(c, d, l) xSHA1Update(c, d, l)
+#define SHA1Final(h, c)     xSHA1Final(h, c)
+#define xsha1(d, l, h)      xsha1_impl(d, l, h)
 
 #endif /* HAVE_SSL */
 
