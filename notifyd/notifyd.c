@@ -219,7 +219,7 @@ EXPORTED void fatal(const char *s, int code)
 
 static void usage(void)
 {
-    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>]");
+    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] [-D] [-X] [-m method].  method defaults to null");
     exit(EX_USAGE);
 }
 
