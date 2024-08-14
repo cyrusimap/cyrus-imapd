@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imip_publish_no_from_no_organizer
-    :needs_component_sieve :needs_component_httpd :min_version_3_9
-    :want_service_http
+sub test_imip_disallow_public
+    :needs_component_sieve :needs_component_httpd :want_service_http
 {
     my ($self) = @_;
 
@@ -19,13 +18,11 @@ sub test_imip_publish_no_from_no_organizer
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
-if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :outcome "outcome";
-    if string "\${outcome}" "added" {
-        setflag "\\\\Flagged";
-    }
-}
+require ["variables", "imap4flags", "processcalendar"];
+  processcalendar :outcome "outcome";
+  if string "\${outcome}" "failed" {
+      setflag "\\\\Flagged";
+  }
 EOF
     );
 
@@ -33,13 +30,12 @@ EOF
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 To: Cassandane <cassandane\@example.com>
 Message-ID: <$uuid\@example.net>
-Content-Type: text/calendar; method=PUBLISH; component=VEVENT
+Content-Type: text/calendar; component=VEVENT
 X-Cassandane-Unique: $uuid
 
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
-METHOD:PUBLISH
 BEGIN:VEVENT
 CREATED:20210923T034327Z
 UID:$uuid
@@ -62,8 +58,7 @@ EOF
     xlog $self, "Check that the message made it to INBOX";
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 
-    xlog $self, "Check that the event made it to calendar";
+    xlog $self, "Check that the event DID NOT make it to calendar";
     my $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_equals(0, scalar @$events);
 }

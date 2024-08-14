@@ -49,7 +49,7 @@
 struct sieve_interp {
     /* standard callbacks for actions */
     sieve_callback *redirect, *discard, *reject, *fileinto, *snooze, *keep;
-    sieve_callback *notify, *imip;
+    sieve_callback *notify, *processcal;
     sieve_vacation_t *vacation;
 
     sieve_get_size *getsize;
@@ -223,8 +223,8 @@ enum sieve_capa_flag {
     /* Snooze - draft-ietf-extra-sieve-snooze */
     SIEVE_CAPA_SNOOZE       = 1LL<<49,
 
-    /* iMIP - vnd.cyrus.imip */
-    SIEVE_CAPA_IMIP         = 1LL<<50,
+    /* ProcessCalendar - draft-ietf-extra-processimip */
+    SIEVE_CAPA_PROCESSCAL   = 1LL<<50,
 
     /* vnd.cyrus.implicit_keep_target */
     SIEVE_CAPA_IKEEP_TARGET = 1LL<<51,
@@ -282,7 +282,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_LOG          \
                         | SIEVE_CAPA_JMAPQUERY    \
                         | SIEVE_CAPA_SNOOZE       \
-                        | SIEVE_CAPA_IMIP         \
+                        | SIEVE_CAPA_PROCESSCAL   \
                         | SIEVE_CAPA_IKEEP_TARGET \
                         | SIEVE_CAPA_COMP_UCASEMAP \
                         )

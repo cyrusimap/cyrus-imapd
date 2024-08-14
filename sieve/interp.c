@@ -137,9 +137,9 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->snooze &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))
             buf_appendcstr(&buf, " vnd.cyrus.snooze");
-        if (i->imip &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMIP))
-            buf_appendcstr(&buf, " vnd.cyrus.imip");
+        if (i->processcal &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))
+            buf_appendcstr(&buf, " processcalendar");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET)
             buf_appendcstr(&buf, " vnd.cyrus.implicit_keep_target");
 
@@ -257,9 +257,9 @@ EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
     interp->keep = f;
 }
 
-EXPORTED void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_processcal(sieve_interp_t *interp, sieve_callback *f)
 {
-    interp->imip = f;
+    interp->processcal = f;
 }
 
 EXPORTED void sieve_register_notify(sieve_interp_t *interp,
@@ -556,8 +556,9 @@ static const struct sieve_capa_t {
     { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },        // legacy capability
     { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
 
-    /* iMIP - vnd.cyrus.imip */
-    { "vnd.cyrus.imip", SIEVE_CAPA_IMIP },
+    /* ProcessCalendar - draft-ietf-extra-processimip */
+    { "processcalendar", SIEVE_CAPA_PROCESSCAL },
+    { "vnd.cyrus.imip",  SIEVE_CAPA_PROCESSCAL },     // legacy capability
 
     /* vnd.cyrus.implicit_keep_target */
     { "vnd.cyrus.implicit_keep_target", SIEVE_CAPA_IKEEP_TARGET },
@@ -765,9 +766,9 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))) capa = 0;
         break;
 
-    case SIEVE_CAPA_IMIP:
-        if (!(interp->imip &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMIP))) capa = 0;
+    case SIEVE_CAPA_PROCESSCAL:
+        if (!(interp->processcal &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))) capa = 0;
         break;
 
     case SIEVE_CAPA_IKEEP_TARGET:

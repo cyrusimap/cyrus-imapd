@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imip_invite_calendarid
+sub test_imip_publish_no_organizer
     :needs_component_sieve :needs_component_httpd :want_service_http
 {
     my ($self) = @_;
@@ -11,18 +11,16 @@ sub test_imip_invite_calendarid
     $self->assert_num_equals(1, $IMAP->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Create calendar user and second calendar";
+    xlog $self, "Create calendar user";
     my $CalDAV = $self->{caldav};
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
-
+    my $CalendarId = 'Default';
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "processcalendar"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processcalendar :calendarid "$CalendarId" :outcome "outcome";
+    processcalendar :allowpublic :outcome "outcome";
     if string "\${outcome}" "added" {
         setflag "\\\\Flagged";
     }
@@ -32,16 +30,15 @@ EOF
 
     my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
-From: Foo <foo\@example.net>
 To: Cassandane <cassandane\@example.com>
 Message-ID: <$uuid\@example.net>
-Content-Type: text/calendar; method=REQUEST; component=VEVENT
+Content-Type: text/calendar; method=PUBLISH; component=VEVENT
 X-Cassandane-Unique: $uuid
 
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
-METHOD:REQUEST
+METHOD:PUBLISH
 BEGIN:VEVENT
 CREATED:20210923T034327Z
 UID:$uuid
@@ -51,9 +48,6 @@ SUMMARY:An Event
 DTSTART;TZID=America/New_York:20210923T153000
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
-ORGANIZER;CN=Test User:MAILTO:foo\@example.net
-ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
-ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
 END:VEVENT
 END:VCALENDAR
 EOF

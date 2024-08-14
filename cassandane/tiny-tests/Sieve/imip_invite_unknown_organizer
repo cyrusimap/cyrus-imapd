@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imip_invite_calendarid
+sub test_imip_invite_unknown_organizer
     :needs_component_sieve :needs_component_httpd :want_service_http
 {
     my ($self) = @_;
@@ -11,19 +11,33 @@ sub test_imip_invite_calendarid
     $self->assert_num_equals(1, $IMAP->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog $self, "Create calendar user and second calendar";
+    xlog $self, "Create calendar user";
     my $CalDAV = $self->{caldav};
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
-
+    my $CalendarId = 'Default';
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Create addressbook user";
+    my $CardDAV = $self->{carddav};
+
+    xlog $self, "Add a card for known organizer";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+N:;Foo;;
+FN:Foo
+EMAIL:foo\@example.net
+END:VCARD
+EOF
+
+    $CardDAV->NewContact('Default',
+                         Net::CardDAVTalk::VCard->new_fromstring($card));
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "processcalendar"];
+require ["body", "variables", "imap4flags", "processcalendar", "extlists"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processcalendar :calendarid "$CalendarId" :outcome "outcome";
-    if string "\${outcome}" "added" {
+    processcalendar :organizers ":addrbook:Default" :outcome "outcome";
+    if string "\${outcome}" "no-action" {
         setflag "\\\\Flagged";
     }
 }
@@ -32,7 +46,7 @@ EOF
 
     my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
-From: Foo <foo\@example.net>
+From: Bar <bar\@example.net>
 To: Cassandane <cassandane\@example.com>
 Message-ID: <$uuid\@example.net>
 Content-Type: text/calendar; method=REQUEST; component=VEVENT
@@ -51,8 +65,8 @@ SUMMARY:An Event
 DTSTART;TZID=America/New_York:20210923T153000
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
-ORGANIZER;CN=Test User:MAILTO:foo\@example.net
-ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+ORGANIZER;CN=Test User:MAILTO:bar\@example.net
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:bar\@example.net
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
 END:VEVENT
 END:VCALENDAR
@@ -67,8 +81,7 @@ EOF
     xlog $self, "Check that the message made it to INBOX";
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 
-    xlog $self, "Check that the event made it to calendar";
+    xlog $self, "Check that the event DID NOT make it to calendar";
     my $events = $CalDAV->GetEvents($CalendarId);
-    $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_equals(0, scalar @$events);
 }

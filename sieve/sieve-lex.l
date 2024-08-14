@@ -386,14 +386,22 @@ ws              [ \t]+
     /* vnd.cyrus.jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
 
-    /* vnd.cyrus.imip */
-<INITIAL>processimip          return PROCESSIMIP;
-<INITIAL>:invitesonly         return INVITESONLY;
-<INITIAL>:updatesonly         return UPDATESONLY;
-<INITIAL>:deletecanceled      return DELETECANCELED;
-<INITIAL>:calendarid          return CALENDARID;
-<INITIAL>:outcome             return OUTCOME;
-<INITIAL>:errstr              return ERRSTR;
+    /* processcalendar - draft-ietf-extra-processimip   */
+<INITIAL>processcalendar       return PROCESSCAL;
+<INITIAL>:allowpublic          return ALLOWPUBLIC;
+<INITIAL>:invitesonly          return INVITESONLY;  /* Fastmail-specific */
+<INITIAL>:updatesonly          return UPDATESONLY;
+<INITIAL>:deletecancelled      return DELETECANCELLED;
+    /*   :addresses            defined in 'vacation'    */
+<INITIAL>:organizers           return ORGANIZERS;
+<INITIAL>:calendarid           return CALENDARID;
+<INITIAL>:outcome              return OUTCOME;
+<INITIAL>:reason               return REASON;
+
+    /* vnd.cyrus.imip (processcalendar precursor) */
+<INITIAL>processimip           return PROCESSIMIP;
+<INITIAL>:deletecanceled       return DELETECANCELLED;
+<INITIAL>:errstr               return REASON;
 
     /* vnd.cyrus.implicit_keep_target */
 <INITIAL>implicit_keep_target  return IKEEP_TARGET;
