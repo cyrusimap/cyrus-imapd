@@ -615,9 +615,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))) capa = 0;
         break;
 
+#ifdef ENABLE_REGEX
     case SIEVE_CAPA_REGEX:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) capa = 0;
         break;
+#endif
 
     case SIEVE_CAPA_COPY:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) capa = 0;
@@ -674,7 +676,6 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_ENOTIFY:
-    case SIEVE_CAPA_NOTIFY:
         if (!(interp->notify &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))) capa = 0;
         break;
@@ -755,11 +756,13 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG))) capa = 0;
         break;
 
+#ifdef WITH_JMAP
     case SIEVE_CAPA_JMAPQUERY:
         if (!(interp->jmapquery &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY)))
             capa = 0;
         break;
+#endif
 
     case SIEVE_CAPA_SNOOZE:
         if (!(interp->snooze &&
