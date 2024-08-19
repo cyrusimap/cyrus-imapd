@@ -4541,11 +4541,11 @@ EOF
 
     my $propfindXml = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
-<D:propfind xmlns:D="DAV:" xmlns:A="http://apple.com/ns/ical/">
-  <D:prop>
-    <A:calendar-color/>
-  </D:prop>
-</D:propfind>
+<propfind xmlns="DAV:">
+  <prop>
+    <calendar-color xmlns="http://apple.com/ns/ical/"/>
+  </prop>
+</propfind>
 EOF
 
     # Assert that color isn't set.
@@ -4559,7 +4559,7 @@ EOF
     $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
                                     $proppatchXml, 'Content-Type' => 'text/xml');
 
-    # Assert color ist set.
+    # Assert color is set.
     $response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $CalendarId,
                                  $propfindXml, 'Content-Type' => 'text/xml');
     $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
