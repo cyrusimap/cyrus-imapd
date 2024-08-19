@@ -311,6 +311,9 @@ EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "message_test: %s\n", s);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

@@ -147,6 +147,9 @@ EXPORTED void fatal(const char *s, int code)
         syslog(LOG_ERR, "fatal error: %s", s);
         fprintf(stderr, "fatal error: %s\n", s);
     }
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

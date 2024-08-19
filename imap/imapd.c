@@ -1442,6 +1442,9 @@ EXPORTED void fatal(const char *s, int code)
     }
 
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 

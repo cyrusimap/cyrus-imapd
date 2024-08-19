@@ -371,6 +371,8 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 EXPORTED void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
+
+    if (exitcode != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(exitcode);
 }
-
