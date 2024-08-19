@@ -2670,19 +2670,21 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
         abort();
     }
 
+    // we always write if given new statusdata, or if we changed the mailbox
+    int write_status = !!sdata;
     if (mailbox->has_changed) {
         sync_log_mailbox(mailbox_name(mailbox));
 
-        if (!sdata) {
+        if (!sdata && !(mailbox->i.options & OPT_MAILBOX_DELETED) && !strcmpsafe(mailbox_name(mailbox), mailbox->h.name)) {
             status_fill_mailbox(mailbox, &mysdata);
             sdata = &mysdata;
         }
 
         mailbox->has_changed = 0;
+        write_status = 1;
     }
 
-    // we always write if given new statusdata, or if we changed the mailbox
-    if (sdata)
+    if (write_status)
         statuscache_invalidate(mailbox_name(mailbox), sdata);
 
     if (mailbox->index_locktype) {
