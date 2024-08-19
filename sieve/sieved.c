@@ -866,11 +866,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
         case B_PROCESSIMIP:
             printf("PROCESSIMIP INVITESONLY(%d)"
                    " UPDATESONLY(%d) DELETECANCELED(%d)",
-                   !!cmd.u.imip.invites_only,
-                   !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
-            print_string(" CALENDARID", cmd.u.imip.calendarid);
-            print_string(" OUTCOME", cmd.u.imip.outcome_var);
-            print_string(" ERRSTR", cmd.u.imip.errstr_var);
+                   !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+            print_string(" CALENDARID", cmd.u.cal.calendarid);
+            print_string(" OUTCOME", cmd.u.cal.outcome_var);
+            print_string(" ERRSTR", cmd.u.cal.reason_var);
             break;
 
 
@@ -879,6 +879,19 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" MAILBOXID", cmd.u.ikt.mailboxid);
             print_string(" SPECIALUSE", cmd.u.ikt.specialuse);
             print_string(" FOLDER", cmd.u.ikt.folder);
+            break;
+
+
+        case B_PROCESSCAL:
+            printf("PROCESSCALENDAR ALLOWPUBLIC(%d) INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELLED(%d)",
+                   !!cmd.u.cal.allow_public, !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+            print_stringlist(" ADDRESSES", cmd.u.cal.addresses);
+            print_string(" ORGANIZERS", cmd.u.cal.organizers);
+            print_string(" CALENDARID", cmd.u.cal.calendarid);
+            print_string(" OUTCOME", cmd.u.cal.outcome_var);
+            print_string(" REASON", cmd.u.cal.reason_var);
             break;
 
 
@@ -1692,14 +1705,14 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_PROCESSIMIP:
-            *requires |= SIEVE_CAPA_IMIP;
+            *requires |= SIEVE_CAPA_PROCESSCAL;
             generate_token("processimip", 0, buf);
-            generate_switch(":invitesonly", cmd.u.imip.invites_only, buf);
-            generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
-            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
-            generate_string(":calendarid", cmd.u.imip.calendarid, buf);
-            generate_string(":outcome", cmd.u.imip.outcome_var, buf);
-            generate_string(":errstr", cmd.u.imip.errstr_var, buf);
+            generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.cal.delete_cancelled, buf);
+            generate_string(":calendarid", cmd.u.cal.calendarid, buf);
+            generate_string(":outcome", cmd.u.cal.outcome_var, buf);
+            generate_string(":errstr", cmd.u.cal.reason_var, buf);
             break;
 
         case B_IKEEP_TARGET:
@@ -1710,6 +1723,20 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_string_capa(":specialuse", cmd.u.ikt.specialuse,
                                  SIEVE_CAPA_SPECIAL_USE, requires, buf);
             generate_string(NULL, cmd.u.ikt.folder, buf);
+            break;
+
+        case B_PROCESSCAL:
+            *requires |= SIEVE_CAPA_PROCESSCAL;
+            generate_token("processcalendar", 0, buf);
+            generate_switch(":allowpublic", cmd.u.cal.allow_public, buf);
+            generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
+            generate_switch(":deletecancelled", cmd.u.cal.delete_cancelled, buf);
+            generate_stringlist(":addresses", cmd.u.cal.addresses, buf);
+            generate_string(":organizers", cmd.u.cal.organizers, buf);
+            generate_string(":calendarid", cmd.u.cal.calendarid, buf);
+            generate_string(":outcome", cmd.u.cal.outcome_var, buf);
+            generate_string(":reason", cmd.u.cal.reason_var, buf);
             break;
 
         default:

@@ -1167,6 +1167,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(itip);
+    if (method == ICAL_METHOD_NONE && SCHED_ALLOW_PUBLIC(sched_data)) {
+        method = ICAL_METHOD_PUBLISH;
+    }
 
     comp = icalcomponent_get_first_real_component(itip);
     kind = icalcomponent_isa(comp);
@@ -1349,7 +1352,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     case ICAL_METHOD_CANCEL: {
         int all_instances = deliver_merge_cancel(ical, itip);
 
-        if (all_instances && SCHED_DELETE_CANCELED(sched_data)) {
+        if (all_instances && SCHED_DELETE_CANCELLED(sched_data)) {
             /* Expunge the resource */
             struct index_record record;
             int r;

@@ -78,7 +78,7 @@ sub new
     }
     $config->set(sievenotifier => 'mailto');
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => ['caldav', 'jmap']);
+    $config->set(httpmodules => ['caldav', 'carddav', 'jmap']);
     $config->set(calendar_user_address_set => 'example.com');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
