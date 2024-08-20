@@ -636,7 +636,6 @@ sub test_email_set_create_encoding
 
         if ($writeEmail2MimeTests) {
             # Make this email as reproducible as possible.
-            $email->{'header:X-Mailer'} = 'email2MimeTest';
             $email->{'header:Date'} = 'Thu, 20 Jun 2024 13:28:51 +0200';
             $email->{messageId} = [$uuidgen->create_str() . '@local'];
         }
