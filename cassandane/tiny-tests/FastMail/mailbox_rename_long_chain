@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_rename_long_chain
+    :AllowMoves :Replication :SyncLog :min_version_3_3
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.Foo');
+    $mtalk->create('INBOX.Bar');
+
+    # replicate and check initial state
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);    
+    $self->check_replication('cassandane');
+
+    # perform the multi-path rename
+    $mtalk = $self->{master_store}->get_client();
+    $mtalk->rename('INBOX.Bar', 'Inbox.Old');
+    $mtalk->rename('INBOX.Foo', 'Inbox.Foo2');
+    $mtalk->rename('INBOX.Foo2', 'Inbox.Foo3');
+    $mtalk->rename('INBOX.Foo3', 'Inbox.Foo4');
+    $mtalk->rename('INBOX.Foo4', 'Inbox.Foo5');
+    $mtalk->rename('INBOX.Foo5', 'Inbox.Foo6');
+    $mtalk->rename('INBOX.Foo6', 'Inbox.Foo7');
+    $mtalk->rename('INBOX.Foo7', 'Inbox.Foo8');
+    $mtalk->rename('INBOX.Foo8', 'Inbox.Bar');
+    # Create a couple of intermediates again
+    $mtalk->create('INBOX.Foo5');
+    $mtalk->create('INBOX.Foo2');
+
+    # replicate and check that it syncs ok
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);    
+    $self->check_replication('cassandane');
+}

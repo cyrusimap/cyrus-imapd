@@ -679,6 +679,18 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
     return NULL;
 }
 
+const struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
+                                                    const char *name)
+{
+    struct sync_folder *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return p;
+    }
+    return NULL;
+}
+
 void sync_folder_list_free(struct sync_folder_list **lp)
 {
     struct sync_folder_list *l = *lp;
@@ -6831,6 +6843,32 @@ static int do_folders(struct sync_client_state *sync_cs,
      * short and contain few dependancies.  Algorithm is to simply pick a
      * rename operation which has no dependancy and repeat until done */
 
+    struct sync_rename *item;
+    for (item = rename_folders->head; item; item = item->next) {
+        if (!strcmp(item->oldname, item->newname)) continue;
+        if (!sync_folder_lookup_byname(replica_folders, item->oldname)) continue;
+        if (!sync_folder_lookup_byname(replica_folders, item->newname)) continue;
+
+        // ok, it's a rename and both source and destination names exist already,
+        // is there an intermediate we can rename to?
+
+        mbentry_t *mbentry_byid = NULL;
+        if (mboxlist_lookup_by_uniqueid(item->uniqueid, &mbentry_byid, NULL)) continue;
+        int i;
+        for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+            const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+            if (sync_folder_lookup_byname(replica_folders, histitem->name)) continue;
+            // add a rename from old name to the temporary name
+            sync_rename_list_add(rename_folders, item->uniqueid, item->oldname,
+                                 histitem->name, item->part, histitem->uidvalidity);
+            // and then reuse this item for the rename from temporary to final
+            free(item->oldname);
+            item->oldname = xstrdup(histitem->name);
+            break;
+        }
+        mboxlist_entry_free(&mbentry_byid);
+    }
+
     while (rename_folders->done < rename_folders->count) {
         int rename_success = 0;
         struct sync_rename *item, *item2 = NULL;
@@ -6841,7 +6879,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             /* don't skip rename to different partition */
             if (strcmp(item->oldname, item->newname)) {
                 item2 = sync_rename_lookup(rename_folders, item->newname);
-                if (item2 && !item2->done) continue;
+                if (item2 && !item2->done && sync_folder_lookup_byname(replica_folders, item->newname)) continue;
             }
 
             /* Found unprocessed item which should rename cleanly */

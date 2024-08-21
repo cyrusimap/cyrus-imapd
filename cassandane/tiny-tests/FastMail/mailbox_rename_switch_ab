@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_rename_switch_ab
+    :AllowMoves :Replication :SyncLog :min_version_3_3
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $mtalk = $self->{master_store}->get_client();
+
+    $mtalk->create('INBOX.Foo');
+    $mtalk->create('INBOX.Bar');
+
+    # replicate and check initial state
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);    
+    $self->check_replication('cassandane');
+
+    # perform the three way rename
+    $mtalk = $self->{master_store}->get_client();
+    $mtalk->rename('INBOX.Foo', 'Inbox.Foo2');
+    $mtalk->rename('INBOX.Bar', 'Inbox.Foo');
+    $mtalk->rename('INBOX.Foo2', 'Inbox.Bar');
+
+    # replicate and check that it syncs ok
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);    
+    $self->check_replication('cassandane');
+}
