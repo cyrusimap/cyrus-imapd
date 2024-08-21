@@ -89,21 +89,6 @@ sub set_up
     ]);
 }
 
-sub skip_check
-{
-    my ($self) = @_;
-
-    # XXX skip tests that would hang in verbose mode for now -- see
-    # XXX detailed comment at MaxMessages::put_submission
-    if (get_verbose()
-        && $self->{_name} eq 'test_emailsubmission_set_futurerelease')
-    {
-        return 'test would hang in verbose mode';
-    }
-
-    return undef;
-}
-
 sub getinbox
 {
     my ($self, $args) = @_;
