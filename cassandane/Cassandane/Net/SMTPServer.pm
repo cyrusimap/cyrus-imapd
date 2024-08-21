@@ -5,7 +5,7 @@ use warnings;
 use Data::Dumper;
 use File::Spec::Functions qw(catfile);
 use File::Temp qw(mkstemps);
-use Net::Server::PreForkSimple;
+use Net::Server::PreFork;
 
 use lib ".";
 use Net::XmtpServer;
@@ -13,7 +13,7 @@ use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use JSON;
 
-use base qw(Net::XmtpServer Net::Server::PreForkSimple);
+use base qw(Net::XmtpServer Net::Server::PreFork);
 
 sub new {
     my ($class, $params, @args) = @_;
