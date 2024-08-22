@@ -78,32 +78,26 @@ static int newsrc_dbopen = 0;
 static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
-    int r = 0;
+    int r;
+    char *tofree = NULL;
 
-    if (r != 0)
-        syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
-               cyrusdb_strerror(r));
-    else {
-        char *tofree = NULL;
+    if (!fname)
+        fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
 
-        if (!fname)
-            fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
-
-        /* create db file name */
-        if (!fname) {
-            tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
-            fname = tofree;
-        }
-
-        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
-        if (r != 0)
-            syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-                   cyrusdb_strerror(r));
-        else
-            newsrc_dbopen = 1;
-
-        free(tofree);
+    /* create db file name */
+    if (!fname) {
+        tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
+        fname = tofree;
     }
+
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
+    if (r != 0)
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+               cyrusdb_strerror(r));
+    else
+        newsrc_dbopen = 1;
+
+    free(tofree);
 
     return r;
 }
