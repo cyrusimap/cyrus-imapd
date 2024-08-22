@@ -77,7 +77,6 @@ static int newsrc_dbopen = 0;
 /* must be called after cyrus_init */
 static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 {
-    char buf[1024];
     int r;
     char *tofree = NULL;
 
