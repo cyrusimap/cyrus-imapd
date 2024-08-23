@@ -119,6 +119,8 @@ sub default
             chatty => 'yes',
             debug => 'yes',
             httpprettytelemetry => 'yes',
+            smtp_backend => 'host',
+            smtp_host => 'bogus:0', # smtpclient_open should fail by default!
         );
         my $defs = Cassandane::Cassini->instance()->get_section('config');
         $default->set(%$defs);
