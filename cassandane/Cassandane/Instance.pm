@@ -119,6 +119,7 @@ sub new
         _pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
         install_certificates => 0,
         _pid => $$,
+        smtpdaemon => 0,
     };
 
     $self->{name} = $params{name}
@@ -151,6 +152,8 @@ sub new
         if defined $params{pwcheck};
     $self->{install_certificates} = $params{install_certificates}
         if defined $params{install_certificates};
+    $self->{smtpdaemon} = $params{smtpdaemon}
+        if defined $params{smtpdaemon};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
@@ -1087,10 +1090,11 @@ sub _start_smtpd
 {
     my ($self) = @_;
 
-    my $smtp_host = $self->{config}->get('smtp_host');
+    return if not $self->{smtpdaemon};
 
-    # if that isn't set, we decided we don't need it
-    return if not $smtp_host;
+    my $smtp_host = $self->{config}->get('smtp_host');
+    die "smtp_host requested but not configured"
+        if not $smtp_host or $smtp_host eq 'bogus:0';
 
     my ($host, $port) = split /:/, $smtp_host;
 
@@ -1186,10 +1190,9 @@ sub start
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
 
-    # arrange for fakesmtpd to be started by Cassandane, but only for the
-    # main instance and only if Cyrus is new enough
+    # arrange for fakesmtpd to be started by Cassandane if we need it
     # XXX should make it a Cyrus waitdaemon instead like fakesaslauthd
-    if ($self->{description} =~ m/^main instance for test /) {
+    if ($self->{smtpdaemon}) {
         my ($maj, $min) =
             Cassandane::Instance->get_version($self->{installation});
 
@@ -1198,9 +1201,11 @@ sub start
             my $port = Cassandane::PortManager::alloc($host);
 
             $self->{config}->set(
-                smtp_backend => 'host',
                 smtp_host => "$host:$port",
             );
+        }
+        else {
+            die "smtpdaemon requested but Cyrus $maj.$min is too old";
         }
     }
 
@@ -1270,7 +1275,7 @@ sub start
         # XXX cassandane won't know about it.
     }
     $self->setup_syslog_replacement();
-    $self->_start_smtpd();
+    $self->_start_smtpd() if $self->{smtpdaemon};
     $self->_start_notifyd();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();

@@ -104,6 +104,7 @@ sub new
         jmap => 0,
         install_certificates => 0,
         squatter => 0,
+        smtpdaemon => 0,
     };
     map {
         $want->{$_} = delete $params->{$_}
@@ -609,6 +610,7 @@ sub _create_instances
 
         $instance_params{config} = $conf;
         $instance_params{install_certificates} = $want->{install_certificates};
+        $instance_params{smtpdaemon} = $want->{smtpdaemon};
 
         $instance_params{description} = "main instance for test $self->{_name}";
         $self->{instance} = Cassandane::Instance->new(%instance_params);
