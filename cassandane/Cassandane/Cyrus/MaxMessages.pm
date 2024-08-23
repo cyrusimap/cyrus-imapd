@@ -324,7 +324,7 @@ sub put_email
 
     $counter ++;
 
-    $self->make_message(subject => "message $counter");
+    $self->make_message("message $counter");
 }
 
 sub test_maxmsg_addressbook_limited
