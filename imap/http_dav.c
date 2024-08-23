@@ -1340,8 +1340,16 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                     ensure_ns(respNs, NS_JMAPCAL, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
-                else
+                else {
+                    if (!nsDef->prefix) {
+                        char myprefix[20];
+                        snprintf(myprefix, sizeof(myprefix), "X%X",
+                                 strhash((const char *) nsDef->href) & 0xffff);
+                        nsDef->prefix = xmlStrdup(BAD_CAST myprefix);
+                    }
+
                     xmlNewNs(root, nsDef->href, nsDef->prefix);
+                }
             }
         }
 
