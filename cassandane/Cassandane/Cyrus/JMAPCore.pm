@@ -113,6 +113,7 @@ sub test_capabilities
 
 sub test_get_session
     :min_version_3_1 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :want_smtpdaemon
 {
     my ($self) = @_;
 
@@ -477,6 +478,7 @@ sub test_echo
 
 sub test_identity_get
     :min_version_3_1 :needs_component_jmap
+    :want_smtpdaemon
 {
 
     my ($self) = @_;

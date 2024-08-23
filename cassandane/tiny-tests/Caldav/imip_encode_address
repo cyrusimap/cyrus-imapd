@@ -8,6 +8,7 @@ use Data::UUID;
 sub test_imip_encode_address
     :needs_component_httpd
     :NoStartInstances
+    :want_smtpdaemon
 {
     my ($self) = @_;
 

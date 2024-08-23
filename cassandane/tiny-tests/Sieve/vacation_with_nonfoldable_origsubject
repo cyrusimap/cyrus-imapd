@@ -5,6 +5,7 @@ sub test_vacation_with_nonfoldable_origsubject
     :min_version_3_5
     :needs_component_sieve
     :NoAltNameSpace
+    :want_smtpdaemon
 {
     my ($self) = @_;
 

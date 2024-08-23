@@ -76,6 +76,7 @@ sub new
         config => $config,
         jmap => 1,
         services => ['imap', 'http', 'sieve'],
+        smtpdaemon => 1,
     }, @_);
 }
 

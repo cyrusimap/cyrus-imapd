@@ -74,7 +74,8 @@ sub new
         config => $config,
         jmap => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        services => [ 'imap', 'http' ],
+        smtpdaemon => 1,
     }, @args);
 }
 
