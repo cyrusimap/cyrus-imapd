@@ -630,9 +630,9 @@ sub _create_instances
         if ($want->{replica} || $want->{csyncreplica})
         {
             my %replica_params = %instance_params;
-            $replica_params{config} = $conf->clone();
+            $replica_params{config} = $self->{_config}->clone();
             $replica_params{config}->set(sync_rightnow_channel => undef);
-	    unless ($self->{no_replicaonly}) {
+            unless ($self->{no_replicaonly}) {
                 $replica_params{config}->set(replicaonly => 'yes');
             }
             my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
