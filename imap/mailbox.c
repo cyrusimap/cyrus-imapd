@@ -8368,44 +8368,6 @@ EXPORTED int mailbox_annotation_lookupmask(struct mailbox *mailbox, uint32_t uid
     return annotatemore_msg_lookupmask(mailbox, uid, entry, userid, value);
 }
 
-
-int mailbox_cid_rename(struct mailbox *mailbox,
-                       conversation_id_t from_cid,
-                       conversation_id_t to_cid)
-{
-    const message_t *msg;
-    int r = 0;
-
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return 0;
-
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-        if (record->cid != from_cid)
-            continue;
-
-        /*
-         * Just rename the CID in place - injecting a copy at the end
-         * messes with clients that just use UID ordering, like Apple's
-         * IOS email client */
-
-        struct index_record copyrecord = *record;
-        copyrecord.cid = to_cid;
-        r = mailbox_rewrite_index_record(mailbox, &copyrecord);
-
-        if (r) {
-            syslog(LOG_ERR, "mailbox_cid_rename: error "
-                            "rewriting record %u, mailbox %s: %s from %llu to %llu",
-                            record->recno, mailbox_name(mailbox), error_message(r), from_cid, to_cid);
-            break;
-        }
-    }
-    mailbox_iter_done(&iter);
-
-    return r;
-}
-
 EXPORTED void mailbox_set_wait_cb(void (*cb)(void *), void *rock)
 {
     mailbox_wait_cb = cb;
