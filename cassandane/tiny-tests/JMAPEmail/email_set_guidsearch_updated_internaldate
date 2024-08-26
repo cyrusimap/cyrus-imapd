@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_guidsearch_updated_internaldate
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog $self, "create emails";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    receivedAt => '2020-02-01T00:00:00Z',
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mB' => {
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    receivedAt => '2020-02-02T00:00:00Z',
+                    subject => 'test',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailBlobIdA = $res->[0][1]->{created}{mA}{blobId};
+    $self->assert_not_null($emailBlobIdA);
+    my $emailIdB = $res->[0][1]->{created}{mB}{id};
+    $self->assert_not_null($emailIdB);
+
+    xlog "Download blob of message A";
+    $res = $jmap->Download('cassandane', $emailBlobIdA);
+    my $emailBlobA = $res->{content};
+    $self->assert_not_null($emailBlobA);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query sorted by internaldate, then destroy message A";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                subject => 'test',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::true,
+            }]
+        }, 'R1'],
+        ['Email/set', {
+            destroy => [$emailIdA],
+        }, 'R2'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailIdA, $emailIdB], $res->[0][1]{ids});
+    $self->assert_str_equals($emailIdA, $res->[1][1]{destroyed}[0]);
+
+    xlog $self, "Compact search tier t1 to t2";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1');
+
+    xlog "Sleep one second";
+    sleep(1);
+
+    xlog "Create dummy message";
+    $self->make_message("dummy") || die;
+
+    xlog "Append blob of message A via IMAP";
+    $imap->append('INBOX', $emailBlobA) || die $@;
+
+    xlog $self, "run incremental squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "Query sorted by internaldate";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                subject => 'test',
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::true,
+            }]
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals([$emailIdB, $emailIdA], $res->[0][1]{ids});
+}

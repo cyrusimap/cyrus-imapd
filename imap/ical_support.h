@@ -51,39 +51,27 @@
 #include <libical/ical.h>
 #undef icalerror_warn
 #define icalerror_warn(message) \
-{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s\n", __FUNCTION__, __FILE__, __LINE__, message);}
+{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
+#include "dav_util.h"
 #include "mailbox.h"
 
-#define PER_USER_CAL_DATA \
+#define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
+
+#define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
-
-#ifndef HAVE_VAVAILABILITY
-/* Allow us to compile without #ifdef HAVE_VAVAILABILITY everywhere */
-#define ICAL_VAVAILABILITY_COMPONENT  ICAL_X_COMPONENT
-#define ICAL_XAVAILABLE_COMPONENT     ICAL_X_COMPONENT
-#endif
-
-#ifndef HAVE_VPOLL
-/* Allow us to compile without #ifdef HAVE_VPOLL everywhere */
-#define ICAL_VPOLL_COMPONENT          ICAL_NO_COMPONENT
-#define ICAL_VVOTER_COMPONENT         ICAL_X_COMPONENT
-#define ICAL_METHOD_POLLSTATUS        ICAL_METHOD_NONE
-#define ICAL_VOTER_PROPERTY           ICAL_NO_PROPERTY
-#define icalproperty_get_voter        icalproperty_get_attendee
-#endif
-
-#ifndef HAVE_VPATCH
-/* Allow us to compile without #ifdef HAVE_VPATCH everywhere */
-#define ICAL_VPATCH_COMPONENT         ICAL_NO_COMPONENT
-#define ICAL_XPATCH_COMPONENT         ICAL_X_COMPONENT
-#endif
 
 #ifndef HAVE_NEW_CLONE_API
 /* Allow us to compile without #ifdef HAVE_NEW_CLONE_API everywhere */
 #define icalcomponent_clone           icalcomponent_new_clone
 #define icalproperty_clone            icalproperty_new_clone
 #define icalparameter_clone           icalparameter_new_clone
+#endif
+
+#ifndef HAVE_GET_COMPONENT_NAME
+/* This should never match anything in the wild
+   which means that we can't patch X- components */
+#define icalcomponent_get_component_name(comp)  "X-CYR-"
 #endif
 
 /* Initialize libical timezones. */
@@ -95,6 +83,57 @@ extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
+extern void icalproperty_set_xparam(icalproperty *prop,
+                                    const char *name, const char *val, int replace);
+extern const char *icalproperty_get_xparam_value(icalproperty *prop,
+                                                 const char *name);
+
+
+/* Strip per-user data to personalize iCalendar resource.
+ *
+ * COLOR and CATEGORIES properties are not stripped.
+ * Instead, they are added to the per-user VPATCH when the
+ * user overwrites them in their copy of the resource.
+ */
+#define ICAL_PERSONAL_DATA_INITIALIZER         \
+    "CALDATA %(VPATCH {324+}\r\n"         \
+    "BEGIN:VPATCH\r\n"                    \
+    "VERSION:1\r\n"                       \
+    "DTSTAMP:19760401T005545Z\r\n"        \
+    "UID:strip-owner-cal-data\r\n"        \
+    "BEGIN:PATCH\r\n"                     \
+    "PATCH-TARGET:/VCALENDAR/ANY\r\n"     \
+    "PATCH-DELETE:/VALARM\r\n"            \
+    "PATCH-DELETE:#TRANSP\r\n"            \
+    "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
+    "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
+    "PATCH-DELETE:#X-APPLE-DEFAULT-ALARM\r\n" \
+    "PATCH-DELETE:#X-JMAP-USEDEFAULTALERTS\r\n" \
+    "END:PATCH\r\n"                       \
+    "END:VPATCH\r\n)"
+
+extern void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata);
+extern void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
+
+struct icalsupport_personal_data {
+    time_t lastmod;
+    modseq_t modseq;
+    int usedefaultalerts;
+    icalcomponent *vpatch;
+    struct message_guid guid; // read-only
+};
+
+extern int icalsupport_encode_personal_data(struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern int icalsupport_decode_personal_data(const struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern void icalsupport_personal_data_fini(struct icalsupport_personal_data *data);
+
+extern int icalcomponent_get_usedefaultalerts(icalcomponent *comp);
+extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag);
+
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
@@ -108,6 +147,8 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
+                                                    icaltimetype recurid,
+                                                    int is_standalone,
                                                     void *data),
                                    void *callback_data);
 
@@ -125,7 +166,9 @@ extern icalcomponent *record_to_ical(struct mailbox *mailbox,
                                      const struct index_record *record,
                                      strarray_t *schedule_addresses);
 
-extern const char *get_icalcomponent_errstr(icalcomponent *ical);
+#define ICAL_SUPPORT_STRICT 0
+#define ICAL_SUPPORT_ALLOW_INVALID_IANA_TIMEZONE (1<<0)
+extern const char *get_icalcomponent_errstr(icalcomponent *ical, unsigned flags);
 
 extern void icalcomponent_remove_invitee(icalcomponent *comp,
                                          icalproperty *prop);
@@ -138,90 +181,75 @@ extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
 extern icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
                                                           const char *name);
 
+extern void icalcomponent_remove_x_property_by_name(icalcomponent *comp,
+                                                    const char *name);
+
 extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
-                                                            icalcomponent_kind kind);
+                                                            icalcomponent_kind kind,
+                                                            icaltimezone *floating_tz);
 
 extern struct icalperiodtype icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                                                                 icalcomponent_kind kind,
+                                                                icaltimezone *floating_tz,
                                                                 unsigned *is_recurring,
                                                                 void (*comp_cb)(icalcomponent*,
                                                                                 void*),
                                                                 void *cb_rock);
 
 extern void icaltime_set_utc(struct icaltimetype *t, int set);
+extern icaltimetype icaltime_convert_to_utc(const struct icaltimetype tt,
+                                            icaltimezone *floating_zone);
 
 extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
 
+/* Functions to work around libical TZID prefixes */
+extern const char *icaltimezone_get_location_tzid(const icaltimezone *zone);
+extern const char *icaltime_get_location_tzid(icaltimetype t);
+
+extern icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid);
+
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    int is_daylight;
+    int is_std;
+    int is_gmt;
+};
+
+extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
+                                                     icaltimetype *startp, icaltimetype *endp,
+                                                     icalarray *obsarray,
+                                                     struct observance *proleptic,
+                                                     icalcomponent **eternal_std,
+                                                     icalcomponent **eternal_dst,
+                                                     icaltimetype *last_dtstart,
+                                                     int ms_compatible);
+
+extern int ical_categories_is_color(icalproperty *cprop);
+
+/* Normalizes both standard and cyrus-extensions */
+extern void icalcomponent_normalize_x(icalcomponent *ical);
+
+/* Returns true if the component's main temporal such as dtstart is of type DATE */
+extern int icalcomponent_temporal_is_date(icalcomponent *comp);
+
+#ifdef WITH_JMAP
+extern const char *icalcomponent_get_jmapid(icalcomponent *comp);
+extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
+#endif
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
-
-
-/* Functions not declared in in libical < v2.0 */
-
-#if !HAVE_DECL_ICAL_STATUS_DELETED
-#define ICAL_STATUS_DELETED ICAL_STATUS_CANCELLED
-#endif
-
-#if !HAVE_DECL_ICALPROPERTY_GET_PARENT
-extern icalcomponent *icalproperty_get_parent(const icalproperty *property);
-#endif
-
-#if !HAVE_DECL_ICALRECUR_FREQ_TO_STRING
-extern const char *icalrecur_freq_to_string(icalrecurrencetype_frequency kind);
-#endif
-
-#if !HAVE_DECL_ICALRECUR_WEEKDAY_TO_STRING
-extern const char *icalrecur_weekday_to_string(icalrecurrencetype_weekday kind);
-#endif
-
-
-#ifdef HAVE_TZDIST_PROPS
 
 #define icalcomponent_get_tzuntil_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_TZUNTIL_PROPERTY)
 
-#else /* !HAVE_TZDIST_PROPS */
-
-/* Functions to replace those not available in libical < v2.0 */
-
-#define icalcomponent_get_tzuntil_property(comp) \
-    icalcomponent_get_x_property_by_name(comp, "TZUNTIL")
-
-extern icalproperty *icalproperty_new_tzidaliasof(const char *v);
-extern icalproperty *icalproperty_new_tzuntil(struct icaltimetype v);
-
-#endif /* HAVE_TZDIST_PROPS */
-
-
-#ifdef HAVE_VALARM_EXT_PROPS
-
 #define icalcomponent_get_acknowledged_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_ACKNOWLEDGED_PROPERTY)
-
-#else /* !HAVE_VALARM_EXT_PROPS */
-
-/* Functions to replace those not available in libical < v1.0 */
-
-#define icalcomponent_get_acknowledged_property(comp) \
-    icalcomponent_get_x_property_by_name(comp, "ACKNOWLEDGED")
-
-extern icalproperty *icalproperty_new_acknowledged(struct icaltimetype v);
-extern struct icaltimetype icalproperty_get_acknowledged(const icalproperty *prop);
-
-#endif /* HAVE_VALARM_EXT_PROPS */
-
-
-#ifndef HAVE_RFC7986_PROPS
-
-/* Functions to replace those not available in libical < v2.0 */
-
-extern icalproperty *icalproperty_new_name(const char *v);
-extern icalproperty *icalproperty_new_color(const char *v);
-
-#endif /* HAVE_RFC7986_PROPS */
-
 
 #ifndef HAVE_RSCALE
 
@@ -232,8 +260,6 @@ extern icalproperty *icalproperty_new_color(const char *v);
 
 #endif /* HAVE_RSCALE */
 
-
-#ifdef HAVE_MANAGED_ATTACH_PARAMS
 
 /* Wrappers to fetch managed attachment parameters by kind */
 
@@ -246,69 +272,6 @@ extern icalproperty *icalproperty_new_color(const char *v);
 #define icalproperty_get_size_parameter(prop) \
     icalproperty_get_first_parameter(prop, ICAL_SIZE_PARAMETER)
 
-#elif defined(HAVE_IANA_PARAMS)
-
-/* Functions to replace those not available in libical < v2.0 */
-
-extern icalparameter* icalproperty_get_iana_parameter_by_name(icalproperty *prop,
-                                                              const char *name);
-
-extern icalparameter *icalparameter_new_filename(const char *fname);
-
-extern void icalparameter_set_filename(icalparameter *param, const char *fname);
-
-extern icalparameter *icalparameter_new_managedid(const char *id);
-
-extern const char *icalparameter_get_managedid(icalparameter *param);
-
-extern void icalparameter_set_managedid(icalparameter *param, const char *id);
-
-extern icalparameter *icalparameter_new_size(const char *sz);
-
-extern const char *icalparameter_get_size(icalparameter *param);
-
-extern void icalparameter_set_size(icalparameter *param, const char *sz);
-
-/* Wrappers to fetch managed attachment parameters by kind */
-
-#define icalproperty_get_filename_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "FILENAME")
-
-#define icalproperty_get_managedid_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "MANAGED-ID")
-
-#define icalproperty_get_size_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SIZE")
-
-#else /* !HAVE_IANA_PARAMS */
-
-/* Dummy functions to allow compilation with libical < v0.48 */
-
-#define icalparameter_new_filename(fname) NULL
-
-#define icalparameter_set_filename(param, fname) (void) param
-
-#define icalparameter_new_managedid(id) NULL
-
-#define icalparameter_get_managedid(param) ""
-
-#define icalparameter_set_managedid(param, id) (void) param
-
-#define icalparameter_new_size(sz) NULL
-
-#define icalparameter_set_size(param, sz) (void) param
-
-#define icalproperty_get_filename_parameter(prop) NULL
-
-#define icalproperty_get_managedid_parameter(prop) NULL
-
-#define icalproperty_get_size_parameter(prop) NULL
-
-#endif /* HAVE_MANAGED_ATTACH_PARAMS */
-
-
-#ifdef HAVE_SCHEDULING_PARAMS
-
 /* Wrappers to fetch scheduling parameters by kind */
 
 #define icalproperty_get_scheduleagent_parameter(prop) \
@@ -319,66 +282,6 @@ extern void icalparameter_set_size(icalparameter *param, const char *sz);
 
 #define icalproperty_get_schedulestatus_parameter(prop) \
     icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
-
-#else /* !HAVE_SCHEDULING_PARAMS */
-
-typedef enum {
-    ICAL_SCHEDULEAGENT_X,
-    ICAL_SCHEDULEAGENT_SERVER,
-    ICAL_SCHEDULEAGENT_CLIENT,
-    ICAL_SCHEDULEAGENT_NONE
-} icalparameter_scheduleagent;
-
-typedef enum {
-    ICAL_SCHEDULEFORCESEND_X,
-    ICAL_SCHEDULEFORCESEND_REQUEST,
-    ICAL_SCHEDULEFORCESEND_REPLY,
-    ICAL_SCHEDULEFORCESEND_NONE
-} icalparameter_scheduleforcesend;
-
-
-#ifdef HAVE_IANA_PARAMS
-
-/* Functions to replace those not available in libical < v1.0 */
-
-extern icalparameter_scheduleagent
-icalparameter_get_scheduleagent(icalparameter *param);
-
-extern icalparameter_scheduleforcesend
-icalparameter_get_scheduleforcesend(icalparameter *param);
-
-extern icalparameter *icalparameter_new_schedulestatus(const char *stat);
-
-/* Wrappers to fetch scheduling parameters by kind */
-
-#define icalproperty_get_scheduleagent_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-AGENT")
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-FORCE-SEND")
-
-#define icalproperty_get_schedulestatus_parameter(prop) \
-    icalproperty_get_iana_parameter_by_name(prop, "SCHEDULE-STATUS")
-
-#else /* !HAVE_IANA_PARAMS */
-
-/* Dummy functions to allow compilation with libical < v0.48 */
-
-#define icalparameter_get_scheduleagent(param) ICAL_SCHEDULEAGENT_NONE
-
-#define icalparameter_get_scheduleforcesend(param) ICAL_SCHEDULEFORCESEND_NONE
-
-#define icalparameter_new_schedulestatus(stat) ((void) stat, NULL)
-
-#define icalproperty_get_scheduleagent_parameter(prop) NULL
-
-#define icalproperty_get_scheduleforcesend_parameter(prop) NULL
-
-#define icalproperty_get_schedulestatus_parameter(prop) NULL
-
-#endif /* HAVE_IANA_PARAMS */
-
-#endif /* HAVE_SCHEDULING_PARAMS */
 
 #endif /* HAVE_ICAL */
 

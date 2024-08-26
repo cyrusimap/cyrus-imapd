@@ -55,6 +55,7 @@
 #include <assert.h>
 #include <string.h>
 #include "xmalloc.h"
+#include "sieve/bytecode.h"
 #include "sieve/comparator.h"
 #include "sieve/interp.h"
 #include "sieve/script.h"
@@ -63,7 +64,6 @@
 #include "sieve/grammar.h"
 #include "sieve/sieve_err.h"
 
-#include "lib/gmtoff.h"
 #include "util.h"
 #include "imparse.h"
 #include "libconfig.h"
@@ -72,9 +72,16 @@
 
 #define ERR_BUF_SIZE 1024
 
-int encoded_char = 0;  /* used to send encoded-character feedback to lexer */
-int getdatepart = 0;   /* used to send start state feedback to lexer */
-static comp_t *ctags;  /* used for accessing comp_t* in a test/command union */
+int encoded_char = 0;    /* used to send encoded-character feedback to lexer */
+static comp_t *ctags;    /* used for accessing comp_t* in a test/command union */
+static int *copy;        /* used for accessing copy flag in a command union */
+static int *create;      /* used for accessing create flag in a command union */
+static strarray_t **flags; /* used for accessing imap flags in a command union */
+static char **specialuse; /* used for accessing special-use flag in a command */
+static char **mailboxid; /* used for accessing mailboxid in a command */
+static char **fccfolder; /* used for accessing fcc.folder in a command */
+static unsigned bctype;  /* used to set the bytecode command type in mtags */
+static unsigned legacy;  /* used to signal a legacy version of a command */
 
 extern int addrparse(sieve_script_t*);
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
@@ -88,6 +95,8 @@ void sieveerror_c(sieve_script_t*, int code, ...);
 static int check_reqs(sieve_script_t*, strarray_t *sl);
 static int chk_match_vars(sieve_script_t*, char *s);
 
+static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...);
+
 /* construct/canonicalize action commands */
 static commandlist_t *build_keep(sieve_script_t*, commandlist_t *c);
 static commandlist_t *build_fileinto(sieve_script_t*,
@@ -98,9 +107,8 @@ static commandlist_t *build_rej_err(sieve_script_t*, int t, char *message);
 static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
 static commandlist_t *build_flag(sieve_script_t*,
                                  commandlist_t *c, strarray_t *flags);
-static commandlist_t *build_notify(sieve_script_t*, int t,
+static commandlist_t *build_notify(sieve_script_t*,
                                    commandlist_t *c, char *method);
-static commandlist_t *build_denotify(sieve_script_t*, commandlist_t *c);
 static commandlist_t *build_include(sieve_script_t*, commandlist_t *c, char*);
 static commandlist_t *build_set(sieve_script_t*, commandlist_t *c,
                                 char *variable, char *value);
@@ -111,6 +119,9 @@ static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
 static commandlist_t *build_log(sieve_script_t*, char *text);
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times);
+static commandlist_t *build_cal(sieve_script_t *sscript, commandlist_t *t);
+static commandlist_t *build_ikeep_target(sieve_script_t*,
+                                         commandlist_t *c, char *folder);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -128,12 +139,12 @@ static test_t *build_stringt(sieve_script_t*, test_t *t,
 static test_t *build_hasflag(sieve_script_t*, test_t *t,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_date(sieve_script_t*, test_t *t,
-                          char *hn, int part, strarray_t *kl);
+                          char *hn, char *part, strarray_t *kl);
 static test_t *build_ihave(sieve_script_t*, strarray_t *sa);
 static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
                                char *keyname, strarray_t *keylist);
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
-static test_t *build_jmapquery(sieve_script_t*, test_t *t, const char *json);
+static test_t *build_jmapquery(sieve_script_t*, test_t *t, char *json);
 
 static int verify_weekday(sieve_script_t *sscript, char *day);
 static int verify_time(sieve_script_t *sscript, char *time);
@@ -157,7 +168,7 @@ extern void sieverestart(FILE *f);
 
 %name-prefix "sieve"
 %defines
-%destructor  { free_tree($$);     } commands command action control thenelse elsif block
+%destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags ntags itags sntags caltags ikttags
 %destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1
@@ -200,7 +211,7 @@ extern void sieverestart(FILE *f);
 %token <nval> OVER UNDER
 %token <nval> ALL LOCALPART DOMAIN
 %token <nval> IS CONTAINS MATCHES
-%token <nval> OCTET ASCIICASEMAP ASCIINUMERIC
+%token <nval> OCTET ASCIICASEMAP ASCIINUMERIC UNICODECASEMAP
 %type <test> htags atags etags
 %type <nval> matchtag collation sizetag addrparttag
 
@@ -245,21 +256,13 @@ extern void sieverestart(FILE *f);
 %type <cl> flagtags
 %type <nval> flagaction
 
-/* imapflags - draft-melnikov-sieve-imapflags-04 */
-%token <nval> MARK UNMARK
-%type <nval> flagmark
-
 /* subaddress - RFC 5233 */
 %token <nval> USER DETAIL
 %type <nval> subaddress
 
 /* date - RFC 5260 */
 %token DATE CURRENTDATE ORIGINALZONE ZONE
-%token <nval> TIMEZONE
-%token <nval> YEARP MONTHP DAYP DATEP JULIAN
-%token <nval> HOURP MINUTEP SECONDP TIMEP ISO8601 STD11 ZONEP WEEKDAYP
 %type <test> dttags cdtags
-%type <nval> datepart
 
 /* index - RFC 5260 */
 %token INDEX LAST
@@ -273,17 +276,12 @@ extern void sieverestart(FILE *f);
 %type <nval> reject
 
 /* enotify - RFC 5435 */
-%token METHOD OPTIONS MESSAGE IMPORTANCE VALIDNOTIFYMETHOD NOTIFYMETHODCAPABILITY
-%token <nval> NOTIFY ENOTIFY ENCODEURL
-%type <cl> ntags
-%type <nval> mod15
-%type <test> methtags
-
-/* notify - draft-martin-sieve-notify-01 */
-%token DENOTIFY ID ANY
+%token OPTIONS MESSAGE IMPORTANCE VALIDNOTIFYMETHOD NOTIFYMETHODCAPABILITY
+%token <nval> NOTIFY ENCODEURL
 %token <nval> LOW NORMAL HIGH
-%type <cl> dtags
-%type <nval> priority
+%type <cl> ntags
+%type <nval> priority mod15
+%type <test> methtags
 
 /* ihave - RFC 5463 */
 %token IHAVE ERROR
@@ -300,7 +298,7 @@ extern void sieverestart(FILE *f);
 %token <nval> SERVERMETADATA
 %token SERVERMETADATAEXISTS
 
-/* redirect-deliveryby - RFC 6009 */
+/* redirect-deliverby - RFC 6009 */
 %token BYTIMEREL BYTIMEABS BYMODE BYTRACE
 
 /* redirect-dsn - RFC 6009 */
@@ -328,20 +326,32 @@ extern void sieverestart(FILE *f);
 /* fcc - RFC 8580 */
 %token FCC
 
-/* draft-gondwana-sieve-mailboxid */
+/* mailboxid - draft-ietf-extra-sieve-mailboxid */
 %token MAILBOXID MAILBOXIDEXISTS
 
-/* x-cyrus-log */
-%token LOG
-
-/* x-cyrus-jmapquery */
-%token JMAPQUERY
-
-/* x-cyrus-snooze */
-%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS DAYSOFWEEK
+/* snooze - draft-ietf-extra-sieve-snooze */
+%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS TZID
 %type <nval> weekdaylist weekdays weekday time
 %type <nl> timelist times time1
 %type <cl> sntags
+
+/* vnd.cyrus.log */
+%token LOG
+
+/* vnd.cyrus.jmapquery */
+%token JMAPQUERY
+
+/* processcalendar - draft-ietf-extra-processimip */
+%token PROCESSCAL ALLOWPUBLIC INVITESONLY UPDATESONLY DELETECANCELLED
+%token ORGANIZERS CALENDARID OUTCOME REASON
+%type <cl> caltags
+
+/* vnd.cyrus.imip (processcalendar precursor) */
+%token PROCESSIMIP
+
+/* vnd.cyrus.implicit_keep_target */
+%token IKEEP_TARGET
+%type <cl> ikttags
 
 
 %%
@@ -354,7 +364,7 @@ extern void sieverestart(FILE *f);
  * This allows us to pass values "forward" by reference.
  */
 
-/* Per RFC5228, Section 3.2, ALL require commands MUST appear first */
+/* Per RFC 5228, Section 3.2, ALL require commands MUST appear first */
 start:    reqs                   { sscript->cmds = NULL; }
         | reqs commands          { sscript->cmds = $2; }
         ;
@@ -379,7 +389,7 @@ command:  control
                                                 error_message(SIEVE_UNSUPP_EXT),
                                                 sievelineno);
                                      sscript->support |= SIEVE_CAPA_IHAVE;
-                                     $$ = build_rej_err(sscript, ERROR,
+                                     $$ = build_rej_err(sscript, B_ERROR,
                                                         buf_release(&buf));
                                  }
         ;
@@ -419,8 +429,11 @@ require: REQUIRE stringlist ';'  { check_reqs(sscript, $2); }
 
 
 control:  IF thenelse            { $$ = $2; }
-        | STOP ';'               { $$ = new_command(STOP, sscript); }
-        | ERROR string ';'       { $$ = build_rej_err(sscript, ERROR, $2); }
+        | STOP ';'               { $$ = new_command(B_STOP, sscript); }
+        | ERROR string ';'       { $$ = build_rej_err(sscript, B_ERROR, $2); }
+        | INCLUDE itags string ';'
+                                 { $$ = build_include(sscript, $2, $3); }
+        | RETURN ';'             { $$ = new_command(B_RETURN, sscript); }
         ;
 
 
@@ -446,13 +459,54 @@ block: '{' commands '}'          { $$ = $2; }
         ;
 
 
+/* INCLUDE tagged arguments */
+itags: /* empty */               { $$ = new_command(B_INCLUDE, sscript); }
+        | itags location         {
+                                     $$ = $1;
+                                     if ($$->u.inc.location != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":personal", ":location");
+                                     }
+
+                                     $$->u.inc.location = $2;
+                                 }
+        | itags ONCE             {
+                                     $$ = $1;
+                                     if ($$->u.inc.once != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":once");
+                                     }
+
+                                     $$->u.inc.once = INC_ONCE_MASK;
+                                 }
+        | itags OPTIONAL         {
+                                     $$ = $1;
+                                     if ($$->u.inc.optional != -1) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":optional");
+                                     }
+
+                                     $$->u.inc.optional = INC_OPTIONAL_MASK;
+                                 }
+        ;
+
+
+/* location tags */
+location: PERSONAL               { $$ = B_PERSONAL; }
+        | GLOBAL                 { $$ = B_GLOBAL;   }
+        ;
+
+
 /*
  * Action commands
  */
 action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | FILEINTO ftags string  { $$ = build_fileinto(sscript, $2, $3); }
         | REDIRECT rtags string  { $$ = build_redirect(sscript, $2, $3); }
-        | DISCARD                { $$ = new_command(DISCARD, sscript); }
+        | DISCARD                { $$ = new_command(B_DISCARD, sscript); }
         | SET stags string string
                                  { $$ = build_set(sscript, $2, $3, $4); }
         | VACATION vtags string  { $$ = build_vacation(sscript, $2, $3); }
@@ -460,9 +514,6 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         /* SET/ADD/REMOVEFLAG */ 
         | flagaction flagtags stringlist
                                  { $$ = build_flag(sscript, $2, $3); }
-
-        /* MARK/UNMARK */ 
-        | flagmark               { $$ = new_command($1, sscript); }
 
         | ADDHEADER ahtags string string
                                  { $$ = build_addheader(sscript,
@@ -472,44 +523,33 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
                                                            $2, $3, $4); }
 
         | reject string          { $$ = build_rej_err(sscript, $1, $2); }
-        | NOTIFY ntags string    { $$ = build_notify(sscript,
-                                                     ENOTIFY, $2, $3); }
-
-        | NOTIFY ntags           { $$ = build_notify(sscript,
-                                                     NOTIFY, $2, NULL); }
-
-        | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
-        | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
+        | NOTIFY ntags string    { $$ = build_notify(sscript, $2, $3); }
         | LOG string             { $$ = build_log(sscript, $2); }
-        | SNOOZE sntags timelist
-                                 { $$ = build_snooze(sscript, $2, $3); }
-        | RETURN                 { $$ = new_command(RETURN, sscript); }
+        | SNOOZE sntags timelist { $$ = build_snooze(sscript, $2, $3); }
+
+        | PROCESSCAL  { legacy = 0; } caltags
+                                 { $$ = build_cal(sscript, $3); }
+
+        | PROCESSIMIP { legacy = 1; } caltags
+                                 { $$ = build_cal(sscript, $3); }
+
+        | IKEEP_TARGET ikttags string
+                                 { $$ = build_ikeep_target(sscript, $2, $3); }
         ;
 
 
 /* KEEP tagged arguments */
-ktags: /* empty */               { $$ = new_command(KEEP, sscript); }
+ktags: /* empty */               {
+                                     $$ = new_command(B_KEEP, sscript);
+                                     flags = &($$->u.k.flags);
+                                 }
         | ktags flags
         ;
 
 
 /* :flags */
 flags: FLAGS stringlist          {
-                                     /* $0 refers to ktags, ftags, or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     strarray_t **flags = NULL;
-
-                                     switch (c->type) {
-                                     case KEEP:
-                                         flags = &c->u.k.flags; break;
-                                     case FILEINTO:
-                                         flags = &c->u.f.flags; break;
-                                     case VACATION:
-                                         flags = &c->u.v.fcc.flags; break;
-                                     case ENOTIFY:
-                                         flags = &c->u.n.fcc.flags; break;
-                                     }
-
+                                     /* **flags assigned by the calling rule */
                                      if (*flags != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -528,7 +568,14 @@ flags: FLAGS stringlist          {
 
 
 /* FILEINTO tagged arguments */
-ftags: /* empty */               { $$ = new_command(FILEINTO, sscript); }
+ftags: /* empty */               {
+                                     $$ = new_command(B_FILEINTO, sscript);
+                                     copy = &($$->u.f.copy);
+                                     flags = &($$->u.f.flags);
+                                     create = &($$->u.f.create);
+                                     specialuse = &($$->u.f.t.specialuse);
+                                     mailboxid = &($$->u.f.t.mailboxid);
+                                 }
         | ftags copy
         | ftags flags
         | ftags create
@@ -539,11 +586,7 @@ ftags: /* empty */               { $$ = new_command(FILEINTO, sscript); }
 
 /* :copy */
 copy: COPY                       {
-                                     /* $0 refers to ftags or rtags */
-                                     commandlist_t *c = $<cl>0;
-                                     int *copy = (c->type == FILEINTO) ?
-                                         &c->u.f.copy : &c->u.r.copy;
-
+                                     /* *copy assigned by the calling rule */
                                      if ((*copy)++) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -560,19 +603,7 @@ copy: COPY                       {
 
 /* :create */
 create: CREATE                  {
-                                     /* $0 refers to ftags or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     int *create = NULL;
-
-                                     switch (c->type) {
-                                     case FILEINTO:
-                                         create = &c->u.f.create; break;
-                                     case VACATION:
-                                         create = &c->u.v.fcc.create; break;
-                                     case ENOTIFY:
-                                         create = &c->u.n.fcc.create; break;
-                                     }
-
+                                     /* *create assigned by the calling rule */
                                      if ((*create)++) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -589,22 +620,7 @@ create: CREATE                  {
 
 /* :specialuse */
 specialuse: SPECIALUSE string    {
-                                     /* $0 refers to ftags or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     char **specialuse = NULL;
-
-                                     switch (c->type) {
-                                     case FILEINTO:
-                                         specialuse = &c->u.f.specialuse;
-                                         break;
-                                     case VACATION:
-                                         specialuse = &c->u.v.fcc.specialuse;
-                                         break;
-                                     case ENOTIFY:
-                                         specialuse = &c->u.n.fcc.specialuse;
-                                         break;
-                                     }
-
+                                     /* **specialuse assigned by calling rule */
                                      if (*specialuse != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -616,31 +632,20 @@ specialuse: SPECIALUSE string    {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "special-use");
                                      }
+                                     else if (*mailboxid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":specialuse",
+                                                      ":mailboxid");
+                                     }
 
                                      *specialuse = $2;
                                  }
         ;
 
+/* :mailboxid */
 mailboxid: MAILBOXID string      {
-                                     /* $0 refers to ftags, sntags or vtags */
-                                     commandlist_t *c = $<cl>0;
-                                     char **mailboxid = NULL;
-
-                                     switch (c->type) {
-                                     case FILEINTO:
-                                         mailboxid = &c->u.f.mailboxid;
-                                         break;
-                                     case SNOOZE:
-                                         mailboxid = &c->u.sn.mailbox;
-                                         break;
-                                     case VACATION:
-                                         mailboxid = &c->u.v.fcc.mailboxid;
-                                         break;
-                                     case ENOTIFY:
-                                         mailboxid = &c->u.n.fcc.mailboxid;
-                                         break;
-                                     }
-
+                                     /* **mailboxid assigned by calling rule */
                                      if (*mailboxid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -652,6 +657,12 @@ mailboxid: MAILBOXID string      {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "mailboxid");
                                      }
+                                     else if (*specialuse != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":mailboxid",
+                                                      ":specialuse");
+                                     }
 
                                      *mailboxid = $2;
                                  }
@@ -659,9 +670,13 @@ mailboxid: MAILBOXID string      {
 
 
 /* REDIRECT tagged arguments */
-rtags: /* empty */               { $$ = new_command(REDIRECT, sscript); }
+rtags: /* empty */               {
+                                     $$ = new_command(B_REDIRECT, sscript);
+                                     copy = &($$->u.r.copy);
+                                 }
         | rtags copy
         | rtags LIST             {
+                                     $$ = $1;
                                      if ($$->u.r.list++) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -674,6 +689,7 @@ rtags: /* empty */               { $$ = new_command(REDIRECT, sscript); }
                                      }
                                  }
         | rtags delbytags        {
+                                     $$ = $1;
                                      if (!supported(SIEVE_CAPA_REDIR_DELBY)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -681,6 +697,7 @@ rtags: /* empty */               { $$ = new_command(REDIRECT, sscript); }
                                      }
                                  }
         | rtags dsntags          {
+                                     $$ = $1;
                                      if (!supported(SIEVE_CAPA_REDIR_DSN)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -695,9 +712,17 @@ delbytags: BYTIMEREL NUMBER      {
                                      commandlist_t *c = $<cl>0;
 
                                      if (c->u.r.bytime != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":bytime*");
+                                         if (isdigit(c->u.r.bytime[0])) {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_CONFLICTING_TAGS,
+                                                          ":bytimerelative",
+                                                          ":bytimeabsolute");
+                                         }
+                                         else {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_DUPLICATE_TAG,
+                                                          ":bytimerelative");
+                                         }
                                      }                                         
 
                                      struct buf buf = BUF_INITIALIZER;
@@ -709,10 +734,17 @@ delbytags: BYTIMEREL NUMBER      {
                                      commandlist_t *c = $<cl>0;
 
                                      if (c->u.r.bytime != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":bytimerelative"
-                                                      " OR :bytimeabsolute");
+                                         if (isdigit(c->u.r.bytime[0])) {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_DUPLICATE_TAG,
+                                                          ":bytimeabsolute");
+                                         }
+                                         else {
+                                             sieveerror_c(sscript,
+                                                          SIEVE_CONFLICTING_TAGS,
+                                                          ":bytimeabsolute",
+                                                          ":bytimerelative");
+                                         }
                                      }
 
                                      c->u.r.bytime = $2;
@@ -773,71 +805,78 @@ dsntags:  DSNNOTIFY string       {
 
 
 /* SET tagged arguments */
-stags: /* empty */               { $$ = new_command(SET, sscript); }
+stags: /* empty */               { $$ = new_command(B_SET, sscript); }
         | stags mod40            {
-                                     if ($$->u.s.mod40) {
+                                     $$ = $1;
+                                     if ($$->u.s.modifiers & BFV_MOD40_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 40 modifier");
                                      }
 
-                                     $$->u.s.mod40 = $2;
+                                     $$->u.s.modifiers |= $2;
                                  }
         | stags mod30            {
-                                     if ($$->u.s.mod30) {
+                                     $$ = $1;
+                                     if ($$->u.s.modifiers & BFV_MOD30_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 30 modifier");
                                      }
 
-                                     $$->u.s.mod30 = $2;
+                                     $$->u.s.modifiers |= $2;
                                  }
         | stags mod20            {
-                                     if ($$->u.s.mod20) {
+                                     $$ = $1;
+                                     if ($$->u.s.modifiers & BFV_MOD20_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 20 modifier");
                                      }
 
-                                     $$->u.s.mod20 = $2;
+                                     $$->u.s.modifiers |= $2;
                                  }
         | stags mod15            {
-                                     if ($$->u.s.mod15) {
+                                     $$ = $1;
+                                     if ($$->u.s.modifiers & BFV_MOD15_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 15 modifier");
                                      }
 
-                                     $$->u.s.mod15 = $2;
+                                     $$->u.s.modifiers |= $2;
                                  }
         | stags mod10            {
-                                     if ($$->u.s.mod10) {
+                                     $$ = $1;
+                                     if ($$->u.s.modifiers & BFV_MOD10_MASK) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "precedence 10 modifier");
                                      }
 
-                                     $$->u.s.mod10 = $2;
+                                     $$->u.s.modifiers |= $2;
                                  }
         ;
 
 
 /* SET modifiers */
-mod40:    LOWER
-        | UPPER
+mod40:    LOWER                 { $$ = BFV_LOWER; }
+        | UPPER                 { $$ = BFV_UPPER; }
         ;
 
-mod30:    LOWERFIRST
-        | UPPERFIRST
+mod30:    LOWERFIRST            { $$ = BFV_LOWERFIRST; }
+        | UPPERFIRST            { $$ = BFV_UPPERFIRST; }
         ;
 
-mod20:    QUOTEWILDCARD
+mod20:    QUOTEWILDCARD         { $$ = BFV_QUOTEWILDCARD; }
         | QUOTEREGEX            { 
                                      if (!supported(SIEVE_CAPA_REGEX)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "regex");
                                      }
+
+                                     $$ = BFV_QUOTEREGEX;
                                  }
 
         ;
@@ -848,16 +887,26 @@ mod15:    ENCODEURL              {
                                                       SIEVE_MISSING_REQUIRE,
                                                       "enotify");
                                      }
+
+                                     $$ = BFV_ENCODEURL;
                                  }
         ;
 
-mod10:    LENGTH
+mod10:    LENGTH                 { $$ = BFV_LENGTH; }
         ;
 
 
 /* VACATION tagged arguments */
-vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
+vtags: /* empty */               {
+                                     $$ = new_command(B_VACATION, sscript);
+                                     flags = &($$->u.v.fcc.flags);
+                                     create = &($$->u.v.fcc.create);
+                                     specialuse = &($$->u.v.fcc.t.specialuse);
+                                     mailboxid = &($$->u.v.fcc.t.mailboxid);
+                                     fccfolder = &($$->u.v.fcc.t.folder);
+                                 }
         | vtags DAYS NUMBER      {
+                                     $$ = $1;
                                      if ($$->u.v.seconds != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -867,6 +916,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.seconds = $3 * DAY2SEC;
                                  }
         | vtags SECONDS NUMBER   {
+                                     $$ = $1;
                                      if (!supported(SIEVE_CAPA_VACATION_SEC)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -881,6 +931,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.seconds = $3;
                                  }
         | vtags SUBJECT string   {
+                                     $$ = $1;
                                      if ($$->u.v.subject != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -891,6 +942,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.subject = $3;
                                  }
         | vtags FROM string      {
+                                     $$ = $1;
                                      if ($$->u.v.from != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -903,6 +955,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
         | vtags ADDRESSES stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.v.addresses != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -913,6 +966,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.addresses = $3;
                                  }
         | vtags MIME             {
+                                     $$ = $1;
                                      if ($$->u.v.mime != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -922,6 +976,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
                                      $$->u.v.mime = 1;
                                  }
         | vtags HANDLE string    {
+                                     $$ = $1;
                                      if ($$->u.v.handle != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -936,22 +991,12 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
 
 fcctags: FCC string              {
-                                     /* $0 refers to vtags or ntags */
-                                     commandlist_t *c = $<cl>0;
-                                     char **folder = NULL;
-
-                                     switch (c->type) {
-                                     case VACATION:
-                                         folder = &c->u.v.fcc.folder; break;
-                                     case ENOTIFY:
-                                         folder = &c->u.n.fcc.folder; break;
-                                     }
-
-                                     if (*folder != NULL) {
+                                     /* **fccfolder assigned by the calling rule */
+                                     if (*fccfolder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":fcc");
-                                         free(*folder);
+                                         free(*fccfolder);
                                      }
                                      else if (!supported(SIEVE_CAPA_FCC)) {
                                          sieveerror_c(sscript,
@@ -959,24 +1004,26 @@ fcctags: FCC string              {
                                                       "fcc");
                                      }
 
-                                     *folder = $2;
+                                     *fccfolder = $2;
                                  }
         | create
         | flags
         | specialuse
+        | mailboxid
         ;
 
 
 /* SET/ADD/REMOVEFLAG */
-flagaction: SETFLAG
-        | ADDFLAG
-        | REMOVEFLAG
+flagaction: SETFLAG              { $$ = B_SETFLAG;    }
+        | ADDFLAG                { $$ = B_ADDFLAG;    }
+        | REMOVEFLAG             { $$ = B_REMOVEFLAG; }
         ;
 
 
 /* SET/ADD/REMOVEFLAG tagged arguments - $0 refers to flagaction */
 flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
         | flagtags string        {
+                                     $$ = $1;
                                      if ($$->u.fl.variable != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_ARG,
@@ -994,15 +1041,10 @@ flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
         ;
 
 
-/* MARK/UNMARK */
-flagmark: MARK
-        | UNMARK
-        ;
-
-
 /* ADDHEADER tagged arguments */
-ahtags: /* empty */              { $$ = new_command(ADDHEADER, sscript); }
+ahtags: /* empty */              { $$ = new_command(B_ADDHEADER, sscript); }
         | ahtags LAST            {
+                                     $$ = $1;
                                      if ($$->u.ah.index < 0) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1015,31 +1057,34 @@ ahtags: /* empty */              { $$ = new_command(ADDHEADER, sscript); }
 
 
 /* DELETEHEADER tagged arguments */
-dhtags: /* empty */              { $$ = new_command(DELETEHEADER, sscript);}
-        | dhtags { ctags = &($1->u.dh.comp); } matchtype
-        | dhtags { ctags = &($1->u.dh.comp); } listmatch
-        | dhtags { ctags = &($1->u.dh.comp); } comparator
-        | dhtags { ctags = &($1->u.dh.comp); } idxtags
+dhtags: /* empty */              {
+                                     $$ = new_command(B_DELETEHEADER, sscript);
+                                     ctags = &($$->u.dh.comp);
+                                 }
+        | dhtags matchtype
+        | dhtags listmatch
+        | dhtags comparator
+        | dhtags index
         ;
 
 
 /* REJECT/EREJECT */
-reject:   REJCT
-        | EREJECT
+reject:   REJCT                  { $$ = B_REJECT;  }
+        | EREJECT                { $$ = B_EREJECT; }
         ;
 
 
-/* NOTIFY tagged arguments
- *
- * Haven't been able to find a way to split the allowed tags for enotify
- * and legacy notify without creating a shift/reduce conflict, so we
- * try to police it during parsing.  Note that this allows :importance
- * and :low/:normal/:high to be used with the incorrect notify flavor.
- */
-ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
-
-        /* enotify-only tagged arguments */
+/* NOTIFY tagged arguments */
+ntags: /* empty */               {
+                                     $$ = new_command(B_ENOTIFY, sscript);
+                                     flags = &($$->u.n.fcc.flags);
+                                     create = &($$->u.n.fcc.create);
+                                     specialuse = &($$->u.n.fcc.t.specialuse);
+                                     mailboxid = &($$->u.n.fcc.t.mailboxid);
+                                     fccfolder = &($$->u.n.fcc.t.folder);
+                                 }
         | ntags FROM string      {
+                                     $$ = $1;
                                      if ($$->u.n.from != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1052,6 +1097,7 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
         | ntags IMPORTANCE priority
                                  {
+                                     $$ = $1;
                                      if ($$->u.n.priority != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1060,41 +1106,8 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
                                      $$->u.n.priority = $3;
                                  }
-        | ntags fcctags
-
-        /* legacy-only tagged arguments */
-        | ntags ID string        {
-                                     if ($$->u.n.id != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":id");
-                                         free($$->u.n.id);
-                                     }
-
-                                     $$->u.n.id = $3;
-                                 }
-        | ntags METHOD string    {
-                                     if ($$->u.n.method != NULL) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":method");
-                                         free($$->u.n.method);
-                                     }
-
-                                     $$->u.n.method = $3;
-                                 }
-        | ntags priority         {
-                                     if ($$->u.n.priority != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      "priority");
-                                     }
-
-                                     $$->u.n.priority = $2;
-                                 }
-
-        /* common tagged arguments */
         | ntags MESSAGE string   {
+                                     $$ = $1;
                                      if ($$->u.n.message != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1107,6 +1120,7 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
         | ntags OPTIONS stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.n.options != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1116,119 +1130,94 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
                                      $$->u.n.options = $3;
                                  }
+        | ntags fcctags
         ;
 
 
-/* priority tag or :importance value */
-priority: LOW
-        | NORMAL
-        | HIGH
-        ;
-
-
-/* DENOTIFY tagged arguments */
-dtags: /* empty */               { $$ = new_command(DENOTIFY, sscript); }
-        | dtags priority         {
-                                     if ($$->u.d.priority != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      "priority");
-                                     }
-
-                                     $$->u.d.priority = $2;
-                                 }
-
-        | dtags { ctags = &($1->u.d.comp); } matchtype string
-                                 {
-                                     if ($$->u.d.pattern) free($$->u.d.pattern);
-                                     $$->u.d.pattern = $4;
-                                 }
-        ;
-
-
-/* INCLUDE tagged arguments */
-itags: /* empty */               { $$ = new_command(INCLUDE, sscript); }
-        | itags location         {
-                                     if ($$->u.inc.location != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      "location");
-                                     }
-
-                                     $$->u.inc.location = $2;
-                                 }
-        | itags ONCE             {
-                                     if ($$->u.inc.once != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":once");
-                                     }
-
-                                     $$->u.inc.once = 1;
-                                 }
-        | itags OPTIONAL         {
-                                     if ($$->u.inc.optional != -1) {
-                                         sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      ":optional");
-                                     }
-
-                                     $$->u.inc.optional = 1;
-                                 }
-        ;
-
-
-/* location tags */
-location: PERSONAL
-        | GLOBAL
+/* :importance value */
+priority: LOW                    { $$ = B_LOW;    }
+        | NORMAL                 { $$ = B_NORMAL; }
+        | HIGH                   { $$ = B_HIGH;   }
         ;
 
 
 /* SNOOZE tagged arguments */
-sntags: /* empty */              { $$ = new_command(SNOOZE, sscript); }
+sntags: /* empty */              {
+                                     $$ = new_command(B_SNOOZE, sscript);
+                                     create = &($$->u.sn.f.create);
+                                     specialuse = &($$->u.sn.f.t.specialuse);
+                                     mailboxid = &($$->u.sn.f.t.mailboxid);
+                                 }
         | sntags MAILBOX string  {
-                                     if ($$->u.sn.mailbox != NULL) {
+                                     $$ = $1;
+                                     if ($$->u.sn.f.t.folder != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":mailbox");
-                                         free($$->u.sn.mailbox);
+                                         free($$->u.sn.f.t.folder);
                                      }
 
-                                     $$->u.sn.mailbox = $3;
+                                     $$->u.sn.f.t.folder = $3;
                                  }
-        | sntags mailboxid       { $$->u.sn.is_mboxid = 1; }
+        | sntags create
+        | sntags specialuse
+        | sntags mailboxid
 
         | sntags ADDFLAGS stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.sn.addflags != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":addflags");
                                          free($$->u.sn.addflags);
                                      }
+                                     else if (!supported(SIEVE_CAPA_IMAP4FLAGS)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "imap4flags");
+                                     }
 
                                      $$->u.sn.addflags = $3;
                                  }
         | sntags REMOVEFLAGS stringlist
                                  {
+                                     $$ = $1;
                                      if ($$->u.sn.removeflags != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":removeflags");
                                          free($$->u.sn.removeflags);
                                      }
+                                     else if (!supported(SIEVE_CAPA_IMAP4FLAGS)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "imap4flags");
+                                     }
 
                                      $$->u.sn.removeflags = $3;
                                  }
-        | sntags DAYSOFWEEK weekdaylist
+        | sntags WEEKDAYS weekdaylist
                                  {
+                                     $$ = $1;
                                      if ($$->u.sn.days != 0) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
-                                                      ":daysofweek");
+                                                      ":weekdays");
                                      }
 
                                      $$->u.sn.days = $3;
+                                 }
+        | sntags TZID string     {
+                                     $$ = $1;
+                                     if ($$->u.sn.tzid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":tzid");
+                                         free($$->u.sn.tzid);
+                                     }
+
+                                     $$->u.sn.tzid = $3;
                                  }
         ;
 
@@ -1268,6 +1257,181 @@ time: STRING                     { $$ = verify_time(sscript, $1); }
         ;
 
 
+/* PROCESSCALENDAR tagged arguments */
+caltags: /* empty */             {
+                                     /* legacy assigned by the calling rule */
+                                     $$ = new_command(B_PROCESSCAL, sscript);
+                                     if (legacy) {
+                                         $$->u.cal.allow_public = 1;
+                                     }
+                                 }
+        | caltags ALLOWPUBLIC    {
+                                     $$ = $1;
+                                     if ($$->u.cal.allow_public) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":allowpublic");
+                                     }
+
+                                     $$->u.cal.allow_public = 1;
+                                 }
+        | caltags INVITESONLY    {
+                                     $$ = $1;
+                                     if ($$->u.cal.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":invitesonly");
+                                     }
+                                     else if ($$->u.cal.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.cal.delete_cancelled) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":deletecancelled");
+                                     }
+
+                                     $$->u.cal.invites_only = 1;
+                                 }
+        | caltags UPDATESONLY    {
+                                     $$ = $1;
+                                     if ($$->u.cal.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.cal.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":updatesonly");
+                                     }
+                                     else if ($$->u.cal.calendarid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":updatesonly",
+                                                      ":calendarid");
+                                     }
+
+                                     $$->u.cal.updates_only = 1;
+                                 }
+
+        | caltags DELETECANCELLED
+                                 {
+                                     $$ = $1;
+                                     if ($$->u.cal.delete_cancelled) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":deletecancelled");
+                                     }
+                                     else if ($$->u.cal.invites_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":invitesonly",
+                                                      ":deletecancelled");
+                                     }
+
+                                     $$->u.cal.delete_cancelled = 1;
+                                 }
+
+        | caltags ADDRESSES stringlist
+                                 {
+                                     $$ = $1;
+                                     if ($$->u.cal.addresses != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":addresses");
+                                         strarray_free($$->u.cal.addresses);
+                                     }
+
+                                     $$->u.cal.addresses = $3;
+                                 }
+        | caltags ORGANIZERS string
+                                 {
+                                     $$ = $1;
+                                     if ($$->u.cal.organizers != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":organizers");
+                                         free($$->u.cal.organizers);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_EXTLISTS)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "extlists");
+                                     }
+
+                                     $$->u.cal.organizers = $3;
+                                 }
+
+        | caltags CALENDARID string
+                                 {
+                                     $$ = $1;
+                                     if ($$->u.cal.calendarid != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":calendarid");
+                                         free($$->u.cal.calendarid);
+                                     }
+                                     else if ($$->u.cal.updates_only) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":updatesonly",
+                                                      ":calendarid");
+                                     }
+
+                                     $$->u.cal.calendarid = $3;
+                                 }
+        | caltags OUTCOME string {
+                                     $$ = $1;
+                                     if ($$->u.cal.outcome_var != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":outcome");
+                                         free($$->u.cal.outcome_var);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.cal.outcome_var = $3;
+                                 }
+        | caltags REASON string  {
+                                     $$ = $1;
+                                     if ($$->u.cal.reason_var != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":reason");
+                                         free($$->u.cal.reason_var);
+                                     }
+                                     else if (!supported(SIEVE_CAPA_VARIABLES)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "variables");
+                                     }
+
+                                     $$->u.cal.reason_var = $3;
+                                 }
+        ;
+
+
+/* IKEEP_TARGET tagged arguments */
+ikttags: /* empty */             {
+                                     $$ = new_command(B_IKEEP_TARGET, sscript);
+                                     specialuse = &($$->u.ikt.specialuse);
+                                     mailboxid = &($$->u.ikt.mailboxid);
+                                 }
+        | ikttags specialuse
+        | ikttags mailboxid
+        ;
+
+
 /*
  * Test commands
  */
@@ -1283,16 +1447,21 @@ tests: test                      { $$ = new_testlist($1, NULL); }
 test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
         | ALLOF testlist         { $$ = build_allof(sscript, $2); }
         | NOT test               { $$ = build_not(sscript, $2);   }
-        | SFALSE                 { $$ = new_test(SFALSE, sscript); }
-        | STRUE                  { $$ = new_test(STRUE, sscript);  }
+        | SFALSE                 { $$ = new_test(BC_FALSE, sscript); }
+        | STRUE                  { $$ = new_test(BC_TRUE, sscript);  }
         | EXISTS stringlist      {
-                                     $$ = new_test(EXISTS, sscript);
+                                     $$ = new_test(BC_EXISTS, sscript);
                                      $$->u.sl = $2;
+                                     $$->nargs = bc_precompile($$->args, "S",
+                                                               $$->u.sl);
                                  }
         | SIZE sizetag NUMBER    {
-                                     $$ = new_test(SIZE, sscript);
+                                     $$ = new_test(BC_SIZE, sscript);
                                      $$->u.sz.t = $2;
                                      $$->u.sz.n = $3;
+                                     $$->nargs = bc_precompile($$->args, "ii",
+                                                               $$->u.sz.t,
+                                                               $$->u.sz.n);
                                  }
 
         | HEADERT htags stringlist stringlist
@@ -1321,16 +1490,18 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
         | HASFLAG hftags stringlist
                                  { $$ = build_hasflag(sscript, $2, NULL, $3); }
 
-        /* getdatepart variable is used to change the start state of the lexer */
-        | DATE dttags string { getdatepart = 1; } datepart stringlist
-                                 { $$ = build_date(sscript, $2, $3, $5, $6); }
+        | DATE dttags string string stringlist
+                                 { $$ = build_date(sscript, $2, $3, $4, $5); }
 
-        | CURRENTDATE cdtags datepart stringlist
+        | CURRENTDATE cdtags string stringlist
                                  { $$ = build_date(sscript, $2, NULL, $3, $4); }
+
         | VALIDNOTIFYMETHOD stringlist
                                  {
-                                     $$ = new_test(VALIDNOTIFYMETHOD, sscript);
+                                     $$ = new_test(BC_VALIDNOTIFYMETHOD, sscript);
                                      $$->u.sl = $2;
+                                     $$->nargs = bc_precompile($$->args, "S",
+                                                               $$->u.sl);
                                  }
         | NOTIFYMETHODCAPABILITY methtags string string stringlist
                                  { $$ = build_mbox_meta(sscript,
@@ -1340,29 +1511,29 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
 
         | MAILBOXEXISTS stringlist
                                  {
-                                     $$ = new_test(MAILBOXEXISTS, sscript);
+                                     $$ = new_test(BC_MAILBOXEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, NULL, NULL, $2);
                                  }
 
-        | METADATA mtags string string stringlist
+        | METADATA { bctype = BC_METADATA; } mtags string string stringlist
                                  { $$ = build_mbox_meta(sscript,
-                                                        $2, $3, $4, $5); }
+                                                        $3, $4, $5, $6); }
 
         | METADATAEXISTS string stringlist
                                  {
-                                     $$ = new_test(METADATAEXISTS, sscript);
+                                     $$ = new_test(BC_METADATAEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, $2, NULL, $3);
                                  }
 
-        | SERVERMETADATA mtags string stringlist
+        | SERVERMETADATA { bctype = BC_SERVERMETADATA; } mtags string stringlist
                                  { $$ = build_mbox_meta(sscript,
-                                                        $2, NULL, $3, $4); }
+                                                        $3, NULL, $4, $5); }
 
         | SERVERMETADATAEXISTS stringlist
                                  {
-                                     $$ = new_test(SERVERMETADATAEXISTS,
+                                     $$ = new_test(BC_SERVERMETADATAEXISTS,
                                                    sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, NULL, NULL, $2);
@@ -1370,61 +1541,67 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
 
         | VALIDEXTLIST stringlist
                                  {
-                                     $$ = new_test(VALIDEXTLIST, sscript);
+                                     $$ = new_test(BC_VALIDEXTLIST, sscript);
                                      $$->u.sl = $2;
+                                     $$->nargs = bc_precompile($$->args, "S",
+                                                               $$->u.sl);
                                  }
         | DUPLICATE duptags      { $$ = build_duplicate(sscript, $2); }
 
         | SPECIALUSEEXISTS stringlist
                                  { 
-                                     $$ = new_test(SPECIALUSEEXISTS, sscript);
+                                     $$ = new_test(BC_SPECIALUSEEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, NULL, NULL, $2);
                                  }
 
         | SPECIALUSEEXISTS string stringlist
                                  {
-                                     $$ = new_test(SPECIALUSEEXISTS, sscript);
+                                     $$ = new_test(BC_SPECIALUSEEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, $2, NULL, $3);
                                  }
 
         | MAILBOXIDEXISTS stringlist
                                  {
-                                     $$ = new_test(MAILBOXIDEXISTS, sscript);
+                                     $$ = new_test(BC_MAILBOXIDEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, NULL, NULL, $2);
                                  }
 
         | JMAPQUERY string       {
-                                     $$ = new_test(JMAPQUERY, sscript);
+                                     $$ = new_test(BC_JMAPQUERY, sscript);
                                      $$ = build_jmapquery(sscript, $$, $2);
                                  }
 
-        | error                  { $$ = new_test(SFALSE, sscript); }
+        | error                  { $$ = new_test(BC_FALSE, sscript); }
         ;
 
 
 /* SIZE tagged arguments */
-sizetag:  OVER
-        | UNDER
+sizetag:  OVER                   { $$ = B_OVER;  }
+        | UNDER                  { $$ = B_UNDER; }
         ;
 
 
 /* HEADER tagged arguments */
-htags: /* empty */               { $$ = new_test(HEADERT, sscript); }
-        | htags { ctags = &($1->u.hhs.comp); } matchtype
-        | htags { ctags = &($1->u.hhs.comp); } listmatch
-        | htags { ctags = &($1->u.hhs.comp); } comparator
-        | htags { ctags = &($1->u.hhs.comp); } idxtags
+htags: /* empty */               {
+                                     $$ = new_test(BC_HEADER, sscript);
+                                     ctags = &($$->u.hhs.comp);
+                                 }
+        | htags matchtype
+        | htags listmatch
+        | htags comparator
+        | htags indexext
         ;
 
 
 /* All match-types except for :list */
 matchtype: matchtag              {
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "match-type");
                                      }
 
@@ -1432,8 +1609,8 @@ matchtype: matchtag              {
                                  }
         | relmatch relation
                                  {
-                                     if (ctags->match != COUNT &&
-                                         ctags->match != VALUE &&
+                                     if (ctags->match != B_COUNT &&
+                                         ctags->match != B_VALUE &&
                                          !supported(SIEVE_CAPA_RELATIONAL)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -1441,7 +1618,7 @@ matchtype: matchtag              {
                                      }
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "match-type");
                                      }
 
@@ -1452,38 +1629,41 @@ matchtype: matchtag              {
 
 
 /* match-type tags */
-matchtag: IS
-        | CONTAINS
-        | MATCHES
+matchtag: IS                     { $$ = B_IS;       }
+        | CONTAINS               { $$ = B_CONTAINS; }
+        | MATCHES                { $$ = B_MATCHES;  }
         | REGEX                  {
                                      if (!supported(SIEVE_CAPA_REGEX)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
                                                       "regex");
                                      }
+
+                                     $$ = B_REGEX;
                                  }
         ;
 
 
 /* Relational match-type tags */
-relmatch: COUNT
-        | VALUE
+relmatch: COUNT                  { $$ = B_COUNT; }
+        | VALUE                  { $$ = B_VALUE; }
         ;
 
 
 /* relational-match */
-relation: EQ
-        | NE
-        | GT
-        | GE
-        | LT
-        | LE
+relation: EQ                     { $$ = B_EQ; }
+        | NE                     { $$ = B_NE; }
+        | GT                     { $$ = B_GT; }
+        | GE                     { $$ = B_GE; }
+        | LT                     { $$ = B_LT; }
+        | LE                     { $$ = B_LE; }
         ;
 
 
 /* :list match-type */
 listmatch: LIST                  {
-                                     if (ctags->match != LIST &&
+                                     /* *ctags assigned by the calling rule */
+                                     if (ctags->match != B_LIST &&
                                          !supported(SIEVE_CAPA_EXTLISTS)) {
                                          sieveerror_c(sscript,
                                                       SIEVE_MISSING_REQUIRE,
@@ -1491,11 +1671,11 @@ listmatch: LIST                  {
                                      }
                                      if (ctags->match != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "match-type");
                                      }
 
-                                     ctags->match = LIST;
+                                     ctags->match = B_LIST;
                                  }
         ;
 
@@ -1503,6 +1683,7 @@ listmatch: LIST                  {
 /* :comparator */
 comparator: COMPARATOR collation
                                  {
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->collation != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1515,8 +1696,8 @@ comparator: COMPARATOR collation
 
 
 /* comparator-types */
-collation: OCTET
-        | ASCIICASEMAP
+collation: OCTET                 { $$ = B_OCTET;        }
+        | ASCIICASEMAP           { $$ = B_ASCIICASEMAP; }
         | ASCIINUMERIC           {
                                      if (!supported(SIEVE_CAPA_COMP_NUMERIC)) {
                                          sieveerror_c(sscript,
@@ -1524,14 +1705,38 @@ collation: OCTET
                                                       "comparator-"
                                                       "i;ascii-numeric");
                                      }
+
+                                     $$ = B_ASCIINUMERIC;
+                                 }
+        | UNICODECASEMAP         {
+                                     if (!supported(SIEVE_CAPA_COMP_UCASEMAP)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "comparator-"
+                                                      "i;unicode-casemap");
+                                     }
+
+                                     $$ = B_UNICODECASEMAP;
                                  }
         ;
 
 
 /* Index tags */
-idxtags: INDEX NUMBER            {
+indexext: index                  {
+                                     /* *ctags assigned by the calling rule */
+                                     if (ctags->index != 0 &&
+                                         !supported(SIEVE_CAPA_INDEX)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "index");
+                                     }
+                                 }
+        ;
+
+index: INDEX NUMBER              {
+                                     /* *ctags assigned by the calling rule */
                                      if (ctags->index == INT_MIN) {
-                                         /* :last before :index */
+                                         /* parsed :last before :index */
                                          ctags->index = -$2;
                                      }
                                      else if (ctags->index != 0) {
@@ -1540,12 +1745,6 @@ idxtags: INDEX NUMBER            {
                                                       ":index");
                                      }
                                      else {
-                                       if (!supported(SIEVE_CAPA_INDEX)) {
-                                             sieveerror_c(sscript,
-                                                          SIEVE_MISSING_REQUIRE,
-                                                          "index");
-                                         }
-
                                          ctags->index = $2;
                                      }
                                  }
@@ -1558,14 +1757,9 @@ idxtags: INDEX NUMBER            {
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":last");
                                      }
-                                     else if (ctags->index == 0) {
-                                       if (!supported(SIEVE_CAPA_INDEX)) {
-                                             sieveerror_c(sscript,
-                                                          SIEVE_MISSING_REQUIRE,
-                                                          "index");
-                                         }
-
-                                         /* :last before :index */
+                                     else {
+                                         /* special value to indicate that
+                                            we parsed :last before :index */
                                          ctags->index = INT_MIN;
                                      }
                                  }
@@ -1573,12 +1767,15 @@ idxtags: INDEX NUMBER            {
 
 
 /* ADDRESS tagged arguments */
-atags: /* empty */               { $$ = new_test(ADDRESS, sscript); }
+atags: /* empty */               {
+                                     $$ = new_test(BC_ADDRESS, sscript);
+                                     ctags = &($$->u.ae.comp);
+                                 }
         | atags addrpart
-        | atags { ctags = &($1->u.ae.comp); } matchtype
-        | atags { ctags = &($1->u.ae.comp); } listmatch
-        | atags { ctags = &($1->u.ae.comp); } comparator
-        | atags { ctags = &($1->u.ae.comp); } idxtags
+        | atags matchtype
+        | atags listmatch
+        | atags comparator
+        | atags indexext
         ;
 
 
@@ -1589,7 +1786,7 @@ addrpart: addrparttag           {
 
                                      if (test->u.ae.addrpart != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "address-part");
                                      }
 
@@ -1598,9 +1795,9 @@ addrpart: addrparttag           {
 
 
 /* address-part tags */
-addrparttag: ALL
-        | LOCALPART
-        | DOMAIN
+addrparttag: ALL                 { $$ = B_ALL;       }
+        | LOCALPART              { $$ = B_LOCALPART; }
+        | DOMAIN                 { $$ = B_DOMAIN;    }
         | subaddress             {
                                      if (!supported(SIEVE_CAPA_SUBADDRESS)) {
                                          sieveerror_c(sscript,
@@ -1612,33 +1809,42 @@ addrparttag: ALL
 
 
 /* subaddress-part tags */
-subaddress: USER
-        | DETAIL
+subaddress: USER                 { $$ = B_USER;   }
+        | DETAIL                 { $$ = B_DETAIL; }
         ;
 
 
 /* ENVELOPE tagged arguments */
-etags: /* empty */               { $$ = new_test(ENVELOPE, sscript); }
+etags: /* empty */               {
+                                     $$ = new_test(BC_ENVELOPE, sscript);
+                                     ctags = &($$->u.ae.comp);
+                                 }
         | etags addrpart
-        | etags { ctags = &($1->u.ae.comp); } matchtype
-        | etags { ctags = &($1->u.ae.comp); } listmatch
-        | etags { ctags = &($1->u.ae.comp); } comparator
+        | etags matchtype
+        | etags listmatch
+        | etags comparator
         ;
 
 
 /* ENVIRONMENT tagged arguments */
-envtags: /* empty */               { $$ = new_test(ENVIRONMENT, sscript); }
-        | envtags { ctags = &($1->u.mm.comp); } matchtype
-        | envtags { ctags = &($1->u.mm.comp); } comparator
+envtags: /* empty */             {
+                                     $$ = new_test(BC_ENVIRONMENT, sscript);
+                                     ctags = &($$->u.mm.comp);
+                                 }
+        | envtags matchtype
+        | envtags comparator
         ;
 
 
 /* BODY tagged arguments */
-btags: /* empty */               { $$ = new_test(BODY, sscript); }
+btags: /* empty */               {
+                                     $$ = new_test(BC_BODY, sscript);
+                                     ctags = &($$->u.b.comp);
+                                 }
         | btags transform        {
                                      if ($$->u.b.transform != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "transform");
                                      }
 
@@ -1649,123 +1855,125 @@ btags: /* empty */               { $$ = new_test(BODY, sscript); }
                                  {
                                      if ($$->u.b.transform != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
+                                                      SIEVE_MULTIPLE_TAGS,
                                                       "transform");
                                          strarray_free($$->u.b.content_types);
                                      }
 
-                                     $$->u.b.transform = CONTENT;
+                                     $$->u.b.transform = B_CONTENT;
                                      $$->u.b.content_types = $3;
                                  }
 
-        | btags { ctags = &($1->u.b.comp); } matchtype
-        | btags { ctags = &($1->u.b.comp); } comparator
+        | btags matchtype
+        | btags comparator
         ;
 
 
 /* body-transform tags */
-transform: RAW
-        | TEXT
+transform: RAW                   { $$ = B_RAW;  }
+        | TEXT                   { $$ = B_TEXT; }
         ;
 
 
 /* STRING tagged arguments */
-strtags: /* empty */             { $$ = new_test(STRINGT, sscript); }
-        | strtags { ctags = &($1->u.hhs.comp); } matchtype
-        | strtags { ctags = &($1->u.hhs.comp); } listmatch
-        | strtags { ctags = &($1->u.hhs.comp); } comparator
+strtags: /* empty */             {
+                                     $$ = new_test(BC_STRING, sscript);
+                                     ctags = &($$->u.hhs.comp);
+                                 }
+        | strtags matchtype
+        | strtags listmatch
+        | strtags comparator
         ;
 
 
 /* HASFLAG tagged arguments */
-hftags: /* empty */              { $$ = new_test(HASFLAG, sscript); }
-        | hftags { ctags = &($1->u.hhs.comp); } matchtype
-        | hftags { ctags = &($1->u.hhs.comp); } comparator
+hftags: /* empty */              {
+                                     $$ = new_test(BC_HASFLAG, sscript);
+                                     ctags = &($$->u.hhs.comp);
+                                 }
+        | hftags matchtype
+        | hftags comparator
         ;
 
 
 /* DATE tagged arguments */
-dttags: /* empty */              { $$ = new_test(DATE, sscript); }
+dttags: /* empty */              {
+                                     $$ = new_test(BC_DATE, sscript);
+                                     ctags = &($$->u.dt.comp);
+                                 }
         | dttags zone
         | dttags ORIGINALZONE    {
-                                     if ($$->u.dt.zonetag != -1) {
+                                     if ($$->u.dt.zone.tag != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":originalzone");
                                      }
 
-                                     $$->u.dt.zonetag = ORIGINALZONE;
+                                     $$->u.dt.zone.tag = B_ORIGINALZONE;
                                  }
-        | dttags { ctags = &($1->u.dt.comp); } matchtype
-        | dttags { ctags = &($1->u.dt.comp); } comparator
-        | dttags { ctags = &($1->u.dt.comp); } idxtags
+        | dttags matchtype
+        | dttags comparator
+        | dttags indexext
         ;
 
 
 /* :zone */
-zone: ZONE TIMEZONE              {
+zone: ZONE string                {
                                      /* $0 refers to a test_t* ([CURRENT]DATE)*/
                                      test_t *test = $<test>0;
 
-                                     if (test->u.dt.zonetag != -1) {
+                                     if (test->u.dt.zone.tag != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":zone");
                                      }
 
-                                     test->u.dt.zonetag = ZONE;
-                                     test->u.dt.zone = $2;
+                                     test->u.dt.zone.tag = B_TIMEZONE;
+                                     test->u.dt.zone.offset = $2;
                                  }
         ;
 
 
 /* CURRENTDATE tagged arguments */
-cdtags: /* empty */              { $$ = new_test(CURRENTDATE, sscript); }
+cdtags: /* empty */              {
+                                     $$ = new_test(BC_CURRENTDATE, sscript);
+                                     ctags = &($$->u.dt.comp);
+                                 }
         | cdtags zone
-        | cdtags { ctags = &($1->u.dt.comp); } matchtype
-        | cdtags { ctags = &($1->u.dt.comp); } comparator
-        ;
-
-
-/* date-parts */
-datepart: YEARP
-        | MONTHP
-        | DAYP
-        | DATEP
-        | JULIAN
-        | HOURP
-        | MINUTEP
-        | SECONDP
-        | TIMEP
-        | ISO8601
-        | STD11
-        | ZONEP
-        | WEEKDAYP
+        | cdtags matchtype
+        | cdtags comparator
         ;
 
 
 /* NOTIFYMETHODCAPABILITY tagged arguments */
-methtags: /* empty */            { $$ = new_test(NOTIFYMETHODCAPABILITY, sscript); }
-        | methtags { ctags = &($1->u.mm.comp); } matchtype
-        | methtags { ctags = &($1->u.mm.comp); } comparator
+methtags: /* empty */            {
+                                     $$ = new_test(BC_NOTIFYMETHODCAPABILITY,
+                                                   sscript);
+                                     ctags = &($$->u.mm.comp);
+                                 }
+        | methtags matchtype
+        | methtags comparator
         ;
 
 
-/* [SERVER]METADATA tagged arguments - $0 refers to [SERVER]METADATA */
-mtags: /* empty */               { $$ = new_test($<nval>0, sscript); }
-        | mtags { ctags = &($1->u.mm.comp); } matchtype
-        | mtags { ctags = &($1->u.mm.comp); } comparator
+/* [SERVER]METADATA tagged arguments */
+mtags: /* empty */               {
+                                     /* bctype assigned by the calling rule */
+                                     $$ = new_test(bctype, sscript);
+                                     ctags = &($$->u.mm.comp);
+                                 }
+        | mtags matchtype
+        | mtags comparator
         ;
 
 
 /* DUPLICATE tagged arguments */
-duptags: /* empty */             { $$ = new_test(DUPLICATE, sscript); }
+duptags: /* empty */             { $$ = new_test(BC_DUPLICATE, sscript); }
         | duptags idtype string  {
                                      if ($$->u.dup.idtype != -1) {
                                          sieveerror_c(sscript,
-                                                      SIEVE_DUPLICATE_TAG,
-                                                      $2 == HEADER ?
-                                                      ":header" : ":uniqueid");
+                                                      SIEVE_CONFLICTING_TAGS,
+                                                      ":header", ":uniqueid");
                                          free($$->u.dup.idval);
                                      }
 
@@ -1804,8 +2012,8 @@ duptags: /* empty */             { $$ = new_test(DUPLICATE, sscript); }
 
 
 /* DUPLICATE idtypes */
-idtype:   HEADER
-        | UNIQUEID
+idtype:   HEADER                 { $$ = B_HEADER;   }
+        | UNIQUEID               { $$ = B_UNIQUEID; }
         ;
 
 
@@ -1828,15 +2036,19 @@ void yyerror(sieve_script_t *sscript, const char *msg)
 }
 
 
-static void vsieveerror_f(sieve_script_t *sscript,
-                          const char *fmt, va_list args)
+static void
+__attribute__((format(printf, 2, 0)))
+vsieveerror_f(sieve_script_t *sscript,
+              const char *fmt, va_list args)
 {
     buf_reset(&sscript->sieveerr);
     buf_vprintf(&sscript->sieveerr, fmt, args);
     yyerror(sscript, buf_cstring(&sscript->sieveerr));
 }
 
-void sieveerror_f(sieve_script_t *sscript, const char *fmt, ...)
+void
+__attribute__((format(printf, 2, 3)))
+sieveerror_f(sieve_script_t *sscript, const char *fmt, ...)
 {
     va_list args;
 
@@ -2027,20 +2239,28 @@ static int verify_regexlist(sieve_script_t *sscript,
                             const strarray_t *sa, int collation)
 {
     int i, ret = 0;
-    regex_t reg;
     int cflags = REG_EXTENDED | REG_NOSUB;
 
-#ifdef HAVE_PCREPOSIX_H
     /* support UTF8 comparisons */
+#if defined HAVE_PCREPOSIX_H
     cflags |= REG_UTF8;
+#elif defined HAVE_PCRE2POSIX_H
+    cflags |= REG_UTF;
 #endif
 
-    if (collation == ASCIICASEMAP) {
+    if (collation == B_ASCIICASEMAP) {
         cflags |= REG_ICASE;
     }
 
     for (i = 0 ; !ret && i < strarray_size(sa) ; i++) {
-        if ((ret = regcomp(&reg, strarray_nth(sa, i), cflags)) != 0) {
+        const char *s = strarray_nth(sa, i);
+        regex_t reg = {0};
+
+        /* Don't try to validate a regex that includes variables */
+        if (supported(SIEVE_CAPA_VARIABLES) && strstr(s, "${")) continue;
+
+        /* Check if the regex will compile */
+        if ((ret = regcomp(&reg, s, cflags)) != 0) {
             size_t errbuf_size = regerror(ret, &reg, NULL, 0);
 
             buf_reset(&sscript->sieveerr);
@@ -2075,7 +2295,7 @@ static int verify_patternlist(sieve_script_t *sscript,
 
     canon_comptags(c, sscript);
 
-    return (c->match == REGEX) ?
+    return (c->match == B_REGEX) ?
         verify_regexlist(sscript, sa, c->collation) : 1;
 }
 
@@ -2128,15 +2348,15 @@ static int verify_header(sieve_script_t *sscript, char *hdr)
 static int verify_addrheader(sieve_script_t *sscript, char *hdr)
 {
     const char **h, *hdrs[] = {
-        "from", "sender", "reply-to",   /* RFC5322 originator fields */
-        "to", "cc", "bcc",              /* RFC5322 destination fields */
-        "message-id", "in-reply-to",    /* RFC5322 identification fields */
-        "references"
-        "resent-from", "resent-sender", /* RFC5322 resent fields */
+        "from", "sender", "reply-to",   /* RFC 5322 originator fields */
+        "to", "cc", "bcc",              /* RFC 5322 destination fields */
+        "message-id", "in-reply-to",    /* RFC 5322 identification fields */
+        "references",
+        "resent-from", "resent-sender", /* RFC 5322 resent fields */
         "resent-to", "resent-cc", "resent-bcc",
-        "return-path",                  /* RFC5322 trace fields */
-        "disposition-notification-to",  /* RFC8098 MDN request fields */
-        "approved",                     /* RFC5536 moderator/control fields */
+        "return-path",                  /* RFC 5322 trace fields */
+        "disposition-notification-to",  /* RFC 8098 MDN request fields */
+        "approved",                     /* RFC 5536 moderator/control fields */
         "delivered-to",                 /* non-standard (loop detection) */
         NULL
     };
@@ -2210,13 +2430,78 @@ static int check_reqs(sieve_script_t *sscript, strarray_t *sa)
     return ret;
 }
 
+/* take a format string and a variable list of arguments
+   and populate the command arguments array */
+static unsigned bc_precompile(cmdarg_t args[], const char *fmt, ...)
+{
+    va_list ap;
+    unsigned n = 0;
+
+    va_start(ap, fmt);
+    for (n = 0; *fmt; fmt++, n++) {
+        args[n].type = *fmt;
+
+        switch (*fmt) {
+        case 'i':
+            args[n].u.i = va_arg(ap, int);
+            break;
+        case 's':
+            args[n].u.s = va_arg(ap, const char *);
+            break;
+        case 'S':
+            args[n].u.sa = va_arg(ap, const strarray_t *);
+            break;
+        case 'U':
+            args[n].u.ua = va_arg(ap, const arrayu64_t *);
+            break;
+        case 't':
+            args[n].u.t = va_arg(ap, const test_t *);
+            break;
+        case 'T':
+            args[n].u.tl = va_arg(ap, const testlist_t *);
+            break;
+        case 'C': {
+            /* Expand the comparator into its component parts */
+            const comp_t *c = va_arg(ap, const comp_t *);
+
+            args[n].type = AT_INT;
+            args[n].u.i = c->match;
+            args[++n].type = AT_INT;
+            args[n].u.i = c->relation;
+            args[++n].type = AT_INT;
+            args[n].u.i = c->collation;
+            break;
+        }
+        case 'Z': {
+            /* Expand the zone into its component parts */
+            const zone_t *z = va_arg(ap, const zone_t *);
+
+            args[n].type = AT_INT;
+            args[n].u.i = z->tag;
+
+            if (z->tag == B_TIMEZONE) {
+                args[++n].type = AT_STR;
+                args[n].u.s = z->offset;
+            }
+            break;
+        }
+        default: assert(*fmt);
+        }
+    }
+    va_end(ap);
+
+    return n;
+}
+
 static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
 {
-    assert(c && c->type == KEEP);
+    assert(c && c->type == B_KEEP);
 
     if (c->u.k.flags && !_verify_flaglist(c->u.k.flags)) {
         strarray_add(c->u.k.flags, "");
     }
+
+    c->nargs = bc_precompile(c->args, "S", c->u.k.flags);
 
     return c;
 }
@@ -2224,13 +2509,21 @@ static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
 static commandlist_t *build_fileinto(sieve_script_t *sscript,
                                      commandlist_t *c, char *folder)
 {
-    assert(c && c->type == FILEINTO);
+    assert(c && c->type == B_FILEINTO);
 
     if (c->u.f.flags && !_verify_flaglist(c->u.f.flags)) {
         strarray_add(c->u.f.flags, "");
     }
     verify_mailbox(sscript, folder);
-    c->u.f.folder = folder;
+    c->u.f.t.folder = folder;
+
+    c->nargs = bc_precompile(c->args, "ssiSis",
+                             c->u.f.t.mailboxid,
+                             c->u.f.t.specialuse,
+                             c->u.f.create,
+                             c->u.f.flags,
+                             c->u.f.copy,
+                             c->u.f.t.folder);
 
     return c;
 }
@@ -2238,7 +2531,7 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
 static commandlist_t *build_redirect(sieve_script_t *sscript,
                                      commandlist_t *c, char *address)
 {
-    assert(c && c->type == REDIRECT);
+    assert(c && c->type == B_REDIRECT);
 
     if (c->u.r.list) verify_list(sscript, address);
     else verify_address(sscript, address);
@@ -2279,8 +2572,7 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
             if (!strcasecmp(token, "NEVER")) never = 1;
             else if (never) {
                 sieveerror_f(sscript,
-                             "DSN NOTIFY value 'NEVER' MUST be used by itself",
-                             token);
+                             "DSN NOTIFY value 'NEVER' MUST be used by itself");
                 break;
             }
             else if (strcasecmp(token, "SUCCESS") &&
@@ -2305,6 +2597,16 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
 
     c->u.r.address = address;
 
+    c->nargs = bc_precompile(c->args, "ssissiis",
+                             c->u.r.bytime,
+                             c->u.r.bymode,
+                             c->u.r.bytrace,
+                             c->u.r.dsn_notify,
+                             c->u.r.dsn_ret,
+                             c->u.r.list,
+                             c->u.r.copy,
+                             c->u.r.address);
+
     return c;
 }
 
@@ -2323,13 +2625,18 @@ static int verify_identifier(sieve_script_t *sscript, char *s)
 static commandlist_t *build_set(sieve_script_t *sscript,
                                 commandlist_t *c, char *variable, char *value)
 {
-    assert(c && c->type == SET);
+    assert(c && c->type == B_SET);
 
     verify_identifier(sscript, variable);
     verify_utf8(sscript, value);
 
     c->u.s.variable = variable;
     c->u.s.value = value;
+
+    c->nargs = bc_precompile(c->args, "iss",
+                             c->u.s.modifiers,
+                             c->u.s.variable,
+                             c->u.s.value);
 
     return c;
 }
@@ -2340,7 +2647,7 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     int min = sscript->interp.vacation->min_response;
     int max = sscript->interp.vacation->max_response;
 
-    assert(c && c->type == VACATION);
+    assert(c && c->type == B_VACATION);
 
     if (c->u.v.handle) verify_utf8(sscript, c->u.v.handle);
     if (c->u.v.subject) verify_utf8(sscript, c->u.v.subject);
@@ -2351,13 +2658,14 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
         verify_utf8(sscript, message);
         c->u.v.mime = 0;
     }
-    if (c->u.v.fcc.folder) {
-        verify_mailbox(sscript, c->u.v.fcc.folder);
+    if (c->u.v.fcc.t.folder) {
+        verify_mailbox(sscript, c->u.v.fcc.t.folder);
         if (c->u.v.fcc.flags && !_verify_flaglist(c->u.v.fcc.flags)) {
             strarray_add(c->u.v.fcc.flags, "");
         }
     }
-    else if (c->u.v.fcc.create || c->u.v.fcc.flags || c->u.v.fcc.specialuse) {
+    else if (c->u.v.fcc.create || c->u.v.fcc.flags ||
+             c->u.v.fcc.t.specialuse || c->u.v.fcc.t.mailboxid) {
         sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
@@ -2367,14 +2675,30 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     if (c->u.v.seconds < min) c->u.v.seconds = min;
     if (c->u.v.seconds > max) c->u.v.seconds = max;
 
+    c->nargs = bc_precompile(c->args,
+                             c->u.v.fcc.t.folder ? "SssiisssiSss" : "Sssiisss",
+                             c->u.v.addresses,
+                             c->u.v.subject,
+                             c->u.v.message,
+                             c->u.v.seconds,
+                             c->u.v.mime,
+                             c->u.v.from,
+                             c->u.v.handle,
+                             c->u.v.fcc.t.folder,
+                             c->u.v.fcc.create,
+                             c->u.v.fcc.flags,
+                             c->u.v.fcc.t.specialuse,
+                             c->u.v.fcc.t.mailboxid);
+
     return c;
 }
 
 static commandlist_t *build_flag(sieve_script_t *sscript,
                                  commandlist_t *c, strarray_t *flags)
 {
-    assert(c &&
-           (c->type == SETFLAG || c->type == ADDFLAG || c->type == REMOVEFLAG));
+    assert(c && (c->type == B_SETFLAG ||
+                 c->type == B_ADDFLAG ||
+                 c->type == B_REMOVEFLAG));
 
     if (!_verify_flaglist(flags)) {
         strarray_add(flags, "");
@@ -2386,13 +2710,17 @@ static commandlist_t *build_flag(sieve_script_t *sscript,
         sieveerror_c(sscript, SIEVE_INVALID_VALUE, "variablename");
     }
 
+    c->nargs = bc_precompile(c->args, "sS",
+                             c->u.fl.variable,
+                             c->u.fl.flags);
+
     return c;
 }
 
 static commandlist_t *build_addheader(sieve_script_t *sscript,
                                       commandlist_t *c, char *name, char *value)
 {
-    assert(c && c->type == ADDHEADER);
+    assert(c && c->type == B_ADDHEADER);
 
     verify_header(sscript, name);
     verify_utf8(sscript, value);
@@ -2401,6 +2729,11 @@ static commandlist_t *build_addheader(sieve_script_t *sscript,
     c->u.ah.name = name;
     c->u.ah.value = value;
 
+    c->nargs = bc_precompile(c->args, "iss",
+                             c->u.ah.index,
+                             c->u.ah.name,
+                             c->u.ah.value);
+
     return c;
 }
 
@@ -2408,11 +2741,14 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
                                          commandlist_t *c,
                                          char *name, strarray_t *values)
 {
-    assert(c && c->type == DELETEHEADER);
+    assert(c && c->type == B_DELETEHEADER);
 
     if (!strcasecmp("Received", name) || !strcasecmp("Auto-Submitted", name)) {
         sieveerror_f(sscript,
                      "MUST NOT delete Received or Auto-Submitted headers");
+    }
+    else if (c->u.dh.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
     }
 
     verify_header(sscript, name);
@@ -2421,17 +2757,21 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
     c->u.dh.name = name;
     c->u.dh.values = values;
 
+    c->nargs = bc_precompile(c->args, "iCsS",
+                             c->u.dh.comp.index,
+                             &c->u.dh.comp,
+                             c->u.dh.name,
+                             c->u.dh.values);
+
     return c;
 }
 
 static int verify_weekday(sieve_script_t *sscript, char *day)
 {
-    const char *days[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
-    int i;
+    int n = day[0] - '0';
 
-    ucase(day);
-    for (i = 0; i < 7; i++) {
-        if (!strcmp(day, days[i])) return (1<<i);
+    if (n >= 0 && n <= 6 && day[1] == '\0') {
+        return (1 << n);
     }
 
     sieveerror_f(sscript, "'%s': not a valid weekday for snooze", day);
@@ -2440,31 +2780,28 @@ static int verify_weekday(sieve_script_t *sscript, char *day)
 
 static int verify_time(sieve_script_t *sscript, char *time)
 {
-    unsigned n, hour = -1, minute = -1;
+    struct tm tm;
+    int t = 0;
+    char *r = strptime(time, "%T", &tm);
 
-    n = sscanf(time, "%02u:%02u", &hour, &minute);
-    if (n == 2 && hour < 24 && minute < 60) {
-        return (60 * hour + minute);
+    if (r && *r == '\0') {
+        t = 3600 * tm.tm_hour + 60 * tm.tm_min + tm.tm_sec;
+    }
+    else {
+        sieveerror_f(sscript, "'%s': not a valid time for snooze", time);
     }
 
-    sieveerror_f(sscript, "'%s': not a valid time for snooze", time);
-    return 0;
-}
+    free(time);  /* done with this string */
 
-static int uint64_cmp(const void *v1, const void *v2)
-{
-    uint64_t u1 = *((uint64_t *) v1);
-    uint64_t u2 = *((uint64_t *) v2);
-
-    return (u1 - u2);
+    return t;
 }
 
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times)
 {
-    assert(c && c->type == SNOOZE);
+    assert(c && c->type == B_SNOOZE);
 
-    if (c->u.sn.mailbox) verify_mailbox(sscript, c->u.sn.mailbox);
+    if (c->u.sn.f.t.folder) verify_mailbox(sscript, c->u.sn.f.t.folder);
     if (c->u.sn.addflags && !_verify_flaglist(c->u.sn.addflags)) {
         strarray_add(c->u.sn.addflags, "");
     }
@@ -2474,8 +2811,19 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     if (!c->u.sn.days) c->u.sn.days = 0x7f; /* all days */
 
     /* Sort times earliest -> latest */
-    arrayu64_sort(times, &uint64_cmp);
+    arrayu64_sort(times, NULL/*ascending*/);
     c->u.sn.times = times;
+
+    c->nargs = bc_precompile(c->args, "sssiSSisU",
+                             c->u.sn.f.t.folder,
+                             c->u.sn.f.t.mailboxid,
+                             c->u.sn.f.t.specialuse,
+                             c->u.sn.f.create,
+                             c->u.sn.addflags,
+                             c->u.sn.removeflags,
+                             c->u.sn.days,
+                             c->u.sn.tzid,
+                             c->u.sn.times);
 
     return c;
 }
@@ -2485,96 +2833,53 @@ static commandlist_t *build_rej_err(sieve_script_t *sscript,
 {
     commandlist_t *c;
 
-    assert(t == REJCT || t == EREJECT || t == ERROR);
+    assert(t == B_REJECT || t == B_EREJECT || t == B_ERROR);
 
     verify_utf8(sscript, message);
 
     c = new_command(t, sscript);
     c->u.str = message;
 
+    c->nargs = bc_precompile(c->args, "s", c->u.str);
+
     return c;
 }
 
-static commandlist_t *build_notify(sieve_script_t *sscript, int t,
+static commandlist_t *build_notify(sieve_script_t *sscript,
                                    commandlist_t *c, char *method)
 {
-    assert(c && (t == NOTIFY || t == ENOTIFY));
+    assert(c && c->type == B_ENOTIFY);
 
-    if (t == ENOTIFY) {
-        if (!supported(SIEVE_CAPA_ENOTIFY)) {
-            sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "enotify");
+    if (c->u.n.fcc.t.folder) {
+        verify_mailbox(sscript, c->u.n.fcc.t.folder);
+        if (c->u.n.fcc.flags && !_verify_flaglist(c->u.n.fcc.flags)) {
+            strarray_add(c->u.n.fcc.flags, "");
         }
-        if (c->u.n.id != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":id");
-        }
-        if (c->u.n.method != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":method");
-        }
-        if (c->u.n.fcc.folder) {
-            verify_mailbox(sscript, c->u.n.fcc.folder);
-            if (c->u.n.fcc.flags && !_verify_flaglist(c->u.n.fcc.flags)) {
-                strarray_add(c->u.n.fcc.flags, "");
-            }
-        }
-        else if (c->u.n.fcc.create || c->u.n.fcc.flags || c->u.n.fcc.specialuse) {
-            sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
-        }
-
-        c->u.n.method = method;
     }
-    else {
-        if (!supported(SIEVE_CAPA_NOTIFY)) {
-            sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "notify");
-        }
-        if (c->u.n.from != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":from");
-        }
-        if (c->u.n.fcc.folder != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":fcc");
-        }
-        if (c->u.n.fcc.create != 0) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":create");
-        }
-        if (c->u.n.fcc.flags != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":flags");
-        }
-        if (c->u.n.fcc.specialuse != NULL) {
-            sieveerror_c(sscript, SIEVE_UNEXPECTED_TAG, ":specialuse");
-        }
-
-        if (!c->u.n.method) c->u.n.method = xstrdup("default");
+    else if (c->u.n.fcc.create || c->u.n.fcc.flags ||
+             c->u.n.fcc.t.specialuse || c->u.n.fcc.t.mailboxid) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":fcc");
     }
 
-    c->type = t;
-    if (c->u.n.priority == -1) c->u.n.priority = NORMAL;
+    c->u.n.method = method;
+
+    if (c->u.n.priority == -1) c->u.n.priority = B_NORMAL;
     if (!c->u.n.message) c->u.n.message = xstrdup("$from$: $subject$");
 
+    c->nargs = bc_precompile(c->args, "ssSis",
+                             c->u.n.method,
+                             c->u.n.from,
+                             c->u.n.options,
+                             c->u.n.priority,
+                             c->u.n.message);
+
     return c;
-}
-
-static commandlist_t *build_denotify(sieve_script_t *sscript,
-                                     commandlist_t *t)
-{
-    assert(t && t->type == DENOTIFY);
-
-    canon_comptags(&t->u.d.comp, sscript);
-    if (t->u.d.priority == -1) t->u.d.priority = ANY;
-    if (t->u.d.pattern) {
-        strarray_t sa = STRARRAY_INITIALIZER;
-
-        strarray_pushm(&sa, t->u.d.pattern);
-        verify_patternlist(sscript, &sa, &t->u.d.comp, NULL);
-        strarray_pop(&sa);
-        strarray_fini(&sa);
-    }
-
-    return t;
 }
 
 static commandlist_t *build_include(sieve_script_t *sscript,
                                     commandlist_t *c, char *script)
 {
-    assert(c && c->type == INCLUDE);
+    assert(c && c->type == B_INCLUDE);
 
     if (strchr(script, '/')) {
         sieveerror_c(sscript, SIEVE_INVALID_VALUE, "script-name");
@@ -2582,8 +2887,13 @@ static commandlist_t *build_include(sieve_script_t *sscript,
 
     c->u.inc.script = script;
     if (c->u.inc.once == -1) c->u.inc.once = 0;
-    if (c->u.inc.location == -1) c->u.inc.location = PERSONAL;
+    if (c->u.inc.location == -1) c->u.inc.location = B_PERSONAL;
     if (c->u.inc.optional == -1) c->u.inc.optional = 0;
+
+    c->nargs = bc_precompile(c->args, "is",
+                             c->u.inc.location |
+                                 (c->u.inc.once | c->u.inc.optional),
+                             c->u.inc.script);
 
     return c;
 }
@@ -2592,14 +2902,56 @@ static commandlist_t *build_log(sieve_script_t *sscript, char *text)
 {
     commandlist_t *c;
 
-    if (!supported(SIEVE_CAPA_LOG)) {
-          sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "x-cyrus-log");
-    }
-
     verify_utf8(sscript, text);
 
-    c = new_command(LOG, sscript);
+    c = new_command(B_LOG, sscript);
     c->u.l.text = text;
+
+    c->nargs = bc_precompile(c->args, "s", c->u.l.text);
+
+    return c;
+}
+
+static commandlist_t *build_cal(sieve_script_t *sscript, commandlist_t *c)
+{
+    unsigned flags = 0;
+
+    assert(c && c->type == B_PROCESSCAL);
+
+    if (c->u.cal.allow_public) flags |= CAL_ALLOWPUBLIC;
+    if (c->u.cal.invites_only) flags |= CAL_INVITESONLY;
+    if (c->u.cal.updates_only) flags |= CAL_UPDATESONLY;
+    if (c->u.cal.delete_cancelled) flags |= CAL_DELETECANCELLED;
+
+    if (c->u.cal.addresses)
+        verify_stringlist(sscript, c->u.cal.addresses, verify_address);
+    if (c->u.cal.organizers) verify_list(sscript, c->u.cal.organizers);
+    if (c->u.cal.outcome_var) verify_identifier(sscript, c->u.cal.outcome_var);
+    if (c->u.cal.reason_var) verify_identifier(sscript, c->u.cal.reason_var);
+    
+    c->nargs = bc_precompile(c->args, "iSssss",
+                             flags,
+                             c->u.cal.addresses,
+                             c->u.cal.organizers,
+                             c->u.cal.calendarid,
+                             c->u.cal.outcome_var,
+                             c->u.cal.reason_var);
+
+    return c;
+}
+
+static commandlist_t *build_ikeep_target(sieve_script_t *sscript,
+                                         commandlist_t *c, char *folder)
+{
+    assert(c && c->type == B_IKEEP_TARGET);
+
+    verify_mailbox(sscript, folder);
+    c->u.ikt.folder = folder;
+
+    c->nargs = bc_precompile(c->args, "sss",
+                             c->u.ikt.mailboxid,
+                             c->u.ikt.specialuse,
+                             c->u.ikt.folder);
 
     return c;
 }
@@ -2619,7 +2971,7 @@ static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
         test_t *fail = NULL, *maybe = NULL;
 
         /* create ANYOF test */
-        t = new_test(ANYOF, sscript);
+        t = new_test(BC_ANYOF, sscript);
         t->u.tl = tl;
 
         /* find first test that did/didn't set ignore_err */
@@ -2640,6 +2992,8 @@ static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
                 sscript->ignore_err = t->ignore_err = fail->ignore_err;
             }
         }
+
+        t->nargs = bc_precompile(t->args, "T", t->u.tl);
     }
 
     return t;
@@ -2658,7 +3012,7 @@ static test_t *build_allof(sieve_script_t *sscript, testlist_t *tl)
     }
     else {
         /* create ALLOF test */
-        t = new_test(ALLOF, sscript);
+        t = new_test(BC_ALLOF, sscript);
         t->u.tl = tl;
 
         /* find first test that set ignore_err and revert to that value */
@@ -2668,6 +3022,8 @@ static test_t *build_allof(sieve_script_t *sscript, testlist_t *tl)
                 break;
             }
         }
+
+        t->nargs = bc_precompile(t->args, "T", t->u.tl);
     }
 
     return t;
@@ -2684,8 +3040,10 @@ static test_t *build_not(sieve_script_t *sscript, test_t *t)
         sscript->ignore_err = --t->ignore_err;
     }
 
-    n = new_test(NOT, sscript);
+    n = new_test(BC_NOT, sscript);
     n->u.t = t;
+
+    n->nargs = bc_precompile(n->args, "t", n->u.t);
 
     return n;
 }
@@ -2700,15 +3058,26 @@ static test_t *build_hhs(sieve_script_t *sscript, test_t *t,
     t->u.hhs.sl = sl;
     t->u.hhs.pl = pl;
 
+    t->nargs += bc_precompile(t->args + t->nargs, "CSS",
+                              &t->u.hhs.comp,
+                              t->u.hhs.sl,
+                              t->u.hhs.pl);
+
     return t;
 }
 
 static test_t *build_header(sieve_script_t *sscript, test_t *t,
                             strarray_t *sl, strarray_t *pl)
 {
-    assert(t && t->type == HEADERT);
+    assert(t && t->type == BC_HEADER);
+
+    if (t->u.hhs.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
+    }
 
     verify_stringlist(sscript, sl, verify_header);
+
+    t->nargs = bc_precompile(t->args, "i", t->u.hhs.comp.index);
 
     return build_hhs(sscript, t, sl, pl);
 }
@@ -2716,7 +3085,7 @@ static test_t *build_header(sieve_script_t *sscript, test_t *t,
 static test_t *build_stringt(sieve_script_t *sscript, test_t *t,
                              strarray_t *sl, strarray_t *pl)
 {
-    assert(t && t->type == STRINGT);
+    assert(t && t->type == BC_STRING);
 
     verify_stringlist(sscript, sl, verify_utf8);
 
@@ -2726,7 +3095,7 @@ static test_t *build_stringt(sieve_script_t *sscript, test_t *t,
 static test_t *build_hasflag(sieve_script_t *sscript, test_t *t,
                              strarray_t *sl, strarray_t *pl)
 {
-    assert(t && t->type == HASFLAG);
+    assert(t && t->type == BC_HASFLAG);
 
     if (sl) {
         if (!supported(SIEVE_CAPA_VARIABLES)) {
@@ -2746,9 +3115,15 @@ static test_t *build_ae(sieve_script_t *sscript, test_t *t,
 
     verify_patternlist(sscript, pl, &t->u.ae.comp, NULL);
 
-    if (t->u.ae.addrpart == -1) t->u.ae.addrpart = ALL;
+    if (t->u.ae.addrpart == -1) t->u.ae.addrpart = B_ALL;
     t->u.ae.sl = sl;
     t->u.ae.pl = pl;
+
+    t->nargs += bc_precompile(t->args + t->nargs, "CiSS",
+                              &t->u.ae.comp,
+                              t->u.ae.addrpart,
+                              t->u.ae.sl,
+                              t->u.ae.pl);
 
     return t;
 }
@@ -2756,9 +3131,15 @@ static test_t *build_ae(sieve_script_t *sscript, test_t *t,
 static test_t *build_address(sieve_script_t *sscript, test_t *t,
                              strarray_t *sl, strarray_t *pl)
 {
-    assert(t && t->type == ADDRESS);
+    assert(t && t->type == BC_ADDRESS);
+
+    if (t->u.ae.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
+    }
 
     verify_stringlist(sscript, sl, verify_addrheader);
+
+    t->nargs = bc_precompile(t->args, "i", t->u.ae.comp.index);
 
     return build_ae(sscript, t, sl, pl);
 }
@@ -2766,7 +3147,7 @@ static test_t *build_address(sieve_script_t *sscript, test_t *t,
 static test_t *build_envelope(sieve_script_t *sscript, test_t *t,
                               strarray_t *sl, strarray_t *pl)
 {
-    assert(t && t->type == ENVELOPE);
+    assert(t && t->type == BC_ENVELOPE);
 
     verify_stringlist(sscript, sl, verify_envelope);
 
@@ -2776,43 +3157,102 @@ static test_t *build_envelope(sieve_script_t *sscript, test_t *t,
 static test_t *build_body(sieve_script_t *sscript,
                           test_t *t, strarray_t *pl)
 {
-    assert(t && (t->type == BODY));
+    assert(t && (t->type == BC_BODY));
 
     verify_patternlist(sscript, pl, &t->u.b.comp, verify_utf8);
 
     if (t->u.b.offset == -1) t->u.b.offset = 0;
-    if (t->u.b.transform == -1) t->u.b.transform = TEXT;
+    if (t->u.b.transform == -1) t->u.b.transform = B_TEXT;
     if (t->u.b.content_types == NULL) {
         t->u.b.content_types = strarray_new();
         strarray_append(t->u.b.content_types,
-                        (t->u.b.transform == RAW) ? "" : "text");
+                        (t->u.b.transform == B_RAW) ? "" : "text");
     }
     t->u.b.pl = pl;
+
+    t->nargs = bc_precompile(t->args, "CiiSS",
+                             &t->u.b.comp,
+                             t->u.b.transform,
+                             t->u.b.offset,
+                             t->u.b.content_types,
+                             t->u.b.pl);
 
     return t;
 }
 
-static test_t *build_date(sieve_script_t *sscript,
-                          test_t *t, char *hn, int part, strarray_t *kl)
+static const struct {
+    const char *name;
+    unsigned bytecode;
+} date_parts[] = {
+    { "year",    B_YEAR    },
+    { "month",   B_MONTH   },
+    { "day",     B_DAY     },
+    { "date",    B_DATE    },
+    { "julian",  B_JULIAN  },
+    { "hour",    B_HOUR    },
+    { "minute",  B_MINUTE  },
+    { "second",  B_SECOND  },
+    { "time",    B_TIME    },
+    { "iso8601", B_ISO8601 },
+    { "std11",   B_STD11   },
+    { "zone",    B_ZONE    },
+    { "weekday", B_WEEKDAY },
+    { NULL,      0         }
+};
+
+static int verify_date_part(sieve_script_t *sscript, char *part)
 {
-    assert(t && (t->type == DATE || t->type == CURRENTDATE));
+    int i;
+
+    for (i = 0; date_parts[i].name && strcasecmp(date_parts[i].name, part); i++);
+
+    if (!date_parts[i].name) {
+        sieveerror_f(sscript, "invalid date-part '%s'", part);
+    }
+
+    return date_parts[i].bytecode;
+}
+
+static test_t *build_date(sieve_script_t *sscript,
+                          test_t *t, char *hn, char *part, strarray_t *kl)
+{
+    assert(t && (t->type == BC_DATE || t->type == BC_CURRENTDATE));
 
     if (hn) verify_header(sscript, hn);
     verify_patternlist(sscript, kl, &t->u.dt.comp, NULL);
 
-    if (t->u.dt.comp.index == 0) t->u.dt.comp.index = 1;
-    if (t->u.dt.zonetag == -1) {
-        struct tm tm;
-        time_t now = time(NULL);
-
-        localtime_r(&now, &tm);
-        t->u.dt.zone = gmtoff_of(&tm, now) / 60;
-        t->u.dt.zonetag = ZONE;
+    if (t->u.dt.comp.index == 0) {
+        t->u.dt.comp.index = 1;
+    }
+    else if (t->u.dt.comp.index == INT_MIN) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
     }
 
-    t->u.dt.date_part = part;
+    if (t->u.dt.zone.tag == -1) {
+        t->u.dt.zone.tag = B_TIMEZONE;
+    }
+
+    t->u.dt.date_part = verify_date_part(sscript, part);
+    free(part); /* done with this string */
     t->u.dt.header_name = hn;
     t->u.dt.kl = kl;
+
+    if (t->type == BC_DATE) {
+        t->nargs = bc_precompile(t->args, "iZCisS",
+                                 t->u.dt.comp.index,
+                                 &t->u.dt.zone,
+                                 &t->u.dt.comp,
+                                 t->u.dt.date_part,
+                                 t->u.dt.header_name,
+                                 t->u.dt.kl);
+    }
+    else {
+        t->nargs = bc_precompile(t->args, "ZCiS",
+                                 &t->u.dt.zone,
+                                 &t->u.dt.comp,
+                                 t->u.dt.date_part,
+                                 t->u.dt.kl);
+    }
 
     return t;
 }
@@ -2822,7 +3262,7 @@ static test_t *build_ihave(sieve_script_t *sscript, strarray_t *sa)
     test_t *t;
     int i;
 
-    t = new_test(IHAVE, sscript);
+    t = new_test(BC_IHAVE, sscript);
     t->u.sl = sa;
 
     /* check if we support all listed extensions */
@@ -2842,6 +3282,8 @@ static test_t *build_ihave(sieve_script_t *sscript, strarray_t *sa)
         }
     }
 
+    t->nargs = bc_precompile(t->args, "S", t->u.sl);
+
     return t;
 }
 
@@ -2849,35 +3291,68 @@ static test_t *build_mbox_meta(sieve_script_t *sscript,
                                test_t *t, char *extname,
                                char *keyname, strarray_t *keylist)
 {
-    assert(t && (t->type == MAILBOXEXISTS || t->type == MAILBOXIDEXISTS ||
-                 t->type == METADATA || t->type == METADATAEXISTS ||
-                 t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS ||
-                 t->type == ENVIRONMENT || t->type == SPECIALUSEEXISTS ||
-                 t->type == NOTIFYMETHODCAPABILITY));
+    assert(t);
 
     canon_comptags(&t->u.mm.comp, sscript);
     t->u.mm.extname = extname;
     t->u.mm.keyname = keyname;
     t->u.mm.keylist = keylist;
 
+    switch (t->type) {
+    case BC_MAILBOXEXISTS:
+    case BC_MAILBOXIDEXISTS:
+    case BC_SERVERMETADATAEXISTS:
+        t->nargs = bc_precompile(t->args, "S",
+                                 t->u.mm.keylist);
+        break;
+
+    case BC_METADATAEXISTS:
+    case BC_SPECIALUSEEXISTS:
+        t->nargs = bc_precompile(t->args, "sS",
+                                 t->u.mm.extname,
+                                 t->u.mm.keylist);
+        break;
+
+    case BC_SERVERMETADATA:
+    case BC_ENVIRONMENT:
+        t->nargs = bc_precompile(t->args, "CsS",
+                                 &t->u.mm.comp,
+                                 t->u.mm.keyname,
+                                 t->u.mm.keylist);
+        break;
+
+    case BC_METADATA:
+    case BC_NOTIFYMETHODCAPABILITY:
+        t->nargs = bc_precompile(t->args, "CssS",
+                                 &t->u.mm.comp,
+                                 t->u.mm.extname,
+                                 t->u.mm.keyname,
+                                 t->u.mm.keylist);
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
+
     return t;
 }
 
 static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 {
-    assert(t && t->type == DUPLICATE);
+    assert(t && t->type == BC_DUPLICATE);
 
     switch (t->u.dup.idtype) {
-    case HEADER:
+    case B_HEADER:
         verify_header(sscript, t->u.dup.idval);
         break;
 
-    case UNIQUEID:
+    case B_UNIQUEID:
         verify_utf8(sscript, t->u.dup.idval);
         break;
 
     default:
-        t->u.dup.idtype = HEADER;
+        t->u.dup.idtype = B_HEADER;
         t->u.dup.idval = xstrdup("Message-ID");
         break;
     }
@@ -2887,142 +3362,108 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 
     if (t->u.dup.seconds == -1) t->u.dup.seconds = 7 * 86400; /* 7 days */
 
+    t->nargs = bc_precompile(t->args, "issii",
+                             t->u.dup.idtype,
+                             t->u.dup.idval,
+                             t->u.dup.handle,
+                             t->u.dup.seconds,
+                             t->u.dup.last);
+
     return t;
 }
 
 #ifdef WITH_JMAP
-#include "imap/json_support.h"
+#include "imap/jmap_api.h"
+#include "imap/jmap_mail_query_parse.h"
 
-static int jmap_parse_condition(json_t *cond, strarray_t *path)
+struct filter_rock {
+    strarray_t *path;
+    unsigned is_invalid;
+};
+
+static void filter_parser_invalid(const char *field, void *rock)
 {
-    json_t *val;
-    const char *field;
+    struct filter_rock *frock = (struct filter_rock *) rock;
 
-    json_object_foreach(cond, field, val) {
-        if (!strcmp(field, "before") ||
-            !strcmp(field, "after")) {
-            if (!json_is_utcdate(val)) break;
-        }
-        else if (!strcmp(field, "minSize") ||
-                 !strcmp(field, "maxSize")) {
-            if (!json_is_integer(val)) break;
-        }
-        else if (!strcmp(field, "hasAttachment")) {
-            if (!json_is_boolean(val)) break;
-        }
-        else if (!strcmp(field, "text") ||
-                 !strcmp(field, "from") ||
-                 !strcmp(field, "to") ||
-                 !strcmp(field, "cc") ||
-                 !strcmp(field, "bcc") ||
-                 !strcmp(field, "subject") ||
-                 !strcmp(field, "body") ||
-                 !strcmp(field, "attachmentName") ||  /* FM-specific */
-                 !strcmp(field, "attachmentType") ||  /* FM-specific */
-                 (//jmap_is_using(req, JMAP_SEARCH_EXTENSION) &&
-                     !strcmp(field, "attachmentBody")) ||
-                 (//jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
-                     (!strcmp(field, "fromContactGroupId") ||
-                      !strcmp(field, "toContactGroupId") ||
-                      !strcmp(field, "ccContactGroupId") ||
-                      !strcmp(field, "bccContactGroupId")))) {
-            if (!json_is_string(val)) break;
-        }
-        else if (!strcmp(field, "header")) {
-            size_t n = json_array_size(val);
-
-            if (n == 0 || n > 2) break;
-
-            do {
-                const char *s = json_string_value(json_array_get(val, --n));
-
-                if (!s || !strlen(s)) {
-                    struct buf buf = BUF_INITIALIZER;
-
-                    buf_printf(&buf, "header[%lu]", n);
-                    strarray_pushm(path, buf_release(&buf));
-                    return 0;
-                }
-            } while (n);
-        }
-        else break;
-    }
-
-    if (field) {
-        strarray_push(path, field);
-        return 0;
-    }
-
-    return 1;
+    if (!frock->is_invalid++) strarray_push(frock->path, field);
 }
 
-static int jmap_parse_filter(json_t *filter, strarray_t *path)
+static void filter_parser_push_index(const char *field, size_t index,
+                                     const char *name, void *rock)
 {
-    json_t *arg, *val;
-    const char *s;
-    size_t i;
+    struct filter_rock *frock = (struct filter_rock *) rock;
+    struct buf buf = BUF_INITIALIZER;
 
-    if (!JNOTNULL(filter) || !json_is_object(filter)) return 0;
-
-    arg = json_object_get(filter, "operator");
-    if (!arg) return jmap_parse_condition(filter, path);
-
-    strarray_push(path, "operator");
-    if (!json_is_string(arg)) return 0;
-
-    s = json_string_value(arg);
-    if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) return 0;
-    free(strarray_pop(path));
-
-    arg = json_object_get(filter, "conditions");
-    if (!json_array_size(arg)) {
-        strarray_push(path, "conditions");
-        return 0;
+    if (!frock->is_invalid) {
+        if (name) buf_printf(&buf, "%s[%zu:%s]", field, index, name);
+        else buf_printf(&buf, "%s[%zu]", field, index);
+        strarray_pushm(frock->path, buf_release(&buf));
     }
-
-    json_array_foreach(arg, i, val) {
-        struct buf buf = BUF_INITIALIZER;
-
-        buf_printf(&buf, "conditions[%lu]", i);
-        strarray_pushm(path, buf_release(&buf));
-        if (!jmap_parse_filter(val, path)) return 0;
-        free(strarray_pop(path));
-    }
-
-    return 1;
 }
 
-static test_t *build_jmapquery(sieve_script_t *sscript,
-                               test_t *t, const char *json)
+static void filter_parser_pop(void *rock)
 {
-    strarray_t path = STRARRAY_INITIALIZER;
+    struct filter_rock *frock = (struct filter_rock *) rock;
+
+    if (!frock->is_invalid) free(strarray_pop(frock->path));
+}
+
+static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
+{
     json_t *jquery;
     json_error_t jerr;
 
-    assert(t && t->type == JMAPQUERY);
+    assert(t && t->type == BC_JMAPQUERY);
 
     /* validate query */
     jquery = json_loads(json, 0, &jerr);
-    if (!jmap_parse_filter(jquery, &path)) {
-        char *s = strarray_join(&path, "/");
+    if (jquery) {
+        strarray_t path = STRARRAY_INITIALIZER;
+        strarray_t capabilities = STRARRAY_INITIALIZER;
+        struct filter_rock frock = { &path, 0 };
+        jmap_email_filter_parse_ctx_t parse_ctx = {
+            NULL,
+            &filter_parser_invalid,
+            &filter_parser_push_index,
+            &filter_parser_pop,
+            &capabilities,
+            &frock
+        };
 
-        if (s) sieveerror_f(sscript, "invalid jmapquery argument: '%s'", s);
-        else sieveerror_f(sscript, "invalid jmapquery format");
+        strarray_append(&capabilities, JMAP_URN_MAIL);
+        strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
 
-        free(s);
+        jmap_email_filter_parse(jquery, &parse_ctx);
+
+        if (frock.is_invalid) {
+            char *s = strarray_join(&path, "/");
+
+            sieveerror_f(sscript, "invalid jmapquery argument: '%s'", s);
+            free(s);
+        }
+
+        strarray_fini(&path);
+        strarray_fini(&capabilities);
     }
-    strarray_fini(&path);
+    else {
+        sieveerror_f(sscript, "invalid jmapquery format");
+    }
 
     t->u.jquery = json_dumps(jquery, JSON_COMPACT);
     json_decref(jquery);
 
+    free(json);  /* done with this string */
+
+    t->nargs = bc_precompile(t->args, "s", t->u.jquery);
+
     return t;
 }
 #else
-static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t,
-                               const char *json __attribute__((unused)))
+static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 {
-    sieveerror_c(sscript, SIEVE_UNSUPP_EXT, "x-cyrus-jmapquery");
+    sieveerror_c(sscript, SIEVE_UNSUPP_EXT, "vnd.cyrus.jmapquery");
+
+    free(json);  /* done with this string */
 
     return t;
 }

@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_subseconds
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # subseconds were deprecated in 3.5 but included as experimental in 3.4
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        uid => "58ADE31-custom-UID",
+        title => "subseconds",
+        start => "2011-12-04T04:05:06.78",
+        created => "2019-06-29T11:58:12.412Z",
+        updated => "2019-06-29T11:58:12.412Z",
+        duration=> "PT5M3.45S",
+        timeZone=> "Europe/Vienna",
+        recurrenceRules => [{
+            '@type' => 'RecurrenceRule',
+            frequency => "daily",
+            until => '2011-12-10T04:05:06.78',
+        }],
+        "replyTo" => {
+            "imip" => 'mailto:foo@local',
+        },
+        "participants" => {
+            'foo' => {
+                '@type' => 'Participant',
+                name => 'Foo',
+                email => 'foo@local',
+                roles => {
+                    owner => JSON::true,
+                    attendee => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:foo@local',
+                },
+                scheduleSequence => 1,
+                scheduleUpdated => '2018-07-06T05:03:02.123Z',
+            },
+        },
+        alerts => {
+            alert1 => {
+                trigger => {
+                    '@type' => 'OffsetTrigger',
+                    relativeTo => "start",
+                    offset => "-PT5M0.7S",
+                },
+                acknowledged => "2015-11-07T08:57:00.523Z",
+                action => "display",
+            },
+        },
+        recurrenceOverrides => {
+            '2011-12-05T04:05:06.78' => {
+                title => "overridden event"
+            },
+            '2011-12-06T04:05:06.78' => {
+                excluded => JSON::true
+            },
+            '2011-12-07T11:00:00.99' => {},
+            '2011-12-08T04:05:06.78' => {
+                title => "overridden event with DTEND",
+                duration => 'PT1H2.345S',
+                locations => {
+                    endLocation => {
+                        '@type' => 'Location',
+                        name => 'end location in another timezone',
+                        relativeTo => 'end',
+                        timeZone => 'Europe/London',
+                    }
+                },
+            },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+
+    # Known regresion: recurrenceRule.until
+    $self->assert_str_equals('2011-12-10T04:05:06',
+        $ret->{recurrenceRules}[0]{until});
+    $ret->{recurrenceRules}[0]{until} = '2011-12-10T04:05:06.78';
+
+    # Known regression: participant.scheduleUpdated
+    $self->assert_str_equals('2018-07-06T05:03:02Z',
+        $ret->{participants}{foo}{scheduleUpdated});
+    $ret->{participants}{foo}{scheduleUpdated} = '2018-07-06T05:03:02.123Z';
+
+    $self->assert_str_equals($event->{created}, $ret->{created});
+    $self->assert_str_equals($event->{updated}, $ret->{updated});
+    $self->assert_normalized_event_equals($event, $ret);
+}

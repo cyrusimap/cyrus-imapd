@@ -54,6 +54,7 @@
 #include "proxy.h"
 #include "spool.h"
 #include "tok.h"
+#include "user.h"
 #include "util.h"
 #include "webdav_db.h"
 #include "xstrlcpy.h"
@@ -61,8 +62,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-
-static struct webdav_db *auth_webdavdb = NULL;
 
 static void my_webdav_init(struct buf *serverinfo);
 static int my_webdav_auth(const char *userid);
@@ -74,7 +73,8 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
 static int webdav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data, void **obj);
+                      struct index_record *record, void *data, void **obj,
+                      struct mime_type_t *mime);
 static int webdav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *davdb, unsigned flags);
@@ -264,7 +264,7 @@ struct namespace_t namespace_drive = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL),
     &my_webdav_init, &my_webdav_auth, my_webdav_reset, &my_webdav_shutdown,
-    &dav_premethod, /*bearer*/NULL,
+    &dav_premethod,
     {
         { &meth_acl,            &webdav_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */
@@ -284,6 +284,7 @@ struct namespace_t namespace_drive = {
         { &meth_proppatch,      &webdav_params },      /* PROPPATCH    */
         { &meth_put,            &webdav_params },      /* PUT          */
         { &meth_report,         &webdav_params },      /* REPORT       */
+        { NULL,                 NULL },                /* SEARCH       */
         { &meth_trace,          &webdav_parse_path },  /* TRACE        */
         { NULL,                 NULL },                /* UNBIND       */
         { &meth_unlock,         &webdav_params }       /* UNLOCK       */
@@ -314,30 +315,28 @@ static int my_webdav_auth(const char *userid)
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return 0;
     }
-    else if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* proxy-only server - won't have DAV databases */
         return 0;
     }
-    else {
-        /* Open WebDAV DB for 'userid' */
-        my_webdav_reset();
-        auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) {
-            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
-    }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
+    struct mboxlock *namespacelock = NULL;
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
     int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        namespacelock = user_namespacelock(userid);
+        // did we lose the race?  Nothing to do!
+        r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+        if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
         mbentry_t *mbentry = NULL;
 
-        r = http_mlookup(inboxname, &mbentry, NULL);
+        r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         free(inboxname);
         if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
         if (!r && mbentry->server) {
@@ -349,29 +348,42 @@ static int my_webdav_auth(const char *userid)
         mboxlist_entry_free(&mbentry);
 
         if (!r) {
-            r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
-                                       NULL, 0,
+            mbentry_t mbentry = MBENTRY_INITIALIZER;
+            mbentry.name = (char *) mbname_intname(mbname);
+            mbentry.mbtype = MBTYPE_COLLECTION;
+            r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                       httpd_userisadmin || httpd_userisproxyadmin,
                                        userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
+                                       0/*flags*/, NULL/*mailboxptr*/);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                           mbname_intname(mbname), error_message(r));
         }
         else {
             syslog(LOG_ERR, "could not autoprovision DAV drive for userid %s: %s",
                    userid, error_message(r));
+            if (r == IMAP_INVALID_USER) {
+                /* We successfully authenticated, but don't have a user INBOX.
+                   Assume that the user has yet to be fully provisioned,
+                   or the user is being renamed.
+                */
+                r = HTTP_UNAVAILABLE;
+            }
+            else {
+                r = HTTP_SERVER_ERROR;
+            }
         }
     }
 
  done:
+    mboxname_release(&namespacelock);
     mbname_free(&mbname);
-    return 0;
+    return r;
 }
 
 
 static void my_webdav_reset(void)
 {
-    if (auth_webdavdb) webdav_close(auth_webdavdb);
-    auth_webdavdb = NULL;
+    // nothing
 }
 
 
@@ -502,8 +514,10 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
-            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
@@ -511,10 +525,13 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     if (tgt->mbentry) {
         /* Just return the mboxname (MKCOL or dest of COPY/MOVE collection) */
         tgt->mbentry->name = xstrdup(mboxname);
+
+        /* XXX  Hack to get around MKCOL/PROPPATCH check */
+        tgt->collection = last;
     }
     else if (*mboxname) {
         /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
 
         if (r == IMAP_MAILBOX_NONEXISTENT && last) {
             /* Assume that the last segment of the path is a resource */
@@ -525,7 +542,7 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
             /* Adjust collection */
             free(mbname_pop_boxes(mbname));
 
-            r = http_mlookup(mbname_intname(mbname), &tgt->mbentry, NULL);
+            r = proxy_mlookup(mbname_intname(mbname), &tgt->mbentry, NULL, NULL);
         }
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
@@ -556,7 +573,8 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
 static int webdav_get(struct transaction_t *txn,
                       struct mailbox *mailbox __attribute__((unused)),
                       struct index_record *record, void *data,
-                      void **obj __attribute__((unused)))
+                      void **obj __attribute__((unused)),
+                      struct mime_type_t *mime __attribute__((unused)))
 {
     if (record && record->uid) {
         /* GET on a resource */
@@ -573,22 +591,12 @@ static int webdav_get(struct transaction_t *txn,
     struct buf *body = &txn->resp_body.payload;
     unsigned level = 0;
 
-    /* Check ACL for current user */
-    int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if ((rights & DACL_READ) != DACL_READ) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_READ;
-        return HTTP_NO_PRIVS;
-    }
-
     struct strlist *action = hash_lookup("action", &txn->req_qparams);
     if (!action) {
         /* Send HTML with davmount link */
         buf_reset(body);
         buf_printf_markup(body, level, HTML_DOCTYPE);
-        buf_printf_markup(body, level++, "<html>");
+        buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(body, level++, "<head>");
         buf_printf_markup(body, level, "<title>%s</title>", txn->req_tgt.path);
         buf_printf_markup(body, --level, "</head>");
@@ -647,12 +655,24 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     if (!buf) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
+    /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
+       XXX  because we may have been called as part of a COPY/MOVE */
+    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+    webdav_lookup_resource(db, &mbentry, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        oldrecord = &record;
-        mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
+        int r = mailbox_find_index_record(mailbox, wdata->dav.imap_uid, &record);
+        if (!r) {
+            oldrecord = &record;
+        }
+        else {
+            xsyslog(LOG_ERR,
+                    "Couldn't find index record corresponding to WebDAV DB record",
+                    "mailbox=<%s> record=<%u> error=<%s>",
+                    mailbox_name(mailbox), wdata->dav.imap_uid, error_message(r));
+        }
     }
 
     /* Get filename of attachment */
@@ -694,7 +714,8 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     /* Store the resource */
     return dav_store_resource(txn, buf_base(buf), buf_len(buf),
-                              mailbox, oldrecord, wdata->dav.createdmodseq, NULL);
+                              mailbox, oldrecord, wdata->dav.createdmodseq,
+                              NULL, NULL);
 }
 
 

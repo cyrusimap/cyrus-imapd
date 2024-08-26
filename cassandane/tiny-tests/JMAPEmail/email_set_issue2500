@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_issue2500
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inboxid = $self->getinbox()->{id};
+
+    my $email = {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [{ name => "Test", email => q{foo@bar} }],
+        subject => "test",
+        bodyStructure => {
+            partId => '1',
+            charset => 'us/ascii',
+        },
+        bodyValues => {
+            "1" => {
+                value => "A text body",
+            },
+        },
+    };
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals('bodyStructure/charset', $res->[0][1]{notCreated}{1}{properties}[0]);
+
+    delete $email->{bodyStructure}{charset};
+    $email->{bodyStructure}{'header:Content-Type'} = 'text/plain;charset=us-ascii';
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals('bodyStructure/header:Content-Type', $res->[0][1]{notCreated}{1}{properties}[0]);
+
+}

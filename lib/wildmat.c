@@ -229,7 +229,7 @@ EXPORTED struct wildmat *split_wildmats(char *str, const char *prefix)
      * split the list of wildmats
      *
      * we split them right to left because this is the order in which
-     * we want to test them (per RFC3977 section 4.2)
+     * we want to test them (per RFC 3977 section 4.2)
      */
     do {
         if ((c = strrchr(str, ',')))

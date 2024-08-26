@@ -43,11 +43,12 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include "index.h"
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "message.h"
 #include "prot.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "strarray.h"
 #include "annotate.h"
 #include "conversations.h"
@@ -58,7 +59,7 @@ struct appendstate {
     /* mailbox we're appending to */
     struct mailbox *mailbox;
     /* do we own it? */
-    int close_mailbox_when_done:1;
+    unsigned int close_mailbox_when_done:1;
     int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
@@ -71,7 +72,7 @@ struct appendstate {
 
     /* set seen on these message on commit */
     int internalseen;
-    struct seqset *seen_seq;
+    seqset_t *seen_seq;
 
     /* for annotations */
     const struct namespace *namespace;
@@ -123,7 +124,7 @@ extern int append_fromstage_full(struct appendstate *mailbox, struct body **body
                                  time_t internaldate, time_t savedate,
                                  modseq_t createdmodseq,
                                  const strarray_t *flags, int nolink,
-                                 struct entryattlist *annotations);
+                                 struct entryattlist **annotations);
 #define append_fromstage(m, b, s, i, c, f, n, a) \
   append_fromstage_full((m), (b), (s), (i), 0, (c), (f), (n), (a))
 
@@ -138,7 +139,8 @@ extern int append_fromstream(struct appendstate *as, struct body **body,
 extern int append_copy(struct mailbox *mailbox,
                        struct appendstate *append_mailbox,
                        ptrarray_t *msgrecs,
-                       int nolink, int is_same_user);
+                       int nolink, int is_same_user,
+                       struct progress_rock *prock);
 
 extern int append_collectnews(struct appendstate *mailbox,
                               const char *group, unsigned long feeduid);

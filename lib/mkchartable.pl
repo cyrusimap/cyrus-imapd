@@ -116,7 +116,7 @@ sub readmapfile {
             $uni1name, $comment, $upper, $lower, $title, @rest) = split ';', $line;
         my $code = hex($hexcode);
 
-        # This is not RFC5051
+        # This is not RFC 5051
         if ($code != 32 and $category =~ m/^Z/) {
            $codemap->{$code}{chars} = [32]; # space
            next;
@@ -128,7 +128,7 @@ sub readmapfile {
 
         # Compatability mapping, skip over the <type>
         while ($decomposition ne '') {
-            # This is not RFC5051
+            # This is not RFC 5051
             if ($decomposition =~ s/^<[^>]*>\s+//) {
                 # Ignore compat mappings to SP followed by combining char
                 $decomposition = '' if $decomposition =~ m/^0020 /

@@ -39,6 +39,7 @@ metric counter cyrus_imap_examine_total                 The total number of IMAP
 metric counter cyrus_imap_fetch_total                   The total number of IMAP FETCHs
 metric counter cyrus_imap_getacl_total                  The total number of IMAP GETACLs
 metric counter cyrus_imap_getannotation_total           The total number of IMAP SETANNOTATIONs
+metric counter cyrus_imap_getjmapaccess_total           The total number of IMAP GETJMAPACCESSs
 metric counter cyrus_imap_getmetadata_total             The total number of IMAP GETMETADATAs
 metric counter cyrus_imap_getquota_total                The total number of IMAP GETQUOTAs
 metric counter cyrus_imap_getquotaroot_total            The total number of IMAP GETQUOTAROOTs
@@ -49,12 +50,15 @@ metric counter cyrus_imap_logout_total                  The total number of IMAP
 metric counter cyrus_imap_list_total                    The total number of IMAP LISTs
 metric counter cyrus_imap_lsub_total                    The total number of IMAP LSUBs
 metric counter cyrus_imap_listrights_total              The total number of IMAP LISTRIGHTSs
+metric counter cyrus_imap_move_total                    The total number of IMAP MOVEs
 metric counter cyrus_imap_myrights_total                The total number of IMAP MYRIGHTSs
 metric counter cyrus_imap_mupdatepush_total             The total number of IMAP MUPDATEPUSHs
+metric counter cyrus_imap_replace_total                 The total number of IMAP REPLACEs
 metric counter cyrus_imap_starttls_total                The total number of IMAP STARTTLSs
 metric counter cyrus_imap_store_total                   The total number of IMAP STOREs
 metric counter cyrus_imap_select_total                  The total number of IMAP SELECTs
 metric counter cyrus_imap_search_total                  The total number of IMAP SEARCHs
+metric counter cyrus_imap_esearch_total                 The total number of IMAP ESEARCHs
 metric counter cyrus_imap_subscribe_total               The total number of IMAP SUBSCRIBEs
 metric counter cyrus_imap_setacl_total                  The total number of IMAP SETACLs
 metric counter cyrus_imap_setannotation_total           The total number of IMAP SETANNOTATIONs
@@ -88,6 +92,7 @@ metric counter cyrus_lmtp_sieve_fileinto_total          The number of sieve FILE
 metric counter cyrus_lmtp_sieve_snooze_total            The number of sieve SNOOZEs
 metric counter cyrus_lmtp_sieve_keep_total              The number of sieve KEEPs
 metric counter cyrus_lmtp_sieve_notify_total            The number of sieve NOTIFYs
+metric counter cyrus_lmtp_sieve_processcalendar_total   The number of sieve PROCESSCALENDARs
 metric counter cyrus_lmtp_sieve_autorespond_total       The number of sieve AUTORESPONDs considered
 metric counter cyrus_lmtp_sieve_autorespond_sent_total  The number of sieve AUTORESPONDs sent
 
@@ -132,6 +137,8 @@ metric counter cyrus_http_put_total               The total number of HTTP PUTs
     label cyrus_http_put_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
 metric counter cyrus_http_report_total            The total number of HTTP REPORTs
     label cyrus_http_report_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
+metric counter cyrus_http_search_total            The total number of HTTP SEARCH
+    label cyrus_http_search_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
 metric counter cyrus_http_trace_total             The total number of HTTP TRACEs
     label cyrus_http_trace_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi
 metric counter cyrus_http_unbind_total            The total number of HTTP UNBINDs

@@ -1,0 +1,205 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_groupaddr
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my @testCases = ({
+        # Example from from Appendix A.1.3 of RFC 5322
+        rawHeader => 'A Group:Ed Jones <c@a.test>,joe@where.test,John <jdoe@one.test>',
+        wantAddresses => [{
+            name => 'Ed Jones',
+            email => 'c@a.test',
+        }, {
+            name => undef,
+            email => 'joe@where.test'
+        }, {
+            name => 'John',
+            email => 'jdoe@one.test',
+        }],
+        wantGroupedAddresses => [{
+            name => 'A Group',
+            addresses => [{
+                name => 'Ed Jones',
+                email => 'c@a.test',
+            }, {
+                name => undef,
+                email => 'joe@where.test'
+            }, {
+                name => 'John',
+                email => 'jdoe@one.test',
+            }],
+        }],
+    }, {
+        # Example from JMAP mail spec, RFC 8621, Section 4.1.2.3
+        rawHeader => '"James Smythe" <james@example.com>, Friends:'
+                     . 'jane@example.com, =?UTF-8?Q?John_Sm=C3=AEth?= '
+                     . '<john@example.com>;',
+        wantAddresses => [{
+                name => 'James Smythe',
+                email => 'james@example.com'
+            }, {
+                name => undef,
+                email => 'jane@example.com'
+            }, {
+                name => "John Sm\N{U+00EE}th",
+                email => 'john@example.com'
+        }],
+        wantGroupedAddresses => [{
+                name => undef,
+                addresses => [{
+                        name => 'James Smythe',
+                        email => 'james@example.com'
+                    }],
+            }, {
+                name => 'Friends',
+                addresses => [{
+                        name => undef,
+                        email => 'jane@example.com'
+                    }, {
+                        name => "John Sm\N{U+00EE}th",
+                        email => 'john@example.com'
+                    }],
+            }]
+    }, {
+        # Issue https://github.com/cyrusimap/cyrus-imapd/issues/2959
+        rawHeader => 'undisclosed-recipients:',
+        wantAddresses => [],
+        wantGroupedAddresses => [{
+            name => 'undisclosed-recipients',
+            addresses => [],
+        }],
+    }, {
+        # Sanity check
+        rawHeader =>   'addr1@local, addr2@local, GroupA:; addr3@local, '
+                     . 'GroupB:addr4@local,addr5@local;addr6@local',
+        wantAddresses => [{
+            name => undef,
+            email => 'addr1@local',
+        }, {
+            name => undef,
+            email => 'addr2@local',
+        }, {
+            name => undef,
+            email => 'addr3@local',
+        }, {
+            name => undef,
+            email => 'addr4@local',
+        }, {
+            name => undef,
+            email => 'addr5@local',
+        }, {
+            name => undef,
+            email => 'addr6@local',
+        }],
+        wantGroupedAddresses => [{
+            name => undef,
+            addresses => [{
+                name => undef,
+                email => 'addr1@local',
+            }, {
+                name => undef,
+                email => 'addr2@local',
+            }],
+        }, {
+            name => 'GroupA',
+            addresses => [],
+        }, {
+            name => undef,
+            addresses => [{
+                name => undef,
+                email => 'addr3@local',
+            }],
+        }, {
+            name => 'GroupB',
+            addresses => [{
+                name => undef,
+                email => 'addr4@local',
+            }, {
+                name => undef,
+                email => 'addr5@local',
+            }],
+        }, {
+            name => undef,
+            addresses => [{
+                name => undef,
+                email => 'addr6@local',
+            }],
+        }],
+    });
+
+    foreach my $tc (@testCases) {
+        my $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    email1 => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        from => [{ email => q{foo1@bar} }],
+                        'header:to' => $tc->{rawHeader},
+                        bodyStructure => {
+                            partId => '1',
+                        },
+                        bodyValues => {
+                            "1" => {
+                                value => "email1 body",
+                            },
+                        },
+                    },
+                },
+            }, 'R1'],
+            ['Email/get', {
+                ids => ['#email1'],
+                properties => [
+                    'header:to:asAddresses',
+                    'header:to:asGroupedAddresses',
+                ],
+            }, 'R2'],
+        ]);
+        $self->assert_not_null($res->[0][1]{created}{email1}{id});
+        $self->assert_deep_equals($tc->{wantAddresses},
+            $res->[1][1]{list}[0]->{'header:to:asAddresses'});
+        $self->assert_deep_equals($tc->{wantGroupedAddresses},
+            $res->[1][1]{list}[0]->{'header:to:asGroupedAddresses'});
+
+        # Now assert that group addresses loop back if set in Email/set.
+
+        $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    email2 => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        from => [{ email => q{foo2@bar} }],
+                        'header:to:asGroupedAddresses' => $tc->{wantGroupedAddresses},
+                        bodyStructure => {
+                            partId => '1',
+                        },
+                        bodyValues => {
+                            "1" => {
+                                value => "email2 body",
+                            },
+                        },
+                    },
+                },
+            }, 'R1'],
+            ['Email/get', {
+                ids => ['#email2'],
+                properties => [
+                    'header:to:asAddresses',
+                    'header:to:asGroupedAddresses',
+                ],
+            }, 'R2'],
+        ]);
+        $self->assert_not_null($res->[0][1]{created}{email2}{id});
+        $self->assert_deep_equals($tc->{wantAddresses},
+            $res->[1][1]{list}[0]->{'header:to:asAddresses'});
+        $self->assert_deep_equals($tc->{wantGroupedAddresses},
+            $res->[1][1]{list}[0]->{'header:to:asGroupedAddresses'});
+    }
+}

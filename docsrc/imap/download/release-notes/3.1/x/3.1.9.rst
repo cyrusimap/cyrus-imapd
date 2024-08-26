@@ -1,0 +1,97 @@
+:tocdepth: 3
+
+==========================
+Cyrus IMAP 3.1.9 Tag Notes
+==========================
+
+Unavailable for download as this is a development branch only.
+
+Access is via git.
+
+.. warning::
+
+    This should be considered for
+    **testing purposes** and **bleeding-edge features** only. We will try to tag these
+    snapshots at coherent development points, but there will generally be **large
+    breaking changes** occurring between releases in this series.
+
+.. _relnotes-3.1.9-changes:
+
+Major changes since the 3.0.x series
+====================================
+
+* Sieve bug fixes and features.
+* Caldav and Carddav improvements.
+* Support for JMAP core protocol (:rfc:`8620`).
+* Support for JMAP Mail (:rfc:`8621`).
+* Experimental support for JMAP Contacts (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Experimental support for JMAP Calendars (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`).
+* Xapian bug fixes.
+* Improvements to Annotations handling.
+* DRAC support has been deprecated.
+* Support for Prometheus stats.
+* Removed support for the Sphinx backend to squatter searches.
+* New cyrus.index format v16 included since 3.1.5 - adds unseen count and
+  createdmodseq to index header, savedate and createdmodseq to index records
+* Support for WebSockets
+* Support for HTTP/2.0
+* Support for Zeroskip database format
+* Intermediate mailboxes are now recorded in mailboxes database
+* Conversations database format update - adds flags and internaldate fields,
+  and is now versioned for future-compatibility.  You will need to rebuild
+  your conversations databases with :cyrusman:`ctl_conversationsdb(8)` and
+  the `-b` switch to benefit from this.
+* IMAP FETCH accepts two new data items, MAILBOXIDS and MAILBOXES, which
+  respectively return the unique ids or names of the containing mailboxes of
+  each message in the sequence (for best performance, rebuild your
+  conversations databases as above)
+* :cyrusman:`mbpath(8)` is now much more useful
+* Twoskip database format now supports shared locks
+* All Cyrus binaries now use real sysexits exit codes instead of mapping
+  nearly everything to EX_TEMPFAIL
+* CyrusDB errors now syslog the actual error instead of just "cyrusdb error"
+* New `allowdeleted` :cyrusman:`imapd.conf(5)` option (default off), which
+  allows admin users to see deleted mailboxes and expunged messages over IMAP
+* :cyrusman:`cyr_virusscan(8)` now supports custom templates for notifications
+  sent about infected messages that have been deleted
+* :cyrusman:`imapd.conf(5)` options that represent a time duration now accept
+  'd', 'h', 'm', 's' suffixes rather than arbitrary units.
+* The `tls_server_cert` and `tls_server_key` :cyrusman:`imapd.conf(5)` options
+  now allow two certificate/key pairs (e.g. RSA and EC) to be used.  Thanks
+  Дилян Палаузов
+* Mailbox create/delete/rename are now performed under a lock on the user's
+  namespace, to prevent races (especially during big renames).
+
+
+Updates to default configuration
+================================
+
+* The `specialusealways` option is now enabled by default. It must
+  explicitly be disabled for interoperability with legacy clients that
+  can't handle RFC 6154 attributes in extended LIST commands.
+* The values accepted by `expunge_mode` have changed, please see the
+  documentation for more information about the changes.
+* The legacy GETANNOTATIONS/SETANNOTATIONS IMAP commands will no longer
+  work unless `annotation_enable_legacy_commands` is enabled.
+* The `outbox_sendlater` option and its functionality have been removed.
+
+
+Security fixes
+==============
+
+* Contains fix for `CVE-2017-14230 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230>`_
+* Contains fix for `CVE-2019-18928 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-18928>`_
+* Contains fix for `CVE-2019-19783 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-19783>`_
+
+
+Significant bugfixes
+====================
+
+* Contains fix for :issue:`2839`
+
+
+.. _Xapian: https://xapian.org
+.. _ClamAV: https://www.clamav.net
+.. _JMAP: http://jmap.io

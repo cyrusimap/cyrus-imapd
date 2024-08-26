@@ -1,8 +1,6 @@
-#! /bin/sh
-exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
-#!perl -w
+#!/usr/bin/perl
 #
-# Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+# Copyright (c) 1994-2020 Carnegie Mellon University.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -42,6 +40,9 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+use strict;
+use warnings;
+
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 use strict;
@@ -61,7 +62,9 @@ my $deletehelp =     "delete <name>    - delete script.\n";
 my $username = $ENV{USER};
 my $authname = $ENV{USER};
 my $realm = "";
+my $password;
 my $ex = "";
+my $exfile = "";
 my $help = 0;
 my $man = 0;
 my $ret;
@@ -69,7 +72,9 @@ my $ret;
 GetOptions("a|authname:s" => \$authname,
     "u|username:s" => \$username,
     "r|realm:s" => \$realm,
+    "p|password:s" => \$password,
     "e|exec:s" => \$ex,
+    "f|execfile:s" => \$exfile,
     "help|?" => \$help,
     man => \$man) or pod2usage(2);
 pod2usage(1) if $help;
@@ -84,7 +89,11 @@ my $acapserver = $ARGV[0];
 my $filehandle;
 my $interactive;
 
-if (! $ex eq "") {
+if (! $exfile eq "") {
+    open(FILEH,"<$exfile") || die "unable to open file: $?";
+    $filehandle = *FILEH;
+    $interactive = 0;
+} elsif (! $ex eq "") {
     $filehandle = tempfile();
 
     if (!$filehandle) { die "unable to open tmp file: $?"; }
@@ -96,8 +105,6 @@ if (! $ex eq "") {
     $filehandle = *STDIN;
     $interactive = 1;
 }
-
-
 
 sub list_cb {
 
@@ -122,6 +129,8 @@ sub prompt {
       return $authname;
   } elsif (($type eq "realm") && (defined $realm)) {
       return $realm;
+  } elsif (($type eq "password") && (defined $password)) {
+      return $password;
   }
 
   my $ostty;
@@ -172,6 +181,8 @@ if (!defined $obj) {
 
 my $term = Term::ReadLine->new("sieveshell");
 
+my $exitcode = 0;
+
 $term->ornaments(0);
 
 while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
@@ -198,6 +209,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
         my $errstr = sieve_get_error($obj);
         $errstr = "unknown error" if(!defined($errstr));
         print "upload failed: $errstr\n";
+        $exitcode = 1;
       }
     } elsif (($words[0] eq "list") ||
              ($words[0] eq "l") ||
@@ -207,6 +219,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
             my $errstr = sieve_get_error($obj);
             $errstr = "unknown error" if(!defined($errstr));
             print "list failed: $errstr\n";
+            $exitcode = 1;
         }
     } elsif (($words[0] eq "activate") ||
              ($words[0] eq "a")) {
@@ -219,6 +232,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
             my $errstr = sieve_get_error($obj);
             $errstr = "unknown error" if(!defined($errstr));
             print "activate failed: $errstr\n";
+            $exitcode = 1;
         }
     } elsif (($words[0] eq "deactivate") ||
              ($words[0] eq "da")) {
@@ -231,6 +245,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
             my $errstr = sieve_get_error($obj);
             $errstr = "unknown error" if(!defined($errstr));
             print "deactivate failed: $errstr\n";
+            $exitcode = 1;
         }
     } elsif (($words[0] eq "delete") ||
              ($words[0] eq "d")) {
@@ -243,6 +258,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
             my $errstr = sieve_get_error($obj);
             $errstr = "unknown error" if(!defined($errstr));
             print "delete failed: $errstr\n";
+            $exitcode = 1;
         }
     } elsif (($words[0] eq "get") ||
              ($words[0] eq "g")) {
@@ -256,6 +272,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
             my $errstr = sieve_get_error($obj);
             $errstr = "unknown error" if(!defined($errstr));
             print "get failed: $errstr\n";
+            $exitcode = 1;
         } else {
             if ($words[2]) {
                 open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
@@ -267,13 +284,16 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
         }
     } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
         sieve_logout($obj);
-        exit 0;
+        last;
     } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
         show_help();
     } else {
         print "Invalid command: $words[0]\n";
+        $exitcode = 1;
     }
 }
+
+exit $exitcode
 
 __END__
 
@@ -290,7 +310,8 @@ sieveshell - remotely manipulate sieve scripts
 =head1 SYNOPSIS
 
 sieveshell [B<--user>=I<user>] [B<--authname>=I<authname>]
-[B<--realm>=I<realm>] [B<--exec>=I<script>] I<server>[B<:>I<port>]
+[B<--realm>=I<realm>] [B<--password>=I<password>]
+[B<--exec>=I<script>] [B<--execfile>=I<file>] I<server>[B<:>I<port>]
 
 sieveshell B<--help>
 
@@ -335,9 +356,19 @@ current login user.
 
 The realm to attempt authentication in.
 
+=item B<-p> I<password>, B<--password>=I<password>
+
+The password to use when authenticating to server. Note that this
+parameter can be seen in the process list. B<Use with caution!>
+
 =item B<-e> I<script>, B<--exec>=I<script>
 
 Instead of working interactively, run commands from I<script>, and
+exit when done.
+
+=item B<-f> I<file>, B<--execfile>=I<file>
+
+Instead of working interactively, run commands from file I<file> and
 exit when done.
 
 =back

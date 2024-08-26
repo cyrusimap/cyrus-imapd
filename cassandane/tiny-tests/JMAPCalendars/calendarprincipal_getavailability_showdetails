@@ -1,0 +1,149 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_getavailability_showdetails
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                invisible => {
+                    name => 'invisibleCalendar',
+                    includeInAvailability => 'none',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $invisibleCalendarId = $res->[0][1]{created}{invisible}{id};
+    $self->assert_not_null($invisibleCalendarId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uid',
+                    title => "event1",
+                    start => "2020-07-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    status => 'confirmed',
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        count => 12,
+                    }],
+                    recurrenceOverrides => {
+                        "2020-08-26T09:00:00" => {
+                            start => "2020-08-26T13:00:00",
+                        },
+                    },
+                },
+                event2 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event2uid',
+                    title => "event2",
+                    start => "2020-08-07T11:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT3H",
+                },
+                event3 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event3uid',
+                    title => "event3",
+                    start => "2020-08-10T13:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    freeBusyStatus => 'free',
+                },
+                event4 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event4uid',
+                    title => "event4",
+                    start => "2020-08-12T09:30:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    status => 'tentative',
+                },
+                event5 => {
+                    calendarIds => {
+                        $invisibleCalendarId => JSON::true,
+                    },
+                    uid => 'event5uid',
+                    title => "event5",
+                    start => "2020-08-14T15:30:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                },
+            },
+        }, 'R1'],
+        ['Principal/getAvailability', {
+            id => 'cassandane',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+            showDetails => JSON::true,
+            eventProperties => ['start', 'title'],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(5, scalar keys %{$res->[0][1]{created}});
+
+    $self->assert_deep_equals([{
+        utcStart => "2020-08-05T07:00:00Z",
+        utcEnd => "2020-08-05T08:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-05T09:00:00",
+            title => 'event1',
+        },
+    }, {
+        utcStart => "2020-08-07T09:00:00Z",
+        utcEnd => "2020-08-07T12:00:00Z",
+        busyStatus => 'unavailable',
+        event => {
+            start => "2020-08-07T11:00:00",
+            title => 'event2',
+        },
+    }, {
+        utcStart => "2020-08-12T07:00:00Z",
+        utcEnd => "2020-08-12T08:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-12T09:00:00",
+            title => 'event1',
+        },
+    }, {
+        utcStart => "2020-08-12T07:30:00Z",
+        utcEnd => "2020-08-12T08:30:00Z",
+        busyStatus => 'tentative',
+        event => {
+            start => "2020-08-12T09:30:00",
+            title => 'event4',
+        },
+    }, {
+        utcStart => "2020-08-19T07:00:00Z",
+        utcEnd => "2020-08-19T08:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-19T09:00:00",
+            title => 'event1',
+        },
+    }, {
+        utcStart => "2020-08-26T11:00:00Z",
+        utcEnd => "2020-08-26T12:00:00Z",
+        busyStatus => 'confirmed',
+        event => {
+            start => "2020-08-26T13:00:00",
+            title => 'event1',
+        },
+    }], $res->[1][1]{list});
+}

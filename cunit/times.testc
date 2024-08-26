@@ -474,22 +474,20 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 0);
 
-    /* Zero Hour */
+    /* Zero Hour - we don't allow it any more, because the date returns negative */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("WED, 31 DEC 1969 19:36:29 -0500", &t, DATETIME_FULL); /* NYC */
-    CU_ASSERT_EQUAL(r, 31);
-    CU_ASSERT_EQUAL(t, 2189);
+    CU_ASSERT_EQUAL(r, -1);
 
     t = UNINIT_TIMET;
     r = time_from_rfc5322(" 1-JAN-1970 11:36:29 +1100", &t, DATETIME_FULL); /* MEL */
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 2189);
 
-    /* Pre Jan 1 1970 */
+    /* Pre Jan 1 1970 - we don't allow */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("WED, 31 DEC 1969 19:36:29", &t, DATETIME_FULL);
-    CU_ASSERT_EQUAL(r, 25);
-    CU_ASSERT_EQUAL(t, -15811);
+    CU_ASSERT_EQUAL(r, -1);
 
     /* Well-formed full RFC5322 format with 2-digit day
      * "dd-mmm-yyyy HH:MM:SS zzzzz" */
@@ -557,22 +555,26 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1230969900);
 
+#if SIZEOF_TIME_T >= 8
     /* Year 9999 */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("Fri, 31-Dec-9999 23:59:59 +0000", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 253402300799);
+#endif
 
     /* Year 1 - This will fail*/
     t = UNINIT_TIMET;
     r = time_from_rfc5322("1 Jan 1 00:00:00 +0000", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, -1);
 
+#if SIZEOF_TIME_T >= 8
     /* 5 digit year */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("Sat, 1 Jan 10000 00:00:00", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, 253402300800);
+#endif
 
     /* Invalid date */
     t = UNINIT_TIMET;

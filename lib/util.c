@@ -65,18 +65,20 @@
 #include <stdint.h>
 #endif
 #include <time.h>
+#include <ftw.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "byteorder64.h"
+#include "byteorder.h"
 #include "libconfig.h"
 #include "map.h"
 #include "retry.h"
 #include "util.h"
 #include "assert.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif
@@ -349,6 +351,13 @@ EXPORTED int strcasecmpsafe(const char *a, const char *b)
                       (b == NULL ? "" : b));
 }
 
+EXPORTED int strncasecmpsafe(const char *a, const char *b, size_t n)
+{
+    return strncasecmp((a == NULL ? "" : a),
+                       (b == NULL ? "" : b),
+                       n);
+}
+
 /* in which NULL is NOT equal to "" */
 EXPORTED int strcmpnull(const char *a, const char *b)
 {
@@ -471,7 +480,7 @@ EXPORTED int create_tempfile(const char *path)
     pattern = strconcat(path, "/cyrus_tmpfile_XXXXXX", (char *)NULL);
 
     fd = mkstemp(pattern);
-    if (fd >= 0 && unlink(pattern) == -1) {
+    if (fd >= 0 && xunlink(pattern) == -1) {
         close(fd);
         fd = -1;
     }
@@ -480,15 +489,50 @@ EXPORTED int create_tempfile(const char *path)
     return fd;
 }
 
+EXPORTED char *create_tempdir(const char *path, const char *subname)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char *dbpath = NULL;
+
+    buf_setcstr(&buf, path);
+    if (!buf.len || buf.s[buf.len-1] != '/') {
+        buf_putc(&buf, '/');
+    }
+    buf_appendcstr(&buf, "cyrus-");
+    buf_appendcstr(&buf, subname && *subname ? subname : "tmpdir");
+    buf_appendcstr(&buf, "-XXXXXX");
+    buf_cstring(&buf);
+    dbpath = xstrdupnull(mkdtemp(buf.s));
+
+    buf_free(&buf);
+    return dbpath;
+}
+
+static int removedir_cb(const char *fpath,
+                        const struct stat *sb __attribute__((unused)),
+                        int typeflag __attribute__((unused)),
+                        struct FTW *ftwbuf __attribute__((unused)))
+{
+    return remove(fpath);
+}
+
+EXPORTED int removedir(const char *path)
+{
+    return nftw(path, removedir_cb, 128, FTW_DEPTH|FTW_PHYS);
+}
+
 /* Create all parent directories for the given path,
  * up to but not including the basename.
  */
 EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
-    char *path = xstrdup(pathname);    /* make a copy to write into */
+    char *path = xstrdupnull(pathname);    /* make a copy to write into */
     char *p = path;
     int save_errno;
     struct stat sbuf;
+
+    if (!p || *p == '\0')
+        return -1;
 
     while ((p = strchr(p+1, '/'))) {
         *p = '\0';
@@ -496,11 +540,14 @@ EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused
             save_errno = errno;
             if (stat(path, &sbuf) == -1) {
                 errno = save_errno;
-                syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+                xsyslog(LOG_ERR, "IOERROR: creating directory",
+                                 "path=<%s>", path);
                 free(path);
                 return -1;
             }
         }
+        if (errno == EEXIST)
+            errno = 0;
         *p = '/';
     }
 
@@ -524,8 +571,9 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     if (!nolink) {
         if (link(from, to) == 0) return 0;
         if (errno == EEXIST) {
-            if (unlink(to) == -1) {
-                syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
+            if (xunlink(to) == -1) {
+                xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
+                                 "filename=<%s>", to);
                 return -1;
             }
             if (link(from, to) == 0) return 0;
@@ -534,19 +582,22 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
 
     srcfd = open(from, O_RDONLY, 0666);
     if (srcfd == -1) {
-        syslog(LOG_ERR, "IOERROR: opening %s: %m", from);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", from);
         r = -1;
         goto done;
     }
 
     if (fstat(srcfd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on %s: %m", from);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>", from);
         r = -1;
         goto done;
     }
 
     if (!sbuf.st_size) {
-        syslog(LOG_ERR, "IOERROR: zero byte file %s: %m", from);
+        xsyslog(LOG_ERR, "IOERROR: zero byte file",
+                         "filename=<%s>", from);
         r = -1;
         goto done;
     }
@@ -554,7 +605,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
         if (!(flags & COPYFILE_MKDIR))
-            syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
+            xsyslog(LOG_ERR, "IOERROR: create failed",
+                             "filename=<%s>", to);
         r = -1;
         goto done;
     }
@@ -564,18 +616,37 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     n = retry_write(destfd, src_base, src_size);
 
     if (n == -1 || fsync(destfd)) {
-        syslog(LOG_ERR, "IOERROR: writing %s: %m", to);
+        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
+                         "filename=<%s>", to);
         r = -1;
-        unlink(to);  /* remove any rubbish we created */
+        xunlink(to);  /* remove any rubbish we created */
         goto done;
     }
 
     if (keeptime) {
+        int ret;
+#if defined(HAVE_FUTIMENS)
+        struct timespec ts[2];
+
+        ts[0] = sbuf.st_atim;
+        ts[1] = sbuf.st_mtim;
+        ret = futimens(destfd, ts);
+#elif defined(HAVE_FUTIMES)
         struct timeval tv[2];
+
         TIMESPEC_TO_TIMEVAL(&tv[0], &sbuf.st_atim);
         TIMESPEC_TO_TIMEVAL(&tv[1], &sbuf.st_mtim);
-        if (futimes(destfd, tv)) {
-            syslog(LOG_ERR, "IOERROR: setting times on %s: %m", to);
+        ret = futimes(destfd, tv);
+#else
+        struct timeval tv[2];
+
+        close(destfd);
+        destfd = -1;
+        ret = utimes(to, tv);
+#endif
+        if (ret) {
+            xsyslog(LOG_ERR, "IOERROR: setting times failed",
+                             "filename=<%s>", to);
             r = -1;
         }
     }
@@ -607,7 +678,7 @@ EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
 
     if (!r && (flags & COPYFILE_RENAME)) {
         /* remove the original file if the copy succeeded */
-        unlink(from);
+        xunlink(from);
     }
 
     return r;
@@ -666,7 +737,7 @@ EXPORTED int set_caps(int stage __attribute__((unused)),
 }
 #endif
 
-static int cap_setuid(int uid, int is_master)
+static int cyrus_cap_setuid(int uid, int is_master)
 {
     int r;
 
@@ -686,7 +757,7 @@ EXPORTED int become_cyrus(int is_master)
     int result;
     static uid_t uid = 0;
 
-    if (uid) return cap_setuid(uid, is_master);
+    if (uid) return cyrus_cap_setuid(uid, is_master);
 
     const char *cyrus = cyrus_user();
     const char *mail = cyrus_group();
@@ -732,7 +803,7 @@ EXPORTED int become_cyrus(int is_master)
         return -1;
     }
 
-    result = cap_setuid(newuid, is_master);
+    result = cyrus_cap_setuid(newuid, is_master);
 
     /* Only set static uid if successful, else future calls won't reset gid */
     if (result == 0)
@@ -924,15 +995,15 @@ EXPORTED int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
     int cval;
 
     /* ULLONG_MAX == 18446744073709551615ULL
-     * - and I don't care about those last 5
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
         if (!cyrus_isdigit(p[n]))
             break;
-        if (result > 1844674407370955161ULL) {
-            return -1;
-        }
         cval = p[n] - '0';
+        if (result >= 1844674407370955161ULL) {
+            if (result > 1844674407370955161ULL || cval > 5)
+                return -1;
+        }
         result = result * 10 + cval;
     }
 
@@ -962,10 +1033,11 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
     int cval;
 
     /* ULLONG_MAX == 18446744073709551615ULL
-     * - and I don't care about those last 5
+     * so if we're greater or equal to (ULLONG_MAX+1)/16
+     * then we will overflow
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
-        if (result > 1844674407370955161ULL) {
+        if (result >= 1152921504606846976ULL) {
             return -1;
         }
         cval = unxdigit[(int)p[n]];
@@ -1048,20 +1120,6 @@ EXPORTED const char *buf_cstring(const struct buf *buf)
     return buf->s;
 }
 
-EXPORTED char *buf_newcstring(struct buf *buf)
-{
-    char *ret = xstrdup(buf_cstring(buf));
-    buf_reset(buf);
-    return ret;
-}
-
-EXPORTED char *buf_release(struct buf *buf)
-{
-    char *ret = (char *)buf_cstring(buf);
-    buf_init(buf);
-    return ret;
-}
-
 EXPORTED const char *buf_cstringnull(const struct buf *buf)
 {
     if (!buf->s) return NULL;
@@ -1074,10 +1132,34 @@ EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
     return buf_cstring(buf);
 }
 
+EXPORTED const char *buf_cstring_or_empty(const struct buf *buf)
+{
+    if (!buf->s) return "";
+    return buf_cstring(buf);
+}
+
+EXPORTED char *buf_newcstring(struct buf *buf)
+{
+    char *ret = xstrdup(buf_cstring(buf));
+    buf_reset(buf);
+    return ret;
+}
+
+EXPORTED char *buf_release(struct buf *buf)
+{
+    char *ret = (char *)buf_cstring(buf);
+    buf->alloc = 0;
+    buf->s = NULL;
+    buf_free(buf);
+    return ret;
+}
+
 EXPORTED char *buf_releasenull(struct buf *buf)
 {
     char *ret = (char *)buf_cstringnull(buf);
-    buf_init(buf);
+    buf->alloc = 0;
+    buf->s = NULL;
+    buf_free(buf);
     return ret;
 }
 
@@ -1286,10 +1368,10 @@ EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
     va_end(args);
 }
 
-static void buf_replace_buf(struct buf *buf,
-                            size_t offset,
-                            size_t length,
-                            const struct buf *replace)
+EXPORTED void buf_replace_buf(struct buf *buf,
+                              size_t offset,
+                              size_t length,
+                              const struct buf *replace)
 {
     if (offset > buf->len) return;
     if (offset + length > buf->len)
@@ -1430,6 +1512,7 @@ EXPORTED void buf_insertcstr(struct buf *dst, unsigned int off, const char *str)
     struct buf str_buf = BUF_INITIALIZER;
     buf_init_ro_cstr(&str_buf, str);
     buf_replace_buf(dst, off, 0, &str_buf);
+    buf_free(&str_buf);
 }
 
 EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
@@ -1438,12 +1521,14 @@ EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
     struct buf map_buf = BUF_INITIALIZER;
     buf_init_ro(&map_buf, base, len);
     buf_replace_buf(dst, off, 0, &map_buf);
+    buf_free(&map_buf);
 }
 
 EXPORTED void buf_remove(struct buf *dst, unsigned int off, unsigned int len)
 {
     struct buf empty_buf = BUF_INITIALIZER;
     buf_replace_buf(dst, off, len, &empty_buf);
+    buf_free(&empty_buf);
 }
 
 /*
@@ -1468,14 +1553,6 @@ EXPORTED int buf_cmp(const struct buf *a, const struct buf *b)
     return r;
 }
 
-EXPORTED void buf_init(struct buf *buf)
-{
-    buf->alloc = 0;
-    buf->len = 0;
-    buf->flags = 0;
-    buf->s = NULL;
-}
-
 /*
  * Initialise a struct buf to point to read-only data.  The key here is
  * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
@@ -1483,10 +1560,9 @@ EXPORTED void buf_init(struct buf *buf)
  */
 EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
 {
-    buf->alloc = 0;
-    buf->len = len;
-    buf->flags = 0;
+    buf_free(buf);
     buf->s = (char *)base;
+    buf->len = len;
 }
 
 /*
@@ -1496,9 +1572,17 @@ EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
  */
 EXPORTED void buf_initm(struct buf *buf, char *base, int len)
 {
-    buf->alloc = buf->len = len;
-    buf->flags = 0;
+    buf_free(buf);
     buf->s = base;
+    buf->alloc = buf->len = len;
+}
+
+/*
+ * Initialise a struct buf to point to writable c string str.
+ */
+EXPORTED void buf_initmcstr(struct buf *buf, char *str)
+{
+    buf_initm(buf, str, strlen(str));
 }
 
 /*
@@ -1506,10 +1590,9 @@ EXPORTED void buf_initm(struct buf *buf, char *base, int len)
  */
 EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
 {
-    buf->alloc = 0;
-    buf->len = (str ? strlen(str) : 0);
-    buf->flags = 0;
+    buf_free(buf);
     buf->s = (char *)str;
+    buf->len = (str ? strlen(str) : 0);
 }
 
 /*
@@ -1517,25 +1600,23 @@ EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
  * This buf is CoW, and if written to the data will be freed
  * using map_free().
  */
-EXPORTED void buf_init_mmap(struct buf *buf, int onceonly, int fd,
+EXPORTED void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
                             const char *fname, size_t size, const char *mboxname)
 {
+    assert(!buf->alloc);
     buf->flags = BUF_MMAP;
     map_refresh(fd, onceonly, (const char **)&buf->s, &buf->len,
                 size, fname, mboxname);
 }
 
-static void _buf_free_data(struct buf *buf)
+EXPORTED void buf_free(struct buf *buf)
 {
+    if (!buf) return;
+
     if (buf->alloc)
         free(buf->s);
     else if (buf->flags & BUF_MMAP)
         map_free((const char **)&buf->s, &buf->len);
-}
-
-EXPORTED void buf_free(struct buf *buf)
-{
-    _buf_free_data(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf->len = 0;
@@ -1544,9 +1625,9 @@ EXPORTED void buf_free(struct buf *buf)
 
 EXPORTED void buf_move(struct buf *dst, struct buf *src)
 {
-    _buf_free_data(dst);
+    buf_free(dst);
     *dst = *src;
-    buf_init(src);
+    memset(src, 0, sizeof(struct buf));
 }
 
 EXPORTED int buf_findchar(const struct buf *buf, unsigned int off, int c)
@@ -1705,6 +1786,17 @@ EXPORTED int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
     return p-hex;
 }
 
+EXPORTED int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags)
+{
+    size_t seplen = _BH_GETSEP(flags) && binlen ? binlen - 1 : 0;
+    size_t newlen = hex->len + binlen * 2 + seplen;
+    buf_ensure(hex, newlen - hex->len + 1);
+    int r = bin_to_hex(bin, binlen, hex->s + hex->len, flags);
+    buf_truncate(hex, newlen);
+    buf_cstring(hex);
+    return r;
+}
+
 EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
 {
     uint16_t *p = (void *)hex;
@@ -1714,6 +1806,16 @@ EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
         *p++ = lchexchars[*v++];
     hex[binlen*2] = '\0';
     return 2 * binlen;
+}
+
+EXPORTED int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen)
+{
+    size_t newlen = hex->len + 2 * binlen;
+    buf_ensure(hex, newlen - hex->len + 1);
+    int r = bin_to_lchex(bin, binlen, hex->s + hex->len);
+    buf_truncate(hex, newlen);
+    buf_cstring(hex);
+    return r;
 }
 
 EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
@@ -1741,6 +1843,25 @@ EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
     }
 
     return (unsigned char *)v - (unsigned char *)bin;
+}
+
+EXPORTED int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen)
+{
+    if (hex == NULL)
+        return -1;
+    if (hexlen == 0)
+        hexlen = strlen(hex);
+    if (hexlen % 2)
+        return -1;
+
+    size_t newlen = bin->len + hexlen / 2;
+    buf_ensure(bin, newlen - bin->len + 1);
+    int r = hex_to_bin(hex, hexlen, bin->s + bin->len);
+    if (r >= 0) {
+        buf_truncate(bin, newlen);
+        buf_cstring(bin);
+    }
+    return r;
 }
 
 #ifdef HAVE_ZLIB
@@ -2028,4 +2149,47 @@ EXPORTED void tcp_disable_nagle(int fd)
     if (setsockopt(fd, proto->p_proto, TCP_NODELAY, &on, sizeof(on)) != 0) {
         syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
     }
+}
+
+EXPORTED void xsyslog_fn(int priority, const char *description,
+                         const char *func, const char *extra_fmt, ...)
+{
+    static struct buf buf = BUF_INITIALIZER;
+    int saved_errno = errno;
+    int want_diag = (LOG_PRI(priority) != LOG_NOTICE
+                     && LOG_PRI(priority) != LOG_INFO);
+
+    buf_reset(&buf);
+    buf_appendcstr(&buf, description);
+    buf_appendmap(&buf, ": ", 2);
+    if (extra_fmt && *extra_fmt) {
+        va_list args;
+
+        va_start(args, extra_fmt);
+        buf_vprintf(&buf, extra_fmt, args);
+        va_end(args);
+
+        buf_putc(&buf, ' ');
+    }
+    if (want_diag) {
+        if (saved_errno) {
+            buf_appendmap(&buf, "syserror=<", 10);
+            buf_appendcstr(&buf, strerror(saved_errno));
+            buf_appendmap(&buf, "> ", 2);
+        }
+        buf_appendmap(&buf, "func=<", 6);
+        if (func) buf_appendcstr(&buf, func);
+        buf_putc(&buf, '>');
+    }
+
+    syslog(priority, "%s", buf_cstring(&buf));
+    buf_free(&buf);
+    errno = saved_errno;
+}
+
+EXPORTED char *modseqtoa(modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    return buf_release(&buf);
 }

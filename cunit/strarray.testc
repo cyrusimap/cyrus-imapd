@@ -598,7 +598,8 @@ static void test_split(void)
     strarray_free(sa);
 
     /* splitm - takes ownership of a strdup()d argument */
-    sa = strarray_splitm(xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4), " ", 0);
+    sa = strarray_new();
+    strarray_splitm(sa, xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4), " ", 0);
     CU_ASSERT_PTR_NOT_NULL(sa);
     CU_ASSERT_EQUAL(sa->count, 5);
     CU_ASSERT(sa->alloc >= sa->count);
@@ -654,6 +655,133 @@ static void test_split(void)
 #undef WORD2
 #undef WORD3
 #undef WORD4
+}
+
+static void test_split_lcase(void)
+{
+    strarray_t *sa;
+#define WORD0   "LORem"
+#define WORD1   "ipSUM"
+#define WORD2   "DoLoR"
+#define WORD3   "siT"
+#define WORD4   "Amet"
+
+#define WORD0lc "lorem"
+#define WORD1lc "ipsum"
+#define WORD2lc "dolor"
+#define WORD3lc "sit"
+#define WORD4lc "amet"
+
+    /* 5 words, space separator */
+    sa = strarray_split(WORD0" "WORD1" "WORD2" "WORD3" "WORD4,
+                        " ", STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 5);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4lc);
+    strarray_free(sa);
+
+    /* 5 words, NULL separator (whitespace) */
+    sa = strarray_split(WORD0" "WORD1"\t"WORD2"\r"WORD3"\n"WORD4,
+                        NULL, STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 5);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4lc);
+    strarray_free(sa);
+
+    /* 5 words, several separators */
+    sa = strarray_split(WORD0"("WORD1")"WORD2"["WORD3"]"WORD4,
+                        "[]()", STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 5);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4lc);
+    strarray_free(sa);
+
+    /* splitm - takes ownership of a strdup()d argument */
+    sa = strarray_new();
+    strarray_splitm(sa, xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4),
+                         " ", STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 5);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4lc);
+    strarray_free(sa);
+
+    /* nsplit - specify a byte range to copy and split */
+    sa = strarray_nsplit(WORD0" "WORD1" "WORD2" "WORD3" "WORD4,
+                         sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2),
+                         " ", STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 3);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2lc);
+    strarray_free(sa);
+
+    /* split with surrounding whitespace */
+    sa = strarray_split(WORD0"| "WORD1" | "WORD2" |"WORD3" | "WORD4"| ",
+                        "|", STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 6);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), " "WORD1lc" ");
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), " "WORD2lc" ");
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3lc" ");
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), " "WORD4lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 5), " ");
+    strarray_free(sa);
+
+    /* trim surrounding whitespace */
+    sa = strarray_split(WORD0"| "WORD1" | "WORD2" |"WORD3" | "WORD4"| ",
+                        "|", STRARRAY_TRIM | STRARRAY_LCASE);
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 5);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3lc);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4lc);
+    strarray_free(sa);
+
+#undef WORD0
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+
+#undef WORD0lc
+#undef WORD1lc
+#undef WORD2lc
+#undef WORD3lc
+#undef WORD4lc
 }
 
 static void test_remove(void)
@@ -1352,6 +1480,7 @@ static void test_sortrawuniq(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD3);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD2);
 
+    strarray_fini(&sa);
 #undef WORD0
 #undef WORD1
 #undef WORD2
@@ -1403,6 +1532,7 @@ static void test_sortmboxuniq(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD1);
 
+    strarray_fini(&sa);
 #undef WORD0
 #undef WORD1
 #undef WORD2
@@ -1584,5 +1714,60 @@ static void test_swap(void)
 #undef WORD1
 }
 
+static void test_appendv(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    const char *s;
+
+    s = strarray_appendv(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    s = strarray_appendv(&sa, "ipsum");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
+}
+
+static void test_addv(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    const char *s;
+
+    s = strarray_addv(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    s = strarray_addv(&sa, "ipsum");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    s = strarray_addv(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
+}
+
+static void test_add_casev(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    const char *s;
+
+    s = strarray_add_casev(&sa, "lorem");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    s = strarray_add_casev(&sa, "ipsum");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 1));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    s = strarray_add_casev(&sa, "lOREm");
+    CU_ASSERT_PTR_EQUAL(s, strarray_nth(&sa, 0));
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
+}
 
 /* vim: set ft=c: */

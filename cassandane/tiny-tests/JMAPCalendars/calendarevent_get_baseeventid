@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_baseeventid
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $event1Uid = '1cf5da26-38e9-47ac-8449-04354ae3772d';
+    my $event2Uid = '3e1356b8-5e55-4413-98c9-27da12271b99';
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    uid => $event1Uid,
+                    title => "event1",
+                    start => "2023-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                    recurrenceOverrides => {
+                        '2023-01-02T09:00:00' => {
+                            start => '2023-01-02T12:00:00',
+                        },
+                    },
+                },
+                event2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    uid => $event2Uid,
+                    title => "event2",
+                    start => "2023-01-01T01:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                },
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1', '#event2',],
+            properties => ['baseEventId'],
+        }, 'R2'],
+    ]);
+    my $event1Id = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($event1Id);
+    $self->assert_null($res->[1][1]{list}[0]{baseEventId});
+
+    my $event2Id = $res->[0][1]{created}{event2}{id};
+    $self->assert_not_null($event2Id);
+    $self->assert_null($res->[1][1]{list}[0]{baseEventId});
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                after =>  '2023-01-01T01:00:00',
+                before => '2023-01-03T00:00:00',
+            },
+            sort => [{
+                property => 'start',
+            }],
+            expandRecurrences => JSON::true,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['baseEventId', 'utcStart',],
+        }, 'R2'],
+    ]);
+
+    $self->assert_deep_equals([
+        encode_eventid($event1Uid, '20230101T090000'),
+        encode_eventid($event2Uid, '20230102T010000'),
+        encode_eventid($event1Uid, '20230102T090000'),
+    ], $res->[0][1]{ids});
+
+    my @events = sort {
+        $a->{utcStart} cmp $b->{utcStart}
+    } @{$res->[1][1]{list}};
+
+    $self->assert_str_equals($event1Id, $events[0]{baseEventId});
+    $self->assert_str_equals($event2Id, $events[1]{baseEventId});
+    $self->assert_str_equals($event1Id, $events[2]{baseEventId});
+}

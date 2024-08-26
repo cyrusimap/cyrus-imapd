@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_quota_f
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "set ourselves a basic usage quota";
+    $self->_set_limits(
+        quotaroot => 'user.cassandane',
+        storage => 100000,
+        message => 50000,
+        $self->res_annot_storage => 10000,
+    );
+    $self->_check_usages(
+        quotaroot => 'user.cassandane',
+        storage => 0,
+        message => 0,
+        $self->res_annot_storage => 0,
+    );
+
+    xlog $self, "create some messages to use various quota resources";
+    $self->{instance}->create_user("quotafuser");
+    $self->_set_limits(
+        quotaroot => 'user.quotafuser',
+        storage => 100000,
+        message => 50000,
+        $self->res_annot_storage => 10000,
+    );
+    $self->{adminstore}->set_folder("user.quotafuser");
+    my $quotafuser_expected_storage = 0;
+    my $quotafuser_expected_message = 0;
+    my $quotafuser_expected_annotation_storage = 0;
+    for (1..3) {
+        my $msg = $self->make_message("QuotaFUser $_", store => $self->{adminstore}, extra_lines => 17000);
+        $quotafuser_expected_storage += length($msg->as_string());
+        $quotafuser_expected_message++;
+    }
+    my $annotation = $self->make_random_data(10);
+    $quotafuser_expected_annotation_storage += length($annotation);
+    $admintalk->setmetadata('user.quotafuser', '/private/comment', { Quote => $annotation });
+
+    my $cassandane_expected_storage = 0;
+    my $cassandane_expected_message = 0;
+    my $cassandane_expected_annotation_storage = 0;
+    for (1..10) {
+        my $msg = $self->make_message("Cassandane $_", extra_lines => 5000);
+        $cassandane_expected_storage += length($msg->as_string());
+        $cassandane_expected_message++;
+    }
+    $annotation = $self->make_random_data(3);
+    $cassandane_expected_annotation_storage += length($annotation);
+    $admintalk->setmetadata('user.cassandane', '/private/comment', { Quote => $annotation });
+
+    xlog $self, "check usages";
+    $self->_check_usages(
+        quotaroot => 'user.quotafuser',
+        storage => int($quotafuser_expected_storage/1024),
+        message => $quotafuser_expected_message,
+        $self->res_annot_storage => int($quotafuser_expected_annotation_storage/1024),
+    );
+    $self->_check_usages(
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        $self->res_annot_storage => int($cassandane_expected_annotation_storage/1024),
+    );
+
+    xlog $self, "create a bogus quota file";
+    $self->_zap_quota(quotaroot => 'user.quotafuser');
+
+    xlog $self, "check usages";
+    $self->_check_usages(
+        quotaroot => 'user.quotafuser',
+        storage => 0,
+        message => 0,
+        $self->res_annot_storage => 0,
+    );
+    $self->_check_usages(
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        $self->res_annot_storage => int($cassandane_expected_annotation_storage/1024),
+    );
+
+    xlog $self, "find and add the quota";
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
+
+    xlog $self, "check usages";
+    $self->_check_usages(
+        quotaroot => 'user.quotafuser',
+        storage => int($quotafuser_expected_storage/1024),
+        message => $quotafuser_expected_message,
+        $self->res_annot_storage => int($quotafuser_expected_annotation_storage/1024),
+    );
+    $self->_check_usages(
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        $self->res_annot_storage => int($cassandane_expected_annotation_storage/1024),
+    );
+
+    xlog $self, "re-run the quota utility";
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
+
+    xlog $self, "check usages";
+    $self->_check_usages(
+        quotaroot => 'user.quotafuser',
+        storage => int($quotafuser_expected_storage/1024),
+        message => $quotafuser_expected_message,
+        $self->res_annot_storage => int($quotafuser_expected_annotation_storage/1024),
+    );
+    $self->_check_usages(
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        $self->res_annot_storage => int($cassandane_expected_annotation_storage/1024),
+    );
+}

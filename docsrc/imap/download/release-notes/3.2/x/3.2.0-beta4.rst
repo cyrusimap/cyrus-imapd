@@ -1,0 +1,126 @@
+:tocdepth: 3
+
+====================================
+Cyrus IMAP 3.2.0-beta4 Release Notes
+====================================
+
+.. WARNING::
+    This is a beta release and may contain fun bugs.  Testing it
+    out and providing feedback would be greatly appreciated, but do
+    not run this on your production mail stores!
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.0-beta4/cyrus-imapd-3.2.0-beta4.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.0-beta4/cyrus-imapd-3.2.0-beta4.tar.gz.sig
+
+.. _relnotes-3.2.0-beta4-changes:
+
+Major changes since the 3.0.x series
+====================================
+
+* Sieve bug fixes and features
+* Replication safety improvements
+* Caldav and Carddav improvements
+* Support for JMAP core protocol (:rfc:`8620`)
+* Support for JMAP Mail (:rfc:`8621`)
+* Experimental support for JMAP Contacts (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`)
+* Experimental support for JMAP Calendars (requires
+  `jmap_nonstandard_extensions: yes` in :cyrusman:`imapd.conf(5)`)
+* Xapian bug fixes
+* Improvements to Annotations handling
+* DRAC support has been deprecated
+* Support for Prometheus stats
+* SNMP stats support has been deprecated
+* Removed support for the Sphinx backend to squatter searches
+* New cyrus.index format v16 included since 3.1.5 - adds unseen count and
+  createdmodseq to index header, savedate and createdmodseq to index records
+* Support for WebSockets
+* Support for HTTP/2.0
+* Experimental support for Zeroskip database format
+* Intermediate mailboxes are now recorded in mailboxes database
+* Conversations database format update - adds flags and internaldate fields,
+  and is now versioned for future-compatibility.  You will need to rebuild
+  your conversations databases with :cyrusman:`ctl_conversationsdb(8)` and
+  the `-b` switch to benefit from this
+* IMAP FETCH accepts two new data items, MAILBOXIDS and MAILBOXES, which
+  respectively return the unique ids or names of the containing mailboxes of
+  each message in the sequence (for best performance, rebuild your
+  conversations databases as above)
+* :cyrusman:`mbpath(8)` is now much more useful
+* Twoskip database format now supports shared locks, and ensures record
+  headers do not span disk block boundaries
+* All Cyrus binaries now use real sysexits exit codes instead of mapping
+  nearly everything to EX_TEMPFAIL
+* CyrusDB errors now syslog the actual error instead of just "cyrusdb error"
+* New `allowdeleted` :cyrusman:`imapd.conf(5)` option (default off), which
+  allows admin users to see deleted mailboxes and expunged messages over IMAP
+* :cyrusman:`cyr_virusscan(8)` now supports custom templates for notifications
+  sent about infected messages that have been deleted
+* :cyrusman:`imapd.conf(5)` options that represent a time duration now accept
+  'd', 'h', 'm', 's' suffixes rather than arbitrary units
+* The `tls_server_cert` and `tls_server_key` :cyrusman:`imapd.conf(5)` options
+  now allow two certificate/key pairs (e.g. RSA and EC) to be used.  Thanks
+  Дилян Палаузов
+* Mailbox create/delete/rename are now performed under a lock on the user's
+  namespace, to prevent races (especially during big renames)
+* The :cyrusman:`cyr_info(8)` `conf-lint` subcommand no longer complains
+  about channel-prefixed sync options
+* New `master_bind_errors_fatal` :cyrusman:`imapd.conf(5)` option (default
+  off), with which master will refuse to start if any of the configured
+  services are unable to successfully bind their port.  The default and legacy
+  behaviour is for master to start with the affected services disabled, and
+  not try to start them again until a SIGHUP is received
+* New `autocreate_acl` :cyrusman:`imapd.conf(5)` option, for specifying ACLs
+  to use when mailboxes are created by `autocreate_inbox_folders`
+* New `zoneinfo_dir` :cyrusman:`imapd.conf(5)` option, for specifying the
+  directory Cyrus should look for timezone definitions in.  The default is
+  to let libical find them itself.  If the `tzdist` http module is enabled,
+  this option is mandatory.
+* The iso-8859-1 charset is now treated as an alias for windows-1252, as per
+  `WHATWG Encoding for emails and websites
+  <https://encoding.spec.whatwg.org/#names-and-labels>`_
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+now accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to re-examine and maybe change
+during the process.
+
+* The `specialusealways` option is now enabled by default. It must
+  explicitly be disabled for interoperability with legacy clients that
+  can't handle RFC 6154 attributes in extended LIST commands.
+* The values accepted by `expunge_mode` have changed, please see the
+  documentation for more information about the changes.
+* The legacy GETANNOTATIONS/SETANNOTATIONS IMAP commands will no longer
+  work unless `annotation_enable_legacy_commands` is enabled.
+* The `outbox_sendlater` option and its functionality have been removed.
+* The `tzdist` http module now finds its timezone data directory according
+  to the new `zoneinfo_dir` :cyrusman:`imapd.conf(5)` option, instead of
+  being hardcoded to "{configdirectory}/zoneinfo".  If you are using this
+  module, you MUST now set this option explicitly.  Calendaring services
+  will use the same timezone definitions.
+
+
+Security fixes
+==============
+
+* Contains fix for `CVE-2017-14230 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230>`_
+* Contains fix for `CVE-2019-18928 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-18928>`_
+* Contains fix for `CVE-2019-19783 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-19783>`_
+
+
+Significant bugfixes
+====================
+
+* Contains fix for :issue:`2839`
+
+
+.. _Xapian: https://xapian.org
+.. _ClamAV: https://www.clamav.net
+.. _JMAP: http://jmap.io

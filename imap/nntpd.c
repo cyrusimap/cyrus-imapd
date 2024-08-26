@@ -96,9 +96,10 @@
 #include "proxy.h"
 #include "retry.h"
 #include "times.h"
+#include "slowio.h"
 #include "smtpclient.h"
 #include "spool.h"
-#include "sync_log.h"
+#include "sync_support.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "userdeny.h"
@@ -125,7 +126,7 @@ extern int opterr;
 struct backend *backend_current = NULL;
 
 /* our cached connections */
-struct backend **backend_cached = NULL;
+ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;
@@ -151,6 +152,7 @@ static int allowanonymous = 0;
 static int singleinstance = 1;  /* attempt single instance store */
 
 static struct stagemsg *stage = NULL;
+static struct proc_handle *proc_handle = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
@@ -272,31 +274,6 @@ static struct protocol_t nntp_protocol =
       { "QUIT", NULL, "205" } } }
 };
 
-/* proxy mboxlist_lookup; on misses, it asks the listener for this
-   machine to make a roundtrip to the master mailbox server to make
-   sure it's up to date */
-static int mlookup(const char *name, mbentry_t **mbentryptr)
-{
-    mbentry_t *mbentry = NULL;
-    int r;
-
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
-        kick_mupdate();
-        mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(name, &mbentry, NULL);
-    }
-    if (r) return r;
-    if (mbentry->mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_RESERVED;
-    if (mbentry->mbtype & MBTYPE_MOVING) r = IMAP_MAILBOX_MOVED;
-    if (mbentry->mbtype & MBTYPE_DELETED) r = IMAP_MAILBOX_NONEXISTENT;
-
-    if (mbentryptr && !r) *mbentryptr = mbentry;
-    else mboxlist_entry_free(&mbentry);
-
-    return r;
-}
-
 static int read_response(struct backend *s, int force_notfatal, char **result)
 {
     static char buf[2048];
@@ -341,22 +318,20 @@ static void nntp_reset(void)
 {
     int i;
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (group_state)
         index_close(&group_state);
 
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        free(backend_cached[i]->context);
-        free(backend_cached[i]);
-        i++;
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        free(be->context);
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
-    backend_cached = NULL;
+    ptrarray_fini(&backend_cached);
     backend_current = NULL;
 
     if (nntp_in) {
@@ -410,6 +385,8 @@ static void nntp_reset(void)
     nntp_exists = 0;
     nntp_current = 0;
     did_capabilities = 0;
+
+    slowio_reset();
 }
 
 /*
@@ -426,7 +403,7 @@ int service_init(int argc __attribute__((unused)),
     initialize_nntp_error_table();
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -444,15 +421,19 @@ int service_init(int argc __attribute__((unused)),
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL) != 0) {
         syslog(LOG_ERR,
-               "unable to init duplicate delivery database\n");
+               "unable to init duplicate delivery database");
         fatal("unable to init duplicate delivery database", EX_SOFTWARE);
     }
 
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
-    while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hsrfp:")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* nntps (do starttls right away) */
             nntps = 1;
             if (!tls_enabled()) {
@@ -599,21 +580,22 @@ void shut_down(int code)
 
     in_shutdown = 1;
 
-    proc_cleanup();
+    libcyrus_run_delayed();
+
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (group_state)
         index_close(&group_state);
 
     /* close backend connections */
-    i = 0;
-    while (backend_cached && backend_cached[i]) {
-        proxy_downserver(backend_cached[i]);
-        free(backend_cached[i]->context);
-        free(backend_cached[i]);
-        i++;
+    for (i = 0; i < ptrarray_size(&backend_cached); i++) {
+        struct backend *be = ptrarray_nth(&backend_cached, i);
+        proxy_downserver(be);
+        free(be->context);
+        free(be);
     }
-    if (backend_cached) free(backend_cached);
+    ptrarray_fini(&backend_cached);
 
     duplicate_done();
 
@@ -654,7 +636,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -664,6 +646,9 @@ EXPORTED void fatal(const char* s, int code)
     }
     if (stage) append_removestage(stage);
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
@@ -755,11 +740,18 @@ static void cmdloop(void)
 
         signals_poll();
 
-        proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
+                      index_mboxname(group_state), NULL);
+
+        libcyrus_run_delayed();
 
         if (!proxy_check_input(protin, nntp_in, nntp_out,
                                backend_current ? backend_current->in : NULL,
-                               NULL, 0)) {
+                               NULL, PROT_NO_FD, NULL, 0)) {
             /* No input from client */
             continue;
         }
@@ -798,7 +790,12 @@ static void cmdloop(void)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
         }
 
-        proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), cmd.s);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), cmd.s);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
+                      index_mboxname(group_state), cmd.s);
 
         /* Ihave/Takethis only allowed for feeders */
         if (!(nntp_capa & MODE_FEED) &&
@@ -1039,11 +1036,8 @@ static void cmdloop(void)
                     if (LISTGROUP) {
                         int msgno, last_msgno;
 
-                        msgno = index_finduid(group_state, uid);
-                        if (!msgno || index_getuid(group_state, msgno) != uid) {
-                            msgno++;
-                        }
-                        last_msgno = index_finduid(group_state, last);
+                        msgno = index_finduid(group_state, uid, FIND_GE);
+                        last_msgno = index_finduid(group_state, last, FIND_LE);
 
                         for (; msgno <= last_msgno; msgno++) {
                             prot_printf(nntp_out, "%u\r\n",
@@ -1625,7 +1619,7 @@ static const int numdays[] = {
 #define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
 
 /*
- * Parse a date/time specification per RFC3977 section 7.3.
+ * Parse a date/time specification per RFC 3977 section 7.3.
  */
 static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
 {
@@ -1707,7 +1701,7 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
         if (!is_newsgroup(name)) return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    if (!r) r = mlookup(name, &mbentry);
+    if (!r) r = proxy_mlookup(name, &mbentry, NULL, NULL);
 
     if (!r && mbentry->acl) {
         int myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl);
@@ -1734,7 +1728,7 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
         mboxlist_entry_free(&mbentry);
         if (!backend_next) return IMAP_SERVER_UNAVAILABLE;
 
-        *ret = backend_next;
+        if (ret) *ret = backend_next;
     }
     else {
         /* local group */
@@ -1860,8 +1854,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     FILE *msgfile;
     struct index_record record;
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) {
+    if (!(msgno = index_finduid(group_state, uid, FIND_EQ))) {
         prot_printf(nntp_out, "423 No such article in this newsgroup\r\n");
         return;
     }
@@ -2284,9 +2277,8 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 
     lcase(hdr);
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) msgno++;
-    last_msgno = index_finduid(group_state, last);
+    msgno = index_finduid(group_state, uid, FIND_GE);
+    last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
         char *body;
@@ -2497,7 +2489,6 @@ static void list_proxy(const char *server,
 {
     struct enum_rock *erock = (struct enum_rock *) rock;
     struct backend *be;
-    int r;
     char *result;
 
     be = proxy_findserver(server, &nntp_protocol,
@@ -2507,9 +2498,8 @@ static void list_proxy(const char *server,
 
     prot_printf(be->out, "LIST %s %s\r\n", erock->cmd, erock->wild);
 
-    r = read_response(be, 0, &result);
-    if (!r && !strncmp(result, "215 ", 4)) {
-        while (!(r = read_response(be, 0, &result)) && result[0] != '.') {
+    if (!read_response(be, 0, &result) && !strncmp(result, "215 ", 4)) {
+        while (!read_response(be, 0, &result) && result[0] != '.') {
             prot_printf(nntp_out, "%s", result);
         }
     }
@@ -2666,7 +2656,7 @@ static void cmd_list(char *arg1, char *arg2)
 
         strcpy(pattern, newsprefix);
         strcat(pattern, "*");
-        annotatemore_findall(pattern, 0, "/comment", /*modseq*/0,
+        annotatemore_findall_pattern(pattern, 0, "/comment", /*modseq*/0,
                              newsgroups_cb, lrock.wild, /*flags*/0);
 
         prot_printf(nntp_out, ".\r\n");
@@ -2812,9 +2802,8 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
     struct nntp_overview *over;
     int found = 0;
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) msgno++;
-    last_msgno = index_finduid(group_state, last);
+    msgno = index_finduid(group_state, uid, FIND_GE);
+    last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
         if (!found++)
@@ -2917,7 +2906,7 @@ static void parse_groups(const char *groups, message_data_t *msg)
         if (!is_newsgroup(rcpt)) continue;
 
         /* Only add mailboxes that exist */
-        if (!mlookup(rcpt, NULL)) {
+        if (!proxy_mlookup(rcpt, NULL, NULL, NULL)) {
             strarray_appendm(&msg->rcpt, rcpt);
             rcpt = NULL;
         }
@@ -3273,7 +3262,7 @@ static int deliver(message_data_t *msg)
         mboxlist_entry_free(&mbentry);
 
         /* look it up */
-        r = mlookup(rcpt, &mbentry);
+        r = proxy_mlookup(rcpt, &mbentry, NULL, NULL);
         if (r) return IMAP_MAILBOX_NONEXISTENT;
 
         if (!(mbentry->acl && (myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl)) &&
@@ -3358,6 +3347,8 @@ static int deliver(message_data_t *msg)
         }
     }
 
+    sync_checkpoint(nntp_in);
+
     return r;
 }
 
@@ -3380,6 +3371,8 @@ static int newgroup(message_data_t *msg)
                                newsmaster, newsmaster_authstate, 0, 0, 0);
 
     /* XXX check body of message for useful MIME parts */
+
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3404,9 +3397,9 @@ static int rmgroup(message_data_t *msg)
 
     if (!r) r = mboxlist_deletemailbox(mailboxname, 0,
                                        newsmaster, newsmaster_authstate,
-                                       1, 0, 0, 0);
+                                       MBOXLIST_DELETE_CHECKACL);
 
-    if (!r) sync_log_mailbox(mailboxname);
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3436,7 +3429,7 @@ static int mvgroup(message_data_t *msg)
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
              newsprefix, (int)len, group);
 
-    r = mlookup(oldmailboxname, &mbentry);
+    r = proxy_mlookup(oldmailboxname, &mbentry, NULL, NULL);
     if (r) return r;
 
     r = mboxlist_renamemailbox(mbentry, newmailboxname, NULL, 0,
@@ -3445,7 +3438,7 @@ static int mvgroup(message_data_t *msg)
 
     /* XXX check body of message for useful MIME parts */
 
-    if (!r) sync_log_mailbox_double(oldmailboxname, newmailboxname);
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3471,7 +3464,7 @@ static int cancel_cb(const duplicate_t *dkey,
 {
     struct mailbox *mailbox = NULL;
 
-    /* make sure its a message in a mailbox that we're serving via NNTP */
+    /* make sure it is a message in a mailbox that we're serving via NNTP */
     if (is_newsgroup(dkey->to)) {
         int r;
 
@@ -3509,6 +3502,8 @@ static int cancel(message_data_t *msg)
      */
     duplicate_key_t dkey = {msgid, "", ""};
     duplicate_mark(&dkey, 0, time(NULL));
+
+    sync_checkpoint(nntp_in);
 
     return r;
 }
@@ -3559,7 +3554,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     char *user, *pass, *host, *port, *wild, *path, *s;
     int oldform = 0;
     struct wildmat *wmat = NULL, *w;
-    int len, err, n, feed = 1;
+    int len, n, feed = 1;
     struct addrinfo hints, *res, *res0;
     int sock = -1;
     struct protstream *pin, *pout;
@@ -3641,7 +3636,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
     if (!port || !*port) port = "119";
-    if ((err = getaddrinfo(host, port, &hints, &res0)) != 0) {
+    if (getaddrinfo(host, port, &hints, &res0) != 0) {
         syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
         return;
     }
@@ -3784,7 +3779,7 @@ static void news2mail(message_data_t *msg)
     char buf[4096], to[1024] = "";
 
     smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
-    smtp_envelope_set_from(&sm_env, "<>");
+    smtp_envelope_set_from(&sm_env, "");
 
     for (n = 0; n < msg->rcpt.count ; n++) {
         /* see if we want to send this to a mailing list */

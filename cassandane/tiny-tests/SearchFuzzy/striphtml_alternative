@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_striphtml_alternative
+    :min_version_3_3 :needs_search_xapian
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    xlog "Index message with both html and plain text part";
+    $self->make_message("test",
+        mime_type => "multipart/alternative",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<div>This is a plain text body with <b>html</b>.</div>\r\n"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/html; charset=\"UTF-8\"\r\n"
+          . "\r\n"
+          . "<div>This is an html body.</div>\r\n"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Assert that HTML in plain text is stripped";
+    my $uids = $talk->search('fuzzy', 'body', 'html') || die;
+    $self->assert_deep_equals([1], $uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_deep_equals([], $uids);
+}

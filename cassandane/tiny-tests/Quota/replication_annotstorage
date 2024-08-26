@@ -1,0 +1,110 @@
+#!perl
+use Cassandane::Tiny;
+
+# Magic: the word 'replication' in the name enables a replica
+sub test_replication_annotstorage
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    xlog $self, "testing replication of X-ANNOTATION-STORAGE quota";
+
+    my $folder = "user.cassandane";
+    my $mastertalk = $self->{master_adminstore}->get_client();
+    my $replicatalk = $self->{replica_adminstore}->get_client();
+
+    my @res;
+
+    xlog $self, "checking there are no initial quotas";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
+    $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
+    $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
+
+    xlog $self, "set an X-ANNOTATION-STORAGE quota on the master";
+    $mastertalk->setquota($folder, "(" . $self->res_annot_storage . " 12345)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([$self->res_annot_storage, 0, 12345], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([$self->res_annot_storage, 0, 12345], \@res);
+
+    xlog $self, "change the X-ANNOTATION-STORAGE quota on the master";
+    $mastertalk->setquota($folder, "(" . $self->res_annot_storage. " 67890)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([$self->res_annot_storage, 0, 67890], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([$self->res_annot_storage, 0, 67890], \@res);
+
+    xlog $self, "add an annotation to use some quota";
+    my $data = $self->make_random_data(13);
+    my $msg = $self->make_message("Message A", store => $self->{master_store});
+    $mastertalk->store('1', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+## This doesn't work because per-mailbox annots are not
+## replicated when sync_client is run in -u mode...sigh
+#     $mastertalk->setmetadata($folder, '/private/comment', { Quote => $data });
+#     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    my $used = int(length($data)/1024);
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check the annotation used some quota on the master";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([
+        $self->res_annot_storage, $used, 67890
+    ], \@res);
+
+    xlog $self, "check the annotation used some quota on the replica";
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([
+        $self->res_annot_storage, $used, 67890
+    ], \@res);
+
+    xlog $self, "clear the X-ANNOTATION-STORAGE quota on the master";
+    $mastertalk->setquota($folder, "()");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+}

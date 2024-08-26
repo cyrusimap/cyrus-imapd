@@ -72,19 +72,14 @@ static struct auth_state auth_anonymous = {
  */
 static int mymemberof(const struct auth_state *auth_state, const char *identifier)
 {
-    int i;
-
     if (!auth_state) auth_state = &auth_anonymous;
 
     if (strcmp(identifier, "anyone") == 0) return 1;
 
     if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
-    if (strncmp(identifier, "group:", 6) != 0) return 0;
+    if (!strncmp(identifier, "group:", 6) && strarray_contains(&auth_state->groups, identifier+6)) return 2;
 
-    for (i=0; i<auth_state->groups.count ; i++) {
-        if (strcmp(identifier+6, auth_state->groups.data[i]) == 0) return 2;
-    }
     return 0;
 }
 
@@ -114,7 +109,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
  * Identifiers don't require a digit, really, so that should probably be
  * relaxed, too.
  */
-static char allowedchars[256] = {
+static const char allowedchars[256] = {
  /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
@@ -294,4 +289,5 @@ HIDDEN struct auth_mech auth_unix =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh */
 };

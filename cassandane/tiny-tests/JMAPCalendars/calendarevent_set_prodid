@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_prodid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/Amsterdam",
+        "showWithoutTime"=> JSON::false,
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+    };
+
+    my $ret;
+
+    # assert default prodId
+    $ret = $self->createandget_event($event);
+    $self->assert_not_null($ret->{prodId});
+
+    # assert custom prodId
+    my $prodId = "my prodId";
+    $event->{prodId} = $prodId;
+    $ret = $self->createandget_event($event);
+    $self->assert_str_equals($prodId, $ret->{prodId});
+}

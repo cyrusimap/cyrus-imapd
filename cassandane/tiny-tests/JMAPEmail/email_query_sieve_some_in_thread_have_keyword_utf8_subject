@@ -1,0 +1,105 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sieve_some_in_thread_have_keyword_utf8_subject
+  : needs_component_jmap : needs_component_sieve : NoMunge8Bit : RFC2047_UTF8 {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    xlog $self, "Set up Sieve script";
+    $imap->create("matches") or die;
+    my $sieve = <<EOF;
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "\${stop}" "Y",
+    jmapquery text:
+    {
+      "someInThreadHaveKeyword": "\$muted"
+    }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    $self->{instance}->install_sieve_script($sieve);
+
+    xlog $self, "Create message with UTF-8 subject";
+    my $mime = <<'EOF';
+From: alice@local
+To: bob@local
+Subject: ¡Hola, señor!
+Message-ID: <1390d09d-60f7-4840-88a2-9f319024b156@local>
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+hello
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('matches', $mime);
+
+    xlog $self, "Set keyword on message";
+    my $res     = $jmap->CallMethods([ [ 'Email/query', {}, 'R1' ] ]);
+    my $emailId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($emailId);
+    $res = $jmap->CallMethods([ [
+        'Email/set',
+        {
+            update => {
+                $emailId => {
+                    'keywords/$muted' => JSON::true,
+                },
+            }
+        },
+        'R1'
+    ] ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+
+    xlog $self, "Deliver reply with encoded UTF-8 subject";
+    my $mime = <<'EOF';
+From: bob@local
+To: alic@local
+Subject: =?utf-8?q?Re:_=C2=A1Hola,_se=C3=B1or!?=
+Message-ID: <0d7c0d81-f9b8-41aa-8d05-edd12deda48c@local>
+In-Reply-To: <1390d09d-60f7-4840-88a2-9f319024b156@local>
+Date: Mon, 13 Apr 2020 16:24:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+hi there!
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Assert that threadId and mailboxIds match";
+    $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    path     => '/ids',
+                    name     => 'Email/query',
+                },
+                properties => [ 'subject', 'mailboxIds', 'keywords', 'threadId' ],
+            },
+            'R2'
+        ],
+    ]);
+    $self->assert_num_equals(2, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals(
+        $res->[1][1]{list}[0]{threadId},
+        $res->[1][1]{list}[1]{threadId}
+    );
+    $self->assert_deep_equals(
+        $res->[1][1]{list}[0]{mailboxIds},
+        $res->[1][1]{list}[1]{mailboxIds}
+    );
+}

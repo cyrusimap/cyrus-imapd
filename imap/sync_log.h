@@ -55,6 +55,10 @@ void sync_log_done(void);
 void sync_log(const char *fmt, ...);
 void sync_log_channel(const char *channel, const char *fmt, ...);
 
+struct buf *sync_log_rightnow_buf();
+void sync_log_reset();
+
+
 #define sync_log_user(user) \
     sync_log("USER %s\n", user)
 
@@ -68,13 +72,16 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
     sync_log("APPEND %s\n", name)
 
 #define sync_log_mailbox(name) \
-    sync_log("MAILBOX %s\n", name)
+    do { assert(*name); sync_log("MAILBOX %s\n", name); } while (0)
 
 #define sync_log_unmailbox(name) \
     sync_log("UNMAILBOX %s\n", name)
 
 #define sync_log_mailbox_double(name1, name2) \
-    sync_log("MAILBOX %s\nMAILBOX %s\n", name1, name2)
+    sync_log("DOUBLEMAILBOX %s %s\n", name1, name2)
+
+#define sync_log_rename(name1, name2) \
+    sync_log("RENAME %s %s\nMAILBOX %s\nMAILBOX %s\n", name1, name2, name1, name2)
 
 #define sync_log_quota(name) \
     sync_log("QUOTA %s\n", name)
@@ -107,7 +114,11 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
     sync_log_channel(channel, "UNMAILBOX %s\n", name)
 
 #define sync_log_channel_mailbox_double(channel, name1, name2) \
-    sync_log_channel(channel, "MAILBOX %s\nMAILBOX %s\n", name1, name2)
+    sync_log_channel(channel, "DOUBLEMAILBOX %s %s\n", name1, name2)
+
+#define sync_log_channel_rename(channel, name1, name2) \
+    sync_log_channel(channel, "RENAME %s %s\nMAILBOX %s\nMAILBOX %s\n", \
+                              name1, name2, name1, name2)
 
 #define sync_log_channel_quota(channel, name) \
     sync_log_channel(channel, "QUOTA %s\n", name)
@@ -125,6 +136,7 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
 typedef struct sync_log_reader sync_log_reader_t;
 
 sync_log_reader_t *sync_log_reader_create_with_channel(const char *channel);
+sync_log_reader_t *sync_log_reader_create_with_content(const char *content);
 sync_log_reader_t *sync_log_reader_create_with_filename(const char *filename);
 sync_log_reader_t *sync_log_reader_create_with_fd(int fd);
 void sync_log_reader_free(sync_log_reader_t *slr);

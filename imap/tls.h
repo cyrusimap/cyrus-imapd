@@ -59,6 +59,12 @@ int tls_enabled(void);
 
 #include "global.h" /* for saslprops_t */
 
+struct tls_alpn_t {
+    const char *id;
+    unsigned (*check_availabilty)(void *rock);
+    void *rock;
+};
+
 /* init tls */
 int tls_init_serverengine(const char *ident,
                           int verifydepth, /* depth to verify */
@@ -88,6 +94,12 @@ int tls_prune_sessions(void);
 
 /* fill string buffer with info about tls connection */
 int tls_get_info(SSL *conn, char *buf, size_t len);
+
+/* Select an application protocol from the client list in order of preference */
+int tls_alpn_select(SSL *ssl,
+                    const unsigned char **out, unsigned char *outlen,
+                    const unsigned char *in, unsigned int inlen,
+                    void *server_list);
 
 #endif /* HAVE_SSL */
 

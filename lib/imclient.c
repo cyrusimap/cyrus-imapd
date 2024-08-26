@@ -408,7 +408,7 @@ EXPORTED void imclient_addcallback(struct imclient *imclient, ...)
  *   %s -- astring (will be quoted or literalized as needed)
  *   %d -- decimal
  *   %u -- unsigned decimal
- *   %v -- #astring (arg is an null-terminated array of (char *)
+ *   %v -- #astring (arg is a null-terminated array of (char *)
  *         which are written as space separated astrings)
  *   %B -- (internal use only) base64-encoded data at end of command line
  */
@@ -624,15 +624,14 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
     const char *plainbuf;
     unsigned plainlen;
-    int result;
 
     assert(imclient);
     assert(buf);
 
     if (imclient->saslcompleted == 1) {
         /* decrypt what we have */
-        if ((result = sasl_decode(imclient->saslconn, buf, len,
-                        &plainbuf, &plainlen)) != SASL_OK) {
+        if (sasl_decode(imclient->saslconn, buf, len,
+              &plainbuf, &plainlen) != SASL_OK) {
             (void) shutdown(imclient->fd, 0);
         }
 
@@ -1182,8 +1181,8 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   if (secprops==NULL) return 1;
 
   saslresult=sasl_setprop(imclient->saslconn, SASL_SEC_PROPS, secprops);
-  if (saslresult!=SASL_OK) return 1;
   free(secprops);
+  if (saslresult!=SASL_OK) return 1;
 
   addrsize=sizeof(struct sockaddr_storage);
   if (getpeername(imclient->fd,(struct sockaddr *)&saddr_r,&addrsize)!=0)

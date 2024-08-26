@@ -810,9 +810,7 @@ sub project_add_suite($)
     #
     # Note: appending is an important semantic.  It ensures
     # that the order of suites in the CUnit run matches the
-    # order in which test source is specified, in SUBDIRS
-    # in the top-level Makefile and then in TESTSOURCES
-    # in each Makefile below that.
+    # order in which they were added (alphabetic)
     #
     vmsg("adding suite $suite->{relpath} $suite->{basedir}");
     push(@suites, $suite);
@@ -872,7 +870,12 @@ sub add_sources(@)
 
     project_load();
 
-    foreach my $path (@args)
+    # Test sources are listed mostly alphabetically in Makefile.am, but
+    # there are exceptions for uninteresting reasons.
+    # There should not be any order dependency, so we can disregard the
+    # order they were listed in, and instead force them into alphabetic
+    # order for better readability of the test suite output.
+    foreach my $path (sort @args)
     {
         die "$path: not a C source file"
             unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);

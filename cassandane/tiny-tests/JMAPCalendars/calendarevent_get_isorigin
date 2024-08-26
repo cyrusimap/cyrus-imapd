@@ -1,0 +1,113 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_isorigin
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Create events";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventNoReplyTo => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'eventNoReplyTo',
+                    start => '2021-01-01T15:30:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+                eventIsOrganizer => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'eventIsOrganizer',
+                    start => '2021-01-01T15:30:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        participant1 => {
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                        },
+                    },
+                },
+                eventIsInvitee => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'eventIsInvitee',
+                    start => '2021-01-01T15:30:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:someone@example.com',
+                    },
+                    participants => {
+                        participant1 => {
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => ['isOrigin'],
+        }, 'R2'],
+    ]);
+
+    my $eventNoReplyToId = $res->[0][1]{created}{eventNoReplyTo}{id};
+    $self->assert_not_null($eventNoReplyToId);
+    my $eventIsOrganizerId = $res->[0][1]{created}{eventIsOrganizer}{id};
+    $self->assert_not_null($eventIsOrganizerId);
+    my $eventIsInviteeId = $res->[0][1]{created}{eventIsInvitee}{id};
+    $self->assert_not_null($eventIsInviteeId);
+
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{eventNoReplyTo}{isOrigin});
+    $self->assert_equals(JSON::true, $res->[0][1]{created}{eventIsOrganizer}{isOrigin});
+    $self->assert_equals(JSON::false, $res->[0][1]{created}{eventIsInvitee}{isOrigin});
+
+    my %events = map { $_->{id} =>  $_ } @{$res->[1][1]{list}};
+    $self->assert_equals(JSON::true, $events{$eventNoReplyToId}{isOrigin});
+    $self->assert_equals(JSON::true, $events{$eventIsOrganizerId}{isOrigin});
+    $self->assert_equals(JSON::false, $events{$eventIsInviteeId}{isOrigin});
+
+    xlog "Add scheduling to formerly unscheduled event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventNoReplyToId => {
+                    replyTo => {
+                        imip => 'mailto:someone@example.com',
+                    },
+                    participants => {
+                        participant1 => {
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ $eventNoReplyToId ],
+            properties => ['isOrigin'],
+        }, 'R2'],
+    ]);
+
+    $self->assert_equals(JSON::false, $res->[0][1]{updated}{$eventNoReplyToId}{isOrigin});
+    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{isOrigin});
+}

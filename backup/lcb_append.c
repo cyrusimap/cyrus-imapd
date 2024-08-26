@@ -76,7 +76,9 @@ static int retry_gzwrite(gzFile gzfile, const char *str, size_t len, const char 
         else {
             int r;
             const char *err = gzerror(gzfile, &r);
-            syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
+            xsyslog(LOG_ERR, "IOERROR: gzwrite failed",
+                             "filename=<%s> error=<%s>",
+                             fname, err);
 
             if (r == Z_STREAM_ERROR)
                 fatal("gzwrite: invalid stream", EX_IOERR);
@@ -109,7 +111,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
     if (index_only) backup->append_state->mode |= BACKUP_APPEND_INDEXONLY;
 
     backup->append_state->wrote = 0;
-    SHA1_Init(&backup->append_state->sha_ctx);
+    SHA1Init(&backup->append_state->sha_ctx);
 
     char header[80];
     snprintf(header, sizeof(header), "# cyrus backup: chunk start\r\n");
@@ -132,7 +134,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
         if (r) goto error;
     }
 
-    SHA1_Update(&backup->append_state->sha_ctx, header, strlen(header));
+    SHA1Update(&backup->append_state->sha_ctx, header, strlen(header));
     backup->append_state->wrote += strlen(header);
 
     struct sqldb_bindval bval[] = {
@@ -147,7 +149,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
 
     r = sqldb_exec(backup->db, backup_index_start_sql, bval, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
         goto error;
     }
@@ -192,13 +194,13 @@ EXPORTED int backup_append(struct backup *backup,
     int r;
 
     /* preload buffer with timestamp preamble */
-    buf_printf(&buf, INT64_FMT " APPLY ", (int64_t) ts);
+    buf_printf(&buf, "%" PRId64 " APPLY ", (int64_t) ts);
 
     /* iterate over the dlist */
     iter = dlist_print_iter_new(dlist, 1);
     do {
         /* track the sha1sum */
-        SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
+        SHA1Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
 
         /* if we're not in index-only mode, write the data out */
         if (!index_only) {
@@ -216,7 +218,7 @@ EXPORTED int backup_append(struct backup *backup,
 
     /* finally, end with "\r\n" */
     buf_setcstr(&buf, "\r\n");
-    SHA1_Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
+    SHA1Update(&backup->append_state->sha_ctx, buf_cstring(&buf), buf_len(&buf));
     if (!index_only) {
         r = retry_gzwrite(backup->append_state->gzfile,
                           buf_cstring(&buf), buf_len(&buf),
@@ -242,6 +244,7 @@ EXPORTED int backup_append(struct backup *backup,
 
 error:
     buf_free(&buf);
+    if (iter) dlist_print_iter_free(&iter);
     return IMAP_INTERNAL;
 }
 
@@ -257,7 +260,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzflush(backup->append_state->gzfile, Z_FINISH);
         if (r != Z_OK) {
-            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i\n",
+            syslog(LOG_ERR, "IOERROR: gzflush %s failed: %i",
                             backup->data_fname, r);
             sqldb_rollback(backup->db, "backup_append");
             goto done;
@@ -266,7 +269,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
 
     unsigned char sha1_raw[SHA1_DIGEST_LENGTH];
     char data_sha1[2 * SHA1_DIGEST_LENGTH + 1];
-    SHA1_Final(sha1_raw, &backup->append_state->sha_ctx);
+    SHA1Final(sha1_raw, &backup->append_state->sha_ctx);
     r = bin_to_hex(sha1_raw, SHA1_DIGEST_LENGTH, data_sha1, BH_LOWER);
     assert(r == 2 * SHA1_DIGEST_LENGTH);
 
@@ -280,7 +283,7 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
 
     r = sqldb_exec(backup->db, backup_index_end_sql, bval, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: something went wrong: %i\n", __func__, r);
+        syslog(LOG_ERR, "%s: something went wrong: %i", __func__, r);
         sqldb_rollback(backup->db, "backup_append");
     }
     else {

@@ -65,6 +65,7 @@
 #include "smtpclient.h"
 #include "sync_support.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 
 /* generated headers are not necessarily in current directory */
@@ -85,37 +86,37 @@ static jmap_method_t jmap_emailsubmission_methods_standard[] = {
         "EmailSubmission/get",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_get,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "EmailSubmission/set",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_set,
-       /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "EmailSubmission/changes",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_changes,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "EmailSubmission/query",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_query,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "EmailSubmission/queryChanges",
         JMAP_URN_SUBMISSION,
         &jmap_emailsubmission_querychanges,
-        JMAP_SHARED_CSTATE
+        JMAP_NEED_CSTATE
     },
     {
         "Identity/get",
         JMAP_URN_SUBMISSION,
         &jmap_identity_get,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     { NULL, NULL, NULL, 0}
 };
@@ -186,10 +187,12 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
 
 static int _emailsubmission_address_parse(json_t *addr,
                                           struct jmap_parser *parser,
+                                          const char **identity,
                                           time_t *holduntil)
 {
     int is_valid = 0;
 
+    if (identity)  *identity = NULL;
     if (holduntil) *holduntil = 0;
 
     json_t *email = json_object_get(addr, "email");
@@ -206,29 +209,39 @@ static int _emailsubmission_address_parse(json_t *addr,
     }
 
     const char *key;
-    json_t *val;
+    json_t *jval;
     json_t *parameters = json_object_get(addr, "parameters");
     jmap_parser_push(parser, "parameters");
-    json_object_foreach(parameters, key, val) {
-        /* TODO validate allowed esmtp characters */
-        if (JNOTNULL(val) && !json_is_string(val)) {
+    json_object_foreach(parameters, key, jval) {
+        if (!smtp_is_valid_esmtp_keyword(key)) {
             jmap_parser_invalid(parser, key);
         }
-        else if (holduntil) {
-            if (!strcasecmp(key, "HOLDFOR")) {
-                const char *nptr = json_string_value(val);
-                char *endptr = NULL;
-                unsigned long interval = strtoul(nptr, &endptr, 10);
-                time_t now = time(0);
+        else if (JNOTNULL(jval) && !json_is_string(jval)) {
+            /* We'll xtext-encode any non-esmtp values later */
+            jmap_parser_invalid(parser, key);
+        }
+        else {
+            const char *val = json_string_value(jval);
 
-                if (*endptr != '\0' || interval > 99999999 /* per RFC 4865 */) {
-                    jmap_parser_invalid(parser, key);
-                }
-                else *holduntil = now + interval;
+            if (identity && !strcasecmp(key, "IDENTITY")) {
+                *identity = val;
             }
-            else if (!strcasecmp(key, "HOLDUNTIL")) {
-                if (time_from_iso8601(json_string_value(val), holduntil) < 0) {
-                    jmap_parser_invalid(parser, key);
+            if (holduntil) {
+                if (!strcasecmp(key, "HOLDFOR")) {
+                    char *endptr = (char *) val;
+                    ulong interval = val ? strtoul(val, &endptr, 10) : ULONG_MAX;
+                    time_t now = time(0);
+
+                    if (endptr == val || *endptr != '\0' ||
+                        interval > 99999999 /* per RFC 4865 */) {
+                        jmap_parser_invalid(parser, key);
+                    }
+                    else *holduntil = now + interval;
+                }
+                else if (!strcasecmp(key, "HOLDUNTIL")) {
+                    if (!val || time_from_iso8601(val, holduntil) < 0) {
+                        jmap_parser_invalid(parser, key);
+                    }
                 }
             }
         }
@@ -262,12 +275,12 @@ static int lookup_submission_collection(const char *accountid,
 
     /* Locate the mailbox */
     submissionname = mbname_intname(mbname);
-    r = http_mlookup(submissionname, mbentry, NULL);
+    r = proxy_mlookup(submissionname, mbentry, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(accountid, NULL);
 
-        int r1 = http_mlookup(inboxname, mbentry, NULL);
+        int r1 = proxy_mlookup(inboxname, mbentry, NULL, NULL);
         free(inboxname);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
             r = IMAP_INVALID_USER;
@@ -275,18 +288,19 @@ static int lookup_submission_collection(const char *accountid,
         }
 
         int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_CREATE)) {
+        if ((rights & JACL_CREATECHILD) != JACL_CREATECHILD) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
+        mboxlist_entry_free(mbentry);
+        *mbentry = mboxlist_entry_create();
         (*mbentry)->name = xstrdup(submissionname);
+        (*mbentry)->mbtype = MBTYPE_JMAPSUBMIT;
     }
     else if (!r) {
         int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & JACL_ADDITEMS) != JACL_ADDITEMS) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -302,19 +316,26 @@ static int ensure_submission_collection(const char *accountid,
                                         mbentry_t **mbentryp,
                                         int *created)
 {
-    /* submission collection */
     mbentry_t *mbentry = NULL;
-    int r = lookup_submission_collection(accountid, &mbentry);
-
     if (created) *created = 0;
 
-    if (r == IMAP_INVALID_USER) {
-        goto done;
+    /* submission collection */
+    int r = lookup_submission_collection(accountid, &mbentry);
+    if (!r) { // happy path
+        if (mbentryp) *mbentryp = mbentry;
+        else mboxlist_entry_free(&mbentry);
+        return 0;
     }
-    else if (r == IMAP_PERMISSION_DENIED) {
-        goto done;
-    }
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+
+    // otherwise, clean up ready for next attempt
+    mboxlist_entry_free(&mbentry);
+
+    struct mboxlock *namespacelock = user_namespacelock(accountid);
+
+    // did we lose the race?
+    r = lookup_submission_collection(accountid, &mbentry);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (created) *created = 1;
 
         if (!mbentry) goto done;
@@ -326,28 +347,23 @@ static int ensure_submission_collection(const char *accountid,
 
         int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
             | OPT_POP3_NEW_UIDL | OPT_IMAP_HAS_ALARMS;
-        r = mboxlist_createmailbox_opts(mbentry->name, MBTYPE_SUBMISSION,
-                                        NULL, 1 /* admin */, accountid,
-                                        httpd_authstate,
-                                        options, 0, 0, 0, 0, NULL, NULL);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        else {
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mbentry->name, error_message(r));
-            }
-            goto done;
+        r = mboxlist_createmailbox(mbentry, options, 0/*highestmodseq*/,
+                                   1/*isadmin*/, accountid, httpd_authstate,
+                                   0/*flags*/, NULL/*mailboxptr*/);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                   mbentry->name, error_message(r));
         }
     }
 
  done:
-    if (mbentryp) *mbentryp = mbentry;
+    mboxname_release(&namespacelock);
+    if (mbentryp && !r) *mbentryp = mbentry;
     else mboxlist_entry_free(&mbentry);
     return r;
 }
 
-static int store_submission(struct mailbox *mailbox,
+static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
                             struct buf *msg, time_t holduntil,
                             json_t *emailsubmission,
                             json_t **new_submission)
@@ -378,8 +394,8 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, internaldate, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -433,24 +449,25 @@ static int store_submission(struct mailbox *mailbox,
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
     /* Append the message to the mailbox */
-    r = append_fromstage(&as, &body, stage, internaldate, 0, &flags, 0, /*annots*/NULL);
+    r = append_fromstage_full(&as, &body, stage, internaldate, now,
+                              /*cmodseq*/0, &flags, /*nolink*/0, /*annots*/NULL);
 
     if (r) {
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -467,6 +484,13 @@ static int store_submission(struct mailbox *mailbox,
          "undoStatus", (holduntil ? "pending" : "final"),
          "sendAt", sendat
     );
+
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        char created[RFC3339_DATETIME_MAX];
+        time_to_rfc3339(now, created, RFC3339_DATETIME_MAX);
+
+        json_object_set_new(*new_submission, "created", json_string(created));
+    }
 
   done:
     if (body) {
@@ -504,25 +528,25 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* identityId */
     const char *identityid = NULL;
     json_t *jidentityId = json_object_get(emailsubmission, "identityId");
-    if (json_is_string(jidentityId)) {
-        identityid = json_string_value(jidentityId);
-        if (strcmp(identityid, req->userid)) {
+    if (JNOTNULL(jidentityId)) {
+        if (json_is_string(jidentityId)) {
+            identityid = json_string_value(jidentityId);
+        }
+        else {
             jmap_parser_invalid(&parser, "identityId");
         }
-    }
-    else {
-        jmap_parser_invalid(&parser, "identityId");
     }
 
     /* envelope */
     time_t holduntil = 0;
     json_t *envelope = json_object_get(emailsubmission, "envelope");
     if (JNOTNULL(envelope)) {
+        const char *id_param = NULL;
         jmap_parser_push(&parser, "envelope");
         json_t *from = json_object_get(envelope, "mailFrom");
         if (json_object_size(from)) {
             jmap_parser_push(&parser, "mailFrom");
-            _emailsubmission_address_parse(from, &parser, &holduntil);
+            _emailsubmission_address_parse(from, &parser, &id_param, &holduntil);
             jmap_parser_pop(&parser);
         }
         else {
@@ -534,16 +558,53 @@ static void _emailsubmission_create(jmap_req_t *req,
             json_t *addr;
             json_array_foreach(rcpt, i, addr) {
                 jmap_parser_push_index(&parser, "rcptTo", i, NULL);
-                _emailsubmission_address_parse(addr, &parser, NULL);
+                _emailsubmission_address_parse(addr, &parser, NULL, NULL);
                 jmap_parser_pop(&parser);
             }
         }
         else {
             jmap_parser_invalid(&parser, "rcptTo");
         }
+
+        /* Don't allow mailFrom IDENTITY param to be different than identityId */
+        if (id_param && strcmpnull(identityid, id_param)) {
+            jmap_parser_invalid(&parser, "identity");
+        }
         jmap_parser_pop(&parser);
     } else {
         envelope = NULL;
+    }
+
+    json_t *onSend = json_object_get(emailsubmission, "onSend");
+    if (JNOTNULL(onSend)) {
+        const char *field;
+        json_t *jval;
+
+        jmap_parser_push(&parser, "onSend");
+        json_object_foreach(onSend, field, jval) {
+            if (!strcmp(field, "moveToMailboxId")) {
+                if (JNOTNULL(jval) && !json_is_string(jval)) {
+                    jmap_parser_invalid(&parser, "moveToMailboxId");
+                }
+            }
+            else if (!strcmp(field, "setKeywords")) {
+                const char *keyword;
+                json_t *jbool;
+
+                jmap_parser_push(&parser, "setKeywords");
+                json_object_foreach(jval, keyword, jbool) {
+                    if (!json_is_boolean(jbool) ||
+                        !jmap_email_keyword_is_valid(keyword)) {
+                        jmap_parser_invalid(&parser, keyword);
+                    }
+                }
+                jmap_parser_pop(&parser);
+            }
+            else {
+                jmap_parser_invalid(&parser, field);
+            }
+        }
+        jmap_parser_pop(&parser);
     }
 
     /* Reject read-only properties */
@@ -552,6 +613,9 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
     if (json_object_get(emailsubmission, "threadId")) {
         jmap_parser_invalid(&parser, "threadId");
+    }
+    if (json_object_get(emailsubmission, "created")) {
+        jmap_parser_invalid(&parser, "created");
     }
     if (json_object_get(emailsubmission, "sendAt")) {
         jmap_parser_invalid(&parser, "sendAt");
@@ -588,7 +652,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     int fd_msg = -1;
 
     /* Lookup the message */
-    r = jmap_email_find(req, msgid, &mboxname, &uid);
+    r = jmap_email_find(req, NULL, msgid, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
             *set_err = json_pack("{s:s}", "type", "emailNotFound");
@@ -597,13 +661,13 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
 
     /* Check ACL */
-    if (!jmap_hasrights_byname(req, mboxname, ACL_READ)) {
+    if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;
     }
 
     /* Open the mailboxes */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = mailbox_open_iwl(mboxname, &mbox);
     if (r) goto done;
 
     /* Load the message */
@@ -651,7 +715,7 @@ static void _emailsubmission_create(jmap_req_t *req,
                             json_pack("{s:s}", "email", from));
 
         /* Determine RCPT TO */
-        json_t *rcpts = json_pack("{}"); /* deduplicated set of recipients */
+        json_t *rcpts = json_object(); /* deduplicated set of recipients */
         json_t *rcptTo = json_array();   /* envelope rcptTo value */
         size_t i;
         const char *s;
@@ -673,6 +737,14 @@ static void _emailsubmission_create(jmap_req_t *req,
         }
         json_decref(rcpts);
         json_object_set_new(myenvelope, "rcptTo", rcptTo);
+    }
+    else if (holduntil) {
+        hash_table props = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&props, 1, 0);
+        hash_insert("from", (void*)1, &props);
+        r = jmap_email_get_with_props(req, &props, mr, &msg);
+        free_hash_table(&props, NULL);
+        if (r) goto done;
     }
 
     /* Validate envelope */
@@ -699,7 +771,7 @@ static void _emailsubmission_create(jmap_req_t *req,
         goto done;
     }
 
-    buf_init_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mbox->name);
+    buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mailbox_name(mbox));
     if (!buf_len(&buf)) {
         syslog(LOG_ERR, "_email_submissioncreate: can't mmap %s: %m", fname);
         r = IMAP_IOERROR;
@@ -721,7 +793,7 @@ static void _emailsubmission_create(jmap_req_t *req,
      * message open. But we don't want to long-lock the
      * mailbox while sending the mail over to a SMTP host */
     msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     if (!*sm) {
         /* Open the SMTP connection */
@@ -730,14 +802,28 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
     smtpclient_set_auth(*sm, req->userid);
 
+    if (identityid) smtpclient_set_jmapid(*sm, identityid);
+
     /* Prepare envelope */
     smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
     jmap_emailsubmission_envelope_to_smtp(&smtpenv, envelope);
 
     if (holduntil) {
         /* Pre-flight the message */
-        smtpclient_set_size(*sm, buf_len(&buf));
-        r = smtpclient_sendprot(*sm, &smtpenv, NULL);
+        json_t *jfromaddr = json_object_get(msg, "from");
+        strarray_t fromaddr = STRARRAY_INITIALIZER;
+        if (jfromaddr) {
+            size_t i;
+            json_t *jval;
+            json_array_foreach(jfromaddr, i, jval) {
+                const char *s = json_string_value(json_object_get(jval, "email"));
+                if (s) {
+                    strarray_append(&fromaddr, s);
+                }
+            }
+        }
+        r = smtpclient_sendcheck(*sm, &smtpenv, buf_len(&buf), &fromaddr);
+        strarray_fini(&fromaddr);
     }
     else {
         /* Send message */
@@ -782,32 +868,35 @@ static void _emailsubmission_create(jmap_req_t *req,
             char *err = NULL;
             const char *p;
 
-            if (smtpclient_has_ext(*sm, "ENHANCEDSTATUSCODES")) {
-                p = strchr(desc, ' ');
-                if (p) {
-                    desc = p+1;
-                    while (*desc == ' ') desc++;  /* trim leading whitespace */
+            if (desc) {
+                if (smtpclient_has_ext(*sm, "ENHANCEDSTATUSCODES")) {
+                    p = strchr(desc, ' ');
+                    if (p) {
+                        desc = p+1;
+                        while (*desc == ' ') desc++;  /* trim leading whitespace */
+                    }
                 }
-            }
-            if ((p = strstr(desc, "[jmapError:"))) {
-                p += 11;
-                const char *q = strchr(p, ']');
-                if (q) {
-                    err = xstrndup(p, q - p);
-                    desc = q+1;
-                    while (*desc == ' ') desc++;  /* trim leading whitespace */
+                if ((p = strstr(desc, "[jmapError:"))) {
+                    p += 11;
+                    const char *q = strchr(p, ']');
+                    if (q) {
+                        err = xstrndup(p, q - p);
+                        desc = q+1;
+                        while (*desc == ' ') desc++;  /* trim leading whitespace */
+                    }
                 }
             }
             if (!err) err = xstrdup("forbiddenToSend");
             *set_err = json_pack("{s:s s:s}",
-                                 "type", err, "description", desc);
+                                 "type", err,
+                                 "description", desc ? desc : error_message(r));
             free(err);
             break;
         }
 
         default:
-            *set_err = json_pack("{s:s s:s}", "type", "smtpProtocolError",
-                                 "description", desc);
+            *set_err = json_pack("{s:s s:s}", "type", "forbiddenToSend",
+                                 "description", desc ? desc : error_message(r));
             break;
         }
     }
@@ -818,7 +907,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* Replace any creation id with actual emailId */
     json_object_set_new(emailsubmission, "emailId", json_string(msgid));
 
-    r = store_submission(submbox, &buf, holduntil,
+    r = store_submission(req, submbox, &buf, holduntil,
                          emailsubmission, new_submission);
 
 done:
@@ -828,7 +917,7 @@ done:
     if (fd_msg != -1) close(fd_msg);
     if (msg) json_decref(msg);
     if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     if (myenvelope) json_decref(myenvelope);
     free(mboxname);
     buf_free(&buf);
@@ -1029,7 +1118,7 @@ done:
     message_unref(&msg);
 }
 
-static int getsubmission(struct jmap_get *get,
+static int getsubmission(jmap_req_t *req, struct jmap_get *get,
                          const char *id, message_t *msg)
 {
     json_t *sub = NULL;
@@ -1060,7 +1149,29 @@ static int getsubmission(struct jmap_get *get,
             json_object_del(sub, "envelope");
         }
 
-        /* senddAt */
+        if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+            /* onSend */
+            if (!jmap_wantprop(get->props, "onSend")) {
+                json_object_del(sub, "onSend");
+            }
+
+            /* created */
+            if (jmap_wantprop(get->props, "created")) {
+                char datestr[RFC3339_DATETIME_MAX];
+                time_t t;
+
+                r = message_get_savedate(msg, &t);
+                if (r) goto done;
+
+                time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+                json_object_set_new(sub, "created", json_string(datestr));
+            }
+        }
+        else {
+            json_object_del(sub, "onSend");
+        }
+
+        /* sendAt */
         if (jmap_wantprop(get->props, "sendAt")) {
             char datestr[RFC3339_DATETIME_MAX];
             time_t t;
@@ -1175,6 +1286,18 @@ static const jmap_property_t submission_props[] = {
         NULL,
         JMAP_PROP_SERVER_SET
     },
+
+    /* FM extensions */
+    {
+        "onSend",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "created",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
     { NULL, NULL, 0 }
 };
 
@@ -1194,16 +1317,20 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_submission_collection(req->accountid,
-                                         &mbentry, &created);
-    if (r) {
+    /* submission collection */
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0; // that's OK, we'll skip trying to open the mailbox
+    }
+    else if (r) {
         syslog(LOG_ERR,
-               "jmap_emailsubmission_get: ensure_submission_collection(%s): %s",
+               "jmap_emailsubmission_get: lookup_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
-
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    else {
+        r = mailbox_open_irl(mbentry->name, &mbox);
+    }
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -1214,7 +1341,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
         json_array_foreach(get.ids, i, val) {
             const char *id = json_string_value(val);
-            message_t *msg = msg_from_subid(mbox, id);
+            message_t *msg = mbox ? msg_from_subid(mbox, id) : NULL;
 
             if (!msg) {
                 /* Not a valid id */
@@ -1222,11 +1349,11 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
                 continue;
             }
 
-            r = getsubmission(&get, id, msg);
+            r = getsubmission(req, &get, id, msg);
             message_unref(&msg);
         }
     }
-    else {
+    else if (mbox) {
         struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
@@ -1238,17 +1365,16 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
             /* Create id from message UID, using 'S' prefix */
             sprintf(id, "S%u", uid);
-            r = getsubmission(&get, id, (message_t *) msg);
+            r = getsubmission(req, &get, id, (message_t *) msg);
         }
         mailbox_iter_done(&iter);
     }
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
+                created ? JMAP_MODSEQ_RELOAD : 0));
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -1262,7 +1388,7 @@ struct submission_set_args {
     json_t *onSuccessDestroy;
 };
 
-static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
+static int _submission_setargs_parse(jmap_req_t *req,
                                      struct jmap_parser *parser,
                                      const char *key,
                                      json_t *arg,
@@ -1272,6 +1398,8 @@ static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
     int r = 1;
 
     if (!strcmp(key, "onSuccessUpdateEmail")) {
+        // need urn:ietf:params:jmap:mail to update emails
+        if (!jmap_is_using(req, JMAP_URN_MAIL)) return 0;
         if (json_is_object(arg)) {
             json_t *jval;
             const char *emailsubmission_id;
@@ -1287,9 +1415,13 @@ static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
         else if (JNOTNULL(arg)) r = 0;
     }
 
-    else if (!strcmp(key, "onSuccessDestroyEmail") && JNOTNULL(arg)) {
-        jmap_parse_strings(arg, parser, "onSuccessDestroyEmail");
-        set->onSuccessDestroy = arg;
+    else if (!strcmp(key, "onSuccessDestroyEmail")) {
+        // need urn:ietf:params:jmap:mail to destroy emails
+        if (!jmap_is_using(req, JMAP_URN_MAIL)) return 0;
+        if (JNOTNULL(arg)) {
+            if (jmap_parse_strings(arg, parser, "onSuccessDestroyEmail"))
+                set->onSuccessDestroy = arg;
+        }
     }
 
     else r = 0;
@@ -1377,26 +1509,20 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &submbox, 1);
+    r = mailbox_open_iwl(mbentry->name, &submbox);
     assert(submbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
     if (set.if_in_state) {
-        /* TODO rewrite state function to use char* not json_t* */
-        json_t *jstate = json_string(set.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_SUBMISSION)) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            json_decref(jstate);
             goto done;
         }
-        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/0);
-        set.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0));
     }
 
     /* create */
@@ -1418,6 +1544,9 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_object_set_new(set.created, creation_id, new_submission);
         json_object_set_new(success_emailids, id, json_string(emailid));
         free(emailid);
+
+        /* Register creation id */
+        jmap_add_id(req, creation_id, id);
     }
     if (sm) smtpclient_close(&sm);
 
@@ -1458,11 +1587,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     /* force modseq to stable */
     if (submbox) mailbox_unlock_index(submbox, NULL);
 
-    // TODO refactor jmap_getstate to return a string, once
-    // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/1);
-    set.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, JMAP_MODSEQ_RELOAD));
 
     jmap_ok(req, jmap_set_reply(&set));
 
@@ -1486,7 +1611,13 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
                         id = json_string_value(json_object_get(jsuccess, "id"));
                 }
                 const char *emailid = json_string_value(json_object_get(success_emailids, id));
-                if (emailid) json_object_set(updateEmails, emailid, jemail);
+                if (emailid) {
+                    json_object_set(updateEmails, emailid, jemail);
+
+                    /* Add this email to scheduled email cache so Email/set{update}
+                       can override ACL check on $scheduled mailbox */
+                    strarray_append(req->scheduled_emails, emailid);
+                }
             }
 
             json_object_set_new(subargs, "update", updateEmails);
@@ -1514,7 +1645,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     }
 
 done:
-    jmap_closembox(req, &submbox);
+    mailbox_close(&submbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     json_decref(success_emailids);
@@ -1529,21 +1660,29 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     mbentry_t *mbentry = NULL;
 
     json_t *err = NULL;
-    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, req->counters.submissiondeletedmodseq,
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         return 0;
     }
 
-    int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(&mbentry);
+        r = 0;
+        changes.new_modseq = jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0);
+        jmap_ok(req, jmap_changes_reply(&changes));
+        goto done;
+    }
     if (r) {
         syslog(LOG_ERR,
-               "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
+               "jmap_emailsubmission_changes: lookup_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -1584,7 +1723,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     }
     mailbox_iter_done(&iter);
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     /* Set new state */
     // XXX - this is wrong!  If we want to do this, we need to sort all the changes by
@@ -1595,7 +1734,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     // if we issued a query for changes since 6, max_changes 1 - we'd get back
     // has_more_changes: true, new_modseq 15, and we'd never see UID=4 as having changed.
     changes.new_modseq = changes.has_more_changes ?
-        highest_modseq : jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+        highest_modseq : jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0);
 
     jmap_ok(req, jmap_changes_reply(&changes));
 
@@ -1637,6 +1776,13 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
                 jmap_parser_invalid(parser, field);
             }
         }
+        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+                 (!strcmp(field, "createdBefore") ||
+                  !strcmp(field, "createdAfter"))) {
+            if (!json_is_utcdate(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }
@@ -1657,6 +1803,9 @@ static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unus
         !strcmp(comp->property, "sentAt")) {
         return 1;
     }
+    if (!strcmp(comp->property, "created")) {
+        return jmap_is_using(req, JMAP_MAIL_EXTENSION);
+    }
     return 0;
 }
 
@@ -1675,6 +1824,8 @@ typedef struct submission_filter {
     const char *undoStatus;
     time_t before;
     time_t after;
+    time_t createdBefore;
+    time_t createdAfter;
 } submission_filter;
 
 /* Parse the JMAP EmailSubmission FilterCondition in arg.
@@ -1685,8 +1836,8 @@ static void *submission_filter_build(json_t *arg)
     submission_filter *f =
         (submission_filter *) xzmalloc(sizeof(struct submission_filter));
 
-    f->before = eternity;
-    f->after = epoch;
+    f->createdBefore = f->before = eternity;
+    f->createdAfter  = f->after  = epoch;
 
     /* identityIds */
     json_t *identityIds = json_object_get(arg, "identityIds");
@@ -1749,6 +1900,20 @@ static void *submission_filter_build(json_t *arg)
         time_from_iso8601(utcDate, &f->after);
     }
 
+    /* createdBefore */
+    if (JNOTNULL(json_object_get(arg, "createdBefore"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "createdBefore", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->createdBefore);
+    }
+
+    /* createdAfter */
+    if (JNOTNULL(json_object_get(arg, "createdAfter"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "createdAfter", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->createdAfter);
+    }
+
     return f;
 }
 
@@ -1771,6 +1936,12 @@ static int submission_filter_match(void *vf, void *rock)
 
     /* after */
     if (record->internaldate < f->after) return 0;
+
+    /* createdBefore */
+    if (record->savedate >= f->createdBefore) return 0;
+
+    /* createdAfter */
+    if (record->savedate < f->createdAfter) return 0;
 
     /* undoStatus */
     if (f->undoStatus) {
@@ -1796,21 +1967,21 @@ static int submission_filter_match(void *vf, void *rock)
                 json_string_value(json_object_get(sfrock->submission,
                                                   "identityId"));
 
-            if (strarray_find(f->identityIds, identityId, 0) == -1) return 0;
+            if (!strarray_contains(f->identityIds, identityId)) return 0;
         }
         if (f->emailIds) {
             sfrock->emailId =
                 json_string_value(json_object_get(sfrock->submission,
                                                   "emailId"));
 
-            if (strarray_find(f->emailIds, sfrock->emailId, 0) == -1) return 0;
+            if (!strarray_contains(f->emailIds, sfrock->emailId)) return 0;
         }
         if (f->threadIds) {
             sfrock->threadId =
                 json_string_value(json_object_get(sfrock->submission,
                                                   "threadId"));
 
-            if (strarray_find(f->threadIds, sfrock->threadId, 0) == -1) return 0;
+            if (!strarray_contains(f->threadIds, sfrock->threadId)) return 0;
         }
     }
 
@@ -1858,6 +2029,9 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
         else if (!strcmp(prop, "sentAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
+        else if (!strcmp(prop, "created")) {
+            sortcrit[i].key = SORT_SAVEDATE;
+        }
     }
 
     i = json_array_size(sort);
@@ -1869,6 +2043,7 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
 struct sub_match {
     char id[JMAP_SUBID_SIZE];
     uint32_t uid;
+    time_t created;
     time_t sentAt;
     const char *emailId;
     const char *threadId;
@@ -1891,6 +2066,9 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
         reverse = sortcrit[i].flags & SORT_REVERSE;
 
         switch (sortcrit[i].key) {
+        case SORT_SAVEDATE:
+            ret = m1->created - m2->created;
+            break;
         case SORT_ARRIVAL:
             ret = m1->sentAt - m2->sentAt;
             break;
@@ -1950,15 +2128,26 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_submission_collection(req->accountid, &mbentry, &created);
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(&mbentry);
+        r = 0;
+        /* Build response */
+        query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
+                    created ? JMAP_MODSEQ_RELOAD : 0));
+        query.result_position = 0;
+        query.can_calculate_changes = 0;
+        jmap_ok(req, jmap_query_reply(&query));
+        goto done;
+    }
     if (r) {
         syslog(LOG_ERR,
-               "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
+               "jmap_emailsubmission_changes: lookup_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -1998,6 +2187,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         /* Create id from message UID, using 'S' prefix */
         sprintf(match->id, "S%u", record->uid);
         match->uid = record->uid;
+        match->created = record->savedate;
         match->sentAt = record->internaldate;
         match->emailId = sfrock.emailId;
         match->threadId = sfrock.threadId;
@@ -2016,7 +2206,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     }
     mailbox_iter_done(&iter);
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
     /* Sort results */
     if (sortcrit) {
@@ -2056,9 +2246,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     free(sortcrit);
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
-    query.query_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT,
+                created ? JMAP_MODSEQ_RELOAD : 0));
     query.result_position = query.position;
     query.can_calculate_changes = 0;
     jmap_ok(req, jmap_query_reply(&query));

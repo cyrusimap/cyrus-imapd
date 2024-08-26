@@ -3,7 +3,6 @@
 <HTML><HEAD>
 <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
 <title>Cyrus IMAP Server:  Cyrus Murder Concepts</title>
-<!-- $Id$ -->
 </HEAD><BODY>
 <H1>Cyrus IMAP Server:  Cyrus Murder Concepts</H1>
 
@@ -65,7 +64,7 @@ href="#AA">Appendix A: DNS Name Load Balancing</a> and <a
 href="#AB">Appendix B: IMAP Multiplexing</a>).</p>
 
 <p>We propose a new approach to overcome these problems. We call it
-the the Cyrus IMAP Aggregator.  The Cyrus aggregator takes a <a
+the Cyrus IMAP Aggregator.  The Cyrus aggregator takes a <a
 href="#def_murder">murder of IMAP servers</a> and presents a server
 independent view to the clients. That is, all the mailboxes across all
 the IMAP servers are aggregated to a single image, thereby appearing
@@ -279,7 +278,7 @@ currently <tt>SELECT</tt>'d mailbox but then interacts with another
 mailbox.</p>
 
 <p>In the case where the destination mailbox is on the same back end
-server as the the source folder, the <tt>COPY</tt> command is issued
+server as the source folder, the <tt>COPY</tt> command is issued
 to the back end server and the back end server takes care of the
 command.</p>
 
@@ -328,7 +327,7 @@ specific host name on which the mailbox is to be created.</p>
       by the proxies).</li>
 
 <li><tt>proxyd</tt> -&gt; back end: duplicate CREATE command and verifies
-      that the <tt>CREATE</tt> does not create an  inconsistency in
+      that the <tt>CREATE</tt> does not create an inconsistency in
       the mailbox list (i.e. the folder name is still unique).</li>
 </ol>
 
@@ -602,8 +601,8 @@ does content filtering.
 <dt><i>client</i></dt>
 
 <dd>A client is a process on a remote computer that communicates with
-the set of servers distributing mail data, be they ACAP, IMAP, LDAP,
-or IMSP servers.  A client opens one or more connections to various
+the set of servers distributing mail data, be they ACAP, IMAP, or LDAP
+servers.  A client opens one or more connections to various
 servers.
 </dd>
 

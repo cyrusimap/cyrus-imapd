@@ -52,6 +52,8 @@
 
 #include <libical/ical.h>
 
+#include <libxml/parser.h>
+
 #include "global.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
@@ -121,7 +123,7 @@ struct namespace_t namespace_ischedule = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
-    isched_init, NULL, NULL, isched_shutdown, NULL, NULL,
+    isched_init, NULL, NULL, isched_shutdown, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
@@ -141,6 +143,7 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* PROPPATCH    */
         { NULL,                 NULL }, /* PUT          */
         { NULL,                 NULL }, /* REPORT       */
+        { NULL,                 NULL }, /* SEARCH       */
         { &meth_trace,          NULL }, /* TRACE        */
         { NULL,                 NULL }, /* UNBIND       */
         { NULL,                 NULL }  /* UNLOCK       */
@@ -152,7 +155,7 @@ struct namespace_t namespace_domainkey = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
         { NULL,                 NULL }, /* BIND         */
@@ -212,7 +215,7 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Fill in iSchedule-Capabilities */
     isched_capa_hdr(txn, &lastmod, &sbuf);
 
-    /* We don't handle GET on a anything other than ?action=capabilities */
+    /* We don't handle GET on anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
     if (!action || action->next || strcmp(action->s, "capabilities")) {
         txn->error.desc = "Invalid action";
@@ -222,7 +225,7 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Generate ETag based on compile date/time of this source file,
        the number of available RSCALEs and the config file size/mtime */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld-%zu-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" SIZE_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                rscale_calendars ? (size_t)rscale_calendars->num_elements : 0,
                sbuf.st_mtime, sbuf.st_size);
 
@@ -258,7 +261,8 @@ static int meth_get_isched(struct transaction_t *txn,
         struct mime_type_t *mime;
         struct icaltimetype date;
         icaltimezone *utc = icaltimezone_get_utc_timezone();
-        int i, n, maxlen;
+        int i, n;
+        int64_t maxlen;
 
         /* Start construction of our query-result */
         if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -269,7 +273,7 @@ static int meth_get_isched(struct transaction_t *txn,
         capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
 
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%ld", txn->resp_body.iserial);
+        buf_printf(&txn->buf, TIME_T_FMT, txn->resp_body.iserial);
         xmlNewChild(capa, NULL, BAD_CAST "serial-number",
                            BAD_CAST buf_cstring(&txn->buf));
 
@@ -296,7 +300,6 @@ static int meth_get_isched(struct transaction_t *txn,
         meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
         xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
 
-#ifdef HAVE_VPOLL
         comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
         xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VPOLL");
         meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
@@ -307,7 +310,6 @@ static int meth_get_isched(struct transaction_t *txn,
         xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
         meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
         xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-#endif /* HAVE_VPOLL */
 
         comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
         xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
@@ -345,10 +347,10 @@ static int meth_get_isched(struct transaction_t *txn,
             }
         }
 
-        maxlen = config_getint(IMAPOPT_MAXMESSAGESIZE);
-        if (!maxlen) maxlen = INT_MAX;
+        maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+        if (maxlen <= 0) maxlen = BYTESIZE_UNLIMITED;
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%d", maxlen);
+        buf_printf(&txn->buf, "%" PRIi64, maxlen);
         xmlNewChild(capa, NULL, BAD_CAST "max-content-length",
                     BAD_CAST buf_cstring(&txn->buf));
 
@@ -459,7 +461,7 @@ static int meth_post_isched(struct transaction_t *txn,
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body.payload)) {
-        txn->error.desc = "Missing request body\r\n";
+        txn->error.desc = "Missing request body";
         return HTTP_BAD_REQUEST;
     }
 
@@ -491,7 +493,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+    if ((txn->error.desc = get_icalcomponent_errstr(ical, ICAL_SUPPORT_STRICT))) {
         assert(!buf_len(&txn->buf));
         buf_setcstr(&txn->buf, txn->error.desc);
         txn->error.desc = buf_cstring(&txn->buf);
@@ -533,9 +535,11 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_REQUEST:
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_CANCEL: {
+            unsigned flags = SCHEDFLAG_ISCHEDULE;
+            if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
             struct sched_data sched_data =
-                { 1, meth == ICAL_METHOD_REPLY, 0,
-                  ical, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL };
+                { SCHED_MECH_ISCHEDULE, flags, ical, NULL, NULL,
+                  ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
             struct auth_state *authstate;
@@ -545,7 +549,7 @@ static int meth_post_isched(struct transaction_t *txn,
             if (!(root = init_xml_response("schedule-response",
                                            NS_ISCHED, NULL, ns))) {
                 ret = HTTP_SERVER_ERROR;
-                txn->error.desc = "Unable to create XML response\r\n";
+                txn->error.desc = "Unable to create XML response";
                 goto done;
             }
 
@@ -567,7 +571,8 @@ static int meth_post_isched(struct transaction_t *txn,
                     sched_param_fini(&sparam);
 
                     if (r) sched_data.status = REQSTAT_NOUSER;
-                    else sched_deliver(httpd_userid, recipient, &sched_data, authstate);
+                    else sched_deliver(httpd_userid, httpd_userid, httpd_userid,
+                                       recipient, &sched_data, authstate);
 
                     xml_add_schedresponse(root, NULL, BAD_CAST recipient,
                                           BAD_CAST sched_data.status);
@@ -576,6 +581,7 @@ static int meth_post_isched(struct transaction_t *txn,
             }
 
             xml_response(HTTP_OK, txn, root->doc);
+            xmlFreeDoc(root->doc);
 
             auth_freestate(authstate);
         }
@@ -662,7 +668,7 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
         buf_printf(&hdrs, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
     buf_printf(&hdrs, "iSchedule-Version: 1.0\r\n");
-    buf_printf(&hdrs, "iSchedule-Message-ID: <cmu-ischedule-%u-%ld-%u@%s>\r\n",
+    buf_printf(&hdrs, "iSchedule-Message-ID: <cmu-ischedule-%u-" TIME_T_FMT "-%u@%s>\r\n",
                getpid(), time(NULL), send_count++, config_servername);
     buf_printf(&hdrs, "Content-Type: text/calendar; charset=utf-8");
 

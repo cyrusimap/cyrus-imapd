@@ -1,0 +1,74 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.13 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.13/cyrus-imapd-3.0.13.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.13/cyrus-imapd-3.0.13.tar.gz.sig
+
+
+.. _relnotes-3.0.13-changes:
+
+Changes Since 3.0.12
+====================
+
+Release changes
+---------------
+
+We're trialing using the Github Releases feature.  If you have trouble downloading
+this release, please report this to the mailing lists.  Thanks!
+
+Security fixes
+--------------
+
+* Fixed CVE-2019-19783_: When creating a missing mailbox as part of a sieve
+  'fileinto' directive, lmtpd would create it as administrator, bypassing ACL
+  checks.
+
+  lmtpd creates missing mailboxes as part of a sieve 'fileinto'
+  directive if:
+
+  * (2.5+) the `anysievefolder` option is enabled (default: not), or
+  * (3.0+) the `sieve_extensions` option has the 'mailbox' extension enabled
+    (default: enabled) and the 'fileinto' directive contains the ":create"
+    argument
+
+  Under these conditions, a user with the ability to upload a custom sieve
+  script to their account could use it to create any valid mailbox on the
+  server (with ACL inherited from the parent mailbox as usual).
+
+  lmtpd no longer creates these mailboxes as administrator, so users may no
+  longer use a 'fileinto' directive to create a mailbox they couldn't create
+  otherwise.
+
+.. _CVE-2019-19783: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-19783
+
+Build changes
+-------------
+
+* `configure --disable-http2` can now be used to disable HTTP/2 support,
+  even when libnghttp2 is installed on the system (thanks Дилян Палаузов)
+
+Bug fixes
+---------
+
+* Fixed :issue:`2383`: XFER of a single mailbox now works (thanks Anthony Prades)
+* Fixed :issue:`2914`: `ctl_backups lock` no longer crashes if the backup is already
+  locked
+* Fixed :issue:`2913`: errors are now logged when `maxlogins_per_host`,
+  `maxlogins_per_user`, and `popminpoll` limits are reached (thanks Sergey)
+* Fixed: various IOERRORs resulting from bad handling of files >2GB
+* Fixed :issue:`2920`: backup tools now expect admin namespace mboxnames, not
+  internal names
+* Fixed :issue:`2931`: symbol ordering in libcyrus.so no longer depends on shell
+  locale in effect during compilation (thanks Xavier)

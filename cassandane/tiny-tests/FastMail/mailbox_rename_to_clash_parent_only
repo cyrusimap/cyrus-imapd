@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_rename_to_clash_parent_only
+    :min_version_3_3 :needs_component_sieve
+    :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.B") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    $imaptalk->create("INBOX.B") || die;
+
+    xlog $self, "move INBOX.A.B to be a child of INBOX";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{B} => {
+          parentId => undef,
+        }
+      }
+    });
+
+    # rejected due to being a child
+    $self->assert_null($res->{updated});
+    $self->assert_not_null($res->{notUpdated}{$mboxids{B}});
+
+    # there were no renames
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/auditlog: rename/);
+}

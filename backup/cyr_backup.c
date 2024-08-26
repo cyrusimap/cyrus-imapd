@@ -49,6 +49,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
 #include <jansson.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,6 +75,9 @@ EXPORTED void fatal(const char *error, int code)
 {
     fprintf(stderr, "fatal error: %s\n", error);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -263,7 +267,22 @@ int main(int argc, char **argv)
     mbname_t *mbname = NULL;
     int i, opt, r = 0;
 
-    while ((opt = getopt(argc, argv, "C:fmuv")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:fmuv";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "filename", no_argument, NULL, 'f' },
+        { "mailbox", no_argument, NULL, 'm' },
+        { "userid", no_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C':
             alt_config = optarg;
@@ -348,7 +367,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "cyr_backup", 0, 0);
 
-    if ((r = mboxname_init_namespace(&cyr_backup_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&cyr_backup_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&cyr_backup_namespace);
@@ -397,6 +416,7 @@ int main(int argc, char **argv)
         backup_close(&backup);
 
     /* clean up and exit */
+    mbname_free(&mbname);
     backup_cleanup_staging_path();
     cyrus_done();
 
@@ -545,7 +565,9 @@ static int cmd_show_mailboxes(struct backup *backup,
 
         /* or it could be an mboxname */
         if (!mailbox) {
-            mbname_t *mbname = mbname_from_intname(arg);
+            mbname_t *mbname = mbname_from_extname(arg,
+                                                   &cyr_backup_namespace,
+                                                   NULL);
             if (!mbname) continue;
             mailbox = backup_get_mailbox_by_name(backup, mbname,
                                                  BACKUP_MAILBOX_ALL_RECORDS);
@@ -712,7 +734,6 @@ static int cmd_json_chunks(struct backup *backup,
     struct backup_chunk *chunk = NULL;
     json_t *jchunks = NULL;
     struct stat data_stat_buf;
-    double total_length = 0.0;
     int r;
 
     (void) options;
@@ -740,8 +761,6 @@ static int cmd_json_chunks(struct backup *backup,
         else {
             ratio = 100.0 * (data_stat_buf.st_size - chunk->offset) / chunk->length;
         }
-
-        total_length += chunk->length;
 
         /* XXX which fields do we want? */
         json_object_set_new(jchunk, "id", json_integer(chunk->id));
@@ -773,7 +792,6 @@ static int json_mailbox_cb(const struct backup_mailbox *mailbox, void *rock)
 {
     json_t *jmailboxes = (json_t *) rock;
     json_t *jmailbox = json_object();
-    json_t *jmessages = json_array();
     char ts_last_appenddate[32] = "[unknown]";
 
     strftime(ts_last_appenddate, sizeof(ts_last_appenddate), "%F %T",
@@ -786,6 +804,7 @@ static int json_mailbox_cb(const struct backup_mailbox *mailbox, void *rock)
 
     if (mailbox->records && mailbox->records->count) {
         struct backup_mailbox_message *iter;
+        json_t *jmessages = json_array();
 
         for (iter = mailbox->records->head; iter; iter = iter->next) {
             json_t *jrecord = json_object();

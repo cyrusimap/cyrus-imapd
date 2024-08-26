@@ -1,0 +1,129 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_collapsethreads
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+
+    my $emailCount = 3;
+    my %createEmails;
+    for (my $i = 1; $i <= $emailCount; $i++) {
+        my $extraBody = ' diy reseller' unless ($i % 2);
+        $createEmails{$i} = {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => "foo$i\@bar" }],
+            to => [{ email => "bar$i\@example.com" }],
+            messageId => ["email$i\@local"],
+            subject => "email$i",
+            bodyStructure => {
+                partId => '1',
+            },
+            bodyValues => {
+                "1" => {
+                    value => "email$i body" . $extraBody
+                },
+            },
+        }
+    }
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => \%createEmails,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals($emailCount, scalar keys %{$res->[0][1]{created}});
+
+    for (my $i = 1; $i <= $emailCount; $i++) {
+        my %createEmails = ();
+        my $threadCount = ($i % 7) + 3; # clamp to max 10 thread emails
+        for (my $j = 1; $j <= $threadCount; $j++) {
+            my $extraBody = ' nyi reseller' unless ($j % 2);
+            $createEmails{$j} = {
+                mailboxIds => {
+                    '$inbox' => JSON::true
+                },
+                from => [{ email => "foo$i" . "ref$j\@bar" }],
+                to => [{ email => "bar$i" . "ref$j\@example.com" }],
+                messageId => ["email$i" . "ref$j\@local"],
+                references => ["email$i\@local"],
+                subject => "Re: email$i",
+                bodyStructure => {
+                    partId => '1',
+                },
+                bodyValues => {
+                    "1" => {
+                        value => "email$i" ."ref$j body" . $extraBody
+                    },
+                },
+            }
+        }
+        $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => \%createEmails,
+            }, 'R1'],
+        ]);
+        $self->assert_num_equals($threadCount, scalar keys %{$res->[0][1]{created}});
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Query collapsed threads";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    text => 'nyi',
+                }, {
+                    text => 'reseller',
+                }],
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::false,
+            }],
+            collapseThreads => JSON::true,
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    text => 'nyi',
+                }, {
+                    text => 'reseller',
+                }],
+            },
+            sort => [{
+                property => 'receivedAt',
+                isAscending => JSON::false,
+            }],
+            collapseThreads => JSON::true,
+            disableGuidSearch => JSON::true,
+        }, 'R2'],
+    ], $using);
+
+    my $guidSearchIds;
+    my @wantIds;
+
+    # Check GUID search results
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
+    $self->assert_deep_equals($res->[1][1]{ids}, $res->[0][1]{ids});
+}

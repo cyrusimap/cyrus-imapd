@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_error
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create calendar with missing mandatory attributes";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {}}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    my $errType = $res->[0][1]{notCreated}{"1"}{type};
+    my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals([ "name" ], $errProp);
+
+    xlog $self, "create calendar with invalid optional attributes";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo", color => "coral",
+                            sortOrder => 2, isVisible => \1,
+                            myRights => {
+                            mayReadFreeBusy => \0, mayReadItems => \0,
+                            mayAddItems => \0, mayModifyItems => \0,
+                            mayRemoveItems => \0, mayRename => \0,
+                            mayDelete => \0
+                            }
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notCreated}{"1"}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals(['myRights'], $res->[0][1]{notCreated}{"1"}{properties});
+
+    xlog $self, "update unknown calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { update => { "unknown" => {
+                            name => "foo"
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{"unknown"}{type};
+    $self->assert_str_equals("notFound", $errType);
+
+    xlog $self, "create calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "update calendar with immutable optional attributes";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { update => { $id => {
+                            myRights => {
+                            mayReadFreeBusy => \0, mayReadItems => \0,
+                            mayAddItems => \0, mayModifyItems => \0,
+                            mayRemoveItems => \0, mayRename => \0,
+                            mayDelete => \0
+                            }
+             }}}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notUpdated}{$id}{type};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals(['myRights'], $res->[0][1]{notUpdated}{$id}{properties});
+
+    xlog $self, "destroy unknown calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {destroy => ["unknown"]}, "R1"]
+    ]);
+    $errType = $res->[0][1]{notDestroyed}{"unknown"}{type};
+    $self->assert_str_equals("notFound", $errType);
+
+    xlog $self, "destroy calendar $id";
+    $res = $jmap->CallMethods([['Calendar/set', {destroy => ["$id"]}, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+}

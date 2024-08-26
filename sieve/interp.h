@@ -49,11 +49,12 @@
 struct sieve_interp {
     /* standard callbacks for actions */
     sieve_callback *redirect, *discard, *reject, *fileinto, *snooze, *keep;
-    sieve_callback *notify;
+    sieve_callback *notify, *processcal;
     sieve_vacation_t *vacation;
 
     sieve_get_size *getsize;
     sieve_get_header *getheader;
+    sieve_get_headersection *getheadersection;
     sieve_add_header *addheader;
     sieve_delete_header *deleteheader;
     sieve_get_envelope *getenvelope;
@@ -76,9 +77,6 @@ struct sieve_interp {
 
     sieve_parse_error *err;
 
-    /* site-specific imapflags for mark/unmark */
-    const strarray_t *markflags;
-
     const strarray_t *notifymethods;
 
     sieve_execute_error *execute_err;
@@ -91,6 +89,15 @@ struct sieve_interp {
 
     /* time when allocated */
     time_t time;
+
+    /* have we added/deleted any headers? */
+    unsigned edited_headers : 1;
+
+    struct {
+        const char *folder;
+        const char *mailboxid;
+        const char *specialuse;
+    } ikeep;
 };
 
 
@@ -130,7 +137,7 @@ enum sieve_capa_flag {
 
     /* IMAP4 Flags - RFC 5232 */
     SIEVE_CAPA_IMAP4FLAGS   = 1LL<<12,
-    SIEVE_CAPA_IMAPFLAGS    = 1LL<<13, /* draft-melnikov-sieve-imapflags-04 */
+    SIEVE_CAPA_IMAPFLAGS    = 0LL<<13, /* deprecated */
 
     /* Subaddress - RFC 5233 */
     SIEVE_CAPA_SUBADDRESS   = 1LL<<14,
@@ -153,7 +160,7 @@ enum sieve_capa_flag {
 
     /* Notifications - RFC 5435 */
     SIEVE_CAPA_ENOTIFY      = 1LL<<23,
-    SIEVE_CAPA_NOTIFY       = 1LL<<24, /* draft-martin-sieve-notify-01 */
+    SIEVE_CAPA_NOTIFY       = 0LL<<24, /* deprecated draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
     SIEVE_CAPA_IHAVE        = 1LL<<25,
@@ -200,21 +207,30 @@ enum sieve_capa_flag {
     /* Fcc - RFC 8580 */
     SIEVE_CAPA_FCC          = 1LL<<45,
 
-    /* Mailboxid - draft-gondwana-sieve-mailboxid */
+    /* Mailboxid - draft-ietf-extra-sieve-mailboxid */
     SIEVE_CAPA_MAILBOXID    = 1LL<<46,
 
-    /* Log - x-cyrus-log */
+    /* Log - vnd.cyrus.log */
     SIEVE_CAPA_LOG          = 1LL<<47,
 
-    /* JMAP Query - x-cyrus-jmapquery */
+    /* JMAP Query - vnd.cyrus.jmapquery */
 #ifdef WITH_JMAP
     SIEVE_CAPA_JMAPQUERY    = 1LL<<48,
 #else
     SIEVE_CAPA_JMAPQUERY    = 0LL<<48, /* disabled at compile-time */
 #endif
 
-    /* Snooze - x-cyrus-snooze */
+    /* Snooze - draft-ietf-extra-sieve-snooze */
     SIEVE_CAPA_SNOOZE       = 1LL<<49,
+
+    /* ProcessCalendar - draft-ietf-extra-processimip */
+    SIEVE_CAPA_PROCESSCAL   = 1LL<<50,
+
+    /* vnd.cyrus.implicit_keep_target */
+    SIEVE_CAPA_IKEEP_TARGET = 1LL<<51,
+
+    /* i;unicode-casemap - RFC 5051 */
+    SIEVE_CAPA_COMP_UCASEMAP= 1LL<<52,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -230,7 +246,6 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_VACATION     \
                         | SIEVE_CAPA_RELATIONAL   \
                         | SIEVE_CAPA_IMAP4FLAGS   \
-                        | SIEVE_CAPA_IMAPFLAGS    \
                         | SIEVE_CAPA_SUBADDRESS   \
                         | SIEVE_CAPA_SPAM         \
                         | SIEVE_CAPA_SPAMPLUS     \
@@ -267,10 +282,14 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_LOG          \
                         | SIEVE_CAPA_JMAPQUERY    \
                         | SIEVE_CAPA_SNOOZE       \
+                        | SIEVE_CAPA_PROCESSCAL   \
+                        | SIEVE_CAPA_IKEEP_TARGET \
+                        | SIEVE_CAPA_COMP_UCASEMAP \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)
 
+extern const char *lookup_capability_string(unsigned long long capa);
 unsigned long long lookup_capability(const char *str);
 unsigned long long extension_isactive(sieve_interp_t *interp, const char *str);
 int interp_verify(sieve_interp_t *interp);

@@ -32,12 +32,12 @@ static void test_names(void)
     CU_ASSERT_EQUAL(r, QUOTA_STORAGE);
 
     CU_ASSERT_STRING_EQUAL(quota_names[QUOTA_ANNOTSTORAGE],
-                           "X-ANNOTATION-STORAGE");
-    r = quota_name_to_resource("X-ANNOTATION-STORAGE");
+                           "ANNOTATION-STORAGE");
+    r = quota_name_to_resource("ANNOTATION-STORAGE");
     CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
-    r = quota_name_to_resource("x-annotation-storage");
+    r = quota_name_to_resource("annotation-storage");
     CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
-    r = quota_name_to_resource("X-AnNotAtiOn-StOragE");
+    r = quota_name_to_resource("AnNotAtiOn-StOragE");
     CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
 
     r = quota_name_to_resource("nonesuch");
@@ -432,13 +432,13 @@ static void test_update_useds(void)
     quota_diff[QUOTA_STORAGE] = 10*1024;
     quota_diff[QUOTA_MESSAGE] = 2;
     quota_diff[QUOTA_ANNOTSTORAGE] = 1*1024;
-    r = quota_update_useds(NULL, quota_diff, NULL);
+    r = quota_update_useds(NULL, quota_diff, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_useds("", quota_diff, NULL);
+    r = quota_update_useds("", quota_diff, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_useds(QUOTAROOT_NONEXISTENT, quota_diff, NULL);
+    r = quota_update_useds(QUOTAROOT_NONEXISTENT, quota_diff, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
     /* set limits */
@@ -454,7 +454,7 @@ static void test_update_useds(void)
 #define TESTCASE(d0, d1, d2, e0, e1, e2) { \
     static const quota_t diff[QUOTA_NUMRESOURCES] = { d0, d1, d2 }; \
     static const quota_t expused[QUOTA_NUMRESOURCES] = { e0, e1, e2 }; \
-    r = quota_update_useds(QUOTAROOT, diff, NULL); \
+    r = quota_update_useds(QUOTAROOT, diff, NULL, 0); \
     CU_ASSERT_EQUAL(r, 0); \
     memset(&q2, 0, sizeof(q2)); \
     q2.root = QUOTAROOT; \
@@ -462,7 +462,7 @@ static void test_update_useds(void)
     CU_ASSERT_EQUAL(r, 0); \
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) { \
         CU_ASSERT_EQUAL(q2.useds[res], expused[res]); \
-        CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]) \
+        CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]); \
     } \
 }
 
@@ -1002,18 +1002,6 @@ static void test_findroot_virtdomains(void)
     TESTCASE("user.farnarkle", NULL);
 }
 #undef TESTCASE
-
-static void config_read_string(const char *s)
-{
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
-    int fd = mkstemp(fname);
-    retry_write(fd, s, strlen(s));
-    config_reset();
-    config_read(fname, 0);
-    unlink(fname);
-    free(fname);
-    close(fd);
-}
 
 static int set_up(void)
 {

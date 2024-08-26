@@ -59,7 +59,7 @@
 #include "xmalloc.h"
 
 #include <libzeroskip/zeroskip.h>
-#include <libzeroskip/btree.h>
+#include <libzeroskip/memtree.h>
 
 struct txn {
     struct zsdb_txn *t;
@@ -112,7 +112,7 @@ static int create_or_reuse_txn(struct dbengine *db,
     return CYRUSDB_OK;
 }
 
-btree_memcmp_fn(
+memtree_memcmp_fn(
   mbox,
   ,
   bsearch_memtree_mbox(k, keylen, b, blen)
@@ -157,7 +157,7 @@ static int cyrusdb_zeroskip_open(const char *fname,
     int r = CYRUSDB_OK;
     int zsdbflags = MODE_RDWR;
     zsdb_cmp_fn dbcmpfn = NULL;
-    btree_search_cb_t btcmpfn = NULL;
+    memtree_search_cb_t btcmpfn = NULL;
 
     dbe = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
@@ -167,7 +167,7 @@ static int cyrusdb_zeroskip_open(const char *fname,
     if (flags & CYRUSDB_MBOXSORT) {
         zsdbflags |= MODE_CUSTOMSEARCH;
         dbcmpfn = bsearch_uncompare_mbox;
-        btcmpfn = btree_memcmp_mbox;
+        btcmpfn = memtree_memcmp_mbox;
     }
 
     if (zsdb_init(&dbe->db, dbcmpfn, btcmpfn) != ZS_OK) {

@@ -52,8 +52,8 @@
 
 typedef struct
 {
-    int count;
-    int alloc;
+    size_t count;
+    size_t alloc;
     uint64_t *data;
 } arrayu64_t;
 
@@ -66,14 +66,13 @@ void arrayu64_free(arrayu64_t *);
 
 int arrayu64_append(arrayu64_t *, uint64_t);
 int arrayu64_add(arrayu64_t *, uint64_t);
-int arrayu64_find(arrayu64_t *, uint64_t, int start);
 void arrayu64_set(arrayu64_t *, int idx, uint64_t);
 void arrayu64_insert(arrayu64_t *, int idx, uint64_t);
 uint64_t arrayu64_remove(arrayu64_t *, int idx);
 /* returns number removed */
 int arrayu64_remove_all(arrayu64_t *, uint64_t);
 uint64_t arrayu64_nth(const arrayu64_t *, int idx);
-void arrayu64_truncate(arrayu64_t *, int newlen);
+void arrayu64_truncate(arrayu64_t *, size_t newlen);
 arrayu64_t *arrayu64_dup(const arrayu64_t *);
 
 uint64_t arrayu64_max(const arrayu64_t *);
@@ -90,6 +89,9 @@ void arrayu64_sort(arrayu64_t *, arrayu64_cmp_fn_t *);
 
 void arrayu64_uniq(arrayu64_t *);
 
-int arrayu64_size(const arrayu64_t *);
+size_t arrayu64_size(const arrayu64_t *);
+
+off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t start);
+off_t arrayu64_bsearch(const arrayu64_t *au, uint64_t val);
 
 #endif /* __CYRUS_ARRAYU64_H__ */

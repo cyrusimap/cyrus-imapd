@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+# a case where ANOTHER user moved an email from a folder with sharedseen
+# enabled to a folder with different seen options enabled caused an IOERROR
+# and DBERROR because the seen db was in a transaction, and hence led to
+# this in the logs:
+#
+# IOERROR: append_addseen failed to open DB for foo@example.com
+
+sub test_email_move_shared_fromsharedseen
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Share account
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+
+    # Create mailbox A
+    $admintalk->create("user.other.A") or die;
+    $admintalk->setacl("user.other.A", "cassandane", "lrswipkxtecdan") or die;
+    $admintalk->setmetadata("user.other.A", "/shared/vendor/cmu/cyrus-imapd/sharedseen", "true");
+
+    # Create message in mailbox A
+    $self->{adminstore}->set_folder('user.other.A');
+    $self->make_message("Email", store => $self->{adminstore}) or die;
+
+    # Create mailbox B
+    $admintalk->create("user.other.B") or die;
+    $admintalk->setacl("user.other.B", "cassandane", "lrswipkxtecdan") or die;
+
+    my @fetchEmailMethods = (
+        ['Email/query', {
+            accountId => 'other',
+            collapseThreads => JSON::true,
+        }, "R1"],
+        ['Email/get', {
+            accountId => 'other',
+            properties => ['mailboxIds'],
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    );
+
+    # Fetch Email
+    my $res = $jmap->CallMethods([@fetchEmailMethods, ['Mailbox/get', { accountId => 'other' }, 'R3']]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+    my $emailId = $res->[1][1]{list}[0]{id};
+    my %mbids = map { $_->{name} => $_->{id} } @{$res->[2][1]{list}};
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "keywords/\$seen" => $JSON::true,
+            }},
+            accountId => 'other',
+        }, 'R1'],
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$mbids{A}" => undef,
+                "mailboxIds/$mbids{B}" => $JSON::true,
+            }},
+            accountId => 'other',
+        }, 'R2'],
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+    $self->assert_not_null($res->[1][1]{updated});
+    $self->assert_null($res->[1][1]{notUpdated});
+}

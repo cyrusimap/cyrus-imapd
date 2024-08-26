@@ -58,6 +58,10 @@
 #include "xstrlcat.h"
 #include "xmalloc.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
+
 
 #define NUM_BUFS 10
 
@@ -114,7 +118,7 @@ EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
 EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
 {
     struct carddav_db *carddavdb = NULL;
-    char *userid = mboxname_to_userid(mailbox->name);
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
     init_internal();
 
@@ -151,7 +155,7 @@ EXPORTED int carddav_close(struct carddav_db *carddavdb)
         buf_free(&carddavdb->bufs[i]);
     }
 
-    r = sqldb_close(&carddavdb->db);
+    r = dav_close(&carddavdb->db);
 
     free(carddavdb->userid);
     free(carddavdb);
@@ -199,12 +203,13 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
     "  modseq, createdmodseq, NULL, NULL" \
     " FROM vcard_objs"
 
-#define CMD_GETFIELDS_JMAP                                              \
+#define CMD_GETFIELDS_JSCARD                                            \
     "SELECT vcard_objs.rowid, creationdate, mailbox, resource, imap_uid," \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  version, vcard_uid, kind, fullname, name, nickname, alive,"      \
     "  modseq, createdmodseq, jmapversion, jmapdata" \
-    " FROM vcard_objs LEFT JOIN vcard_jmapcache USING (rowid)"
+    " FROM vcard_objs LEFT JOIN jscard_cache"                           \
+    "  ON (vcard_objs.rowid = jscard_cache.rowid AND jscard_cache.userid = :userid)"
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -215,6 +220,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     memset(cdata, 0, sizeof(struct carddav_data));
 
+    cdata->dav.mailbox_byname = (db->db->version < DB_MBOXID_VERSION);
     cdata->dav.alive = sqlite3_column_int(stmt, 15);
     cdata->dav.modseq = sqlite3_column_int64(stmt, 16);
     cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 17);
@@ -225,9 +231,14 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
     cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
-    cdata->version = sqlite3_column_int(stmt, 9);
     cdata->kind = sqlite3_column_int(stmt, 11);
     cdata->jmapversion = sqlite3_column_int(stmt, 18);
+
+    cdata->version = sqlite3_column_int(stmt, 9);
+    if (cdata->version == 0) {
+        /* Default to v3 for records stored before we actually set the version */
+        cdata->version = 3;
+    }
 
     if (rrock->cb) {
         /* We can use the column data directly for the callback */
@@ -275,7 +286,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 14),
                                &db->bufs[8]);
         cdata->jmapdata =
-            column_text_to_buf((const char *) sqlite3_column_text(stmt, 15),
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 19),
                                 &db->bufs[9]);
     }
 
@@ -286,10 +297,12 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
-                           const char *mailbox, const char *resource,
+                           const mbentry_t *mbentry, const char *resource,
                            struct carddav_data **result,
                            int tombstones)
 {
+    const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT, { .s = mailbox       } },
         { ":resource", SQLITE_TEXT, { .s = resource      } },
@@ -304,6 +317,7 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     /* always mailbox and resource so error paths don't fail */
+    cdata.dav.mailbox_byname = (carddavdb->db->version < DB_MBOXID_VERSION);
     cdata.dav.mailbox = mailbox;
     cdata.dav.resource = resource;
 
@@ -315,10 +329,12 @@ EXPORTED int carddav_lookup_resource(struct carddav_db *carddavdb,
     " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
 
 EXPORTED int carddav_lookup_imapuid(struct carddav_db *carddavdb,
-                                    const char *mailbox, int imap_uid,
+                                    const mbentry_t *mbentry, int imap_uid,
                                     struct carddav_data **result,
                                     int tombstones)
 {
+    const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
         { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
@@ -362,26 +378,75 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 
 
 #define CMD_SELMBOX CMD_GETFIELDS \
-    " WHERE mailbox = :mailbox AND alive = 1 ORDER BY modseq DESC;"
+    " WHERE mailbox = :mailbox AND alive = 1"
 
 #define CMD_SELALIVE CMD_GETFIELDS \
-    " WHERE alive = 1 ORDER BY modseq DESC;"
+    " WHERE alive = 1"
 
-EXPORTED int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
-                   int (*cb)(void *rock, struct carddav_data *data),
-                   void *rock)
+#define CMD_DEFAULT_ORDER " ORDER BY modseq DESC;"
+
+EXPORTED int carddav_foreach(struct carddav_db *carddavdb,
+                             const mbentry_t *mbentry,
+                             int (*cb)(void *rock, struct carddav_data *data),
+                             void *rock)
 {
+    return carddav_foreach_sort(carddavdb, mbentry, NULL, 0, cb, rock);
+}
+
+EXPORTED int carddav_foreach_sort(struct carddav_db *carddavdb,
+                                  const mbentry_t *mbentry,
+                                  enum carddav_sort* sort, size_t nsort,
+                                  int (*cb)(void *rock, struct carddav_data *data),
+                                  void *rock)
+{
+    const char *mailbox = !mbentry ? NULL :
+        ((carddavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
     struct carddav_data cdata;
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
 
-    if (mailbox) {
-        return sqldb_exec(carddavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock);
-    } else {
-        return sqldb_exec(carddavdb->db, CMD_SELALIVE, bval, &read_cb, &rrock);
+    if (!nsort) {
+        if (mailbox) {
+            return sqldb_exec(carddavdb->db, CMD_SELMBOX CMD_DEFAULT_ORDER,
+                              bval, &read_cb, &rrock);
+        } else {
+            return sqldb_exec(carddavdb->db, CMD_SELALIVE CMD_DEFAULT_ORDER,
+                              bval, &read_cb, &rrock);
+        }
     }
+
+    struct buf stmt = BUF_INITIALIZER;
+    buf_setcstr(&stmt, mailbox ? CMD_SELMBOX : CMD_SELALIVE);
+    buf_appendcstr(&stmt, " ORDER BY");
+    size_t i;
+    for (i = 0; i < nsort; i++) {
+        const char *column = NULL;
+        switch (sort[i] & ~CARD_SORT_DESC) {
+            case CARD_SORT_MODSEQ:
+                column = "modseq";
+                break;
+            case CARD_SORT_UID:
+                column = "vcard_uid";
+                break;
+            case CARD_SORT_FULLNAME:
+                column = "fullname";
+                break;
+            default:
+                continue;
+        }
+        if (i) buf_putc(&stmt, ',');
+        buf_putc(&stmt, ' ');
+        buf_appendcstr(&stmt, column);
+        buf_appendcstr(&stmt, sort[i] & CARD_SORT_DESC ? " DESC" : " ASC");
+    }
+    buf_putc(&stmt, ';');
+
+    int r = sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval, &read_cb, &rrock);
+    buf_free(&stmt);
+    return r;
 }
 
 #define CMD_GETUID_GROUPS \
@@ -507,13 +572,17 @@ static int details_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, const char *email,
-                                              const char *mboxname, int *ispinned)
+EXPORTED strarray_t *carddav_getemail2details(struct carddav_db *carddavdb,
+                                              const char *email,
+                                              const mbentry_t *mbentry,
+                                              int *ispinned)
 {
+    const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
-        { ":email", SQLITE_TEXT,   { .s = email } },
-        { ":mailbox", SQLITE_TEXT, { .s = mboxname } },
-        { NULL,     SQLITE_NULL,   { .s = NULL  } }
+        { ":email",   SQLITE_TEXT, { .s = email   } },
+        { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
+        { NULL,       SQLITE_NULL, { .s = NULL    } }
     };
     struct detailsdata data = { strarray_new(), 0 };
 
@@ -526,14 +595,18 @@ EXPORTED strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, cons
     return data.uids;
 }
 
-EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *member_uid,
-                                           const char *mboxname, const char *otheruser)
+EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
+                                           const char *member_uid,
+                                           const mbentry_t *mbentry,
+                                           const char *otheruser)
 {
+    const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":member_uid", SQLITE_TEXT, { .s = member_uid } },
-        { ":mailbox", SQLITE_TEXT,    { .s = mboxname } },
-        { ":otheruser",  SQLITE_TEXT, { .s = otheruser } },
-        { NULL,          SQLITE_NULL, { .s = NULL  } }
+        { ":mailbox",    SQLITE_TEXT, { .s = mailbox    } },
+        { ":otheruser",  SQLITE_TEXT, { .s = otheruser  } },
+        { NULL,          SQLITE_NULL, { .s = NULL       } }
     };
     strarray_t *groups = strarray_new();
 
@@ -619,27 +692,45 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group,
-                                      mbname_t *othermb)
+EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
+                                      const mbentry_t *mbentry, const char *group,
+                                      const mbentry_t *othermb)
 {
     int r = 0;
     int isshared = 0;
     if (!strncmpsafe(group, "shared/", 7)) {
-        assert(!mailbox); // no mailbox filter on shared groups
+        assert(!mbentry); // no mailbox filter on shared groups
         if (!carddavdb->db->attached) return NULL;
         if (!*group) return NULL; // can't just be "shared/"
         isshared = 1;
         group += 7;
     }
 
+    const char *mailbox = !mbentry ? NULL :
+        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+
+    const char *othermailbox = !othermb ? NULL :
+        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        othermb->uniqueid : othermb->name;
+
+    const char *otheruser = NULL;
+    mbname_t *othermbname = NULL;
+    if (othermb) {
+        othermbname = mbname_from_intname(othermb->name);
+        otheruser = mbname_userid(othermbname);
+    }
+
     struct sqldb_bindval bval[] = {
         { ":mailbox",      SQLITE_TEXT,    { .s = mailbox } },
         { ":group",        SQLITE_TEXT,    { .s = group   } },
         { ":kind",         SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
-        { ":otheruser",    SQLITE_TEXT,    { .s = othermb ? mbname_userid(othermb) : NULL } },
-        { ":othermailbox", SQLITE_TEXT,    { .s = othermb ? mbname_intname(othermb) : NULL } },
+        { ":otheruser",    SQLITE_TEXT,    { .s = otheruser } },
+        { ":othermailbox", SQLITE_TEXT,    { .s = othermailbox } },
         { NULL,            SQLITE_NULL,    { .s = NULL    } }
     };
+
+    strarray_t *members = NULL;
 
     if (*group) {
         // first check that the group exists
@@ -649,14 +740,11 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
         r = sqldb_exec(carddavdb->db, existsql, bval, &groupexists_cb, &exists);
         if (r) {
             /* XXX syslog */
-            return NULL;
+            goto done;
         }
 
-        if (!exists)
-            return NULL;
+        if (!exists) goto done;
     }
-
-    strarray_t *members = strarray_new();
 
     // pick which filter to use!
     const char *membersql = GETGROUP_MEMBERS;
@@ -667,11 +755,14 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
     }
     else if (!*group) membersql = GETALL_MEMBERS;
 
+    members = strarray_new();
     r = sqldb_exec(carddavdb->db, membersql, bval, &groupmembers_cb, members);
     if (r) {
         /* XXX syslog */
     }
 
+done:
+    mbname_free(&othermbname);
     return members;
 }
 
@@ -799,7 +890,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const s
     "  nickname     = :nickname"        \
     " WHERE rowid = :rowid;"
 
-#define CMD_DELETE_JMAPCACHE "DELETE FROM vcard_jmapcache WHERE rowid = :rowid"
+#define CMD_DELETE_JSCARDCACHE "DELETE FROM jscard_cache WHERE rowid = :rowid"
 
 EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata)
 {
@@ -825,9 +916,7 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
         { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
 
     if (cdata->dav.rowid) {
-        int r = sqldb_exec(carddavdb->db, CMD_DELETE_JMAPCACHE, bval, NULL, NULL);
-        if (r) return r;
-        r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
+        int r = sqldb_exec(carddavdb->db, CMD_UPDATE, bval, NULL, NULL);
         if (r) return r;
     }
     else {
@@ -838,6 +927,25 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
 
     return 0;
 }
+
+
+#define CMD_UPDATE_EMAILS                                                \
+    "UPDATE vcard_emails SET ispinned = :ispinned WHERE objid = :objid;"
+
+EXPORTED int carddav_update(struct carddav_db *carddavdb,
+                            struct carddav_data *cdata, int ispinned)
+{
+    struct sqldb_bindval bval[] = {
+        { ":objid",        SQLITE_INTEGER, { .i = cdata->dav.rowid } },
+        { ":ispinned",     SQLITE_INTEGER, { .i = ispinned         } },
+        { NULL,            SQLITE_NULL,    { .s = NULL             } } };
+
+    int r = carddav_write(carddavdb, cdata);
+    if (r) return r;
+
+    return sqldb_exec(carddavdb->db, CMD_UPDATE_EMAILS, bval, NULL, NULL);
+}
+
 
 
 #define CMD_DELETE "DELETE FROM vcard_objs WHERE rowid = :rowid;"
@@ -860,8 +968,11 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
 
 #define CMD_DELMBOX "DELETE FROM vcard_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
+EXPORTED int carddav_delmbox(struct carddav_db *carddavdb,
+                             const mbentry_t *mbentry)
 {
+    const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
@@ -873,37 +984,50 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
     return 0;
 }
 
-#define CMD_INSERT_JMAPCACHE                                                \
-    "INSERT INTO vcard_jmapcache ( rowid, jmapversion, jmapdata )"          \
-    " VALUES ( :rowid, :jmapversion, :jmapdata );"
+#define CMD_DELETE_JSCARDCACHE_USER                                         \
+    "DELETE FROM jscard_cache"                                              \
+    " WHERE rowid = :rowid AND userid = :userid"
 
-EXPORTED int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid, int version, const char *data)
+#define CMD_INSERT_JSCARDCACHE_USER                                         \
+    "INSERT INTO jscard_cache ( rowid, userid, jmapversion, jmapdata )"     \
+    " VALUES ( :rowid, :userid, :jmapversion, :jmapdata );"
+
+EXPORTED int carddav_write_jscardcache(struct carddav_db *carddavdb,
+                                       int rowid, const char *userid,
+                                       int version, const char *data)
 {
     struct sqldb_bindval bval[] = {
         { ":rowid",        SQLITE_INTEGER, { .i = rowid  } },
+        { ":userid",       SQLITE_TEXT,    { .s = userid } },
         { ":jmapversion",  SQLITE_INTEGER, { .i = version } },
         { ":jmapdata",     SQLITE_TEXT,    { .s = data   } },
         { NULL,            SQLITE_NULL,    { .s = NULL   } } };
     int r;
 
     /* clean up existing records if any */
-    r = sqldb_exec(carddavdb->db, CMD_DELETE_JMAPCACHE, bval, NULL, NULL);
+    r = sqldb_exec(carddavdb->db, CMD_DELETE_JSCARDCACHE_USER, bval, NULL, NULL);
     if (r) return r;
 
+    if (!data) return 0;
+
     /* insert the cache record */
-    return sqldb_exec(carddavdb->db, CMD_INSERT_JMAPCACHE, bval, NULL, NULL);
+    return sqldb_exec(carddavdb->db, CMD_INSERT_JSCARDCACHE_USER, bval, NULL, NULL);
 }
 
 EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
-                               const char *abookname,
-                               const char *vcard_uid, int kind,
+                               const mbentry_t *mbentry,
+                               const char *userid, const char *vcard_uid, int kind,
                                int (*cb)(void *rock,
                                          struct carddav_data *cdata),
                                void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((carddavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
+        { ":userid",    SQLITE_TEXT,    { .s = userid    } },
         { ":kind",      SQLITE_INTEGER, { .i = kind      } },
-        { ":mailbox",   SQLITE_TEXT,    { .s = abookname } },
+        { ":mailbox",   SQLITE_TEXT,    { .s = mailbox   } },
         { ":vcard_uid", SQLITE_TEXT,    { .s = vcard_uid } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
@@ -911,9 +1035,11 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     struct read_rock rrock = { carddavdb, &cdata, 0, cb, rock };
     struct buf sqlbuf = BUF_INITIALIZER;
 
-    buf_setcstr(&sqlbuf, CMD_GETFIELDS_JMAP);
-    buf_appendcstr(&sqlbuf, " WHERE alive = 1 AND kind = :kind");
-    if (abookname)
+    buf_setcstr(&sqlbuf, CMD_GETFIELDS_JSCARD);
+    buf_appendcstr(&sqlbuf, " WHERE alive = 1");
+    if (kind != CARDDAV_KIND_ANY)
+        buf_appendcstr(&sqlbuf, " AND kind = :kind");
+    if (mailbox)
         buf_appendcstr(&sqlbuf, " AND mailbox = :mailbox");
     if (vcard_uid)
         buf_appendcstr(&sqlbuf, " AND vcard_uid = :vcard_uid");
@@ -937,14 +1063,17 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
 #define BYMODSEQ  " modseq > :modseq;"
 
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
-                                 modseq_t oldmodseq, const char *mboxname,
+                                 modseq_t oldmodseq, const mbentry_t *mbentry,
                                  int kind, int limit,
                                  int (*cb)(void *rock,
                                            struct carddav_data *cdata),
                                  void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((carddavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
-        { ":mailbox", SQLITE_TEXT,    { .s = mboxname  } },
+        { ":mailbox", SQLITE_TEXT,    { .s = mailbox   } },
         { ":modseq",  SQLITE_INTEGER, { .i = oldmodseq } },
         { ":kind",    SQLITE_INTEGER, { .i = kind      } },
         /* SQLite interprets a negative limit as unbounded. */
@@ -957,9 +1086,8 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
-    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
-    if (kind >= 0) {
-        /* Use a negative value to signal that we accept ALL card types */
+    if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (kind >= 0 && kind != CARDDAV_KIND_ANY) {
         buf_appendcstr(&sqlbuf, " kind = :kind AND");
     }
     if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
@@ -983,27 +1111,37 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
 {
     struct vparse_entry *ventry;
 
+    struct buf nicknames = BUF_INITIALIZER;
+    strarray_t values = STRARRAY_INITIALIZER;
     strarray_t emails = STRARRAY_INITIALIZER;
     strarray_t member_uids = STRARRAY_INITIALIZER;
 
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
-        const char *propval = ventry->v.value;
-
         if (!name) continue;
+
+        char *propval = vparse_get_value(ventry);
         if (!propval) continue;
 
         if (!strcasecmp(name, "uid")) {
             cdata->vcard_uid = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "n")) {
             cdata->name = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "fn")) {
             cdata->fullname = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "nickname")) {
-            cdata->nickname = propval;
+            if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
+            buf_appendcstr(&nicknames, propval);
+            cdata->nickname = buf_cstring(&nicknames);
         }
         else if (!strcasecmp(name, "email")) {
             /* XXX - insert if primary */
@@ -1014,21 +1152,25 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
                     !strcasecmp(param->value, "pref"))
                     ispref = 1;
             }
-            strarray_append(&emails, propval);
+            strarray_appendm(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
+            propval = NULL;
         }
         else if (!strcasecmp(name, "member") ||
                  !strcasecmp(name, "x-addressbookserver-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
-            strarray_append(&member_uids, propval+9);
-            strarray_append(&member_uids, "");
+            if (!strncmp(propval, "urn:uuid:", 9)) {
+                strarray_append(&member_uids, propval+9);
+                strarray_append(&member_uids, "");
+            }
         }
         else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
-            struct vparse_param *param = vparse_get_param(ventry, "userid");
-            if (!param) continue;
-            strarray_append(&member_uids, propval+9);
-            strarray_append(&member_uids, param->value);
+            if (!strncmp(propval, "urn:uuid:", 9)) {
+                struct vparse_param *param = vparse_get_param(ventry, "userid");
+                if (param) {
+                    strarray_append(&member_uids, propval+9);
+                    strarray_append(&member_uids, param->value);
+                }
+            }
         }
         else if (!strcasecmp(name, "kind") ||
                  !strcasecmp(name, "x-addressbookserver-kind")) {
@@ -1036,53 +1178,70 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
                 cdata->kind = CARDDAV_KIND_GROUP;
             /* default case is CARDDAV_KIND_CONTACT */
         }
+        else if (!strcasecmp(name, "version")) {
+            cdata->version = propval[0] - '0';
+        }
+
+        free(propval);
     }
 
     int r = carddav_write(carddavdb, cdata);
     if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
+    buf_free(&nicknames);
+    strarray_fini(&values);
     strarray_fini(&emails);
     strarray_fini(&member_uids);
 
     return r;
 }
 
-EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                           const char *resource, modseq_t createdmodseq,
-                           strarray_t *flags, struct entryattlist *annots,
-                           const char *userid, struct auth_state *authstate,
-                           int ignorequota)
+static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
+                          const char *uid, const char *fullname,
+                          const char *resource, modseq_t createdmodseq,
+                          strarray_t *flags, struct entryattlist **annots,
+                          const char *userid, struct auth_state *authstate,
+                          int ignorequota, uint32_t oldsize)
 {
     int r = 0;
     FILE *f = NULL;
-    struct stagemsg *stage;
+    struct stagemsg *stage = NULL;
     char *header;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct appendstate as;
     time_t now = time(0);
     char *freeme = NULL;
     char datestr[80];
+    static int64_t vcard_max_size = -1;
+    char *mbuserid = NULL;
+
+    if (vcard_max_size < 0) {
+        vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
+        if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
+    }
 
     init_internal();
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         return -1;
     }
 
-    /* set the REVision time */
-    time_to_iso8601(now, datestr, sizeof(datestr), 0);
-    vparse_replace_entry(vcard, NULL, "REV", datestr);
+    /* Check size of vCard (allow existing oversized cards to be updated) */
+    size_t max_size = vcard_max_size;
+    if (oldsize > max_size) {
+        max_size += CARDDAV_UPDATE_OVERAGE;
+    }
+    if (buf_len(vcard) > max_size) {
+        r = IMAP_MESSAGE_TOO_LARGE;
+        goto done;
+    }
 
     /* Create header for resource */
-    const char *uid = vparse_stringval(vcard, "uid");
-    const char *fullname = vparse_stringval(vcard, "fn");
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vcard, &buf);
-    char *mbuserid = mboxname_to_userid(mailbox->name);
+    mbuserid = mboxname_to_userid(mailbox_name(mailbox));
 
     time_to_rfc5322(now, datestr, sizeof(datestr));
 
@@ -1097,15 +1256,25 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
     fprintf(f, "Date: %s\r\n", datestr);
 
-    if (strchr(uid, '@'))
-        fprintf(f, "Message-ID: <%s>\r\n", uid);
-    else
-        fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+    /* Use SHA1(uid)@servername as Message-ID */
+    struct message_guid uuid;
+    message_guid_generate(&uuid, uid, strlen(uid));
+    fprintf(f, "Message-ID: <%s@%s>\r\n",
+            message_guid_encode(&uuid), config_servername);
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
-    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(&buf));
-    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(vcard));
+
+    /* Since we use the vCard UID in the resource name,
+       this param may be long and needs to get properly split per RFC 2231 */
+    struct buf value = BUF_INITIALIZER;
+    charset_append_mime_param(&value,
+                              CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
+                              "filename",
+                              resource);
+    fprintf(f, "Content-Disposition: inline%s\r\n", buf_cstring(&value));
+    buf_free(&value);
 
     /* XXX  Check domain of data and use appropriate CTE */
 
@@ -1113,8 +1282,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
     fprintf(f, "\r\n");
 
     /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(&buf));
-    buf_free(&buf);
+    fprintf(f, "%s", buf_cstring(vcard));
 
     qdiffs[QUOTA_STORAGE] = ftell(f);
     qdiffs[QUOTA_MESSAGE] = 1;
@@ -1125,7 +1293,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                                ignorequota ? NULL : qdiffs, 0, 0,
                                EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
@@ -1157,6 +1325,36 @@ done:
     return r;
 }
 
+EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
+                           const char *resource, modseq_t createdmodseq,
+                           strarray_t *flags, struct entryattlist **annots,
+                           const char *userid, struct auth_state *authstate,
+                           int ignorequota, uint32_t oldsize)
+{
+    time_t now = time(0);
+    char datestr[80];
+
+    /* set the REVision time */
+    time_to_iso8601(now, datestr, sizeof(datestr), 0);
+    vparse_replace_entry(vcard, NULL, "REV", datestr);
+
+    /* get important properties */
+    const char *uid = vparse_stringval(vcard, "uid");
+    const char *fullname = vparse_stringval(vcard, "fn");
+
+    /* serialize the card */
+    struct buf buf = BUF_INITIALIZER;
+    vparse_tobuf(vcard, &buf);
+
+    int r = _carddav_store(mailbox, &buf, uid, fullname,
+                           resource, createdmodseq, flags, annots,
+                           userid, authstate, ignorequota, oldsize);
+
+    buf_free(&buf);
+
+    return r;
+}
+
 EXPORTED int carddav_remove(struct mailbox *mailbox,
                             uint32_t olduid, int isreplace, const char *userid)
 {
@@ -1179,13 +1377,13 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
         mboxevent_extract_record(mboxevent, mailbox, &oldrecord);
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_numunseen(mboxevent, mailbox, -1);
-        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox->name, 0);
+        mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 0);
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
     }
     if (r) {
         syslog(LOG_ERR, "expunging record (%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
     }
     return r;
 }
@@ -1212,3 +1410,166 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
     return res;
 }
 
+#ifdef HAVE_LIBICALVCARD
+
+#include "vcard_support.h"
+
+EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
+                                 struct carddav_data *cdata,
+                                 vcardcomponent *vcard,
+                                 int ispinned)
+{
+    struct buf nicknames = BUF_INITIALIZER;
+    strarray_t values = STRARRAY_INITIALIZER;
+    strarray_t emails = STRARRAY_INITIALIZER;
+    strarray_t member_uids = STRARRAY_INITIALIZER;
+    vcardproperty *prop;
+    char *propval = NULL;
+
+    for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
+         prop;
+         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
+        /* The libical BUFFER_RING_SIZE used by *_get_value_as_string()
+         * is 2500 entries.
+         * A vCard with more than 2500 properties (E.g. a large group card)
+         * will cause some of our value pointers to be freed out from under us.
+         * So, we use vcardproperty_get_value_as_string_r() here instead
+         * and manage the memory ourselves.
+         */
+        free(propval);
+        propval = vcardproperty_get_value_as_string_r(prop);
+        const char *userid = "";
+
+        if (!propval) continue;
+
+        switch (vcardproperty_isa(prop)) {
+        case VCARD_UID_PROPERTY:
+            cdata->vcard_uid = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
+            break;
+
+        case VCARD_N_PROPERTY:
+            cdata->name = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
+            break;
+
+        case VCARD_FN_PROPERTY:
+            cdata->fullname = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
+            break;
+
+        case VCARD_NICKNAME_PROPERTY:
+            if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
+            buf_appendcstr(&nicknames, propval);
+            cdata->nickname = buf_cstring(&nicknames);
+            break;
+
+        case VCARD_EMAIL_PROPERTY: {
+            /* XXX - insert if primary */
+            int ispref = 0;
+            vcardparameter *param =
+                vcardproperty_get_first_parameter(prop, VCARD_PREF_PARAMETER);
+            if (param) {
+                ispref = (vcardparameter_get_pref(param) == 1);
+            }
+            else if ((param =
+                      vcardproperty_get_first_parameter(prop,
+                                                        VCARD_TYPE_PARAMETER))) {
+                vcardenumarray *types = vcardparameter_get_type(param);
+                vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
+                if (vcardenumarray_find(types, &pref) >= 0) ispref = 1;
+            }
+            strarray_appendm(&emails, propval);
+            strarray_append(&emails, ispref ? "1" : "");
+            propval = NULL;
+            break;
+        }
+
+        kind:
+        case VCARD_KIND_PROPERTY:
+            if (!strcasecmp(propval, "group"))
+                cdata->kind = CARDDAV_KIND_GROUP;
+            /* default case is CARDDAV_KIND_CONTACT */
+            break;
+
+        member:
+        case VCARD_MEMBER_PROPERTY:
+            if (strncmp(propval, "urn:uuid:", 9)) continue;
+            strarray_append(&member_uids, propval+9);
+            strarray_append(&member_uids, userid);
+            break;
+
+        case VCARD_VERSION_PROPERTY:
+            cdata->version = propval[0] - '0';
+            break;
+
+        case VCARD_X_PROPERTY: {
+            const char *name = vcardproperty_get_property_name(prop);
+            if (!strcasecmp(name, "x-addressbookserver-kind"))
+                goto kind;
+            else if (!strcasecmp(name, "x-addressbookserver-member"))
+                goto member;
+            else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
+                userid = vcardproperty_get_xparam_value(prop, "userid");
+                if (!userid) continue;
+                goto member;
+            }
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    int r;
+    if (cdata->dav.rowid) {
+        /* clean up existing cache records */
+        struct sqldb_bindval bval[] = {
+            { ":rowid",        SQLITE_INTEGER, { .i = cdata->dav.rowid } },
+            { NULL,            SQLITE_NULL,    { .s = NULL             } } };
+
+        r = sqldb_exec(carddavdb->db, CMD_DELETE_JSCARDCACHE, bval, NULL, NULL);
+        if (r) goto done;
+    }
+    r = carddav_write(carddavdb, cdata);
+    if (!r) r = carddav_write_emails(carddavdb,
+                                     cdata->dav.rowid, &emails, ispinned);
+    if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
+
+done:
+    buf_free(&nicknames);
+    strarray_fini(&values);
+    strarray_fini(&emails);
+    strarray_fini(&member_uids);
+    free(propval);
+
+    return r;
+}
+
+EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
+                             const char *resource, modseq_t createdmodseq,
+                             struct entryattlist **annots,
+                             const char *userid, struct auth_state *authstate,
+                             int ignorequota, uint32_t oldsize)
+{
+    /* get important properties */
+    const char *uid = vcardcomponent_get_uid(vcard);
+    const char *fullname = vcardcomponent_get_fn(vcard);
+
+    /* serialize the card */
+    struct buf *buf = vcard_as_buf_x(vcard);
+
+    int r = _carddav_store(mailbox, buf, uid, fullname,
+                           resource, createdmodseq, NULL, annots,
+                           userid, authstate, ignorequota, oldsize);
+
+    buf_destroy(buf);
+
+    return r;
+}
+
+#endif /* HAVE_LIBICALVCARD */

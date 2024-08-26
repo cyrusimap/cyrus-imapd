@@ -83,6 +83,8 @@ struct quota {
     char *scanmbox;
     quota_t scanuseds[QUOTA_NUMRESOURCES];
 
+    /* inforation for changes */
+    int dirty;
     modseq_t modseq;
 };
 
@@ -90,6 +92,7 @@ struct quota {
 #define QUOTA_UNLIMITED     (-1)
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
+extern const char * const legacy_quota_names[QUOTA_NUMRESOURCES];
 extern const quota_t quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 
@@ -101,6 +104,7 @@ extern void quota_changelockrelease(void);
 extern void quota_init(struct quota *quota, const char *root);
 extern void quota_free(struct quota *quota);
 
+extern int quota_read_withconversations(struct quota *quota);
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
 extern int quota_check(const struct quota *quota,
@@ -116,7 +120,8 @@ extern int quota_write(struct quota *quota, int silent, struct txn **tid);
 
 extern int quota_update_useds(const char *quotaroot,
                               const quota_t diff[QUOTA_NUMRESOURCES],
-                              const char *mboxname);
+                              const char *mboxname,
+                              int silent);
 extern int quota_check_useds(const char *quotaroot,
                              const quota_t diff[QUOTA_NUMRESOURCES]);
 

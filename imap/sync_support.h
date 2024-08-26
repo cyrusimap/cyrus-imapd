@@ -51,6 +51,7 @@
 #include "prot.h"
 #include "seen.h"
 #include "mailbox.h"
+#include "sync_log.h"
 
 extern struct protocol_t imap_csync_protocol;
 extern struct protocol_t csync_protocol;
@@ -147,6 +148,8 @@ struct sync_folder {
     struct sync_annot_list *annots;
     modseq_t xconvmodseq;
     modseq_t raclmodseq;
+    modseq_t foldermodseq;
+    char *groups;
     int ispartial;
     struct quota quota;
     int   mark;
@@ -176,15 +179,12 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          struct sync_annot_list *annot,
                                          modseq_t xconvmodseq,
                                          modseq_t raclmodseq,
+                                         modseq_t foldermodseq,
+                                         const char *groups,
                                          int ispartial);
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
                                        const char *uniqueid);
-
-struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
-                                              const char *name);
-
-int sync_folder_mark(struct sync_folder_list *l, const char *uniqueid);
 
 void sync_folder_list_free(struct sync_folder_list **lp);
 
@@ -318,29 +318,16 @@ struct sync_sieve_list {
 
 struct sync_sieve_list *sync_sieve_list_create(void);
 
-void sync_sieve_list_add(struct sync_sieve_list *l,
-                         const char *name, time_t last_update,
-                         struct message_guid *guidp, int active);
-
-struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l,
-                                     const char *name);
-
-void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name);
-
 void sync_sieve_list_free(struct sync_sieve_list **lp);
-
-struct sync_sieve_list *sync_sieve_list_generate(const char *userid);
-
-char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep);
 
 int sync_sieve_upload(const char *userid, const char *name,
                       time_t last_update, const char *content, size_t len);
 
-int sync_sieve_activate(const char *userid, const char *name);
+int sync_sieve_activate(const char *userid, const char *bcname);
 
 int sync_sieve_deactivate(const char *userid);
 
-int sync_sieve_delete(const char *userid, const char *name);
+int sync_sieve_delete(const char *userid, const char *script);
 
 /* ====================================================================== */
 
@@ -397,11 +384,10 @@ void sync_send_lookup(struct dlist *kl, struct protstream *out);
 void sync_send_restart(struct protstream *out);
 void sync_send_restore(struct dlist *kl, struct protstream *out);
 
-struct dlist *sync_parseline(struct protstream *in);
+struct dlist *sync_parseline(struct protstream *in, int isarchive);
 
 /* ====================================================================== */
 
-int addmbox(char *name, int matchlen, int category, void *rock);
 int addmbox_cb(const mbentry_t *mbentry, void *rock);
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
@@ -424,6 +410,19 @@ int read_annotations(const struct mailbox *,
 
 int sync_mailbox_version_check(struct mailbox **mailboxp);
 
+/* =====================  client-side sync  ============================= */
+
+struct sync_client_state {
+    struct backend *backend;
+    struct protstream *clientin;
+    const char *servername;
+    const char *channel;
+    struct db *cachedb;
+    struct buf tagbuf;
+    unsigned flags;
+};
+#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
+
 /* =====================  server-side sync  ============================= */
 
 struct sync_state {
@@ -432,7 +431,7 @@ struct sync_state {
     struct auth_state *authstate;
     struct namespace *namespace;
     struct protstream *pout;
-    int local_only;
+    unsigned flags;
 };
 
 int sync_get_message(struct dlist *kin, struct sync_state *sstate);
@@ -479,22 +478,26 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_VERBOSE   (1<<0)
 #define SYNC_FLAG_LOGGING   (1<<1)
 #define SYNC_FLAG_LOCALONLY (1<<2)
-#define SYNC_FLAG_DELETE_REMOTE (1<<3)
+// 3 was DELETE_REMOTE; now we use tombstones
 #define SYNC_FLAG_NO_COPYBACK (1<<4)
+#define SYNC_FLAG_BATCH (1<<5)
+#define SYNC_FLAG_SIEVE_MAILBOX (1<<6)
+#define SYNC_FLAG_NONBLOCK (1<<7)
+#define SYNC_FLAG_ARCHIVE (1<<8)
 
-int sync_do_seen(const char *userid, char *uniqueid, struct backend *sync_be,
-                 unsigned flags);
-int sync_do_quota(const char *root, struct backend *sync_be, unsigned flags);
-int sync_do_annotation(char *mboxname, struct backend *sync_be, unsigned flags);
-int sync_do_mailboxes(struct sync_name_list *mboxname_list,
-                      const char *topart, struct backend *sync_be,
-                      const char **channelp, unsigned flags);
-int sync_do_user(const char *userid, const char *topart,
-                 struct backend *sync_be, const char **channelp, unsigned flags);
-int sync_do_meta(const char *userid, struct backend *sync_be, unsigned flags);
-int sync_set_sub(const char *userid, const char *mboxname, int add,
-                 struct backend *sync_be, unsigned flags);
-int sync_response_parse(struct protstream *sync_in, const char *cmd,
+int sync_do_seen(struct sync_client_state *sync_cs, const char *userid, char *uniqueid);
+int sync_do_quota(struct sync_client_state *sync_cs, const char *root);
+int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname);
+int sync_do_mailboxes(struct sync_client_state *sync_cs,
+                      struct sync_name_list *mboxname_list,
+                      const char *topart, int flags);
+int sync_do_user(struct sync_client_state *sync_cs,
+                 const char *userid, const char *topart);
+int sync_do_meta(struct sync_client_state *sync_cs, const char *userid);
+int sync_do_sub(struct sync_client_state *sync_cs,
+                const char *userid, const char *mboxname, int add);
+
+int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
                         struct sync_folder_list *folder_list,
                         struct sync_name_list *sub_list,
                         struct sync_sieve_list *sieve_list,
@@ -503,28 +506,38 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
 int sync_find_reserve_messages(struct mailbox *mailbox,
                                uint32_t fromuid, uint32_t touid,
                                struct sync_msgid_list *part_list);
-int sync_reserve_partition(char *partition,
+int sync_reserve_partition(struct sync_client_state *sync_cs, char *partition,
                            struct sync_folder_list *replica_folders,
-                           struct sync_msgid_list *part_list,
-                           struct backend *sync_be);
-int sync_update_mailbox(struct sync_folder *local,
-                        struct sync_folder *remote,
-                        const char *topart,
-                        struct sync_reserve_list *reserve_guids,
-                        struct backend *sync_be, unsigned flags);
-int sync_folder_delete(const char *mboxname,
-                       struct backend *sync_be, unsigned flags);
-int sync_do_user_quota(struct sync_name_list *master_quotaroots,
-                       struct sync_quota_list *replica_quota,
-                       struct backend *sync_be, unsigned flags);
-int sync_do_user_sub(const char *userid, struct sync_name_list *replica_subs,
-                     struct backend *sync_be, unsigned flags);
-int sync_do_user_seen(const char *userid, struct sync_seen_list *replica_seen,
-                      struct backend *sync_be, unsigned flags);
-int sync_do_user_sieve(const char *userid,
-                       struct sync_sieve_list *replica_sieve,
-                       struct backend *sync_be, unsigned flags);
+                           struct sync_msgid_list *part_list);
 
+int sync_do_update_mailbox(struct sync_client_state *sync_cs,
+                           struct sync_folder *local,
+                           struct sync_folder *remote,
+                           const char *topart,
+                           struct sync_reserve_list *reserve_guids);
+
+int sync_do_folder_delete(struct sync_client_state *sync_cs,
+                          const char *mboxname);
+int sync_do_user_quota(struct sync_client_state *sync_cs,
+                       struct sync_name_list *master_quotaroots,
+                       struct sync_quota_list *replica_quota);
+int sync_do_user_sub(struct sync_client_state *sync_cs, const char *userid,
+                     struct sync_name_list *replica_subs);
+int sync_do_user_seen(struct sync_client_state *sync_cs, const char *userid,
+                      struct sync_seen_list *replica_seen);
+int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
+                       struct sync_sieve_list *replica_sieve);
+
+int sync_do_restart(struct sync_client_state *sync_cs);
+
+int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr);
+
+int sync_do_enable(struct sync_client_state *sync_cs, unsigned capa);
+
+int sync_connect(struct sync_client_state *sync_cs);
+void sync_disconnect(struct sync_client_state *sync_cs);
+
+int sync_checkpoint(struct protstream *clientin);
 
 
 /* ====================================================================== */

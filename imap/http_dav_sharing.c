@@ -51,12 +51,15 @@
 #include "strhash.h"
 #include "syslog.h"
 #include "times.h"
+#include "user.h"
 #include "webdav_db.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+
+#include <libxml/parser.h>
 
 #define DAVNOTIFICATION_CONTENT_TYPE \
     "application/davnotification+xml; charset=utf-8"
@@ -74,10 +77,8 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
-                      struct index_record *record, void *data, void **obj);
-static int notify_put(struct transaction_t *txn, void *obj,
-                      struct mailbox *mailbox, const char *resource,
-                      void *davdb, unsigned flags);
+                      struct index_record *record, void *data, void **obj,
+                      struct mime_type_t *mime);
 
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
@@ -93,13 +94,12 @@ static struct buf *from_xml(xmlDocPtr doc)
 {
     struct buf *buf = buf_new();
     xmlChar *xml = NULL;
-    int len;
+    int len = 0;
 
     /* Dump XML response tree into a text buffer */
     xmlDocDumpFormatMemoryEnc(doc, &xml, &len, "utf-8",
                               config_httpprettytelemetry);
     if (xml) buf_initm(buf, (char *) xml, len);
-    else buf_init(buf);
 
     return buf;
 }
@@ -256,13 +256,13 @@ static struct meth_params notify_params = {
       (db_write_proc_t) &webdav_write,
       (db_delete_proc_t) &webdav_delete },
     NULL,                                       /* No ACL extensions */
-    { 0, &notify_put },
+    { 0, NULL },
     NULL,                                       /* No special DELETE handling */
     &notify_get,
     { 0, 0, NULL },                             /* No MKCOL handling */
     NULL,                                       /* No PATCH handling */
     { 0, &notify_post, { 0, NULL, NULL } },     /* No generic POST handling */
-    { 0, &notify_put },
+    { 0, NULL },
     { DAV_FINITE_DEPTH, notify_props},
     notify_reports
 };
@@ -276,7 +276,7 @@ struct namespace_t namespace_notify = {
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_ACL),
     &my_dav_init, &my_dav_auth, &my_dav_reset, &my_dav_shutdown,
-    &dav_premethod, /*bearer*/NULL,
+    &dav_premethod,
     {
         { &meth_acl,            &notify_params },      /* ACL          */
         { NULL,                 NULL },                /* BIND         */
@@ -296,6 +296,7 @@ struct namespace_t namespace_notify = {
         { NULL,                 NULL },                /* PROPPATCH    */
         { NULL,                 NULL },                /* PUT          */
         { &meth_report,         &notify_params },      /* REPORT       */
+        { NULL,                 NULL },                /* SEARCH       */
         { &meth_trace,          &notify_parse_path },  /* TRACE        */
         { NULL,                 NULL },                /* UNBIND       */
         { NULL,                 NULL },                /* UNLOCK       */
@@ -317,7 +318,7 @@ static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 
-static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
+int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentryp)
 {
     mbname_t *mbname;
     const char *notifyname;
@@ -340,21 +341,22 @@ static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     notifyname = mbname_intname(mbname);
-    r = http_mlookup(notifyname, mbentry, NULL);
+    r = proxy_mlookup(notifyname, mbentryp, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
 
-        int r1 = http_mlookup(inboxname, mbentry, NULL);
+        int r1 = proxy_mlookup(inboxname, mbentryp, NULL, NULL);
         free(inboxname);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
             r = IMAP_INVALID_USER;
             goto done;
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
-        (*mbentry)->name = xstrdup(notifyname);
+        mboxlist_entry_free(mbentryp);
+        *mbentryp = mboxlist_entry_create();
+        (*mbentryp)->name = xstrdup(notifyname);
+        (*mbentryp)->mbtype = MBTYPE_COLLECTION;
     }
 
   done:
@@ -363,17 +365,15 @@ static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
     return r;
 }
 
-
-static int create_notify_collection(const char *userid, struct mailbox **mailbox)
+static int _create_notify_collection(const char *userid, mbentry_t **mbentryp) 
 {
-    /* notifications collection */
-    mbentry_t *mbentry = NULL;
-    int r = lookup_notify_collection(userid, &mbentry);
+    /* lock the namespace lock and try again */
+    struct mboxlock *namespacelock = user_namespacelock(userid);
 
-    if (r == IMAP_INVALID_USER) {
-        goto done;
-    }
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+    int r = dav_lookup_notify_collection(userid, mbentryp);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mbentry_t *mbentry = *mbentryp;
         if (!mbentry) goto done;
         else if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
@@ -381,24 +381,39 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
             goto done;
         }
 
-        r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
-                                   NULL, 1 /* admin */, userid, NULL,
-                                   0, 0, 0, 0, mailbox);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+        r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, userid, NULL/*authstate*/,
+                                   0/*flags*/, NULL);
+
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to create notify collection",
+                      "mailbox=<%s> error=<%s>",
                       mbentry->name, error_message(r));
-    }
-    else if (mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
-        }
     }
 
  done:
+    mboxname_release(&namespacelock);
+    return r;
+}
+
+static int create_notify_collection(const char *userid, struct mailbox **mailboxp)
+{
+    /* notifications collection */
+    mbentry_t *mbentry = NULL;
+    int r = dav_lookup_notify_collection(userid, &mbentry);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(&mbentry);
+        r = _create_notify_collection(userid, &mbentry);
+    }
+
+    if (!r && mailboxp) {
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbentry->name, mailboxp);
+        if (r) xsyslog(LOG_ERR, "IOERROR: failed to open notify collection",
+                       "mailbox=<%s> error=<%s>",
+                       mbentry->name, error_message(r));
+    }
+
     mboxlist_entry_free(&mbentry);
     return r;
 }
@@ -448,14 +463,15 @@ static void my_dav_shutdown(void)
 /* Perform a GET/HEAD request on a WebDAV notification resource */
 static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data,
-                      void **obj __attribute__((unused)))
+                      void **obj __attribute__((unused)),
+                      struct mime_type_t *mime __attribute__((unused)))
 {
     const char **hdr;
     struct webdav_data *wdata = (struct webdav_data *) data;
     struct dlist *dl = NULL, *al;
     const char *type_str;
     struct buf msg_buf = BUF_INITIALIZER;
-    struct buf inbuf, *outbuf = NULL;
+    struct buf inbuf = BUF_INITIALIZER, *outbuf = NULL;
     xmlDocPtr indoc = NULL, outdoc;
     xmlNodePtr notify = NULL, root, node, type;
     xmlNodePtr resp = NULL, sharedurl = NULL, node2;
@@ -659,6 +675,26 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
             xmlNewChild(reply, NULL, BAD_CAST "summary", comment);
             xmlFree(comment);
         }
+
+        if (sharee) {
+            struct request_target_t tgt = { .allow = ALLOW_CAL };
+            xmlChar *princ_path = xmlNodeGetContent(sharee);
+            const char *errstr = NULL;
+
+            if (principal_parse_path((const char *) princ_path,
+                                     &tgt, &errstr) == 0) {
+                struct buf name = BUF_INITIALIZER;
+
+                dav_get_principalname(tgt.userid, &name);
+                request_target_fini(&tgt);
+
+                xmlNewChild(reply, NULL,
+                            BAD_CAST "common-name", BAD_CAST buf_cstring(&name));
+                buf_free(&name);
+            }
+
+            xmlFree(princ_path);
+        }
     }
     else {
         /* Unknown type - return as-is */
@@ -682,13 +718,174 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
     return ret;
 }
 
+static struct dlist *notify_extract_dl(xmlDocPtr doc)
+{
+    xmlNodePtr root, dtstamp, type = NULL;
 
-HIDDEN int dav_send_notification(xmlDocPtr doc,
+    /* Get type of notification */
+    if ((root = xmlDocGetRootElement(doc)) &&
+        (dtstamp = xmlFirstElementChild(root))) {
+        type = xmlNextElementSibling(dtstamp);
+    }
+
+    /* Create and cache RFC 5322 header fields for resource */
+    if (!type) {
+        return NULL;
+    }
+
+    /* Create a dlist representing type, namespace, and attribute(s) */
+    time_t t;
+    xmlChar *value = xmlNodeGetContent(dtstamp);
+    time_from_iso8601((const char *) value, &t);
+    xmlFree(value);
+
+    struct dlist *dl = dlist_newkvlist(NULL, "N");
+    dlist_setdate(dl, "S", t);
+    dlist_setatom(dl, "NS", (char *) type->ns->href);
+    dlist_setatom(dl, "T", (char *) type->name);
+
+    /* Add any attributes */
+    xmlAttrPtr attr;
+    struct dlist *al = dlist_newkvlist(dl, "A");
+    for (attr = type->properties; attr; attr = attr->next) {
+        value = xmlNodeGetContent((xmlNodePtr) attr);
+        dlist_setmap(al, (char *) attr->name,
+                (char *) value, xmlStrlen(value));
+        xmlFree(value);
+    }
+
+    /* Add any additional data */
+    al = dlist_newkvlist(dl, "D");
+    if (!xmlStrcmp(type->name, BAD_CAST SHARE_INVITE_NOTIFICATION)) {
+        xmlNodePtr node;
+        for (node = xmlFirstElementChild(type); node;
+                node = xmlNextElementSibling(node)) {
+            if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
+                struct request_target_t tgt;
+                struct meth_params *pparams;
+                const char *errstr;
+                char *path;
+                int i;
+
+                value = xmlNodeGetContent(xmlFirstElementChild(node));
+                path = xmlURIUnescapeString((const char *) value,
+                                            xmlStrlen(value), NULL);
+                xmlFree(value);
+
+                /* Find the namespace of the requested resource */
+                for (i = 0; http_namespaces[i]; i++) {
+                    size_t len;
+
+                    /* Skip disabled namespaces */
+                    if (!http_namespaces[i]->enabled) continue;
+
+                    /* See if the prefix matches - terminated with NUL or '/' */
+                    len = strlen(http_namespaces[i]->prefix);
+                    if (!strncmp(path, http_namespaces[i]->prefix, len) &&
+                            (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+                        break;
+                    }
+                }
+
+                memset(&tgt, 0, sizeof(struct request_target_t));
+                tgt.namespace = http_namespaces[i];
+                pparams =
+                    (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
+                tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
+                pparams->parse_path(path, &tgt, &errstr);
+                free(tgt.userid);
+                free(path);
+
+                if (tgt.mbentry) {
+                    dlist_setatom(al, "M", tgt.mbentry->name);
+                    mboxlist_entry_free(&tgt.mbentry);
+                }
+                break;
+            }
+        }
+    }
+
+    return dl;
+}
+
+static int dav_store_notification(struct transaction_t *txn,
+                                  xmlDocPtr doc, struct dlist *extradata,
+                                  struct mailbox *mailbox, const char *resource,
+                                  struct webdav_db *db)
+{
+    struct webdav_data *wdata;
+    struct index_record *oldrecord = NULL, record;
+    struct buf *xmlbuf = NULL;
+    int r;
+
+    mbentry_t *mbentry = NULL;
+    r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
+    if (r) goto done;
+
+    /* Find message UID for the resource */
+    webdav_lookup_resource(db, mbentry, resource, &wdata, 0);
+
+    if (wdata->dav.imap_uid) {
+        /* Fetch index record for the resource */
+        oldrecord = &record;
+        mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
+    }
+
+    struct dlist *dl = notify_extract_dl(doc);
+    if (!dl) {
+        r = HTTP_FORBIDDEN;
+        goto done;
+    }
+
+    if (extradata) {
+        struct dlist *md = dlist_newkvlist(dl, "X");
+        dlist_stitch(md, extradata); // XXX takes ownership
+    }
+
+    const char *type;
+    if (dlist_getatom(dl, "T", &type)) {
+        spool_replace_header(xstrdup("Subject"),
+                             xstrdup((char *) type), txn->req_hdrs);
+
+        struct buf buf = BUF_INITIALIZER;
+        dlist_printbuf(dl, 1, &buf);
+        dlist_free(&dl);
+        spool_replace_header(xstrdup("Content-Description"),
+                buf_release(&buf), txn->req_hdrs);
+    }
+
+    buf_reset(&txn->buf);
+    buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
+    spool_replace_header(xstrdup("Message-ID"),
+                         buf_release(&txn->buf), txn->req_hdrs);
+
+    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
+    spool_replace_header(xstrdup("Content-Disposition"),
+                         buf_release(&txn->buf), txn->req_hdrs);
+
+    /* Dump XML response tree into a text buffer */
+    xmlbuf = from_xml(doc);
+    if (!buf_len(xmlbuf)) r = HTTP_SERVER_ERROR;
+    else {
+        /* Store the resource */
+        r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
+                               mailbox, oldrecord, wdata->dav.createdmodseq,
+                               NULL, NULL);
+    }
+
+done:
+    buf_destroy(xmlbuf);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
                                  const char *userid, const char *resource)
 {
     struct mailbox *mailbox = NULL;
     struct webdav_db *webdavdb = NULL;
-    struct transaction_t txn;
+    struct transaction_t txn = { 0 };
+    mbentry_t mbentry;
     int r;
 
     /* XXX  Need to find location of user.
@@ -712,13 +909,20 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     webdavdb = webdav_open_mailbox(mailbox);
     if (!webdavdb) {
         syslog(LOG_ERR, "dav_send_notification: unable to open WebDAV DB (%s)",
-               mailbox->name);
+               mailbox_name(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
 
     /* Start with an empty (clean) transaction */
-    memset(&txn, 0, sizeof(struct transaction_t));
+    txn.userid = httpd_userid;
+    txn.authstate = httpd_authstate;
+
+    /* Create minimal mbentry for request target from mailbox */
+    memset(&mbentry, 0, sizeof(mbentry_t));
+    mbentry.name = (char *)mailbox_name(mailbox);
+    mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
+    txn.req_tgt.mbentry = &mbentry;
 
     /* Create header cache */
     if (!(txn.req_hdrs = spool_new_hdrcache())) {
@@ -730,11 +934,12 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     spool_cache_header(xstrdup("Content-Type"),
                        xstrdup(DAVNOTIFICATION_CONTENT_TYPE), txn.req_hdrs);
 
-    r = notify_put(&txn, doc, mailbox, resource, webdavdb, 0);
+    r = dav_store_notification(&txn, doc, extradata,
+                               mailbox, resource, webdavdb);
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        syslog(LOG_ERR,
-               "dav_send_notification: notify_put(%s, %s) failed: %s",
-               mailbox->name, resource, error_message(r));
+        xsyslog(LOG_ERR, "can not store notification",
+                "mboxname=<%s> resource=<%s> err=<%s>",
+                mailbox_name(mailbox), resource, error_message(r));
     }
 
   done:
@@ -744,6 +949,44 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     mailbox_close(&mailbox);
 
     return r;
+}
+
+struct scheduled_notification {
+    xmlDocPtr doc;
+    struct dlist *extradata;
+    char *userid;
+    char *resource;
+    struct scheduled_notification *next;
+};
+
+static struct scheduled_notification *scheduled_notifications = NULL;
+
+HIDDEN int dav_schedule_notification(xmlDocPtr doc, struct dlist *extradata,
+                                     const char *userid, const char *resource)
+{
+    struct scheduled_notification *new = xzmalloc(sizeof(struct scheduled_notification));
+    new->doc = xmlCopyDoc(doc, 1);
+    new->extradata = extradata;  // not a copy, eaten by dav_send_notification
+    new->userid = xstrdupnull(userid);
+    new->resource = xstrdupnull(resource);
+    new->next = scheduled_notifications;
+    scheduled_notifications = new;
+    return 0;
+}
+
+HIDDEN void dav_run_notifications()
+{
+    struct scheduled_notification *next = NULL;
+    struct scheduled_notification *item;
+    for (item = scheduled_notifications; item; item = next) {
+        next = item->next;
+        dav_send_notification(item->doc, item->extradata, item->userid, item->resource);
+	xmlFreeDoc(item->doc);
+	free(item->userid);
+	free(item->resource);
+	free(item);
+    }
+    scheduled_notifications = NULL;
 }
 
 
@@ -795,7 +1038,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     }
     if (ret) goto done;
 
-    /* Make sure its a invite-reply element */
+    /* Make sure it is an invite-reply element */
     if (xmlStrcmp(root->name, BAD_CAST "invite-reply")) {
         txn->error.desc =
             "Missing invite-reply element in POST request";
@@ -842,7 +1085,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
         /* Locate notification mailbox for target user */
         mboxlist_entry_free(&txn->req_tgt.mbentry);
         txn->req_tgt.mbentry = NULL;
-        r = lookup_notify_collection(txn->req_tgt.userid, &txn->req_tgt.mbentry);
+        r = dav_lookup_notify_collection(txn->req_tgt.userid, &txn->req_tgt.mbentry);
         if (r) {
             syslog(LOG_ERR, "lookup_notify_collection(%s) failed: %s",
                    txn->req_tgt.userid, error_message(r));
@@ -856,7 +1099,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     webdavdb = webdav_open_userid(txn->req_tgt.userid);
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry->name,
+    webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry,
                            resource, &wdata, 0);
     if (!wdata->dav.imap_uid) {
         ret = HTTP_NOT_FOUND;
@@ -876,7 +1119,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
     /* [Un]subscribe */
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
-                           httpd_authstate, add, 0, 0);
+                           httpd_authstate, add, 0, 0, 0);
     if (r) {
         syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
                mboxname, txn->req_tgt.userid, error_message(r));
@@ -888,8 +1131,8 @@ HIDDEN int notify_post(struct transaction_t *txn)
     /* Set invite status */
     r = mailbox_open_iwl(mboxname, &shared);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for share reply",
-               mboxname);
+        xsyslog(LOG_ERR, "IOERROR: failed to open mailbox for share reply",
+                "mailbox=<%s> err=<%s>", mboxname, error_message(r));
     }
     else {
         annotate_state_t *astate = NULL;
@@ -903,7 +1146,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
             r = annotate_state_writemask(astate, annot,
                                          txn->req_tgt.userid, &value);
 
-            if (shared->mbtype == MBTYPE_CALENDAR) {
+            if (mbtype_isa(mailbox_mbtype(shared)) == MBTYPE_CALENDAR) {
                 /* Sharee's copy of calendar SHOULD default to transparent */
                 annot =
                     DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
@@ -956,8 +1199,8 @@ HIDDEN int notify_post(struct transaction_t *txn)
                strhash(XML_NS_DAV), strhash(SHARE_REPLY_NOTIFICATION),
                strhash(mboxname), strhash(txn->req_tgt.userid));
 
-    r = dav_send_notification(notify->doc,
-                              mbname_userid(mbname), buf_cstring(&txn->buf));
+    r = dav_send_notification(notify->doc, NULL, mbname_userid(mbname),
+                              buf_cstring(&txn->buf));
 
 
     if (add) {
@@ -1001,144 +1244,6 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
     return ret;
 }
-
-
-/* Perform a PUT request on a WebDAV notification resource */
-static int notify_put(struct transaction_t *txn, void *obj,
-                      struct mailbox *mailbox, const char *resource,
-                      void *destdb, unsigned flags __attribute__((unused)))
-{
-    struct webdav_db *db = (struct webdav_db *)destdb;
-    xmlDocPtr doc = (xmlDocPtr) obj;
-    xmlNodePtr root, dtstamp, type = NULL, node;
-    struct webdav_data *wdata;
-    struct index_record *oldrecord = NULL, record;
-    struct buf *xmlbuf;
-    int r;
-
-    /* Validate the data */
-    if (!doc) return HTTP_FORBIDDEN;
-
-    /* Find message UID for the resource */
-    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
-
-    if (wdata->dav.imap_uid) {
-        /* Fetch index record for the resource */
-        oldrecord = &record;
-        mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
-    }
-
-    /* Get type of notification */
-    if ((root = xmlDocGetRootElement(doc)) &&
-        (dtstamp = xmlFirstElementChild(root))) {
-        type = xmlNextElementSibling(dtstamp);
-    }
-
-    /* Create and cache RFC 5322 header fields for resource */
-    if (type) {
-        struct buf buf = BUF_INITIALIZER;
-        xmlChar *value;
-        time_t t;
-        struct dlist *dl, *al;
-        xmlAttrPtr attr;
-
-        spool_replace_header(xstrdup("Subject"),
-                             xstrdup((char *) type->name), txn->req_hdrs);
-
-        /* Create a dlist representing type, namespace, and attribute(s) */
-        value = xmlNodeGetContent(dtstamp);
-        time_from_iso8601((const char *) value, &t);
-        xmlFree(value);
-
-        dl = dlist_newkvlist(NULL, "N");
-        dlist_setdate(dl, "S", t);
-        dlist_setatom(dl, "NS", (char *) type->ns->href);
-        dlist_setatom(dl, "T", (char *) type->name);
-
-        /* Add any attributes */
-        al = dlist_newkvlist(dl, "A");
-        for (attr = type->properties; attr; attr = attr->next) {
-            value = xmlNodeGetContent((xmlNodePtr) attr);
-            dlist_setmap(al, (char *) attr->name,
-                         (char *) value, xmlStrlen(value));
-            xmlFree(value);
-        }
-
-        /* Add any additional data */
-        al = dlist_newkvlist(dl, "D");
-        if (!xmlStrcmp(type->name, BAD_CAST SHARE_INVITE_NOTIFICATION)) {
-            for (node = xmlFirstElementChild(type); node;
-                 node = xmlNextElementSibling(node)) {
-                if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
-                    struct request_target_t tgt;
-                    struct meth_params *pparams;
-                    const char *path, *errstr;
-                    int i;
-
-                    value = xmlNodeGetContent(xmlFirstElementChild(node));
-                    path = (const char *) value;
-
-                    /* Find the namespace of the requested resource */
-                    for (i = 0; http_namespaces[i]; i++) {
-                        size_t len;
-
-                        /* Skip disabled namespaces */
-                        if (!http_namespaces[i]->enabled) continue;
-
-                        /* See if the prefix matches - terminated with NUL or '/' */
-                        len = strlen(http_namespaces[i]->prefix);
-                        if (!strncmp(path, http_namespaces[i]->prefix, len) &&
-                            (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
-                            break;
-                        }
-                    }
-
-                    memset(&tgt, 0, sizeof(struct request_target_t));
-                    tgt.namespace = http_namespaces[i];
-                    pparams =
-                        (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
-                    tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
-                    pparams->parse_path(path, &tgt, &errstr);
-                    xmlFree(value);
-                    free(tgt.userid);
-
-                    dlist_setatom(al, "M", tgt.mbentry->name);
-
-                    mboxlist_entry_free(&tgt.mbentry);
-                    break;
-                }
-            }
-        }
-
-        dlist_printbuf(dl, 1, &buf);
-        dlist_free(&dl);
-        spool_replace_header(xstrdup("Content-Description"),
-                             buf_release(&buf), txn->req_hdrs);
-    }
-
-    buf_reset(&txn->buf);
-    buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
-                         buf_release(&txn->buf), txn->req_hdrs);
-
-    buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
-                         buf_release(&txn->buf), txn->req_hdrs);
-
-    /* Dump XML response tree into a text buffer */
-    xmlbuf = from_xml(doc);
-    if (!buf_len(xmlbuf)) r = HTTP_SERVER_ERROR;
-    else {
-        /* Store the resource */
-        r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
-                               mailbox, oldrecord, wdata->dav.createdmodseq, NULL);
-    }
-
-    buf_destroy(xmlbuf);
-
-    return r;
-}
-
 
 /* Determine allowed methods in notify namespace */
 static unsigned long notify_allow_cb(struct request_target_t *tgt)
@@ -1230,7 +1335,10 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
             strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+        {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
@@ -1238,7 +1346,7 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
 
     if (*mboxname) {
         /* Locate the mailbox */
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
@@ -1496,7 +1604,7 @@ HIDDEN int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
 
     fctx->flags.cs_sharing = (rock != 0);
 
-    mbname = mbname_from_intname(fctx->mailbox->name);
+    mbname = mbname_from_intname(mailbox_name(fctx->mailbox));
 
     if (!strcmpsafe(mbname_userid(mbname), fctx->req_tgt->userid)) {
         mbname_free(&mbname);
@@ -1703,7 +1811,7 @@ HIDDEN int propfind_csnotify_collection(struct propfind_ctx *fctx,
     mboxlist_entry_free(&tgt.mbentry);
 
     /* Free the entry list */
-    free_entry_list(my_fctx.elist);
+    free_entry_list(&my_fctx);
 
     buf_free(&my_fctx.buf);
 
@@ -1855,14 +1963,14 @@ HIDDEN int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
 HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams)
 {
     xmlNodePtr root = NULL, node, sharee;
-    int rights, ret, legacy = 0;
+    int oldrights, ret, legacy = 0;
     struct buf resource = BUF_INITIALIZER;
     xmlNodePtr notify = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
 
     /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_ADMIN)) {
+    oldrights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+    if (!(oldrights & DACL_ADMIN)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
@@ -1883,6 +1991,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     }
 
     /* Local mailbox */
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
 
     /* Read body */
     ret = parse_xml_body(txn, &root, DAVSHARING_CONTENT_TYPE);
@@ -1892,7 +2001,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     }
     if (ret) goto done;
 
-    /* Make sure its a share-resource element */
+    /* Make sure it is a share-resource element */
     if (!xmlStrcmp(root->name, BAD_CAST "share")) legacy = 1;
     else if (xmlStrcmp(root->name, BAD_CAST "share-resource")) {
         txn->error.desc =
@@ -2015,6 +2124,14 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                                           pparams->propfind.lprops,
                                           userid, access, content);
 
+                    int newrights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+                    struct dlist *extradata = dlist_newkvlist(NULL, "ACL");
+                    char rights[100];
+                    cyrus_acl_masktostr(oldrights, rights);
+                    dlist_setatom(extradata, "OLD", rights);
+                    cyrus_acl_masktostr(newrights, rights);
+                    dlist_setatom(extradata, "NEW", rights);
+
                     /* Create a resource name for the notifications -
                        We use a consistent naming scheme so that multiple
                        notifications of the same type for the same resource
@@ -2026,8 +2143,8 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                                strhash(txn->req_tgt.mbentry->name),
                                strhash(userid));
 
-                    r = dav_send_notification(notify->doc,
-                                              userid, buf_cstring(&resource));
+                    r = dav_schedule_notification(notify->doc, extradata,
+                                                  userid, buf_cstring(&resource));
                 }
 
                 free(userid);
@@ -2044,6 +2161,8 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     if (root) xmlFreeDoc(root->doc);
     if (notify) xmlFreeDoc(notify->doc);
     buf_free(&resource);
+    mboxname_release(&namespacelock);
+    dav_run_notifications();
 
     return ret;
 }

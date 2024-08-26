@@ -1,0 +1,59 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 2.5.15 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the `stable 2.5 series <http://www.cyrusimap.org/stable>`_.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.15/cyrus-imapd-2.5.15.tar.gz
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.15/cyrus-imapd-2.5.15.tar.gz.sig
+
+.. _relnotes-2.5.15-changes:
+
+Changes Since 2.5.14
+====================
+
+Release changes
+---------------
+
+We’re trialing using the Github Releases feature. If you have trouble
+downloading this release, please report this to the mailing lists. Thanks!
+
+Security fixes
+--------------
+
+* Fixed CVE-2019-19783_: When creating a missing mailbox as part of a sieve
+  'fileinto' directive, lmtpd would create it as administrator, bypassing ACL
+  checks.
+
+  lmtpd creates missing mailboxes as part of a sieve 'fileinto'
+  directive if:
+
+  * (2.5+) the `anysievefolder` option is enabled (default: not), or
+  * (3.0+) the `sieve_extensions` option has the 'mailbox' extension enabled
+    (default: enabled) and the 'fileinto' directive contains the ":create"
+    argument
+
+  Under these conditions, a user with the ability to upload a custom sieve
+  script to their account could use it to create any valid mailbox on the
+  server (with ACL inherited from the parent mailbox as usual).
+
+  lmtpd no longer creates these mailboxes as administrator, so users may no
+  longer use a 'fileinto' directive to create a mailbox they couldn't create
+  otherwise.
+
+.. _CVE-2019-19783: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-19783
+
+Bug fixes
+---------
+
+* Fixed :issue:`2913`: errors are now logged when `maxlogins_per_host`,
+  `maxlogins_per_user`, and `popminpoll` limits are reached (thanks Sergey)

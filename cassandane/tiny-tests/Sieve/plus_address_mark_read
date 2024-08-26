@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_plus_address_mark_read
+    :needs_component_sieve :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $folder = "INBOX.foo";
+
+    xlog $self, "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+
+    $imaptalk->setacl($folder, 'anyone' => 'p');
+
+    xlog $self, "Install a script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["imap4flags"];
+addflag "\\\\Seen";
+EOF
+    );
+
+    xlog $self, "Deliver a message to plus address";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg, user => "cassandane+foo");
+
+    xlog $self, "Check that the message made it to $folder";
+    $self->{store}->set_folder($folder);
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $msg->set_attribute(flags => [ '\\Recent', '\\Seen']);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}

@@ -47,6 +47,7 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -56,6 +57,7 @@
 #include <sys/types.h>
 
 #include <libical/ical.h>
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include "annotate.h" /* for strlist functionality */
@@ -67,13 +69,10 @@
 #include "xml_support.h"
 #include "zoneinfo_db.h"
 
-extern int optind;
-extern char *optarg;
-
 /* config.c stuff */
 const int config_need_data = 0;
 
-int verbose = 0;
+static int verbose = 0;
 
 /* forward declarations */
 void usage(void);
@@ -88,10 +87,23 @@ int main(int argc, char **argv)
 {
     int opt, r = 0;
     char *alt_config = NULL, *pub = NULL, *ver = NULL, *winfile = NULL;
-    char prefix[2048];
+    const char *zoneinfo_dir = NULL;
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
-    while ((opt = getopt(argc, argv, "C:r:vw:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:r:vw:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "rebuild", required_argument, NULL, 'r' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "windows-zone-xml", required_argument, NULL, 'w' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -130,7 +142,12 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    snprintf(prefix, sizeof(prefix), "%s%s", config_dir, FNAME_ZONEINFODIR);
+    zoneinfo_dir = config_getstring(IMAPOPT_ZONEINFO_DIR);
+    if (!zoneinfo_dir) {
+        fprintf(stderr, "zoneinfo_dir must be set for tzdist service\n");
+        cyrus_done();
+        return EX_CONFIG;
+    }
 
     switch (op) {
     case REBUILD: {
@@ -150,7 +167,7 @@ int main(int argc, char **argv)
         hash_insert(INFO_TZID, info, &tzentries);
 
         /* Add LEAP record (last updated and hash) */
-        snprintf(buf, sizeof(buf), "%s%s", prefix, FNAME_LEAPSECFILE);
+        snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_LEAPSECFILE);
         if (verbose) printf("Processing leap seconds file %s\n", buf);
         if (!(fp = fopen(buf, "r"))) {
             fprintf(stderr, "Could not open leap seconds file %s\n", buf);
@@ -187,7 +204,7 @@ int main(int argc, char **argv)
         }
 
         /* Add ZONE/LINK records */
-        do_zonedir(prefix, &tzentries, info);
+        do_zonedir(zoneinfo_dir, &tzentries, info);
 
         zoneinfo_open(NULL);
 
@@ -243,8 +260,8 @@ int main(int argc, char **argv)
             goto done;
         }
 
-        if (chdir(prefix)) {
-            fprintf(stderr, "chdir(%s) failed\n", prefix);
+        if (chdir(zoneinfo_dir)) {
+            fprintf(stderr, "chdir(%s) failed\n", zoneinfo_dir);
             goto done;
         }
 
@@ -322,8 +339,8 @@ int main(int argc, char **argv)
 void usage(void)
 {
     fprintf(stderr,
-            "usage: zoneinfo_reconstruct [-C <alt_config>] [-v]"
-            " -r <publisher>:<version>\n");
+            "usage: ctl_zoneinfo [-C <alt_config>] [-v]"
+            " -r <publisher>:<version> | -w <file>\n");
     exit(EX_USAGE);
 }
 
@@ -342,6 +359,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
     dirp = opendir(dir);
     if (!dirp) {
         fprintf(stderr, "can't open zoneinfo directory %s\n", dir);
+        return;
     }
 
     while ((dirent = readdir(dirp))) {
@@ -371,7 +389,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 
             /* Isolate alias in path */
             path[plen-4] = '\0';  /* Trim ".ics" */
-            alias = path + strlen(config_dir) + strlen("zoneinfo") + 2;
+            alias = path + strlen(dir) + 1;
 
             if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
 

@@ -104,7 +104,7 @@ static void timeout_mainloop(int fd, pid_t pid)
             exit(1);
         }
 
-        r = read(fd, &c, 1);
+        r = read(fd, &c, sizeof(c));
         if (r < 0) {
             perror("timeout: read");
             exit(1);
@@ -141,7 +141,8 @@ static void timeout_mainloop(int fd, pid_t pid)
             break;
 
         default:
-            fprintf(stderr, "timeout: Unknown command '%c'\n", c);
+            fprintf(stderr, "timeout: Unknown command '%c' (%#x)\n",
+                            c, (unsigned) c);
             exit(1);
         }
     }
@@ -197,7 +198,7 @@ int timeout_init(void (*cb)(void))
 
 int timeout_begin(int millisec)
 {
-    int c;
+    char c;
     int r;
 
 // fprintf(stderr, "timeout_begin\n");
@@ -205,7 +206,7 @@ int timeout_begin(int millisec)
         return -1;
 
     c = CMD_BEGIN;
-    r = write(timeout_fd, &c, 1);
+    r = write(timeout_fd, &c, sizeof(c));
     if (r < 0) {
         perror("timeout: write");
         return -1;
@@ -220,7 +221,7 @@ int timeout_begin(int millisec)
 
 int timeout_end(void)
 {
-    int c;
+    char c;
     int r;
 
 // fprintf(stderr, "timeout_end\n");
@@ -228,7 +229,7 @@ int timeout_end(void)
         return -1;
 
     c = CMD_END;
-    r = write(timeout_fd, &c, 1);
+    r = write(timeout_fd, &c, sizeof(c));
     if (r < 0) {
         perror("timeout: write");
         return -1;

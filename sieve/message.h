@@ -67,7 +67,7 @@ typedef enum {
     ACTION_UNMARK,
     ACTION_ENOTIFY,
     ACTION_NOTIFY,
-    ACTION_DENOTIFY
+    ACTION_DENOTIFY,
 } action_t;
 
 /* information */
@@ -108,7 +108,7 @@ typedef struct notify_list_s {
     const char *id;
     const char *from;
     const char *method;
-    const char **options;
+    strarray_t *options;
     const char *priority;
     const char *message;
     struct notify_list_s *next;
@@ -126,17 +126,23 @@ typedef struct duptrack_list_s {
 duptrack_list_t *new_duptrack_list(void);
 void free_duptrack_list(duptrack_list_t *d);
 
+#define IMPLICIT_KEEP   (1<<0)
+#define CANCEL_KEEP     (1<<1)
+#define CREATE_MAILBOX  (1<<2)
+
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the
  * action list */
 int do_reject(action_list_t *m, int action, const char *msg);
-int do_fileinto(action_list_t *m, const char *mbox, const char *specialuse,
-                int cancel_keep, int do_create, const char *mailboxid,
-                strarray_t *imapflags);
+int do_fileinto(sieve_interp_t *i, void *sc,
+                action_list_t *a, const char *mbox, const char *specialuse,
+                unsigned flags, const char *mailboxid,
+                strarray_t *imapflags, struct buf *headers);
 int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
                 const char *dsn_notify, const char *dsn_ret,
-                int is_ext_list, int cancel_keep);
-int do_keep(action_list_t *m, strarray_t *imapflags);
+                int is_ext_list, int cancel_keep, struct buf *headers);
+int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
+            action_list_t *m, strarray_t *imapflags, struct buf *headers);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr, char *subj,
                 const char *msg, int seconds, int mime, const char *handle,
@@ -147,14 +153,15 @@ int do_removeflag(action_list_t *m, const char *flag);
 int do_mark(action_list_t *m);
 int do_unmark(action_list_t *m);
 int do_notify(notify_list_t *n, const char *id, const char *from,
-              const char *method, const char **options,
+              const char *method, strarray_t *options,
               const char *priority, const char *message);
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
                 strarray_t *match_vars, void *comprock, const char *priority);
 int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc);
-int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
-              strarray_t *addflags, strarray_t *removeflags,
+int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mboxid,
+              const char *awaken_spluse, int do_create,
+              strarray_t *addflags, strarray_t *removeflags, const char *tzid,
               unsigned char days, arrayu64_t *times,
-              strarray_t *imapflags);
+              strarray_t *imapflags, struct buf *headers);
 
 #endif

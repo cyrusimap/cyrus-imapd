@@ -47,15 +47,17 @@
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
 
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#include "httpd.h"
+#include "global.h"
 #include "ical_support.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xcal.h"
 #include "xml_support.h"
+#include "xstrlcpy.h"
 
 
 /*
@@ -256,11 +258,9 @@ static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
         kind_string = icalparameter_get_xname(param);
         break;
 
-#ifdef HAVE_IANA_PARAMS
     case ICAL_IANA_PARAMETER:
         kind_string = icalparameter_get_iana_name(param);
         break;
-#endif
 
     default:
         kind_string = icalparameter_kind_to_string(kind);
@@ -357,10 +357,15 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
     case ICAL_GEO_VALUE: {
         struct icalgeotype geo = icalvalue_get_geo(value);
 
+#ifdef ICAL_GEO_LEN
+        xmlNewTextChild(xtype, NULL, BAD_CAST "latitude", BAD_CAST geo.lat);
+        xmlNewTextChild(xtype, NULL, BAD_CAST "longitude", BAD_CAST geo.lon);
+#else
         snprintf(buf, sizeof(buf), "%f", geo.lat);
         xmlNewTextChild(xtype, NULL, BAD_CAST "latitude", BAD_CAST buf);
         snprintf(buf, sizeof(buf), "%f", geo.lon);
         xmlNewTextChild(xtype, NULL, BAD_CAST "longitude", BAD_CAST buf);
+#endif
         return;
     }
 
@@ -636,7 +641,11 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         }
 
         content = xmlNodeGetContent(node);
+#ifdef ICAL_GEO_LEN
+        strlcpy(geo.lat, (const char *) content, ICAL_GEO_LEN);
+#else
         geo.lat = atof((const char *) content);
+#endif
 
         node = xmlNextElementSibling(node);
         if (!node) {
@@ -651,7 +660,11 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
 
         xmlFree(content);
         content = xmlNodeGetContent(node);
+#ifdef ICAL_GEO_LEN
+        strlcpy(geo.lon, (const char *) content, ICAL_GEO_LEN);
+#else
         geo.lon = atof((const char *) content);
+#endif
 
         value = icalvalue_new_geo(geo);
 

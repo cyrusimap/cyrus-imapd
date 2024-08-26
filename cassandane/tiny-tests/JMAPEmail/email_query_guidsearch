@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    for (my $i = 0; $i < 10; $i++) {
+        $self->make_message("msg$i", to => Cassandane::Address->new(
+            localpart => "recipient$i",
+            domain => 'example.com'
+        )) || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog "Running query with guidsearch";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+        }, 'R1']
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    my $guidSearchIds = $res->[0][1]{ids};
+    $self->assert_num_equals(10, scalar @{$guidSearchIds});
+
+    xlog "Running query without guidsearch";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                to => '@example.com',
+            },
+            disableGuidSearch => JSON::true,
+        }, 'R1']
+    ], $using);
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    my $uidSearchIds = $res->[0][1]{ids};
+    $self->assert_num_equals(10, scalar @{$uidSearchIds});
+
+    xlog "Comparing results";
+    $self->assert_deep_equals($guidSearchIds, $uidSearchIds);
+}

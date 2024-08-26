@@ -5,6 +5,9 @@
 #include "util.h"
 #include "strarray.h"
 
+#define VCARD_APPLE_LABEL_PROPERTY "X-ABLabel"
+#define VCARD_APPLE_ABADR_PROPERTY "X-ABADR"
+
 enum parse_error {
 PE_OK = 0,
 PE_BACKQUOTE_EOF,
@@ -25,12 +28,6 @@ PE_ILLEGAL_CHAR,
 PE_NUMERR /* last */
 };
 
-enum parse_ctrl {
-    VPARSE_CTRL_IGNORE = 0,
-    VPARSE_CTRL_SKIP,
-    VPARSE_CTRL_REJECT
-};
-
 struct vparse_state {
     struct buf buf;
     const char *base;
@@ -40,7 +37,6 @@ struct vparse_state {
     strarray_t *multivalcomma;
     strarray_t *multiparam;
     int barekeys;
-    int ctrl;
 
     /* current items */
     struct vparse_card *card;
@@ -104,7 +100,9 @@ extern void vparse_replace_entry(struct vparse_card *card, const char *group, co
 extern void vparse_set_value(struct vparse_entry *entry, const char *value);
 /* XXX - multivalue should be strarray_t */
 //extern void vparse_set_multivalue(struct vparse_entry *entry, const strarray_t *values);
+extern char *vparse_get_value(struct vparse_entry *entry);
 
+extern void vparse_free_param(struct vparse_param *param);
 extern void vparse_delete_params(struct vparse_entry *entry, const char *name);
 extern struct vparse_param *vparse_get_param(struct vparse_entry *entry, const char *name);
 extern struct vparse_param *vparse_add_param(struct vparse_entry *entry, const char *name, const char *value);

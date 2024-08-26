@@ -1,0 +1,38 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.15 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.15/cyrus-imapd-3.0.15.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.15/cyrus-imapd-3.0.15.tar.gz.sig
+
+
+.. _relnotes-3.0.15-changes:
+
+Changes Since 3.0.14
+====================
+
+Bug fixes
+---------
+
+* Fixed :issue:`3143`: tools/git-version.sh did not need bash specifically
+* Fixed :issue:`3191`: saved session reuse crash when TLS enabled for backend
+  connections
+* Fixed :issue:`3287`: tools/translatesieve directory iteration protection
+  (thanks Daniel O'Connor)
+* Fixed :issue:`53`: mailbox tombstones were not being cleaned up by
+  :cyrusman:`cyr_expire(8)`
+* Fixed: XFER now recognises 3.4 and 3.5 backends
+* Fixed :issue:`3320`: memory leak during backend auth state cleanup
+* Fixed :issue:`3312`: fixed use-after-free segfault in mupdate-client (thanks
+  Mario Haustein)

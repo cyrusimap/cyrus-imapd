@@ -1,0 +1,57 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.8.3 Release Notes
+==============================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.3/cyrus-imapd-3.8.3.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.3/cyrus-imapd-3.8.3.tar.gz.sig
+
+.. _relnotes-3.8.3-changes:
+
+Changes since 3.8.2
+===================
+
+Security fixes
+--------------
+
+* Fixed CVE-2024-34055_:
+  Cyrus-IMAP through 3.8.2 and 3.10.0-beta2 allow authenticated attackers
+  to cause unbounded memory allocation by sending many LITERALs in a
+  single command.
+
+  The IMAP protocol allows for command arguments to be LITERALs of
+  negotiated length, and for these the server allocates memory to
+  receive the content before instructing the client to proceed. The
+  allocated memory is released when the whole command has been received
+  and processed.
+
+  The IMAP protocol has a number commands that specify an unlimited
+  number of arguments, for example SEARCH. Each of these arguments can
+  be a LITERAL, for which memory will be allocated and not released
+  until the entire command has been received and processed. This can run
+  a server out of memory, with varying consequences depending on the
+  server's OOM policy.
+
+  Discovered by Damian Poddebniak.
+
+  Two limits, with corresponding :cyrusman:`imapd.conf(5)` options, have
+  been added to address this:
+
+  * ``maxargssize`` (default: unlimited): limits the overall length of a
+    single IMAP command.  Deployments should configure this to a size that
+    suits their system resources and client usage patterns
+  * ``maxliteral`` (default: 128K): limits the length of individual IMAP
+    LITERALs
+
+  Connections sending commands that would exceed these limits will see the
+  command fail, or the connection closed, depending on the specific context.
+  The error message will contain the ``[TOOBIG]`` response code.
+
+  These limits may be set small without affecting message uploads, as the
+  APPEND command's message literal is limited by ``maxmessagesize``, not by
+  these new options.
+
+.. _CVE-2024-34055: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34055

@@ -1,0 +1,207 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_caldav
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+
+    xlog "User creates an event";
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:test
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('created', $res->[0][1]{list}[0]{type});
+    $self->assert_str_equals('cassandane',
+        $res->[0][1]{list}[0]{changedBy}{calendarPrincipalId});
+    $self->assert_not_null($res->[0][1]{list}[0]{event});
+
+    xlog "User updates an event";
+
+    $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:testupdated
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+    my %notifs = map { $_->{type} => $_ } @{$res->[0][1]{list}};
+    $self->assert_not_null($notifs{'updated'}->{event});
+    $self->assert_not_null($notifs{'updated'}->{eventPatch});
+    $self->assert_str_equals('cassandane',
+        $notifs{'updated'}->{changedBy}{calendarPrincipalId});
+
+    xlog "User deletes an event";
+
+    $caldav->Request('DELETE',
+        '/dav/calendars/user/cassandane/Default/test.ics');
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('destroyed', $res->[0][1]{list}[0]{type});
+    $self->assert_str_equals('cassandane',
+        $res->[0][1]{list}[0]{changedBy}{calendarPrincipalId});
+    $self->assert_not_null($res->[0][1]{list}[0]{event});
+
+    xlog "iTIP handler creates an event";
+
+    $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:testitip
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/testitip.ics',
+        $ical, 'Content-Type' => 'text/calendar',
+               'Schedule-Sender-Address' => 'itipsender@local',
+               'Schedule-Sender-Name' => '=?utf-8?q?iTIP_=E2=98=BA_Sender?=',
+        );
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('created', $res->[0][1]{list}[0]{type});
+    $self->assert_str_equals('itipsender@local',
+        $res->[0][1]{list}[0]{changedBy}{email});
+    $self->assert_str_equals("iTIP \N{WHITE SMILING FACE} Sender", # assert RFC0247 support
+        $res->[0][1]{list}[0]{changedBy}{name});
+    $self->assert_null($res->[0][1]{list}[0]{changedBy}{calendarPrincipalId});
+
+    xlog "iTIP handler deletes an event";
+
+    $caldav->Request('DELETE',
+        '/dav/calendars/user/cassandane/Default/testitip.ics',
+        undef,
+        'Schedule-Sender-Address' => 'itipdeleter@local',
+        'Schedule-Sender-Name' => 'iTIP Deleter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('destroyed', $res->[0][1]{list}[0]{type});
+    $self->assert_str_equals('itipdeleter@local',
+        $res->[0][1]{list}[0]{changedBy}{email});
+    $self->assert_str_equals('iTIP Deleter',
+        $res->[0][1]{list}[0]{changedBy}{name});
+    $self->assert_null($res->[0][1]{list}[0]{changedBy}{calendarPrincipalId});
+}

@@ -62,3 +62,62 @@ static void test_isatom(void)
 /* XXX test imparse_issequence() */
 
 /* XXX test imparse_isnumber() */
+
+static void test_parse_range(void)
+{
+    range_t range;
+
+    /*
+     * https://tools.ietf.org/html/rfc9051#name-formal-syntax
+     *
+     * nz-number       = digit-nz *DIGIT
+     *                     ; Non-zero unsigned 32-bit integer
+     *                     ; (0 < n < 4,294,967,296)
+     *
+     *
+     * https://tools.ietf.org/html/rfc9394#name-formal-syntax
+     *
+     * MINUS               = "-"
+     *
+     * partial-range-first = nz-number ":" nz-number
+     *     ;; Request to search from oldest (lowest UIDs) to
+     *     ;; more recent messages.
+     *     ;; A range 500:400 is the same as 400:500.
+     *     ;; This is similar to <seq-range> from [RFC3501]
+     *     ;; but cannot contain "*".
+     *
+     * partial-range-last  = MINUS nz-number ":" MINUS nz-number
+     *     ;; Request to search from newest (highest UIDs) to
+     *     ;; oldest messages.
+     *     ;; A range -500:-400 is the same as -400:-500.
+     *
+     * partial-range       = partial-range-first / partial-range-last
+     */
+
+    CU_ASSERT_EQUAL(imparse_range("1:1", &range), 0);
+    CU_ASSERT_EQUAL(imparse_range("1:2", &range), 0);
+    CU_ASSERT_EQUAL(imparse_range("2:1", &range), 0);
+    CU_ASSERT_EQUAL(imparse_range("-1:-2", &range), 0);
+    CU_ASSERT_EQUAL(imparse_range("-2:-1", &range), 0);
+
+    CU_ASSERT_EQUAL(imparse_range("1:-2", &range), 0);
+    CU_ASSERT_EQUAL(imparse_range("-1:2", &range), 0);
+
+    CU_ASSERT_NOT_EQUAL(imparse_range("0:1", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("--1:-2", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("+1:-2", &range), 0);
+
+    CU_ASSERT_NOT_EQUAL(imparse_range("1", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("1:", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range(":1", &range), 0);
+
+    CU_ASSERT_NOT_EQUAL(imparse_range("1:a", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("-1:-a", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("1a:2", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("1:2a", &range), 0);
+
+    CU_ASSERT_NOT_EQUAL(imparse_range("1:4294967296", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("-1:-4294967296", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("1:18446744073709551616", &range), 0);
+    CU_ASSERT_NOT_EQUAL(imparse_range("-1:-18446744073709551616", &range), 0);
+}

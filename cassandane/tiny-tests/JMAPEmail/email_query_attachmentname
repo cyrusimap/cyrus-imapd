@@ -1,0 +1,98 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_attachmentname
+    :needs_component_jmap :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    xlog "Append emails";
+    my @filenameParams = (
+        'filename="logo.png"',
+        'filename=somethingelse.png',
+        "filename*=utf-8''R%C3%BCbezahl.png",
+        'filename=blåbærsyltetøy.png',
+    );
+    while (my ($i, $filenameParam) = each @filenameParams) {
+        my $mime = <<EOF;
+Mime-Version: 1.0
+From: from\@local
+To: to\@local
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Subject: msg$i
+Content-Type: multipart/mixed; boundary=4c6605ea-9dfb-4489-a37a-30266e24b10b=_
+
+--4c6605ea-9dfb-4489-a37a-30266e24b10b=_
+Content-Type: text/plain; charset=utf-8
+
+msg$i
+--4c6605ea-9dfb-4489-a37a-30266e24b10b=_
+Content-Disposition: attachment; $filenameParam
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+
+beefc0de
+EOF
+        $mime =~ s/\r?\n/\r\n/gs;
+
+        my $msg = Cassandane::Message->new();
+        $msg->set_lines(split /\n/, $mime);
+        $self->{instance}->deliver($msg);
+    }
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+
+    ]);
+    my @ids = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(scalar @filenameParams, scalar @ids);
+
+    my @tests = ({
+        filter => {
+            attachmentName => "logo",
+        },
+        wantIds => [$ids[0]],
+    }, {
+        filter => {
+            attachmentName => "png",
+        },
+        wantIds => [$ids[0], $ids[1], $ids[2], $ids[3]],
+    }, {
+        filter => {
+            attachmentName => decode('utf-8', "Rübezahl.png"),
+        },
+        wantIds => [$ids[2]],
+    }, {
+        filter => {
+            text => decode('utf-8', "rübezahl"),
+        },
+        wantIds => [$ids[2]],
+    }, {
+        filter => {
+            attachmentName => decode('utf-8', 'blåbærsyltetøy'),
+        },
+        wantIds => [$ids[3]],
+    });
+
+    foreach (@tests) {
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => $_->{filter},
+                sort => [{
+                    property => 'subject',
+                }],
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
+}

@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_searchsnippet_get_shared
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create user and share mailboxes";
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
+    $admintalk->create("user.foo.box1") or die;
+    $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => 'foo' }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create emails in shared account";
+    $self->{adminstore}->set_folder('user.foo');
+    my %params = (
+        body => "A simple email",
+    );
+    $res = $self->make_message("Email foo", %params, store => $self->{adminstore}) || die;
+    $self->{adminstore}->set_folder('user.foo.box1');
+    %params = (
+        body => "Another simple email",
+    );
+    $res = $self->make_message("Email bar", %params, store => $self->{adminstore}) || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch email ids";
+    $res = $jmap->CallMethods([
+        ['Email/query', { accountId => 'foo' }, "R1"],
+        ['Email/get', {
+            accountId => 'foo',
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }
+        }, 'R2' ],
+    ]);
+
+    my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $foo = $m{"Email foo"}->{id};
+    my $bar = $m{"Email bar"}->{id};
+    $self->assert_not_null($foo);
+    $self->assert_not_null($bar);
+
+    xlog $self, "remove read rights for mailbox containing email $bar";
+    $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
+
+    xlog $self, "fetch snippets";
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            accountId => 'foo',
+            emailIds => [ $foo, $bar ],
+            filter => { text => "simple" },
+    }, "R1"]]);
+    $self->assert_str_equals($foo, $res->[0][1]->{list}[0]{emailId});
+    $self->assert_str_equals($bar, $res->[0][1]->{notFound}[0]);
+}

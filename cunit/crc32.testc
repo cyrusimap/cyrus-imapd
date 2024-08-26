@@ -1,99 +1,7 @@
 /* Unit test for lib/crc32.c */
+#include <config.h>
 #include "cunit/cyrunit.h"
 #include "crc32.h"
-#include "crc32c.h"
-
-static void test_rfc3720(void)
-{
-    // resulting CRCs are reversed endianness
-
-    const char ZEROS[] = {
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-    };
-    uint32_t ZEROSCRC = 0x8a9136aa;
-
-    const char ONES[] = {
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-    };
-    uint32_t ONESCRC = 0x62a8ab43;
-
-    const char INCR[] = {
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-        0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
-    };
-    uint32_t INCRCRC = 0x46dd794e;
-
-    const char DECR[] = {
-        0x1f, 0x1e, 0x1d, 0x1c, 0x1b, 0x1a, 0x19, 0x18,
-        0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10,
-        0x0f, 0x0e, 0x0d, 0x0c, 0x0b, 0x0a, 0x09, 0x08,
-        0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00
-    };
-    uint32_t DECRCRC = 0x113fdb5c;
-
-    const char SCSIREAD[] = {
-        0x01, 0xc0, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x14, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x04, 0x00,
-        0x00, 0x00, 0x00, 0x14,
-        0x00, 0x00, 0x00, 0x18,
-        0x28, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x02, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00
-    };
-    uint32_t SCSIREADCRC = 0xd9963a56;
-
-    uint32_t c;
-
-    c = crc32c_map(ZEROS, sizeof(ZEROS));
-    CU_ASSERT_EQUAL(c, ZEROSCRC);
-
-    c = crc32c_map(ONES, sizeof(ONES));
-    CU_ASSERT_EQUAL(c, ONESCRC);
-
-    c = crc32c_map(INCR, sizeof(INCR));
-    CU_ASSERT_EQUAL(c, INCRCRC);
-
-    c = crc32c_map(DECR, sizeof(DECR));
-    CU_ASSERT_EQUAL(c, DECRCRC);
-
-    c = crc32c_map(SCSIREAD, sizeof(SCSIREAD));
-    CU_ASSERT_EQUAL(c, SCSIREADCRC);
-}
-
-static void test_crc32c(void)
-{
-    static const char TEXT[] = "lorem ipsum";
-    static const char TEXT1[] = "lorem";
-    static const char TEXT2[] = " ipsum";
-    static uint32_t CRC32C = 0xdfb4e6c9;
-    uint32_t c;
-    struct iovec iov[2];
-
-    memset(iov, 0, sizeof(iov));
-    iov[0].iov_base = (char *)TEXT1;
-    iov[0].iov_len = sizeof(TEXT1)-1;
-    iov[1].iov_base = (char *)TEXT2;
-    iov[1].iov_len = sizeof(TEXT2)-1;
-
-    c = crc32c_iovec(iov, 2);
-    CU_ASSERT_EQUAL(c, CRC32C);
-
-    c = crc32c_map(TEXT, sizeof(TEXT)-1);
-    CU_ASSERT_EQUAL(c, CRC32C);
-}
 
 static void test_map(void)
 {
@@ -102,6 +10,31 @@ static void test_map(void)
     uint32_t c;
 
     c = crc32_map(TEXT, sizeof(TEXT)-1);
+    CU_ASSERT_EQUAL(c, CRC32);
+}
+
+static void test_unaligned(void)
+{
+    struct aligned_data {
+        char pad1[1];
+        char UNALIGNED_TEXT[12];
+        char pad2[3];
+        char ALIGNED_TEXT[12];
+    } __attribute__((packed, aligned (ALIGNOF_UINT32_T)));
+
+    static const struct aligned_data data = {
+        { 0 },
+        "lorem ipsum",
+        { 0 },
+        "lorem ipsum",
+    };
+    static const uint32_t CRC32 = 0x72d7748e;
+    uint32_t c;
+
+    c = crc32_map(data.UNALIGNED_TEXT, sizeof(data.UNALIGNED_TEXT)-1);
+    CU_ASSERT_EQUAL(c, CRC32);
+
+    c = crc32_map(data.ALIGNED_TEXT, sizeof(data.ALIGNED_TEXT)-1);
     CU_ASSERT_EQUAL(c, CRC32);
 }
 
@@ -236,6 +169,420 @@ static void test_iovec_blank(void)
     CU_ASSERT_EQUAL(c, CRC32);
 }
 
+static void test_heaps(void)
+{
+    static const char TEXTBLOCK[] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                                    "the quick brown fox jumped over the lazy dog"
+                                    "\000\001\002\003\004\005\006\007\008\009\010"
+                                    "FIHU(E)WJHF*(EWJF98&88u90r9832q7648032768hef"
+                                    "da39a3ee5e6b4b0d3255bfef95601890afd80709\127"
+                                    "YYYYYYYYYYYY01234567890123456790123456789012";
 
+    /* generated checks to ensure all sorts of offsets are right */
+
+    /* GENERATED WITH THE FOLLOWING CODE:
+     * int i, j;
+     * for (j = 1; j < 10; j++) {
+     *     for (i = 20; i < 60; i++) {
+     *         printf("    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+%d, %d), 0x%08x);\n", i, j, crc32_map(TEXTBLOCK+i, j));
+     *     }
+     * }
+     */
+
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 1), 0xb7b2364b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 1), 0x856a5aa8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 1), 0x916b06e7);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 1), 0xefda7a5a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 1), 0xe96ccf45);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 1), 0xf500ae27);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 1), 0xf26d6a3e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 1), 0xe66c3671);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 1), 0x06b9df6f);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 1), 0x0862575d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 1), 0xe96ccf45);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 1), 0x71beeff9);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 1), 0x6c09ff9d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 1), 0x0f0f9344);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 1), 0x1c630b12);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 1), 0x7808a3d2);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 1), 0xe96ccf45);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 2), 0x560b1c65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 2), 0x64d37086);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 2), 0x49e34767);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 2), 0xd1256687);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 2), 0x623dadd5);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 2), 0xf35f77f7);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 2), 0x5792dffb);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 2), 0x27ff46b0);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 2), 0x215df2f3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 2), 0xd569924b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 2), 0xfcbe805b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 2), 0x77e13629);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 2), 0xa8190bca);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 2), 0x81dd7542);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 2), 0x6ddd8108);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 2), 0x8badb191);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 2), 0x81c9741e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 2), 0x708cf230);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 3), 0x8a3ca880);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 3), 0xb8e4c463);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 3), 0x95d4f382);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 3), 0x3c456de6);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 3), 0x9a61fca0);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 3), 0x03dbb5d1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 3), 0xd14752f6);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 3), 0xcc548f3a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 3), 0xcdff93a5);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 3), 0x2cf7a909);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 3), 0x08b73ecf);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 3), 0x8dfbd905);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 3), 0x2ecc86c7);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 3), 0x7416a1e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 3), 0x8430f6db);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 3), 0x76bef661);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 3), 0x6eefc126);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 3), 0x8c5ddff7);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 3), 0x29a62f1a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 4), 0x5a8089c3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 4), 0x6858e520);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 4), 0x4568d2c1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 4), 0xecf94ca5);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 4), 0xa039cd65);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 4), 0x234c6c33);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 4), 0x03ba53c9);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 4), 0xb263260a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 4), 0xc0795252);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 4), 0xae13ffa9);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 4), 0x909c8048);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 4), 0x7a6d87e6);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 4), 0x1ceef0cb);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 4), 0x0a2108d1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 4), 0xcb1acf5d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 4), 0x698d9878);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 4), 0xd3af207d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 4), 0xa4b041dc);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 4), 0x2c5aa924);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 4), 0x719749d6);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 5), 0xb58525c8);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 5), 0x875d492b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 5), 0xaa6d7eca);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 5), 0x03fce0ae);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 5), 0x4f3c616e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 5), 0xc878023d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 5), 0x4d9e4744);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 5), 0x04d7f636);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 5), 0xe6de5557);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 5), 0x8dc71ed7);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 5), 0x46c8c7f6);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 5), 0x0929badb);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 5), 0x251ad557);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 5), 0x03a5668c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 5), 0xedbdc858);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 5), 0x6d199454);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 5), 0xb7dbbbd3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 5), 0x58b48941);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 5), 0x80cebdfa);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 5), 0xb0f3a8fb);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 5), 0x86ad2fed);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 6), 0x22b8f9ec);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 6), 0x1060950f);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 6), 0x3d50a2ee);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 6), 0x94c13c8a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 6), 0xd801bd4a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 6), 0x5f45de19);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 6), 0xaacd5e2d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 6), 0x97902dbf);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 6), 0xc9079d00);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 6), 0xfd8b4d5f);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 6), 0xf1564f2c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 6), 0x25267017);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 6), 0x7d01dd7b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 6), 0xfa254dc6);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 6), 0xf86e617f);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 6), 0x1d55c7dc);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 6), 0x8507433c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 6), 0x69be7335);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 6), 0x0e8c56cb);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 6), 0xd134c33c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 6), 0xc3b31779);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 6), 0xa1585421);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 7), 0x1e2c20e1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 7), 0x2cf44c02);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 7), 0x01c47be3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 7), 0xa855e587);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 7), 0xe4956447);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 7), 0x63d10714);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 7), 0x96598720);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 7), 0xa319a75a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 7), 0x5df0e15f);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 7), 0x08ab50c0);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 7), 0x1245086d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 7), 0x4397d555);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 7), 0xefff5c2a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 7), 0xc8a53a2d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 7), 0x6e9e49da);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 7), 0xb84aa11e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 7), 0x6614047d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 7), 0x59395024);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 7), 0x59d5e914);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 7), 0x806481ed);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 7), 0xc6d28701);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 7), 0x567f1d44);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 7), 0xbea52234);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 8), 0x60a1c885);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 8), 0x5279a466);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 8), 0x7f499387);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 8), 0xd6d80de3);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 8), 0x9a188c23);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 8), 0x1d5cef70);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 8), 0xe8d46f44);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 8), 0xdd944f3e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 8), 0x8da47e22);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 8), 0xf3ebebd9);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 8), 0x7200a6a5);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 8), 0x42afb714);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 8), 0x774bcd33);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 8), 0xd45ba5ce);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 8), 0x5974f25d);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 8), 0x1e600651);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 8), 0x13dbb887);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 8), 0x58013265);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 8), 0x33554ec5);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 8), 0x965f1717);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 8), 0x37573501);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 8), 0x08a485da);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 8), 0x838a90aa);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 8), 0xc00ba3ff);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+20, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+21, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+22, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+23, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+24, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+25, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+26, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+27, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+28, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+29, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+30, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+31, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+32, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+33, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+34, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+35, 9), 0x2a00e02c);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+36, 9), 0x18d88ccf);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+37, 9), 0x35e8bb2e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+38, 9), 0x9c79254a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+39, 9), 0xd0b9a48a);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+40, 9), 0x57fdc7d9);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+41, 9), 0xa27547ed);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+42, 9), 0x97356797);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+43, 9), 0xc705568b);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+44, 9), 0xdd8fb2c7);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+45, 9), 0x16904ede);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+46, 9), 0xd770b838);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+47, 9), 0x76918457);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+48, 9), 0xb0a8b99f);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+49, 9), 0x606bbf00);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+50, 9), 0x6d8bfa69);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+51, 9), 0xf51ece21);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+52, 9), 0x051ce6db);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+53, 9), 0x328f07a1);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+54, 9), 0x67e175f2);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+55, 9), 0x6a291595);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+56, 9), 0x08550068);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+57, 9), 0x9463f571);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+58, 9), 0xd781320e);
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK+59, 9), 0xafc57a9f);
+
+    /* full test of larger block plus iovec versions of same */
+    CU_ASSERT_EQUAL(crc32_map(TEXTBLOCK, 230), 0x5fc0ba36);
+
+    struct iovec iov[10];
+    uint32_t c;
+    memset(iov, 0, sizeof(iov));
+    iov[0].iov_base = (char *)TEXTBLOCK;
+    iov[0].iov_len = 66;
+    iov[1].iov_base = (char *)TEXTBLOCK+66;
+    iov[1].iov_len = 164;
+
+    c = crc32_iovec(iov, 2);
+    CU_ASSERT_EQUAL(c, 0x5fc0ba36);
+
+    iov[0].iov_base = (char *)TEXTBLOCK;
+    iov[0].iov_len = 1;
+    iov[1].iov_base = (char *)TEXTBLOCK+1;
+    iov[1].iov_len = 0;
+    iov[2].iov_base = (char *)TEXTBLOCK+1;
+    iov[2].iov_len = 17;
+    iov[3].iov_base = (char *)TEXTBLOCK+18;
+    iov[3].iov_len = 46;
+    iov[4].iov_base = (char *)TEXTBLOCK+64;
+    iov[4].iov_len = 64;
+    iov[5].iov_base = (char *)TEXTBLOCK+128;
+    iov[5].iov_len = 72;
+    iov[6].iov_base = (char *)TEXTBLOCK+200;
+    iov[6].iov_len = 8;
+    iov[7].iov_base = (char *)TEXTBLOCK+208;
+    iov[7].iov_len = 22;
+
+    c = crc32_iovec(iov, 8);
+    CU_ASSERT_EQUAL(c, 0x5fc0ba36);
+}
 
 /* vim: set ft=c: */

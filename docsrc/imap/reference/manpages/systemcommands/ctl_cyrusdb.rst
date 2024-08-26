@@ -37,7 +37,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -r
+.. option:: -r, --recover
 
     Recover the database after an application or system failure. Also
     performs database cleanups like removing mailbox reservations (and
@@ -47,12 +47,18 @@ Options
     matches the configured database type in imapd.conf.  If not, the
     file is automatically converted using the same logic as cvt_cyrusdb.
 
-.. option:: -x
+    If the ``reverseacls`` option in :cyrusman:`imapd.conf(5)` is enabled,
+    and the RACL entries in the database are an old version or do not
+    exist, they will be generated.  Conversely, if RACL entries do exist
+    in the database, but the ``reverseacls`` option is disabled, then the
+    entries will be cleaned up.
+
+.. option:: -x, --no-cleanup
 
     Used with ``-r`` to only recover the database, and prevent any
     cleanup.
 
-.. option:: -c
+.. option:: -c, --checkpoint
 
     Checkpoint and archive (a copy of) the database.
 

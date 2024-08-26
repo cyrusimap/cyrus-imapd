@@ -45,9 +45,10 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <errno.h>
-#include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -71,6 +72,7 @@
 #include "parseaddr.h"
 #include "charset.h"
 #include "stristr.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -105,14 +107,16 @@ struct msg {
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
 static int message_parse_body(struct msg *msg,
+                              struct body *body,
+                              const char *defaultContentType,
+                              strarray_t *boundaries,
+                              const char *efname);
+static int message_parse_headers(struct msg *msg,
                                  struct body *body,
                                  const char *defaultContentType,
-                                 strarray_t *boundaries);
+                                 strarray_t *boundaries,
+                                 const char *efname);
 
-static int message_parse_headers(struct msg *msg,
-                                    struct body *body,
-                                    const char *defaultContentType,
-                                    strarray_t *boundaries);
 static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
@@ -124,14 +128,15 @@ static void message_parse_params(const char *hdr, struct param **paramp);
 static void message_fold_params(struct param **paramp);
 static void message_parse_language(const char *hdr, struct param **paramp);
 static void message_parse_rfc822space(const char **s);
-static void message_parse_received_date(const char *hdr, char **hdrp);
 
 static void message_parse_multipart(struct msg *msg,
-                                       struct body *body,
-                                       strarray_t *boundaries);
+                                    struct body *body,
+                                    strarray_t *boundaries,
+                                    const char *efname);
 static void message_parse_content(struct msg *msg,
-                                     struct body *body,
-                                     strarray_t *boundaries);
+                                  struct body *body,
+                                  strarray_t *boundaries,
+                                  const char *efname);
 
 static char *message_getline(struct buf *, struct msg *msg);
 static int message_pendingboundary(const char *s, int slen, strarray_t *);
@@ -166,7 +171,7 @@ static char *message_ucase(char *s)
 }
 
 /*
- * Check a message 'from' of 'size' bytes for minimal RFC-822 compliance.
+ * Check a message 'from' of 'size' bytes for minimal RFC 822 compliance.
  * The message is read from 'from'. If 'to' is not NULL, the message
  * is copied to 'to', otherwise an in-memory buffer of 'from' is checked.
  *
@@ -189,7 +194,8 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     while (size) {
         n = prot_read(from, buf, size > 4096 ? 4096 : size);
         if (!n) {
-            syslog(LOG_ERR, "IOERROR: reading message: unexpected end of file");
+            xsyslog(LOG_ERR, "IOERROR: reading message: unexpected end of file",
+                             NULL);
             return IMAP_IOERROR;
         }
 
@@ -248,7 +254,7 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     if (to) {
         fflush(to);
         if (ferror(to) || fsync(fileno(to))) {
-            syslog(LOG_ERR, "IOERROR: writing message: %m");
+            xsyslog(LOG_ERR, "IOERROR: writing message", NULL);
             r = IMAP_IOERROR;
             goto done;
         }
@@ -322,6 +328,13 @@ done:
     return r;
 }
 
+static int body_is_rfc822(const struct body *body)
+{
+    return body && !strcasecmpsafe(body->type, "MESSAGE") &&
+           (!strcasecmpsafe(body->subtype, "RFC822") ||
+            !strcasecmpsafe(body->subtype, "GLOBAL"));
+}
+
 EXPORTED int message_parse(const char *fname, struct index_record *record)
 {
     struct body *body = NULL;
@@ -331,7 +344,7 @@ EXPORTED int message_parse(const char *fname, struct index_record *record)
     f = fopen(fname, "r");
     if (!f) return IMAP_IOERROR;
 
-    r = message_parse_file(f, NULL, NULL, &body);
+    r = message_parse_file(f, NULL, NULL, &body, fname);
     if (!r) r = message_create_record(record, body);
 
     fclose(f);
@@ -353,8 +366,9 @@ EXPORTED int message_parse(const char *fname, struct index_record *record)
  * and returned to the caller.  The caller MUST unmap the file.
  */
 EXPORTED int message_parse_file(FILE *infile,
-                       const char **msg_base, size_t *msg_len,
-                       struct body **body)
+                                const char **msg_base, size_t *msg_len,
+                                struct body **body,
+                                const char *efname)
 {
     int fd = fileno(infile);
     struct stat sbuf;
@@ -371,7 +385,12 @@ EXPORTED int message_parse_file(FILE *infile,
     *msg_len = 0;
 
     if (fstat(fd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
+        if (efname)
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
+                             "filename=<%s>",
+                             efname);
+        else
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool", NULL);
         fatal("can't fstat message file", EX_OSFILE);
     }
     map_refresh(fd, 1, msg_base, msg_len, sbuf.st_size,
@@ -381,11 +400,45 @@ EXPORTED int message_parse_file(FILE *infile,
         return IMAP_IOERROR; /* zero length file? */
 
     if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
-    r = message_parse_mapped(*msg_base, *msg_len, *body);
+    r = message_parse_mapped(*msg_base, *msg_len, *body, efname);
 
     if (unmap) map_free(msg_base, msg_len);
 
     return r;
+}
+
+/*
+ * Parse the message 'infile'.
+ *
+ * The caller MUST free the allocated body struct.
+ *
+ * If msg_base/msg_len are non-NULL, the file will remain memory-mapped
+ * and returned to the caller.  The caller MUST unmap the file.
+ */
+EXPORTED int message_parse_file_buf(FILE *infile,
+                                    struct buf *buf,
+                                    struct body **body,
+                                    const char *efname)
+{
+    int fd = fileno(infile);
+    struct stat sbuf;
+
+    // unmap or clear space
+    buf_free(buf);
+
+    if (fstat(fd, &sbuf) == -1) {
+        if (efname)
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
+                             "filename=<%s>",
+                             efname);
+        else
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool", NULL);
+        fatal("can't fstat message file", EX_OSFILE);
+    }
+    buf_refresh_mmap(buf, 1, fd, efname, sbuf.st_size, "new message");
+
+    if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
+    return message_parse_mapped(buf_base(buf), buf_len(buf), *body, efname);
 }
 
 
@@ -401,7 +454,8 @@ EXPORTED int message_parse_file(FILE *infile,
  *
  * XXX can we do this with mmap()?
  */
-EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
+EXPORTED int message_parse_binary_file(FILE *infile, struct body **body,
+                                       const char *efname)
 {
     int fd = fileno(infile);
     struct stat sbuf;
@@ -409,7 +463,12 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
     size_t n;
 
     if (fstat(fd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
+        if (efname)
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
+                             "filename=<%s>",
+                             efname);
+        else
+            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool", NULL);
         fatal("can't fstat message file", EX_OSFILE);
     }
     msg.len = sbuf.st_size;
@@ -421,13 +480,18 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
 
     n = retry_read(fd, (char*) msg.base, msg.len);
     if (n != msg.len) {
-        syslog(LOG_ERR, "IOERROR: reading binary file in spool: %m");
+        if (efname)
+            xsyslog(LOG_ERR, "IOERROR: reading binary file in spool",
+                             "filename=<%s>",
+                             efname);
+        else
+            xsyslog(LOG_ERR, "IOERROR: reading binary file in spool", NULL);
         return IMAP_IOERROR;
     }
 
     if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
     message_parse_body(&msg, *body,
-                       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
+                       DEFAULT_CONTENT_TYPE, NULL, efname);
 
     (*body)->filesize = msg.len;
 
@@ -439,7 +503,12 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
     free((char*) msg.base);
 
     if (n != msg.len || fsync(fd)) {
-        syslog(LOG_ERR, "IOERROR: rewriting binary file in spool: %m");
+        if (efname)
+            xsyslog(LOG_ERR, "IOERROR: rewriting binary file in spool",
+                             "filename=<%s>",
+                             efname);
+        else
+            xsyslog(LOG_ERR, "IOERROR: rewriting binary file in spool", NULL);
         return IMAP_IOERROR;
     }
 
@@ -450,7 +519,7 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
  * Parse the message at 'msg_base' of length 'msg_len'.
  */
 EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
-                         struct body *body)
+                                  struct body *body, const char *efname)
 {
     struct msg msg;
 
@@ -459,17 +528,27 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.offset = 0;
     msg.encode = 0;
 
-    message_parse_body(&msg, body,
-                       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
+    message_parse_body(&msg, body, DEFAULT_CONTENT_TYPE, NULL, efname);
 
     body->filesize = msg_len;
 
     message_guid_generate(&body->guid, msg_base, msg_len);
 
     if (body->filesize != body->header_size + body->content_size) {
-        syslog(LOG_NOTICE, "IOERROR: size mismatch on parse %s (%d, %d)",
-               message_guid_encode(&body->guid), (int)body->filesize,
-               (int)(body->header_size + body->content_size));
+        if (efname)
+            /* XXX IOERROR but only LOG_NOTICE?? */
+            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
+                                "guid=<%s> filename=<%s> "
+                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
+                                message_guid_encode(&body->guid), efname,
+                                body->filesize,
+                                body->header_size + body->content_size);
+        else
+            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
+                                "guid=<%s> "
+                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
+                                message_guid_encode(&body->guid), body->filesize,
+                                body->header_size + body->content_size);
     }
 
     return 0;
@@ -480,7 +559,7 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
  * listed in headers or (if headers_not is non-empty) those headers
  * not in headers_not.
  */
-EXPORTED void message_pruneheader(char *buf, const strarray_t *headers,
+HIDDEN void message_pruneheader(char *buf, const strarray_t *headers,
                          const strarray_t *headers_not)
 {
     char *p, *colon, *nextheader;
@@ -566,7 +645,8 @@ static void message_find_part(struct body *body, const char *section,
     if (match) {
         /* matching part, sanity check the size against the mmap'd file */
         if (body->content_offset + body->content_size > msg_len) {
-            syslog(LOG_ERR, "IOERROR: body part exceeds size of message file");
+            xsyslog(LOG_ERR, "IOERROR: body part exceeds size of message file",
+                             NULL);
             fatal("body part exceeds size of message file", EX_OSFILE);
         }
 
@@ -574,10 +654,16 @@ static void message_find_part(struct body *body, const char *section,
             int encoding;
             charset_t charset = CHARSET_UNKNOWN_CHARSET;
             message_parse_charset(body, &encoding, &charset);
-            if (charset == CHARSET_UNKNOWN_CHARSET)
+            if (!strcasecmp(body->type, "text") &&
+                (!strcasecmp(body->subtype, "calendar") ||
+                 !strcasecmp(body->subtype, "vcard"))) {
+                /* override charset for text/calendar and text/vcard */
+                charset = charset_lookupname("utf-8");
+            }
+            else if (charset == CHARSET_UNKNOWN_CHARSET)
                 /* try ASCII */
-                charset = charset_lookupname("US-ASCII");
-            body->decoded_body = charset_to_utf8(
+                charset = charset_lookupname("us-ascii");
+            body->decoded_body = charset_to_utf8cstr(
                 msg_base + body->content_offset, body->content_size,
                 charset, encoding); /* returns a cstring */
             charset_free(&charset);
@@ -599,8 +685,7 @@ static void message_find_part(struct body *body, const char *section,
                               msg_base, msg_len, parts, n);
         }
     }
-    else if (!strcmp(body->type, "MESSAGE") &&
-             !strcmp(body->subtype, "RFC822")) {
+    else if (body_is_rfc822(body)) {
         snprintf(nextsection, sizeof(nextsection), "%s.1", section);
         message_find_part(body->subpart, nextsection, content_types,
                           msg_base, msg_len, parts, n);
@@ -621,7 +706,7 @@ EXPORTED void message_fetch_part(struct message_content *msg,
 
     *parts = NULL;
     message_find_part(msg->body, "1", content_types,
-                      msg->base, msg->len, parts, &n);
+                      buf_base(&msg->map), buf_len(&msg->map), parts, &n);
 }
 
 /*
@@ -629,8 +714,8 @@ EXPORTED void message_fetch_part(struct message_content *msg,
  * and fills in appropriate information in the index record pointed to
  * by 'record'.
  */
-HIDDEN int message_create_record(struct index_record *record,
-                          const struct body *body)
+EXPORTED int message_create_record(struct index_record *record,
+                                   const struct body *body)
 {
     /* used for sent time searching, truncated to day with no TZ */
     if (time_from_rfc5322(body->date, &record->sentdate, DATETIME_DATE_ONLY) < 0)
@@ -664,21 +749,20 @@ message_header_lookup(const char *buf, const char **valp)
 static void body_add_content_guid(const char *base, struct body *body)
 {
     int encoding = ENCODING_NONE;
-    char *decbuf = NULL;
+    uint8_t dest[SHA1_DIGEST_LENGTH];
+    size_t decodedlen = 0;
     charset_t cs = NULL;
-    size_t len = body->content_size;
+
     message_parse_charset(body, &encoding, &cs);
-    base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
-    if (base) {
-        message_guid_generate(&body->content_guid, base, len);
-        body->decoded_content_size = len;
+    if (!charset_decode_sha1(dest, &decodedlen, base, body->content_size, encoding)) {
+        message_guid_import(&body->content_guid, (void *)dest);
+        body->decoded_content_size = decodedlen;
     }
     else {
         message_guid_set_null(&body->content_guid);
         body->decoded_content_size = 0;
     }
     charset_free(&cs);
-    free(decbuf);
 }
 
 
@@ -687,13 +771,13 @@ static void body_add_content_guid(const char *base, struct body *body)
  */
 static int message_parse_body(struct msg *msg, struct body *body,
                               const char *defaultContentType,
-                              strarray_t *boundaries)
+                              strarray_t *boundaries,
+                              const char *efname)
 {
     strarray_t newboundaries = STRARRAY_INITIALIZER;
     int sawboundary;
 
     memset(body, 0, sizeof(struct body));
-    buf_init(&body->cacheheaders);
 
     /* No passed-in boundary structure, create a new, empty one */
     if (!boundaries) {
@@ -704,17 +788,20 @@ static int message_parse_body(struct msg *msg, struct body *body,
 
 
     sawboundary = message_parse_headers(msg, body, defaultContentType,
-                                        boundaries);
+                                        boundaries, efname);
 
     /* Charset id and encoding id are stored in the binary
      * bodystructure, but we don't have that one here. */
-    struct param *param = body->params;
-    while (param) {
-        if (!strcasecmp(param->attribute, "CHARSET")) {
-            body->charset_id = xstrdupnull(param->value);
-            break;
+    body->charset_id = NULL;
+    if (body->params) {
+        charset_t cs = !strcmp(body->type, "TEXT") ?
+            charset_lookupname("us-ascii") : CHARSET_UNKNOWN_CHARSET;
+        message_parse_charset_params(body->params, &cs);
+        if (cs != CHARSET_UNKNOWN_CHARSET) {
+            /* Use parameter value, instead of canonical name */
+            body->charset_id = xstrdup(charset_alias_name(cs));
         }
-        param = param->next;
+        charset_free(&cs);
     }
 
     body->charset_enc = encoding_lookupname(body->encoding);
@@ -722,11 +809,10 @@ static int message_parse_body(struct msg *msg, struct body *body,
     /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
         if (!sawboundary) {
-            message_parse_multipart(msg, body, boundaries);
+            message_parse_multipart(msg, body, boundaries, efname);
         }
     }
-    else if (strcmp(body->type, "MESSAGE") == 0 &&
-        strcmp(body->subtype, "RFC822") == 0) {
+    else if (body_is_rfc822(body)) {
         const char *base = msg->base + msg->offset;
         body->subpart = (struct body *)xzmalloc(sizeof(struct body));
 
@@ -736,7 +822,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
         }
         else {
             message_parse_body(msg, body->subpart,
-                               DEFAULT_CONTENT_TYPE, boundaries);
+                               DEFAULT_CONTENT_TYPE, boundaries, efname);
 
             /* Calculate our size/lines information */
             body->content_size = body->subpart->header_size +
@@ -750,12 +836,11 @@ static int message_parse_body(struct msg *msg, struct body *body,
 
             /* it's nice to have a GUID for the message/rfc822 itself */
             body_add_content_guid(base, body);
-
         }
     }
     else {
         if (!sawboundary) {
-            message_parse_content(msg, body, boundaries);
+            message_parse_content(msg, body, boundaries, efname);
         }
     }
 
@@ -770,7 +855,8 @@ static int message_parse_body(struct msg *msg, struct body *body,
  */
 static int message_parse_headers(struct msg *msg, struct body *body,
                                  const char *defaultContentType,
-                                 strarray_t *boundaries)
+                                 strarray_t *boundaries,
+                                 const char *efname)
 {
     struct buf headers = BUF_INITIALIZER;
     char *next;
@@ -822,8 +908,14 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 
             /* check if we've hit a limit and flag it */
             if (maxlines && body->header_lines > maxlines) {
-                syslog(LOG_ERR, "ERROR: message has more than %d header lines, not caching any more",
-                       maxlines);
+                if (efname)
+                    syslog(LOG_ERR, "ERROR: message (%s) has more than %d header lines "
+                                    "not caching any more",
+                           efname, maxlines);
+                else
+                    syslog(LOG_ERR, "ERROR: message has more than %d header lines "
+                                    "not caching any more",
+                           maxlines);
                 have_max = 1;
                 continue;
             }
@@ -868,13 +960,30 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 
                 /* If we're encoding binary, replace "binary"
                    with "base64" in CTE header body */
-                if (msg->encode &&
-                    !strcmpsafe(body->encoding, "BINARY")) {
-                    char *p = (char*)
-                        stristr(msg->base + body->header_offset +
-                                (next - headers.s) + 27,
-                                "binary");
-                    memcpy(p, "base64", 6);
+                if (msg->encode && !strcmpsafe(body->encoding, "BINARY")) {
+                    // Determine the start and end of the CTE header value
+                    const char *hdr_val = msg->base + body->header_offset +
+                                          (next - headers.s) + 26;
+                    const char *hdr_end = hdr_val;
+                    const char *msghdr_end =
+                        msg->base + body->header_offset + body->header_size;
+                    for (; hdr_end < msghdr_end; hdr_end++) {
+                        if (hdr_end[0] == '\r') {
+                            if (hdr_end + 2 < msghdr_end &&
+                                hdr_end[1] == '\n' &&
+                                hdr_end[2] != ' ' && hdr_end[2] != '\t') {
+                                hdr_end += 2;
+                                break;
+                            }
+                        }
+                    }
+                    // Replace header value
+                    char *p =
+                        (char *)strinstr(hdr_val, hdr_end - hdr_val, "binary");
+                    if (p)
+                        memcpy(p, "base64", 6);
+                    else
+                        xsyslog(LOG_ERR, "can not patch BINARY CTE header", NULL);
                 }
                 break;
             case RFC822_CONTENT_TYPE:
@@ -912,7 +1021,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
                 break;
             case RFC822_X_DELIVEREDINTERNALDATE:
                 /* Explicit x-deliveredinternaldate overrides received: headers */
-                message_parse_string(value, &body->received_date);
+                message_parse_string(value, &body->x_deliveredinternaldate);
                 break;
             case RFC822_X_ME_MESSAGE_ID:
                 message_parse_string(value, &body->x_me_message_id);
@@ -932,7 +1041,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 }
 
 /*
- * Parse a list of RFC-822 addresses from a header
+ * Parse a list of RFC 822 addresses from a header
  */
 static void message_parse_address(const char *hdr, struct address **addrp)
 {
@@ -996,17 +1105,33 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
     *hdrp = message_ucase(xstrndup(hdr, len));
 }
 
+EXPORTED void message_parse_charset_params(const struct param *params,
+                                           charset_t *c_ptr)
+{
+    const struct param *param;
+    for (param = params; param; param = param->next) {
+        if (!strcasecmp(param->attribute, "charset")) {
+            if (param->value && *param->value) {
+                charset_t cs = charset_lookupname(param->value);
+                if (cs == CHARSET_UNKNOWN_CHARSET) {
+                    xsyslog(LOG_NOTICE, "unknown charset", "charset=<%s>", param->value);
+                    continue;
+                }
+                charset_free(c_ptr);
+                *c_ptr = cs;
+            }
+        }
+    }
+}
+
 /*
  * parse a charset and encoding out of a body structure
  */
 static void message_parse_charset(const struct body *body,
                                   int *e_ptr, charset_t *c_ptr)
 {
-
     int encoding = ENCODING_NONE;
-    charset_t charset = charset_lookupname("US-ASCII");
-    struct param *param;
-
+    charset_t charset = charset_lookupname("us-ascii");
 
     if (body->encoding) {
         switch (body->encoding[0]) {
@@ -1040,24 +1165,14 @@ static void message_parse_charset(const struct body *body,
     }
 
     if (!body->type || !strcmp(body->type, "TEXT")) {
-        for (param = body->params; param; param = param->next) {
-            if (!strcasecmp(param->attribute, "charset")) {
-                if (param->value && *param->value) {
-                    charset_free(&charset);
-                    charset = charset_lookupname(param->value);
-                    if (charset == CHARSET_UNKNOWN_CHARSET)
-                        syslog(LOG_NOTICE, "message_parse_charset: unknown charset %s for text/%s", param->value, body->subtype);
-                }
-                break;
-            }
-        }
+        message_parse_charset_params(body->params, &charset);
     }
     else if (!strcmp(body->type, "MESSAGE")) {
-        if (!strcmp(body->subtype, "RFC822")) {
+        if (!strcmp(body->subtype, "RFC822") ||
+            !strcmp(body->subtype, "GLOBAL")) {
             charset_free(&charset);
             charset = CHARSET_UNKNOWN_CHARSET;
         }
-        encoding = ENCODING_NONE;
     }
     else {
         charset_free(&charset);
@@ -1205,7 +1320,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
         message_parse_params(hdr+1, paramp);
         message_fold_params(paramp);
         if (decbuf && paramp && *paramp) {
-            /* The type header was erroneously encoded as a RFC2407 encoded word
+            /* The type header was erroneously encoded as a RFC 2407 encoded word
              * (rather than encoding its attributes), and the parameter values
              * might now contain non-ASCII characters. Let's reencode them. */
             struct param *param = *paramp;
@@ -1371,7 +1486,11 @@ static void message_parse_params(const char *hdr, struct param **paramp)
                     }
                     else break;
                 }
-                if (*hdr < ' ' && *hdr != '\t') {
+                if (*hdr & 0x80) {
+                    /* Allow unencoded non-ASCII characters */
+                    /* XXX  We should probably make sure this is valid UTF-8 */
+                }
+                else if (*hdr < ' ' && *hdr != '\t') {
                     /* Reject control characters */
                     goto skip;
                 }
@@ -1400,7 +1519,7 @@ skip:
         /* Save attribute/value pair */
         *paramp = param = (struct param *)xzmalloc(sizeof(struct param));
         param->attribute = message_ucase(xstrndup(attribute, attributelen));
-        param->value = xmalloc(valuelen + 1);
+        param->value = xzmalloc(valuelen + 1);  /* xzmalloc for trailing NUL */
         if (*value == '\"') {
             p = param->value;
             value++;
@@ -1412,7 +1531,7 @@ skip:
             *p = '\0';
         }
         else {
-            strlcpy(param->value, value, valuelen + 1);
+            memcpy(param->value, value, valuelen);
         }
 
         /* Get ready to parse the next parameter */
@@ -1421,7 +1540,7 @@ skip:
 }
 
 /*
- * Decode RFC-2231 parameter continuations
+ * Decode RFC 2231 parameter continuations
  *
  * Algorithm: Run down the list of parameters looking for
  * an attribute of the form "foo*0" or "foo*0*".  When we find
@@ -1628,7 +1747,7 @@ static void message_parse_language(const char *hdr, struct param **paramp)
 }
 
 /*
- * Skip over RFC-822 whitespace and comments
+ * Skip over RFC 822 whitespace and comments
  */
 static void message_parse_rfc822space(const char **s)
 {
@@ -1686,7 +1805,7 @@ static void message_parse_rfc822space(const char **s)
  * Parse the content of a MIME multipart body-part
  */
 static void message_parse_multipart(struct msg *msg, struct body *body,
-                                    strarray_t *boundaries)
+                                    strarray_t *boundaries, const char *efname)
 {
     struct body preamble, epilogue;
     struct param *boundary;
@@ -1702,22 +1821,30 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     /* Find boundary id */
     boundary = body->params;
-    while(boundary && strcmp(boundary->attribute, "BOUNDARY") != 0) {
+    while (boundary &&
+           strcmp(boundary->attribute, "BOUNDARY") != 0 &&
+           strcmp(boundary->attribute, "BOUNDARY*") != 0) {
         boundary = boundary->next;
     }
 
     if (!boundary) {
         /* Invalid MIME--treat as zero-part multipart */
-        message_parse_content(msg, body, boundaries);
+        message_parse_content(msg, body, boundaries, efname);
         return;
     }
 
     /* Add the new boundary id */
-    strarray_append(boundaries, boundary->value);
+    char *id = NULL;
+    if (boundary->attribute[8] == '*') {
+        /* Decode boundary id */
+        id = charset_parse_mimexvalue(boundary->value, NULL);
+    }
+    if (!id) id = xstrdup(boundary->value);
+    strarray_appendm(boundaries, id);
     depth = boundaries->count;
 
     /* Parse preamble */
-    message_parse_content(msg, &preamble, boundaries);
+    message_parse_content(msg, &preamble, boundaries, efname);
 
     /* Parse the component body-parts */
     while (boundaries->count == depth &&
@@ -1725,7 +1852,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
         body->subpart = (struct body *)xrealloc((char *)body->subpart,
                                  (body->numparts+1)*sizeof(struct body));
         message_parse_body(msg, &body->subpart[body->numparts],
-                           defaultContentType, boundaries);
+                           defaultContentType, boundaries, efname);
         if (msg->offset == msg->len &&
             body->subpart[body->numparts].boundary_size == 0) {
             /* hit the end of the message, therefore end all pending
@@ -1737,7 +1864,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     if (boundaries->count == depth-1) {
         /* Parse epilogue */
-        message_parse_content(msg, &epilogue, boundaries);
+        message_parse_content(msg, &epilogue, boundaries, efname);
     }
     else if (body->numparts) {
         /*
@@ -1786,7 +1913,14 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     /* check if we've hit a limit and flag it */
     if (limit && depth == limit) {
-        syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, not parsing anymore", limit);
+        if (efname)
+            syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, "
+                            "not parsing anymore (%s)",
+                   limit, efname);
+        else
+            syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, "
+                            "not parsing anymore",
+                   limit);
     }
 }
 
@@ -1794,7 +1928,8 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
  * Parse the content of a generic body-part
  */
 static void message_parse_content(struct msg *msg, struct body *body,
-                                  strarray_t *boundaries)
+                                  strarray_t *boundaries,
+                                  const char *efname __attribute__((unused)))
 {
     const char *line, *endline;
     unsigned long s_offset = msg->offset;
@@ -1825,7 +1960,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
                 body->content_lines--;
                 body->boundary_lines++;
             }
-            if (body->content_size) {
+            if (body->content_size > 1) {
                 body->content_size -= 2;
                 body->boundary_size += 2;
             }
@@ -1847,7 +1982,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
         int b64_lines, delta;
 
         /* Determine encoded size */
-        charset_encode_mimebody(NULL, body->content_size, NULL,
+        charset_b64encode_mimebody(NULL, body->content_size, NULL,
                                 &b64_size, NULL, 1 /* wrap */);
 
         delta = b64_size - body->content_size;
@@ -1860,7 +1995,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
                 msg->len - s_offset);
 
         /* Encode content into buffer at current position */
-        charset_encode_mimebody(msg->base + s_offset + delta,
+        charset_b64encode_mimebody(msg->base + s_offset + delta,
                                 body->content_size,
                                 (char*) msg->base + s_offset,
                                 NULL, &b64_lines, 1 /* wrap */);
@@ -1879,7 +2014,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
     body_add_content_guid(msg->base + s_offset, body);
 }
 
-static void message_parse_received_date(const char *hdr, char **hdrp)
+EXPORTED void message_parse_received_date(const char *hdr, char **hdrp)
 {
   char *curp, *hdrbuf = 0;
 
@@ -1905,6 +2040,13 @@ static void message_parse_received_date(const char *hdr, char **hdrp)
   if (curp == hdrbuf) {
     *hdrp = hdrbuf;
     return;
+  }
+
+  /* No date string after ; - treat as non-existent */
+  if (curp[1] == '\0') {
+      free(hdrbuf);
+      *hdrp = xzmalloc(1);
+      return;
   }
 
   /* Found it, copy out date string part */
@@ -1997,8 +2139,7 @@ EXPORTED int message_write_cache(struct index_record *record, const struct body 
 
     /* initialise data structures */
     buf_reset(&cacheitem_buffer);
-    for (i = 0; i < NUM_CACHE_FIELDS; i++)
-        buf_init(&ib[i]);
+    memset(ib, 0, sizeof(ib));
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
@@ -2193,8 +2334,7 @@ EXPORTED void message_write_body(struct buf *buf, const struct body *body,
         buf_putc(buf, ' ');
         buf_printf(buf, "%u", body->content_lines);
     }
-    else if (strcmp(body->type, "MESSAGE") == 0
-             && strcmp(body->subtype, "RFC822") == 0) {
+    else if (body_is_rfc822(body)) {
         /* Message/rfc822 gets a body_msg */
         buf_putc(buf, ' ');
         message_write_envelope(buf, body->subpart);
@@ -2383,8 +2523,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
 {
     int part;
 
-    if (strcmp(body->type, "MESSAGE") == 0
-        && strcmp(body->subtype, "RFC822") == 0) {
+    if (body_is_rfc822(body)) {
         if (body->subpart->numparts) {
             /*
              * Part 0 of a message/rfc822 is the message header/text.
@@ -2497,7 +2636,7 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     if (charset != CHARSET_UNKNOWN_CHARSET) {
         size_t itemsize;
 
-        name = charset_name(charset);
+        name = charset_alias_name(charset);
         len = strlen(name);
 
         /* charset name length is a multiple of cache item size,
@@ -2542,7 +2681,7 @@ static void message_write_searchaddr(struct buf *buf,
 
     while (addrlist) {
 
-        /* Handle RFC-822 group addresses */
+        /* Handle RFC 822 group addresses */
         if (!addrlist->domain) {
             if (addrlist->mailbox) {
                 if (prevaddr) buf_putc(buf, ',');
@@ -2566,7 +2705,34 @@ static void message_write_searchaddr(struct buf *buf,
 
             if (addrlist->name) {
                 tmp = charset_parse_mimeheader(addrlist->name, charset_flags);
-                buf_appendcstr(buf, tmp);
+                /* Determine if name is an atext or quoted-string */
+                static const char atext_specials[] = "!#$%&'*+-/=?^_`{|}~";
+                const char *c;
+                for (c = tmp; *c; c++) {
+                    // see RFC 5322, section 3.2.3
+                    if (!isalpha(*c) && !isdigit(*c) && !isspace(*c) &&
+                            !strchr(atext_specials, *c)) {
+                        break;
+                    }
+                }
+                int need_quote = *c;
+                /* Write name */
+                if (need_quote) {
+                    struct buf qtext = BUF_INITIALIZER;
+                    buf_ensure(&qtext, strlen(tmp) + 2);
+                    buf_putc(&qtext, '"');
+                    for (c = tmp; *c; c++) {
+                        if (*c == '\\' || *c == '"')
+                            buf_putc(&qtext, '\\');
+                        buf_putc(&qtext, *c);
+                    }
+                    buf_putc(&qtext, '"');
+                    buf_append(buf, &qtext);
+                    buf_free(&qtext);
+                }
+                else {
+                    buf_appendcstr(buf, tmp);
+                }
                 free(tmp); tmp = NULL;
                 buf_putc(buf, ' ');
             }
@@ -2641,6 +2807,7 @@ EXPORTED void message_free_body(struct body *body)
     if (body->x_me_message_id) free(body->x_me_message_id);
     if (body->references) free(body->references);
     if (body->received_date) free(body->received_date);
+    if (body->x_deliveredinternaldate) free(body->x_deliveredinternaldate);
     if (body->charset_id) free(body->charset_id);
     if (body->part_id) free(body->part_id);
 
@@ -2886,12 +3053,11 @@ static int message_read_address(struct protstream *strm, struct address **addrp)
     if ((c = prot_getc(strm)) == '(') {
         /* parse list */
         struct address *addr;
-        struct buf buf;
         unsigned nameoff = 0, rtoff = 0, mboxoff = 0, domoff = 0;
 
         do {
+            struct buf buf = BUF_INITIALIZER;
             *addrp = addr = (struct address *) xzmalloc(sizeof(struct address));
-            buf_init(&buf);
 
             /* opening '(' */
             c = prot_getc(strm);
@@ -2910,13 +3076,15 @@ static int message_read_address(struct protstream *strm, struct address **addrp)
 
             /* addr parts must now point into our freeme string */
             if (buf.len) {
-                char *freeme = addr->freeme = buf.s;
+                char *freeme = addr->freeme = buf_release(&buf);
 
                 if (addr->name) addr->name = freeme+nameoff;
                 if (addr->route) addr->route = freeme+rtoff;
                 if (addr->mailbox) addr->mailbox = freeme+mboxoff;
                 if (addr->domain) addr->domain = freeme+domoff;
             }
+
+            buf_free(&buf);
 
             /* get ready to append the next address */
             addrp = &addr->next;
@@ -2994,14 +3162,13 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
     if (c == EOF) goto done;
 
     /* check for multipart */
-    if ((c = prot_peek(strm)) == '(') {
+    if (prot_peek(strm) == '(') {
 
         body->type = xstrdup("MULTIPART");
         do {
-            body->subpart =
-                (struct body *)xrealloc((char *)body->subpart,
-                                        (body->numparts+1)*sizeof(struct body));
-            memset(&body->subpart[body->numparts], 0, sizeof(struct body));
+            body->subpart = xzrealloc(body->subpart,
+                                      body->numparts * sizeof(struct body),
+                                      (body->numparts + 1) * sizeof(struct body));
             buf_reset(&buf);
             if (part_id) buf_printf(&buf, "%s.", part_id);
             buf_printf(&buf, "%d", body->numparts + 1);
@@ -3063,12 +3230,10 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
 
         if (!strcmp(body->type, "TEXT")) {
             /* body lines */
-            c = getint32(strm, (int32_t *) &body->content_lines);
+            c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
-        else if (!strcmp(body->type, "MESSAGE") &&
-                 !strcmp(body->subtype, "RFC822")) {
-
+        else if (body_is_rfc822(body)) {
             body->subpart = (struct body *) xzmalloc(sizeof(struct body));
 
             /* envelope structure */
@@ -3082,7 +3247,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             if (c == EOF) goto done;
 
             /* body lines */
-            c = getint32(strm, (int32_t *) &body->content_lines);
+            c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
 
@@ -3155,8 +3320,20 @@ static void message_read_binarybody(struct body *body, const char **sect,
     p = *sect += CACHE_ITEM_SIZE_SKIP;
     if (!n) return;
 
-    if (!strcmp(body->type, "MESSAGE") && !strcmp(body->subtype, "RFC822") &&
-        body->subpart->numparts) {
+    if (body_is_rfc822(body) && body->encoding) {
+        // Handle encoded messages.
+        if (!body->charset_enc) {
+            body->charset_enc = encoding_lookupname(body->encoding);
+        }
+        if (cache_version < 13 && body->charset_enc) {
+            // Cache versions < 13 stored the undecoded content size
+            // as decoded content size. Reset to zero and let caller
+            // handle it.
+            body->decoded_content_size = 0;
+        }
+    }
+
+    if (body_is_rfc822(body) && body->subpart->numparts) {
         subpart = body->subpart->subpart;
         body = body->subpart;
     }
@@ -3283,7 +3460,6 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
     /* Read envelope response from cache */
     strm = prot_readmap(cacheitem_base(record, CACHE_ENVELOPE),
                         cacheitem_size(record, CACHE_ENVELOPE));
-    prot_setisclient(strm, 1);  /* no-sync literals */
 
     message_read_envelope(strm, *body);
     prot_free(strm);
@@ -3291,7 +3467,6 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
     /* Read bodystructure response from cache */
     strm = prot_readmap(cacheitem_base(record, CACHE_BODYSTRUCTURE),
                         cacheitem_size(record, CACHE_BODYSTRUCTURE));
-    prot_setisclient(strm, 1);  /* no-sync literals */
 
     message_read_body(strm, *body, NULL);
     prot_free(strm);
@@ -3358,8 +3533,8 @@ static conversation_id_t generate_conversation_id(
 }
 
 /*
- * In RFC2822, the In-Reply-To field is explicitly required to contain
- * only message-ids, whitespace and commas.  The old RFC822 was less
+ * In RFC 2822, the In-Reply-To field is explicitly required to contain
+ * only message-ids, whitespace and commas.  The old RFC 822 was less
  * well specified and allowed all sorts of stuff.  We used to be equally
  * liberal here in parsing the field.  Sadly some versions of the NMH
  * mailer will generate In-Reply-To containing email addresses which we
@@ -3384,38 +3559,150 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     int r = mailbox_open_iwl(mboxname, mailboxptr);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
-    /* create the mailbox */
-    char *userid = mboxname_to_userid(mboxname);
-    r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, userid, NULL,
-                               0, 0, 0, 0, mailboxptr);
-    free(userid);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+
+    // try again - maybe we lost the race!
+    r = mailbox_open_iwl(mboxname, mailboxptr);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* create the mailbox - it's OK to do as admin because this only ever gets
+         * a user subfolder for this conversations.db owner */
+        mbentry_t mbentry = MBENTRY_INITIALIZER;
+        mbentry.name = (char *) mboxname;
+        mbentry.mbtype = MBTYPE_COLLECTION;
+
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
+                                   0/*flags*/, mailboxptr);
+    }
+
+    mboxname_release(&namespacelock);
+
     return r;
 }
 
 /*
- * Update the conversations database for the given
- * mailbox, to account for the given message.
- * @body may be NULL, in which case we get everything
- * we need out of the cache item in @record.
+ * This is the legacy code version to generate conversation subjects.
+ * We keep it here to allow matching messages to conversations that
+ * already got that oldstyle subject set.
  */
-EXPORTED int message_update_conversations(struct conversations_state *state,
-                                          struct mailbox *mailbox,
-                                          struct index_record *record,
-                                          conversation_t **convp)
+/*
+ * Normalise a subject string, to a form which can be used for deciding
+ * whether a message belongs in the same conversation as it's antecedent
+ * messages.  What we're doing here is the same idea as the "base
+ * subject" algorithm described in RFC 5256 but slightly adapted from
+ * experience.  Differences are:
+ *
+ *  - We eliminate all whitespace; RFC 5256 normalises any sequence
+ *    of whitespace characters to a single SP.  We do this because
+ *    we have observed combinations of buggy client software both
+ *    add and remove whitespace around folding points.
+ *
+ *  - We include the Unicode U+00A0 (non-breaking space) codepoint in our
+ *    determination of whitespace (as the UTF-8 sequence \xC2\xA0) because
+ *    we have seen it in the wild, but do not currently generalise this to
+ *    other Unicode "whitespace" codepoints. (XXX)
+ *
+ *  - Because we eliminate whitespace entirely, and whitespace helps
+ *    delimit some of our other replacements, we do that whitespace
+ *    step last instead of first.
+ *
+ *  - We eliminate leading tokens like Re: and Fwd: using a simpler
+ *    and more generic rule than RFC 5256's; this rule catches a number
+ *    of semantically identical prefixes in other human languages, but
+ *    unfortunately also catches lots of other things.  We think we can
+ *    get away with this because the normalised subject is never directly
+ *    seen by human eyes, so some information loss is acceptable as long
+ *    as the subjects in different messages match correctly.
+ *
+ *  - We eliminate trailing tokens like [SEC=UNCLASSIFIED],
+ *    [DLM=Sensitive], etc which are automatically added by Australian
+ *    Government department email systems.  In theory there should be no
+ *    more than one of these on an email subject but in practice multiple
+ *    have been seen.
+ *    http://www.finance.gov.au/files/2012/04/EPMS2012.3.pdf
+ */
+static void oldstyle_normalise_subject(struct buf *s)
 {
-    char *hdrs[4];
+    static int initialised_res = 0;
+    static regex_t whitespace_re;
+    static regex_t relike_token_re;
+    static regex_t blob_start_re;
+    static regex_t blob_end_re;
+    int r;
+
+    if (!initialised_res) {
+        r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+(\\[[0-9]+\\])?:", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&blob_end_re, "\\[(SEC|DLM)=[^]]+\\][ \t]*$", REG_EXTENDED);
+        assert(r == 0);
+        initialised_res = 1;
+    }
+
+    /* step 1 is to decode any RFC 2047 MIME encoding of the header
+     * field, but we assume that has already happened */
+
+    /* step 2 is to eliminate all "Re:"-like tokens and [] blobs
+     * at the start, and AusGov [] blobs at the end */
+    while (buf_replace_one_re(s, &relike_token_re, NULL) ||
+           buf_replace_one_re(s, &blob_start_re, NULL) ||
+           buf_replace_one_re(s, &blob_end_re, NULL))
+        ;
+
+    /* step 3 is eliminating whitespace. */
+    buf_replace_all_re(s, &whitespace_re, NULL);
+}
+
+static void extract_convsubject(const struct index_record *record,
+                                struct buf *msubject,
+                                void (*normalise)(struct buf*))
+{
+    if (cacheitem_base(record, CACHE_HEADERS)) {
+        message1_get_subject(record, msubject);
+        normalise(msubject);
+    }
+}
+
+EXPORTED char *message_extract_convsubject(const struct index_record *record)
+{
+    if (cacheitem_base(record, CACHE_HEADERS)) {
+        struct buf msubject = BUF_INITIALIZER;
+        extract_convsubject(record, &msubject, conversation_normalise_subject);
+        return buf_release(&msubject);
+    }
+    return NULL;
+}
+
+static int extract_convdata(struct conversations_state *state,
+                            message_t *msg,
+                            strarray_t *msgidlist,
+                            arrayu64_t *matchlist,
+                            char **msubjp)
+{
+    char *hdrs[4] = {0};
     char *c_refs = NULL, *c_env = NULL, *c_me_msgid = NULL;
-    struct buf msubject = BUF_INITIALIZER;
-    strarray_t msgidlist = STRARRAY_INITIALIZER;
-    arrayu64_t matchlist = ARRAYU64_INITIALIZER;
+    char *c_inreplyto = NULL, *c_msgid = NULL;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
-    int mustkeep = 0;
     conversation_t *conv = NULL;
-    const char *msubj = NULL;
+    char *msubj = NULL;
+    char *msubj_oldstyle = NULL;
+    strarray_t want = STRARRAY_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
     int i;
-    int j;
+    size_t j;
     int r = 0;
-    struct mailbox *local_mailbox = NULL;
+
+    r = message_need(msg, M_RECORD|M_CACHE);
+    if (r) {
+        r = message_need(msg, M_MAP|M_FULLBODY);
+        if (r) {
+            /* nope, now we're screwed */
+            return IMAP_INTERNAL;
+        }
+    }
 
     /*
      * Gather all the msgids mentioned in the message, starting with
@@ -3426,61 +3713,110 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
      * msgid in In-Reply-To:), so we weed those out before proceeding
      * to the database.
      */
-    if (cacheitem_base(record, CACHE_HEADERS)) {
-        /* we have cache loaded, get what we need there */
-        strarray_t want = STRARRAY_INITIALIZER;
+
+    /* get References */
+    if (msg->have & M_CACHE) {
+        c_refs = xstrndup(cacheitem_base(&msg->record, CACHE_HEADERS),
+                          cacheitem_size(&msg->record, CACHE_HEADERS));
+    }
+    else {
+        message_get_field(msg, "rawheaders", MESSAGE_DECODED, &buf);
+        c_refs = buf_release(&buf);
+    }
+    strarray_append(&want, "references");
+    message_pruneheader(c_refs, &want, 0);
+    hdrs[0] = c_refs;
+
+    /* get In-Reply-To, Message-ID out of the envelope
+     *
+     * get a working copy; strip outer ()'s
+     * +1 -> skip the leading paren
+     * -2 -> don't include the size of the outer parens
+     */
+    if (msg->have & M_CACHE) {
         char *envtokens[NUMENVTOKENS];
-
-        /* get References from cached headers */
-        c_refs = xstrndup(cacheitem_base(record, CACHE_HEADERS),
-                          cacheitem_size(record, CACHE_HEADERS));
-        strarray_append(&want, "references");
-        message_pruneheader(c_refs, &want, 0);
-        hdrs[0] = c_refs;
-
-        /* get In-Reply-To, Message-ID out of the envelope
-         *
-         * get a working copy; strip outer ()'s
-         * +1 -> skip the leading paren
-         * -2 -> don't include the size of the outer parens
-         */
-        c_env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
-                         cacheitem_size(record, CACHE_ENVELOPE) - 2);
+        c_env = xstrndup(cacheitem_base(&msg->record, CACHE_ENVELOPE) + 1,
+                cacheitem_size(&msg->record, CACHE_ENVELOPE) - 2);
         parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
         hdrs[1] = envtokens[ENV_INREPLYTO];
         hdrs[2] = envtokens[ENV_MSGID];
-
-        /* get X-ME-Message-ID from cached headers */
-        c_me_msgid = xstrndup(cacheitem_base(record, CACHE_HEADERS),
-                              cacheitem_size(record, CACHE_HEADERS));
-        strarray_set(&want, 0, "x-me-message-id");
-        message_pruneheader(c_me_msgid, &want, 0);
-        hdrs[3] = c_me_msgid;
-
-        strarray_fini(&want);
-
-        message1_get_subject(record, &msubject);
-
-        /* work around stupid message_guid API */
-        message_guid_isnull(&record->guid);
     }
     else {
-        /* nope, now we're screwed */
-        return IMAP_INTERNAL;
+        message_get_field(msg, "rawheaders", MESSAGE_DECODED, &buf);
+        c_inreplyto = buf_release(&buf);
+        strarray_set(&want, 0, "in-reply-to");
+        message_pruneheader(c_inreplyto, &want, 0);
+        if (!strncasecmp(c_inreplyto, "in-reply-to:", 12)) {
+            buf_setcstr(&buf, c_inreplyto + 12);
+            buf_trim(&buf);
+            free(c_inreplyto);
+            c_inreplyto = xstrdup(buf_cstring(&buf));
+            hdrs[1] = c_inreplyto;
+        }
+
+        message_get_field(msg, "rawheaders", MESSAGE_DECODED, &buf);
+        c_msgid = buf_release(&buf);
+        strarray_set(&want, 0, "message-id");
+        message_pruneheader(c_msgid, &want, 0);
+        if (!strncasecmp(c_msgid, "message-id:", 11)) {
+            buf_setcstr(&buf, c_msgid + 11);
+            buf_trim(&buf);
+            free(c_msgid);
+            c_msgid = xstrdup(buf_cstring(&buf));
+            hdrs[2] = c_msgid;
+        }
     }
+
+    /* get X-ME-Message-ID */
+    if (msg->have & M_CACHE) {
+        c_me_msgid = xstrndup(cacheitem_base(&msg->record, CACHE_HEADERS),
+                              cacheitem_size(&msg->record, CACHE_HEADERS));
+    }
+    else {
+        message_get_field(msg, "rawheaders", MESSAGE_DECODED, &buf);
+        c_me_msgid = buf_release(&buf);
+    }
+    strarray_set(&want, 0, "x-me-message-id");
+    message_pruneheader(c_me_msgid, &want, 0);
+    hdrs[3] = c_me_msgid;
+
+    /* get Subject */
+    /* Note that a NULL subject, e.g. due to a missing Subject: header
+     * field in the original message, is normalised to "" not NULL */
+    if (msg->have & M_CACHE) {
+        struct buf msubject = BUF_INITIALIZER;
+        extract_convsubject(&msg->record, &msubject, conversation_normalise_subject);
+        msubj = xstrdup(buf_cstring(&msubject));
+        buf_reset(&msubject);
+        extract_convsubject(&msg->record, &msubject, oldstyle_normalise_subject);
+        msubj_oldstyle = buf_release(&msubject);
+    }
+    else {
+        message_get_field(msg, "subject", MESSAGE_SNIPPET, &buf);
+        buf_trim(&buf);
+        if (buf_len(&buf)) {
+            struct buf tmp = BUF_INITIALIZER;
+            buf_copy(&tmp, &buf);
+            conversation_normalise_subject(&tmp);
+            msubj = buf_release(&tmp);
+
+            buf_copy(&tmp, &buf);
+            oldstyle_normalise_subject(&tmp);
+            msubj_oldstyle = buf_release(&tmp);
+        }
+    }
+    *msubjp = msubj;
+
+    /* work around stupid message_guid API */
+    message_guid_isnull(&msg->record.guid);
 
     if (!is_valid_rfc2822_inreplyto(hdrs[1]))
         hdrs[1] = NULL;
 
-    /* Note that a NULL subject, e.g. due to a missing Subject: header
-     * field in the original message, is normalised to "" not NULL */
-    conversation_normalise_subject(&msubject);
-    msubj = buf_cstring(&msubject);
-
     for (i = 0 ; i < 4 ; i++) {
         int hcount = 0;
         char *msgid = NULL;
-        while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
+        while ((msgid = message_iter_msgid(hdrs[i], &hdrs[i])) != NULL) {
             hcount++;
             if (hcount > 20) {
                 free(msgid);
@@ -3489,7 +3825,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             }
             /*
              * The issue of case sensitivity of msgids is curious.
-             * RFC2822 seems to imply they're case-insensitive,
+             * RFC 2822 seems to imply they're case-insensitive,
              * without explicitly stating so.  So here we punt
              * on that being the case.
              *
@@ -3499,7 +3835,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             msgid = lcase(msgid);
 
             /* already seen this one? */
-            if (strarray_find(&msgidlist, msgid, 0) >= 0) {
+            if (strarray_contains(msgidlist, msgid)) {
                 free(msgid);
                 continue;
             }
@@ -3510,7 +3846,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                 continue;
             }
 
-            strarray_appendm(&msgidlist, msgid);
+            strarray_appendm(msgidlist, msgid);
 
             /* Lookup the conversations database to work out which
              * conversation ids that message belongs to. */
@@ -3525,8 +3861,11 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                 if (r) goto out;
                 /* [IRIS-1576] if X-ME-Message-ID says the messages are
                 * linked, ignore any difference in Subject: header fields. */
-                if (!conv || i == 3 || !strcmpsafe(conv->subject, msubj))
-                    arrayu64_add(&matchlist, cid);
+                if (!conv || i == 3 || !conv->subject ||
+                        !strcmpsafe(conv->subject, msubj) ||
+                        !strcmpsafe(conv->subject, msubj_oldstyle)) {
+                    arrayu64_add(matchlist, cid);
+                }
             }
 
             conversation_free(conv);
@@ -3534,12 +3873,53 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         }
     }
 
+out:
+    strarray_fini(&want);
+    buf_free(&buf);
+    arrayu64_fini(&cids);
+    free(c_refs);
+    free(c_env);
+    free(c_inreplyto);
+    free(c_msgid);
+    free(c_me_msgid);
+    free(msubj_oldstyle);
+
+    return r;
+}
+
+/*
+ * Update the conversations database for the given
+ * mailbox, to account for the given message.
+ * @body may be NULL, in which case we get everything
+ * we need out of the cache item in @record.
+ */
+EXPORTED int message_update_conversations(struct conversations_state *state,
+                                          struct mailbox *mailbox,
+                                          struct index_record *record,
+                                          conversation_t **convp)
+{
+    strarray_t msgidlist = STRARRAY_INITIALIZER;
+    arrayu64_t matchlist = ARRAYU64_INITIALIZER;
+    int mustkeep = 0;
+    conversation_t *conv = NULL;
+    char *msubj = NULL;
+    int i;
+    int r = 0;
+    struct mailbox *local_mailbox = NULL;
+    message_t *msg = message_new_from_record(mailbox, record);
+
+    /* extract existing conversations for this message */
+    r = extract_convdata(state, msg, &msgidlist, &matchlist, &msubj);
+    if (r) goto out;
+
+    /* work around stupid message_guid API */
+    message_guid_isnull(&record->guid);
+
     /* calculate the CID if needed */
-    if (!record->silent) {
+    if (!record->silentupdate) {
         /* match for GUID, it always has the same CID */
-        if (!record->cid) {
-            record->cid = conversations_guid_cid_lookup(state, message_guid_encode(&record->guid));
-            if (record->cid) mustkeep = 1;
+        if (conversations_guid_cid_lookup(state, message_guid_encode(&record->guid), record)) {
+            mustkeep = 1;
         }
         if (!record->cid) record->cid = arrayu64_max(&matchlist);
         if (!record->cid) {
@@ -3577,13 +3957,13 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     if (!conv) conv = conversation_new();
 
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
-    if (conv->exists >= max_thread && !mustkeep && !record->silent) {
+    if (conv->exists >= max_thread && !mustkeep && !record->silentupdate) {
         /* time to reset the conversation */
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
 
         syslog(LOG_NOTICE, "splitting conversation for %s %u base:%016llx was:%016llx now:%016llx",
-               mailbox->name, record->uid, record->basecid, was, record->cid);
+               mailbox_name(mailbox), record->uid, record->basecid, was, record->cid);
 
         if (!record->basecid) record->basecid = was;
 
@@ -3593,7 +3973,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (!conv) conv = conversation_new();
 
         /* and update the pointer for next time */
-        if (strcmpsafe(state->annotmboxname, mailbox->name)) {
+        if (strcmpsafe(state->annotmboxname, mailbox_name(mailbox))) {
             r = getconvmailbox(state->annotmboxname, &local_mailbox);
             if (r) goto out;
             mailbox = local_mailbox;
@@ -3613,8 +3993,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (r) goto out;
     }
 
-    /* Create the subject header if not already set */
-    if (!conv->subject)
+    /* Create the subject header if not already set and this isn't a Draft */
+    if (!conv->subject && !(record->system_flags & FLAG_DRAFT))
         conv->subject = xstrdupnull(msubj);
 
     /*
@@ -3633,13 +4013,10 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
 
 out:
+    message_unref(&msg);
     strarray_fini(&msgidlist);
     arrayu64_fini(&matchlist);
-    arrayu64_fini(&cids);
-    free(c_refs);
-    free(c_env);
-    free(c_me_msgid);
-    buf_free(&msubject);
+    free(msubj);
     if (local_mailbox)
         mailbox_close(&local_mailbox);
 
@@ -3648,8 +4025,7 @@ out:
     else if (convp)
         *convp = conv;
     else {
-        // no emailcounts needed here, because we haven't changec counts for any messages
-        r = conversation_save(state, record->cid, conv, NULL);
+        r = conversation_save(state, record->cid, conv);
         conversation_free(conv);
     }
 
@@ -3891,7 +4267,7 @@ static int message_need(const message_t *cm, unsigned int need)
         r = message_need(m, M_MAP);
         if (r) return r;
         m->body = (struct body *)xzmalloc(sizeof(struct body));
-        r = message_parse_mapped(m->map.s, m->map.len, m->body);
+        r = message_parse_mapped(m->map.s, m->map.len, m->body, NULL);
         if (r) return r;
         found(M_CACHEBODY|M_FULLBODY);
     }
@@ -4135,8 +4511,7 @@ badformat:
             body->content_lines = atoi(buf_cstring(&buf));
         }
 
-        else if (!strcmpsafe(body->type, "MESSAGE") &&
-                 !strcmpsafe(body->subtype, "RFC822")) {
+        else if (body_is_rfc822(body)) {
             body->numparts = 1;
             body->subpart = xzmalloc(sizeof(struct body));
 
@@ -4209,8 +4584,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
         goto done;
     }
 
-    if (strcmp(body->type, "MESSAGE") == 0
-        && strcmp(body->subtype, "RFC822") == 0) {
+    if (body_is_rfc822(body)) {
 
         if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 
@@ -4444,14 +4818,16 @@ static int message_parse_cbodystructure(message_t *m)
                         cacheitem_size(&m->record, CACHE_BODYSTRUCTURE));
     if (!prot)
         return IMAP_MAILBOX_BADFORMAT;
-    prot_setisclient(prot, 1);  /* don't crash parsing literals */
 
     m->body = xzmalloc(sizeof(struct body));
     r = parse_bodystructure_part(prot, m->body, NULL);
-    if (r) syslog(LOG_ERR, "IOERROR: parsing body structure for %s %u (%.*s)",
-                  m->mailbox->name, m->record.uid,
-                  (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
-                  cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+    if (r) {
+        xsyslog(LOG_ERR, "IOERROR: error parsing body structure",
+                         "mailbox=<%s> record_uid=<%u>, cacheitem=<%.*s>",
+                         mailbox_name(m->mailbox), m->record.uid,
+                         (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
+                         cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+    }
     if (r) goto done;
 
     memset(&toplevel, 0, sizeof(struct body));
@@ -4459,11 +4835,15 @@ static int message_parse_cbodystructure(message_t *m)
     toplevel.subtype = "RFC822";
     toplevel.subpart = m->body;
 
-    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel, m->record.cache_version, NULL);
-    if (r) syslog(LOG_ERR, "IOERROR: parsing section structure for %s %u (%.*s)",
-                  m->mailbox->name, m->record.uid,
-                  (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
-                  cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel,
+                                     m->record.cache_version, NULL);
+    if (r) {
+        xsyslog(LOG_ERR, "IOERROR: error parsing section structure",
+                         "mailbox=<%s> record_uid=<%u> cacheitem=<%.*s>",
+                         mailbox_name(m->mailbox), m->record.uid,
+                         (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
+                         cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+    }
 
 done:
     prot_free(prot);
@@ -4482,7 +4862,9 @@ static int message_map_file(message_t *m, const char *fname)
     if (fd == -1) return errno;
 
     if (fstat(fd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>",
+                         fname);
         fatal("can't fstat message file", EX_OSFILE);
     }
     if (!S_ISREG(sbuf.st_mode)) {
@@ -4490,8 +4872,8 @@ static int message_map_file(message_t *m, const char *fname)
         return EINVAL;
     }
     buf_free(&m->map);
-    buf_init_mmap(&m->map, /*onceonly*/1, fd, fname, sbuf.st_size,
-                  m->mailbox ? m->mailbox->name : NULL);
+    buf_refresh_mmap(&m->map, /*onceonly*/1, fd, fname, sbuf.st_size,
+                  m->mailbox ? mailbox_name(m->mailbox) : NULL);
     close(fd);
 
     return 0;
@@ -4499,18 +4881,19 @@ static int message_map_file(message_t *m, const char *fname)
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
-static void body_get_leaf_types(struct body *body, strarray_t *types)
+static void body_get_types(struct body *body, strarray_t *types, int leafs_only)
 {
     int i;
 
-    if (strcmpsafe(body->type, "MULTIPART") &&
-        strcmpsafe(body->type, "MESSAGE")) {
+    if (!leafs_only ||
+            (strcmpsafe(body->type, "MULTIPART") &&
+             strcmpsafe(body->type, "MESSAGE"))) {
         strarray_append(types, body->type);
         strarray_append(types, body->subtype);
     }
 
     for (i = 0; i < body->numparts; i++) {
-        body_get_leaf_types(&body->subpart[i], types);
+        body_get_types(&body->subpart[i], types, leafs_only);
     }
 }
 
@@ -4545,7 +4928,7 @@ static int body_foreach_section(struct body *body, struct message *message,
             msg.len = body->header_size;
             msg.offset = 0;
             msg.encode = 0;
-            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries);
+            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries, NULL);
 
             disposition = tmpbody->disposition;
             disposition_params = tmpbody->disposition_params;
@@ -4629,7 +5012,15 @@ EXPORTED int message_get_leaf_types(message_t *m, strarray_t *types)
 {
     int r = message_need(m, M_CACHEBODY);
     if (r) return r;
-    body_get_leaf_types(m->body, types);
+    body_get_types(m->body, types, 1);
+    return 0;
+}
+
+EXPORTED int message_get_types(message_t *m, strarray_t *types)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    body_get_types(m->body, types, 0);
     return 0;
 }
 
@@ -4638,6 +5029,25 @@ EXPORTED int message_get_leaf_types(message_t *m, strarray_t *types)
 EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
 {
     return message_get_field(m, "bcc", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_deliveredto(message_t *m, struct buf *buf)
+{
+    int r = message_get_field(m, "X-Original-Delivered-To", MESSAGE_RAW, buf);
+    if (!r && buf_len(buf) == 0) {
+        r = message_get_field(m, "X-Delivered-To", MESSAGE_RAW, buf);
+    }
+    return r;
+}
+
+EXPORTED int message_get_inreplyto(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "in-reply-to", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_references(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "references", MESSAGE_RAW, buf);
 }
 
 EXPORTED int message_get_cc(message_t *m, struct buf *buf)
@@ -4675,10 +5085,34 @@ EXPORTED int message_get_mailinglist(message_t *m, struct buf *buf)
     return message_get_field(m, "mailing-list", MESSAGE_RAW, buf);
 }
 
+EXPORTED int message_get_priority(message_t *m, struct buf *buf)
+{
+    /* Only returns priority value "1" or none. */
+    int r = message_get_field(m, "X-Priority", MESSAGE_RAW, buf);
+    buf_trim(buf);
+    if (!r && !strcmp(buf_cstring(buf), "1")) {
+        return 0;
+    }
+    r = message_get_field(m, "Importance", MESSAGE_RAW, buf);
+    buf_trim(buf);
+    if (!r && !strcmp(buf_cstring(buf), "high")) {
+        buf_setcstr(buf, "1");
+        return 0;
+    }
+    buf_reset(buf);
+    return r;
+}
+
 EXPORTED const struct index_record *msg_record(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return &m->record;
+}
+
+EXPORTED struct mailbox *msg_mailbox(const message_t *m)
+{
+    assert(!message_need(m, M_MAILBOX));
+    return m->mailbox;
 }
 
 EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
@@ -4697,7 +5131,7 @@ EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
 
 EXPORTED uint32_t msg_size(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.size;
 }
 
@@ -4711,7 +5145,7 @@ EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
 
 EXPORTED uint32_t msg_uid(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.uid;
 }
 
@@ -4725,7 +5159,7 @@ EXPORTED int message_get_cid(message_t *m, conversation_id_t *cidp)
 
 EXPORTED conversation_id_t msg_cid(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.cid;
 }
 
@@ -4739,7 +5173,7 @@ EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
 
 EXPORTED modseq_t msg_modseq(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return m->record.modseq;
 }
 
@@ -4751,9 +5185,9 @@ EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
     return 0;
 }
 
-EXPORTED int msg_msgno(const message_t *m)
+EXPORTED uint32_t msg_msgno(const message_t *m)
 {
-    assert(!message_need(m, M_INDEX))
+    assert(!message_need(m, M_INDEX));
     return m->msgno;
 }
 
@@ -4775,7 +5209,7 @@ EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
 
 EXPORTED const struct message_guid *msg_guid(const message_t *m)
 {
-    assert(!message_need(m, M_RECORD))
+    assert(!message_need(m, M_RECORD));
     return &m->record.guid;
 }
 
@@ -4869,7 +5303,7 @@ static void extract_one(struct buf *buf,
                         const char *name,
                         int flags,
                         int has_name,
-                        int isutf8,
+                        int isutf8, // <0: maybe, 0: no, >1: yes
                         struct buf *raw)
 {
     char *p = NULL;
@@ -4900,6 +5334,16 @@ static void extract_one(struct buf *buf,
         /* insert a fieldname and colon */
         buf_insertcstr(raw, 0, ":");
         buf_insertcstr(raw, 0, name);
+    }
+
+    if (isutf8 < 0) {
+        struct char_counts utf8counts =
+            charset_count_validutf8(buf_base(raw), buf_len(raw));
+
+        // do not decode MIME header if its raw value is a valid
+        // UTF8 string and contains multi-byte characters
+        isutf8 = utf8counts.total && !utf8counts.invalid &&
+            utf8counts.bytelen[1] != utf8counts.total;
     }
 
     switch (flags & _MESSAGE_FORMAT_MASK) {
@@ -4966,7 +5410,27 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     strarray_t want = STRARRAY_INITIALIZER;
     struct buf raw = BUF_INITIALIZER;
     int hasname = 1;
-    int isutf8 = 0;
+    int isutf8 = -1; // maybe
+
+    if (!strcasecmp(hdr, "rawheaders")) {
+        int r = message_need(m, M_MAP);
+        if (r) return r;
+        size_t header_size = 0;
+        r = message_need(m, M_RECORD);
+        if (!r) {
+            header_size = m->record.header_size;
+        }
+        else if (r == IMAP_NOTFOUND) {
+            r = message_need(m, M_FULLBODY);
+            if (!r) {
+                header_size = m->body->header_size;
+            }
+        }
+        if (!r) {
+            buf_setmap(buf, m->map.s, header_size);
+        }
+        return r;
+    }
 
     if (!strcasecmp(hdr, "rawbody")) {
         int r = message_need(m, M_MAP|M_RECORD);
@@ -5181,4 +5645,143 @@ EXPORTED int message_get_cachebody(message_t *m, const struct body **bodyp)
     if (r) return r;
     *bodyp = m->body;
     return 0;
+}
+
+EXPORTED int message_get_body(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "rawbody", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_get_headers(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "rawheaders", MESSAGE_RAW, buf);
+}
+
+EXPORTED int message_extract_cids(message_t *msg,
+                                  struct conversations_state *cstate,
+                                  arrayu64_t *cids)
+{
+    strarray_t msgidlist = STRARRAY_INITIALIZER;
+    char *msubj = NULL;
+    int r = extract_convdata(cstate, msg, &msgidlist, cids, &msubj);
+    strarray_fini(&msgidlist);
+    free(msubj);
+
+    struct buf annotkey = BUF_INITIALIZER;
+    struct buf annotval = BUF_INITIALIZER;
+    size_t i;
+
+    for (i = 0; i < arrayu64_size(cids); i++) {
+        conversation_id_t newcid = 0;
+        buf_reset(&annotkey);
+        buf_reset(&annotval);
+        buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, (conversation_id_t) arrayu64_nth(cids, i));
+        annotatemore_lookup(cstate->annotmboxname, buf_cstring(&annotkey), "", &annotval);
+        if (buf_len(&annotval) == 16) {
+            const char *p = buf_cstring(&annotval);
+            /* we have a new canonical CID */
+            parsehex(p, &p, 16, &newcid);
+        }
+        if (newcid) arrayu64_set(cids, i, newcid);
+    }
+
+    buf_free(&annotkey);
+    buf_free(&annotval);
+
+    return r;
+}
+
+#define MSGID_SPECIALS "<> @\\"
+
+EXPORTED char *message_iter_msgid(char *str, char **rem)
+{
+    /*
+     * This is a poor-man's way of finding the message-id.  We simply look for
+     * any string having the format "< ... @ ... >" and assume that the mail
+     * client created a properly formatted message-id.
+     */
+    char *msgid, *src, *dst, *cp;
+
+    if (!str) return NULL;
+
+    msgid = NULL;
+    src = str;
+
+    /* find the start of a msgid (don't go past the end of the header) */
+    while ((cp = src = strpbrk(src, "<\r")) != NULL) {
+
+        /* check for fold or end of header
+         *
+         * Per RFC 2822 section 2.2.3, a long header may be folded by
+         * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
+         * Any other CRLF is the end of the header.
+         */
+        if (*cp++ == '\r') {
+            if (*cp++ == '\n' && !(*cp == ' ' || *cp == '\t')) {
+                /* end of header, we're done */
+                break;
+            }
+
+            /* skip fold (or junk) */
+            src++;
+            continue;
+        }
+
+        /* see if we have (and skip) a quoted localpart */
+        if (*cp == '\"') {
+            /* find the endquote, making sure it isn't escaped */
+            do {
+                ++cp; cp = strchr(cp, '\"');
+            } while (cp && *(cp-1) == '\\');
+
+            /* no endquote, so bail */
+            if (!cp) {
+                src++;
+                continue;
+            }
+        }
+
+        /* find the end of the msgid */
+        if ((cp = strchr(cp, '>')) == NULL)
+            return NULL;
+
+        /* alloc space for the msgid */
+        dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
+
+        *dst++ = *src++;
+
+        /* quoted string */
+        if (*src == '\"') {
+            src++;
+            while (*src != '\"') {
+                if (*src == '\\') {
+                    src++;
+                }
+                *dst++ = *src++;
+            }
+            src++;
+        }
+        /* atom */
+        else {
+            while (!strchr(MSGID_SPECIALS, *src))
+                *dst++ = *src++;
+        }
+
+        if (*src != '@' || *(dst-1) == '<') continue;
+        *dst++ = *src++;
+
+        /* domain atom */
+        while (!strchr(MSGID_SPECIALS, *src))
+            *dst++ = *src++;
+
+        if (*src != '>' || *(dst-1) == '@') continue;
+        *dst++ = *src++;
+        *dst = '\0';
+
+        if (rem) *rem = src;
+        return msgid;
+    }
+
+    if (msgid) free(msgid);
+    return NULL;
 }

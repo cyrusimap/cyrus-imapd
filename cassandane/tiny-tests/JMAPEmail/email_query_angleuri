@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_angleuri
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # Search indexing attempts to strip HTML tags also from plain
+    # text bodies if they are part of a multipart/alternative.
+    # This is because ill-behaving email implementations tend to
+    # put HTML in these, too.
+
+    # Unfortunately, legit email clients might enclose URLs
+    # in angle-brackets when they convert anchor hrefs in
+    # HTML bodies to plain text alternatives. This caused
+    # Cyrus to also strip such URLs from plain text, instead
+    # of indexing them for text search.
+
+    xlog $self, "Append message with angle-bracket URI in plain text";
+    my $mimeMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: needle_in_plain
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain;charset=utf-8
+
+Click here <https://example.com/needle> for a surprise
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/html;charset=utf-8
+
+<!DOCTYPE html><html><body>Nothing to see here</body></html>
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mimeMessage) || die $@;
+
+    xlog $self, "Append message with angle-bracket URI in HTML text";
+    $mimeMessage = <<'EOF';
+From: from@local
+To: to@local
+Subject: needle_in_html
+Date: Mon, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain;charset=utf-8
+
+Nothing to see here
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/html;charset=utf-8
+
+<!DOCTYPE html><html><body>Click here <https://example.com/needle> for a surprise</body></html>
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mimeMessage) || die $@;
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Assert angle-bracket URI is indexed for plain text, but not HTML";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => 'needle',
+            },
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => ['subject'],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals('needle_in_plain',
+        $res->[1][1]{list}[0]{subject});
+}

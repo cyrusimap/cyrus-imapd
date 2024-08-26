@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_media_blob
+    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "upload photo";
+    my $res = $jmap->Upload("some photo", "image/jpeg");
+    my $blobId = $res->{blobId};
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $id,
+                    name => { full => 'Jane Doe' },
+                    media => {
+                        res1 => {
+                            '@type' => 'MediaResource',
+                            kind => 'photo',
+                            mediaType => 'image/jpeg',
+                            blobId => $blobId
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $blobId = $res->[0][1]{created}{1}{media}{res1}{blobId};
+    $self->assert_not_null($blobId);
+
+    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr|PHOTO;PROP-ID=res1:data:image/jpeg;base64,c29tZSBwaG90bw==|, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
+
+    $res = $jmap->Download('cassandane', $blobId);
+
+    $self->assert_str_equals('image/jpeg', $res->{headers}{'content-type'});
+    $self->assert_str_equals('some photo', $res->{content});
+}

@@ -69,7 +69,6 @@ struct namespace_t namespace_prometheus = {
     &prom_reset,
     &prom_shutdown,
     /* XXX premethod */ NULL,
-    /* XXX bearer */ NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -89,6 +88,7 @@ struct namespace_t namespace_prometheus = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL },                 /* UNLOCK       */

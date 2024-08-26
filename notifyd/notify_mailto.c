@@ -110,7 +110,7 @@ char* notify_mailto(const char *class,
         return strdup("NO mailto could not spawn sendmail process");
 
     t = time(NULL);
-    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-%lu-%d@%s>",
+    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-" TIME_T_FMT "-%d@%s>",
              (int) sm_pid, t, global_outgoing_count++, config_servername);
 
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);

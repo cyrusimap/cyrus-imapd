@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_zero_length_text
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+MIME-Version: 1.0
+From: "Example.com" <renewals@example.com>
+To: "Me" <me@example.com>
+Date: 25 Jun 2016 02:29:42 -0400
+Subject: Upcoming Auto-Renewal Notification for July, 2016
+Content-Type: multipart/alternative;
+ boundary=--boundary_34056
+Message-ID: <abc123@server.example.net>
+
+----boundary_34056
+Content-Type: text/plain
+Content-Transfer-Encoding: quoted-printable
+
+
+----boundary_34056
+Content-Type: text/html
+Content-Transfer-Encoding: 7bit
+
+<html>
+foo
+</html>
+
+----boundary_34056--
+
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog $self, "import and get email from blob $blobid";
+    my $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => $blobid,
+                mailboxIds => {$inboxid =>  JSON::true},
+            },
+        },
+    }, "R1"], ["Email/get", {
+        ids => ["#1"],
+        properties => ['bodyStructure', 'bodyValues'],
+        fetchAllBodyValues => JSON::true,
+    }, "R2" ]]);
+
+    $self->assert_str_equals("Email/import", $res->[0][0]);
+    $self->assert_str_equals("Email/get", $res->[1][0]);
+
+    my $msg = $res->[1][1]{list}[0];
+    my $bodyValue = $msg->{bodyValues}{1};
+    $self->assert_str_equals("", $bodyValue->{value});
+    $self->assert_equals(JSON::false, $bodyValue->{isEncodingProblem});
+}

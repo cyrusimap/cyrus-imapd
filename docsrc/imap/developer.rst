@@ -15,6 +15,7 @@ Getting Started
     developer/compiling
     installing
     developer/developer-testing
+    developer/coverage
     developer/jmap
 
 .. toctree::
@@ -41,4 +42,6 @@ Releasing
 
 .. toctree::
     developer/releasing
+    developer/major-releasing
+    developer/snapshot-releasing
     developer/ancient-releasing

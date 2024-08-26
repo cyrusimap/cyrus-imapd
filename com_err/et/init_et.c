@@ -50,11 +50,6 @@
 #include "error_table.h"
 #include "mit-sipb-copyright.h"
 
-struct foobar {
-    struct et_list etl;
-    struct error_table et;
-};
-
 extern struct et_list * _et_list;
 
 int init_error_table(msgs, base, count)
@@ -62,20 +57,25 @@ int init_error_table(msgs, base, count)
     int base;
     int count;
 {
-    struct foobar * new_et;
+    struct et_list *etl;
+    struct error_table *et;
 
     if (!base || !count || !msgs)
         return 0;
 
-    new_et = (struct foobar *) malloc(sizeof(struct foobar));
-    if (!new_et)
-        return errno;   /* oops */
-    new_et->etl.table = &new_et->et;
-    new_et->et.msgs = msgs;
-    new_et->et.base = base;
-    new_et->et.n_msgs= count;
+    etl = malloc(sizeof *etl);
+    et = malloc(sizeof *et);
+    if (!etl || !et) {
+        free(etl);
+        free(et);
+        return errno; /* oops */
+    }
+    etl->table = et;
+    et->msgs = msgs;
+    et->base = base;
+    et->n_msgs = count;
 
-    new_et->etl.next = _et_list;
-    _et_list = &new_et->etl;
+    etl->next = _et_list;
+    _et_list = etl;
     return 0;
 }

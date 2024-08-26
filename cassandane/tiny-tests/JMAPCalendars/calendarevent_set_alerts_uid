@@ -1,0 +1,159 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_alerts_uid
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create CalDAV event with VALARM without UID";
+    $caldav->Request('PUT',
+        "/dav/calendars/user/cassandane/Default/alarmnouid.ics",
+<<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20230909T160000Z
+DURATION:PT1H
+UID:e64be8a7-02b8-4f4f-8513-3bf133066073
+SUMMARY:noUid
+BEGIN:VALARM
+DESCRIPTION:
+ACTION:DISPLAY
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+        , 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Create CalDAV event with VALARM with UID";
+    my $alertFixedUid = '8378e120-cd1c-43fb-805e-06348592b644';
+    $caldav->Request('PUT',
+        "/dav/calendars/user/cassandane/Default/alarmfixeduid.ics",
+<<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20230909T160000Z
+DURATION:PT1H
+UID:c32c934c-16e1-40f9-a8c5-b20e3bd7b224
+SUMMARY:fixedUid
+BEGIN:VALARM
+UID:$alertFixedUid
+DESCRIPTION:
+ACTION:DISPLAY
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+        , 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Create JMAP events having UUID, SHA1 and simple alert ids";
+
+    my $uuidJmapId = 'b23087c0-8822-4f29-a279-741c102fdc26';
+    my $sha1JmapId = 'f142b15de0ad6e1631fd2db106dd3e906a260747';
+    my $simpleJmapId = 'alert1';
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                uuidJmapId => {
+                    title => 'uuidJmapId',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2023-08-01T17:07:00',
+                    timeZone => 'Etc/UTC',
+                    alerts => {
+                        $uuidJmapId => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                            action => "display",
+                        }
+                    }
+                },
+                sha1JmapId => {
+                    title => 'sha1JmapId',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2023-08-02T17:07:00',
+                    timeZone => 'Etc/UTC',
+                    alerts => {
+                        $sha1JmapId => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                            action => "display",
+                        }
+                    }
+                },
+                simpleJmapId => {
+                    title => 'simpleJmapId',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2023-08-03T17:07:00',
+                    timeZone => 'Etc/UTC',
+                    alerts => {
+                        $simpleJmapId => {
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                            action => "display",
+                        }
+                    }
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{uuidJmapId});
+    $self->assert_not_null($res->[0][1]{created}{sha1JmapId});
+    $self->assert_not_null($res->[0][1]{created}{simpleJmapId});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['title', 'alerts', 'cyrusimap.org:iCalProps'],
+        }, 'R2'],
+    ]);
+
+    my %eventAlerts = map { $_->{title} => $_->{alerts} } @{$res->[1][1]{list}};
+
+    # Alert with no UID gets some JMAP id assigned
+    $self->assert_num_equals(1, scalar keys %{$eventAlerts{noUid}});
+    $self->assert_null((values %{$eventAlerts{noUid}})[0]{uid});
+
+    # Alarm with UUID JMAP id gets the same value as UID
+    $self->assert_str_equals('uid', $eventAlerts{uuidJmapId}{
+        $uuidJmapId}{'cyrusimap.org:iCalProps'}[0][0]);
+    $self->assert_str_equals($uuidJmapId, $eventAlerts{uuidJmapId}{
+        $uuidJmapId}{'cyrusimap.org:iCalProps'}[0][3]);
+
+    # Alarm with simple JMAP id gets some other value as UID
+    $self->assert_str_equals('uid', $eventAlerts{simpleJmapId}{
+        $simpleJmapId}{'cyrusimap.org:iCalProps'}[0][0]);
+    $self->assert_str_not_equals($simpleJmapId, $eventAlerts{simpleJmapId}{
+        $simpleJmapId}{'cyrusimap.org:iCalProps'}[0][3]);
+}

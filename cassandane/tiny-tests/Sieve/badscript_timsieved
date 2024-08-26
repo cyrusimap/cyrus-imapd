@@ -1,0 +1,12 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_badscript_timsieved
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing sieve script compile failures, via timsieved";
+    $self->{compile_method} = 'timsieved';
+    $self->badscript_common();
+}

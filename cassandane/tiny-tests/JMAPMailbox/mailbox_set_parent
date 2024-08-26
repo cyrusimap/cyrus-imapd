@@ -1,0 +1,124 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_parent
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create mailboxes
+    xlog $self, "create mailbox foo";
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "1" => {
+                name => "foo",
+                parentId => undef,
+                role => undef }
+        }
+    }, "R1"]]);
+    my $id1 = $res->[0][1]{created}{"1"}{id};
+    xlog $self, "create mailbox foo.bar";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "2" => {
+                name => "bar",
+                parentId => $id1,
+                role => undef }
+        }
+    }, "R1"]]);
+    my $id2 = $res->[0][1]{created}{"2"}{id};
+    xlog $self, "create mailbox foo.bar.baz";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "3" => {
+                name => "baz",
+                parentId => $id2,
+                role => undef
+            }
+        }
+    }, "R1"]]);
+    my $id3 = $res->[0][1]{created}{"3"}{id};
+
+    # All set up?
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
+    $self->assert_null($res->[0][1]{list}[0]->{parentId});
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
+    $self->assert_str_equals($id1, $res->[0][1]{list}[0]->{parentId});
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($id2, $res->[0][1]{list}[0]->{parentId});
+
+    xlog $self, "move foo.bar to bar";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id2 => {
+                name => "bar",
+                parentId => undef,
+                role => undef }
+        }
+    }, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
+    $self->assert_null($res->[0][1]{list}[0]->{parentId});
+
+    xlog $self, "move bar.baz to foo.baz";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id3 => {
+                name => "baz",
+                parentId => $id1,
+                role => undef
+            }
+        }
+    }, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
+    $self->assert_str_equals($id1, $res->[0][1]{list}[0]->{parentId});
+
+    xlog $self, "move foo to bar.foo";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id1 => {
+                name => "foo",
+                parentId => $id2,
+                role => undef
+            }
+        }
+    }, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
+    $self->assert_str_equals($id2, $res->[0][1]{list}[0]->{parentId});
+
+    xlog $self, "move foo to non-existent parent";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id1 => {
+                name => "foo",
+                parentId => "nope",
+                role => undef
+            }
+        }
+    }, "R1"]]);
+    my $errType = $res->[0][1]{notUpdated}{$id1}{type};
+    my $errProp = $res->[0][1]{notUpdated}{$id1}{properties};
+    $self->assert_str_equals("invalidProperties", $errType);
+    $self->assert_deep_equals([ "parentId" ], $errProp);
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
+    $self->assert_str_equals($id2, $res->[0][1]{list}[0]->{parentId});
+
+    xlog $self, "attempt to destroy bar (which has child foo)";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [$id2]
+    }, "R1"]]);
+    $errType = $res->[0][1]{notDestroyed}{$id2}{type};
+    $self->assert_str_equals("mailboxHasChild", $errType);
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
+    $self->assert_null($res->[0][1]{list}[0]->{parentId});
+
+    xlog $self, "destroy all";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [$id3, $id1, $id2]
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
+    $self->assert(grep {$_ eq $id1} @{$res->[0][1]{destroyed}});
+    $self->assert(grep {$_ eq $id2} @{$res->[0][1]{destroyed}});
+    $self->assert(grep {$_ eq $id3} @{$res->[0][1]{destroyed}});
+}

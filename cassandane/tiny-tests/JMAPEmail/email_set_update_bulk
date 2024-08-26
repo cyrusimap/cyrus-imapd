@@ -1,0 +1,124 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_bulk
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+
+    my $talk = $self->{store}->get_client();
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/debug',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+
+    $talk->create('INBOX.A') or die;
+    $talk->create('INBOX.B') or die;
+    $talk->create('INBOX.C') or die;
+    $talk->create('INBOX.D') or die;
+
+    # Get mailboxes
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
+    $self->assert_not_null($res);
+    my %mboxIdByName = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    # Create email in mailbox A and B
+    $store->set_folder('INBOX.A');
+    $self->make_message('Email1') || die;
+    $talk->copy(1, 'INBOX.B');
+    $talk->store(1, "+flags", "(\\Seen hello)");
+
+    # check that the flags aren't on B
+    $talk->select("INBOX.B");
+    $res = $talk->fetch("1", "(flags)");
+    my @flags = @{$res->{1}{flags}};
+    $self->assert_null(grep { $_ eq 'hello' } @flags);
+    $self->assert_null(grep { $_ eq '\\Seen' } @flags);
+
+    # Create email in mailboox A
+    $talk->select("INBOX.A");
+    $self->make_message('Email2') || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ property => 'subject' }],
+    }, 'R1']], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    my $emailId1 = $res->[0][1]->{ids}[0];
+    my $emailId2 = $res->[0][1]->{ids}[1];
+
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $emailId1 => {
+                mailboxIds => {
+                    $mboxIdByName{'C'} => JSON::true,
+                },
+            },
+            $emailId2 => {
+                mailboxIds => {
+                    $mboxIdByName{'C'} => JSON::true,
+                },
+            }
+        },
+    }, 'R1']], $using);
+    $self->make_message('Email3') || die;
+
+    # check that the flags made it
+    $talk->select("INBOX.C");
+    $res = $talk->fetch("1", "(flags)");
+    @flags = @{$res->{1}{flags}};
+    $self->assert_not_null(grep { $_ eq 'hello' } @flags);
+    # but \Seen shouldn't
+    $self->assert_null(grep { $_ eq '\\Seen' } @flags);
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ property => 'subject' }],
+    }, 'R1']], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    my @ids = @{$res->[0][1]->{ids}};
+    my $emailId3 = $ids[2];
+
+    # now move all the ids to folder 'D' but two are not in the
+    # source folder any more
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            map { $_ => {
+                 "mailboxIds/$mboxIdByName{'A'}" => undef,
+                 "mailboxIds/$mboxIdByName{'D'}" => JSON::true,
+            } } @ids,
+        },
+    }, 'R1']], $using);
+
+    $self->assert_not_null($res);
+    $self->assert(exists $res->[0][1]{updated}{$emailId1});
+    $self->assert(exists $res->[0][1]{updated}{$emailId2});
+    $self->assert(exists $res->[0][1]{updated}{$emailId3});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId1, $emailId2, $emailId3],
+        properties => ['mailboxIds'],
+    }, "R1"]], $using);
+    my %emailById = map { $_->{id} => $_ } @{$res->[0][1]{list}};
+
+    # now we need to test for actual location
+    my $wantMailboxesEmail1 = {
+        $mboxIdByName{'C'} => JSON::true,
+        $mboxIdByName{'D'} => JSON::true,
+    };
+    my $wantMailboxesEmail2 = {
+        $mboxIdByName{'C'} => JSON::true,
+        $mboxIdByName{'D'} => JSON::true,
+    };
+    my $wantMailboxesEmail3 = {
+        $mboxIdByName{'D'} => JSON::true,
+    };
+    $self->assert_deep_equals($wantMailboxesEmail1, $emailById{$emailId1}->{mailboxIds});
+    $self->assert_deep_equals($wantMailboxesEmail2, $emailById{$emailId2}->{mailboxIds});
+    $self->assert_deep_equals($wantMailboxesEmail3, $emailById{$emailId3}->{mailboxIds});
+}

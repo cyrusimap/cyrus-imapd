@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rfc6638_3_2_2_1_attendee_allowed_changes
+    :needs_component_httpd
+{
+    my ($self) = @_;
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "change summary";
+    {
+        my $uuid = $CalDAV->genuuid();
+        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER:MAILTO:test1\@example.com
+EOF
+        $self->{instance}->getnotify();
+        eval { $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF, summary => "updated event"); };
+ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER:MAILTO:test1\@example.com
+EOF
+        my $err = $@;
+        # XXX - changing summary isn't rejected yet, should be
+        #$self->assert_matches(qr/allowed-attendee-scheduling-object-change/, $err);
+    }
+
+    xlog $self, "change organizer";
+    {
+        my $uuid = $CalDAV->genuuid();
+        $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER:MAILTO:test1\@example.com
+EOF
+        $self->{instance}->getnotify();
+        eval { $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF); };
+ATTENDEE;CN=Test User;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
+ORGANIZER:MAILTO:test2\@example.com
+EOF
+        my $err = $@;
+        $self->assert_matches(qr/allowed-attendee-scheduling-object-change/, $err);
+    }
+}

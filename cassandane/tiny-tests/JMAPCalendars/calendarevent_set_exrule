@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_exrule
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $event =  {
+        calendarIds => {
+            Default => JSON::true,
+        },
+        title => "title",
+        description => "description",
+        start => "2020-12-03T09:00:00",
+        duration => "PT1H",
+        timeZone => "Europe/London",
+        showWithoutTime => JSON::false,
+        freeBusyStatus => "busy",
+        recurrenceRules => [{
+            frequency => 'weekly',
+        }],
+        excludedRecurrenceRules => [{
+            frequency => 'monthly',
+            byMonthDay => [1],
+        }],
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarIds} = $ret->{calendarIds};
+    $self->assert_normalized_event_equals($event, $ret);
+}

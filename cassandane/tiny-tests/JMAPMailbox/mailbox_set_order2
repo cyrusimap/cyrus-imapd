@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_order2
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # Create and get mailbox tree.
+    $imaptalk->create("INBOX.A") or die;
+    $imaptalk->create("INBOX.A.B") or die;
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my ($idA, $idB) = ($m{"A"}{id}, $m{"B"}{id});
+
+    # Use a non-trivial, but correct operations order: this
+    # asserts that name clashes and mailboxHasChild conflicts
+    # are resolved appropriately: the create depends on the
+    # deletion of current mailbox A, which depends on the
+    # update to move away the child from A, which requires
+    # the create to set the parentId. Fun times.
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            Anew => {
+                name => 'A',
+                parentId => undef,
+                role => undef,
+            },
+        },
+        update => {
+            $idB => {
+                parentId => '#Anew',
+            },
+        },
+        destroy => [
+            $idA,
+        ]
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{created}{'Anew'});
+    $self->assert(exists $res->[0][1]{updated}{$idB});
+    $self->assert_str_equals($idA, $res->[0][1]{destroyed}[0]);
+}

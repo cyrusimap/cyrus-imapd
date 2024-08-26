@@ -16,16 +16,15 @@ Synopsis
 .. parsed-literal::
 
     **master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
-        [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-P** *snmp agentx ping interval* ]
+        [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-r** *ready_file* ]
         [ **-j** *janitor period* ] [ **-d** | **-D** ] [ **-L** *logfile* ]
-        [ **-x** *snmp agentx socket* ]
 
 Description
 ===========
 
 **master** is the process that controls all of the Cyrus
 processes. This process is responsible for creating all imapd, pop3d,
-lmtpd and sieved child processes. This process also performs scheduled
+lmtpd and timsieved child processes. This process also performs scheduled
 cleanup/maintenance.
 
 If this process dies, then no new sessions will be started.
@@ -56,7 +55,7 @@ Options
 
 .. option:: -j  janitor full-sweeps per second
 
-    Sets the amount of times per second the janitor should sweep the
+    Sets the number of times per second the janitor should sweep the
     entire child table.  Leave it at the default of 1 unless you have a
     really high fork rate (and you have not increased the child hash
     table size when you compiled Cyrus from its default of 10000
@@ -65,13 +64,14 @@ Options
 .. option:: -p  pidfile
 
     Use *pidfile* as the pidfile.  If not specified, defaults to
-    ``/var/run/master.pid``
+    ``master_pid_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.pid``
 
-.. option:: -P  snmp agentx ping interval
+.. option:: -r  ready_file
 
-    Sets the amount on time in seconds the subagent will try and
-    reconnect to the master agent (snmpd) if it ever becomes (or
-    starts) disconnected.  Requires net-snmp 5.0 or higher.
+    Use *ready_file* as the ready file.  If not specified, uses
+    ``master_ready_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.ready``
 
 .. option:: -d
 
@@ -87,11 +87,6 @@ Options
 .. option:: -L  logfile
 
     Redirect stdout and stderr to the given *logfile*.
-
-.. option:: -x  snmp agentx socket
-
-    Address the master agent (most likely snmpd) listens on.
-    Requires net-snmp 5.0 or higher.
 
 Configuration
 =============
@@ -125,6 +120,9 @@ The environment variable **CYRUS_VERBOSE** can be set to log additional
 debugging information. Setting the value to 1 results in base level logging.
 Setting it higher results in more log messages being generated.
 
+The :cyrusman:`cyr_info(8)` utility's ``proc`` subcommand can be used to
+list the active processes that **master** is managing.
+
 Files
 =====
 
@@ -137,4 +135,4 @@ See Also
 
 :cyrusman:`cyrus.conf(5)`, :cyrusman:`imapd.conf(5)`, :cyrusman:`imapd(8)`,
 :cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, :cyrusman:`timsieved(8)`,
-:cyrusman:`idled(8)`
+:cyrusman:`idled(8)`, :cyrusman:`cyr_info(8)`

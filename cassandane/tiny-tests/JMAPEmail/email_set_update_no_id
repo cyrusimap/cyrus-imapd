@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_no_id
+    :min_version_3_4 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => 'email',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'email',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]{created}{email}{id};
+    $self->assert_not_null($emailId);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    keywords => {
+                        'foo' => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_equals(undef, $res->[0][1]{updated}{$emailId});
+
+}

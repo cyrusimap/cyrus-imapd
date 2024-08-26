@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_folder_at_novirtdomains
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( foo@bar )] ],
+    ]);
+
+    my $data = $imaptalk->list("", "%", "RETURN", [qw( CHILDREN )]);
+
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => '\\HasNoChildren',
+        'foo@bar' => '\\HasNoChildren',
+    });
+}

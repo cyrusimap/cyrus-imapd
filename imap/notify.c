@@ -87,7 +87,8 @@ static void notify_dlist(const char *sockpath, const char *method,
                          const char *class, const char *priority,
                          const char *user, const char *mailbox,
                          int nopt, const char **options,
-                         const char *message, const char *fname)
+                         const char *message, const char *fname,
+                         const char *loginfo)
 {
     struct sockaddr_un sun_data;
     struct protstream *in = NULL, *out = NULL;
@@ -115,12 +116,14 @@ static void notify_dlist(const char *sockpath, const char *method,
 
     soc = socket(PF_UNIX, SOCK_STREAM, 0);
     if (soc < 0) {
-        syslog(LOG_ERR, "NOTIFY: unable to create notify socket(): %m");
+        syslog(LOG_ERR,
+               "NOTIFY(%s): unable to create notify socket(): %m", loginfo);
         goto out;
     }
 
     if (connect(soc, (struct sockaddr *)&sun_data, sizeof(sun_data)) < 0) {
-        syslog(LOG_ERR, "NOTIFY: failed to connect to %s: %m", sockpath);
+        syslog(LOG_ERR,
+               "NOTIFY(%s): failed to connect to %s: %m", loginfo, sockpath);
         goto out;
     }
 
@@ -134,14 +137,18 @@ static void notify_dlist(const char *sockpath, const char *method,
     prot_printf(out, "\r\n");
     prot_flush(out);
 
-    c = dlist_parse(&res, 1, 0, in);
+    c = dlist_parse(&res, 1, 0, 0, in);
     if (c == '\r') c = prot_getc(in);
     /* XXX - do something with the response?  Like have NOTIFY answer */
     if (c == '\n' && res && res->name) {
-        syslog(LOG_NOTICE, "NOTIFY: response %s to method %s", res->name, method);
+        if (strcmp(res->name, "OK")) {
+            syslog(LOG_NOTICE, "NOTIFY(%s): response %s to method %s",
+                  loginfo, res->name, method);
+        }
     }
     else {
-        syslog(LOG_ERR, "NOTIFY: error sending %s to %s", method, sockpath);
+        syslog(LOG_ERR, "NOTIFY(%s): error sending %s to %s",
+               loginfo, method, sockpath);
     }
 
 out:
@@ -166,17 +173,30 @@ EXPORTED void notify(const char *method,
     int i, r = 0;
     unsigned bufsiz;
     socklen_t optlen;
+    struct buf logbuf = BUF_INITIALIZER;
+    char *loginfo = NULL;
+
+    buf_setcstr(&logbuf, class);
+    if (user) {
+        buf_printf(&logbuf, ", %s", user);
+        if (mailbox) {
+            buf_printf(&logbuf, ", %s", mailbox);
+        }
+    }
+    loginfo = buf_release(&logbuf);
 
     if (!strncmp(notify_sock, "dlist:", 6)) {
         notify_dlist(notify_sock+6, method, class, priority,
-                            user, mailbox, nopt, options,
-                            message, fname);
+                     user, mailbox, nopt, options,
+                     message, fname, loginfo);
+        free(loginfo);
         return;
     }
 
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (soc == -1) {
-        syslog(LOG_ERR, "unable to create notify socket(): %m");
+        syslog(LOG_ERR,
+               "NOTIFY(%s): unable to create notify socket(): %m", loginfo);
         goto out;
     }
 
@@ -195,7 +215,9 @@ EXPORTED void notify(const char *method,
     optlen = sizeof(bufsiz);
     r = getsockopt(soc, SOL_SOCKET, SO_SNDBUF, &bufsiz, &optlen);
     if (r == -1) {
-        syslog(LOG_ERR, "unable to getsockopt(SO_SNDBUF) on notify socket: %m");
+        syslog(LOG_ERR,
+               "NOTIFY(%s): unable to getsockopt(SO_SNDBUF) on socket: %m",
+               loginfo);
         goto out;
     }
 
@@ -226,8 +248,7 @@ EXPORTED void notify(const char *method,
     if (!r && fname) r = add_arg(buf, bufsiz, fname, &buflen);
 
     if (r) {
-        syslog(LOG_ERR, "notify datagram too large, %s, %s",
-               user, mailbox);
+        syslog(LOG_ERR, "NOTIFY(%s): datagram too large", loginfo);
         goto out;
     }
 
@@ -235,14 +256,15 @@ EXPORTED void notify(const char *method,
                (struct sockaddr *)&sun_data, sizeof(sun_data));
 
     if (r < 0) {
-        syslog(LOG_ERR, "unable to sendto() notify socket: %m");
+        syslog(LOG_ERR, "NOTIFY(%s): unable to sendto() socket: %m", loginfo);
         goto out;
     }
     if (r < buflen) {
-        syslog(LOG_ERR, "short write to notify socket");
+        syslog(LOG_ERR, "NOTIFY(%s): short write to socket", loginfo);
         goto out;
     }
 
 out:
     xclose(soc);
+    free(loginfo);
 }

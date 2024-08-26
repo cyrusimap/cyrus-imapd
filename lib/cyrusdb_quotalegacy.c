@@ -93,6 +93,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 #include "strarray.h"
 
 #define FNAME_QUOTADIR "/quota/"
@@ -205,7 +206,7 @@ static int abort_subtxn(const char *fname, struct subtxn *tid)
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
-        unlink(tid->fnamenew);
+        xunlink(tid->fnamenew);
         free(tid->fnamenew);
     }
 
@@ -217,14 +218,18 @@ static int abort_subtxn(const char *fname, struct subtxn *tid)
         /* release lock */
         r = lock_unlock(tid->fd, fname);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: unlocking %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
+                             "fname=<%s>",
+                             fname);
             r = CYRUSDB_IOERROR;
         }
 
         /* close */
         r = close(tid->fd);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: closing %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: close failed",
+                             "fname=<%s>",
+                             fname);
             r = CYRUSDB_IOERROR;
         }
     }
@@ -249,16 +254,20 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
             fstat(writefd, &sbuf) == -1 ||
             rename(tid->fnamenew, fname) == -1 ||
             lock_unlock(writefd, fname) == -1) {
-            syslog(LOG_ERR, "IOERROR: writing %s: %m", tid->fnamenew);
+            xsyslog(LOG_ERR, "IOERROR: commit failed",
+                             "fname=<%s>",
+                             tid->fnamenew);
             r = CYRUSDB_IOERROR;
         }
         close(writefd);
         free(tid->fnamenew);
     } else if (tid->delete) {
         /* delete file */
-        r = unlink(fname);
+        r = xunlink(fname);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: unlinking %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: unlink failed",
+                             "fname=<%s>",
+                             fname);
             r = CYRUSDB_IOERROR;
         }
     } else {
@@ -269,13 +278,17 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
     if (tid->fd != -1) {
         r = lock_unlock(tid->fd, fname);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: unlocking %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
+                             "fname=<%s>",
+                             fname);
             r = CYRUSDB_IOERROR;
         }
 
         r = close(tid->fd);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: closing %s: %m", fname);
+            xsyslog(LOG_ERR, "IOERROR: close failed",
+                             "fname=<%s>",
+                             fname);
             r = CYRUSDB_IOERROR;
         }
     }
@@ -375,8 +388,11 @@ static int myfetch(struct dbengine *db, char *quota_path,
         /* just check if the key exists */
         struct stat sbuf;
 
-        if (stat(quota_path, &sbuf) == -1)
+        if (stat(quota_path, &sbuf) == -1) {
+            if (errno == ENOENT)
+                errno = 0;
             return CYRUSDB_NOTFOUND;
+        }
 
         return 0;
     }
@@ -394,10 +410,12 @@ static int myfetch(struct dbengine *db, char *quota_path,
         if (quota_fd == -1) {
             if (errno == ENOENT) {
                 /* key doesn't exist */
+                errno = 0;
                 return CYRUSDB_NOTFOUND;
             }
 
-            syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", quota_path);
+            xsyslog(LOG_ERR, "IOERROR: open quota file failed",
+                             "fname=<%s>", quota_path);
             return CYRUSDB_IOERROR;
         }
 
@@ -408,8 +426,9 @@ static int myfetch(struct dbengine *db, char *quota_path,
 
             r = lock_reopen(quota_fd, quota_path, &sbuf, &lockfailaction);
             if (r == -1) {
-                syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
-                       quota_path);
+                xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
+                                 "action=<%s> fname=<%s>",
+                                 lockfailaction, quota_path);
                 xclose(quota_fd);
                 return CYRUSDB_IOERROR;
             }
@@ -581,6 +600,8 @@ static int foreach(struct dbengine *db,
     int i;
     char *tmpprefix = NULL, *p = NULL;
 
+    assert(cb);
+
     /* if we need to truncate the prefix, do so */
     if (prefix[prefixlen] != '\0') {
         tmpprefix = xmalloc(prefixlen + 1);
@@ -698,15 +719,18 @@ static int mystore(struct dbengine *db,
             }
         }
         if (fd == -1 && (errno != ENOENT || data)) {
-            syslog(LOG_ERR, "IOERROR: opening quota file %s: %m", quota_path);
+            xsyslog(LOG_ERR, "IOERROR: open quota file failed",
+                             "fname=<%s>",
+                             quota_path);
             return CYRUSDB_IOERROR;
         }
 
         if (fd != -1) {
             r = lock_reopen(fd, quota_path, &sbuf, &lockfailaction);
             if (r == -1) {
-                syslog(LOG_ERR, "IOERROR: %s quota %s: %m", lockfailaction,
-                       quota_path);
+                xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
+                                 "action=<%s> fname=<%s>",
+                                 lockfailaction, quota_path);
                 xclose(fd);
                 return CYRUSDB_IOERROR;
             }
@@ -737,15 +761,16 @@ static int mystore(struct dbengine *db,
             strlcpy(new_quota_path, quota_path, sizeof(new_quota_path));
             strlcat(new_quota_path, ".NEW", sizeof(new_quota_path));
 
-            unlink(new_quota_path);
+            xunlink(new_quota_path);
             newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
             if (newfd == -1 && errno == ENOENT) {
                 if (cyrus_mkdir(new_quota_path, 0755) != -1)
                     newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
             }
             if (newfd == -1) {
-                syslog(LOG_ERR, "IOERROR: creating quota file %s: %m",
-                       new_quota_path);
+                xsyslog(LOG_ERR, "IOERROR: creating quota file failed",
+                                 "fname=<%s>",
+                                 new_quota_path);
                 if (tid)
                     abort_txn(db, *tid);
                 else
@@ -756,8 +781,9 @@ static int mystore(struct dbengine *db,
             mytid->fdnew = newfd;
             r = lock_blocking(newfd, new_quota_path);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: locking quota file %s: %m",
-                       new_quota_path);
+                xsyslog(LOG_ERR, "IOERROR: lock_blocking failed",
+                                 "fname=<%s>",
+                                 new_quota_path);
                 if (tid)
                     abort_txn(db, *tid);
                 else
@@ -777,18 +803,20 @@ static int mystore(struct dbengine *db,
         buf[datalen] = '\n';
 
         lseek(mytid->fdnew, 0, SEEK_SET);
+        /* XXX this should maybe use retry_write... */
         n = write(mytid->fdnew, buf, datalen+1);
         if (n == (ssize_t)datalen+1) r1 = ftruncate(mytid->fdnew, datalen+1);
         free(buf);
 
         if (n != (ssize_t)datalen+1 || r1 == -1) {
             if (n == -1 || r1 == -1)
-                syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
-                       new_quota_path);
+                xsyslog(LOG_ERR, "IOERROR: write failed",
+                                 "fname=<%s>",
+                                 new_quota_path);
             else
-                syslog(LOG_ERR,
-                       "IOERROR: writing quota file %s: failed to write %d bytes",
-                       new_quota_path, (int)datalen+1);
+                xsyslog(LOG_ERR, "IOERROR: partial write",
+                                 "fname=<%s> wanted=<%d>",
+                                 new_quota_path, (int)datalen+1);
             if (tid)
                 abort_txn(db, *tid);
             else

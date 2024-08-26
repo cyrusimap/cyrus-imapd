@@ -42,6 +42,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -155,7 +156,6 @@ static void batch_commands(struct db *db)
     int r = 0;
 
     prot_setisclient(in, 1);
-    prot_setisclient(out, 1);
 
     while (1) {
         buf_reset(&cmd);
@@ -197,9 +197,17 @@ static void batch_commands(struct db *db)
                 const char *res;
                 size_t reslen;
                 r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
-                if (r) goto done;
-                aprinter_cb(out, key.s, key.len, res, reslen);
-                prot_flush(out);
+                switch (r) {
+                case 0:
+                    aprinter_cb(out, key.s, key.len, res, reslen);
+                    prot_flush(out);
+                    break;
+                case CYRUSDB_NOTFOUND:
+                    r = 0;
+                    break;
+                default:
+                    goto done;
+                }
             }
             else if (!strcmp(cmd.s, "DELETE")) {
                 r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
@@ -238,6 +246,13 @@ done:
         fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
                 line, (int)cmd.len, cmd.s, error_message(r));
     }
+
+    prot_free(in);
+    prot_free(out);
+
+    buf_free(&cmd);
+    buf_free(&key);
+    buf_free(&val);
 }
 
 int main(int argc, char *argv[])
@@ -259,7 +274,22 @@ int main(int argc, char *argv[])
     struct txn *tid = NULL;
     struct txn **tidp = NULL;
 
-    while ((opt = getopt(argc, argv, "C:MntTc")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:MTcnt";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "improved-mboxlist-sort", no_argument, NULL, 'M' },
+        { "use-transaction", no_argument, NULL, 'T' },
+        { "convert", no_argument, NULL, 'c' }, /* XXX undocumented */
+        { "create", no_argument, NULL, 'n' },
+        { "no-transaction", no_argument, NULL, 't' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -317,7 +347,7 @@ int main(int argc, char *argv[])
 
     if(fname[0] != '/') {
         printf("\nSorry, you cannot use this tool with relative path names.\n"
-               "This is because some database backends (mainly berkeley) do not\n"
+               "This is because some database backends do not\n"
                "always do what you would expect with them.\n"
                "\nPlease use absolute pathnames instead.\n\n");
         exit(EX_OSERR);

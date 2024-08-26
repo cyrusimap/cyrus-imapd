@@ -75,7 +75,7 @@ struct namespace_t namespace_cgi = {
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ | ALLOW_POST,
-    cgi_init, NULL, NULL, NULL, NULL, NULL,
+    cgi_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -95,6 +95,7 @@ struct namespace_t namespace_cgi = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -163,6 +164,7 @@ static int meth_get(struct transaction_t *txn,
     hdrcache_t resp_hdrs = NULL;
     struct body_t resp_body;
     long code = 0;
+    extern char **environ;
     
     memset(&resp_body, 0, sizeof(struct body_t));
 
@@ -243,7 +245,7 @@ static int meth_get(struct transaction_t *txn,
     /* Add some HTTP headers from request */
     spool_enum_hdrcache(txn->req_hdrs, &req_hdr_to_env, &txn->buf);
 
-    env = strarray_splitm(buf_release(&txn->buf), "\t", 0);
+    env = strarray_splitm(NULL, buf_release(&txn->buf), "\t", 0);
     strarray_append(env, NULL);
     environ = env->data;
 

@@ -73,9 +73,9 @@
 #include "search_engines.h"
 #include "seen.h"
 #include "strhash.h"
-#include "stristr.h"
 #include "sync_log.h"
 #include "syslog.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -93,14 +93,18 @@
 #define CONVERSATION_ID_STRMAX      (1+sizeof(conversation_id_t)*2)
 
 /* per user conversations db extension */
-#define FNAME_CONVERSATIONS_SUFFIX "conversations"
 #define FNKEY "$FOLDER_NAMES"
+#define FIKEY "$FOLDER_IDS"
 #define CFKEY "$COUNTED_FLAGS"
 #define CONVSPLITFOLDER "#splitconversations"
 
 #define DB config_conversations_db
 
-#define CONVERSATIONS_VERSION 0
+struct conversations_open {
+    struct conversations_state s;
+    struct mboxlock *local_namespacelock;
+    struct conversations_open *next;
+};
 
 static struct conversations_open *open_conversations;
 
@@ -138,6 +142,9 @@ static char *conversations_path(mbname_t *mbname)
      * it's hard-coded as the user */
     if (!mbname_userid(mbname))
         return NULL;
+    // deleted mailboxes don't have a conversations database
+    if (mbname_isdeleted(mbname))
+        return NULL;
     if (convdir)
         return strconcat(convdir, "/", mbname_userid(mbname), ".", suff, (char *)NULL);
     return mboxname_conf_getpath(mbname, suff);
@@ -172,7 +179,7 @@ static int _init_counted(struct conversations_state *state,
         val = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
         if (!val) val = "";
         vallen = strlen(val);
-        if (vallen) {
+        if (vallen && !state->is_shared) {
             r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
                     val, vallen, &state->txn);
             if (r) {
@@ -203,9 +210,9 @@ static int _init_counted(struct conversations_state *state,
 
 int _saxfolder(int type, struct dlistsax_data *d)
 {
-    struct conversations_open *open = (struct conversations_open *)d->rock;
+    strarray_t *list = (strarray_t *)d->rock;
     if (type == DLISTSAX_STRING)
-        strarray_append(open->s.folder_names, d->data);
+        strarray_append(list, d->data);
     return 0;
 }
 
@@ -216,15 +223,16 @@ static int write_folders(struct conversations_state *state)
     int r;
     int i;
 
-    for (i = 0; i < strarray_size(state->folder_names); i++) {
-        const char *fname = strarray_nth(state->folder_names, i);
-        dlist_setatom(dl, NULL, fname);
+    for (i = 0; i < strarray_size(state->folders); i++) {
+        const char *folder = strarray_nth(state->folders, i);
+        dlist_setatom(dl, NULL, folder);
     }
 
     dlist_printbuf(dl, 0, &buf);
     dlist_free(&dl);
 
-    r = cyrusdb_store(state->db, FNKEY, strlen(FNKEY),
+    const char *key = state->folders_byname ? FNKEY : FIKEY;
+    r = cyrusdb_store(state->db, key, strlen(key),
                       buf.s, buf.len, &state->txn);
 
     buf_free(&buf);
@@ -232,26 +240,40 @@ static int write_folders(struct conversations_state *state)
     return r;
 }
 
-static int folder_number(struct conversations_state *state,
-                         const char *name,
+EXPORTED int conversation_folder_number(struct conversations_state *state,
+                         const char *folder,
                          int create_flag)
 {
-    int pos = strarray_find(state->folder_names, name, 0);
+    int pos = strarray_find(state->folders, folder, 0);
     int r;
 
     /* if we have to add it, then save the keys back */
     if (pos < 0 && create_flag) {
         /* replace the first unused if there is one */
-        pos = strarray_find(state->folder_names, "-", 0);
+        pos = strarray_find(state->folders, "-", 0);
         if (pos >= 0)
-            strarray_set(state->folder_names, pos, name);
+            strarray_set(state->folders, pos, folder);
         /* otherwise append */
         else
-            pos = strarray_append(state->folder_names, name);
+            pos = strarray_append(state->folders, folder);
 
         /* track the Trash folder number as it's added */
-        if (!strcmpsafe(name, state->trashmboxname))
-            state->trashfolder = pos;
+        if (state->folders_byname) {
+            if (!strcmpsafe(folder, state->trashmboxname))
+                state->trashfolder = pos;
+        }
+        else {
+            if (!state->trashmboxid && state->trashmboxname) {
+                mbentry_t *mbentry = NULL;
+
+                mboxlist_lookup(state->trashmboxname, &mbentry, NULL);
+                state->trashmboxid = mbentry ? xstrdup(mbentry->uniqueid) : NULL;
+                mboxlist_entry_free(&mbentry);
+            }
+
+            if (!strcmpsafe(folder, state->trashmboxid))
+                state->trashfolder = pos;
+        }
 
         /* store must succeed */
         r = write_folders(state);
@@ -261,15 +283,61 @@ static int folder_number(struct conversations_state *state,
     return pos;
 }
 
-EXPORTED uint32_t conversations_num_folders(struct conversations_state *state)
+EXPORTED int conversations_num_folders(struct conversations_state *state)
 {
-    return strarray_size(state->folder_names);
+    return strarray_size(state->folders);
 }
 
-EXPORTED const char* conversations_folder_name(struct conversations_state *state,
-                                               uint32_t foldernum)
+EXPORTED const char *conversations_folder_mboxname(const struct conversations_state *state,
+                                                   int foldernum)
 {
-    return strarray_safenth(state->folder_names, foldernum);
+    const char *val = strarray_nth(state->folders, foldernum);
+    if (!val) return NULL; // missing?  Weird - we've requested past the end of the list
+    if (!strcmp(val, "-")) return NULL;  // tombstone
+
+    if (state->folders_byname)
+        return val;
+
+    // make it writeable even though const, because we're fiddling cache
+    struct conversations_state *backdoor = (struct conversations_state *)state;
+    if (!backdoor->altrep) backdoor->altrep = strarray_new();
+    const char *res = strarray_nth(backdoor->altrep, foldernum);
+    if (!res) {
+        // cache lookup
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup_by_uniqueid(val, &mbentry, NULL);
+        if (r || !mbentry) return NULL;
+        strarray_set(backdoor->altrep, foldernum, mbentry->name);
+        mboxlist_entry_free(&mbentry);
+        res = strarray_nth(backdoor->altrep, foldernum);
+    }
+    return res;
+}
+
+EXPORTED const char *conversations_folder_uniqueid(const struct conversations_state *state,
+                                                   int foldernum)
+{
+    const char *val = strarray_nth(state->folders, foldernum);
+    if (!val) return NULL; // missing?  Weird - we've requested past the end of the list
+    if (!strcmp(val, "-")) return NULL;  // tombstone
+
+    if (!state->folders_byname)
+        return val;
+
+    // make it writeable even though const, because we're fiddling cache
+    struct conversations_state *backdoor = (struct conversations_state *)state;
+    if (!backdoor->altrep) backdoor->altrep = strarray_new();
+    const char *res = strarray_nth(backdoor->altrep, foldernum);
+    if (!res) {
+        // cache lookup
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup(val, &mbentry, NULL);
+        if (r || !mbentry) return NULL;
+        strarray_set(backdoor->altrep, foldernum, mbentry->uniqueid);
+        mboxlist_entry_free(&mbentry);
+        res = strarray_nth(backdoor->altrep, foldernum);
+    }
+    return res;
 }
 
 EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *state)
@@ -277,9 +345,9 @@ EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *st
     int i;
     size_t count = 0;
     conv_status_t status;
-    for (i = 0; i < strarray_size(state->folder_names); i++) {
-        const char *mboxname = strarray_nth(state->folder_names, i);
-        int r = conversation_getstatus(state, mboxname, &status);
+    for (i = 0; i < strarray_size(state->folders); i++) {
+        const char *folder = strarray_nth(state->folders, i);
+        int r = conversation_getstatus(state, folder, &status);
         if (r) continue;
         count += status.emailexists;
     }
@@ -304,44 +372,53 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     }
 
     open = xzmalloc(sizeof(struct conversations_open));
-
-    /* open db */
     open->s.is_shared = shared;
-    int flags = CYRUSDB_CREATE | (shared ? CYRUSDB_SHARED : CYRUSDB_CONVERT);
-    r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
-    if (r || open->s.db == NULL) {
-        free(open);
-        return IMAP_IOERROR;
-    }
     open->s.path = xstrdup(fname);
     open->next = open_conversations;
     open_conversations = open;
 
+    /* first ensure that the usernamespace is locked */
+    int haslock = user_isnamespacelocked(userid);
+    if (haslock) {
+        if (!shared) assert(haslock != LOCK_SHARED);
+    }
+    else {
+        int locktype = shared ? LOCK_SHARED : LOCK_EXCLUSIVE;
+        open->local_namespacelock = user_namespacelock_full(userid, locktype);
+    }
+
+    /* open db */
+    int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
+    r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
+    if (r || open->s.db == NULL) {
+        _conv_remove(&open->s);
+        return IMAP_IOERROR;
+    }
+
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
     r = _init_counted(&open->s, val, vallen);
-    if (r == CYRUSDB_READONLY) {
-        /* racy: drop shared lock, grab write lock */
-        cyrusdb_commit(open->s.db, open->s.txn);
-        open->s.txn = NULL;
-        flags &= ~CYRUSDB_SHARED;
-        r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
-        if (!r) r = _init_counted(&open->s, val, vallen);
-    }
     if (r) {
         cyrusdb_abort(open->s.db, open->s.txn);
         _conv_remove(&open->s);
-        free(open);
         return r;
     }
 
     /* we should just read the folder names up front too */
-    open->s.folder_names = strarray_new();
+    open->s.folders = strarray_new();
 
     /* if there's a value, parse as a dlist */
-    if (!cyrusdb_fetch(open->s.db, FNKEY, strlen(FNKEY),
-                   &val, &vallen, &open->s.txn)) {
-        dlist_parsesax(val, vallen, 0, _saxfolder, open);
+    vallen = 0;
+    r = cyrusdb_fetch(open->s.db, FIKEY, strlen(FIKEY),
+                      &val, &vallen, &open->s.txn);
+    if (r == CYRUSDB_NOTFOUND) {
+        vallen = 0;
+        r = cyrusdb_fetch(open->s.db, FNKEY, strlen(FNKEY),
+                          &val, &vallen, &open->s.txn);
+        if (!r) open->s.folders_byname = 1;
+    }
+    if (!r) {
+        dlist_parsesax(val, vallen, 0, _saxfolder, open->s.folders);
     }
 
     if (userid)
@@ -350,11 +427,24 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
         open->s.annotmboxname = xstrdup(CONVSPLITFOLDER);
 
     char *trashmboxname = mboxname_user_mbox(userid, "Trash");
-    open->s.trashfolder = folder_number(&open->s, trashmboxname, /*create*/0);
     open->s.trashmboxname = trashmboxname;
+    open->s.trashfolder = -1;
+    if (open->s.folders_byname)
+        open->s.trashfolder = conversation_folder_number(&open->s, trashmboxname, /*create*/0);
+    else if (trashmboxname) {
+        mbentry_t *mbentry = NULL;
+
+        mboxlist_lookup(trashmboxname, &mbentry, NULL);
+        if (mbentry) {
+            open->s.trashmboxid = xstrdup(mbentry->uniqueid);
+            open->s.trashfolder =
+                conversation_folder_number(&open->s, open->s.trashmboxid, /*create*/0);
+            mboxlist_entry_free(&mbentry);
+        }
+    }
 
     /* create the status cache */
-    construct_hash_table(&open->s.folderstatus, strarray_size(open->s.folder_names)/4+4, 0);
+    construct_hash_table(&open->s.folderstatus, strarray_size(open->s.folders)/4+4, 0);
 
     *statep = &open->s;
 
@@ -382,7 +472,6 @@ EXPORTED int conversations_open_mbox(const char *mboxname, int shared, struct co
     free(userid);
     free(path);
     return r;
-    return 0;
 }
 
 EXPORTED struct conversations_state *conversations_get_path(const char *fname)
@@ -430,10 +519,15 @@ static void _conv_remove(struct conversations_state *state)
             free(cur->s.annotmboxname);
             free(cur->s.path);
             free(cur->s.trashmboxname);
+            free(cur->s.trashmboxid);
             if (cur->s.counted_flags)
                 strarray_free(cur->s.counted_flags);
-            if (cur->s.folder_names)
-                strarray_free(cur->s.folder_names);
+            if (cur->s.folders)
+                strarray_free(cur->s.folders);
+            if (cur->s.altrep)
+                strarray_free(cur->s.altrep);
+            if (cur->local_namespacelock)
+                mboxname_release(&cur->local_namespacelock);
             free(cur);
             return;
         }
@@ -453,12 +547,22 @@ static void commitstatus_cb(const char *key, void *data, void *rock)
 {
     conv_status_t *status = (conv_status_t *)data;
     struct conversations_state *state = (struct conversations_state *)rock;
+    const char *folder = key+1; /* skip the leading F */
+    mbentry_t *mbentry = NULL;
 
     conversation_storestatus(state, key, strlen(key), status);
     /* just in case convdb has a higher modseq for any reason (aka deleted and
      * recreated while a replica was still valid with the old user) */
-    mboxname_setmodseq(key+1, status->threadmodseq, /*mbtype */0, /*dofolder*/0);
-    sync_log_mailbox(key+1); /* skip the leading F */
+    if (!state->folders_byname) {
+        mboxlist_lookup_by_uniqueid(folder, &mbentry, NULL);
+        if (!mbentry) return;
+
+        folder = mbentry->name;
+    }
+    mboxname_setmodseq(folder, status->threadmodseq, /*mbtype */0, /*flags*/0);
+    sync_log_mailbox(folder);
+
+    mboxlist_entry_free(&mbentry);
 }
 
 static void conversations_commitcache(struct conversations_state *state)
@@ -489,6 +593,7 @@ EXPORTED int conversations_abort(struct conversations_state **statep)
     return 0;
 }
 
+static int _write_quota(struct conversations_state *state);
 EXPORTED int conversations_commit(struct conversations_state **statep)
 {
     struct conversations_state *state = *statep;
@@ -500,6 +605,9 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
 
     /* commit cache, writes to to DB */
     conversations_commitcache(state);
+
+    r = _write_quota(state);
+    if (r) return r;
 
     /* finally it's safe to commit the DB itself */
     if (state->db) {
@@ -524,9 +632,12 @@ static int check_msgid(const char *msgid, size_t len, size_t *lenp)
     if (msgid[0] != '<' || msgid[len-1] != '>' || len < 3)
         return IMAP_INVALID_IDENTIFIER;
 
+#if 0  /* XXX  This check results in messages with invalid Message-ID
+          to be threadid incorrectly. */
     /* Leniently accept msg-id without @, but refuse multiple @ */
     if (memchr(msgid, '@', len) != memrchr(msgid, '@', len))
         return IMAP_INVALID_IDENTIFIER;
+#endif
 
     /* Leniently accept specials, but refuse the outright broken */
     size_t i;
@@ -551,14 +662,12 @@ static int _conversations_set_key(struct conversations_state *state,
                                   const arrayu64_t *cids, time_t stamp)
 {
     int r;
-    struct buf buf;
-    int version = CONVERSATIONS_VERSION;
-    int i;
+    struct buf buf = BUF_INITIALIZER;
+    int version = CONVERSATIONS_KEY_VERSION;
+    size_t i;
 
     /* XXX: should this be a delete operation? */
     assert(cids->count);
-
-    buf_init(&buf);
 
     if (state->db == NULL)
         return IMAP_IOERROR;
@@ -569,7 +678,7 @@ static int _conversations_set_key(struct conversations_state *state,
         if (i) buf_putc(&buf, ',');
         buf_printf(&buf, CONV_FMT, cid);
     }
-    buf_printf(&buf, " %lu", stamp);
+    buf_printf(&buf, " " TIME_T_FMT, stamp);
 
     r = cyrusdb_store(state->db,
                       key, keylen,
@@ -582,27 +691,6 @@ static int _conversations_set_key(struct conversations_state *state,
 
     return 0;
 }
-
-static int _sanity_check_counts(conversation_t *conv)
-{
-    conv_folder_t *folder;
-    uint32_t num_records = 0;
-    uint32_t exists = 0;
-
-    for (folder = conv->folders; folder; folder = folder->next) {
-        num_records += folder->num_records;
-        exists += folder->exists;
-    }
-
-    if (num_records != conv->num_records)
-        return IMAP_INTERNAL;
-
-    if (exists != conv->exists)
-        return IMAP_INTERNAL;
-
-    return 0;
-}
-
 
 EXPORTED int conversations_add_msgid(struct conversations_state *state,
                                      const char *msgid,
@@ -638,9 +726,6 @@ static int _conversations_parse(const char *data, size_t datalen,
     bit64 tval;
     bit64 version;
 
-    /* make sure we don't leak old data */
-    arrayu64_truncate(cids, 0);
-
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
 
@@ -649,7 +734,7 @@ static int _conversations_parse(const char *data, size_t datalen,
     rest++; /* skip space */
     restlen = datalen - (rest - data);
 
-    if (version != CONVERSATIONS_VERSION) {
+    if (version != CONVERSATIONS_KEY_VERSION) {
         /* XXX - an error code for "incorrect version"? */
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -660,7 +745,7 @@ static int _conversations_parse(const char *data, size_t datalen,
     while (1) {
         r = parsehex(rest, &rest, 16, &cid);
         if (r) return IMAP_MAILBOX_BADFORMAT;
-        arrayu64_append(cids, cid);
+        if (cids) arrayu64_append(cids, cid);
         if (rest[0] == ' ') break;
         if (rest[0] != ',') return IMAP_MAILBOX_BADFORMAT;
         rest++; /* skip comma */
@@ -692,6 +777,9 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
     const char *data;
     int r;
 
+    /* make sure we don't leak old data */
+    arrayu64_truncate(cids, 0);
+
     r = check_msgid(msgid, 0, &keylen);
     if (r)
         return r;
@@ -714,68 +802,32 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
 /*
  * Normalise a subject string, to a form which can be used for deciding
  * whether a message belongs in the same conversation as it's antecedent
- * messages.  What we're doing here is the same idea as the "base
- * subject" algorithm described in RFC5256 but slightly adapted from
- * experience.  Differences are:
- *
- *  - We eliminate all whitespace; RFC5256 normalises any sequence
- *    of whitespace characters to a single SP.  We do this because
- *    we have observed combinations of buggy client software both
- *    add and remove whitespace around folding points.
- *
- *  - We include the Unicode U+00A0 (non-breaking space) codepoint in our
- *    determination of whitespace (as the UTF-8 sequence \xC2\xA0) because
- *    we have seen it in the wild, but do not currently generalise this to
- *    other Unicode "whitespace" codepoints. (XXX)
- *
- *  - Because we eliminate whitespace entirely, and whitespace helps
- *    delimit some of our other replacements, we do that whitespace
- *    step last instead of first.
- *
- *  - We eliminate leading tokens like Re: and Fwd: using a simpler
- *    and more generic rule than RFC5256's; this rule catches a number
- *    of semantically identical prefixes in other human languages, but
- *    unfortunately also catches lots of other things.  We think we can
- *    get away with this because the normalised subject is never directly
- *    seen by human eyes, so some information loss is acceptable as long
- *    as the subjects in different messages match correctly.
- *
- *  - We eliminate trailing tokens like [SEC=UNCLASSIFIED],
- *    [DLM=Sensitive], etc which are automatically added by Australian
- *    Government department email systems.  In theory there should be no
- *    more than one of these on an email subject but in practice multiple
- *    have been seen.
- *    http://www.finance.gov.au/files/2012/04/EPMS2012.3.pdf
+ * messages.
  */
 EXPORTED void conversation_normalise_subject(struct buf *s)
 {
     static int initialised_res = 0;
     static regex_t whitespace_re;
+    static regex_t bracket_re;
     static regex_t relike_token_re;
-    static regex_t blob_start_re;
-    static regex_t blob_end_re;
     int r;
 
     if (!initialised_res) {
         r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&relike_token_re, "^[ \t]*[A-Za-z0-9]+(\\[[0-9]+\\])?:", REG_EXTENDED);
+        r = regcomp(&bracket_re, "(\\[[^]\\[]*])|(^[^\\[]*])|(\\[[^]]*$)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&blob_start_re, "^[ \t]*\\[[^]]+\\]", REG_EXTENDED);
-        assert(r == 0);
-        r = regcomp(&blob_end_re, "\\[(SEC|DLM)=[^]]+\\][ \t]*$", REG_EXTENDED);
+        r = regcomp(&relike_token_re, "^[ \t]*[^ \t\r\n\f]+:", REG_EXTENDED);
         assert(r == 0);
         initialised_res = 1;
     }
 
-    /* step 1 is to decode any RFC2047 MIME encoding of the header
-     * field, but we assume that has already happened */
+    /* step 1 is to remove anything within (maybe unmatched) square brackets */
+    while (buf_replace_one_re(s, &bracket_re, NULL))
+        ;
 
-    /* step 2 is to eliminate all "Re:"-like tokens and [] blobs
-     * at the start, and AusGov [] blobs at the end */
-    while (buf_replace_one_re(s, &relike_token_re, NULL) ||
-           buf_replace_one_re(s, &blob_start_re, NULL) ||
-           buf_replace_one_re(s, &blob_end_re, NULL))
+    /* step 2 is to eliminate all "Re:"-like tokens */
+    while (buf_replace_one_re(s, &relike_token_re, NULL))
         ;
 
     /* step 3 is eliminating whitespace. */
@@ -786,12 +838,15 @@ static int folder_number_rename(struct conversations_state *state,
                                 const char *from_name,
                                 const char *to_name)
 {
-    int pos = strarray_find(state->folder_names, from_name, 0);
+    /* Do nothing if using folder ids */
+    if (to_name && !state->folders_byname) return 0;
+
+    int pos = strarray_find(state->folders, from_name, 0);
 
     if (pos < 0) return 0; /* nothing to do! */
 
     /* replace the name  - set to '-' if deleted */
-    strarray_set(state->folder_names, pos, to_name ? to_name : "-");
+    strarray_set(state->folders, pos, to_name ? to_name : "-");
 
     return write_folders(state);
 }
@@ -814,7 +869,7 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
     dlist_setnum32(dl, "EMAILUNSEEN", status->emailunseen);
 
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "%d ", CONVERSATIONS_VERSION);
+    buf_printf(&buf, "%d ", CONVERSATIONS_STATUS_VERSION);
     dlist_printbuf(dl, 0, &buf);
     dlist_free(&dl);
 
@@ -829,10 +884,10 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
 }
 
 EXPORTED int conversation_setstatus(struct conversations_state *state,
-                                    const char *mboxname,
+                                    const char *mailbox,
                                     const conv_status_t *status)
 {
-    char *key = strconcat("F", mboxname, (char *)NULL);
+    char *key = strconcat("F", mailbox, (char *)NULL);
     conv_status_t *cachestatus = NULL;
 
     cachestatus = hash_lookup(key, &state->folderstatus);
@@ -855,7 +910,6 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
     const conv_folder_t *folder;
     const conv_sender_t *sender;
     const conv_thread_t *thread;
-    int version = CONVERSATIONS_VERSION;
     int i;
 
     dl = dlist_newlist(NULL, NULL);
@@ -909,11 +963,12 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
         dlist_setguid(nn, "GUID", &thread->guid);
         dlist_setnum32(nn, "EXISTS", thread->exists);
         dlist_setnum32(nn, "INTERNALDATE", thread->internaldate);
+        dlist_setnum32(nn, "CREATEDMODSEQ", thread->createdmodseq);
     }
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
 
-    buf_printf(buf, "%d ", version);
+    buf_printf(buf, "%d ", conv->version);
     dlist_printbuf(dl, 0, buf);
     dlist_free(&dl);
 }
@@ -926,11 +981,6 @@ EXPORTED int conversation_store(struct conversations_state *state,
 
     conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
 
-    if (_sanity_check_counts(conv)) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit on store: %s %.*s %.*s",
-               state->path, keylen, key, (int)buf.len, buf.s);
-    }
-
     int r = cyrusdb_store(state->db, key, keylen, buf.s, buf.len, &state->txn);
 
     buf_free(&buf);
@@ -938,7 +988,7 @@ EXPORTED int conversation_store(struct conversations_state *state,
     return r;
 }
 
-static void _apply_delta(uint32_t *valp, int delta)
+static void _apply_delta(uint32_t *valp, ssize_t delta)
 {
     if (delta >= 0) {
         *valp += delta;
@@ -953,78 +1003,94 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
+static int _read_quota(struct conversations_state *state)
+{
+    const char *data = NULL;
+    size_t datalen = 0;
+    bit64 val = 0;
+    int r = cyrusdb_fetch(state->db, "Q", 1, &data, &datalen, &state->txn);
+    if (r) return r;
+    if (datalen) {
+        const char *rest;
+        if (datalen < 12) return IMAP_MAILBOX_BADFORMAT;
+        if (memcmp(data, "1 %(E ", 6)) return IMAP_MAILBOX_BADFORMAT;
+        r = parsenum(data+6, &rest, datalen-6, &val);
+        if (r) return r;
+
+        state->quota.emails = val;
+
+        datalen -= (rest - data);
+        data = rest;
+        if (datalen < 5) return IMAP_MAILBOX_BADFORMAT;
+        if (memcmp(data, " S ", 3)) return IMAP_MAILBOX_BADFORMAT;
+        r = parsenum(data+3, &rest, datalen-3, &val);
+        if (r) return r;
+
+        state->quota.storage = val;
+
+        datalen -= (rest - data);
+        if (datalen != 1) return IMAP_MAILBOX_BADFORMAT;
+        if (*rest != ')') return IMAP_MAILBOX_BADFORMAT;
+        return 0;
+    }
+    return CYRUSDB_NOTFOUND;
+}
+
+static int _write_quota(struct conversations_state *state)
+{
+    if (!state->quota_dirty) return 0;
+
+    ssize_t emails = state->quota.emails;
+    ssize_t storage = state->quota.storage;
+
+    // can't go negative (could happen before a rebuild)
+    if (emails < 0 || storage < 0) {
+        syslog(LOG_ERR, "IOERROR: conversations_audit on quota store: %s (%lld %lld)",
+               state->path, (long long)emails, (long long)storage);
+        emails = 0;
+        storage = 0;
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "1 %%(E %lld S %lld)", (long long)emails, (long long)storage);
+    int r = cyrusdb_store(state->db, "Q", 1, buf.s, buf.len, &state->txn);
+    buf_free(&buf);
+
+    return r;
+}
+
+EXPORTED int conversations_read_quota(struct conversations_state *state, struct conv_quota *q)
+{
+    if (!state->quota_loaded) {
+        memset(&state->quota, 0, sizeof(struct conv_quota));
+        int r = _read_quota(state);
+        if (r && r != CYRUSDB_NOTFOUND) return r;
+        state->quota_loaded = 1;
+    }
+    if (q) *q = state->quota;
+    return 0;
+}
+
+static int _update_quotaused(struct conversations_state *state, int existsdiff, ssize_t quotadiff)
+{
+    // no change?  No worries
+    if (!existsdiff && !quotadiff) return 0;
+
+    int r = conversations_read_quota(state, NULL);
+    if (r) return r;
+
+    state->quota.emails += existsdiff;
+    state->quota.storage += quotadiff;
+    state->quota_dirty = 1; // write on commit
+
+    return 0;
+}
+
 static int _conversation_save(struct conversations_state *state,
                               const char *key, int keylen,
-                              conversation_t *conv,
-                              struct emailcounts *ecounts)
+                              conversation_t *conv)
 {
-    const conv_folder_t *folder;
     int r;
-
-    /* see if any 'F' keys need to be changed */
-    for (folder = conv->folders ; folder ; folder = folder->next) {
-        const char *mboxname = strarray_nth(state->folder_names, folder->number);
-        int exists_diff = 0;
-        int unseen_diff = 0;
-        int emailexists_diff = 0;
-        int emailunseen_diff = 0;
-        conv_status_t status = CONV_STATUS_INIT;
-        int unseen = conv->unseen;
-        int prev_unseen = conv->prev_unseen;
-
-        if (folder->number == state->trashfolder) {
-            unseen = conv->trash_unseen;
-            prev_unseen = conv->prev_trash_unseen;
-        }
-
-        /* case: full removal of conversation - make sure to remove
-         * unseen as well */
-        if (folder->exists) {
-            if (folder->prev_exists) {
-                /* both exist, just check for unseen changes */
-                unseen_diff = !!unseen - !!prev_unseen;
-            }
-            else {
-                /* adding, check if it's unseen */
-                exists_diff = 1;
-                if (unseen) unseen_diff = 1;
-            }
-        }
-        else if (folder->prev_exists) {
-            /* removing, check if it WAS unseen */
-            exists_diff = -1;
-            if (prev_unseen) unseen_diff = -1;
-        }
-        else {
-            /* we don't care about unseen if the cid is not registered
-             * in this folder, and wasn't previously either */
-        }
-
-        if (ecounts && !strcmp(ecounts->mboxname, mboxname)) {
-            // do we have email diffs?
-            emailexists_diff = !!ecounts->post_emailexists - !!ecounts->pre_emailexists;
-            emailunseen_diff = !!ecounts->post_emailunseen - !!ecounts->pre_emailunseen;
-        }
-
-        /* XXX - it's super inefficient to be doing this for
-         * every cid in every folder in the transaction.  Big
-         * wins available by caching these in memory and writing
-         * once at the end of the transaction */
-        r = conversation_getstatus(state, mboxname, &status);
-        if (r) goto done;
-        if (exists_diff || unseen_diff
-         || emailexists_diff || emailunseen_diff
-         || status.threadmodseq < conv->modseq) {
-            if (status.threadmodseq < conv->modseq)
-                status.threadmodseq = conv->modseq;
-            _apply_delta(&status.threadexists, exists_diff);
-            _apply_delta(&status.threadunseen, unseen_diff);
-            _apply_delta(&status.emailexists, emailexists_diff);
-            _apply_delta(&status.emailunseen, emailunseen_diff);
-            r = conversation_setstatus(state, mboxname, &status);
-            if (r) goto done;
-        }
-    }
 
     if (conv->num_records) {
         r = conversation_store(state, key, keylen, conv);
@@ -1034,8 +1100,6 @@ static int _conversation_save(struct conversations_state *state,
         r = cyrusdb_delete(state->db, key, keylen, &state->txn, 1);
     }
 
-
-done:
     if (!r)
         conv->flags &= ~CONV_ISDIRTY;
 
@@ -1044,8 +1108,7 @@ done:
 
 EXPORTED int conversation_save(struct conversations_state *state,
                       conversation_id_t cid,
-                      conversation_t *conv,
-                      struct emailcounts *ecounts)
+                      conversation_t *conv)
 {
     char bkey[CONVERSATION_ID_STRMAX+2];
 
@@ -1061,7 +1124,7 @@ EXPORTED int conversation_save(struct conversations_state *state,
 
     snprintf(bkey, sizeof(bkey), "B" CONV_FMT, cid);
 
-    return _conversation_save(state, bkey, strlen(bkey), conv, ecounts);
+    return _conversation_save(state, bkey, strlen(bkey), conv);
 }
 
 struct convstatusrock {
@@ -1121,7 +1184,7 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
     rest++; /* skip space */
     restlen = datalen - (rest - data);
 
-    if (version != CONVERSATIONS_VERSION) {
+    if (version != CONVERSATIONS_STATUS_VERSION) {
         /* XXX - an error code for "incorrect version"? */
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -1130,10 +1193,10 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
 }
 
 EXPORTED int conversation_getstatus(struct conversations_state *state,
-                                    const char *mboxname,
+                                    const char *mailbox,
                                     conv_status_t *status)
 {
-    char *key = strconcat("F", mboxname, (char *)NULL);
+    char *key = strconcat("F", mailbox, (char *)NULL);
     const char *data;
     size_t datalen;
     int r = 0;
@@ -1168,7 +1231,7 @@ EXPORTED int conversation_getstatus(struct conversations_state *state,
 
  done:
     if (r)
-        syslog(LOG_ERR, "IOERROR: conversations invalid status %s", mboxname);
+        syslog(LOG_ERR, "IOERROR: conversations invalid status %s", mailbox);
 
     free(key);
 
@@ -1252,7 +1315,6 @@ int _saxconvparse(int type, struct dlistsax_data *d)
         // unseen
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
         rock->conv->unseen = atol(d->data);
-        rock->conv->prev_unseen = rock->conv->unseen;
         rock->state = 5;
         return 0;
 
@@ -1313,7 +1375,6 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             return 0;
         case 3:
             rock->folder->exists = atol(d->data);
-            rock->folder->prev_exists = rock->folder->exists;
             rock->substate = 4;
             return 0;
         case 4:
@@ -1432,6 +1493,11 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             rock->thread->internaldate = atol(d->data);
             rock->substate = 3;
             return 0;
+
+        case 3:
+            rock->thread->createdmodseq = atoll(d->data);
+            rock->substate = 4;
+            return 0;
         }
         return 0; // there might be following fields that we ignore here
 
@@ -1471,7 +1537,7 @@ EXPORTED int conversation_parse(const char *data, size_t datalen,
     rest++; /* skip space */
     restlen = datalen - (rest - data);
 
-    if (version != CONVERSATIONS_VERSION) return IMAP_MAILBOX_BADFORMAT;
+    if (version > CONVERSATIONS_RECORD_VERSION) return IMAP_MAILBOX_BADFORMAT;
 
     struct convparserock rock = { conv, STRARRAY_INITIALIZER,
                                   NULL, NULL, NULL, 0, 0, flags };
@@ -1480,6 +1546,7 @@ EXPORTED int conversation_parse(const char *data, size_t datalen,
     if (r) return r;
 
     conv->flags = flags;
+    conv->version = version;
 
     return 0;
 }
@@ -1510,17 +1577,9 @@ EXPORTED int conversation_load_advanced(struct conversations_state *state,
 
     r = conversation_parse(data, datalen, conv, flags);
 
-    if (r || ((conv->flags & CONV_WITHFOLDERS) && _sanity_check_counts(conv))) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit on load: %s %s %.*s",
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: conversations_audit parse error: %s %s %.*s",
                state->path, bkey, (int)datalen, data);
-    }
-
-    const conv_folder_t *folder = conversation_get_folder(conv, state->trashfolder, /*create*/0);
-    if (folder) {
-        conv->trash_unseen = conv->prev_trash_unseen = folder->unseen;
-    }
-    else {
-        conv->trash_unseen = conv->prev_trash_unseen = 0;
     }
 
     return r;
@@ -1557,7 +1616,7 @@ static int _conversation_load_modseq(const char *data, int datalen,
     int r;
 
     r = parsenum(p, &p, (end-p), &version);
-    if (r || version != CONVERSATIONS_VERSION)
+    if (r || version > CONVERSATIONS_RECORD_VERSION)
         return IMAP_MAILBOX_BADFORMAT;
 
     if ((end - p) < 4 || p[0] != ' ' || p[1] != '(')
@@ -1608,7 +1667,20 @@ EXPORTED conv_folder_t *conversation_find_folder(struct conversations_state *sta
                                         conversation_t *conv,
                                         const char *mboxname)
 {
-    int number = folder_number(state, mboxname, /*create*/0);
+    int number;
+
+    if (state->folders_byname)
+        number = conversation_folder_number(state, mboxname, /*create*/0);
+    else {
+        mbentry_t *mbentry = NULL;
+
+        mboxlist_lookup(mboxname, &mbentry, NULL);
+        if (!mbentry) return NULL;
+
+        number = conversation_folder_number(state, mbentry->uniqueid, /*create*/0);
+        mboxlist_entry_free(&mbentry);
+    }
+
     return conversation_get_folder(conv, number, /*create*/0);
 }
 
@@ -1708,6 +1780,11 @@ static int _thread_datesort(const void **a, const void **b)
     if (r < 0) return -1;
     if (r > 0) return 1;
 
+    // if same internaldate, use createdmodseq for a stable sort
+    int64_t r2 = (ta->createdmodseq - tb->createdmodseq);
+    if (r2 < 0) return -1;
+    if (r2 > 0) return 1;
+
     return message_guid_cmp(&ta->guid, &tb->guid);
 }
 
@@ -1741,6 +1818,7 @@ static void conversations_thread_sort(conversation_t *conv)
 static void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
                                        time_t internaldate,
+                                       modseq_t createdmodseq,
                                        int delta_exists)
 {
     conv_thread_t *thread, **nextp = &conv->thread;
@@ -1766,7 +1844,15 @@ static void conversation_update_thread(conversation_t *conv,
     }
 
     message_guid_copy(&thread->guid, guid);
-    thread->internaldate = internaldate;
+    // these should always be the same for all copies of an email!
+    // but if not (e.g. IMAP append) we want the earliest non-zero value
+    if (!thread->internaldate || thread->internaldate > internaldate)
+        thread->internaldate = internaldate;
+    // the same email may exist multiple times in a folder or in multiple
+    // folders with different createdmodseq.  We want to track the earliest
+    // one
+    if (!thread->createdmodseq || thread->createdmodseq > createdmodseq)
+        thread->createdmodseq = createdmodseq;
     _apply_delta(&thread->exists, delta_exists);
 
     conversations_thread_sort(conv);
@@ -1780,7 +1866,7 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
                                          const char *mailbox,
                                          const char *domain,
                                          time_t lastseen,
-                                         int delta_exists)
+                                         ssize_t delta_exists)
 {
     conv_sender_t *sender, *ptr, **nextp = &conv->senders;
 
@@ -1861,29 +1947,6 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
     conv->flags |= CONV_ISDIRTY;
 }
 
-static int _match1(void *rock,
-                   const char *key __attribute__((unused)),
-                   size_t keylen __attribute__((unused)),
-                   const char *data __attribute__((unused)),
-                   size_t datalen __attribute__((unused)))
-{
-    int *match = (int *)rock;
-    *match = 1;
-    return CYRUSDB_DONE;
-}
-
-EXPORTED int conversations_guid_exists(struct conversations_state *state,
-                                       const char *guidrep)
-{
-    int match = 0;
-
-    char *key = strconcat("G", guidrep, (char *)NULL);
-    cyrusdb_foreach(state->db, key, strlen(key), NULL, _match1, &match, NULL);
-    free(key);
-
-    return match;
-}
-
 struct guid_foreach_rock {
     struct conversations_state *state;
     int(*cb)(const conv_guidrec_t *, void *);
@@ -1895,7 +1958,9 @@ struct guid_foreach_rock {
 };
 
 static int _guid_one(struct guid_foreach_rock *frock,
+                     const char *key,
                      conversation_id_t cid,
+                     conversation_id_t basecid,
                      uint32_t system_flags,
                      uint32_t internal_flags,
                      time_t internaldate,
@@ -1906,7 +1971,10 @@ static int _guid_one(struct guid_foreach_rock *frock,
     uint32_t res;
 
     /* Set G record values */
+    rec.cstate = frock->state;
+    rec.guidrep = key+1;
     rec.cid = cid;
+    rec.basecid = basecid;
     rec.system_flags = system_flags;
     rec.internal_flags = internal_flags;
     rec.internaldate = internaldate;
@@ -1920,12 +1988,10 @@ static int _guid_one(struct guid_foreach_rock *frock,
     p = strchr(item, ':');
     if (!p) return IMAP_INTERNAL;
 
-    /* mboxname */
+    /* folder number */
     int r = parseuint32(item, &err, &res);
     if (r || err != p) return IMAP_INTERNAL;
     rec.foldernum = res;
-    rec.mboxname = strarray_safenth(frock->state->folder_names, res);
-    if (!rec.mboxname) return IMAP_INTERNAL;
 
     /* uid */
     r = parseuint32(p + 1, &err, &res);
@@ -1959,11 +2025,8 @@ static int _guid_filter_p(void *rock,
 
     struct guid_foreach_rock *frock = (struct guid_foreach_rock *)rock;
 
-    uint8_t val[20];
-    hex_to_bin(key+1, 40, val);
-
     for (; frock->filterpos < frock->filternum; frock->filterpos++) {
-        int cmp = memcmp(frock->filterdata + (21 * frock->filterpos), val, 20);
+        int cmp = memcmp(frock->filterdata + (41 * frock->filterpos), key+1, 40);
         if (cmp > 0) break; // definitely not a match
         if (cmp == 0) return 1; // match.
         /* We don't also increment for a match because multiple rows
@@ -1991,7 +2054,7 @@ static int _guid_cb(void *rock,
         int i;
         for (i = 0; i < recs->count; i++) {
             buf_setcstr(&frock->partbuf, strarray_nth(recs, i));
-            r = _guid_one(frock, /*cid*/0,
+            r = _guid_one(frock, key, /*cid*/0, /*basecid*/0,
                           /*system_flags*/0, /*internal_flags*/0,
                           /*internaldate*/0, /*version*/0);
             if (r) break;
@@ -2005,6 +2068,7 @@ static int _guid_cb(void *rock,
         return IMAP_INTERNAL;
 
     conversation_id_t cid = 0;
+    conversation_id_t basecid = 0;
     uint32_t system_flags = 0;
     uint32_t internal_flags = 0;
     time_t internaldate = 0;
@@ -2016,12 +2080,15 @@ static int _guid_cb(void *rock,
         if (*p & 0x80) version = *p & 0x7f;
         if (version > 0) p++;
 
-        if (version == 0) {
+        switch (version) {
+        case 0:
             /* cid */
             r = parsehex(p, &p, 16, &cid);
             if (r) return r;
-        }
-        else {
+            break;
+
+        case 1: /* OLD - byname version */
+        case 2: /* original byid version (no basecid) */
             /* cid */
             cid = ntohll(*((bit64*)p));
             p += 8;
@@ -2034,11 +2101,30 @@ static int _guid_cb(void *rock,
             /* internaldate*/
             internaldate = (time_t) ntohll(*((bit64*)p));
             p += 8;
+            break;
+
+        default:
+            /* cid */
+            cid = ntohll(*((bit64*)p));
+            p += 8;
+            /* system_flags */
+            system_flags = ntohl(*((bit32*)p));
+            p += 4;
+            /* internal flags */
+            internal_flags = ntohl(*((bit32*)p));
+            p += 4;
+            /* internaldate*/
+            internaldate = (time_t) ntohll(*((bit64*)p));
+            p += 8;
+            /* basecid */
+            basecid = ntohll(*((bit64*)p));
+            p += 8;
+            break;
         }
     }
 
     buf_setmap(&frock->partbuf, key+42, keylen-42);
-    r = _guid_one(frock, cid, system_flags, internal_flags,
+    r = _guid_one(frock, key, cid, basecid, system_flags, internal_flags,
                   internaldate, version);
 
     return r;
@@ -2051,7 +2137,9 @@ static int _guid_foreach_helper(struct conversations_state *state,
                                 const void *data,
                                 size_t num)
 {
-    struct guid_foreach_rock rock = { state, cb, cbrock, data, num, 0, BUF_INITIALIZER };
+    struct guid_foreach_rock rock = {
+        state, cb, cbrock, data, num, 0, BUF_INITIALIZER
+    };
 
     foreach_p *filter = data ? _guid_filter_p : NULL;
 
@@ -2095,34 +2183,41 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
         syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using indexed mode for %d records",
                state->path, (int)n);
     }
-    char guid[41];
-    guid[40] = '\0';
     size_t i;
     for (i = 0; i < n; i++) {
-        const char *entry = data + (i*21);
-        bin_to_lchex(entry, 20, guid);
-        int r = conversations_guid_foreach(state, guid, cb, cbrock);
+        const char *guidrep = data + (i*41);
+        int r = conversations_guid_foreach(state, guidrep, cb, cbrock);
         if (r) return r;
     }
     return 0;
 }
 
+struct cidlookupdata {
+    struct index_record *record;
+    int found;
+};
+
 static int _getcid(const conv_guidrec_t *rec, void *rock)
 {
-    conversation_id_t *cidp = (conversation_id_t *)rock;
-    if (!rec->part) {
-        *cidp = rec->cid;
+    struct cidlookupdata *data = (struct cidlookupdata *)rock;
+    if (!rec->part && rec->cid) {
+        if (data->record) {
+            data->record->cid = rec->cid;
+            data->record->basecid = rec->basecid;
+        }
+        data->found = 1;
         return CYRUSDB_DONE;
     }
     return 0;
 }
 
-EXPORTED conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
-                                                         const char *guidrep)
+EXPORTED int conversations_guid_cid_lookup(struct conversations_state *state,
+                                           const char *guidrep,
+                                           struct index_record *record)
 {
-    conversation_id_t cid = 0;
-    conversations_guid_foreach(state, guidrep, _getcid, &cid);
-    return cid;
+    struct cidlookupdata rock = { record, 0 };
+    conversations_guid_foreach(state, guidrep, _getcid, &rock);
+    return rock.found;
 }
 
 
@@ -2130,6 +2225,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
                                       const char *guidrep,
                                       const char *item,
                                       conversation_id_t cid,
+                                      conversation_id_t basecid,
                                       uint32_t system_flags,
                                       uint32_t internal_flags,
                                       time_t internaldate,
@@ -2169,13 +2265,24 @@ static int conversations_guid_setitem(struct conversations_state *state,
     buf_appendcstr(&key, item);
 
     if (add) {
-        /* When bumping the G value version, make sure to update _guid_cb */
         struct buf val = BUF_INITIALIZER;
-        buf_putc(&val, (char)(0x80 | CONV_GUIDREC_VERSION));
-        buf_appendbit64(&val, cid);
-        buf_appendbit32(&val, system_flags);
-        buf_appendbit32(&val, internal_flags);
-        buf_appendbit64(&val, (bit64)internaldate);
+        if (state->folders_byname) {
+            buf_putc(&val, 0x80 | CONV_GUIDREC_BYNAME_VERSION);
+            buf_appendbit64(&val, cid);
+            buf_appendbit32(&val, system_flags);
+            buf_appendbit32(&val, internal_flags);
+            buf_appendbit64(&val, (bit64)internaldate);
+        }
+        /* When bumping the G value version, make sure to update _guid_cb */
+        else {
+            buf_putc(&val, 0x80 | CONV_GUIDREC_VERSION);
+            buf_appendbit64(&val, cid);
+            buf_appendbit32(&val, system_flags);
+            buf_appendbit32(&val, internal_flags);
+            buf_appendbit64(&val, (bit64)internaldate);
+            buf_appendbit64(&val, basecid);
+        }
+
         r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
                                      buf_base(&val), buf_len(&val),
                                      &state->txn);
@@ -2193,6 +2300,7 @@ done:
 
 static int _guid_addbody(struct conversations_state *state,
                          conversation_id_t cid,
+                         conversation_id_t basecid,
                          uint32_t system_flags, uint32_t internal_flags,
                          time_t internaldate,
                          struct body *body,
@@ -2209,7 +2317,7 @@ static int _guid_addbody(struct conversations_state *state,
         buf_setcstr(&buf, base);
         buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
-        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), cid,
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), cid, basecid,
                                        system_flags, internal_flags, internaldate,
                                        add);
         buf_free(&buf);
@@ -2217,11 +2325,11 @@ static int _guid_addbody(struct conversations_state *state,
         if (r) return r;
     }
 
-    r = _guid_addbody(state, cid, system_flags, internal_flags, internaldate, body->subpart, base, add);
+    r = _guid_addbody(state, cid, basecid, system_flags, internal_flags, internaldate, body->subpart, base, add);
     if (r) return r;
 
     for (i = 1; i < body->numparts; i++) {
-        r = _guid_addbody(state, cid, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
+        r = _guid_addbody(state, cid, basecid, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
         if (r) return r;
     }
 
@@ -2233,7 +2341,9 @@ static int conversations_set_guid(struct conversations_state *state,
                                   const struct index_record *record,
                                   int add)
 {
-    int folder = folder_number(state, mailbox->name, /*create*/1);
+    int folder = conversation_folder_number(state,
+                                            CONV_FOLDER_KEY_MBOX(state, mailbox),
+                                            /*create*/1);
     struct buf item = BUF_INITIALIZER;
     struct body *body = NULL;
     int r = 0;
@@ -2248,40 +2358,14 @@ static int conversations_set_guid(struct conversations_state *state,
     const char *base = buf_cstring(&item);
 
     r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
-                                   base, record->cid,
+                                   base, record->cid, record->basecid,
                                    record->system_flags,
                                    record->internal_flags,
                                    record->internaldate,
                                    add);
-    if (!r) r = _guid_addbody(state, record->cid,
+    if (!r) r = _guid_addbody(state, record->cid, record->basecid,
                               record->system_flags, record->internal_flags,
                               record->internaldate, body, base, add);
-
-#ifdef WITH_DAV
-    if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
-        !strcmp(body->type, "TEXT") && !strcmp(body->subtype, "VCARD")) {
-
-        struct vparse_card *vcard = record_to_vcard(mailbox, record);
-
-        if (vcard) {
-            struct message_guid guid;
-            struct vparse_entry *photo =
-                vparse_get_entry(vcard->objects, NULL, "photo");
-
-            if (photo && vcard_prop_decode_value(photo, NULL, NULL, &guid)) {
-                buf_printf(&item, "[%s/VCARD#PHOTO]", body->part_id);
-                r = conversations_guid_setitem(state, message_guid_encode(&guid),
-                                               buf_cstring(&item), 0 /*cid*/,
-                                               record->system_flags,
-                                               record->internal_flags,
-                                               record->internaldate,
-                                               add);
-            }
-
-            vparse_free_card(vcard);
-        }
-    }
-#endif /* WITH_DAV */
 
     message_free_body(body);
     free(body);
@@ -2289,49 +2373,80 @@ static int conversations_set_guid(struct conversations_state *state,
     return r;
 }
 
+struct read_emailcounts_rock {
+    struct conversations_state *cstate;
+    struct emailcounts *ecounts;
+};
+
 static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
 {
-    struct emailcounts *ecounts = (struct emailcounts *)rock;
     if (rec->part) return 0;
-    if (strcmp(ecounts->mboxname, rec->mboxname)) return 0;
-    // ok, we're in the same folder - are we expunged?
+    // only count records with cids, otherwise the zero and rebuild fails
+    if (!rec->cid) return 0;
+
+    struct emailcounts *ecounts = ((struct read_emailcounts_rock*)rock)->ecounts;
+    struct conversations_state *cstate = ((struct read_emailcounts_rock*)rock)->cstate;
+
+    struct emailcountitems *i = ecounts->ispost ? &ecounts->post : &ecounts->pre;
+
+    i->numrecords++;
+    if (rec->foldernum == ecounts->foldernum) i->foldernumrecords++;
+
+    // only count in regular IMAP mailboxes
+    if (!bv_isset(&ecounts->mbtype_known, rec->foldernum)) {
+        const char *mboxname = conversations_folder_mboxname(cstate, rec->foldernum);
+        if (mboxname && !mboxname_isnondeliverymailbox(mboxname, 0)) {
+            bv_set(&ecounts->mbtype_mail, rec->foldernum);
+        }
+        bv_set(&ecounts->mbtype_known, rec->foldernum);
+    }
+    if (!bv_isset(&ecounts->mbtype_mail, rec->foldernum))
+        return 0;
+
+    // the rest only counts non-deleted records
     if (rec->version > 0 &&
          (rec->system_flags & FLAG_DELETED ||
           rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
         return 0;
-    if (ecounts->ispost) {
-        // not expunged or unsure, count it as exists
-        ecounts->post_emailexists++;
-        // not seen or unsure, count it as unseen
-        if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-            ecounts->post_emailunseen++;
+
+    i->exists++;
+    if (rec->foldernum == ecounts->foldernum) i->folderexists++;
+    bv_set(&ecounts->exists_foldernums, rec->foldernum);
+
+    // not seen or unsure, count it as unseen
+    if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT))) {
+        if (rec->foldernum != ecounts->trashfolder) i->unseen++;
+        if (rec->foldernum == ecounts->foldernum) i->folderunseen++;
     }
-    else {
-        // not expunged or unsure, count it as exists
-        ecounts->pre_emailexists++;
-        // not seen or unsure, count it as unseen
-        if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-            ecounts->pre_emailunseen++;
-    }
+
     return 0;
+}
+
+EXPORTED void emailcounts_fini(struct emailcounts *ecounts)
+{
+    bv_fini(&ecounts->exists_foldernums);
+    bv_fini(&ecounts->mbtype_known);
+    bv_fini(&ecounts->mbtype_mail);
+    static struct emailcounts init = EMAILCOUNTS_INIT;
+    *ecounts = init;
 }
 
 EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          struct mailbox *mailbox,
                                          const struct index_record *old,
                                          struct index_record *new,
-                                         int allowrenumber)
+                                         int allowrenumber,
+                                         int ignorelimits,
+                                         int silent)
 {
     conversation_t *conv = NULL;
-    int delta_num_records = 0;
-    int delta_exists = 0;
-    int delta_unseen = 0;
-    int is_trash = 0;
-    int delta_size = 0;
+    size_t delta_exists = 0;
+    size_t delta_size = 0;
     int *delta_counts = NULL;
     int i;
     modseq_t modseq = 0;
     int r = 0;
+    struct emailcounts ecounts = EMAILCOUNTS_INIT;
 
     if (old && new) {
         /* we're always moving forwards */
@@ -2346,9 +2461,9 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
          * a removal and re-add, so cache gets parsed and msgids
          * updated */
         if (old->cid != new->cid) {
-            r = conversations_update_record(cstate, mailbox, old, NULL, 0);
+            r = conversations_update_record(cstate, mailbox, old, NULL, 0, ignorelimits, silent);
             if (r) return r;
-            return conversations_update_record(cstate, mailbox, NULL, new, 0);
+            return conversations_update_record(cstate, mailbox, NULL, new, 0, ignorelimits, silent);
         }
     }
 
@@ -2358,31 +2473,43 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (new && !old && allowrenumber) {
         /* add the conversation */
         r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
-        if (r) return r;
+        if (r) goto done;
         r = message_update_conversations(cstate, mailbox, new, &conv);
-        if (r) return r;
+        if (r) goto done;
     }
     else if (record->cid) {
         r = conversation_load(cstate, record->cid, &conv);
-        if (r) return r;
+        if (r) goto done;
+        /* add subject if it loses draft flag */
+        if (conv && !conv->subject && !(record->system_flags & FLAG_DRAFT)) {
+            r = mailbox_cacherecord(mailbox, record);
+            if (r) goto done;
+            conv->subject = message_extract_convsubject(record);
+        }
         if (!conv) {
             if (!new) {
                 /* We're trying to delete a conversation that's already
                  * gone...don't try to hard */
                 syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
                                    "deleted, ignoring", record->cid);
-                return 0;
+                goto done;
             }
             conv = conversation_new();
         }
     }
 
-    struct emailcounts ecounts = EMAILCOUNTS_INIT;
+    ecounts.foldernum =
+        conversation_folder_number(cstate, CONV_FOLDER_KEY_MBOX(cstate, mailbox), /*create*/1);
+    ecounts.trashfolder = cstate->trashfolder;
+    bv_setsize(&ecounts.exists_foldernums, conversations_num_folders(cstate));
+    bv_setsize(&ecounts.mbtype_known, conversations_num_folders(cstate));
+    bv_setsize(&ecounts.mbtype_mail, conversations_num_folders(cstate));
+
     /* count the email state before making GUID changes */
-    ecounts.mboxname = mailbox->name;
+    struct read_emailcounts_rock rock = { cstate, &ecounts };
     r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
-    if (r) return r;
+                                   _read_emailcounts_cb, &rock);
+    if (r) goto done;
 
     // always update the GUID information first, as it's used for search
     // even if conversations have not been set on this email
@@ -2391,37 +2518,66 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                     old->internal_flags != new->internal_flags ||
                     old->internaldate != new->internaldate) {
             r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
-            if (r) return r;
+            if (r) goto done;
         }
     }
     else {
         if (old) {
             r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
-            if (r) return r;
+            if (r) goto done;
         }
     }
 
-    // the rest is bookkeeping purely for CIDed messages
-    if (!record->cid) return 0;
+    /* we've made any set_guid, so count the state again! */
+    ecounts.ispost = 1;
+    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
+                                   _read_emailcounts_cb, &rock);
+    if (r) goto done;
 
-    /* IRIS-2534: check if it's the trash folder - XXX - should be separate
-     * conversation root or similar more useful method in future */
-    is_trash = mboxname_isusertrash(mailbox->name);
+    // check sanity limits
+    if (!ignorelimits && ecounts.post.numrecords > ecounts.pre.numrecords) {
+        if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
+            r = IMAP_CONVERSATION_GUIDLIMIT;
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: conversations GUID limit for %s/%u/%s (%llu %llu %llu)",
+                   mailbox_name(mailbox), record->uid,
+                   message_guid_encode(&record->guid),
+                   (long long unsigned)ecounts.post.numrecords,
+                   (long long unsigned)ecounts.post.exists,
+                   (long long unsigned)ecounts.post.folderexists);
+            goto done;
+        }
+    }
+
+    // set up deltas
+    if (ecounts.pre.exists) {
+        delta_exists -= 1;
+        delta_size -= record->size;
+    }
+    if (ecounts.post.exists) {
+        delta_exists += 1;
+        delta_size += record->size;
+    }
+
+    // update quotas
+    r = _update_quotaused(cstate, delta_exists, delta_size);
+    if (r) goto done;
+
+    // the rest is bookkeeping purely for CIDed messages
+    if (!record->cid) goto done;
 
     if (cstate->counted_flags)
         delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
 
     /* calculate the changes */
     if (old) {
-        /* decrease any relevent counts */
+        /* decrease any relevant counts */
         if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(old->system_flags & FLAG_DELETED)) {
-            delta_exists--;
-            delta_size -= old->size;
-            /* drafts don't update the 'unseen' counter so that
-             * they never turn a conversation "unread" */
-            if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-                delta_unseen--;
             if (cstate->counted_flags) {
                 for (i = 0; i < cstate->counted_flags->count; i++) {
                     const char *flag = strarray_nth(cstate->counted_flags, i);
@@ -2430,7 +2586,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                 }
             }
         }
-        delta_num_records--;
         modseq = MAX(modseq, old->modseq);
     }
 
@@ -2438,12 +2593,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         /* add any counts */
         if (!(new->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             !(new->system_flags & FLAG_DELETED)) {
-            delta_exists++;
-            delta_size += new->size;
-            /* drafts don't update the 'unseen' counter so that
-             * they never turn a conversation "unread" */
-            if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
-                delta_unseen++;
             if (cstate->counted_flags) {
                 for (i = 0; i < cstate->counted_flags->count; i++) {
                     const char *flag = strarray_nth(cstate->counted_flags, i);
@@ -2452,15 +2601,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                 }
             }
         }
-        delta_num_records++;
         modseq = MAX(modseq, new->modseq);
     }
-
-    /* we've made any set_guid, so count the state again! */
-    ecounts.ispost = 1;
-    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
-    if (r) return r;
 
     /* XXX - combine this with the earlier cache parsing */
     if (!mailbox_cacherecord(mailbox, record)) {
@@ -2491,56 +2633,87 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     conversation_update_thread(conv,
                                &record->guid,
                                record->internaldate,
+                               record->createdmodseq,
                                delta_exists);
 
-    conversation_update(cstate, conv, mailbox->name,
-                        is_trash, delta_num_records,
-                        delta_exists, delta_unseen,
-                        delta_size, delta_counts, modseq,
-                        record->createdmodseq);
+    r = conversation_update(cstate, conv, &ecounts,
+                            delta_size, delta_counts,
+                            modseq, record->createdmodseq, silent);
+    if (r) goto done;
 
-    r = conversation_save(cstate, record->cid, conv, &ecounts);
+    r = conversation_save(cstate, record->cid, conv);
 
+done:
+    emailcounts_fini(&ecounts);
     conversation_free(conv);
     free(delta_counts);
     return r;
 }
 
 
-EXPORTED void conversation_update(struct conversations_state *state,
-                         conversation_t *conv, const char *mboxname,
-                         int is_trash, int delta_num_records,
-                         int delta_exists, int delta_unseen,
-                         int delta_size, int *delta_counts,
-                         modseq_t modseq, modseq_t createdmodseq)
+EXPORTED int conversation_update(struct conversations_state *state,
+                         conversation_t *conv, struct emailcounts *ecounts,
+                         ssize_t delta_size, int *delta_counts,
+                         modseq_t modseq, modseq_t createdmodseq, int silent)
 {
-    conv_folder_t *folder;
-    int number = folder_number(state, mboxname, /*create*/1);
-    int i;
+    conv_folder_t *folder = conversation_get_folder(conv, ecounts->foldernum, /*create*/1);
 
-    folder = conversation_get_folder(conv, number, /*create*/1);
+    // only count one per instance of the GUID in each folder, and in total
+    int delta_num_records = !!ecounts->post.numrecords - !!ecounts->pre.numrecords;
+    int delta_exists = !!ecounts->post.exists - !!ecounts->pre.exists;
+    int delta_unseen = !!ecounts->post.unseen - !!ecounts->pre.unseen;
+    int delta_folder_records = !!ecounts->post.foldernumrecords - !!ecounts->pre.foldernumrecords;
+    int delta_folder_exists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
+    int delta_folder_unseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
 
+    // version 0 counted every UID rather than by GUID
+    if (conv->version < 1) {
+        delta_num_records = ecounts->post.numrecords - ecounts->pre.numrecords;
+        delta_exists = ecounts->post.exists - ecounts->pre.exists;
+        delta_unseen = ecounts->post.unseen - ecounts->pre.unseen;
+        delta_folder_records = ecounts->post.foldernumrecords - ecounts->pre.foldernumrecords;
+        delta_folder_exists = ecounts->post.folderexists - ecounts->pre.folderexists;
+        delta_folder_unseen = ecounts->post.folderunseen - ecounts->pre.folderunseen;
+    }
+
+    int oldfolderexists = folder->exists;
+    int oldfolderunseen = folder->unseen;
+    int oldunseen = conv->unseen;
+
+    int is_trash = (ecounts->foldernum == state->trashfolder);
+
+    /* update the conversation tracking values for the whole conversation */
     if (delta_num_records) {
         _apply_delta(&conv->num_records, delta_num_records);
-        _apply_delta(&folder->num_records, delta_num_records);
         conv->flags |= CONV_ISDIRTY;
     }
     if (delta_exists) {
         _apply_delta(&conv->exists, delta_exists);
-        _apply_delta(&folder->exists, delta_exists);
         conv->flags |= CONV_ISDIRTY;
     }
     if (delta_unseen) {
-        if (is_trash) _apply_delta(&conv->trash_unseen, delta_unseen);
-        else _apply_delta(&conv->unseen, delta_unseen);
-        _apply_delta(&folder->unseen, delta_unseen);
+        _apply_delta(&conv->unseen, delta_unseen);
         conv->flags |= CONV_ISDIRTY;
     }
     if (delta_size) {
         _apply_delta(&conv->size, delta_size);
         conv->flags |= CONV_ISDIRTY;
     }
+    if (delta_folder_records) {
+        _apply_delta(&folder->num_records, delta_folder_records);
+        conv->flags |= CONV_ISDIRTY;
+    }
+    if (delta_folder_exists) {
+        _apply_delta(&folder->exists, delta_folder_exists);
+        conv->flags |= CONV_ISDIRTY;
+    }
+    if (delta_folder_unseen) {
+        _apply_delta(&folder->unseen, delta_folder_unseen);
+        conv->flags |= CONV_ISDIRTY;
+    }
+
     if (state->counted_flags) {
+        int i;
         for (i = 0; i < state->counted_flags->count; i++) {
             if (delta_counts[i]) {
                 _apply_delta(&conv->counts[i], delta_counts[i]);
@@ -2560,6 +2733,118 @@ EXPORTED void conversation_update(struct conversations_state *state,
         conv->createdmodseq = createdmodseq;
         conv->flags |= CONV_ISDIRTY;
     }
+
+    // now update all the folder counts
+
+    int dexists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
+    int dfolderunseen = !!ecounts->post.folderunseen - !!ecounts->pre.folderunseen;
+    int dfolderexists = !!ecounts->post.folderexists - !!ecounts->pre.folderexists;
+    int dunseen = !!ecounts->post.unseen - !!ecounts->pre.unseen;
+    int dthreadexists = !!folder->exists - !!oldfolderexists;
+    int dthreadunseen = !!conv->unseen - !!oldunseen;
+    if (is_trash) dthreadunseen = !!folder->unseen - !!oldfolderunseen;
+
+
+    for (folder = conv->folders; folder; folder = folder->next) {
+        conv_status_t status;
+        const char *mailbox = strarray_nth(state->folders, folder->number);
+
+        int r = conversation_getstatus(state, mailbox, &status);
+        if (r) return r;
+
+        int dirty = 0;
+
+        // all counts apply to the current folder
+        if (folder->number == ecounts->foldernum) {
+            if (dexists) {
+                _apply_delta(&status.emailexists, dexists);
+                dirty = 1;
+            }
+
+            if (folder->number != state->trashfolder) {
+                if (dfolderexists > 0 && ecounts->post.unseen) {
+                    // email just got added here and is unseen
+                    _apply_delta(&status.emailunseen, 1);
+                    dirty = 1;
+                }
+                else if (dfolderexists < 0 && ecounts->pre.unseen) {
+                    // email just got deleted here and was unseen
+                    _apply_delta(&status.emailunseen, -1);
+                    dirty = 1;
+                }
+                else if (dfolderexists == 0 && dunseen > 0) {
+                    // email was seen and got unseen
+                    _apply_delta(&status.emailunseen, 1);
+                    dirty = 1;
+                }
+                else if (dfolderexists == 0 && dunseen < 0) {
+                    // email was unseen and got seen
+                    _apply_delta(&status.emailunseen, -1);
+                    dirty = 1;
+                }
+            }
+            else if (dfolderunseen) {
+                // trash only counts its own unseen emails
+                _apply_delta(&status.emailunseen, dfolderunseen);
+                dirty = 1;
+            }
+
+            if (dthreadexists) {
+                _apply_delta(&status.threadexists, dthreadexists);
+                dirty = 1;
+            }
+
+            // case - adding a seen email to a new folder, but the thread is unseen
+            if (folder->exists && !oldfolderexists && (is_trash ? folder->unseen : conv->unseen)) {
+                _apply_delta(&status.threadunseen, 1);
+                dirty = 1;
+            }
+            // case - removing the last message from a folder, and the thread remains unseen
+            else if (!folder->exists && oldfolderexists && (is_trash ? oldfolderunseen : oldunseen)) {
+                _apply_delta(&status.threadunseen, -1);
+                dirty = 1;
+            }
+            // case there's an email in this folder, and the thread has changed
+            else if (folder->exists && dthreadunseen) {
+                _apply_delta(&status.threadunseen, dthreadunseen);
+                dirty = 1;
+            }
+        }
+        // unseen changes apply to all other folders except trash if this isn't the trash folder
+        else if (!is_trash && folder->number != state->trashfolder && folder->exists) {
+
+            if (bv_isset(&ecounts->exists_foldernums, folder->number)) {
+                if (dunseen > 0) {
+                    // email was seen and got unseen
+                    _apply_delta(&status.emailunseen, 1);
+                    dirty = 1;
+                }
+                if (dunseen < 0) {
+                    // email was unseen and got seen
+                    _apply_delta(&status.emailunseen, -1);
+                    dirty = 1;
+                }
+            }
+
+            if (dthreadunseen) {
+                _apply_delta(&status.threadunseen, dthreadunseen);
+                dirty = 1;
+            }
+
+        }
+
+        if (!silent && status.threadmodseq < modseq) {
+            status.threadmodseq = modseq;
+            dirty = 1;
+        }
+
+        if (dirty) {
+            r = conversation_setstatus(state, mailbox, &status);
+            if (r) return r;
+        }
+    }
+
+    return 0;
 }
 
 EXPORTED conversation_t *conversation_new()
@@ -2567,6 +2852,7 @@ EXPORTED conversation_t *conversation_new()
     conversation_t *conv;
 
     conv = xzmalloc(sizeof(conversation_t));
+    conv->version = CONVERSATIONS_RECORD_VERSION;
     conv->flags |= CONV_ISDIRTY;
     xstats_inc(CONV_NEW);
 
@@ -2586,10 +2872,10 @@ EXPORTED void conversation_fini(conversation_t *conv)
     conv_sender_t *sender;
     while ((sender = conv->senders)) {
         conv->senders = sender->next;
-        xfree(sender->name);
-        xfree(sender->route);
-        xfree(sender->mailbox);
-        xfree(sender->domain);
+        free(sender->name);
+        free(sender->route);
+        free(sender->mailbox);
+        free(sender->domain);
         free(sender);
     }
 
@@ -2610,6 +2896,8 @@ EXPORTED void conversation_free(conversation_t *conv)
 
 struct prune_rock {
     struct conversations_state *state;
+    arrayu64_t *cidfilter;
+    arrayu64_t cids;
     time_t thresh;
     unsigned int nseen;
     unsigned int ndeleted;
@@ -2620,7 +2908,6 @@ static int prunecb(void *rock,
                    const char *data, size_t datalen)
 {
     struct prune_rock *prock = (struct prune_rock *)rock;
-    arrayu64_t cids = ARRAYU64_INITIALIZER;
     time_t stamp;
     int r;
 
@@ -2628,12 +2915,23 @@ static int prunecb(void *rock,
     r = check_msgid(key, keylen, NULL);
     if (r) goto done;
 
-    r = _conversations_parse(data, datalen, &cids, &stamp);
+    arrayu64_truncate(&prock->cids, 0);
+
+    r = _conversations_parse(data, datalen, &prock->cids, &stamp);
     if (r) goto done;
 
-    /* keep records newer than the threshold */
-    if (stamp >= prock->thresh)
-        goto done;
+    if (prock->cidfilter) {
+        size_t i;
+        for (i = 0; i < arrayu64_size(&prock->cids); i++) {
+            if (arrayu64_bsearch(prock->cidfilter, arrayu64_nth(&prock->cids, i)))
+                goto done; // found a match
+        }
+    }
+    else {
+        /* keep records newer than the threshold */
+        if (stamp >= prock->thresh)
+            goto done;
+    }
 
     prock->ndeleted++;
 
@@ -2643,17 +2941,44 @@ static int prunecb(void *rock,
                        /*force*/1);
 
 done:
-    arrayu64_fini(&cids);
     return r;
+}
+
+static int addknowncid(void *rock,
+                       const char *key, size_t keylen,
+                       const char *data __attribute__((unused)),
+                       size_t datalen __attribute__((unused)))
+{
+    arrayu64_t *knowncids = (arrayu64_t *)rock;
+    conversation_id_t cid;
+    const char *rest;
+
+    // errors - just skip them, they won't be readable!
+    if (keylen != 17 || key[0] != 'B') return 0;
+    int r = parsehex(key+1, &rest, 16, &cid);
+    if (!r) arrayu64_append(knowncids, cid);
+    return 0;
 }
 
 EXPORTED int conversations_prune(struct conversations_state *state,
                                  time_t thresh, unsigned int *nseenp,
                                  unsigned int *ndeletedp)
 {
-    struct prune_rock rock = { state, thresh, 0, 0 };
+    struct prune_rock rock = { state, NULL, ARRAYU64_INITIALIZER, thresh, 0, 0 };
+
+    if (config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING)) {
+        // these will be added in CID order, so we don't need to sort them
+        rock.cidfilter = arrayu64_new();
+        cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid, rock.cidfilter, &state->txn);
+    }
 
     cyrusdb_foreach(state->db, "<", 1, NULL, prunecb, &rock, &state->txn);
+
+    arrayu64_fini(&rock.cids);
+    if (rock.cidfilter) {
+        arrayu64_fini(rock.cidfilter);
+        free(rock.cidfilter);
+    }
 
     if (nseenp)
         *nseenp = rock.nseen;
@@ -2697,6 +3022,9 @@ static int folder_key_rename(struct conversations_state *state,
     if (r) return r;
 
     if (to_name) {
+        /* Do nothing if using folder ids */
+        if (!state->folders_byname) return 0;
+
         r = conversation_setstatus(state, to_name, &status);
         if (r) return r;
         return conversation_setstatus(state, from_name, NULL);
@@ -2781,6 +3109,9 @@ static int zero_b_cb(void *rock,
     /* zero out the size */
     conv->size = 0;
 
+    /* Update the version */
+    conv->version = CONVERSATIONS_RECORD_VERSION;
+
     r = conversation_store(state, key, keylen, conv);
 
 done:
@@ -2824,24 +3155,44 @@ static int zero_g_cb(void *rock,
     return r;
 }
 
-EXPORTED int conversations_zero_counts(struct conversations_state *state)
+EXPORTED int conversations_zero_counts(struct conversations_state *state, int wipe)
 {
     int r = 0;
 
-    /* wipe B counts */
-    r = cyrusdb_foreach(state->db, "B", 1, NULL, zero_b_cb,
-                        state, &state->txn);
-    if (r) return r;
+    if (wipe) {
+        /* wipe the lot and start over, this loses all highestmodseqs */
+        r = cyrusdb_foreach(state->db, "", 0, NULL, zero_g_cb,
+                            state, &state->txn);
 
-    /* wipe F counts */
-    r = cyrusdb_foreach(state->db, "F", 1, NULL, zero_f_cb,
-                        state, &state->txn);
-    if (r) return r;
+        if (r) return r;
 
-    /* wipe G keys (there's no modseq kept, so we can just wipe them) */
-    r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
-                        state, &state->txn);
-    if (r) return r;
+        /* wipe our internal state too */
+        state->folders_byname = 0;
+        if (state->folders) strarray_truncate(state->folders, 0);
+        if (state->altrep) strarray_truncate(state->altrep, 0);
+        state->trashfolder = -1;
+    }
+    else {
+        /* wipe B counts */
+        r = cyrusdb_foreach(state->db, "B", 1, NULL, zero_b_cb,
+                            state, &state->txn);
+        if (r) return r;
+
+        /* wipe F counts */
+        r = cyrusdb_foreach(state->db, "F", 1, NULL, zero_f_cb,
+                            state, &state->txn);
+        if (r) return r;
+
+        /* wipe G keys (there's no modseq kept, so we can just wipe them) */
+        r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
+                            state, &state->txn);
+        if (r) return r;
+
+        /* wipe quota (it's actually just one key) */
+        r = cyrusdb_foreach(state->db, "Q", 1, NULL, zero_g_cb,
+                            state, &state->txn);
+        if (r) return r;
+    }
 
     /* re-init the counted flags */
     r = _init_counted(state, NULL, 0);

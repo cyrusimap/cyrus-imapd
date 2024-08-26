@@ -1,0 +1,132 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_v3
+    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # PROP-IDs added so we can easily compare the results
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/test.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+BDAY;PROP-ID=A1:1944-06-07
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG;PROP-ID=O1:Bubba Gump Shrimp Co.;foo
+TITLE;PROP-ID=T1:Shrimp Man
+PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
+foo.ADR;PROP-ID=A1;JSCOMPS="s, ;2;3;4;5;6":;;1501 Broadway;New York;NY;10036;USA
+foo.GEO:40.7571383482188;-73.98695548990568
+foo.TZ:-05:00
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+        }, 'R1']
+    ]);
+
+    my $want_jscard = {
+        '@type' => 'Card',
+        version => '1.0',
+        addressBookId => 'Default',
+        'cyrusimap.org:href' => $carddav->fullpath() . $href,
+        id => $id,
+        uid => $id,
+        updated => '2008-04-24T19:52:43Z',
+        vCardProps => [
+            [ 'version', {}, 'text', '3.0' ]
+        ],
+        name => {
+            full => 'Forrest Gump',
+            components => [
+                { 'kind' => 'surname', 'value' => 'Gump' },
+                { 'kind' => 'given',   'value' => 'Forrest' },
+                { 'kind' => 'title',  'value' => 'Mr.' },
+            ]
+        },
+        anniversaries => {
+            A1 => {
+                'kind' => 'birth',
+                'date' => { 'year' => 1944, 'month' => 6, 'day' => 7 }
+            }
+        },
+        organizations => {
+            O1 => {
+                name => 'Bubba Gump Shrimp Co.',
+                units => [
+                    { name => 'foo' }
+                ]
+            }
+        },
+        titles => {
+            T1 => {
+                'name' => 'Shrimp Man'
+            }
+        },
+        addresses => {
+            A1 => {
+                'isOrdered' => JSON::true,
+                'components' => [
+                    { kind => 'name',     value => '1501 Broadway' },
+                    { kind => 'locality', value => 'New York' },
+                    { kind => 'region',   value => 'NY' },
+                    { kind => 'postcode', value => '10036' },
+                    { kind => 'country',  value => 'USA' }
+                ],
+                'coordinates' => 'geo:40.7571383482188,-73.98695548990568',
+                'timeZone' => 'Etc/GMT+5'
+            }
+        },
+        media => {
+            P1 => {
+                kind => 'photo',
+                mediaType => 'image/jpeg'
+            }
+        }
+    };
+
+    
+    my $have_jscard = $res->[0][1]{list}[0];
+
+    # Get media blob id before we delete it
+    my $blobid = $res->[0][1]{list}[0]{media}{P1}{blobId};
+    $self->assert_not_null($blobid);
+
+    # Delete generated fields
+    delete $have_jscard->{blobId};
+    delete $have_jscard->{media}{P1}{blobId};
+    delete $have_jscard->{'cyrusimap.org:blobId'};
+    delete $have_jscard->{'cyrusimap.org:size'};
+
+    # Normalize and compare cards
+    normalize_jscard($want_jscard);
+    normalize_jscard($have_jscard);
+    $self->assert_deep_equals($want_jscard, $have_jscard);
+
+    $res = $jmap->Download('cassandane', $blobid);
+
+    $self->assert_str_equals('image/jpeg', $res->{headers}{'content-type'});
+    $self->assert_str_equals('some photo', $res->{content});
+}

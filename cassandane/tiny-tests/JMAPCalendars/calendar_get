@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_get
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $id = $caldav->NewCalendar({ name => "calname", color => "aqua"});
+    my $unknownId = "foo";
+
+    xlog $self, "get existing calendar";
+    my $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('aqua', $res->[0][1]{list}[0]{color});
+
+    xlog $self, "get existing calendar with select properties";
+    $res = $jmap->CallMethods([['Calendar/get', { ids => [$id], properties => ["name"] }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals("calname", $res->[0][1]{list}[0]{name});
+    $self->assert_null($res->[0][1]{list}[0]{color});
+
+    xlog $self, "get unknown calendar";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => [$unknownId]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(0, scalar(@{$res->[0][1]{list}}));
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{notFound}}));
+    $self->assert_str_equals($unknownId, $res->[0][1]{notFound}[0]);
+
+    xlog $self, "get all calendars";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => undef}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{list}}));
+    $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{list}}));
+}

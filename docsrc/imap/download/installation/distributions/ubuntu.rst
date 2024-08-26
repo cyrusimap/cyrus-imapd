@@ -36,7 +36,6 @@ system, issue the following command:
 
     *   db-util
     *   db-upgrade-util
-    *   libdb5.X (where X depends on OS version)
     *   libsasl2-2
     *   libsasl2-modules
     *   libcomerr2

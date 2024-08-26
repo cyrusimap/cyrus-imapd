@@ -1,0 +1,158 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_threadkeywords
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    my $convflags = $self->{instance}->{config}->get('conversations_counted_flags');
+    if (not defined $convflags) {
+        xlog $self, "conversations_counted_flags not configured. Skipping test";
+        return;
+    }
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my %params = (store => $store);
+    $store->set_folder("INBOX");
+
+    xlog $self, "generating email A";
+    $exp{A} = $self->make_message("Email A", %params);
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog $self, "generating email B";
+    $exp{B} = $self->make_message("Email B", %params);
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog $self, "generating email C referencing A";
+    %params = (
+        references => [ $exp{A} ],
+        store => $store,
+    );
+    $exp{C} = $self->make_message("Re: Email A", %params);
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch email ids";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2' ],
+    ]);
+    my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $msga = $m{"Email A"};
+    my $msgb = $m{"Email B"};
+    my $msgc = $m{"Re: Email A"};
+    $self->assert_not_null($msga);
+    $self->assert_not_null($msgb);
+    $self->assert_not_null($msgc);
+
+    my @flags = split ' ', $convflags;
+    foreach (@flags) {
+        my $flag = $_;
+        next if lc $flag eq '$hasattachment';  # special case
+
+        xlog $self, "Testing for counted conversation flag $flag";
+        $flag =~ s+^\\+\$+ ;
+
+        xlog $self, "fetch collapsed threads with some $flag flag";
+        $res = $jmap->CallMethods([['Email/query', {
+            filter => {
+                someInThreadHaveKeyword => $flag,
+            },
+            collapseThreads => JSON::true,
+        }, "R1"]]);
+        $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+
+        xlog $self, "set $flag flag on email email A";
+        $res = $jmap->CallMethods([['Email/set', {
+            update => {
+                $msga->{id} => {
+                    keywords => { $flag => JSON::true },
+                },
+            }
+        }, "R1"]]);
+
+        xlog $self, "fetch collapsed threads with some $flag flag";
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    someInThreadHaveKeyword => $flag,
+                },
+                collapseThreads => JSON::true,
+            }, "R1"],
+        ]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert(
+            ($msga->{id} eq $res->[0][1]->{ids}[0]) or
+            ($msgc->{id} eq $res->[0][1]->{ids}[0])
+        );
+
+        xlog $self, "fetch collapsed threads with no $flag flag";
+        $res = $jmap->CallMethods([['Email/query', {
+            filter => {
+                noneInThreadHaveKeyword => $flag,
+            },
+            collapseThreads => JSON::true,
+        }, "R1"]]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($msgb->{id}, $res->[0][1]->{ids}[0]);
+
+        xlog $self, "fetch collapsed threads sorted ascending by $flag";
+        $res = $jmap->CallMethods([['Email/query', {
+            sort => [{ property => "someInThreadHaveKeyword", keyword => $flag }],
+            collapseThreads => JSON::true,
+        }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert_str_equals($msgb->{id}, $res->[0][1]->{ids}[0]);
+        $self->assert(
+            ($msga->{id} eq $res->[0][1]->{ids}[1]) or
+            ($msgc->{id} eq $res->[0][1]->{ids}[1])
+        );
+
+        xlog $self, "fetch collapsed threads sorted descending by $flag";
+        $res = $jmap->CallMethods([['Email/query', {
+            sort => [{ property => "someInThreadHaveKeyword", keyword => $flag, isAscending => JSON::false }],
+            collapseThreads => JSON::true,
+        }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+        $self->assert(
+            ($msga->{id} eq $res->[0][1]->{ids}[0]) or
+            ($msgc->{id} eq $res->[0][1]->{ids}[0])
+        );
+        $self->assert_str_equals($msgb->{id}, $res->[0][1]->{ids}[1]);
+
+        xlog $self, 'reset keywords on email email A';
+        $res = $jmap->CallMethods([['Email/set', {
+            update => {
+                $msga->{id} => {
+                    keywords => { },
+                },
+            }
+        }, "R1"]]);
+    }
+
+    # test that 'someInThreadHaveKeyword' filter fail
+    # with an 'cannotDoFilter' error for flags that are not defined
+    # in the conversations_counted_flags config option
+    xlog $self, "fetch collapsed threads with unsupported flag";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            someInThreadHaveKeyword => 'notcountedflag',
+        },
+        collapseThreads => JSON::true,
+    }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
+}

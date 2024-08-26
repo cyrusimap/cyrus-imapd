@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_parse
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "\r\n"
+          . "Return-Path: <Ava.Nguyen\@local>\r\n"
+          . "Mime-Version: 1.0\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "Subject: bar\r\n"
+          . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+          . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+          . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+          . "To: Test User <test\@local>\r\n"
+          . "\r\n"
+          . "An embedded email"
+          . "\r\n--sub--\r\n",
+    ) || die;
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['attachments'],
+        }, 'R2' ],
+    ]);
+    my $blobId = $res->[1][1]{list}[0]{attachments}[0]{blobId};
+
+    my @props = $self->defaultprops_for_email_get();
+    push @props, "bodyStructure";
+    push @props, "bodyValues";
+
+    $res = $jmap->CallMethods([['Email/parse', {
+        blobIds => [ $blobId ], properties => \@props, fetchAllBodyValues => JSON::true,
+    }, 'R1']]);
+    my $email = $res->[0][1]{parsed}{$blobId};
+    $self->assert_not_null($email);
+
+    $self->assert_null($email->{id});
+    $self->assert_null($email->{threadId});
+    $self->assert_null($email->{mailboxIds});
+    $self->assert_deep_equals({}, $email->{keywords});
+    $self->assert_deep_equals(['fake.1475639947.6507@local'], $email->{messageId});
+    $self->assert_deep_equals([{name=>'Ava T. Nguyen', email=>'Ava.Nguyen@local'}], $email->{from});
+    $self->assert_deep_equals([{name=>'Test User', email=>'test@local'}], $email->{to});
+    $self->assert_null($email->{cc});
+    $self->assert_null($email->{bcc});
+    $self->assert_null($email->{references});
+    $self->assert_null($email->{sender});
+    $self->assert_null($email->{replyTo});
+    $self->assert_str_equals('bar', $email->{subject});
+    $self->assert_str_equals('2016-10-05T14:59:07+11:00', $email->{sentAt});
+    $self->assert_not_null($email->{blobId});
+    $self->assert_str_equals('text/plain', $email->{bodyStructure}{type});
+    $self->assert_null($email->{bodyStructure}{subParts});
+    $self->assert_num_equals(1, scalar @{$email->{textBody}});
+    $self->assert_num_equals(1, scalar @{$email->{htmlBody}});
+    $self->assert_num_equals(0, scalar @{$email->{attachments}});
+
+    my $bodyValue = $email->{bodyValues}{$email->{bodyStructure}{partId}};
+    $self->assert_str_equals('An embedded email', $bodyValue->{value});
+}

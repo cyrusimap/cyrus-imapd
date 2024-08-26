@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_mailboxids_validate_nopatch
+    :min_version_3_5 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                'emailA' => {
+                    mailboxIds => {
+                        '#mboxA' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'emailA',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $mboxA = $res->[0][1]->{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[0][1]->{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my $emailA = $res->[1][1]->{created}{emailA}{id};
+    $self->assert_not_null($emailA);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailA => {
+                    mailboxIds => {
+                        $mboxA => undef,
+                        $mboxB => JSON::true,
+                    },
+                }
+            }
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailA});
+    $self->assert_deep_equals(['mailboxIds/'.$mboxA],
+        $res->[0][1]{notUpdated}{$emailA}{properties});
+}

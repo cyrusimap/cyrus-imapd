@@ -113,7 +113,6 @@ EXPORTED int backup_read_message_data(struct backup *backup,
     if (r) return r;
 
     struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
-    prot_setisclient(ps, 1); /* don't sync literals */
     r = parse_backup_line(ps, NULL, NULL, &dl);
     prot_free(ps);
 
@@ -135,7 +134,7 @@ EXPORTED int backup_read_message_data(struct backup *backup,
         if (fd != -1) {
             struct buf buf = BUF_INITIALIZER;
 
-            buf_init_mmap(&buf, 1, fd, fname, MAP_UNKNOWN_LEN, NULL);
+            buf_refresh_mmap(&buf, 1, fd, fname, MAP_UNKNOWN_LEN, NULL);
             close(fd);
 
             r = proc(&buf, rock);
@@ -203,15 +202,15 @@ EXPORTED int backup_prepare_message_upload(struct backup *backup,
         if (!r) {
             struct protstream *ps = prot_readcb(_prot_fill_cb, gzuc);
             int c;
-            prot_setisclient(ps, 1); /* don't sync literals */
             c = parse_backup_line(ps, NULL, NULL, &dl);
             prot_free(ps);
             ps = NULL;
             if (c == EOF) {
-                syslog(LOG_ERR, "IOERROR: couldn't parse message %s from chunk %d of backup %s",
-                       message_guid_encode(&msgid->guid),
-                       chunk->id,
-                       backup->data_fname);
+                xsyslog(LOG_ERR, "IOERROR: parse_backup_line failed",
+                                 "guid=<%s> chunk=<%d> backup=<%s>",
+                                 message_guid_encode(&msgid->guid),
+                                 chunk->id,
+                                 backup->data_fname);
                 r = IMAP_IOERROR;
             }
         }

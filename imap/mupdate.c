@@ -249,6 +249,9 @@ static struct conn *conn_new(int fd)
     C->pin = prot_new(C->fd, 0);
     C->pout = prot_new(C->fd, 1);
 
+    /* Allow LITERAL+ */
+    prot_setisclient(C->pin, 1);
+
     prot_setflushonread(C->pin, C->pout);
     prot_settimeout(C->pin, 180*60);
 
@@ -297,13 +300,6 @@ static struct conn *conn_new(int fd)
 
     /* set my allowable security properties */
     sasl_setprop(C->saslconn, SASL_SEC_PROPS, mysasl_secprops(SASL_SEC_NOANONYMOUS));
-
-    /* Clear Buffers */
-    memset(&(C->tag), 0, sizeof(struct buf));
-    memset(&(C->cmd), 0, sizeof(struct buf));
-    memset(&(C->arg1), 0, sizeof(struct buf));
-    memset(&(C->arg2), 0, sizeof(struct buf));
-    memset(&(C->arg3), 0, sizeof(struct buf));
 
     return C;
 }
@@ -621,10 +617,10 @@ EXPORTED void fatal(const char *s, int code)
     else recurse_code = code;
 
     syslog(LOG_ERR, "%s", s);
-    shut_down(code);
 
-    /* NOTREACHED */
-    exit(code); /* shut up GCC */
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    shut_down(code);
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
@@ -952,7 +948,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
         break;
 
     nologin:
-        prot_printf(c->pout, "%s BAD Please login first\r\n", c->tag.s);
+        prot_printf(c->pout, "%s BAD \"Please login first\"\r\n", c->tag.s);
         eatline(c->pin, ch);
         break;
     }
@@ -1408,7 +1404,7 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
         break;
 
     case SET_RESERVE:
-        mbentry->mbtype = MBTYPE_RESERVE;
+        mbentry->mbtype |= MBTYPE_RESERVE;
         mboxlist_insertremote(mbentry, mytid);
         break;
 
@@ -1469,11 +1465,16 @@ static struct mbent *database_lookup(const char *name, const mbentry_t *mbentry,
     else
         location = xstrdup("");
 
-    out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->location = (pool) ? mpool_strdup(pool, location)
-                         : xstrdup(location);
+    if (pool) {
+        out->mailbox = mpool_strdup(pool, name);
+        out->location = mpool_strdup(pool, location);
+        free(location);
+    }
+    else {
+        out->mailbox = xstrdup(name);
+        out->location = location;
+    }
 
-    free(location);
     if (my_mbentry) mboxlist_entry_free(&my_mbentry);
 
     return out;
@@ -1674,6 +1675,7 @@ static void cmd_set(struct conn *C,
 
             m->t = t;
         } else {
+            char *thismailbox = m ? m->mailbox : xstrdup(mailbox);
             struct mbent *newm;
 
             /* allocate new mailbox */
@@ -1682,7 +1684,7 @@ static void cmd_set(struct conn *C,
             } else {
                 newm = xrealloc(m, sizeof(struct mbent) + 1);
             }
-            newm->mailbox = xstrdup(mailbox);
+            newm->mailbox = thismailbox;
             newm->location = xstrdup(location);
 
             if (acl) {
@@ -1812,7 +1814,7 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
         /* Either there is not a prefix to test, or we matched it */
 
         if (!C->streaming_hosts ||
-            strarray_find(C->streaming_hosts, mbentry->server, 0) >= 0) {
+            strarray_contains(C->streaming_hosts, mbentry->server)) {
             switch (m->t) {
             case SET_ACTIVE:
                 prot_printf(C->pout,
@@ -2116,7 +2118,6 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     char *oldlocation = NULL;
     char *thislocation = NULL;
     char *tmp;
-    enum settype t = -1;
     int ret = 0;
 
     if (!mdata || !rock || !mdata->mailbox) return 1;
@@ -2134,7 +2135,7 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             /* ret = -1; */
             goto done;
         }
-        m->t = t = SET_DELETE;
+        m->t = SET_DELETE;
 
         oldlocation = xstrdup(m->location);
     } else {
@@ -2152,9 +2153,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             else m->acl[0] = '\0';
 
             if (!strncmp(rock, "MAILBOX", 6)) {
-                m->t = t = SET_ACTIVE;
+                m->t = SET_ACTIVE;
             } else if (!strncmp(rock, "RESERVE", 7)) {
-                m->t = t = SET_RESERVE;
+                m->t = SET_RESERVE;
             } else {
                 syslog(LOG_DEBUG,
                        "bad mupdate command in cmd_change: %s", rock);
@@ -2186,9 +2187,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             }
 
             if (!strncmp(rock, "MAILBOX", 6)) {
-                newm->t = t = SET_ACTIVE;
+                newm->t = SET_ACTIVE;
             } else if (!strncmp(rock, "RESERVE", 7)) {
-                newm->t = t = SET_RESERVE;
+                newm->t = SET_RESERVE;
             } else {
                 syslog(LOG_DEBUG,
                        "bad mupdate command in cmd_change: %s", rock);
@@ -2389,7 +2390,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
                 } else {
                     mbentry_t *mbentry = mboxlist_entry_create();
                     mbentry->name = xstrdupnull(r->mailbox);
-                    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+                    mbentry->mbtype |= (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
                     mbentry->server = xstrdupnull(r->location);
 
                     c = strchr(mbentry->server, '!');
@@ -2433,7 +2434,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
             /* Remote without corresponding local, insert it */
             mbentry_t *mbentry = mboxlist_entry_create();
             mbentry->name = xstrdupnull(r->mailbox);
-            mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+            mbentry->mbtype |= (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
             mbentry->server = xstrdupnull(r->location);
 
             c = strchr(mbentry->server, '!');
@@ -2468,7 +2469,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
         while (r) {
             mbentry_t *mbentry = mboxlist_entry_create();
             mbentry->name = xstrdupnull(r->mailbox);
-            mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+            mbentry->mbtype |= (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
             mbentry->server = xstrdupnull(r->location);
 
             c = strchr(mbentry->server, '!');

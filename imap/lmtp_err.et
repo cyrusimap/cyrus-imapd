@@ -45,7 +45,7 @@ error_table lmtp
 # Enhanced Mail System Status Codes (RFC 3463)
 
 ec LMTP_OK,
-   "250 2.1.5 Ok SESSIONID=<%2$s>"
+   "250 2.1.5 %s SESSIONID=<%s>"
 
 ec LMTP_MAILBOX_ERROR,
    "451 4.2.0 %s"

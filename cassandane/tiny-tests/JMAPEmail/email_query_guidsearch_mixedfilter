@@ -1,0 +1,162 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_mixedfilter
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog $self, "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ], $using);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{'A'}->{id};
+    my $mboxIdB = $mboxByName{'B'}->{id};
+
+    xlog $self, "create emails";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mAfoo' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'foo',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mAbar' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'bar',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mBfoo' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'foo',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+                'mBbar' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'from@local'
+                    }],
+                    to => [{
+                        name => '', email => 'to@local'
+                    }],
+                    subject => 'bar',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdAfoo = $res->[0][1]->{created}{mAfoo}{id};
+    $self->assert_not_null($emailIdAfoo);
+    my $emailIdAbar = $res->[0][1]->{created}{mAbar}{id};
+    $self->assert_not_null($emailIdAbar);
+    my $emailIdBfoo = $res->[0][1]->{created}{mBfoo}{id};
+    $self->assert_not_null($emailIdBfoo);
+    my $emailIdBbar = $res->[0][1]->{created}{mBbar}{id};
+    $self->assert_not_null($emailIdBbar);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @wantIds;
+
+    xlog $self, "query emails with disjunction of mixed criteria";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'OR',
+                conditions => [{
+                    subject => 'foo',
+                }, {
+                    inMailbox => $mboxIdB,
+                }],
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+
+    # Current Cyrus implementation of GUID search does not support
+    # disjunctions of Xapian and non-Xapian filters. This might change.
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdAfoo, $emailIdBfoo, $emailIdBbar);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+}

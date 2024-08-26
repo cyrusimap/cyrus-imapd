@@ -1,0 +1,100 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_draft_reply_new_subject_new_thrid
+    :min_version_3_3 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
+
+    my $draft =  {
+        mailboxIds => { $draftsmbox => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        sender => [{ name => "Marvin the Martian", email => "marvin\@acme.local" }],
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+            { name => "Rainer M\N{LATIN SMALL LETTER U WITH DIAERESIS}ller", email => "rainer\@de.local" },
+        ],
+        cc => [
+            { name => "Elmer Fudd", email => "elmer\@acme.local" },
+            { name => "Porky Pig", email => "porky\@acme.local" },
+        ],
+        bcc => [
+            { name => "Wile E. Coyote", email => "coyote\@acme.local" },
+        ],
+        replyTo => [ { name => undef, email => "the.other.sam\@acme.local" } ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        htmlBody => [{ partId => '2' }],
+        bodyValues => {
+            '1' => { value => "I'm givin' ya one last chance ta surrenda!" },
+            '2' => { value => "Oh!!! I <em>hate</em> that Rabbit." },
+        },
+        keywords => { '$draft' => JSON::true },
+    };
+
+    xlog $self, "Create a draft";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "Get draft $id";
+    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
+    $self->assert_deep_equals($msg->{from}, $draft->{from});
+    $self->assert_deep_equals($msg->{sender}, $draft->{sender});
+    $self->assert_deep_equals($msg->{to}, $draft->{to});
+    $self->assert_deep_equals($msg->{cc}, $draft->{cc});
+    $self->assert_deep_equals($msg->{bcc}, $draft->{bcc});
+    $self->assert_deep_equals($msg->{replyTo}, $draft->{replyTo});
+    $self->assert_str_equals($msg->{subject}, $draft->{subject});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
+    $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
+
+    xlog $self, "create sent mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "sent",
+                            parentId => undef,
+                            role => "sent"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $sentmbox = $res->[0][1]{created}{"1"}{id};
+
+    # Now change the draft keyword, which is allowed since approx ~Q1/2018.
+    xlog $self, "Update the email into the sent mailbox and remove draft";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $id => {
+                'keywords' => { '$seen' => JSON::true },
+                'mailboxIds' => { $sentmbox => JSON::true },
+            } },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "Create a new draft which is in reply";
+    $draft->{inReplyTo} = $msg->{messageId};
+    $draft->{subject} = "Rubbish different subject";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    my $id2 = $res->[0][1]{created}{"1"}{id};
+    my $thread2 = $res->[0][1]{created}{"1"}{threadId};
+    $self->assert_str_not_equals($msg->{threadId}, $thread2);
+}

@@ -1,0 +1,151 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_querychanges_sortflagged_otherfolder
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+    my %exp;
+    my $dt;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "generating email A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{A} = $self->make_message("Email A", date => $dt, body => "a");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog $self, "Get mailbox id";
+    $res = $jmap->CallMethods([['Mailbox/query', {}, "R1"]]);
+    my $mbid = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($mbid);
+
+    xlog $self, "Get email id";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => { inMailbox => $mbid },
+        collapseThreads => $JSON::true,
+        sort => [
+            { property => "someInThreadHaveKeyword",
+              keyword => "\$flagged",
+              isAscending => $JSON::false },
+            { property => "receivedAt",
+              isAscending => $JSON::false },
+        ],
+    }, "R1"]]);
+    my $ida = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($ida);
+
+    $state = $res->[0][1]->{queryState};
+
+    xlog $self, "generating email B";
+    $exp{B} = $self->make_message("Email B", body => "b");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog $self, "generating email C referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "Create new mailbox";
+    $res = $jmap->CallMethods([['Mailbox/set', { create => { 1 => { name => "foo" } } }, "R1"]]);
+
+    $self->{store}->set_folder("INBOX.foo");
+    xlog $self, "generating email D referencing A (in foo)";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -1));
+    $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D}->set_attributes(uid => 1, cid => $exp{A}->get_attribute('cid'));
+
+    # EXPECTED ORDER OF MESSAGES NOW BY DATE IS:
+    # A C B (with D in the other mailbox)
+    # fetch them all by ID now to get an ID map
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => { inMailbox => $mbid },
+        sort => [
+            { property => "receivedAt",
+              "isAscending" => $JSON::true },
+        ],
+    }, "R1"]]);
+    my @ids = @{$res->[0][1]->{ids}};
+    $self->assert_num_equals(3, scalar @ids);
+    $self->assert_str_equals($ida, $ids[0]);
+    my $idc = $ids[1];
+    my $idb = $ids[2];
+
+    # raw fetch - check order now
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => { inMailbox => $mbid },
+        collapseThreads => $JSON::true,
+        sort => [
+            { property => "someInThreadHaveKeyword",
+              keyword => "\$flagged",
+              isAscending => $JSON::false },
+            { property => "receivedAt",
+              isAscending => $JSON::false },
+         ],
+    }, "R1"]]);
+    $self->assert_deep_equals([$idb, $idc], $res->[0][1]->{ids});
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        filter => { inMailbox => $mbid },
+        sinceQueryState => $state, collapseThreads => $JSON::true,
+        sort => [
+            { property => "someInThreadHaveKeyword",
+              keyword => "\$flagged",
+              isAscending => $JSON::false },
+            { property => "receivedAt",
+              isAscending => $JSON::false },
+         ],
+    }, "R1"]]);
+    $state = $res->[0][1]{newQueryState};
+
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{removed}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{added}});
+    # check that the order is B C
+    $self->assert_deep_equals([{id => $idb, index => 0}, {id => $idc, index => 1}], $res->[0][1]{added});
+
+    $talk->select("INBOX.foo");
+    $talk->store('1', "+flags", '\\Flagged');
+
+    # this has put the flag on D, which should sort C to the top!
+
+    # raw fetch - check order now
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => { inMailbox => $mbid },
+        collapseThreads => $JSON::true,
+        sort => [
+            { property => "someInThreadHaveKeyword",
+              keyword => "\$flagged",
+              isAscending => $JSON::false },
+            { property => "receivedAt",
+              isAscending => $JSON::false },
+         ],
+    }, "R1"]]);
+    $self->assert_deep_equals([$idc, $idb], $res->[0][1]->{ids});
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        filter => { inMailbox => $mbid },
+        sinceQueryState => $state, collapseThreads => $JSON::true,
+        sort => [
+            { property => "someInThreadHaveKeyword",
+              keyword => "\$flagged",
+              isAscending => $JSON::false },
+            { property => "receivedAt",
+              isAscending => $JSON::false },
+         ],
+    }, "R1"]]);
+    $state = $res->[0][1]{newQueryState};
+
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{removed}});
+    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
+    $self->assert_not_null(grep { $_ eq $idc } map { $_ } @{$res->[0][1]->{removed}});
+    $self->assert_deep_equals([{id => $idc, index => 0}], $res->[0][1]{added});
+}

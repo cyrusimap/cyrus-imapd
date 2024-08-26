@@ -122,6 +122,6 @@ EXPORTED int hashset_exists(struct hashset *hs, const void *data)
 
 EXPORTED void hashset_free(struct hashset **hsp)
 {
-    xfree((*hsp)->data);
+    free((*hsp)->data);
     xzfree(*hsp);
 }

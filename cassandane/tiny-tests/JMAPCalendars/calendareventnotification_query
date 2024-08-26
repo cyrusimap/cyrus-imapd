@@ -1,0 +1,159 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_query
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create notifications";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    title => 'event1',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2011-01-01T04:05:06',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $event1Id = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($event1Id);
+
+    sleep(1);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event1Id => {
+                    title => 'event1updated',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$event1Id});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+    my %notifs = map { $_->{type} => $_ } @{$res->[0][1]{list}};
+    my $notif1 = $notifs{created};
+    $self->assert_not_null($notif1);
+    my $notif2 = $notifs{updated};
+    $self->assert_not_null($notif2);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                type => 'created',
+            },
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                type => 'updated',
+            },
+        }, 'R2'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                before => $notif2->{created},
+            },
+        }, 'R3'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                after => $notif2->{created},
+            },
+        }, 'R4'],
+    ]);
+    $self->assert_deep_equals([$notif1->{id}], $res->[0][1]{ids});
+    $self->assert_deep_equals([$notif2->{id}], $res->[1][1]{ids});
+    $self->assert_deep_equals([$notif1->{id}], $res->[2][1]{ids});
+    $self->assert_deep_equals([$notif2->{id}], $res->[3][1]{ids});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event2 => {
+                    title => 'event2',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2012-02-02T04:05:06',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $event2Id = $res->[0][1]{created}{event2}{id};
+    $self->assert_not_null($event2Id);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                calendarEventIds => [$event2Id],
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_not_equals($notif1->{id}, $res->[0][1]{ids}[0]);
+    $self->assert_str_not_equals($notif2->{id}, $res->[0][1]{ids}[0]);
+}

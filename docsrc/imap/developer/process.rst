@@ -9,7 +9,7 @@ We need to develop not just for ourselves, but for those who follow us. This mea
 Coding Style
 ============
 
-* Unix style: CRLF line endings.
+* Unix style: LF line endings.
 * No trailing spaces.
 * No tabs: use 4 spaces instead.
 * Bracketing style: use the style that's already there.
@@ -62,6 +62,6 @@ Community Participation
 
 Join us! The project is only as good as the sum of its people. We all work together, despite the tyranny of distance and timezones.
 
-Meetings are currently :ref:`held online <feedback-meetings>` via Google Hangouts. Not sure what time that is for you? Try the `meeting planner <http://www.worldtimebuddy.com/?pl=1&lid=8,2988507,0,21&h=8>`_.
+Meetings are currently :ref:`held online via Zoom <feedback-meetings>`.
 
-There's also :ref:`IRC and mailing lists <support>`.
+There's also :ref:`mailing lists <support>`.

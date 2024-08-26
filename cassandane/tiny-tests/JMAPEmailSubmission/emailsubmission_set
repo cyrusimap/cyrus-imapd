@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email") or die;
+
+    xlog $self, "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($msgsubid);
+
+    xlog $self, "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+
+    xlog $self, "get email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/get', {
+        ids => [ $msgsubid ],
+    }, "R1" ] ] );
+    $self->assert_str_equals($msgsubid, $res->[0][1]->{list}[0]{id});
+
+    xlog $self, "update email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        update => {
+            $msgsubid => {
+                undoStatus => 'canceled',
+            }
+       }
+    }, "R1" ] ] );
+    $self->assert_str_equals('cannotUnsend', $res->[0][1]->{notUpdated}{$msgsubid}{type});
+
+    xlog $self, "destroy email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        destroy => [ $msgsubid ],
+    }, "R1" ] ] );
+    $self->assert_str_equals($msgsubid, $res->[0][1]->{destroyed}[0]);
+
+    xlog $self, "make sure #jmapsubmission folder isn't visible via IMAP";
+    my $talk = $self->{store}->get_client();
+    my @list = $talk->list('', '*');
+    $self->assert_num_equals(0, scalar grep { $_->[2] eq 'INBOX.#jmapsubmission' } @list);
+}

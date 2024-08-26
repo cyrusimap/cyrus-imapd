@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_expandrecurrences_date
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//FastMail/1.0/EN
+BEGIN:VEVENT
+DTEND;VALUE=DATE:20180423
+DTSTAMP:20190505T204102Z
+DTSTART;VALUE=DATE:20180422
+RRULE:FREQ=YEARLY;COUNT=5
+SEQUENCE:0
+SUMMARY:Earth Day
+UID:123456789
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/123456789.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                after =>  '2020-04-21T14:00:00',
+                before => '2020-04-22T13:59:59',
+            },
+            expandRecurrences => JSON::true,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids',
+            },
+            properties => ['start'],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('2020-04-22T00:00:00', $res->[1][1]{list}[0]{start});
+}

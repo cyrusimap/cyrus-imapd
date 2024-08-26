@@ -52,6 +52,7 @@
 
 #include "arrayu64.h"
 #include "strarray.h"
+#include "util.h"
 #include "sieve/sieve_err.h"
 
 /* external sieve types */
@@ -73,10 +74,12 @@ typedef int sieve_get_metadata(void *interp_context, const char *extname,
 typedef int sieve_get_header(void *message_context,
                              const char *header,
                              const char ***contents);
-typedef int sieve_add_header(void *script_context, void *message_context,
+typedef int sieve_get_headersection(void *message_context,
+                                    struct buf **contents);
+typedef int sieve_add_header(void *message_context,
                              const char *header, const char *contents, int index);
-typedef int sieve_delete_header(void *script_context, void *message_context,
-                             const char *header, int index);
+typedef int sieve_delete_header(void *message_context,
+                                const char *header, int index);
 typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context,
                                const char *field,
@@ -91,8 +94,8 @@ typedef int sieve_list_validator(void *interp_context, const char *list);
 typedef int sieve_list_comparator(const char *text, size_t tlen,
                                   const char *list, strarray_t *match_vars,
                                   void *rock);
-typedef int sieve_jmapquery(void *script_context, void *message_context,
-                            const char *json);
+typedef int sieve_jmapquery(void *interp_context, void *script_context,
+                            void *message_context, const char *json);
 
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
@@ -122,8 +125,18 @@ typedef struct sieve_duplicate {
     sieve_callback *track;
 } sieve_duplicate_t;
 
+typedef struct sieve_cal_context {
+    unsigned allow_public     : 1;
+    unsigned invites_only     : 1;
+    unsigned updates_only     : 1;
+    unsigned delete_cancelled : 1;
+    strarray_t *addresses;
+    const char *organizers;
+    const char *calendarid;
+    struct buf outcome;
+    struct buf reason;
+} sieve_cal_context_t;
 
-/* sieve_imapflags: NULL -> defaults to \flagged */
 
 typedef struct sieve_redirect_context {
     const char *addr;
@@ -131,6 +144,7 @@ typedef struct sieve_redirect_context {
     const char *deliverby;
     const char *dsn_notify;
     const char *dsn_ret;
+    struct buf *headers;
 } sieve_redirect_context_t;
 
 typedef struct sieve_reject_context {
@@ -140,29 +154,40 @@ typedef struct sieve_reject_context {
 
 typedef struct sieve_snooze_context {
     const char *awaken_mbox;
+    const char *awaken_mboxid;
+    const char *awaken_spluse;
+    unsigned do_create : 1;
     strarray_t *imapflags;
     strarray_t *addflags;
     strarray_t *removeflags;
     unsigned char days;
     arrayu64_t *times;
-    int is_mboxid : 1;
+    const char *tzid;
+    struct buf *headers;
 } sieve_snooze_context_t;
 
 typedef struct sieve_fileinto_context {
     const char *mailbox;
     const char *specialuse;
     strarray_t *imapflags;
-    int do_create :1;
+    unsigned do_create : 1;
+    unsigned ikeep_target : 1;
     const char *mailboxid;
+    struct buf *headers;
+    char *resolved_mailbox;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {
+    unsigned implicit : 1;
     strarray_t *imapflags;
+    struct buf *headers;
+    char *resolved_mailbox;
 } sieve_keep_context_t;
 
 typedef struct sieve_notify_context {
     const char *method;
-    const char **options;
+    const char *from;
+    strarray_t *options;
     const char *priority;
     const char *message;
     const char *fname;
@@ -193,6 +218,8 @@ typedef struct sieve_duplicate_context {
 sieve_interp_t *sieve_interp_alloc(void *interp_context);
 int sieve_interp_free(sieve_interp_t **interp);
 
+sieve_interp_t *sieve_build_nonexec_interp();
+
 /* add the callbacks for actions. undefined behavior results if these
    are called after sieve_script_parse is called! */
 void sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f);
@@ -202,11 +229,11 @@ void sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_snooze(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
-void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);
 void sieve_register_notify(sieve_interp_t *interp,
                            sieve_callback *f, const strarray_t *methods);
 void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 void sieve_register_logger(sieve_interp_t *interp, sieve_logger *f);
+void sieve_register_processcal(sieve_interp_t *interp, sieve_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
@@ -219,8 +246,10 @@ void sieve_register_specialuseexists(sieve_interp_t *interp,
                                      sieve_get_specialuseexists *f);
 void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f);
 void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
-void sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f);
-void sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f);
+void sieve_register_headersection(sieve_interp_t *interp,
+                                  sieve_get_headersection *f);
+int sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f);
+int sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f);
 void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 void sieve_register_environment(sieve_interp_t *interp, sieve_get_environment *f);
@@ -252,6 +281,11 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 int sieve_script_parse_only(FILE *stream, char **out_errors,
                             sieve_script_t **ret);
 
+/* Parse (but not compile or execute) a script in a string buffer.
+ * If interp is NULL, a disposable single-use interpreter will be used. */
+int sieve_script_parse_string(sieve_interp_t *interp, const char *s,
+                              char **errors, sieve_script_t **script);
+
 /* given a path to a bytecode file, load it into the sieve_execute_t */
 int sieve_script_load(const char *fpath, sieve_execute_t **ret);
 
@@ -266,7 +300,6 @@ int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
                            void *script_context, void *message_context);
 
 /* Get space separated list of extensions supported by the implementation */
-    strarray_t *extensions;
 const strarray_t *sieve_listextensions(sieve_interp_t *i);
 
 /* Create a bytecode structure given a parsed commandlist */
@@ -277,12 +310,6 @@ int sieve_emit_bytecode(int fd, bytecode_info_t *bc);
 
 /* Free a bytecode_info_t */
 void sieve_free_bytecode(bytecode_info_t **p);
-
-/* Get path of bc file pointed to by defaultbc symlink.
- * Caller must free return value
- * Returns NULL if unable to perform conversion
- */
-char *sieve_getdefaultbcfname(const char *defaultbc);
 
 /* Rebuild bc_fname from script_fname if needed or forced.
  * At least one of script_fname or bc_fname must be provided.

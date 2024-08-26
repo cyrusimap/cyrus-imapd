@@ -512,8 +512,6 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_ADDFLAG:
         case B_REMOVEFLAG:
         case B_ENOTIFY:
-        case B_NOTIFY:
-        case B_DENOTIFY:
         case B_VACATION:
         case B_INCLUDE:
         case B_SET:
@@ -527,6 +525,8 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_UNMARK:
         case B_RETURN:
         case B_SNOOZE:
+        case B_PROCESSCAL:
+        case B_IKEEP_TARGET:
             /* Spew the action parameters */
             ret = bc_params_emit(fd, &codep, stopcodep, bc);
             if (ret < 0) return -1;

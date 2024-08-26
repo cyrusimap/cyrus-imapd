@@ -48,9 +48,6 @@
 
 #include "annotate.h" /* for strlist functionality */
 
-/* name of the zoneinfo directory */
-#define FNAME_ZONEINFODIR "/zoneinfo"
-
 /* name of the NIST leap seconds file (provided with IANA tzdata) */
 #define FNAME_LEAPSECFILE "/leap-seconds.list"
 

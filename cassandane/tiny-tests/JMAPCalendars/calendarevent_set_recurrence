@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_recurrence
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $recurrenceRules = [{
+        frequency => "monthly",
+        interval => 2,
+        firstDayOfWeek => "su",
+        count => 1024,
+        byDay => [{
+                day => "mo",
+                nthOfPeriod => -2,
+            }, {
+                day => "sa",
+        }],
+    }];
+
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "showWithoutTime"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "recurrenceRules" => $recurrenceRules,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarIds} = $ret->{calendarIds};
+    $self->assert_normalized_event_equals($event, $ret);
+
+    # Now delete the recurrence rule
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set',{
+            update => {
+                $event->{id} => {
+                    recurrenceRules => undef,
+                },
+            },
+        }, "R1"],
+        ['CalendarEvent/get',{
+            ids => [$event->{id}],
+        }, "R2"],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$event->{id}});
+
+    delete $event->{recurrenceRules};
+    $ret = $res->[1][1]{list}[0];
+    $self->assert_normalized_event_equals($event, $ret);
+}

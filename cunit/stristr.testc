@@ -1,0 +1,39 @@
+#include <stdlib.h>
+#include <string.h>
+#include "cunit/cyrunit.h"
+#include "util.h"
+
+#include "stristr.h"
+
+static void test_strstr(void)
+{
+    struct test {
+        const char *string;
+        const char *pattern;
+    } tests[] = {{
+        "foo", "bar"
+    }, {
+        "foobarfoo", "bar"
+    }, {
+        "foo", ""
+    }, {
+        "", "bar"
+    }, {
+        "", ""
+    }};
+
+    for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
+        char *s = xstrdup(tests[i].string);
+        char *p = xstrdup(tests[i].pattern);
+
+        char *want = strstr(s, p);
+        char *have = stristr(s, p);
+
+        CU_ASSERT_PTR_EQUAL(want, have);
+
+        free(s);
+        free(p);
+    }
+}
+
+/* vim: set ft=c: */

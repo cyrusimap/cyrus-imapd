@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
@@ -152,11 +153,29 @@ static int getheader(void *v, const char *phead, const char ***body)
     }
 }
 
-/* adds the header "head" with body "body" to msg */
-static int addheader(void *sc, void *mc,
-                     const char *head, const char *body, int index)
+static void getheaders_cb(const char *name, const char *value,
+                          const char *raw, void *rock)
 {
-    script_data_t *sd = (script_data_t *)sc;
+    struct buf *contents = (struct buf *) rock;
+
+    if (raw) buf_appendcstr(contents, raw);
+    else buf_printf(contents, "%s: %s\r\n", name, value);
+}
+
+static int getheadersection(void *mc, struct buf **contents)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    *contents = buf_new();
+
+    spool_enum_hdrcache(m->cache, &getheaders_cb, *contents);
+
+    return SIEVE_OK;
+}
+
+/* adds the header "head" with body "body" to msg */
+static int addheader(void *mc, const char *head, const char *body, int index)
+{
     message_data_t *m = (message_data_t *) mc;
 
     if (head == NULL || body == NULL) return SIEVE_FAIL;
@@ -170,15 +189,12 @@ static int addheader(void *sc, void *mc,
         spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
     }
 
-    sd->edited_header = 1;
-
     return SIEVE_OK;
 }
 
 /* deletes (instance "index" of) the header "head" from msg */
-static int deleteheader(void *sc, void *mc, const char *head, int index)
+static int deleteheader(void *mc, const char *head, int index)
 {
-    script_data_t *sd = (script_data_t *)sc;
     message_data_t *m = (message_data_t *) mc;
 
     if (head == NULL) return SIEVE_FAIL;
@@ -191,8 +207,6 @@ static int deleteheader(void *sc, void *mc, const char *head, int index)
         printf("removing header '%s[%d]'\n", head, index);
         spool_remove_header_instance(xstrdup(head), index, m->cache);
     }
-
-    sd->edited_header = 1;
 
     return SIEVE_OK;
 }
@@ -282,8 +296,8 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
 
     if (!m->content.body) {
         /* parse the message body if we haven't already */
-        r = message_parse_file(m->data, &m->content.base,
-                               &m->content.len, &m->content.body);
+        r = message_parse_file_buf(m->data, &m->content.map,
+                                   &m->content.body, NULL);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as
@@ -388,18 +402,16 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     int *force_fail = (int*) ic;
-    int flag = 0;
 
     printf("notify ");
     if (nc->method) {
-        const char **opts = nc->options;
-
         printf("%s(", nc->method);
-        while (opts && *opts) {
-            if (flag) printf(", ");
-            printf("%s", *opts);
-            opts++;
-            flag = 1;
+        if (nc->options) {
+            int i;
+            for (i = 0; i < strarray_size(nc->options); i++) {
+                if (i) printf(", ");
+                printf("%s", strarray_nth(nc->options, i));
+            }
         }
         printf("), ");
     }
@@ -554,11 +566,11 @@ int main(int argc, char *argv[])
     char *tmpscript = NULL, *script = NULL, *extname = NULL;
     int c, force_fail = 0;
     int fd, res, r;
-    static strarray_t mark = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
     script_data_t sd = { NULL, "", NULL, 0 };
     FILE *f;
     unsigned uid = 0;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
@@ -616,7 +628,7 @@ int main(int argc, char *argv[])
     global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&test_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&test_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -631,7 +643,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
@@ -696,6 +707,7 @@ int main(int argc, char *argv[])
     sieve_register_keep(i, keep);
     sieve_register_size(i, getsize);
     sieve_register_header(i, getheader);
+    sieve_register_headersection(i, getheadersection);
     sieve_register_addheader(i, addheader);
     sieve_register_deleteheader(i, deleteheader);
     sieve_register_envelope(i, getenvelope);
@@ -710,9 +722,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    strarray_append(&mark, "\\flagged");
-    sieve_register_imapflags(i, &mark);
-
     sieve_register_notify(i, notify, NULL);
     sieve_register_parse_error(i, mysieve_error);
     sieve_register_execute_error(i, mysieve_execute_error);
@@ -725,7 +734,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (extname) {
@@ -740,30 +749,16 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        if (uid) {
-            const char *path =
-                mboxname_datapath(mailbox->part, mailbox->name,
-                                  mailbox->uniqueid, uid);
-
-            printf("\n\nProcessing UID %u:\n", uid);
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
+            if (uid && record->uid != uid) continue;
+            printf("\n\nProcessing UID %u:\n", record->uid);
+            const char *path = mailbox_record_fname(mailbox, record);
             r = process_message(path, exe, i, &sd);
         }
-        else {
-            struct mailbox_iter *iter =
-                mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-            const message_t *msg;
-            while ((msg = mailbox_iter_step(iter))) {
-                const struct index_record *record = msg_record(msg);
-                const char *path =
-                    mboxname_datapath(mailbox->part, mailbox->name,
-                                      mailbox->uniqueid, record->uid);
-
-                printf("\n\nProcessing UID %u:\n", record->uid);
-                r = process_message(path, exe, i, &sd);
-            }
-
-            mailbox_iter_done(&iter);
-        }
+        mailbox_iter_done(&iter);
 
         mailbox_close(&mailbox);
     }
@@ -782,7 +777,6 @@ int main(int argc, char *argv[])
 
     strarray_fini(&e_from);
     strarray_fini(&e_to);
-    strarray_fini(&mark);
 
     cyrus_done();
 
@@ -792,5 +786,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

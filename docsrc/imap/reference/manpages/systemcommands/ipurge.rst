@@ -47,52 +47,52 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -f
+.. option:: -f, --include-user-mailboxes
 
     Force ipurge to examine mailboxes below INBOX.* and user.*.
 
-.. option:: -d days
+.. option:: -d days, --days=days
 
     Age of message in *days*.
 
-.. option:: -b bytes
+.. option:: -b bytes, --bytes=bytes
 
     Size of message in *bytes*.
 
-.. option:: -k Kbytes
+.. option:: -k Kbytes, --kbytes=Kbytes
 
     Size of message in *Kbytes* (2^10 bytes).
 
-.. option:: -m Mbytes
+.. option:: -m Mbytes, --mbytes=Mbytes
 
     Size of message in *Mbytes* (2^20 bytes).
 
-.. option:: -x
+.. option:: -x, --exact-match
 
     Perform an exact match on age or size (instead of older or larger).
 
-.. option:: -X
+.. option:: -X, --delivery-time
 
     Use delivery time instead of Date: header for date matches.
 
-.. option:: -i
+.. option:: -i, --invert-match
 
     Invert match logic: -x means not equal, date is for newer, size is
     for smaller.
 
-.. option:: -s
+.. option:: -s, --skip-flagged
 
     Skip over messages that have the \\Flagged flag set.
 
-.. option:: -o
+.. option:: -o, --only-deleted
 
     Only purge messages that have the \\Deleted flag set.
 
-.. option:: -n
+.. option:: -n, --dry-run
 
     Only print messages that would be deleted (dry run).
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Enable verbose output/logging.
 

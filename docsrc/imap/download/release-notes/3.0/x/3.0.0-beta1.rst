@@ -10,15 +10,10 @@ Cyrus IMAP 3.0.0 beta1 Release Notes
 
     Do **NOT** use this version unless you're a developer of sorts.
 
-Download via HTTP:
+Download from GitHub:
 
-    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.0-beta1.tar.gz
-    *   http://www.cyrusimap.org/releases/cyrus-imapd-3.0.0-beta1.tar.gz.sig
-
-Download via FTP:
-
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.0-beta1.tar.gz
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.0-beta1.tar.gz.sig
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.0-beta1/cyrus-imapd-3.0.0-beta1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.0-beta1/cyrus-imapd-3.0.0-beta1.tar.gz.sig
 
 .. _relnotes-3.0.0-beta1-changes:
 

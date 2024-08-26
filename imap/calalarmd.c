@@ -76,6 +76,8 @@ EXPORTED void fatal(const char *msg, int err)
 
     cyrus_done();
 
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(err);
 }
 
@@ -117,7 +119,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
 
-    mboxname_init_namespace(&calalarmd_namespace, /*isadmin*/1);
+    mboxname_init_namespace(&calalarmd_namespace, NAMESPACE_OPTION_ADMIN);
     mboxevent_setnamespace(&calalarmd_namespace);
 
     if (upgrade) {
@@ -126,7 +128,7 @@ int main(int argc, char **argv)
     }
 
     if (runattime) {
-        caldav_alarm_process(runattime, NULL);
+        caldav_alarm_process(runattime, NULL, /*dryrun*/0);
         shut_down(0);
     }
 
@@ -153,12 +155,13 @@ int main(int argc, char **argv)
         struct timeval start, end;
         double totaltime;
         int tosleep;
-        time_t interval = 1;
+        time_t interval = 10;
 
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process(0, &interval);
+        caldav_alarm_process(0, &interval, /*dryrun*/0);
+        libcyrus_run_delayed();
         gettimeofday(&end, 0);
 
         signals_poll();
@@ -167,6 +170,8 @@ int main(int argc, char **argv)
         tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
         if (tosleep > 0)
             sleep(tosleep);
+
+        session_new_id();  // so we know which actions happened in the same run
     }
 
     /* NOTREACHED */

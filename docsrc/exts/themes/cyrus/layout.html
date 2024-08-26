@@ -100,10 +100,12 @@
           <a href="{{ pathto(master_doc) }}" class="icon icon-home"> {{ project }}
         {% endif %} #}
 
-  {#      {% if logo %} #}
+          {% if logo %}
           {# Not strictly valid HTML, but it's the only way to display/scale it properly, without weird scripting or heaps of work #}
           <img src="{{ pathto('_static/logo.gif', 1) }}"  />
-     {#   {% endif %} #}
+          {% else %}
+          <h1>{{ project }}</h1>
+          {% endif %}
         </a>
 
         {% include "searchbox.html" %}

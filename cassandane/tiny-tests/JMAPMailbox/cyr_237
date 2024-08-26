@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cyr_237
+    :min_version_3_3 :needs_component_jmap :NoAltNameSpace :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog $self, "Create \\Scheduled mailbox";
+    my $res = $jmap->CallMethods([
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "Scheduled",
+                    role => "scheduled"
+                }
+            }
+         }, "R1"],
+    ]);
+
+    xlog $self, "Upload something (to create #jmap)";
+    my $data = $jmap->Upload("some text", "text/plain");
+
+    my $acl = $admin->getacl("user.cassandane.#jmap");
+    my %map = @$acl;
+    $self->assert_str_equals('lrswipkxtecdan', $map{cassandane});
+    $self->assert_null($map{sharee});
+    $self->assert_null($map{'-anyone'});
+
+    my $inboxId = $self->getinbox()->{id};
+    $self->assert_not_null($inboxId);
+
+    xlog $self, "Share INBOX";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $inboxId => {
+                    shareWith => {
+                        sharee => {
+                            mayRead => JSON::true,
+                            mayWrite => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R2']
+    ], $using);
+
+    $acl = $admin->getacl("user.cassandane.#jmap");
+    %map = @$acl;
+    $self->assert_str_equals('lrswipkxtecdan', $map{cassandane});
+    $self->assert_str_equals('lrswitedn', $map{sharee});
+    $self->assert_null($map{'-anyone'});
+}

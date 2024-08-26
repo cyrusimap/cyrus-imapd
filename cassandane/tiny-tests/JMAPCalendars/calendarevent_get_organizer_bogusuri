@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_organizer_bogusuri
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # As seen in the wild: an ORGANIZER/ATTENDEE with a value
+    # that hasn't even an URI scheme.
+
+    my ($id, $ical) = $self->icalfile('organizer_bogusuri');
+
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
+        '55d3677ce6a79b250d0fc3b5eed5130807d93dd3' => {
+            '@type' => 'Participant',
+            name => 'Organizer',
+            roles => {
+                'attendee' => JSON::true,
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                other => '/foo-bar/principal/',
+            },
+            expectReply => JSON::false,
+            participationStatus => 'needs-action',
+        },
+        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+            '@type' => 'Participant',
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:attendee@local',
+            },
+            expectReply => JSON::false,
+            participationStatus => 'needs-action',
+        },
+    };
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
+    $self->assert_null($event->{replyTo}{imip});
+    $self->assert_str_equals('/foo-bar/principal/', $event->{replyTo}{other});
+}

@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_store
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    xlog $self, "ENABLE UIDONLY & CONDSTORE";
+    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY', 'CONDSTORE');
+    $self->assert_num_equals(1, $res->{uidonly});
+    $self->assert_num_equals(1, $res->{condstore});
+
+    xlog $self, "attempt STORE";
+    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+    # get_response_code() doesn't (yet) handle [UIDREQUIRED]
+    $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
+
+    xlog $self, "UID STORE";
+    my %fetched = $self->uidonly_cmd($imaptalk, 'UID STORE',
+                                     '1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert(exists $fetched{'1'});
+    $self->assert_str_equals('\\Deleted', $fetched{'1'}->{flags}[0]);
+    # make sure that MODSEQ is also in the response
+    $self->assert(exists $fetched{'1'}->{modseq});
+    $self->assert(exists $fetched{'6'});
+    $self->assert_str_equals('\\Deleted', $fetched{'6'}->{flags}[0]);
+    $self->assert(exists $fetched{'6'}->{modseq});
+}
+
+1;

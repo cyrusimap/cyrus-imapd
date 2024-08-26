@@ -97,11 +97,16 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     static unsigned max_msgsize = 0;
     const char **hdr;
 
-    if (!max_msgsize) {
-        max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+    if (max_msgsize == 0) {
+        int64_t val = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
 
-        /* If max_msgsize is 0, allow any size */
-        if (!max_msgsize) max_msgsize = INT_MAX;
+        /* 0 means "unlimited", which really means our internally-defined limit */
+        if (val <= 0) val = BYTESIZE_UNLIMITED;
+
+        /* XXX constrained by other variable sizes here */
+        if (val > BYTESIZE_UNLIMITED) val = BYTESIZE_UNLIMITED;
+
+        max_msgsize = val;
     }
 
     body->framing = FRAMING_LENGTH;
@@ -176,7 +181,7 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
         }
 
         body->len = strtoul(hdr[0], NULL, 10);
-        if (body->len > max_msgsize) return HTTP_PAYLOAD_TOO_LARGE;
+        if (body->len > max_msgsize) return HTTP_CONTENT_TOO_LARGE;
 
         body->framing = FRAMING_LENGTH;
     }
@@ -294,7 +299,7 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
                 /* XXX  Do we need to parse chunk-ext? */
             }
             else if (chunk > body->max - body->len) {
-                return HTTP_PAYLOAD_TOO_LARGE;
+                return HTTP_CONTENT_TOO_LARGE;
             }
 
             if (!chunk) {
@@ -341,7 +346,7 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
             else
                 n = prot_readbuf(pin, &body->payload, PROT_BUFSIZE);
 
-            if (n > body->max - body->len) return HTTP_PAYLOAD_TOO_LARGE;
+            if (n > body->max - body->len) return HTTP_CONTENT_TOO_LARGE;
             body->len += n;
 
         } while (n);
@@ -425,13 +430,15 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
 {
     static char statbuf[2048];
     const char **conn;
+    unsigned version;
     int r;
 
     *errstr = NULL;
     *code = HTTP_BAD_GATEWAY;
 
     if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
-        (sscanf(statbuf, HTTP_VERSION " %u ", code) != 1)) {
+        (sscanf(statbuf, "HTTP/1.%1u %3u ", &version, code) != 2) ||
+        (version > 1)) {
         *errstr = "Unable to read status-line from backend";
         return HTTP_BAD_GATEWAY;
     }
@@ -446,7 +453,7 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
     if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
 
     /* Check connection persistence */
-    if (!strncmp(statbuf, "HTTP/1.0 ", 9)) body->flags |= BODY_CLOSE;
+    if (version == 0) body->flags |= BODY_CLOSE;
     for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
         tok_t tok =
             TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);

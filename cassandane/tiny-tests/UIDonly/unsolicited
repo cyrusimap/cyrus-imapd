@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_unsolicited
+    :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Deliver some messages";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+    $msg = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg);
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->select('INBOX');
+
+    xlog $self, "Expunge first message";
+    $imaptalk->store('1', '+flags', '\\deleted');
+    $imaptalk->expunge();
+
+    xlog $self, "ENABLE UIDONLY & CONDSTORE";
+    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY', 'CONDSTORE');
+    $self->assert_num_equals(1, $res->{uidonly});
+    $self->assert_num_equals(1, $res->{uidonly});
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $res = $admintalk->select('user.cassandane');
+
+    xlog $self, "set flag in another session";
+    $admintalk->store('1', '+flags', '\\flagged');
+
+    xlog $self, "poll for changes";
+    my %fetched = $self->uidonly_cmd($imaptalk, 'NOOP');
+    $self->assert(exists $fetched{'2'});
+    # make sure UID isn't in the response
+    $self->assert(not exists $fetched{'2'}->{uid});
+    $self->assert(exists $fetched{'2'}->{flags});
+    $self->assert(exists $fetched{'2'}->{modseq});
+}
+
+1;

@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+use base qw(Cassandane::Cyrus::TestCase);
+
+sub test_email_query_notes
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/notes' capability
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/notes';
+    $jmap->DefaultUsing(\@using);
+
+    # force creation of notes mailbox prior to creating notes
+    my $res = $jmap->CallMethods([
+        ['Note/set', {
+         }, "R0"]
+    ]);
+
+    xlog "create note";
+    $res = $jmap->CallMethods([['Note/set',
+                                { create => { "1" => {title => "foo"}, } },
+                                "R1"]]);
+    $self->assert_not_null($res);
+    my $note1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "query for notes";
+    $res = $jmap->CallMethods([['Email/query', { }, "R1"], ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
+}

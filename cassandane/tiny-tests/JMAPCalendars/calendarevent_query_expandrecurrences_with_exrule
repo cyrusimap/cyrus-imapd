@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_expandrecurrences_with_exrule
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog $self, "create events";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    uid => 'event1uid',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2020-08-04T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        interval => 4,
+                    }],
+                    excludedRecurrenceRules => [{
+                        frequency => 'monthly',
+                        byMonthDay => [1],
+                    }, {
+                        frequency => 'monthly',
+                        byMonthDay => [4,22],
+                    }],
+                    recurrenceOverrides => {
+                        '2021-01-01T09:00:00' => {
+                            title => 'rdate overrides exrule',
+                        },
+                    },
+                },
+            }
+        }, 'R1']
+    ]);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                before => '2021-02-01T00:00:00',
+            },
+            sort => [{
+                property => 'start',
+                isAscending => JSON::false,
+            }],
+            expandRecurrences => JSON::true,
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(5, $res->[0][1]{total});
+    $self->assert_deep_equals([
+         encode_eventid('event1uid','20210119T090000'),
+         encode_eventid('event1uid','20210101T090000'),
+         encode_eventid('event1uid','20201124T090000'),
+         encode_eventid('event1uid','20201027T090000'),
+         encode_eventid('event1uid','20200929T090000'),
+    ], $res->[0][1]{ids});
+}

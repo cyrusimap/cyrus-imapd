@@ -65,6 +65,19 @@ ec IMAP_QUOTA_EXCEEDED,
 ec IMAP_MESSAGE_TOO_LARGE,
    "Message size exceeds fixed limit"
 
+# Same as IMAP_MESSAGE_TOO_LARGE, but with TOOBIG response code
+ec IMAP_MESSAGE_TOOBIG,
+   "[TOOBIG] Message size exceeds fixed limit"
+
+ec IMAP_ARGS_TOO_LARGE,
+   "[TOOBIG] Command arguments total size exceeds fixed limit"
+
+ec IMAP_LITERAL_TOO_LARGE,
+   "[TOOBIG] Literal size exceeds fixed limit"
+
+ec IMAP_LITERAL_MINUS_TOO_LARGE,
+   "[TOOBIG] Non-synchronizing literal size exceeds 4K"
+
 ec IMAP_USERFLAG_EXHAUSTED,
    "Too many user flags in mailbox"
 
@@ -115,6 +128,9 @@ ec IMAP_MAILBOX_DISABLED,
 
 ec IMAP_MAILBOX_SPECIALUSE,
    "SPECIAL-USE flag conflict"
+
+ec IMAP_MAILBOX_HASCHILDREN,
+   "[HASCHILDREN] Mailbox has inferior hierarchical names"
 
 ec IMAP_PARTITION_UNKNOWN,
    "Unknown/invalid partition"
@@ -167,6 +183,9 @@ ec IMAP_ZERO_LENGTH_LITERAL,
 ec IMAP_DISABLED,
    "Command is disabled by configuration"
 
+ec IMAP_CONNECTION_READONLY,
+   "This connection is configured for read-only access"
+
 # following used only proxy/db operations
 ec IMAP_BAD_SERVER,
    "Invalid server requested"
@@ -202,6 +221,9 @@ ec IMAP_ANONYMOUS_NOT_PERMITTED,
 
 ec IMAP_UNSUPPORTED_QUOTA,
    "Unsupported quota resource"
+
+ec IMAP_USER_LEGACY_DIRS,
+   "User is using legacy mailbox directories.  Reconstruct user first."
 
 # Following used only for SASL operations
 
@@ -248,6 +270,9 @@ ec IMAP_CONVERSATIONS_ALREADY_OPEN,
 ec IMAP_CONVERSATIONS_NOT_OPEN,
    "Conversation DB is not opened"
 
+ec IMAP_CONVERSATION_GUIDLIMIT,
+   "Too many identical emails"
+
 ec IMAP_ANCHOR_NOT_FOUND,
    "Anchor not found"
 
@@ -261,6 +286,9 @@ ec IMAP_SEARCH_SLOW,
 
 ec IMAP_SEARCH_MUTABLE,
     "Search is mutable"
+
+ec IMAP_SEARCH_NOT_SUPPORTED,
+    "Search is not supported"
 
 # Following used for internationalization of untagged BYE response
 

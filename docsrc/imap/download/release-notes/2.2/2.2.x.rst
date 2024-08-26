@@ -70,12 +70,12 @@ Changes to the Cyrus IMAP Server since 2.2.6
 Changes to the Cyrus IMAP Server since 2.2.5
 
 *   Fix a bug in the proxy code where a backend connection might get closed twice
-*   Improved consistancy checking in chk_cyrus
+*   Improved consistency checking in chk_cyrus
 *   Fix segfault in APPEND code
 *   Fix a bug with an interaction between sieve and unixhierarchysep
 *   Fix a file descriptor leak in the quotadb code
 *   Fix a triggered assertation in service-thread services
-*   Add a number of internal consistancy checks to the skiplist code
+*   Add a number of internal consistency checks to the skiplist code
 *   Allow mbpath to handle virtual domains
 *   Fix various MANAGESIEVE client authentication issues
 *   Other minor fixes
@@ -143,7 +143,7 @@ Changes to the Cyrus IMAP Server since 2.2.0
 
 Changes to the Cyrus IMAP Server since 2.1.x
 
-*   There have been extensive performance and consistancy changes to the configuration subsystem. This will both ensure greater consistancy between the documentation and the code, as well as a more standard format for specifing service-specific configuration options in imapd.conf. Important changes are detailed here:
+*   There have been extensive performance and consistency changes to the configuration subsystem. This will both ensure greater consistency between the documentation and the code, as well as a more standard format for specifing service-specific configuration options in imapd.conf. Important changes are detailed here:
 *       The tls_[service]_* configuration options have been removed. Now use [servicename]_tls_*, where servicename is the service identifier from cyrus.conf for that particular process.
 *       Administrative groups (e.g. admins and lmtp_admins) no longer union, service groups completely override the generic group.
 *       lmtp_allowplaintext is no longer a defined parameter and must be specified using the service name of your lmtp process if you require a specific value

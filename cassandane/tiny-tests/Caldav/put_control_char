@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_put_control_char
+    :min_version_3_9 :needs_component_httpd :needs_ical_ctrl :MagicPlus
+{
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    # Assert that CONTROL chars are omitted when reading
+    # iCalendar data during PUT.
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:ct\x{15}rl
+SUMMARY:test
+CLASS:PRIVATE
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
+    $self->assert_matches(qr/DESCRIPTION:ctrl/, $res->{content});
+}

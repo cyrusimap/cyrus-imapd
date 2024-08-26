@@ -2,7 +2,32 @@
 #include "config.h"
 #include "cunit/cyrunit.h"
 #include "prot.h"
+#include "lib/libcyr_cfg.h"
 #include "imap/global.h"
+
+#define DBDIR           "test-dbdir"
+
+static int set_up(void)
+{
+    /* need basic configuration for getxstring */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}
 
 /*
  * Here's the ABNF describing the various types of string from RF3501.
@@ -47,22 +72,19 @@
 
 /*
  * Run a single testcase.
- *
- * Note: prot_setisclient() turns off off literal synchronising so
- * we don't have to futz around with testing that.
  */
 #define _TESTCASE_PRE(fut, input, retval, consumed)                 \
     do {                                                            \
         struct buf b = BUF_INITIALIZER;                             \
         struct protstream *p;                                       \
         int c;                                                      \
+        long long _consumed = (consumed);                           \
         p = prot_readmap(input, sizeof(input)-1);                   \
         CU_ASSERT_PTR_NOT_NULL_FATAL(p);                            \
-        prot_setisclient(p, 1);                                     \
         c = fut(p, NULL, &b);                                       \
         CU_ASSERT_EQUAL(c, retval);                                 \
-        if (consumed >= 0) {                                        \
-            CU_ASSERT_EQUAL(prot_bytes_in(p), consumed);            \
+        if (_consumed >= 0) {                                       \
+            CU_ASSERT_EQUAL(prot_bytes_in(p), _consumed);           \
         }                                                           \
         if (c != EOF) {
 

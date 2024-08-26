@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_embedded_nuls
+{
+    my ($self) = @_;
+
+    xlog $self, "testing getting and setting embedded NULs";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $folder = 'INBOX.test_embedded_nuls';
+    my $entry = '/private/comment';
+    my $binary = "Hello\0World";
+
+    xlog $self, "create a temporary mailbox";
+    $imaptalk->create($folder)
+        or die "Cannot create mailbox $folder: $@";
+
+    xlog $self, "initially, NIL is reported";
+    my $res = $imaptalk->getmetadata($folder, $entry)
+        or die "Cannot get metadata: $@";
+    $self->assert_num_equals(1, scalar keys %$res);
+    $self->assert_null($res->{$folder}{$entry});
+
+    xlog $self, "set and then get the same back again";
+    $imaptalk->setmetadata($folder, $entry, $binary);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals($binary, $res->{$folder}{$entry});
+
+    xlog $self, "remove it again";
+    $imaptalk->setmetadata($folder, $entry, undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "check it's gone now";
+    $res = $imaptalk->getmetadata($folder, $entry)
+        or die "Cannot get metadata: $@";
+    $self->assert_num_equals(1, scalar keys %$res);
+    $self->assert_null($res->{$folder}{$entry});
+
+    xlog $self, "clean up temporary mailbox";
+    $imaptalk->delete($folder)
+        or die "Cannot delete mailbox $folder: $@";
+}

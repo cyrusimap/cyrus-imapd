@@ -86,6 +86,7 @@ struct smtpclient {
     char *notify;
     char *ret;
     char *by;
+    char *jmapid;
     unsigned long msgsize;
     smtp_resp_t resp;
 };
@@ -97,13 +98,17 @@ enum {
     SMTPCLIENT_CAPA_STATUS    = (1 << 6),
     SMTPCLIENT_CAPA_FUTURE    = (1 << 7),
     SMTPCLIENT_CAPA_PRIORITY  = (1 << 8),
-    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9)
+    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9),
+    SMTPCLIENT_CAPA_JMAPID    = (1 << 10),
 };
+
+static const char *smtpclient_ehlo_hostname = NULL;
 
 static struct protocol_t smtp_protocol =
 { "smtp", "smtp", TYPE_STD,
   { { { 0, "220 " },
-      { "EHLO", "localhost", "250 ", NULL,
+        // EHLO hostname will be set in smtpclient_open().
+      { "EHLO", NULL, "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
         { { "AUTH", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
@@ -114,6 +119,7 @@ static struct protocol_t smtp_protocol =
           { "FUTURERELEASE", SMTPCLIENT_CAPA_FUTURE },
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
           { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECK },
+          { "JMAPIDENTITY", SMTPCLIENT_CAPA_JMAPID },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -140,6 +146,31 @@ static void smtpclient_logerror(smtpclient_t *sm, const char *cmd, int r);
 
 EXPORTED int smtpclient_open(smtpclient_t **smp)
 {
+    if (!smtpclient_ehlo_hostname) {
+        if (config_getswitch(IMAPOPT_CLIENT_BIND)) {
+            smtpclient_ehlo_hostname =
+                config_getstring(IMAPOPT_CLIENT_BIND_NAME);
+        }
+        if (!smtpclient_ehlo_hostname) {
+            smtpclient_ehlo_hostname = config_servername;
+        }
+        if (!smtpclient_ehlo_hostname) {
+            xsyslog(LOG_ERR,
+                    "can not determine EHLO hostname, "
+                    "either client_bind/client_bind_name or servername option must be set",
+                    NULL);
+            return IMAP_INTERNAL;
+        }
+        if (smtp_protocol.type == TYPE_STD &&
+            !strcasecmpsafe(smtp_protocol.u.std.capa_cmd.cmd, "EHLO")) {
+            smtp_protocol.u.std.capa_cmd.arg = smtpclient_ehlo_hostname;
+        }
+        else {
+            xsyslog(LOG_ERR, "unexpected smtp_protocol value", NULL);
+            return IMAP_INTERNAL;
+        }
+    }
+
     int r = 0;
     const char *backend = config_getstring(IMAPOPT_SMTP_BACKEND);
 
@@ -190,6 +221,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     free(sm->ret);
     free(sm->notify);
     free(sm->authid);
+    free(sm->jmapid);
     buf_free(&sm->resp.text);
 
     free(sm);
@@ -362,7 +394,7 @@ static int smtpclient_ehlo(smtpclient_t *sm)
     int r = 0;
 
     /* Say EHLO */
-    buf_setcstr(&sm->buf, "EHLO localhost\r\n");
+    buf_printf(&sm->buf, "EHLO %s\r\n", smtpclient_ehlo_hostname);
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
@@ -394,12 +426,21 @@ done:
     return r;
 }
 
-static int smtpclient_schk(smtpclient_t *sm)
+static int smtpclient_schk(smtpclient_t *sm, strarray_t *fromaddr)
 {
     int r = 0;
 
     /* Say SCHK */
-    buf_setcstr(&sm->buf, "SCHK\r\n");
+    buf_setcstr(&sm->buf, "SCHK");
+    if (fromaddr) {
+        /* Add FROMADDR= parameters */
+        int i;
+        for (i = 0; i < strarray_size(fromaddr); i++) {
+            buf_appendcstr(&sm->buf, " FROMADDR=");
+            smtp_encode_esmtp_value(strarray_nth(fromaddr, i), &sm->buf);
+        }
+    }
+    buf_appendcstr(&sm->buf, "\r\n");
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
@@ -523,6 +564,10 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
     if (sm->by && CAPA(sm->backend, SMTPCLIENT_CAPA_DELIVERBY)) {
         smtp_params_set_extra(&addr->params, &extra_params, "BY", sm->by);
     }
+    if (sm->jmapid && CAPA(sm->backend, SMTPCLIENT_CAPA_JMAPID)) {
+        smtp_params_set_extra(&addr->params,
+                              &extra_params, "IDENTITY", sm->jmapid);
+    }
     if (sm->msgsize && CAPA(sm->backend, SMTPCLIENT_CAPA_SIZE)) {
         char szbuf[21];
         snprintf(szbuf, sizeof(szbuf), "%lu", sm->msgsize);
@@ -620,14 +665,41 @@ done:
     return r;
 }
 
+static int validate_envelope_params(ptrarray_t *params)
+{
+    if (!params) return 0;
+
+    int i;
+    for (i = 0; i < ptrarray_size(params); i++) {
+        smtp_param_t *param = ptrarray_nth(params, i);
+        if (!smtp_is_valid_esmtp_keyword(param->key)) {
+            syslog(LOG_ERR, "smtpclient: invalid estmp keyword: \"%s\"", param->key);
+            return IMAP_PROTOCOL_ERROR;
+        }
+        if (!strcasecmp(param->key, "AUTH")) {
+            syslog(LOG_ERR, "smptclient: rejecting AUTH parameter in envelope");
+            return IMAP_PERMISSION_DENIED;
+        }
+        if (param->val && !smtp_is_valid_esmtp_value(param->val)) {
+            syslog(LOG_ERR, "smtpclient: invalid estmp value: \"%s\"", param->val);
+            return IMAP_PROTOCOL_ERROR;
+        }
+    }
+
+    return 0;
+}
+
 static int validate_envelope(smtp_envelope_t *env)
 {
-    int i;
+    int i, r;
 
     if (!env->from.addr) {
         syslog(LOG_ERR, "smtpclient: envelope missing sender");
         return IMAP_PROTOCOL_ERROR;
     }
+    r = validate_envelope_params(&env->from.params);
+    if (r) return r;
+
     if (!env->rcpts.count) {
         syslog(LOG_ERR, "smtpclient: envelope missing recipients");
         return IMAP_PROTOCOL_ERROR;
@@ -638,12 +710,14 @@ static int validate_envelope(smtp_envelope_t *env)
             syslog(LOG_ERR, "smtpclient: invalid recipient at position %d", i);
             return IMAP_PROTOCOL_ERROR;
         }
+        r = validate_envelope_params(&addr->params);
+        if (r) return r;
     }
 
     return 0;
 }
 
-EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data)
+static int smtpclient_sendenv(smtpclient_t *sm, smtp_envelope_t *env)
 {
     int r = 0;
 
@@ -665,31 +739,46 @@ EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct 
     r = smtpclient_rcpt_to(sm, &env->rcpts);
     if (r) goto done;
 
-    if (data) {
-        r = smtpclient_data(sm, data);
-        if (r) goto done;
-    }
-    else {
-        /* simply pre-flighting the envelope */
-        if (CAPA(sm->backend, SMTPCLIENT_CAPA_SENDCHECK)) {
-            r = smtpclient_schk(sm);
-        }
-        else {
-            r = smtpclient_rset(sm);
-        }
-        if (r) goto done;
-    }
-
 done:
     return r;
 }
 
-EXPORTED int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data)
+EXPORTED int smtpclient_sendprot(smtpclient_t *sm,
+                                 smtp_envelope_t *env, struct protstream *data)
 {
+    int r = smtpclient_sendenv(sm, env);
+    if (r) return r;
+
+    return smtpclient_data(sm, data);
+}
+
+EXPORTED int smtpclient_send(smtpclient_t *sm,
+                             smtp_envelope_t *env, struct buf *data)
+{
+
     struct protstream *p = prot_readmap(buf_base(data), buf_len(data));
     smtpclient_set_size(sm, buf_len(data));
     int r = smtpclient_sendprot(sm, env, p);
     prot_free(p);
+    return r;
+}
+
+EXPORTED int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
+                                  size_t size, strarray_t *fromaddr)
+{
+    if (size > 0) smtpclient_set_size(sm, size);
+
+    int r = smtpclient_sendenv(sm, env);
+    if (r) return r;
+
+    /* simply pre-flighting the envelope */
+    if (CAPA(sm->backend, SMTPCLIENT_CAPA_SENDCHECK)) {
+        r = smtpclient_schk(sm, fromaddr);
+    }
+    else {
+        r = smtpclient_rset(sm);
+    }
+
     return r;
 }
 
@@ -717,6 +806,18 @@ EXPORTED void smtpclient_set_by(smtpclient_t *sm, const char *value)
     sm->by = xstrdupnull(value);
 }
 
+EXPORTED void smtpclient_set_jmapid(smtpclient_t *sm, const char *value)
+{
+    xzfree(sm->jmapid);
+
+    if (value) {
+        struct buf xtext = BUF_INITIALIZER;
+
+        smtp_encode_esmtp_value(value, &xtext);
+        sm->jmapid = buf_release(&xtext);
+    }
+}
+
 EXPORTED void smtpclient_set_size(smtpclient_t *sm, unsigned long value)
 {
     sm->msgsize = value;
@@ -734,9 +835,14 @@ EXPORTED unsigned long smtpclient_get_maxsize(smtpclient_t *sm)
     return maxsize;
 }
 
+EXPORTED unsigned smtpclient_get_resp_code(smtpclient_t *sm)
+{
+    return atoi(sm->resp.code);
+}
+
 EXPORTED const char *smtpclient_get_resp_text(smtpclient_t *sm)
 {
-    return buf_cstring(&sm->resp.text);
+    return buf_cstringnull_ifempty(&sm->resp.text);
 }
 
 /* SMTP backend implementations */
@@ -808,6 +914,43 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
 done:
     free(myaddr);
     return r;
+}
+
+EXPORTED int smtp_is_valid_esmtp_keyword(const char *val)
+{
+    if (!isascii(*val) || !isalnum(*val)) {
+        return 0;
+    }
+    for (val = val + 1; *val; val++) {
+        if (!isascii(*val) || (*val != '-' && !isalnum(*val))) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+EXPORTED int smtp_is_valid_esmtp_value(const char *val)
+{
+    if (*val == '\0') return 0;
+    for ( ; *val; val++) {
+        if (*val == '=' || *val < '!' || *val > '~') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Encodes into the current location of the struct buf.
+   The caller must buf_reset() before calling, if necessary. */
+EXPORTED void smtp_encode_esmtp_value(const char *val, struct buf *xtext)
+{
+    const char *p;
+    for (p = val; *p; p++) {
+        if (('!' <= *p && *p <= '~') && *p != '=' && *p != '+') {
+            buf_putc(xtext, *p);
+        }
+        else buf_printf(xtext, "+%02X", *p);
+    }
 }
 
 

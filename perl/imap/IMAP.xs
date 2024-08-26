@@ -717,26 +717,23 @@ imclient_toURL(client,server,box)
         char *server
         char *box
 PREINIT:
-        char *out_buf;
-        int len;
+        struct buf buf = BUF_INITIALIZER;
         struct imapurl imapurl;
 PPCODE:
-        len = strlen(server)+strlen(box);
-        out_buf = safemalloc(4*len);
-
         memset(&imapurl, 0, sizeof(struct imapurl));
         imapurl.server = server;
         imapurl.mailbox = box;
-        imapurl_toURL(out_buf, &imapurl);
+        imapurl_toURL(&buf, &imapurl);
+        buf_cstring(&buf);
 
-        if(!out_buf[0]) {
-                safefree(out_buf);
+        if(!buf_len(&buf)) {
+                buf_free(&buf);
                 XSRETURN_UNDEF;
         }
 
-        XPUSHs(sv_2mortal(newSVpv(out_buf, 0)));
+        XPUSHs(sv_2mortal(newSVpv(buf_cstring(&buf), 0)));
 
         /* newSVpv copies this */
-        safefree(out_buf);
+        buf_free(&buf);
 
         XSRETURN(1);

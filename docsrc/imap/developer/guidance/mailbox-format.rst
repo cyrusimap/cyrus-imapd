@@ -1,9 +1,5 @@
 .. _imap-developer-guidance-mailbox-format:
 
-..  Note: This document was converted from the original by Nic Bernstein
-    (Onlight).  Any formatting mistakes are my fault and not the
-    original author's.
-
 Cyrus IMAP Server: Mailbox File Formats
 =======================================
 

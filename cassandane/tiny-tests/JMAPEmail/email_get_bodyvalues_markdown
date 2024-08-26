@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_bodyvalues_markdown
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Upload email blob";
+    my $rawEmail = ""
+    . "From: foo\@local\r\n"
+    . "To: bar\@local\r\n"
+    . "Subject: test\r\n"
+    . "Date: Tue, 24 Mar 2020 11:21:50 -0500\r\n"
+    . "Content-Type: text/x-markdown\r\n"
+    . "MIME-Version: 1.0\r\n"
+    . "\r\n"
+    . "This is a test";
+    my $data = $jmap->Upload($rawEmail, "application/octet-stream");
+    my $blobId = $data->{blobId};
+
+    xlog "Import and get email";
+    my $res = $jmap->CallMethods([
+        ['Email/import', {
+            emails => {
+                1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    blobId => $blobId,
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#1'],
+            properties => ['bodyStructure', 'bodyValues'],
+            bodyProperties => [
+                'partId',
+                'type',
+            ],
+            fetchAllBodyValues => JSON::true,
+        }, '$2'],
+    ]);
+
+    $self->assert_str_equals('text/x-markdown',
+        $res->[1][1]{list}[0]{bodyStructure}{type});
+    my $partId = $res->[1][1]{list}[0]{bodyStructure}{partId};
+    $self->assert_not_null($partId);
+    $self->assert_str_equals('This is a test',
+        $res->[1][1]{list}[0]{bodyValues}{$partId}{value});
+    $self->assert_equals(JSON::false,
+        $res->[1][1]{list}[0]{bodyValues}{$partId}{isEncodingProblem});
+}

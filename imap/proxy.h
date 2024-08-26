@@ -69,7 +69,7 @@ void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
 
 struct backend *
 proxy_findserver(const char *server, struct protocol_t *prot,
-                 const char *userid, struct backend ***cache,
+                 const char *userid, ptrarray_t *cache,
                  struct backend **current, struct backend **inbox,
                  struct protstream *clientin);
 
@@ -80,6 +80,16 @@ int proxy_check_input(struct protgroup *protin,
                       struct protstream *clientout,
                       struct protstream *serverin,
                       struct protstream *serverout,
+                      int extra_read_fd,
+                      int *extra_read_flag,
                       unsigned long timeout_sec);
+
+struct mbox_refer {
+    int (*proc)(mbentry_t *mbentry, void *rock);
+    void *rock;
+};
+
+extern int proxy_mlookup(const char *name, mbentry_t **mbentryp,
+                         void *tid, struct mbox_refer *refer);
 
 #endif /* _PROXY_H */

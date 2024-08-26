@@ -41,7 +41,6 @@
  * Author: Sébastien Michel from Atos Worldline
  */
 #include <config.h>
-#include "imap/mboxevent.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -64,13 +63,13 @@
 #include "map.h"
 #include "times.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 
-#include "map.h"
+#include "jmap_util.h"
 #include "mboxevent.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "notify.h"
-#include "global.h"
 
 #define MESSAGE_EVENTS (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_EXPIRE|\
                         EVENT_MESSAGE_EXPUNGE|EVENT_MESSAGE_NEW|\
@@ -89,6 +88,8 @@
 #define CALENDAR_EVENTS (EVENT_CALENDAR_ALARM)
 
 #define APPLEPUSHSERVICE_EVENTS (EVENT_APPLEPUSHSERVICE|EVENT_APPLEPUSHSERVICE_DAV)
+
+#define JMAP_EVENTS    (EVENT_MESSAGES_UNSCHEDULED)
 
 
 static const char *notifier = NULL;
@@ -133,6 +134,7 @@ static struct mboxevent event_template =
     /* 23 */ { EVENT_MBTYPE, "vnd.cmu.mbtype", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_SERVERFQDN, "serverFQDN", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MAILBOX_ACL, "vnd.cmu.mailboxACL", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_VISIBLE_USERS, "vnd.cmu.visibleUsers", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 24 */ { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 25 */ { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 26 */ { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -146,15 +148,21 @@ static struct mboxevent event_template =
     { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
+    { EVENT_JMAP_STATES, "vnd.fastmail.jmapStates", EVENT_PARAM_JSON, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_ALARM_RECIPIENTS, "alarmRecipients", EVENT_PARAM_ARRAY, { 0 }, 0 },
+    { EVENT_CALENDAR_ALERTID, "alertId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_USER_ID, "userId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_CALENDAR_ID, "calendarId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_CALENDAR_NAME, "calendarName", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_CALENDAR_COLOR, "calendarColor", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CALENDAR_CALENDAR_OWNER, "calendarOwner", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_UID, "uid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CALENDAR_RECURID, "recurrenceId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CALENDAR_EVENTID, "calendarEventId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_ACTION, "action", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_SUMMARY, "summary", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_DESCRIPTION, "description", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -182,17 +190,32 @@ static struct mboxevent event_template =
     { EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,           "expiry",          EVENT_PARAM_INT,    { 0 }, 0 },
 
+    /* messages unscheduled send params for calalarmd/notifyd */
+    { EVENT_MESSAGES_UNSCHEDULED_USERID, "userId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MESSAGES_UNSCHEDULED_COUNT,  "count",  EVENT_PARAM_INT,    { 0 }, 0 },
+
     /* always at end to let the parser to easily truncate this part */
     /* 31 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
   STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
 
-static char *json_formatter(enum event_type type, struct event_parameter params[]);
+static json_t *json_formatter(enum event_type type, struct event_parameter params[]);
 static int filled_params(enum event_type type, struct mboxevent *mboxevent);
 static int mboxevent_expected_param(enum event_type type, enum event_param param);
 
 static int mboxevent_initialized = 0;
+
+/* function to be used for IMAP IDLE/NOTIFY notification of changes/updates */
+static mboxevent_idlenotifier_t *idle_notifier = NULL;
+
+/*
+ * Set the idlenotifier function
+ */
+HIDDEN void mboxevent_set_idlenotifier(mboxevent_idlenotifier_t *notifyproc)
+{
+    idle_notifier = notifyproc;
+}
 
 static void done_cb(void *rock __attribute__((unused))) {
     /* do nothing */
@@ -210,7 +233,8 @@ EXPORTED int mboxevent_init(void)
     const char *options;
     int groups;
 
-    if (!(notifier = config_getstring(IMAPOPT_EVENT_NOTIFIER))) return 0;
+    if (!(notifier = config_getstring(IMAPOPT_EVENT_NOTIFIER)) && !idle_notifier)
+        return 0;
 
     /* some don't want to notify events for some IMAP flags */
     options = config_getstring(IMAPOPT_EVENT_EXCLUDE_FLAGS);
@@ -222,7 +246,7 @@ EXPORTED int mboxevent_init(void)
     excluded_specialuse = strarray_split(options, NULL, 0);
 
     /* special meaning to disable event notification on all sub folders */
-    if (strarray_find_case(excluded_specialuse, "ALL", 0) >= 0)
+    if (strarray_contains_case(excluded_specialuse, "ALL"))
         enable_subfolder = 0;
 
     /* get event types's extra parameters */
@@ -254,6 +278,9 @@ EXPORTED int mboxevent_init(void)
     if (groups & IMAP_ENUM_EVENT_GROUPS_APPLEPUSHSERVICE)
         enabled_events |= APPLEPUSHSERVICE_EVENTS;
 
+    if (groups & IMAP_ENUM_EVENT_GROUPS_JMAP)
+        enabled_events |= JMAP_EVENTS;
+
     mboxevent_initialized = 1;
 
     return enabled_events;
@@ -278,16 +305,16 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     init_internal();
 
-    if (!enable_subfolder && !mboxname_isusermailbox(mailbox->name, 1)) {
+    if (!enable_subfolder && !mboxname_isusermailbox(mailbox_name(mailbox), 1)) {
         enabled = 0;
         goto done;
     }
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-        userid = mboxname_to_userid(mailbox->name);
+        userid = mboxname_to_userid(mailbox_name(mailbox));
 
-        r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+        r = annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
         if (r) goto done; /* XXX - return -1?  Failure? */
 
         /* get info and set flags */
@@ -295,7 +322,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
         for (i = 0; i < strarray_size(specialuse) ; i++) {
             const char *attribute = strarray_nth(specialuse, i);
-            if (strarray_find(excluded_specialuse, attribute, 0) >= 0) {
+            if (strarray_contains(excluded_specialuse, attribute)) {
                 enabled = 0;
                 goto done;
             }
@@ -316,11 +343,7 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
     init_internal();
 
     /* event notification is completely disabled */
-    if (!notifier)
-        return NULL;
-
-    /* the group to which belong the event is not enabled */
-    if (!(enabled_events & type))
+    if (!notifier && !idle_notifier)
         return NULL;
 
     mboxevent = xmalloc(sizeof(struct mboxevent));
@@ -392,14 +415,24 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     if (!event)
         return;
 
-    seqset_free(event->uidset);
-    seqset_free(event->olduidset);
+    seqset_free(&event->uidset);
+    seqset_free(&event->olduidset);
     strarray_fini(&event->midset);
     strarray_fini(&event->flagnames);
 
     for (i = 0; i <= MAX_PARAM; i++) {
-        if (event->params[i].filled && event->params[i].type == EVENT_PARAM_STRING)
-            free(event->params[i].value.s);
+        if (event->params[i].filled) {
+            switch (event->params[i].type) {
+            case EVENT_PARAM_STRING:
+                free(event->params[i].value.s);
+                break;
+            case EVENT_PARAM_JSON:
+                json_decref(event->params[i].value.j);
+                break;
+            default:
+                break;
+            }
+        }
     }
 
     if (event->prev)
@@ -488,6 +521,16 @@ static int mboxevent_expected_applepushservice_dav_param(enum event_param param)
     }
 }
 
+static int mboxevent_expected_schedsend_failed_param(enum event_param param) {
+    switch (param) {
+    case EVENT_MESSAGES_UNSCHEDULED_USERID:
+    case EVENT_MESSAGES_UNSCHEDULED_COUNT:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int mboxevent_expected_param(enum event_type type, enum event_param param)
 {
     if (type == EVENT_CALENDAR_ALARM)
@@ -497,6 +540,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return mboxevent_expected_applepushservice_param(param);
     if (type == EVENT_APPLEPUSHSERVICE_DAV)
         return mboxevent_expected_applepushservice_dav_param(param);
+
+    if (type == EVENT_MESSAGES_UNSCHEDULED)
+        return mboxevent_expected_schedsend_failed_param(param);
 
     switch (param) {
     case EVENT_BODYSTRUCTURE:
@@ -532,6 +578,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return (type & MAILBOX_EVENTS);
     case EVENT_MAILBOX_ACL:
         return (type & MAILBOX_EVENTS);
+    case EVENT_VISIBLE_USERS:
+        return (type & MAILBOX_EVENTS);
     case EVENT_QUOTA_MESSAGES:
         return type & QUOTA_EVENTS;
     case EVENT_MESSAGE_CONTENT:
@@ -555,6 +603,11 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MESSAGE_THREADID:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_THREADID) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+    case EVENT_JMAP_EMAIL:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPEMAIL) &&
+               (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
+    case EVENT_JMAP_STATES:
+        return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES;
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -651,7 +704,7 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
         if (event->type == EVENT_FLAGS_SET &&
             event->next &&
             event->next->type == EVENT_FLAGS_CLEAR &&
-            strarray_find_case(&event->next->flagnames, "\\Seen", 0) >= 0) {
+            strarray_contains_case(&event->next->flagnames, "\\Seen")) {
 
             struct mboxevent *other = event->next;
             // swap the outsides first
@@ -739,14 +792,27 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
                 }
             }
 
-            /* check if expected event parameters are filled */
-            assert(filled_params(type, event));
-
             /* notification is ready to send */
-            formatted_message = json_formatter(type, event->params);
-            notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL, formatted_message, fname);
+            json_t *jevent = json_formatter(type, event->params);
 
-            free(formatted_message);
+            if (notifier && (type & enabled_events)) {
+                /* check if expected event parameters are filled */
+                assert(filled_params(type, event));
+
+                formatted_message = json_dumps(jevent,
+                                               JSON_PRESERVE_ORDER|JSON_COMPACT);
+                notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL,
+                       formatted_message, fname);
+                free(formatted_message);
+            }
+
+            if (idle_notifier &&
+                (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS|SUBS_EVENTS))) {
+                /* the group to which the event belongs is for IMAP IDLE/NOTIFY */
+                json_object_set_new(jevent, "@type", json_string("notify"));
+                idle_notifier(jevent);
+            }
+            json_decref(jevent);
         }
         while (strarray_size(&event->flagnames) > 0);
     }
@@ -764,23 +830,23 @@ EXPORTED void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_U
 
     /* add system flags */
     if (system_flags & FLAG_DELETED) {
-        if (strarray_find_case(excluded_flags, "\\Deleted", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Deleted"))
             strarray_add_case(&event->flagnames, "\\Deleted");
     }
     if (system_flags & FLAG_ANSWERED) {
-        if (strarray_find_case(excluded_flags, "\\Answered", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Answered"))
             strarray_add_case(&event->flagnames, "\\Answered");
     }
     if (system_flags & FLAG_FLAGGED) {
-        if (strarray_find_case(excluded_flags, "\\Flagged", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Flagged"))
             strarray_add_case(&event->flagnames, "\\Flagged");
     }
     if (system_flags & FLAG_DRAFT) {
-        if (strarray_find_case(excluded_flags, "\\Draft", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Draft"))
             strarray_add_case(&event->flagnames, "\\Draft");
     }
     if (system_flags & FLAG_SEEN) {
-        if (strarray_find_case(excluded_flags, "\\Seen", 0) < 0)
+        if (!strarray_contains_case(excluded_flags, "\\Seen"))
             strarray_add_case(&event->flagnames, "\\Seen");
     }
 
@@ -792,7 +858,7 @@ EXPORTED void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_U
         if (!(flagnames[flag] && (flagmask & (1<<(flag & 31)))))
             continue;
 
-        if (strarray_find_case(excluded_flags, flagnames[flag], 0) < 0)
+        if (!strarray_contains_case(excluded_flags, flagnames[flag]))
             strarray_add_case(&event->flagnames, flagnames[flag]);
     }
 }
@@ -811,7 +877,6 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
                                    const char *userid, const char *mailboxname,
                                    const int ext_name __attribute__((unused)))
 {
-    char url[MAX_MAILBOX_PATH+1];
     struct imapurl imapurl;
     int r;
 
@@ -835,12 +900,12 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     imapurl.mailbox = extname;
     mbname_free(&mbname);
 
-    imapurl_toURL(url, &imapurl);
-
     // All events want a URI parameter, which in the case of Login/Logout
     // might be useful if it took in to account TLS SNI for example.
     if (!event->params[EVENT_URI].filled) {
-        FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+        struct buf url = BUF_INITIALIZER;
+        imapurl_toURL(&url, &imapurl);
+        FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
     }
 
     // Login and Logout events do not have a mailboxname, so avoid looking that up...
@@ -894,10 +959,60 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     }
 }
 
+static const char *threadid(bit64 cid)
+{
+    static char id[JMAP_THREADID_SIZE];
+
+    if (!cid) {
+        strlcpy(id, "NIL", JMAP_THREADID_SIZE);
+    }
+    else {
+        jmap_set_threadid(cid, id);
+    }
+
+    return id;
+}
+
+static json_t *jmap_email(struct message_guid *guid, bit64 cid, struct body *body)
+{
+    char emailid[JMAP_EMAILID_SIZE];
+
+    jmap_set_emailid(guid, emailid);
+
+    return json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
+                     "id", emailid,
+                     "threadId", threadid(cid),
+                     "sentAt", jmap_header_as_date(body->date),
+                     "subject", jmap_header_as_text(body->subject),
+                     "from",
+                     jmap_emailaddresses_from_addr(body->from,
+                                                   HEADER_FORM_ADDRESSES),
+                     "sender",
+                     jmap_emailaddresses_from_addr(body->sender,
+                                                   HEADER_FORM_ADDRESSES),
+                     "replyTo",
+                     jmap_emailaddresses_from_addr(body->reply_to,
+                                                   HEADER_FORM_ADDRESSES),
+                     "to",
+                     jmap_emailaddresses_from_addr(body->to,
+                                                   HEADER_FORM_ADDRESSES),
+                     "cc",
+                     jmap_emailaddresses_from_addr(body->cc,
+                                                   HEADER_FORM_ADDRESSES),
+                     "bcc",
+                     jmap_emailaddresses_from_addr(body->bcc,
+                                                   HEADER_FORM_ADDRESSES),
+                     "inReplyTo",
+                     jmap_header_as_messageids(body->in_reply_to),
+                     "messageId",
+                     jmap_header_as_messageids(body->message_id));
+}
+
 EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *mailbox,
                                        struct index_record *record)
 {
     char *msgid = NULL;
+    struct body *body = NULL;
 
     if (!event)
         return;
@@ -950,28 +1065,26 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message EMAILID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&record->guid), 24);
-        emailid[25] = '\0';
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+        char *emailid = xmalloc(JMAP_EMAILID_SIZE);
+        jmap_set_emailid(&record->guid, emailid);
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
     }
 
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
-        char threadid[18];
-        if (!record->cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
-        }
-        else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(record->cid), 16);
-            threadid[17] = '\0';
-        }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
+                          xstrdup(threadid(record->cid)));
+    }
+
+    /* add vnd.fastmail.jmapEmail */
+    if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
+        if (mailbox_cacherecord(mailbox, record))
+            return;
+        message_read_bodystructure(record, &body);
+
+        json_t *email = jmap_email(&record->guid, record->cid, body);
+
+        FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
     }
 
     /* add vnd.cmu.envelope */
@@ -990,20 +1103,25 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
 #ifdef WITH_DAV
     /* add caldav items */
-    if ((mailbox->mbtype & (MBTYPES_DAV)) &&
+    if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
-        struct body *body = NULL;
         const char *resource = NULL;
         struct param *param;
+        char *xval = NULL;
 
-        if (mailbox_cacherecord(mailbox, record))
-            return;
-        message_read_bodystructure(record, &body);
+        if (!body) {
+            if (mailbox_cacherecord(mailbox, record))
+                return;
+            message_read_bodystructure(record, &body);
+        }
 
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {
                 resource = param->value;
+            }
+            else if (!strcmp(param->attribute, "FILENAME*")) {
+                resource = xval = charset_parse_mimexvalue(param->value, NULL);
             }
         }
 
@@ -1012,18 +1130,22 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
-            if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+            unsigned mbtype = mbtype_isa(mailbox_mbtype(mailbox));
+            const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                        .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+
+            if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) {
                 struct carddav_db *carddavdb = NULL;
                 struct carddav_data *cdata = NULL;
                 carddavdb = mailbox_open_carddav(mailbox);
-                carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
+                carddav_lookup_resource(carddavdb, &mbentry, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
             }
-            else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            else if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) {
                 struct caldav_db *caldavdb = NULL;
                 struct caldav_data *cdata = NULL;
                 caldavdb = mailbox_open_caldav(mailbox);
-                caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
+                caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
             }
             else {
@@ -1031,14 +1153,20 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
             }
         }
+
+        free(xval);
     }
 #endif // WITH_DAV
+
+    if (body) message_free_body(body);
+    free(body);
 }
 
 EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *msgrec)
 {
     int r;
     uint32_t uid;
+    struct body *body = NULL;
 
     if (!event)
         return;
@@ -1118,11 +1246,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
             return;
         }
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&guid), 24);
-        emailid[25] = '\0';
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+        char *emailid = xmalloc(JMAP_EMAILID_SIZE);
+        jmap_set_emailid(&guid, emailid);
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
     }
 
     /* add message THREADID */
@@ -1132,19 +1258,28 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
             return;
         }
-        char threadid[18];
-        if (!cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid(cid)));
+    }
+
+    /* add vnd.fastmail.jmapEmail */
+    if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
+        struct message_guid guid;
+        bit64 cid;
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            return;
         }
-        else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(cid), 16);
-            threadid[17] = '\0';
+        if ((r = msgrecord_get_cid(msgrec, &cid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            return;
         }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+        if ((r = msgrecord_extract_bodystructure(msgrec, &body))) {
+            syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
+            return;
+        }
+        json_t *email = jmap_email(&guid, cid, body);
+
+        FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
     }
 
     /* add vnd.cmu.envelope */
@@ -1173,19 +1308,27 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     r = msgrecord_get_mailbox(msgrec, &mailbox);
     if (r) return;
 
-    if ((mailbox->mbtype & (MBTYPES_DAV)) &&
+    if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
-        struct body *body = NULL;
         const char *resource = NULL;
         struct param *param;
+        char *xval = NULL;
 
-        r = msgrecord_extract_bodystructure(msgrec, &body);
-        if (r) return;
+        if (!body) {
+            r = msgrecord_extract_bodystructure(msgrec, &body);
+            if (r) {
+                syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
+                return;
+            }
+        }
 
         for (param = body->disposition_params; param; param = param->next) {
             if (!strcmp(param->attribute, "FILENAME")) {
                 resource = param->value;
+            }
+            else if (!strcmp(param->attribute, "FILENAME*")) {
+                resource = xval = charset_parse_mimexvalue(param->value, NULL);
             }
         }
 
@@ -1194,18 +1337,22 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
-            if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+            unsigned mbtype = mbtype_isa(mailbox_mbtype(mailbox));
+            const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
+                                        .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+
+            if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) {
                 struct carddav_db *carddavdb = NULL;
                 struct carddav_data *cdata = NULL;
                 carddavdb = mailbox_open_carddav(mailbox);
-                carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
+                carddav_lookup_resource(carddavdb, &mbentry, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
             }
-            else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            else if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) {
                 struct caldav_db *caldavdb = NULL;
                 struct caldav_data *cdata = NULL;
                 caldavdb = mailbox_open_caldav(mailbox);
-                caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 1);
+                caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
             }
             else {
@@ -1214,10 +1361,12 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             }
         }
 
-        if (body) message_free_body(body);
-        free(body);
+        free(xval);
     }
 #endif // WITH_DAV
+
+    if (body) message_free_body(body);
+    free(body);
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
@@ -1270,8 +1419,9 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
                                msgrecord_t *msgrec, FILE* content)
 {
     const char *base = NULL;
-    size_t offset, size, truncate, len = 0;
+    size_t offset, size, len = 0;
     uint32_t record_size, header_size;
+    int64_t truncate;
 
     if (!event)
         return;
@@ -1281,11 +1431,12 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
 
     if (msgrecord_get_size(msgrec, &record_size) ||
         msgrecord_get_header_size(msgrec, &header_size)) {
-        syslog(LOG_ERR, "mobxevent: can't determine content size");
+        syslog(LOG_ERR, "mboxevent: can't determine content size");
         return;
     }
 
-    truncate = config_getint(IMAPOPT_EVENT_CONTENT_SIZE);
+    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    if (truncate < 0) truncate = 0;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
     /*  include message up to 'truncate' in size with the notification */
@@ -1295,7 +1446,7 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
             size = record_size;
         }
         else {
-            /* XXX RFC 5423 suggests to include a URLAUTH [RFC4467] reference
+            /* XXX RFC 5423 suggests to include a URLAUTH [RFC 4467] reference
              * for larger messages. IMAP URL of mailboxID seems enough though */
             return;
         }
@@ -1339,7 +1490,8 @@ void mboxevent_extract_content(struct mboxevent *event,
                                const struct index_record *record, FILE* content)
 {
     const char *base = NULL;
-    size_t offset, size, truncate, len = 0;
+    size_t offset, size, len = 0;
+    int64_t truncate;
 
     if (!event)
         return;
@@ -1347,7 +1499,8 @@ void mboxevent_extract_content(struct mboxevent *event,
     if (!mboxevent_expected_param(event->type, EVENT_MESSAGE_CONTENT))
         return;
 
-    truncate = config_getint(IMAPOPT_EVENT_CONTENT_SIZE);
+    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    if (truncate < 0) truncate = 0;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
     /*  include message up to 'truncate' in size with the notification */
@@ -1357,7 +1510,7 @@ void mboxevent_extract_content(struct mboxevent *event,
             size = record->size;
         }
         else {
-            /* XXX RFC 5423 suggests to include a URLAUTH [RFC4467] reference
+            /* XXX RFC 5423 suggests to include a URLAUTH [RFC 4467] reference
              * for larger messages. IMAP URL of mailboxID seems enough though */
             return;
         }
@@ -1400,7 +1553,6 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
                              enum quota_resource res)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
 
     if (!event)
         return;
@@ -1441,13 +1593,13 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
         char *extname = mboxname_to_external(quota->root, &namespace, NULL);
         imapurl.mailbox = extname;
 
-        imapurl_toURL(url, &imapurl);
-
-        free(extname);
-
         if (!event->params[EVENT_URI].filled) {
-            FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+            struct buf url = BUF_INITIALIZER;
+            imapurl_toURL(&url, &imapurl);
+            FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
         }
+
+        xzfree(extname);
 
         /* Note that userbuf for shared folders is NULL, and xstrdup
          * doesn't like it. However, shared folder hierarchies can have
@@ -1460,6 +1612,7 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
             FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
             free(userid);
         }
+
     }
 }
 
@@ -1481,11 +1634,40 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
     }
 }
 
+static struct jmap_state_t
+{
+    const char *type;
+    size_t offset;
+} jmap_states[] = {
+    { "Mailbox",
+      offsetof(struct mboxname_counters, mailfoldersmodseq) },
+    { "Email",
+      offsetof(struct mboxname_counters, mailmodseq) },
+    { "EmailSubmission",
+      offsetof(struct mboxname_counters, submissionmodseq) },
+    { "Calendar",
+      offsetof(struct mboxname_counters, caldavfoldersmodseq) },
+    { "CalendarEvent",
+      offsetof(struct mboxname_counters, caldavmodseq) },
+    { "Contact",
+      offsetof(struct mboxname_counters, carddavmodseq) },
+    { "ContactGroup",
+      offsetof(struct mboxname_counters, carddavmodseq) },
+    { "Note",
+      offsetof(struct mboxname_counters, notesmodseq) },
+    { "SieveScript",
+      offsetof(struct mboxname_counters, sievemodseq) },
+    { "Quota",
+      offsetof(struct mboxname_counters, quotamodseq) },
+    { "Racl",
+      offsetof(struct mboxname_counters, raclmodseq) },
+    { NULL, 0 }
+};
+
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
                                         struct mailbox *mailbox)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
 
     if (!event)
         return;
@@ -1507,30 +1689,32 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     imapurl.server = config_servername;
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
-    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
+    char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
         imapurl.uid = seqset_first(event->uidset);
         /* don't add uidset parameter to MessageNew and MessageAppend events */
-        seqset_free(event->uidset);
+        seqset_free(&event->uidset);
         event->uidset = NULL;
     }
 
     /* all events needs uri parameter */
-    imapurl_toURL(url, &imapurl);
-    FILL_STRING_PARAM(event, EVENT_URI, xstrdup(url));
+    struct buf url = BUF_INITIALIZER;
+    imapurl_toURL(&url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
 
     free(extname);
 
     FILL_STRING_PARAM(event, EVENT_MBTYPE,
-        xstrdup(mboxlist_mbtype_to_string(mailbox->mbtype)));
+        xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
 
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox->acl));
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
+    FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
 
     /* mailbox related events also require mailboxID */
     if (event->type & MAILBOX_EVENTS) {
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mailbox->uniqueid));
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mailbox_uniqueid(mailbox)));
     }
 
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {
@@ -1559,7 +1743,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         if (cstate)
-            conversation_getstatus(cstate, mailbox->name, &status);
+            conversation_getstatus(cstate,
+                                   CONV_FOLDER_KEY_MBOX(cstate, mailbox), &status);
 
         if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS)) {
             FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.threadexists);
@@ -1574,7 +1759,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         struct mboxname_counters counters;
         struct buf value = BUF_INITIALIZER;
 
-        int r = mboxname_read_counters(mailbox->name, &counters);
+        int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
         if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
                            counters.version, counters.highestmodseq,
                            counters.mailmodseq, counters.caldavmodseq,
@@ -1586,13 +1771,33 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
         FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
     }
+
+    /* add vnd.fastmail.jmapStates */
+    if (mboxevent_expected_param(event->type, EVENT_JMAP_STATES)) {
+        struct mboxname_counters counters;
+
+        int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
+        if (!r) {
+            json_t *states = json_object();
+            struct jmap_state_t *state;
+
+            for (state = jmap_states; state->type; state++) {
+                modseq_t *modseq = (modseq_t *)(state->offset + (size_t) &counters);
+                char buf[21];  /* unsigned long long is 20 chars */
+
+                snprintf(buf, sizeof(buf), MODSEQ_FMT, *modseq);
+                json_object_set_new(states, state->type, json_string(buf));
+            }
+
+            FILL_JSON_PARAM(event, EVENT_JMAP_STATES, states);
+        }
+    }
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
                                    const struct mailbox *mailbox)
 {
     struct imapurl imapurl;
-    char url[MAX_MAILBOX_PATH+1];
 
     if (!event)
         return;
@@ -1602,11 +1807,12 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     imapurl.uidvalidity = mailbox->i.uidvalidity;
 
     /* translate internal mailbox name to external */
-    char *extname = mboxname_to_external(mailbox->name, &namespace, NULL);
+    char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
-    imapurl_toURL(url, &imapurl);
-    FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, xstrdup(url));
+    struct buf url = BUF_INITIALIZER;
+    imapurl_toURL(&url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, buf_release(&url));
 
     free(extname);
 }
@@ -1624,9 +1830,9 @@ EXPORTED void mboxevent_set_applepushservice(struct mboxevent *event,
                                              const char *userid)
 {
     FILL_UNSIGNED_PARAM(event, EVENT_APPLEPUSHSERVICE_VERSION,      applepushserviceargs->aps_version);
-    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_ACCOUNT_ID,   (char *) buf_cstring(&applepushserviceargs->aps_account_id));
-    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN, (char *) buf_cstring(&applepushserviceargs->aps_device_token));
-    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_SUBTOPIC,     (char *) buf_cstring(&applepushserviceargs->aps_subtopic));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_ACCOUNT_ID,   buf_releasenull(&applepushserviceargs->aps_account_id));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_DEVICE_TOKEN, buf_releasenull(&applepushserviceargs->aps_device_token));
+    FILL_STRING_PARAM(event,   EVENT_APPLEPUSHSERVICE_SUBTOPIC,     buf_releasenull(&applepushserviceargs->aps_subtopic));
     FILL_ARRAY_PARAM(event,    EVENT_APPLEPUSHSERVICE_MAILBOXES,    mailboxes);
 
     FILL_STRING_PARAM(event, EVENT_USER, xstrdupsafe(userid));
@@ -1651,74 +1857,75 @@ EXPORTED void mboxevent_set_applepushservice_dav(struct mboxevent *event,
 
 }
 
+struct event_t {
+    const char *name;
+    enum event_type type;
+};
+
+static const struct event_t event_list[] = {
+    { "Cancelled",           EVENT_CANCELLED            },
+    { "MessageAppend",       EVENT_MESSAGE_APPEND       },
+    { "MessageExpire",       EVENT_MESSAGE_EXPIRE       },
+    { "MessageExpunge",      EVENT_MESSAGE_EXPUNGE      },
+    { "MessageNew",          EVENT_MESSAGE_NEW          },
+    { "vnd.cmu.MessageCopy", EVENT_MESSAGE_COPY         },
+    { "vnd.cmu.MessageMove", EVENT_MESSAGE_MOVE         },
+    { "QuotaExceed",         EVENT_QUOTA_EXCEED         },
+    { "QuotaWithin",         EVENT_QUOTA_WITHIN         },
+    { "QuotaChange",         EVENT_QUOTA_CHANGE         },
+    { "MessageRead",         EVENT_MESSAGE_READ         },
+    { "MessageTrash",        EVENT_MESSAGE_TRASH        },
+    { "FlagsSet",            EVENT_FLAGS_SET            },
+    { "FlagsClear",          EVENT_FLAGS_CLEAR          },
+    { "Login",               EVENT_LOGIN                },
+    { "Logout",              EVENT_LOGOUT               },
+    { "MailboxCreate",       EVENT_MAILBOX_CREATE       },
+    { "MailboxDelete",       EVENT_MAILBOX_DELETE       },
+    { "MailboxRename",       EVENT_MAILBOX_RENAME       },
+    { "MailboxSubscribe",    EVENT_MAILBOX_SUBSCRIBE    },
+    { "MailboxUnSubscribe",  EVENT_MAILBOX_UNSUBSCRIBE  },
+    { "AclChange",           EVENT_ACL_CHANGE           },
+    { "CalendarEventNew",    EVENT_CALENDAR             },
+    { "CalendarAlarm",       EVENT_CALENDAR_ALARM       },
+    { "ApplePushService",    EVENT_APPLEPUSHSERVICE     },
+    { "ApplePushServiceDAV", EVENT_APPLEPUSHSERVICE_DAV },
+    { "MailboxModseq",       EVENT_MAILBOX_MODSEQ       },
+    { "MessagesUnscheduled", EVENT_MESSAGES_UNSCHEDULED },
+    { NULL,                  0                          }
+};
+
 static const char *event_to_name(enum event_type type)
 {
+    const struct event_t *ev;
+
     if (type == (EVENT_MESSAGE_NEW|EVENT_CALENDAR))
         return "MessageNew";
 
-    switch (type) {
-    case EVENT_MESSAGE_APPEND:
-        return "MessageAppend";
-    case EVENT_MESSAGE_EXPIRE:
-        return "MessageExpire";
-    case EVENT_MESSAGE_EXPUNGE:
-        return "MessageExpunge";
-    case EVENT_MESSAGE_NEW:
-        return "MessageNew";
-    case EVENT_MESSAGE_COPY:
-        return "vnd.cmu.MessageCopy";
-    case EVENT_MESSAGE_MOVE:
-        return "vnd.cmu.MessageMove";
-    case EVENT_QUOTA_EXCEED:
-        return "QuotaExceed";
-    case EVENT_QUOTA_WITHIN:
-        return "QuotaWithin";
-    case EVENT_QUOTA_CHANGE:
-        return "QuotaChange";
-    case EVENT_MESSAGE_READ:
-        return "MessageRead";
-    case EVENT_MESSAGE_TRASH:
-        return "MessageTrash";
-    case EVENT_FLAGS_SET:
-        return "FlagsSet";
-    case EVENT_FLAGS_CLEAR:
-        return "FlagsClear";
-    case EVENT_LOGIN:
-        return "Login";
-    case EVENT_LOGOUT:
-        return "Logout";
-    case EVENT_MAILBOX_CREATE:
-        return "MailboxCreate";
-    case EVENT_MAILBOX_DELETE:
-        return "MailboxDelete";
-    case EVENT_MAILBOX_RENAME:
-        return "MailboxRename";
-    case EVENT_MAILBOX_SUBSCRIBE:
-        return "MailboxSubscribe";
-    case EVENT_MAILBOX_UNSUBSCRIBE:
-        return "MailboxUnSubscribe";
-    case EVENT_ACL_CHANGE:
-        return "AclChange";
-    case EVENT_CALENDAR_ALARM:
-        return "CalendarAlarm";
-    case EVENT_APPLEPUSHSERVICE:
-        return "ApplePushService";
-    case EVENT_APPLEPUSHSERVICE_DAV:
-        return "ApplePushServiceDAV";
-    case EVENT_MAILBOX_MODSEQ:
-        return "MailboxModseq";
-    default:
-        fatal("Unknown message event", EX_SOFTWARE);
+    for (ev = event_list; ev->name; ev++) {
+        if (type == ev->type) return ev->name;
     }
+
+    fatal("Unknown message event", EX_SOFTWARE);
 
     /* never happen */
     return NULL;
 }
 
-static char *json_formatter(enum event_type type, struct event_parameter params[])
+EXPORTED enum event_type name_to_mboxevent(const char *name)
+{
+    const struct event_t *ev;
+
+    for (ev = event_list; ev->name; ev++) {
+        if (!strcasecmp(name, ev->name)) return ev->type;
+    }
+
+    return 0;
+}   
+
+static json_t *json_formatter(enum event_type type, struct event_parameter params[])
 {
     int param, ival;
-    char *val, *ptr, *result;
+    char *val, *ptr;
     json_t *event_json = json_object();
     json_t *jarray;
 
@@ -1732,8 +1939,9 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
         switch (params[param].id) {
         case EVENT_CLIENT_ADDRESS:
             /* come from saslprops structure */
-            val = strdup(params[param].value.s);
+            val = xstrdup(params[param].value.s);
             ptr = strchr(val, ';');
+            assert(ptr != NULL);
             *ptr++ = '\0';
 
             json_object_set_new(event_json, "clientIP", json_string(val));
@@ -1745,8 +1953,9 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
             break;
         case EVENT_SERVER_ADDRESS:
             /* come from saslprops structure */
-            val = strdup(params[param].value.s);
+            val = xstrdup(params[param].value.s);
             ptr = strchr(val, ';');
+            assert(ptr != NULL);
             *ptr++ = '\0';
 
             json_object_set_new(event_json, "serverDomain", json_string(val));
@@ -1777,15 +1986,15 @@ static char *json_formatter(enum event_type type, struct event_parameter params[
 
                 json_object_set_new(event_json, params[param].name, jarray);
                 break;
+            case EVENT_PARAM_JSON:
+                json_object_set(event_json, params[param].name, params[param].value.j);
+                break;
             }
             break;
         }
     }
 
-    result = json_dumps(event_json, JSON_PRESERVE_ORDER|JSON_COMPACT);
-    json_decref(event_json);
-
-    return result;
+    return event_json;
 
 }
 

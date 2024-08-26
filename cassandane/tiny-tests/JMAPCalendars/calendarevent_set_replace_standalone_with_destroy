@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_replace_standalone_with_destroy
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Create standalone instance";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-02T01:01:01',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instanceId = $res->[0][1]{created}{instance}{id};
+    $self->assert_not_null($instanceId);
+
+    xlog "Destroy standalone instance and create main event for same uid";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T01:01:01',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 5,
+                    }],
+                },
+            },
+            destroy => [ $instanceId ],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            properties => [ 'recurrenceOverrides' ],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+    $self->assert_deep_equals([ $instanceId ], $res->[0][1]{destroyed});
+    $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
+
+}

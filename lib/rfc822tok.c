@@ -1,4 +1,4 @@
-/* rfc822tok.c -- RFC822/RFC2822 tokenizer
+/* rfc822tok.c -- RFC 822/RFC 2822 tokenizer
  *
  * Copyright (c) 2012 Carnegie Mellon University.  All rights reserved.
  *

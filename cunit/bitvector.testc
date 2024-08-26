@@ -29,46 +29,46 @@ static void test_basic(void)
     /* can set bit0 and get it back */
     bv_set(&bv, 0);
     CU_ASSERT_EQUAL(1, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 7));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 23));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 104));
     CU_ASSERT_EQUAL(1, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
 
     /* can set bit23 and get it back */
     bv_set(&bv, 23);
     CU_ASSERT_EQUAL(24, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 7));
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 23));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 104));
     CU_ASSERT_EQUAL(24, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
 
     /* can set all bits, does not change length */
     bv_setall(&bv);
     CU_ASSERT_EQUAL(24, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 7));
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 23));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 104));
     CU_ASSERT_EQUAL(24, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
 
     /* can clear all bits, does not change length */
     bv_clearall(&bv);
     CU_ASSERT_EQUAL(24, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 0));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 7));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 23));
     CU_ASSERT_EQUAL(0, bv_isset(&bv, 104));
     CU_ASSERT_EQUAL(24, bv.length);
-    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv.alloc);
 
     /* can set the size, does not change existing bits */
     bv_set(&bv, 0);
@@ -83,6 +83,20 @@ static void test_basic(void)
     CU_ASSERT_EQUAL(105, bv.length);
     CU_ASSERT_NOT_EQUAL(0, bv.alloc);
 
+    /* bits are now heap-allocated */
+
+    /* can set bit63 and get it back */
+    bv_set(&bv, 63);
+    CU_ASSERT_EQUAL(105, bv.length);
+    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
+    CU_ASSERT_EQUAL(0, bv_isset(&bv, 7));
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 23));
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 63));
+    CU_ASSERT_EQUAL(0, bv_isset(&bv, 104));
+    CU_ASSERT_EQUAL(105, bv.length);
+    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+
     /* setall now works on the new size */
     bv_setall(&bv);
     CU_ASSERT_EQUAL(105, bv.length);
@@ -91,6 +105,28 @@ static void test_basic(void)
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 7));
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 23));
     CU_ASSERT_EQUAL(1, bv_isset(&bv, 104));
+    CU_ASSERT_EQUAL(105, bv.length);
+    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+
+    /* can set all bits, does not change length */
+    bv_setall(&bv);
+    CU_ASSERT_EQUAL(105, bv.length);
+    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 0));
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 7));
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 23));
+    CU_ASSERT_EQUAL(1, bv_isset(&bv, 104));
+    CU_ASSERT_EQUAL(105, bv.length);
+    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+
+    /* can clear all bits, does not change length */
+    bv_clearall(&bv);
+    CU_ASSERT_EQUAL(105, bv.length);
+    CU_ASSERT_NOT_EQUAL(0, bv.alloc);
+    CU_ASSERT_EQUAL(0, bv_isset(&bv, 0));
+    CU_ASSERT_EQUAL(0, bv_isset(&bv, 7));
+    CU_ASSERT_EQUAL(0, bv_isset(&bv, 23));
+    CU_ASSERT_EQUAL(0, bv_isset(&bv, 104));
     CU_ASSERT_EQUAL(105, bv.length);
     CU_ASSERT_NOT_EQUAL(0, bv.alloc);
 

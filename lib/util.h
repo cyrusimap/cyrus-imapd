@@ -71,17 +71,20 @@
 extern const char CYRUS_VERSION[];
 
 #ifdef ENABLE_REGEX
-# ifdef HAVE_PCREPOSIX_H
+# if defined HAVE_PCREPOSIX_H
 #  include <pcre.h>
 #  include <pcreposix.h>
-# else /* !HAVE_PCREPOSIX_H */
-#  ifdef HAVE_RXPOSIX_H
-#   include <rxposix.h>
-#  else /* !HAVE_RXPOSIX_H */
-#   include <regex.h>
-#  endif /* HAVE_RXPOSIX_H */
-# endif /* HAVE_PCREPOSIX_H */
-#endif /* ENABLE_REGEX */
+# elif defined HAVE_PCRE2POSIX_H
+#  ifndef PCRE2POSIX_H_INCLUDED
+#   include <pcre2posix.h>
+#   define PCRE2POSIX_H_INCLUDED
+#  endif
+# elif defined HAVE_RXPOSIX_H
+#  include <rxposix.h>
+# else
+#  include <regex.h>
+# endif
+#endif
 
 #ifdef HAVE_LIBUUID
 #include <uuid/uuid.h>
@@ -106,12 +109,7 @@ typedef unsigned long long int bit64;
 typedef unsigned long long int modseq_t;
 #define MODSEQ_FMT "%llu"
 #define atomodseq_t(s) strtoull(s, NULL, 10)
-
-#if SIZEOF_LONG >= 8
-#define INT64_FMT "%ld"
-#else
-#define INT64_FMT "%lld"
-#endif
+char *modseqtoa(modseq_t modseq);
 
 #define Uisalnum(c) isalnum((int)((unsigned char)(c)))
 #define Uisalpha(c) isalpha((int)((unsigned char)(c)))
@@ -148,6 +146,13 @@ extern const unsigned char convert_to_uppercase[256];
 /* Calculate the number of entries in a vector */
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
 
+#ifndef TIMESPEC_TO_TIMEVAL
+#define TIMESPEC_TO_TIMEVAL(tv, ts) { \
+        (tv)->tv_sec = (ts)->tv_sec; \
+        (tv)->tv_usec = (ts)->tv_nsec / 1000; \
+}
+#endif
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;
@@ -173,6 +178,7 @@ int strcmpsafe(const char *a, const char *b);
 int strcasecmpsafe(const char *a, const char *b);
 /* ditto strncmp */
 int strncmpsafe(const char *a, const char *b, size_t n);
+int strncasecmpsafe(const char *a, const char *b, size_t n);
 
 /* NULL isn't "" */
 int strcmpnull(const char *a, const char *b);
@@ -202,6 +208,17 @@ extern char *dir_hash_b(const char *name, int full, char buf[2]);
  * create an [unlinked] temporary file and return the file descriptor.
  */
 extern int create_tempfile(const char *path);
+
+/* create a temporary directory at path and return the directory
+ * name "cyrus-subname-XXXXXX", where subname defaults to "tmpdir"
+ * and XXXXXX is a string that makes the directory name unique.
+ * */
+extern char *create_tempdir(const char *path, const char *subname);
+
+/* recursively call remove(3) on path and its descendants, except
+ * symlinks. Returns zero on success, or the first non-zero return
+ * value of remove on error. */
+extern int removedir(const char *path);
 
 /* Close a network filedescriptor the "safe" way */
 extern int cyrus_close_sock(int fd);
@@ -281,8 +298,9 @@ void _buf_ensure(struct buf *buf, size_t len);
 const char *buf_cstring(const struct buf *buf);
 const char *buf_cstringnull(const struct buf *buf);
 const char *buf_cstringnull_ifempty(const struct buf *buf);
-char *buf_release(struct buf *buf);
+const char *buf_cstring_or_empty(const struct buf *buf);
 char *buf_newcstring(struct buf *buf);
+char *buf_release(struct buf *buf);
 char *buf_releasenull(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
@@ -304,9 +322,12 @@ void buf_cowappendfree(struct buf *buf, char *base, unsigned int len);
 void buf_insert(struct buf *dst, unsigned int off, const struct buf *src);
 void buf_insertcstr(struct buf *buf, unsigned int off, const char *str);
 void buf_insertmap(struct buf *buf, unsigned int off, const char *base, int len);
-void buf_vprintf(struct buf *buf, const char *fmt, va_list args);
+void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
+                __attribute__((format(printf, 2, 0)));
 void buf_printf(struct buf *buf, const char *fmt, ...)
-                __attribute__((format(printf,2,3)));
+                __attribute__((format(printf, 2, 3)));
+void buf_replace_buf(struct buf *buf, size_t offset, size_t length,
+                     const struct buf *replace);
 int buf_replace_all(struct buf *buf, const char *match,
                     const char *replace);
 int buf_replace_char(struct buf *buf, char match, char replace);
@@ -320,11 +341,11 @@ void buf_remove(struct buf *buf, unsigned int off, unsigned int len);
 int buf_cmp(const struct buf *, const struct buf *);
 int buf_findchar(const struct buf *, unsigned int off, int c);
 int buf_findline(const struct buf *buf, const char *line);
-void buf_init(struct buf *buf);
 void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_initm(struct buf *buf, char *base, int len);
+void buf_initmcstr(struct buf *buf, char *str);
 void buf_init_ro_cstr(struct buf *buf, const char *str);
-void buf_init_mmap(struct buf *buf, int onceonly, int fd,
+void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
                    const char *fname, size_t size, const char *mboxname);
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
@@ -352,6 +373,10 @@ char *strconcat(const char *s1, ...);
 int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
 int bin_to_lchex(const void *bin, size_t binlen, char *hex);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
+
+int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags);
+int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen);
+int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen);
 
 /* use getpassphrase on machines which support it */
 #ifdef HAVE_GETPASSPHRASE
@@ -403,6 +428,12 @@ const char *makeuuid();
 
 void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
+
+void xsyslog_fn(int priority, const char *description,
+                const char *func, const char *extra_fmt, ...)
+               __attribute__((format(printf, 4, 5)));
+#define xsyslog(pri, desc, ...)  \
+    xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
 
 /*
  * GCC_VERSION macro usage:

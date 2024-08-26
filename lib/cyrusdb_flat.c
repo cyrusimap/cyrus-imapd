@@ -65,6 +65,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 
 /* we have the file locked iff we have an outstanding transaction */
 
@@ -157,8 +158,8 @@ static void decode(const char *ps, int len, struct buf *buf)
         else
             buf_putc(buf, *p);
     }
-    /* Note: buf is not NUL-terminated.  It happens that neither
-     * skiplist nor berkeley backends guarantee any such thing,
+    /* Note: buf is not NUL-terminated.  It happens that the
+     * skiplist backend does not guarantee any such thing,
      * and so code that depends on it is quite broken anyway */
 }
 
@@ -173,7 +174,7 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
-        unlink(tid->fnamenew);
+        xunlink(tid->fnamenew);
         free(tid->fnamenew);
         rw = 1;
     }
@@ -181,14 +182,18 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
     /* release lock */
     r = lock_unlock(db->fd, db->fname);
     if (r == -1) {
-        syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+        xsyslog(LOG_ERR, "IOERROR: unlocking db failed",
+                         "fname=<%s>",
+                         db->fname);
         r = CYRUSDB_IOERROR;
     }
 
     if (rw) {
         /* return to our normally scheduled fd */
         if (!r && fstat(db->fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstat on %s: %m", db->fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "fname=<%s>",
+                             db->fname);
             r = CYRUSDB_IOERROR;
         }
         if (!r) {
@@ -248,7 +253,9 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 
         r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
         if (r < 0) {
-            syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
+                             "action=<%s> fname=<%s>",
+                             lockfailaction, db->fname);
             return CYRUSDB_IOERROR;
         }
         *mytid = new_txn();
@@ -268,7 +275,9 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
         /* no txn, but let's try to be reasonably up-to-date */
 
         if (stat(db->fname, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: stating flat %s: %m", db->fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed",
+                             "fname=<%s>",
+                             db->fname);
             return CYRUSDB_IOERROR;
         }
 
@@ -278,13 +287,17 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 
             if (newfd == -1) {
                 /* fail! */
-                syslog(LOG_ERR, "couldn't reopen %s: %m", db->fname);
+                xsyslog(LOG_ERR, "IOERROR: reopen failed",
+                                 "fname=<%s>",
+                                 db->fname);
                 return CYRUSDB_IOERROR;
             }
             dup2(newfd, db->fd);
             close(newfd);
             if (stat(db->fname, &sbuf) == -1) {
-                syslog(LOG_ERR, "IOERROR: stating flat %s: %m", db->fname);
+                xsyslog(LOG_ERR, "IOERROR: stat failed",
+                                 "fname=<%s>",
+                                 db->fname);
                 return CYRUSDB_IOERROR;
             }
 
@@ -326,13 +339,17 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     }
 
     if (db->fd == -1) {
-        syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "fname=<%s>",
+                         fname);
         free_db(db);
         return CYRUSDB_IOERROR;
     }
 
     if (fstat(db->fd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "fname=<%s>",
+                         fname);
         close(db->fd);
         free_db(db);
         return CYRUSDB_IOERROR;
@@ -502,6 +519,8 @@ static int foreach(struct dbengine *db,
 
     struct buf prefixbuf = BUF_INITIALIZER;
 
+    assert(cb);
+
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
 
@@ -623,7 +642,9 @@ static int mystore(struct dbengine *db,
     if (!mytid || !*mytid) {
         r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
         if (r < 0) {
-            syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, db->fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
+                             "action=<%s> fname=<%s>",
+                             lockfailaction, db->fname);
             return CYRUSDB_IOERROR;
         }
 
@@ -661,7 +682,7 @@ static int mystore(struct dbengine *db,
         strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     }
 
-    unlink(fnamebuf);
+    xunlink(fnamebuf);
     r = writefd = open(fnamebuf, O_RDWR | O_CREAT, 0666);
     if (r < 0) {
         syslog(LOG_ERR, "opening %s for writing failed: %m", fnamebuf);
@@ -693,7 +714,9 @@ static int mystore(struct dbengine *db,
     /* do the write */
     r = retry_writev(writefd, iov, niov);
     if (r == -1) {
-        syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
+        xsyslog(LOG_ERR, "IOERROR: write failed",
+                         "fname=<%s>",
+                         fnamebuf);
         close(writefd);
         if (mytid) abort_txn(db, *mytid);
         buf_free(&keybuf);
@@ -720,7 +743,9 @@ static int mystore(struct dbengine *db,
         if (fsync(writefd) ||
             fstat(writefd, &sbuf) == -1 ||
             rename(fnamebuf, db->fname) == -1) {
-            syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
+            xsyslog(LOG_ERR, "IOERROR: commit failed",
+                             "fname=<%s>",
+                             fnamebuf);
             close(writefd);
             buf_free(&keybuf);
             buf_free(&databuf);
@@ -733,7 +758,9 @@ static int mystore(struct dbengine *db,
         /* release lock */
         r = lock_unlock(db->fd, db->fname);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
+                             "fname=<%s>",
+                             db->fname);
             r = CYRUSDB_IOERROR;
         }
 
@@ -796,7 +823,9 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
         if (fsync(writefd) ||
             fstat(writefd, &sbuf) == -1 ||
             rename(tid->fnamenew, db->fname) == -1) {
-            syslog(LOG_ERR, "IOERROR: writing %s: %m", tid->fnamenew);
+            xsyslog(LOG_ERR, "IOERROR: commit failed",
+                             "fname=<%s>",
+                             tid->fnamenew);
             close(writefd);
             r = CYRUSDB_IOERROR;
         } else {
@@ -812,7 +841,9 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
         /* release lock */
         r = lock_unlock(db->fd, db->fname);
         if (r == -1) {
-            syslog(LOG_ERR, "IOERROR: unlocking db %s: %m", db->fname);
+            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
+                             "fname=<%s>",
+                             db->fname);
             r = CYRUSDB_IOERROR;
         }
     }
