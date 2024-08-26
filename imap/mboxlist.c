@@ -1974,7 +1974,7 @@ static int _rename_check_specialuse(const char *oldname, const char *newname)
         strarray_t *check = strarray_split(protect, NULL, STRARRAY_TRIM);
         strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
         if (strarray_intersect_case(uses, check)) {
-            /* then if llowspecialusesubfolders is not enabled the target must be a single-depth mailbox too */
+            /* then if allowspecialusesubfolders is not enabled the target must be a single-depth mailbox too */
             if (!config_getswitch(IMAPOPT_ALLOWSPECIALUSESUBFOLDER) && strarray_size(mbname_boxes(new)) != 1)
                 r = IMAP_MAILBOX_SPECIALUSE;
             /* and have a userid as well */

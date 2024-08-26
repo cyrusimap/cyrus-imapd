@@ -172,7 +172,7 @@ are listed with ``<none>''.
 /* Defaults to enabled.  If disabled, disallows the use of the SETACL
    command at all via IMAP. */
 
-{ "allowspecialusesubfolder", 0, SWITCH, "3.0.14" }
+{ "allowspecialusesubfolder", 0, SWITCH, "UNRELEASED" }
 /* If enabled, allows special-use folders to be moved into subfolders
 .PP
   By default, cyrus does not allow a special-use folder to be moved or
