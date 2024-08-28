@@ -608,8 +608,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. NOTE::
 
-        The LIST and LSUB commands return the special-use flags, unless the
-	``specialusealways`` configuration variable is explicitly turned off.
+        The unextended LIST and LSUB commands return the special-use flags, unless
+        the ``specialusealways`` configuration variable is explicitly turned off.
 
 :rfc:`6203`
 
