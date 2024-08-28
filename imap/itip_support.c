@@ -546,7 +546,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             /* Create a new override from the master component
                and add it to the current object */
             icalproperty *recuridp = icalproperty_new_recurrenceid(recurid);
-            const char *tzid = icaltimezone_get_location(startzone);
+            const char *tzid = icaltimezone_get_location_tzid(startzone);
             if (tzid) {
                 icalproperty_set_parameter(recuridp, icalparameter_new_tzid(tzid));
             }
