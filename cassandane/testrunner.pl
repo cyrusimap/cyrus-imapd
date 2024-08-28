@@ -355,6 +355,7 @@ else
 {
     # Build the schedule per commandline
     $plan->schedule(@names);
+    $plan->check_sanity();
 
     # Run the schedule
     $want_formats{prettier} = 1 if not scalar keys %want_formats;
