@@ -461,6 +461,7 @@ sub add_pass
 }
 
 package Cassandane::Unit::TestPlan;
+use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
@@ -645,6 +646,66 @@ sub schedule
     }
 }
 
+sub check_sanity
+{
+    my ($self) = @_;
+
+    # collect tiny-tests directories that are used by test modules
+    my %used_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            return if not -f $fname;
+            return if $fname !~ m/\.pm$/;
+
+            open my $fh, '<', $fname or die "open $fname: $!";
+            while (<$fh>) {
+                if (m{^\s*use\s+Cassandane::Tiny::Loader\s*
+                      (['"])
+                      (.*?)
+                      \1
+                      \s*;\s*$
+                    }x)
+                {
+                    push @{$used_tt_dirs{$2}}, $fname;
+                }
+            }
+            close $fh;
+        },
+    }, @test_roots);
+
+    # collect tiny-tests directories that exist on disk
+    my %real_tt_dirs;
+    if (opendir my $dh, 'tiny-tests') {
+        while (readdir $dh) {
+            next if m/^\./;
+            my $path = "tiny-tests/$_";
+            next if not -d $path;
+            $real_tt_dirs{$path} = 1;
+        }
+        closedir $dh;
+    }
+
+    # whinge about bad test modules
+    while (my ($tt, $modules) = each %used_tt_dirs) {
+        # XXX this one might not be an error if we start doing this
+        # XXX intentionally, perhaps to run the same group of tests under
+        # XXX different setups or configurations
+        die "@{$modules} share tiny-tests directory $tt"
+            if scalar @{$modules} > 1;
+
+        die "$modules->[0] uses nonexistent tiny-tests directory $tt"
+            if not $real_tt_dirs{$tt};
+    }
+
+    # whinge about orphaned directories
+    foreach my $tt (keys %real_tt_dirs) {
+        die "$tt directory is not used by any tests"
+            if not $used_tt_dirs{$tt};
+    }
+}
 
 #
 # Get the entire expanded schedule as specific {suite,testname} tuples,
