@@ -550,6 +550,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             if (tzid) {
                 icalproperty_set_parameter(recuridp, icalparameter_new_tzid(tzid));
             }
+syslog(LOG_NOTICE, "XXXXXXXX  create new override: startzone = %p, tzid = '%s'", startzone, tzid ? tzid : "NULL");
             comp = master_to_recurrence(master, recuridp);
             icalcomponent_add_component(ical, comp);
 
