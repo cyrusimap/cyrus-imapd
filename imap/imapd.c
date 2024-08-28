@@ -7013,8 +7013,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
     use = dlist_getchild(extargs, "USE");
     if (use) {
-        /* only user mailboxes can have specialuse, and they must be user toplevel folders */
-        if (!mbname_userid(mbname) || strarray_size(mbname_boxes(mbname)) != 1) {
+        /* only user mailboxes can have specialuse, and if allowspecialusesubfolders is not enabled they must be user toplevel folders */
+        if (!mbname_userid(mbname) || (!config_getswitch(IMAPOPT_ALLOWSPECIALUSESUBFOLDER ) && strarray_size(mbname_boxes(mbname)) != 1)) {
             r = IMAP_MAILBOX_SPECIALUSE;
             goto err;
         }
