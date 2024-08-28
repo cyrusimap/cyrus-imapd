@@ -383,6 +383,8 @@ else
 {
     # Build the schedule per commandline
     $plan->schedule(@names);
+    $plan->check_sanity();
+
     # Run the schedule
     open my $fh, '>&', \*STDOUT
         or die "Cannot save STDOUT as a runner print stream: $!";
