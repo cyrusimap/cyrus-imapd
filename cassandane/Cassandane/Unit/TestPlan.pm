@@ -723,15 +723,23 @@ sub check_sanity
 
     # collect tiny-tests directories that exist on disk
     my %real_tt_dirs;
-    if (opendir my $dh, 'tiny-tests') {
-        while (readdir $dh) {
-            next if m/^\./;
-            my $path = "tiny-tests/$_";
-            next if not -d $path;
-            $real_tt_dirs{$path} = 1;
-        }
-        closedir $dh;
-    }
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            my ($tt, $suite, $test) = split q{/}, $fname, 3;
+            return if not $suite;
+
+            if (not $test) {
+                # explicit initialisation to detect directories with no files
+                $real_tt_dirs{"$tt/$suite"} //= 0;
+                return;
+            }
+
+            $real_tt_dirs{"$tt/$suite"} ++;
+        },
+    }, 'tiny-tests') if -d 'tiny-tests';
 
     # whinge about bad test modules
     while (my ($tt, $modules) = each %used_tt_dirs) {
@@ -742,13 +750,16 @@ sub check_sanity
             if scalar @{$modules} > 1;
 
         die "$modules->[0] uses nonexistent tiny-tests directory $tt"
-            if not $real_tt_dirs{$tt};
+            if not exists $real_tt_dirs{$tt};
     }
 
     # whinge about orphaned directories
-    foreach my $tt (keys %real_tt_dirs) {
+    while (my ($tt, $ntests) = each %real_tt_dirs) {
         die "$tt directory is not used by any tests"
             if not $used_tt_dirs{$tt};
+
+        die "$tt directory contains no tests"
+            if not $ntests;
     }
 }
 
