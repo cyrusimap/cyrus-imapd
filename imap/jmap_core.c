@@ -47,6 +47,7 @@
 
 #include <string.h>
 #include <syslog.h>
+#include <sys/utsname.h>
 
 #include "acl.h"
 #include "append.h"
@@ -182,6 +183,23 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 "maxObjectsInSet",
                 settings->limits[MAX_OBJECTS_IN_SET],
                 "collationAlgorithms", json_array()));
+
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+        struct utsname buf;
+
+        uname(&buf);
+        json_object_set_new(settings->server_capabilities,
+                            JMAP_URN_CORE_INFO,
+                            json_pack("{s:{s:s s:s} s:n s:{s:s s:s} s:n}",
+                                      "product",
+                                      "name", "Cyrus JMAP",
+                                      "version", CYRUS_VERSION,
+                                      "backend",
+                                      "environment",
+                                      "name", buf.sysname,
+                                      "version", buf.release,
+                                      "capabilitiesOverrides"));
+    }
 
     jmap_method_t *mp;
     for (mp = jmap_core_methods_standard; mp->name; mp++) {
