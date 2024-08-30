@@ -37,12 +37,12 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Unit::RunnerPretty;
+package Cassandane::Unit::FormatPretty;
 use strict;
 use warnings;
 
 use lib '.';
-use base qw(Cassandane::Unit::Runner);
+use base qw(Cassandane::Unit::Formatter);
 
 sub new
 {
@@ -66,7 +66,7 @@ sub new
 sub ansi
 {
     my ($self, $codes, @args) = @_;
-    my $isatty = -t $self->print_stream;
+    my $isatty = -t $self->{fh};
 
     my $ansi;
 
@@ -75,13 +75,6 @@ sub ansi
     $ansi .= "\e[0m" if $isatty;
 
     return $ansi;
-}
-
-sub start_test
-{
-    my $self = shift;
-    my $test = shift;
-    # prevent the default action which is to print "."
 }
 
 sub add_pass
@@ -100,8 +93,6 @@ sub add_error
     my $self = shift;
     my $test = shift;
 
-    $self->record_failed($test);
-
     my $line = sprintf "%s %s\n",
                        $self->ansi([31], '[ERROR ]'),
                        _getname($test);
@@ -113,7 +104,6 @@ sub add_failure
     my $self = shift;
     my $test = shift;
 
-    $self->record_failed($test);
     my $line = sprintf "%s %s\n",
                        $self->ansi([33], '[FAILED]'),
                        _getname($test);
@@ -149,8 +139,8 @@ sub print_errors
     my $saved_output_stream;
     if ($self->{_quiet}) {
         if ($self->{_quiet_report_fh}) {
-            $saved_output_stream = $self->{_Print_stream};
-            $self->{_Print_stream} = $self->{_quiet_report_fh};
+            $saved_output_stream = $self->{fh};
+            $self->{fh} = $self->{_quiet_report_fh};
         }
         else {
             return;
@@ -178,7 +168,7 @@ sub print_errors
     }
 
     if ($saved_output_stream) {
-        $self->{_Print_stream} = $saved_output_stream;
+        $self->{fh} = $saved_output_stream;
     }
 }
 
@@ -189,8 +179,8 @@ sub print_failures
     my $saved_output_stream;
     if ($self->{_quiet}) {
         if ($self->{_quiet_report_fh}) {
-            $saved_output_stream = $self->{_Print_stream};
-            $self->{_Print_stream} = $self->{_quiet_report_fh};
+            $saved_output_stream = $self->{fh};
+            $self->{fh} = $self->{_quiet_report_fh};
         }
         else {
             return;
@@ -218,7 +208,7 @@ sub print_failures
     }
 
     if ($saved_output_stream) {
-        $self->{_Print_stream} = $saved_output_stream;
+        $self->{fh} = $saved_output_stream;
     }
 }
 
