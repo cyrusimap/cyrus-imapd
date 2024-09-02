@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_body_sieve
+    :min_version_3_7 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :AltNamespace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $imap->create("matches") or die;
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "text" : "wizzbang"
+  }
+.
+  )
+{
+  fileinto "matches";
+}
+EOF
+    );
+
+    xlog "Deliver matching message";
+    my $msg1 = $self->{gen}->generate(
+        subject => 'xxxyyyzzz',
+        body => "a msg with a wizzbang in it"
+    );
+    $self->{instance}->deliver($msg1);
+
+    xlog "Assert that message got moved into INBOX.matches";
+    $self->{store}->set_folder('matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog $self, "Deliver a non-matching message";
+    my $msg2 = $self->{gen}->generate(
+        subject => 'zzzyyyyxxx',
+        body => "a more boring msg"
+    );
+    $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog "Assert that message got moved into INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}

@@ -3,7 +3,8 @@ Synopsis
 
 .. parsed-literal::
 
-    **lmtpd** [ **-C** *config-file* ]  [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ] [ **-a** ]
+    **lmtpd** [ **-C** *config-file* ]  [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
+        [ **-H** ] [ **-a** ]
 
 Description
 ===========
@@ -38,6 +39,10 @@ Options
 .. option:: -D
 
     Run external debugger specified in debug_command.
+
+.. option:: -H
+
+    Tell **lmtpd** to expect a HAProxy protocol header from the sender.
 
 .. option:: -a
 

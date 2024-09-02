@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
@@ -569,6 +570,7 @@ int main(int argc, char *argv[])
     script_data_t sd = { NULL, "", NULL, 0 };
     FILE *f;
     unsigned uid = 0;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
@@ -626,7 +628,7 @@ int main(int argc, char *argv[])
     global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&test_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&test_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -641,7 +643,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
@@ -733,7 +734,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (extname) {
@@ -748,30 +749,16 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        if (uid) {
-            const char *path =
-                mboxname_datapath(mailbox->part, mailbox->name,
-                                  mailbox->uniqueid, uid);
-
-            printf("\n\nProcessing UID %u:\n", uid);
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            const struct index_record *record = msg_record(msg);
+            if (uid && record->uid != uid) continue;
+            printf("\n\nProcessing UID %u:\n", record->uid);
+            const char *path = mailbox_record_fname(mailbox, record);
             r = process_message(path, exe, i, &sd);
         }
-        else {
-            struct mailbox_iter *iter =
-                mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-            const message_t *msg;
-            while ((msg = mailbox_iter_step(iter))) {
-                const struct index_record *record = msg_record(msg);
-                const char *path =
-                    mboxname_datapath(mailbox->part, mailbox->name,
-                                      mailbox->uniqueid, record->uid);
-
-                printf("\n\nProcessing UID %u:\n", record->uid);
-                r = process_message(path, exe, i, &sd);
-            }
-
-            mailbox_iter_done(&iter);
-        }
+        mailbox_iter_done(&iter);
 
         mailbox_close(&mailbox);
     }
@@ -799,5 +786,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_intermediary_annotation
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $imap->create("INBOX.i1.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId', 'sortOrder'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxId = $mboxByName{'i1'}->{id};
+    $self->assert_num_equals(0, $mboxByName{'i1'}->{sortOrder});
+    $self->assert_null($mboxByName{'i1'}->{parentId});
+
+    xlog $self, "Set annotation on intermediate";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxId => {
+                    sortOrder => 7,
+                },
+            }
+        }, 'R1'],
+        ['Mailbox/get', {
+            ids => [$mboxId],
+            properties => ['name', 'parentId', 'sortOrder'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId});
+    $self->assert_num_equals(7, $res->[1][1]{list}[0]->{sortOrder});
+
+    xlog $self, "Assert mailbox tree";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(3, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{foo}->{parentId});
+}

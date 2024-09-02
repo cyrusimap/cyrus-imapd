@@ -54,6 +54,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                                              jmap_email_filter_parse_ctx_t *ctx)
 {
     const char *field, *s = NULL;
+    int have_mail_extension = strarray_contains(ctx->capabilities, JMAP_MAIL_EXTENSION);
     json_t *arg;
 
     json_object_foreach(filter, field, arg) {
@@ -81,10 +82,10 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                  !strcmp(field, "bcc") ||
                  !strcmp(field, "subject") ||
                  !strcmp(field, "body") ||
-                 (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                 (have_mail_extension &&
                   (!strcmp(field, "attachmentName") ||    /* FM-specific */
                    !strcmp(field, "attachmentType"))) ||  /* FM-specific */
-                 (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                 (have_mail_extension &&
                    !strcmp(field, "attachmentBody"))) {
             if (!json_is_string(arg)) {
                 ctx->invalid_field(field, ctx->rock);
@@ -134,7 +135,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 }
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+        else if (have_mail_extension &&
                  (!strcmp(field, "fromContactGroupId") ||
                   !strcmp(field, "toContactGroupId") ||
                   !strcmp(field, "ccContactGroupId") ||
@@ -143,7 +144,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+        else if (have_mail_extension &&
                  (!strcmp(field, "fromAnyContact") ||
                   !strcmp(field, "toAnyContact") ||
                   !strcmp(field, "ccAnyContact") ||
@@ -152,20 +153,17 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
-                !strcmp(field, "deliveredTo")) {
+        else if (have_mail_extension && !strcmp(field, "deliveredTo")) {
             if (!json_is_string(arg)) {
                 ctx->invalid_field(field, ctx->rock);
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
-                !strcmp(field, "isHighPriority")) {
+        else if (have_mail_extension && !strcmp(field, "isHighPriority")) {
             if (!json_is_boolean(arg)) {
                 ctx->invalid_field(field, ctx->rock);
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
-                !strcmp(field, "language")) {
+        else if (have_mail_extension && !strcmp(field, "language")) {
             if (json_is_string(arg)) {
                 const char *s = json_string_value(arg);
                 if (!(isalpha(s[0]) && isalpha(s[1]) &&
@@ -178,8 +176,22 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 ctx->invalid_field(field, ctx->rock);
             }
         }
-        else if (strarray_find(ctx->capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
-                !strcmp(field, "listId")) {
+        else if (have_mail_extension && !strcmp(field, "inReplyTo")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
+        else if (have_mail_extension && !strcmp(field, "listId")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
+        else if (have_mail_extension && !strcmp(field, "messageId")) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
+        else if (have_mail_extension && !strcmp(field, "references")) {
             if (!json_is_string(arg)) {
                 ctx->invalid_field(field, ctx->rock);
             }
@@ -188,7 +200,33 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
             ctx->validate_field(field, arg, ctx->rock);
         }
         else {
-            ctx->invalid_field(field, ctx->rock);
+            // can just check for syntactical correctness
+            if (!strcmp(field, "inMailbox")) {
+                if (!json_is_string(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else if (!strcmp(field, "inMailboxOtherThan")) {
+                if (!json_is_array(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else if (!strcmp(field, "allInThreadHaveKeyword") ||
+                    !strcmp(field, "someInThreadHaveKeyword") ||
+                    !strcmp(field, "noneInThreadHaveKeyword")) {
+                if (!json_string_value(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else if (!strcmp(field, "hasKeyword") ||
+                    !strcmp(field, "notKeyword")) {
+                if (!json_string_value(arg)) {
+                    ctx->invalid_field(field, ctx->rock);
+                }
+            }
+            else {
+                ctx->invalid_field(field, ctx->rock);
+            }
         }
     }
 }
@@ -207,9 +245,6 @@ HIDDEN void jmap_email_filter_parse(json_t *filter,
             ctx->invalid_field("operator", ctx->rock);
         }
         json_t *jconds = json_object_get(filter, "conditions");
-        if (!json_array_size(jconds)) {
-            ctx->invalid_field("conditions", ctx->rock);
-        }
         size_t i;
         json_t *jcond;
         json_array_foreach(jconds, i, jcond) {

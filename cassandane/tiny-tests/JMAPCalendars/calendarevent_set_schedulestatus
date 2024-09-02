@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_schedulestatus
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    title => 'test',
+                    replyTo => {
+                        imip => 'mailto:orga@local',
+                    },
+                    participants => {
+                        part1 => {
+                            '@type' => 'Participant',
+                            sendTo => {
+                                imip => 'mailto:part1@local',
+                            },
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            scheduleStatus => ['2.0', '2.4'],
+                        },
+                    },
+                    start => '2021-01-01T01:00:00',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#event1'],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['2.0', '2.4'],
+        $res->[1][1]{list}[0]{participants}{part1}{scheduleStatus});
+}

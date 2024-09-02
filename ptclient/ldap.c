@@ -80,58 +80,6 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 
-/* xxx this just uses the UNIX canonicalization semantics, which is
- * most likely wrong */
-
-/* Map of which characters are allowed by auth_canonifyid.
- * Key: 0 -> not allowed (special, ctrl, or would confuse Unix or imapd)
- *      1 -> allowed, but requires an alpha somewhere else in the string
- *      2 -> allowed, and is an alpha
- *
- * At least one character must be an alpha.
- *
- * This may not be restrictive enough.
- * Here are the reasons for the restrictions:
- *
- * &    forbidden because of MUTF-7.  (This could be fixed.)
- * :    forbidden because it's special in /etc/passwd
- * /    forbidden because it can't be used in a mailbox name
- * * %  forbidden because they're IMAP magic in the LIST/LSUB commands
- * ?    it just scares me
- * ctrl chars, DEL
- *      can't send them as IMAP characters in plain folder names, I think
- * 80-FF forbidden because you can't send them in IMAP anyway
- *       (and they're forbidden as folder names). (This could be fixed.)
- *
- * + and - are *allowed* although '+' is probably used for userid+detail
- * subaddressing and qmail users use '-' for subaddressing.
- *
- * Identifiers don't require a digit, really, so that should probably be
- * relaxed, too.
- */
-static char allowedchars[256] = {
- /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
-    1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 20-2F */
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 30-3F */
-
-    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 40-4F */
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, /* 50-5F */
-    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 60-6F */
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, /* 70-7F */
-
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
 typedef struct _ptsm {
     const char      *uri;
     int             version;
@@ -168,6 +116,7 @@ typedef struct _ptsm {
     const char      *group_filter;
     const char      *group_base;
     int             group_scope;
+    const char      *groupmember_attribute;
 
     /* Used for domain name space -> root dn discovery */
     const char      *domain_base_dn;
@@ -228,61 +177,6 @@ static int ptsmodule_interact(
     }
 
     return LDAP_SUCCESS;
-}
-
-/*
- * Convert 'identifier' into canonical form.
- * Returns a pointer to a static buffer containing the canonical form
- * or NULL if 'identifier' is invalid.
- *
- * XXX If any of the characters marked with 0 are valid and are cropping up,
- * the right thing to do is probably to canonicalize the identifier to two
- * representations: one for getpwent calls and one for folder names.  The
- * latter canonicalizes to a MUTF7 representation.
- */
-static char *ptsmodule_canonifyid(const char *identifier, size_t len)
-{
-    static char retbuf[81];
-    char sawalpha;
-    char *p;
-    int username_tolower = 0;
-    int i = 0;
-
-    if(!len) len = strlen(identifier);
-    if(len >= sizeof(retbuf)) return NULL;
-
-    memcpy(retbuf, identifier, len);
-    retbuf[len] = '\0';
-
-    if (!strncmp(retbuf, "group:", 6))
-        i = 6;
-
-    /* Copy the string and look up values in the allowedchars array above.
-     * If we see any we don't like, reject the string.
-     * Lowercase usernames if requested.
-     */
-    username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
-    sawalpha = 0;
-    for(p = retbuf+i; *p; p++) {
-        if (username_tolower && Uisupper(*p))
-            *p = tolower((unsigned char)*p);
-
-        switch (allowedchars[*(unsigned char*) p]) {
-        case 0:
-            return NULL;
-
-        case 2:
-            sawalpha = 1;
-            /* FALL THROUGH */
-
-        default:
-            ;
-        }
-    }
-
-    if (!sawalpha) return NULL;  /* has to be one alpha char */
-
-    return retbuf;
 }
 
 
@@ -362,8 +256,8 @@ static int ptsmodule_connect(void)
 
         rc = ldap_set_option(ptsm->ld, LDAP_OPT_NETWORK_TIMEOUT, &(ptsm->timeout));
         if (rc != LDAP_OPT_SUCCESS) {
-                syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT %ld.%06d.",
-                       (long)ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
+                syslog(LOG_WARNING, "Unable to set LDAP_OPT_NETWORK_TIMEOUT " TIME_T_FMT ".%06d.",
+                       ptsm->timeout.tv_sec, (int)ptsm->timeout.tv_usec);
         }
 
         rc = ldap_set_option(ptsm->ld, LDAP_OPT_SIZELIMIT, &(ptsm->size_limit));
@@ -523,11 +417,9 @@ static void myinit(void)
 
     ptsm->member_filter = config_getstring(IMAPOPT_LDAP_MEMBER_FILTER);
     ptsm->member_base = config_getstring(IMAPOPT_LDAP_MEMBER_BASE);
-    ptsm->member_attribute = (config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) ?
-        config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE));
-
-    ptsm->user_attribute = (config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) ?
-        config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE));
+    ptsm->member_attribute = config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE);
+    ptsm->user_attribute = config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE);
+    ptsm->groupmember_attribute = config_getstring(IMAPOPT_LDAP_GROUPMEMBER_ATTRIBUTE);
 
     p = config_getstring(IMAPOPT_LDAP_GROUP_SCOPE);
     if (!strcasecmp(p, "one")) {
@@ -871,7 +763,7 @@ static int ptsmodule_get_dn(
     char domain_filter[1024];
     char *attrs[] = {LDAP_NO_ATTRS,NULL}; //do not return all attrs!
     char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
-    LDAPMessage *res;
+    LDAPMessage *res = NULL;
     LDAPMessage *entry;
     char **vals;
     /* unused: BerElement *ber; */
@@ -969,6 +861,8 @@ static int ptsmodule_get_dn(
                             base = temp_base;
                             count_matches++;
                         }
+                        ldap_value_free(vals);
+                        ldap_msgfree(res2);
                     }
                 }
 
@@ -1057,6 +951,10 @@ static int ptsmodule_get_dn(
                 goto done;
         }
 
+        if (res) {
+            ldap_msgfree(res);
+            res = NULL;
+        }
         rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
 
         if (rc != LDAP_SUCCESS) {
@@ -1073,9 +971,6 @@ static int ptsmodule_get_dn(
             goto done;
         }
 
-        free(filter);
-        free(base);
-
         /*
          * We don't want to return the *first* entry found, we want to return
          * the *only* entry found.
@@ -1090,18 +985,18 @@ static int ptsmodule_get_dn(
                 *ret = ldap_get_dn(ptsm->ld, entry);
             }
         }
-
-        ldap_msgfree(res);
-        res = NULL;
     }
 
-    return (*ret ? PTSM_OK : PTSM_FAIL);
+    rc = (*ret ? PTSM_OK : PTSM_FAIL);
 
  done:
     if (filter)
         free(filter);
     if (base)
         free(base);
+    if (res)
+        ldap_msgfree(res);
+
     return rc;
 }
 
@@ -1117,7 +1012,6 @@ static int ptsmodule_make_authstate_attribute(
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
-    char **rdn = NULL;
     int rc;
     char *attrs[] = {(char *)ptsm->member_attribute,(char *)ptsm->user_attribute,NULL};
 
@@ -1154,17 +1048,12 @@ static int ptsmodule_make_authstate_attribute(
 
             *dsize = sizeof(struct auth_state) +
                 (numvals * sizeof(struct auth_ident));
-            *newstate = xmalloc(*dsize);
-            if (*newstate == NULL) {
-                *reply = "no memory";
-                rc = PTSM_FAIL;
-                goto done;
-            }
-
+            *newstate = xzmalloc(*dsize);
             (*newstate)->ngroups = numvals;
-            (*newstate)->userid.id[0] = '\0';
             for (i = 0; i < numvals; i++) {
                 unsigned int j;
+                char **rdn = NULL;
+
                 strcpy((*newstate)->groups[i].id, "group:");
                 rdn = ldap_explode_rdn(vals[i],1);
                 for (j = 0; j < strlen(rdn[0]); j++) {
@@ -1173,9 +1062,9 @@ static int ptsmodule_make_authstate_attribute(
                 }
                 strlcat((*newstate)->groups[i].id, rdn[0], sizeof((*newstate)->groups[i].id));
                 (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+                ldap_value_free(rdn);
             }
 
-            ldap_value_free(rdn);
             ldap_value_free(vals);
             vals = NULL;
         }
@@ -1188,19 +1077,11 @@ static int ptsmodule_make_authstate_attribute(
                 if (numvals == 1) {
                     if(!*newstate) {
                         *dsize = sizeof(struct auth_state);
-                        *newstate = xmalloc(*dsize);
-
-                        if (*newstate == NULL) {
-                            *reply = "no memory";
-                            rc = PTSM_FAIL;
-                            goto done;
-                        }
-
-                        (*newstate)->ngroups = 0;
+                        *newstate = xzmalloc(*dsize);
                     }
 
                     size=strlen(vals[0]);
-                    strcpy((*newstate)->userid.id, ptsmodule_canonifyid(vals[0],size));
+                    strcpy((*newstate)->userid.id, ptsmodule_unix_canonifyid(vals[0],size));
                     (*newstate)->userid.hash = strhash((*newstate)->userid.id);
                 }
 
@@ -1210,16 +1091,9 @@ static int ptsmodule_make_authstate_attribute(
         }
     }
 
-    if(!*newstate) {
+    if (!*newstate) {
         *dsize = sizeof(struct auth_state);
-        *newstate = xmalloc(*dsize);
-        if (*newstate == NULL) {
-            *reply = "no memory";
-            rc = PTSM_FAIL;
-            goto done;
-        }
-        (*newstate)->ngroups = 0;
-        (*newstate)->userid.id[0] = '\0';
+        *newstate = xzmalloc(*dsize);
     }
 
     /* fill in the rest of our new state structure */
@@ -1306,14 +1180,7 @@ static int ptsmodule_make_authstate_filter(
 
     *dsize = sizeof(struct auth_state) + (n * sizeof(struct auth_ident));
 
-    *newstate = xmalloc(*dsize);
-
-    if (*newstate == NULL) {
-        *reply = "no memory";
-        rc = PTSM_FAIL;
-        goto done;
-    }
-
+    *newstate = xzmalloc(*dsize);
     (*newstate)->ngroups = n;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
@@ -1403,6 +1270,7 @@ static int ptsmodule_make_authstate_group(
     int rc;
     int n;
     LDAPMessage *res = NULL;
+    LDAPMessage *res2 = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
     char *attrs[] = {NULL};
@@ -1489,20 +1357,16 @@ static int ptsmodule_make_authstate_group(
                 }
             }
         }
-    } else {
-        rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, NULL, &base);
-        if (rc != PTSM_OK)
-            goto done;
     }
 
-    syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);
-
-
+    /* XXX i guess canon_id+6 skips over leading "group:" */
     rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id+6, NULL, &base);
     if (rc != PTSM_OK) {
         *reply = "ptsmodule_expand_tokens() failed for group search base";
         goto done;
     }
+
+    syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);
 
     rc = ldap_search_st(ptsm->ld, base, ptsm->group_scope, filter, attrs, 0, &(ptsm->timeout), &res);
     if (rc != LDAP_SUCCESS) {
@@ -1523,18 +1387,56 @@ static int ptsmodule_make_authstate_group(
         goto done;
     }
 
-    *dsize = sizeof(struct auth_state) +
-             (n * sizeof(struct auth_ident));
-    *newstate = xmalloc(*dsize);
-    if (*newstate == NULL) {
-        *reply = "no memory";
-        rc = PTSM_FAIL;
-        goto done;
+    // there must be one
+    entry = ldap_first_entry(ptsm->ld, res);
+    int numvals = 0;
+    if (ptsm->groupmember_attribute) {
+        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->groupmember_attribute);
+        numvals = ldap_count_values(vals);
     }
-    (*newstate)->ngroups = 0;
+
+    // now fetch the list of members!
+
+    *dsize = sizeof(struct auth_state) + (numvals * sizeof(struct auth_ident));
+    *newstate = xzmalloc(*dsize);
+    (*newstate)->ngroups = numvals;
     strcpy((*newstate)->userid.id, canon_id);
     (*newstate)->userid.hash = strhash(canon_id);
     (*newstate)->mark = time(0);
+    int i;
+    int j = 0;
+    for (i = 0; i < numvals; i++) {
+        if (!ptsm->user_attribute) break; // no user attribute, can't set group members
+        if (res2) {
+            ldap_msgfree(res2);
+            res2 = NULL;
+        }
+        rc = ldap_search_st(ptsm->ld, vals[i], LDAP_SCOPE_BASE, "(objectclass=*)", attrs, 0, &(ptsm->timeout), &res2);
+        if (rc != LDAP_SUCCESS) {
+            *reply = "ldap_search(dn) failed";
+            if (rc == LDAP_SERVER_DOWN) {
+                ldap_unbind(ptsm->ld);
+                ptsm->ld = NULL;
+                rc = PTSM_RETRY;
+            } else
+                rc = PTSM_FAIL;
+            goto done;
+        }
+
+        n = ldap_count_entries(ptsm->ld, res2);
+        if (!n) continue; // no DN record (stale pointer) - skip
+
+        entry = ldap_first_entry(ptsm->ld, res2);
+        char **uvals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
+        int unumvals = ldap_count_values(uvals);
+        int k;
+        for (k = 0; k < unumvals; k++) {
+            // create a group item
+            strlcat((*newstate)->groups[j].id, uvals[k], sizeof((*newstate)->groups[j].id));
+            (*newstate)->groups[j].hash = strhash((*newstate)->groups[j].id);
+            j++;
+        }
+    }
 
     rc = PTSM_OK;
 
@@ -1542,6 +1444,8 @@ done:;
 
     if (res)
         ldap_msgfree(res);
+    if (res2)
+        ldap_msgfree(res2);
     if (filter)
         free(filter);
     if (base)
@@ -1561,9 +1465,9 @@ static struct auth_state *myauthstate(
     int rc;
     int retries = 1;
 
-    canon_id = ptsmodule_canonifyid(identifier, size);
+    canon_id = ptsmodule_unix_canonifyid(identifier, size);
     if (EMPTY(canon_id)) {
-        *reply = "ptsmodule_canonifyid() failed";
+        *reply = "ptsmodule_unix_canonifyid() failed";
         return NULL;
     }
     size = strlen(canon_id);

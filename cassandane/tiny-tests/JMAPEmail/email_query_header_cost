@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_header_cost
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message() || die;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                header => ['x-hdr', 'foo', 'contains'],
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                header => ['subject', 'foo', 'contains'],
+            },
+        }, 'R2'],
+    ], $using);
+    $self->assert_deep_equals(['body'],
+        $res->[0][1]{performance}{details}{filters});
+    $self->assert_deep_equals(['cache'],
+        $res->[1][1]{performance}{details}{filters});
+}

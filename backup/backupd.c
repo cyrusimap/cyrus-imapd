@@ -56,14 +56,15 @@
 #include "lib/bsearch.h"
 #include "lib/imparse.h"
 #include "lib/map.h"
+#include "lib/proc.h"
 #include "lib/signals.h"
+#include "lib/slowio.h"
 #include "lib/strarray.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
-#include "imap/proc.h"
 #include "imap/sync_support.h"
 #include "imap/telemetry.h"
 #include "imap/tls.h"
@@ -84,6 +85,7 @@ static sasl_conn_t *backupd_saslconn = NULL;
 static int backupd_starttls_done = 0;
 static int backupd_compress_done = 0;
 static int backupd_logfd = -1;
+static struct proc_handle *proc_handle = NULL;
 
 struct open_backup {
     char *name;
@@ -159,7 +161,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -171,6 +173,9 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(backupd_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
@@ -184,7 +189,7 @@ EXPORTED int service_init(int argc __attribute__((unused)),
 {
     // FIXME should this be calling fatal? fatal exits directly
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -222,16 +227,15 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 {
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
-    int timeout;
+    int r, timeout;
 
     signals_poll();
 
     backupd_in = prot_new(0, 0);
     backupd_out = prot_new(1, 1);
 
-    /* Force use of LITERAL+ so we don't need two way communications */
+    /* Allow use of LITERAL+ */
     prot_setisclient(backupd_in, 1);
-    prot_setisclient(backupd_out, 1);
 
     /* Find out name of client host */
     backupd_clienthost = get_clienthost(0, &localip, &remoteip);
@@ -268,7 +272,10 @@ EXPORTED int service_main(int argc __attribute__((unused)),
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
-    proc_register(config_ident, backupd_clienthost, NULL, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, backupd_clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, backupd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
@@ -295,7 +302,7 @@ static void backupd_reset(void)
 {
     open_backups_list_close(&backupd_open_backups, 0);
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     if (backupd_in) {
         prot_NONBLOCK(backupd_in);
@@ -355,6 +362,8 @@ static void backupd_reset(void)
     saslprops.ssf = 0;
 
     backup_cleanup_staging_path();
+
+    slowio_reset();
 }
 
 static void dobanner(void)
@@ -645,7 +654,7 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, /*parsekeys*/ 1, /*isbackup*/ 1, backupd_in);
+                c = dlist_parse(&dl, /*parsekeys*/ 1, /*isarchive*/ 0, /*isbackup*/ 1, backupd_in);
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
                 if (c != '\n') goto extraargs;
@@ -681,7 +690,7 @@ static void cmdloop(void)
             if (!backupd_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
                 struct dlist *dl = NULL;
-                c = dlist_parse(&dl, /*parsekeys*/ 1, /*isbackup*/ 1, backupd_in);
+                c = dlist_parse(&dl, /*parsekeys*/ 1, /*isarchive*/ 0, /*isbackup*/ 1, backupd_in);
                 if (c == EOF) goto missingargs;
                 if (c == '\r') c = prot_getc(backupd_in);
                 if (c != '\n') goto extraargs;
@@ -721,7 +730,8 @@ static void cmdloop(void)
 
         }
 
-        syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
+        xsyslog(LOG_ERR, "IOERROR: received bad command",
+                         "command=<%s>", cmd.s);
         prot_printf(backupd_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
         eatline(backupd_in, c);
         continue;
@@ -822,7 +832,11 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     backupd_userid = xstrdup((const char *) val);
-    proc_register(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, backupd_clienthost, backupd_userid,
+                      NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, backupd_clienthost, backupd_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", backupd_clienthost, backupd_userid,
            mech, backupd_starttls_done ? "+TLS" : "", "User logged in");
@@ -913,7 +927,7 @@ static int cmd_apply_message(struct dlist *dl)
 
             message_guid_generate(&computed_guid, msg_base, msg_len);
             if (!message_guid_equal(guid, &computed_guid)) {
-                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s\n",
+                syslog(LOG_ERR, "%s: guid mismatch: header %s, derived %s",
                     __func__, message_guid_encode(guid),
                     message_guid_encode(&computed_guid));
                 r = IMAP_PROTOCOL_ERROR;
@@ -923,7 +937,8 @@ static int cmd_apply_message(struct dlist *dl)
             close(fd);
         }
         else {
-            syslog(LOG_ERR, "IOERROR: %s open %s: %m", __func__, fname);
+            xsyslog(LOG_ERR, "IOERROR: open failed",
+                             "filename=<%s>", fname);
             r = IMAP_IOERROR;
         }
 
@@ -1037,7 +1052,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *di;
     strarray_t userids = STRARRAY_INITIALIZER;
     mbname_t *shared_mbname = NULL;
-    int i, r;
+    int i, r = 0;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
     if (!dlist_getlist(dl, "MBOXNAME", &ml)) return IMAP_PROTOCOL_ERROR;

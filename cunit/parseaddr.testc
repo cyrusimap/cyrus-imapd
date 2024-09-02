@@ -367,6 +367,20 @@ static void test_rfc2047_text(void)
     parseaddr_free(a);
 }
 
+static void test_utf8_domain(void)
+{
+    struct address *a;
+
+    a = NULL;
+    parseaddr_list("J. Besteiro <jb@julián.example.com>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "J. Besteiro");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "jb");
+    CU_ASSERT_STRING_EQUAL(a->domain, "julián.example.com");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+}
 
 static void test_group(void)
 {

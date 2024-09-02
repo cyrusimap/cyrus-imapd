@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_calendarevents_utc
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # calendarEvents property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $uid1 = "d9e7f7d6-ce1a-4a71-94c0-b4edd41e5959";
+
+    $self->make_message("foo",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "txt body"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "Content-Transfer-Encoding: quoted-printable\r\n"
+          . "\r\n"
+          . "BEGIN:VCALENDAR\r\n"
+          . "VERSION:2.0\r\n"
+          . "PRODID:-//CyrusIMAP.org/Cyrus 3.1.3-606//EN\r\n"
+          . "CALSCALE:GREGORIAN\r\n"
+          . "BEGIN:VTIMEZONE\r\n"
+          . "TZID:UTC\r\n"
+          . "BEGIN:STANDARD\r\n"
+          . "DTSTART:16010101T000000\r\n"
+          . "TZOFFSETFROM:+0000\r\n"
+          . "TZOFFSETTO:+0000\r\n"
+          . "END:STANDARD\r\n"
+          . "BEGIN:DAYLIGHT\r\n"
+          . "DTSTART:16010101T000000\r\n"
+          . "TZOFFSETFROM:+0000\r\n"
+          . "TZOFFSETTO:+0000\r\n"
+          . "END:DAYLIGHT\r\n"
+          . "END:VTIMEZONE\r\n"
+          . "BEGIN:VEVENT\r\n"
+          . "CREATED:20180518T090306Z\r\n"
+          . "DTEND;TZID=UTC:20180518T100000\r\n"
+          . "DTSTAMP:20180518T090306Z\r\n"
+          . "DTSTART;TZID=UTC:20180518T090000\r\n"
+          . "LAST-MODIFIED:20180518T090306Z\r\n"
+          . "SEQUENCE:1\r\n"
+          . "SUMMARY:Foo\r\n"
+          . "TRANSP:OPAQUE\r\n"
+          . "UID:$uid1\r\n"
+          . "END:VEVENT\r\n"
+          . "END:VCALENDAR\r\n"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['textBody', 'attachments', 'calendarEvents'],
+        }, 'R2' ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+
+    $self->assert_num_equals(1, scalar @{$msg->{attachments}});
+    $self->assert_str_equals('text/calendar', $msg->{attachments}[0]{type});
+
+    $self->assert_num_equals(1, scalar keys %{$msg->{calendarEvents}});
+    my $partId = $msg->{attachments}[0]{partId};
+
+    my %jsevents_by_uid = map { $_->{uid} => $_ } @{$msg->{calendarEvents}{$partId}};
+    $self->assert_num_equals(1, scalar keys %jsevents_by_uid);
+    my $jsevent1 = $jsevents_by_uid{$uid1};
+
+    $self->assert_not_null($jsevent1);
+    $self->assert_str_equals("Foo", $jsevent1->{title});
+    $self->assert_str_equals('2018-05-18T09:00:00', $jsevent1->{start});
+    $self->assert_str_equals('Etc/UTC', $jsevent1->{timeZone});
+    $self->assert_str_equals('PT1H', $jsevent1->{duration});
+}

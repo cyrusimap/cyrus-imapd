@@ -1,0 +1,198 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_emailaddress
+    :needs_component_jmap :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Append emails";
+    $self->make_message("msg1",
+        from => Cassandane::Address->new(
+            localpart => 'from',
+            domain => 'local',
+        ),
+        to => Cassandane::Address->new(
+            name => "Jon Doe",
+            localpart => "foo.bar",
+            domain => "xxx.example.com"
+        ),
+        body => "msg1"
+    ) || die;
+    $self->make_message("msg2",
+        from => Cassandane::Address->new(
+            localpart => 'from',
+            domain => 'local',
+        ),
+        to => Cassandane::Address->new(
+            name => "Jane Doe",
+            localpart => "foo.baz+bla",
+            domain => "yyy.example.com"
+        ),
+        body => "msg2"
+    ) || die;
+    $self->make_message("msg3",
+        from => Cassandane::Address->new(
+            localpart => 'from',
+            domain => 'local',
+        ),
+        to => Cassandane::Address->new(
+            localpart => '"tu x"',
+            domain => "example.com"
+        ),
+        body => "msg3"
+    ) || die;
+    my $mime = <<'EOF';
+From: <from@local>
+To: toa@example.com, RecipientB <tob@example.com>
+Subject: msg4
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg4
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    $mime = <<'EOF';
+From: <from@local>
+To: Jøran Øygårdvær <sjöhäst712@example.com>, Dømi <info@xn--dmi-0na.fo>, xn--ls8ha@outlook.com, foo@ümlaut.example.com, δοκιμή@παράδειγμα.δοκιμή
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Subject: msg5
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg5
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'subject',
+            }],
+        }, 'R1'],
+
+    ], $using);
+    my @ids = @{$res->[0][1]{ids}};
+    $self->assert_num_equals(5, scalar @ids);
+
+    my @tests = ({
+        to => '@xxx.example.com',
+        wantIds => [$ids[0]],
+    }, {
+        to => '@*.example.com',
+        wantIds => [$ids[0], $ids[1], $ids[4]],
+    }, {
+        to => '@*example.com',
+        wantIds => [$ids[0], $ids[1], $ids[2], $ids[3], $ids[4]],
+    }, {
+        to => 'foo*@*example.com',
+        wantIds => [$ids[0], $ids[1], $ids[4]],
+    }, {
+        to => 'foo.bar@*.com',
+        wantIds => [$ids[0]],
+    }, {
+        to => 'foo.baz+*@yyy.example.com',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'foo.baz+bla@yyy.example.com',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'foo.bar@',
+        wantIds => [$ids[0]],
+    }, {
+        to => 'foo.ba*@',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'doe',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'jane doe',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'foo* example',
+        wantIds => [$ids[0], $ids[1], $ids[4]],
+    }, {
+        to => 'foo* yyy',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'example.com',
+        wantIds => [$ids[0], $ids[1], $ids[2], $ids[3], $ids[4]],
+    }, {
+        to => '"tu x"@example.com',
+        wantIds => [$ids[2]],
+    }, {
+        to => 'tux@example.com',
+        wantIds => [],
+    }, {
+        to => 'Jane Doe <foo.baz+bla@yyy.example.com>',
+        wantIds => [$ids[1]],
+    }, {
+        to => 'Doe <foo*@*example.com>',
+        wantIds => [$ids[0], $ids[1]],
+    }, {
+        to => 'tob@example.com',
+        wantIds => [$ids[3]],
+    }, {
+        to => decode('utf-8', "Øygårdvær"),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'sjöhäst712@example.com'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'Dømi'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'xn--ls8ha@outlook.com'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'δοκιμή'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', '@παράδειγμα.δοκιμή'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'info@dømi.fo'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'sjöhäst712'),
+        wantIds => [$ids[4]],
+    }, {
+        to => decode('utf-8', 'Dømi <*@*dømi.fo>'),
+        wantIds => [$ids[4]],
+    });
+
+    foreach (@tests) {
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    to => $_->{to},
+                },
+                sort => [{
+                    property => 'subject',
+                }],
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
+}

@@ -1,0 +1,172 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "share calendar home to user";
+    $admintalk->setacl("user.manifold.#calendars", cassandane => 'lrswipkxtecdn');
+
+    # run tests for both the main and shared account
+    foreach ("cassandane", "manifold") {
+        my $account = $_;
+
+        xlog $self, "create calendars A and B";
+        my $res = $jmap->CallMethods([
+                ['Calendar/set', {
+                        accountId => $account,
+                        create => {
+                            "1" => {
+                                name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
+                            },
+                            "2" => {
+                                name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
+                            }
+                        }}, "R1"]
+            ]);
+        my $calidA = $res->[0][1]{created}{"1"}{id};
+        my $calidB = $res->[0][1]{created}{"2"}{id};
+        my $state = $res->[0][1]{newState};
+
+        if ($account eq 'manifold') {
+            $admintalk->setacl("user.manifold.#calendars.$calidA", cassandane => 'lrswipkxtecdn');
+            $admintalk->setacl("user.manifold.#calendars.$calidB", cassandane => 'lrswipkxtecdn');
+        }
+
+        xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+        $res = $jmap->CallMethods([['CalendarEvent/set', {
+                        accountId => $account,
+                        create => {
+                            "1" => {
+                                calendarIds => {
+                                    $calidA => JSON::true,
+                                },
+                                "title" => "foo",
+                                "description" => "bar",
+                                "freeBusyStatus" => "busy",
+                                "showWithoutTime" => JSON::false,
+                                "start" => "2016-07-01T10:00:00",
+                                "timeZone" => "Europe/Vienna",
+                                "duration" => "PT1H",
+                            },
+                            "2" => {
+                                calendarIds => {
+                                    $calidB => JSON::true,
+                                },
+                                "title" => "foo",
+                                "description" => "",
+                                "freeBusyStatus" => "busy",
+                                "showWithoutTime" => JSON::true,
+                                "start" => "2016-01-01T00:00:00",
+                                "duration" => "P2D",
+                            }
+                        }}, "R1"]]);
+        my $id1 = $res->[0][1]{created}{"1"}{id};
+        my $id2 = $res->[0][1]{created}{"2"}{id};
+
+        xlog $self, "Run squatter";
+        $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+        xlog $self, "get unfiltered calendar event list";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account }, "R1"] ]);
+        $self->assert_num_equals(2, $res->[0][1]{total});
+        $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($account, $res->[0][1]{accountId});
+
+        xlog $self, "get filtered calendar event list with flat filter";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        accountId => $account,
+                        "filter" => {
+                            "after" => "2015-12-31T00:00:00",
+                            "before" => "2016-12-31T23:59:59",
+                            "text" => "foo",
+                            "description" => "bar"
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+        xlog $self, "get filtered calendar event list";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        accountId => $account,
+                        "filter" => {
+                            "operator" => "AND",
+                            "conditions" => [
+                                {
+                                    "after" => "2015-12-31T00:00:00",
+                                    "before" => "2016-12-31T23:59:59"
+                                },
+                                {
+                                    "text" => "foo",
+                                    "description" => "bar"
+                                }
+                            ]
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+        xlog $self, "filter by calendar $calidA";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        accountId => $account,
+                        "filter" => {
+                            "inCalendars" => [ $calidA ],
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+        $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+        xlog $self, "filter by calendar $calidA or $calidB";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        accountId => $account,
+                        "filter" => {
+                            "inCalendars" => [ $calidA, $calidB ],
+                        }
+                    }, "R1"] ]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+
+        xlog $self, "filter by calendar NOT in $calidA and $calidB";
+        $res = $jmap->CallMethods([['CalendarEvent/query', {
+                        accountId => $account,
+                        "filter" => {
+                            "operator" => "NOT",
+                            "conditions" => [{
+                                    "inCalendars" => [ $calidA, $calidB ],
+                                }],
+                        }}, "R1"]]);
+        $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
+
+        xlog $self, "limit results";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account, limit => 1 }, "R1"] ]);
+        $self->assert_num_equals(2, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+
+        xlog $self, "skip result a position 1";
+        $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account, position => 1 }, "R1"] ]);
+        $self->assert_num_equals(2, $res->[0][1]{total});
+        $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    }
+}

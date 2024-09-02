@@ -45,6 +45,8 @@
 
 struct mboxkey;
 
+#define FNAME_MBOXKEYSUFFIX "mboxkey" /* per user mailbox key extension */
+
 #define MBOXKEY_CREATE 0x01
 
 /* get a database handle corresponding to user pair */

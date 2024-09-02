@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_implicit_keep_target_mailboxid
+    :min_version_3_9 :needs_component_sieve :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $folder = "INBOX.foo";
+
+    xlog $self, "Create folder";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+
+    xlog $self, "Get folder id";
+    my $res = $imaptalk->status($folder, ['mailboxid']);
+    my $folderid = $res->{mailboxid}[0];
+
+    xlog $self, "Install a script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["vnd.cyrus.implicit_keep_target", "mailboxid"];
+implicit_keep_target :mailboxid "$folderid" "INBOX";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to $folder";
+    $self->{store}->set_folder($folder);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}
+

@@ -70,11 +70,8 @@ int sievedir_foreach(const char *sievedir, unsigned flags,
                                  const char *link_target, void *rock),
                      void *rock);
 
-int sievedir_num_scripts(const char *sievedir, const char *name);
-
 int sievedir_valid_name(const struct buf *name);
 
-int sievedir_script_exists(const char *sievedir, const char *name);
 int sievedir_script_isactive(const char *sievedir, const char *name);
 const char *sievedir_get_active(const char *sievedir);
 
@@ -87,5 +84,7 @@ int sievedir_put_script(const char *sievedir, const char *name,
 int sievedir_delete_script(const char *sievedir, const char *name);
 int sievedir_rename_script(const char *sievedir,
                            const char *oldname, const char *newname);
+
+int sievedir_valid_path(const char *sievedir);
 
 #endif /* INCLUDED_SIEVEDIR_H */

@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **httpd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-p** *ssf* ] [ **-q** ]
+        [ **-H** ] [ **-s** ] [ **-p** *ssf* ] [ **-q** ]
 
 Description
 ===========
@@ -56,6 +56,10 @@ Options
 .. option:: -D
 
     Run external debugger specified in debug_command.
+
+.. option:: -H
+
+    Tell **httpd** to expect a HAProxy protocol header from the sender.
 
 .. option:: -s
 

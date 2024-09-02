@@ -24,7 +24,6 @@
 struct server_config {
     int sasl_plain;
     int sasl_login;
-    int sasl_digestmd5;
     int starttls;
     int deflate;
     int caps_one_per_line;
@@ -46,7 +45,7 @@ struct server_state {
 
     /* global state */
     int rend_sock;
-    char banner[32];
+    char banner[64];
 
     /* per-connection state */
     int is_connected;
@@ -71,7 +70,6 @@ static struct server_state *server_state;
 static const struct server_config default_server_config = {
     .sasl_plain = 1,
     .sasl_login = 0,
-    .sasl_digestmd5 = 0,
     .starttls = 0,
     .deflate = 0,
     .caps_one_per_line = 1
@@ -197,11 +195,11 @@ static void test_badservice(void)
  * Test that backend_version detects the remote version correctly.
  */
 struct backend_version_data {
-    char banner[32];
+    char banner[64];
     int version;
 };
 
-static void test_backend_version(void)
+static void backend_version_common(void)
 {
     size_t i, n_tests;
     struct backend_version_data data[] = {
@@ -340,7 +338,7 @@ static void test_backend_version(void)
         { "Cyrus IMAP 3.4.8", 17 },
         { "Cyrus IMAP 3.4.9", 17 },
 
-        /* 3.5 supported 17..?? but we don't bother detecting that microscopically */
+        /* 3.5 had just one */
         { "Cyrus IMAP 3.5.0", 17 },
         { "Cyrus IMAP 3.5.1", 17 },
         { "Cyrus IMAP 3.5.2", 17 },
@@ -351,9 +349,63 @@ static void test_backend_version(void)
         { "Cyrus IMAP 3.5.7", 17 },
         { "Cyrus IMAP 3.5.8", 17 },
         { "Cyrus IMAP 3.5.9", 17 },
-    };
 
-    default_conditions();
+        /* 3.6 had just one */
+        { "Cyrus IMAP 3.6.0", 17 },
+        { "Cyrus IMAP 3.6.1", 17 },
+        { "Cyrus IMAP 3.6.2", 17 },
+        { "Cyrus IMAP 3.6.3", 17 },
+        { "Cyrus IMAP 3.6.4", 17 },
+        { "Cyrus IMAP 3.6.5", 17 },
+        { "Cyrus IMAP 3.6.6", 17 },
+        { "Cyrus IMAP 3.6.7", 17 },
+        { "Cyrus IMAP 3.6.8", 17 },
+        { "Cyrus IMAP 3.6.9", 17 },
+
+        /* 3.7 had just one */
+        { "Cyrus IMAP 3.7.0", 17 },
+        { "Cyrus IMAP 3.7.1", 17 },
+        { "Cyrus IMAP 3.7.2", 17 },
+        { "Cyrus IMAP 3.7.3", 17 },
+        { "Cyrus IMAP 3.7.4", 17 },
+        { "Cyrus IMAP 3.7.5", 17 },
+        { "Cyrus IMAP 3.7.6", 17 },
+        { "Cyrus IMAP 3.7.7", 17 },
+        { "Cyrus IMAP 3.7.8", 17 },
+        { "Cyrus IMAP 3.7.9", 17 },
+
+        /* 3.8 had just one */
+        { "Cyrus IMAP 3.8.0", 17 },
+        { "Cyrus IMAP 3.8.1", 17 },
+        { "Cyrus IMAP 3.8.2", 17 },
+        { "Cyrus IMAP 3.8.3", 17 },
+        { "Cyrus IMAP 3.8.4", 17 },
+        { "Cyrus IMAP 3.8.5", 17 },
+        { "Cyrus IMAP 3.8.6", 17 },
+        { "Cyrus IMAP 3.8.7", 17 },
+        { "Cyrus IMAP 3.8.8", 17 },
+        { "Cyrus IMAP 3.8.9", 17 },
+
+        /* 3.9 supported 17..?? but we don't bother detecting that microscopically */
+        { "Cyrus IMAP 3.9.0", 17 },
+        { "Cyrus IMAP 3.9.1", 17 },
+        { "Cyrus IMAP 3.9.2", 17 },
+        { "Cyrus IMAP 3.9.3", 17 },
+        { "Cyrus IMAP 3.9.4", 17 },
+        { "Cyrus IMAP 3.9.5", 17 },
+        { "Cyrus IMAP 3.9.6", 17 },
+        { "Cyrus IMAP 3.9.7", 17 },
+        { "Cyrus IMAP 3.9.8", 17 },
+        { "Cyrus IMAP 3.9.9", 17 },
+
+        /* better test some pre-release version strings too, would be bad if
+         * the parser chokes on them!
+         */
+        { "Cyrus IMAP 3.0.0-rc1", 13 },
+        { "Cyrus IMAP 3.2.0-beta4", 16 },
+        { "Cyrus IMAP 3.6.0-beta2", 17 },
+        { "Cyrus IMAP 3.7.0-alpha0-1155-gf86d12f44a", 17 },
+    };
 
     /* XXX there's something wrong with the toy test server that results in
      * XXX the banner not being set with auto_capa enabled???
@@ -386,15 +438,32 @@ static void test_backend_version(void)
     }
 }
 
-static void test_unrecognised_backend_version(void)
+static void test_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    backend_version_common();
+}
+
+static void test_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    backend_version_common();
+}
+
+static void unrecognised_backend_version_common(void)
 {
     size_t i, n_tests;
     struct backend_version_data data[] = {
         { "BOGUS", 6 }, /* completely unrecognised */
         { "Cyrus IMAP v2.3.B (OGUS)", 6 }, /* junk 2.3 revision */
+        { "Cyrus IMAP 10.0.0", MAILBOX_MINOR_VERSION }, /* unknown future version */
+        { "Cyrus IMAP 10.0.0-rc1", MAILBOX_MINOR_VERSION },
+        { "Cyrus IMAP 10.0.0-alpha0-57-g1f6140ee54", MAILBOX_MINOR_VERSION },
     };
-
-    default_conditions();
 
     /* XXX there's something wrong with the toy test server that results in
      * XXX the banner not being set with auto_capa enabled???
@@ -419,7 +488,7 @@ static void test_unrecognised_backend_version(void)
         CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
         CU_ASSERT_EQUAL(server_state->is_tls, 0);
 
-        CU_SYSLOG_MATCH("Assuming index version 6!");
+        CU_SYSLOG_MATCH("Assuming index version [0-9]+!");
         got_version = backend_version(be);
         CU_ASSERT_EQUAL(got_version, data[i].version);
         CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -427,6 +496,22 @@ static void test_unrecognised_backend_version(void)
         backend_disconnect(be);
         free(be);
     }
+}
+
+static void test_unrecognised_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    unrecognised_backend_version_common();
+}
+
+static void test_unrecognised_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    unrecognised_backend_version_common();
 }
 
 /*
@@ -494,38 +579,6 @@ static void not_test_sasl_login(void)
     free(be);
 }
 #endif
-
-/*
- * Test authenticating with the DIGEST-MD5 mechanism.
- */
-static void test_sasl_digestmd5(void)
-{
-    struct backend *be;
-    const char *auth_status = NULL;
-    char *mechs;
-    int r;
-
-    default_conditions();
-    server_state->config.sasl_plain = 0;
-    server_state->config.sasl_digestmd5 = 1;
-
-    be = backend_connect(NULL, HOST, &test_prot,
-                         USERID, callbacks, &auth_status, /*fd*/-1);
-    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
-    CU_ASSERT_EQUAL(server_state->is_connected, 1);
-    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
-    CU_ASSERT_EQUAL(server_state->is_tls, 0);
-
-    mechs = backend_get_cap_params(be, CAPA_AUTH);
-    CU_ASSERT_STRING_EQUAL(mechs, "DIGEST-MD5");
-    free(mechs);
-
-    r = backend_ping(be, NULL);
-    CU_ASSERT_EQUAL(r, 0);
-
-    backend_disconnect(be);
-    free(be);
-}
 
 /* Common routine to test the semantics of capabilities */
 static void caps_common(void)
@@ -949,7 +1002,6 @@ static void server_emit_caps(struct server_state *state)
     if (!state->config.starttls || state->is_tls) {
         int got_login = 0;
         int got_plain = 0;
-        int got_digestmd5 = 0;
 
         /* First see what mechanisms SASL has; no point reporting
          * mechanisms which aren't actually available. */
@@ -970,10 +1022,6 @@ static void server_emit_caps(struct server_state *state)
                 words[n++] = "PLAIN";
                 got_plain = 1;
             }
-            if (!strcasecmp(p, "DIGEST-MD5") && state->config.sasl_digestmd5) {
-                words[n++] = "DIGEST-MD5";
-                got_digestmd5 = 1;
-            }
         }
         words[n++] = NULL;
         free(b);
@@ -984,9 +1032,6 @@ static void server_emit_caps(struct server_state *state)
         if (state->config.sasl_plain && !got_plain)
             fprintf(stderr, "Server failed to find requested "
                             "SASL mechanism \"PLAIN\"\n");
-        if (state->config.sasl_digestmd5 && !got_digestmd5)
-            fprintf(stderr, "Server failed to find requested "
-                            "SASL mechanism \"DIGEST-MD5\"\n");
     }
 
     /*
@@ -1375,8 +1420,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
     if (!prop)
         return AUXPROP_RET;
     for ( ; prop->name ; prop++) {
-        if (!strcmp(prop->name, "*userPassword") ||
-            !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
+        if (!strcmp(prop->name, "*userPassword")) {
             if (prop->values)
                 sparams->utils->prop_erase(sparams->propctx, prop->name);
             sparams->utils->prop_set(sparams->propctx, prop->name,
@@ -1389,7 +1433,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
 
 /*
  * Helps create a fake "auxiliary property plugin" for the SASL library,
- * which is how we hook into the DIGEST-MD5 mechanism when it wants to
+ * which is how we hook into the DIGEST-MD5? mechanism when it wants to
  * get a plaintext password to check against the hash received from the
  * client.
  */

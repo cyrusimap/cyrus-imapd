@@ -1,0 +1,232 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_thread_changes
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+    my %params;
+    my $dt;
+    my $draftsmbox;
+    my $state;
+    my $threadA;
+    my $threadB;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $draftsmbox = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsmbox);
+
+    xlog $self, "Generate an email in drafts via IMAP";
+    $self->{store}->set_folder("INBOX.drafts");
+    $self->make_message("Email A") || die;
+
+    xlog $self, "get thread state";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2' ],
+    ]);
+    $res = $jmap->CallMethods([
+        ['Thread/get', { 'ids' => [ $res->[1][1]{list}[0]{threadId} ] }, 'R1'],
+    ]);
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "get thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    xlog $self, "generating email A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{A} = $self->make_message("Email A", date => $dt, body => "a");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog $self, "get thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+    $threadA = $res->[0][1]{created}[0];
+
+    xlog $self, "generating email C referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "get thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "get thread updates (expect no changes)";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    xlog $self, "generating email B";
+    $exp{B} = $self->make_message("Email B", body => "b");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog $self, "generating email D referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -1));
+    $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "generating email E referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(minutes => -30));
+    $exp{E} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "e");
+    $exp{E}->set_attributes(uid => 5, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "get max 1 thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_str_not_equals($threadA, $res->[0][1]{created}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+    $threadB = $res->[0][1]{created}[0];
+
+    xlog $self, "get max 2 thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, maxChanges => 2 }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "fetch emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+
+    # Map messages by body contents
+    my %m = map { $_->{bodyValues}{$_->{textBody}[0]{partId}}{value} => $_ } @{$res->[1][1]{list}};
+    my $msgA = $m{"a"};
+    my $msgB = $m{"b"};
+    my $msgC = $m{"c"};
+    my $msgD = $m{"d"};
+    my $msgE = $m{"e"};
+    $self->assert_not_null($msgA);
+    $self->assert_not_null($msgB);
+    $self->assert_not_null($msgC);
+    $self->assert_not_null($msgD);
+    $self->assert_not_null($msgE);
+
+    xlog $self, "destroy email b, update email d";
+    $res = $jmap->CallMethods([['Email/set', {
+        destroy => [ $msgB->{id} ],
+        update =>  { $msgD->{id} => { 'keywords/$foo' => JSON::true }},
+    }, "R1"]]);
+    $self->assert_str_equals($msgB->{id}, $res->[0][1]{destroyed}[0]);
+    $self->assert(exists $res->[0][1]->{updated}{$msgD->{id}});
+
+    xlog $self, "get thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($threadB, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "destroy emails c and e";
+    $res = $jmap->CallMethods([['Email/set', {
+        destroy => [ $msgC->{id}, $msgE->{id} ],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "get thread updates, fetch threads";
+    $res = $jmap->CallMethods([
+        ['Thread/changes', { sinceState => $state }, "R1"],
+        ['Thread/get', { '#ids' => { resultOf => 'R1', name => 'Thread/changes', path => '/updated' }}, 'R2'],
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]->{newState};
+
+    $self->assert_str_equals('Thread/get', $res->[1][0]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals($threadA, $res->[1][1]{list}[0]->{id});
+
+    xlog $self, "destroy emails a and d";
+    $res = $jmap->CallMethods([['Email/set', {
+        destroy => [ $msgA->{id}, $msgD->{id} ],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "get thread updates";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($threadA, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "get thread updates (expect no changes)";
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+}

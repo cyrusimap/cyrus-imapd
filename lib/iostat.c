@@ -19,9 +19,9 @@ EXPORTED void read_io_count(struct io_count *iocount) {
         return;
     }
     else {
-        syslog(LOG_ERR,"IOERROR: opening file /proc/self/io\n");
+        syslog(LOG_ERR,"IOERROR: opening file /proc/self/io");
         config_iolog = 0;
-        syslog(LOG_ERR,"I/O log has been deactivated\n");
+        syslog(LOG_ERR,"I/O log has been deactivated");
     }
 }
 

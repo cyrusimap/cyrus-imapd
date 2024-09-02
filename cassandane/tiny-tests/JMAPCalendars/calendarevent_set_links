@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_links
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/Vienna",
+        "showWithoutTime"=> JSON::false,
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "links" => {
+            "spec" => {
+                href => "http://jmap.io/spec.html#calendar-events",
+                title => "the spec",
+                rel => "enclosure",
+            },
+            "rfc5545" => {
+               href => "https://tools.ietf.org/html/rfc5545",
+               rel => "describedby",
+            },
+            "image" => {
+               href => "https://foo.local/favicon.png",
+               rel => "icon",
+               cid => '123456789asd',
+               display => 'badge',
+            },
+            "attach" => {
+               href => "http://example.com/some.url",
+               rel => "enclosure",
+            },
+        },
+    };
+
+    my $ret;
+
+    $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarIds} = $ret->{calendarIds};
+    $self->assert_normalized_event_equals($event, $ret);
+}

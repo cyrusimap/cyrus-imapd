@@ -83,6 +83,8 @@ struct quota {
     char *scanmbox;
     quota_t scanuseds[QUOTA_NUMRESOURCES];
 
+    /* inforation for changes */
+    int dirty;
     modseq_t modseq;
 };
 
@@ -90,6 +92,7 @@ struct quota {
 #define QUOTA_UNLIMITED     (-1)
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
+extern const char * const legacy_quota_names[QUOTA_NUMRESOURCES];
 extern const quota_t quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 

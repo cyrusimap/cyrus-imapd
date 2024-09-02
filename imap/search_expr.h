@@ -50,6 +50,7 @@
 struct protstream;
 struct index_state;
 
+/* keep this in sync with search_op_name in search_expr.c */
 enum search_op {
     SEOP_UNKNOWN,
     SEOP_TRUE,
@@ -69,6 +70,7 @@ enum search_op {
     SEOP_OR,
     SEOP_NOT,
 };
+extern const char *search_op_name[];
 
 union search_value {
     time_t t;
@@ -93,14 +95,16 @@ struct search_attr {
     int part;
     int cost;
     void (*internalise)(struct index_state *, const union search_value *,
-                       void **internalisedp);
+                        void *data1, void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
     int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
     void (*serialise)(struct buf *, const union search_value *);
     int (*unserialise)(struct protstream*, union search_value *);
     unsigned int (*get_countability)(const union search_value *);
     void (*duplicate)(union search_value *, const union search_value *);
-    void (*free)(union search_value *);
+    void (*free)(union search_value *, struct search_attr **);
+    void (*freeattr)(struct search_attr **);
+    struct search_attr* (*dupattr)(struct search_attr *);
     void *data1;        /* extra data for the functions above */
 };
 
@@ -151,6 +155,7 @@ extern void search_expr_split_by_folder_and_index(search_expr_t *e,
                                                    void *rock),
                                         void *rock);
 extern char *search_expr_firstmailbox(const search_expr_t *);
+extern void search_expr_detrivialise(search_expr_t **ep);
 
 enum search_cost {
     SEARCH_COST_NONE = 0,
@@ -166,5 +171,7 @@ extern const search_attr_t *search_attr_find(const char *);
 extern const search_attr_t *search_attr_find_field(const char *field);
 extern int search_attr_is_fuzzable(const search_attr_t *);
 extern enum search_cost search_attr_cost(const search_attr_t *);
+
+extern int search_getseword(struct protstream *prot, char *buf, int maxlen);
 
 #endif

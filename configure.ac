@@ -79,6 +79,7 @@ PKG_PROG_PKG_CONFIG
 
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2
                   no-installinfo subdir-objects silent-rules tar-ustar])
+AM_SILENT_RULES([yes])
 AC_CONFIG_LIBOBJ_DIR([lib])
 
 dnl Useful hook for distributions
@@ -129,9 +130,16 @@ fi
 dnl for some reason AC_PROG_CXX can succeed even though c++ compiler is missing
 dnl if it is invoked after AC_PROG_CC, so instead invoke it first
 dnl ref: https://lists.gnu.org/archive/html/bug-autoconf/2010-05/msg00001.html
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 AC_PROG_CXX
 AC_PROG_CC
 AM_PROG_CC_C_O
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
+
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
@@ -143,6 +151,16 @@ if test $ac_cv_sys_long_file_names = no; then
         AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_C_INLINE
+
+dnl check for libm -- sets LIBM
+dnl LT_LIB_M breaks under -Werror, so work around that
+saved_CFLAGS="$CFLAGS"
+saved_CPPFLAGS="$CPPFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CPPFLAGS="$CPPFLAGS -Wno-error"
+LT_LIB_M
+CFLAGS="$saved_CFLAGS"
+CPPFLAGS="$saved_CPPFLAGS"
 
 gl_VISIBILITY
 AH_BOTTOM([#if HAVE_VISIBILITY
@@ -161,7 +179,13 @@ AH_BOTTOM([#if defined __GNUC__ &&  __GNUC__ > 6
 ])
 
 LT_PREREQ([2.2.6])
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 LT_INIT([disable-static])
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
 AC_SUBST([LIBTOOL_DEPS])
 
 dnl Check the size of various types
@@ -192,10 +216,16 @@ AC_CHECK_ALIGNOF(uint32_t)
 dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
-AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
+AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdalign.h stdarg.h)
 AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem memrchr)
-AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes)
+AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes getline)
 AC_HEADER_DIRENT
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
 
 dnl check whether to use getpassphrase or getpass
 AC_CHECK_HEADERS(stdlib.h)
@@ -242,7 +272,13 @@ AC_CHECK_FUNCS(timegm)
 
 AC_SUBST(CPPFLAGS)
 AC_SUBST(LOCALDEFS)
+saved_CFLAGS="$CFLAGS"
+saved_CXXFLAGS="$CXXFLAGS"
+CFLAGS="$CFLAGS -Wno-error"
+CXXFLAGS="$CXXFLAGS -Wno-error"
 AC_FUNC_VPRINTF
+CFLAGS="$saved_CFLAGS"
+CXXFLAGS="$saved_CXXFLAGS"
 
 CYR_INTTYPE([time_t], [#include <time.h>])
 AC_DEFINE_UNQUOTED([TIME_T_FMT], ["$cyr_cv_format_time_t"],
@@ -597,7 +633,7 @@ if test "x$enable_xapian" != xno ; then
         fi
 
         dnl Xapian requires CXX11
-        AX_CXX_COMPILE_STDCXX_11([noext], [mandatory])
+        AX_CXX_COMPILE_STDCXX_11([], [mandatory])
 
         dnl If AC_PROG_LIBTOOL (or the deprecated older version AM_PROG_LIBTOOL)
         dnl has already been expanded, enable libtool support now, otherwise add
@@ -632,16 +668,31 @@ if test "x$enable_xapian" != xno ; then
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS | Xapian::MSet::SNIPPET_CJK_WORDS; (void) cjk_flags; ]])],
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_WORD_BREAKS | Xapian::QueryParser::FLAG_WORD_BREAKS | Xapian::MSet::SNIPPET_WORD_BREAKS; (void) cjk_flags; ]])],
             [xapian_cjkwords="yes"],
             [xapian_cjkwords="no"])
         AC_MSG_RESULT($xapian_cjkwords)
         if test $xapian_cjkwords = yes; then
-            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
+            AC_DEFINE([USE_XAPIAN_WORD_BREAKS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
             xapian_cjk_tokens=words
         else
-            AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. CJK ngram tokenization will be used instead.])
-            xapian_cjk_tokens=ngrams
+            dnl Xapian upstream version 1.5 used different flag names to enable
+            dnl word break tokenization until March 2023.
+            dnl See https://github.com/xapian/xapian/commit/13295e9142f56911d4876fb92271df348759c34b
+            AC_LINK_IFELSE(
+                [AC_LANG_PROGRAM(
+                    [[#include <xapian.h>]],
+                    [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS | Xapian::MSet::SNIPPET_CJK_WORDS; (void) cjk_flags; ]])],
+                [xapian_cjkwords="yes"],
+                [xapian_cjkwords="no"])
+            AC_MSG_RESULT($xapian_cjkwords)
+            if test $xapian_cjkwords = yes; then
+                AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
+                xapian_cjk_tokens=words
+            else
+                AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. CJK ngram tokenization will be used instead.])
+                xapian_cjk_tokens=ngrams
+            fi
         fi
         LDFLAGS=$ORIG_LDFLAGS
         CXXFLAGS=$ORIG_CXXFLAGS
@@ -664,59 +715,111 @@ AM_CONDITIONAL([SQUATTER],
     [test "${enable_squat}" != "no" -o "${enable_xapian}" != "no" ])
 
 AC_ARG_ENABLE(sieve,
-        [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
-AC_ARG_ENABLE(pcre,
-        [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="$enableval"])
+    [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 
 if test "$enable_sieve" != "no"; then
-        AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
+    AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
 
-        dnl Sieve configure stuff
-        AC_PROG_YACC
-        AM_PROG_LEX
+    if test "x$HAVE_SQLITE" != x1; then
+        AC_MSG_ERROR([Need sqlite3 for sieve])
+    else
+        use_sqlite="yes"
+    fi
 
-        if test -z "$ac_cv_prog_YACC"; then
-            AC_MSG_ERROR([Sieve requires bison/byacc/yacc, but none is installed])
-        fi
+    dnl Sieve configure stuff
+    AC_PROG_YACC
+    AM_PROG_LEX
 
-        if test -z "$ac_cv_prog_LEX"; then
-            AC_MSG_ERROR([Sieve requires flex/lex, but none is installed])
-        fi
+    if test -z "$ac_cv_prog_YACC"; then
+        AC_MSG_ERROR([Sieve requires bison/byacc/yacc, but none is installed])
+    fi
+
+    if test -z "$ac_cv_prog_LEX"; then
+        AC_MSG_ERROR([Sieve requires flex/lex, but none is installed])
+    fi
 fi
 
 AM_CONDITIONAL([SIEVE], [test "${enable_sieve}" != "no"])
 
+AC_ARG_ENABLE(pcre,
+    [AS_HELP_STRING([--disable-pcre], [disable PCRE library])],[cyrus_cv_pcre_utf8="$enableval"])
+AC_ARG_ENABLE(pcre2,
+    [AS_HELP_STRING([--disable-pcre2], [disable PCRE2 library])],[cyrus_cv_pcre2_utf8="$enableval"])
+
 if test "$enable_pcre" != "no"; then
-        AC_CHECK_HEADER(pcreposix.h)
-        if test "$ac_cv_header_pcreposix_h" = "yes"; then
-            AC_MSG_CHECKING(for utf8 enabled pcre)
-            AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
-#ifndef REG_UTF8
-#include </nonexistent>
-#endif],cyrus_cv_pcre_utf8=yes,cyrus_cv_pcre_utf8=no))
-            AC_MSG_RESULT($cyrus_cv_pcre_utf8)
-        else
-            cyrus_cv_pcre_utf8="no"
-        fi
+    PKG_CHECK_MODULES([PCRE],
+                      [libpcreposix libpcre],
+                      [ AC_MSG_CHECKING(for utf8 enabled pcre)
+                        saved_CFLAGS="$CFLAGS"
+                        saved_LIBS="$LIBS"
+                        CFLAGS="$CFLAGS PCRE_CFLAGS"
+                        LIBS="$LIBS PCRE_LIBS"
+                        AC_CACHE_VAL(cyrus_cv_pcre_utf8,
+                                     AC_TRY_CPP([   #include <pcreposix.h>
+                                                    #ifndef REG_UTF8
+                                                    #include </nonexistent>
+                                                    #endif
+                                                ],
+                                                [cyrus_cv_pcre_utf8=yes],
+                                                [cyrus_cv_pcre_utf8=no]))
+                        AC_MSG_RESULT($cyrus_cv_pcre_utf8)
+                        CFLAGS="$saved_CFLAGS"
+                        LIBS="$saved_LIBS"
+                      ],
+                      [cyrus_cv_pcre_utf8="no"])
+fi
+
+if test "$enable_pcre2" != "no"; then
+    PKG_CHECK_MODULES([PCRE2],
+                      [libpcre2-posix libpcre2-8],
+                      [ AC_MSG_CHECKING(for utf8 enabled pcre2)
+                        saved_CFLAGS="$CFLAGS"
+                        saved_LIBS="$LIBS"
+                        CFLAGS="$CFLAGS PCRE2_CFLAGS"
+                        LIBS="$LIBS PCRE2_LIBS"
+                        AC_CACHE_VAL(cyrus_cv_pcre2_utf8,
+                                     AC_TRY_CPP([   #include <pcre2posix.h>
+                                                    #ifndef REG_UTF
+                                                    #include </nonexistent>
+                                                    #endif
+                                                ],
+                                                [cyrus_cv_pcre2_utf8=yes],
+                                                [cyrus_cv_pcre2_utf8=no]))
+                        AC_MSG_RESULT($cyrus_cv_pcre2_utf8)
+                        CFLAGS="$saved_CFLAGS"
+                        LIBS="$saved_LIBS"
+                      ],
+                      [cyrus_cv_pcre2_utf8="no"])
 fi
 
 LIB_REGEX=
-if test "$cyrus_cv_pcre_utf8" = "yes"; then
-        LIB_REGEX="-lpcre -lpcreposix";
-        AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
-        AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+CFLAGS_REGEX=
+if test "$cyrus_cv_pcre2_utf8" = "yes"; then
+    CFLAGS_REGEX="$PCRE2_CFLAGS"
+    LIB_REGEX="$PCRE2_LIBS"
+    AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+    AC_DEFINE(HAVE_PCRE2POSIX_H, [], [Do we have usable pcre2 library?])
+    cyrus_cv_pcre_utf8="no"
+elif test "$cyrus_cv_pcre_utf8" = "yes"; then
+    CFLAGS_REGEX="$PCRE_CFLAGS"
+    LIB_REGEX="$PCRE_LIBS";
+    AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+    AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+    cyrus_cv_pcre2_utf8="no"
 else
-        AC_CHECK_HEADERS(rxposix.h)
-        if test "$ac_cv_header_rxposix_h" = "yes"; then
-            LIB_REGEX="-lrx"
-            AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
-        else
-            AC_SEARCH_LIBS(regcomp, regex,
-                           AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?]), [])
-        fi
+    AC_CHECK_HEADERS(rxposix.h)
+    if test "$ac_cv_header_rxposix_h" = "yes"; then
+        LIB_REGEX="-lrx"
+        AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+    else
+        AC_SEARCH_LIBS(regcomp, regex,
+                        AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?]), [])
+    fi
 fi
 AC_SUBST(LIB_REGEX)
+AC_SUBST(CFLAGS_REGEX)
 LIBS="$LIBS $LIB_REGEX"
+CFLAGS="$CFLAGS $CFLAGS_REGEX"
 
 dnl
 dnl see if we're compiling with SRS
@@ -831,7 +934,7 @@ AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
 #include <fcntl.h>
 #ifndef FNDELAY
 #define FNDELAY         O_NDELAY
-#endif],[fcntl(0, F_GETFL, 0)&FNDELAY],
+#endif],[(void)(fcntl(0, F_GETFL, 0) & FNDELAY)],
 cyrus_cv_sys_nonblock=fcntl,cyrus_cv_sys_nonblock=ioctl))
 AM_CONDITIONAL([NONBLOCK_FCNTL], [test "$cyrus_cv_sys_nonblock" = "fcntl"])
 AC_MSG_RESULT($cyrus_cv_sys_nonblock)
@@ -840,6 +943,7 @@ AC_MSG_CHECKING(timezone GMT offset method)
 AC_CACHE_VAL(cyrus_cv_struct_sys_gmtoff,AC_TRY_COMPILE([
 #include <time.h>],[struct tm tm;
 tm.tm_gmtoff = 0;
+(void) tm;
 ],cyrus_cv_struct_sys_gmtoff=tm,cyrus_cv_struct_sys_gmtoff=gmtime))
 AM_CONDITIONAL([GMTOFF_TM], [test "$cyrus_cv_struct_sys_gmtoff" = "tm"])
 AC_MSG_RESULT($cyrus_cv_struct_sys_gmtoff)
@@ -1108,8 +1212,6 @@ AC_SUBST(LDAP_CPPFLAGS)
 AC_SUBST(LDAP_LDFLAGS)
 AC_SUBST(LDAP_LIBS)
 AM_CONDITIONAL([HAVE_LDAP], [test "$have_ldap" = "yes"])
-
-AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes"])
 
 AC_ARG_WITH([clamav],
 	AS_HELP_STRING([--without-clamav], [ignore presence of ClamAV and disable it]))
@@ -1446,7 +1548,7 @@ AC_MSG_RESULT($have_libcap)
 dnl
 dnl Check for jansson library, needed for JSON support
 dnl
-PKG_CHECK_MODULES([JANSSON], [jansson >= 2.3],
+PKG_CHECK_MODULES([JANSSON], [jansson >= 2.10],
                   [ AC_DEFINE(HAVE_JANSSON, [], [Do we have Jansson?])
                     with_jansson=yes ],
                   AC_MSG_ERROR([libjansson is required]))
@@ -1454,16 +1556,6 @@ dnl call AC_SUBST macro to support pkg-config version older than 0.24
 AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
 AM_CONDITIONAL([USE_JANSSON], [test "x$with_jansson" = xyes])
-
-save_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS $JANSSON_CFLAGS $JANSSON_LIBS"
-AC_CHECK_LIB([jansson], [json_dumpb],
-             [],
-             [ AC_DEFINE(NEED_JANSSON_JSON_DUMPB, [1],
-                         [Do we need to provide our own json_dumpb()?])
-               AC_MSG_NOTICE([jansson does not provide json_dumpb(), using ours instead])
-             ])
-CFLAGS="$save_CFLAGS"
 
 dnl
 dnl Check for ICU library, needed for charset conversions and non-gregorian
@@ -1502,12 +1594,12 @@ AC_ARG_WITH([chardet],
     [],
     [with_chardet=yes])
 AS_IF([test "x$with_chardet" = "xyes"],
-	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet],
+	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet >= 1.0.5],
 		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with chardet library support])
 		  with_chardet=yes ],
 		with_chardet=no)])
 AS_IF([test "x$with_chardet" != "xyes"],
-      [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet])])
+      [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet >= 1.0.5])])
 AC_SUBST([LIBCHARDET_LIBS])
 AC_SUBST([LIBCHARDET_CFLAGS])
 AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
@@ -1529,14 +1621,20 @@ AC_SUBST([CLD2_CFLAGS])
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
-dnl Set pidfile location
+dnl Check for guesstz library
 dnl
-AC_ARG_WITH(pidfile,
-        [AS_HELP_STRING([--with-pidfile=DIR], [pidfile in DIR [/var/run/cyrus-master.pid]])],
-        [MASTERPIDFILE="$withval"],
-        [MASTERPIDFILE="/var/run/cyrus-master.pid"])
-MASTERPIDFILE="\"$MASTERPIDFILE\""
-AC_DEFINE_UNQUOTED(MASTER_PIDFILE, $MASTERPIDFILE,[Name of the pidfile for master])
+AC_ARG_WITH([guesstz],
+       [AS_HELP_STRING([--without-guesstz], [ignore presence of guesstz library and disable it])],
+    [],
+    [with_guesstz=yes])
+AS_IF([test "x$with_guesstz" = "xyes"],
+       [ PKG_CHECK_MODULES([GUESSTZ], [guesstz],
+               [ AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])
+                 with_guesstz=yes ],
+          with_guesstz=no)])
+AC_SUBST([GUESSTZ_LIBS])
+AC_SUBST([GUESSTZ_CFLAGS])
+AM_CONDITIONAL([HAVE_GUESSTZ], [test "x$with_guesstz" = xyes])
 
 dnl
 dnl see if we're compiling with autocreate support
@@ -1581,6 +1679,13 @@ if test "x$enable_murder" = "xyes"; then
 fi
 
 dnl
+dnl See if we have an xxd available
+dnl
+AC_ARG_VAR([XXD], [Location of xxd])
+AC_PATH_PROG([XXD],[xxd])
+AM_CONDITIONAL([HAVE_XXD], [test -n "$XXD"])
+
+dnl
 dnl see if we're compiling with HTTP support
 dnl
 AC_ARG_ENABLE(http,
@@ -1600,6 +1705,8 @@ dnl
             AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
         fi
 
+        AS_IF([test -z "$XXD"], [AC_MSG_ERROR([Need xxd for http])])
+
         PKG_CHECK_MODULES([XML2], [libxml-2.0], [
                 AC_DEFINE(HAVE_XML2, [], [Build with libxml support])
                 LIBS="$LIBS ${XML2_LIBS}"
@@ -1616,17 +1723,12 @@ dnl
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
 
-        PKG_CHECK_MODULES([ICAL], [libical >= 3.0.0], [
+        PKG_CHECK_MODULES([ICAL], [libical >= 3.0.10], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS}"
                 with_ical=yes
                 ],
-                AC_MSG_ERROR([Need libical 3.0.0 for http]))
-
-        dnl icalproperty_new_color was overlooked, and eventually added in 3.0.5
-        AC_CHECK_LIB(ical, icalproperty_new_color,
-                AC_DEFINE(HAVE_RFC7986_COLOR,[],
-                        [Do we have built-in support for RFC7986 color prop?]))
+                AC_MSG_ERROR([Need libical 3.0.10 for http]))
 
         dnl libical may have been built without RSCALE support
         AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
@@ -1638,6 +1740,32 @@ dnl
                 AC_DEFINE(HAVE_NEW_CLONE_API,[],
                         [Do we have support for new clone API?]))
 
+        dnl ical_set_invalid_rrule_handling_setting will be new in libical 3.1.0
+        AC_CHECK_LIB(ical, ical_set_invalid_rrule_handling_setting,
+                AC_DEFINE(HAVE_INVALID_RRULE_HANDLING,[],
+                        [Do we have support for controlling invalid RRULE handline?]))
+
+        dnl icalcomponent_get_component_name will be new in libical 3.1.0
+        AC_CHECK_LIB(ical, icalcomponent_get_component_name,
+                AC_DEFINE(HAVE_GET_COMPONENT_NAME,[],
+                        [Do we have support for fetching X- component names?]))
+
+        dnl Check if libical parser allows setting CONTROL char handling
+        AC_CHECK_LIB(ical, icalparser_get_ctrl,
+            [
+                AC_DEFINE(HAVE_ICALPARSER_CTRL,[], [Can we omit CONTROL characters?])
+                have_ical_ctrl=yes
+            ],
+            have_ical_ctrl=no)
+
+        dnl Check for libicalvcard
+        AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
+                 AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])
+                 LIBS="$LIBS -licalvcard"
+                 with_icalvcard=yes
+                ],
+                with_icalvcard=no)
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
@@ -1648,11 +1776,9 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
 
         AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
         if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
-                PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5], [
+                PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.34.0], [
                         AC_DEFINE(HAVE_NGHTTP2,[],
                                 [Build HTTP/2 support into httpd?])
-                        AC_CHECK_DECLS([NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL],
-                                [], [], [[#include <nghttp2/nghttp2.h>]])
                         with_nghttp2=yes
                 ], [
                         if test "x$with_nghttp2" = "xyes"; then
@@ -1707,11 +1833,6 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                ])
         fi
 
-        dnl httpd needs libmath in a few places
-        dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
-        dnl XXX break under -Werror(!)
-        LIB_MATH="-lm"
-
         PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
                 AC_DEFINE(HAVE_SHAPELIB,[],
                         [Build geographic support into tzdist?])
@@ -1721,7 +1842,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
 else
         with_nghttp2="no (httpd is not built)"
         with_wslay="no (httpd is not built)"
@@ -1729,6 +1850,7 @@ else
         with_zstd="no (httpd is not built)"
         with_xml2="no (httpd is not built)"
         with_ical="no (httpd is not built)"
+        with_icalvcard="no (httpd is not built)"
         with_shapelib="no (httpd is not built)"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
@@ -1771,7 +1893,7 @@ dnl
 dnl see if we're compiling replication support programs
 dnl
 AC_ARG_ENABLE(replication,
-        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])],,[enable_replication="no";])
+        [AS_HELP_STRING([--enable-replication], [enable replication support])],,[enable_replication="no";])
 AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != no])
 if test "x$enable_replication" = "xyes"; then
         AC_DEFINE(USE_REPLICATION,[],[Build with replication functionality])
@@ -1983,14 +2105,16 @@ dnl Make sure perl modules are in the build directory (which isn't necessarily
 dnl the source directory)
     AC_CONFIG_LINKS([perl/sieve/managesieve/managesieve.pm:perl/sieve/managesieve/managesieve.pm])
     AC_CONFIG_FILES([perl/sieve/managesieve/MANIFEST])
-    AC_CONFIG_LINKS([perl/imap/Cyrus/HeaderFile.pm:perl/imap/Cyrus/HeaderFile.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/AccountSync.pm:perl/imap/Cyrus/AccountSync.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/CacheFile.pm:perl/imap/Cyrus/CacheFile.pm])
-    AC_CONFIG_LINKS([perl/imap/Cyrus/IndexFile.pm:perl/imap/Cyrus/IndexFile.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/DList.pm:perl/imap/Cyrus/DList.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/HeaderFile.pm:perl/imap/Cyrus/HeaderFile.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/ImapClone.pm:perl/imap/Cyrus/ImapClone.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/IndexFile.pm:perl/imap/Cyrus/IndexFile.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/Mbentry.pm:perl/imap/Cyrus/Mbentry.pm])
+    AC_CONFIG_LINKS([perl/imap/Cyrus/Mbname.pm:perl/imap/Cyrus/Mbname.pm])
     AC_CONFIG_LINKS([perl/imap/Cyrus/SyncProto.pm:perl/imap/Cyrus/SyncProto.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP/Shell.pm:perl/imap/IMAP/Shell.pm])
-    AC_CONFIG_LINKS([perl/imap/IMAP/IMSP.pm:perl/imap/IMAP/IMSP.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
     AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
     AC_CONFIG_FILES([perl/imap/MANIFEST])
@@ -2114,6 +2238,17 @@ fi
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
 dnl
+dnl Enable/disable I/O throttling (for testing)
+dnl
+AC_ARG_ENABLE(debug-slowio,
+        [AS_HELP_STRING([--enable-debug-slowio], [enable I/O throttling])])
+AS_IF(
+    [test "x$enable_debug_slowio" = "xyes"],
+    [AC_DEFINE(ENABLE_DEBUG_SLOWIO,[],
+        [Build with slowio support])]
+)
+
+dnl
 dnl Enable/disable cyrusdb benchmarks.
 dnl
 AC_ARG_ENABLE(cyrusdb-benchmarks,
@@ -2205,6 +2340,44 @@ AS_IF(
         [Do we have support for optimize __attribute__?])]
 )
 
+AC_CACHE_CHECK(
+    [whether the C compiler supports alignof(expression)],
+    [cyrus_cv_gnu_alignof_expression],
+    [
+        AC_LANG_PUSH([C])
+        saved_CFLAGS="$CFLAGS"
+        saved_CPPFLAGS="$CPPFLAGS"
+        CFLAGS="$CFLAGS -Wall -Werror -Wno-unused"
+        CPPFLAGS="$CPPFLAGS -Wall -Werror -Wno-unused"
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM(
+                [
+                    #include <stdalign.h>
+                    #include <stddef.h>
+                ],
+                [
+                    int x;
+                    struct { float y; } y;
+                    size_t a, b;
+
+                    a = alignof(x);
+                    b = alignof(y.y);
+                ])
+            ],
+            [cyrus_cv_gnu_alignof_expression=yes],
+            [cyrus_cv_gnu_alignof_expression=no]
+        )
+        CFLAGS="$saved_CFLAGS"
+        CPPFLAGS="$saved_CPPFLAGS"
+        AC_LANG_POP([C])
+    ])
+AS_IF(
+    [test "x$cyrus_cv_gnu_alignof_expression" = "xyes"],
+    [AC_DEFINE(HAVE_GNU_ALIGNOF_EXPRESSION,[],
+        [Do we have support for alignof(expression)?]
+    )]
+)
+
 dnl documentation generation (sphinx, perl2rst, gitpython)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
@@ -2225,10 +2398,17 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                        have_ppvr=no
                      ])
 
-AX_PYTHON_MODULE([git], [], [python])
+AX_PYTHON_MODULE([git], [], [python2])
 AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
-        [*],    [AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+        [*],    [
+    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
+    AX_PYTHON_MODULE([git], [], [python3])
+    AS_CASE([$HAVE_PYMOD_GIT],
+            [yes],  [],
+            [*],    [
+         AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
     [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes -a x"$HAVE_PYMOD_GIT" = xyes])
@@ -2477,6 +2657,7 @@ External dependencies:
    zlib:               $with_zlib
    jansson:            $with_jansson
    pcre:               $cyrus_cv_pcre_utf8
+   pcre2:              $cyrus_cv_pcre2_utf8
    clamav:             $with_clamav
    -----------------------
    caringo:            $with_caringo
@@ -2488,10 +2669,12 @@ External dependencies:
    zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
+   icalvcard:          $with_icalvcard
    shapelib:           $with_shapelib
    icu4c:              $with_icu4c
    chardet:            $with_chardet
    cld2:               $with_cld2
+   guesstz:            $with_guesstz
 
 Database support:
    mysql:              $with_mysql
@@ -2503,6 +2686,9 @@ Search engine:
    squat:              $enable_squat
    xapian:             $enable_xapian
    xapian_cjk_tokens:  $xapian_cjk_tokens
+
+iCalendar features:
+   ctrl:               $have_ical_ctrl
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
@@ -2520,5 +2706,7 @@ Build info:
    cxxflags:           $CXXFLAGS
    libs:               $LIBS
    ldflags:            $LDFLAGS
+   libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
+   xxd:                $XXD
 "

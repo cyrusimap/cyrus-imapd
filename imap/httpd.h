@@ -50,9 +50,11 @@
 #include <libical/ical.h>
 
 #include "annotate.h" /* for strlist */
+#include "dynarray.h"
 #include "hash.h"
 #include "http_client.h"
 #include "mailbox.h"
+#include "md5.h"
 #include "prometheus.h"
 #include "spool.h"
 
@@ -66,16 +68,11 @@
 #define DFLAG_UNBIND    "DAV:unbind"
 #define DFLAG_UNCHANGED "DAV:unchanged"
 
-/* XML namespace URIs */
-#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
-
 /* Supported TLS version for Upgrade */
 #define TLS_VERSION      "TLS/1.2"
 
 /* Supported HTML DOCTYPE */
-#define HTML_DOCTYPE \
-    "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
-    "\"http://www.w3.org/TR/html4/loose.dtd\">"
+#define HTML_DOCTYPE "<!DOCTYPE html>"
 
 #define XML_DECLARATION \
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -94,10 +91,8 @@
 
 /* SASL usage based on availability */
 #if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
-  #define HTTP_DIGEST_MECH "DIGEST-MD5"
   #define SASL_USAGE_FLAGS (SASL_NEED_HTTP | SASL_SUCCESS_DATA)
 #else
-  #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
   #define SASL_USAGE_FLAGS SASL_SUCCESS_DATA
 #endif /* SASL_NEED_HTTP */
 
@@ -186,12 +181,10 @@ struct auth_scheme_t {
 /* Auth scheme identifiers */
 enum {
     AUTH_BASIC        = (1<<0),
-    AUTH_DIGEST       = (1<<1),
-    AUTH_SPNEGO       = (1<<2),
-    AUTH_NTLM         = (1<<3),
-    AUTH_BEARER       = (1<<4),
-    AUTH_SCRAM_SHA1   = (1<<5),
-    AUTH_SCRAM_SHA256 = (1<<6)
+    AUTH_SPNEGO       = (1<<1),
+    AUTH_BEARER       = (1<<2),
+    AUTH_SCRAM_SHA1   = (1<<3),
+    AUTH_SCRAM_SHA256 = (1<<4)
 };
 
 /* Auth scheme flags */
@@ -253,6 +246,8 @@ enum {
 typedef int (*parse_path_t)(const char *path, struct request_target_t *tgt,
                             const char **resultstr);
 
+void request_target_fini(struct request_target_t *tgt);
+
 /* Auth challenge context */
 struct auth_challenge_t {
     struct auth_scheme_t *scheme;       /* Selected AUTH scheme */
@@ -276,7 +271,7 @@ struct range {
 
 struct patch_doc_t {
     const char *format;                 /* MIME format of patch document */
-    int (*proc)();                      /* Function to parse and apply doc */
+    int (*proc)(txn_t *, void *);       /* Function to parse and apply doc */
 };
 
 typedef int (*encode_proc_t)(struct transaction_t *txn,
@@ -328,21 +323,45 @@ struct txn_flags_t {
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
     unsigned long redirect : 1;         /* CGI local redirect */
+    unsigned long retry    : 1;         /* Retry-After */
 };
 
 /* HTTP connection context */
 struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
+    struct protgroup *pgin;             /* Streams to watch for input */
     const char *clienthost;             /* Name of client host */
     int logfd;                          /* Telemetry log file */
     struct buf logbuf;                  /* Telemetry log buffer */
+    unsigned close : 1;                 /* Close connection flag */
+    const char *close_str;              /* Reason for closing connection */
 
     void *tls_ctx;                      /* TLS context */
     void *sess_ctx;                     /* HTTP/2+ session context */
+    void **ws_ctx;                      /* Reference to WebSocket context
+                                           (HTTP/1.1 only) */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
+
+    /* Version-specific functions for generating a response */
+    void (*begin_resp_headers)(txn_t *txn, long code);
+    void (*add_resp_header)(txn_t *txn, const char *name, struct buf *value);
+    int (*end_resp_headers)(txn_t *txn, long code);
+    int (*resp_body_chunk)(txn_t *txn, const char *data, unsigned datalen,
+                           int last_chunk, MD5_CTX *md5ctx);
+
+    ptrarray_t reset_callbacks;         /* Array of functions to reset
+                                           auxiliary connection contexts
+                                           (e.g. TLS, HTTP/2, WebSockets) */
+
+    ptrarray_t shutdown_callbacks;      /* Array of functions to cleanup
+                                           auxiliary connection contexts
+                                           (e.g. TLS, HTTP/2, WebSockets) */
 };
+
+typedef void (*conn_reset_t)(struct http_connection *conn);
+typedef void (*conn_shutdown_t)(struct http_connection *conn);
 
 
 /* Transaction context */
@@ -350,6 +369,11 @@ struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
     void *strm_ctx;                     /* HTTP/2+ stream context */
     void *ws_ctx;                       /* WebSocket channel context */
+    void *push_ctx;                     /* Push notifications context */
+
+    const char *userid;
+    const struct auth_state *authstate;
+
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
     struct request_line_t req_line;     /* Parsed request-line */
@@ -378,10 +402,19 @@ struct transaction_t {
                                              - error desc string
                                         */
 
+    struct backend *be;                 /* Connection to backend server */
+
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
     void *zstd;                         /* Zstandard compression context */
+
+    ptrarray_t done_callbacks;          /* Array of functions to cleanup
+                                           auxiliary stream contexts
+                                           (e.g. compression, HTTP/2, WS) */
 };
+
+typedef void (*txn_done_t)(struct transaction_t *txn);
+
 
 /* HTTP version flags */
 enum {
@@ -458,11 +491,13 @@ struct method_t {
 };
 
 struct connect_params {
-    /* WebSocket parameters */
-    const char *endpoint;
-    const char *subprotocol;
-    int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
+    parse_path_t parse_path;
+    struct {
+        /* WebSocket parameters */
+        const char *endpoint;
+        const char *subprotocol;
+        const void *data_cb;
+    } ws;
 };
 
 struct namespace_t {
@@ -473,15 +508,13 @@ struct namespace_t {
     const char *well_known;     /* Any /.well-known/ URI */
     int (*need_auth)(txn_t *);  /* Function run prior to unauthorized requests */
     unsigned auth_schemes;      /* Bitmask of allowed auth schemes, 0 for any */
-    int mboxtype;               /* What mbtype can be seen in this namespace? */
+    uint32_t mboxtype;          /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
     void (*init)(struct buf *); /* Function run during service startup */
     int (*auth)(const char *);  /* Function run after authentication */
     void (*reset)(void);        /* Function run before change in auth */
     void (*shutdown)(void);     /* Function run during service shutdown */
     int (*premethod)(txn_t *);  /* Function run prior to any method */
-    int (*bearer)(const char *, /* Function run to authenticate Bearer token */
-                  char *, size_t);
     struct method_t methods[];  /* Array of functions to perform HTTP methods.
                                  * MUST be an entry for EACH method listed,
                                  * and in the SAME ORDER in which they appear
@@ -493,11 +526,11 @@ struct namespace_t {
 
 struct accept {
     char *token;
+    char *version;
+    char *charset;
     float qual;
-    struct accept *next;
 };
 
-extern struct namespace_t namespace_default;
 extern struct namespace_t namespace_principal;
 extern struct namespace_t namespace_notify;
 extern struct namespace_t namespace_calendar;
@@ -520,7 +553,7 @@ extern struct namespace_t namespace_cgi;
 
 /* XXX  These should be included in struct transaction_t */
 extern struct buf serverinfo;
-extern struct backend **backend_cached;
+extern ptrarray_t backend_cached;
 extern struct protstream *httpd_in;
 extern struct protstream *httpd_out;
 extern int https;
@@ -536,21 +569,23 @@ extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern const char *httpd_localip, *httpd_remoteip;
 extern unsigned long config_httpmodules;
-extern int config_httpprettytelemetry;
 extern strarray_t *httpd_log_headers;
+extern char *httpd_altsvc;
 
 extern int ignorequota;
 extern int apns_enabled;
+extern int ws_enabled;
+
+extern struct proc_handle *httpd_proc_handle;
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
-extern struct accept *parse_accept(const char **hdr);
+extern dynarray_t *parse_accept(const char **hdr);
+extern void free_accept(struct accept *a);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(unsigned ver, long code);
 extern char *httpdate_gen(char *buf, size_t len, time_t t);
-extern void begin_resp_headers(struct transaction_t *txn, long code);
-extern int end_resp_headers(struct transaction_t *txn, long code);
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...)
                       __attribute__((format(printf, 3, 4)));
@@ -559,6 +594,7 @@ extern void content_md5_hdr(struct transaction_t *txn,
 extern void comma_list_hdr(struct transaction_t *txn,
                            const char *hdr, const char *vals[],
                            unsigned flags, ...);
+extern void connection_hdrs(struct transaction_t *txn);
 extern void response_header(long code, struct transaction_t *txn);
 extern void buf_printf_markup(struct buf *buf, unsigned level,
                               const char *fmt, ...)
@@ -585,6 +621,7 @@ extern int check_precond(struct transaction_t *txn,
 
 extern void log_cachehdr(const char *name, const char *contents,
                          const char *raw, void *rock);
+extern void log_request(long code, struct transaction_t *txn);
 
 extern int examine_request(struct transaction_t *txn, const char *uri);
 extern int process_request(struct transaction_t *txn);
@@ -595,11 +632,19 @@ extern int http_allow_noauth(struct transaction_t *txn);
 extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);
 
-extern void *zlib_init();
+extern void zlib_init(struct transaction_t *txn);
 extern int zlib_compress(struct transaction_t *txn, unsigned flags,
                          const char *buf, unsigned len);
 
-extern void *zstd_init();
-extern void *brotli_init();
+extern void brotli_init(struct transaction_t *txn);
+extern void zstd_init(struct transaction_t *txn);
+
+extern void http1_begin_resp_headers(struct transaction_t *txn, long code);
+extern void http1_add_resp_header(struct transaction_t *txn,
+                                  const char *name, struct buf *value);
+extern int http1_end_resp_headers(struct transaction_t *txn, long code);
+extern int http1_resp_body_chunk(struct transaction_t *txn,
+                                 const char *data, unsigned datalen,
+                                 int last_chunk, MD5_CTX *md5ctx);
 
 #endif /* HTTPD_H */

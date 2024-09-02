@@ -1,0 +1,111 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_searchsnippet_get
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create emails";
+    my %params = (
+        body => "A simple message",
+    );
+    $res = $self->make_message("Message foo", %params) || die;
+
+    %params = (
+        body => ""
+        . "In the context of electronic mail, messages are viewed as having an\r\n"
+        . "envelope and contents.  The envelope contains whatever information is\r\n"
+        . "needed to accomplish transmission and delivery.  (See [RFC5321] for a\r\n"
+        . "discussion of the envelope.)  The contents comprise the object to be\r\n"
+        . "delivered to the recipient.  This specification applies only to the\r\n"
+        . "format and some of the semantics of message contents.  It contains no\r\n"
+        . "specification of the information in the envelope.i\r\n"
+        . "\r\n"
+        . "However, some message systems may use information from the contents\r\n"
+        . "to create the envelope.  It is intended that this specification\r\n"
+        . "facilitate the acquisition of such information by programs.\r\n"
+        . "\r\n"
+        . "This specification is intended as a definition of what message\r\n"
+        . "content format is to be passed between systems.  Though some message\r\n"
+        . "systems locally store messages in this format (which eliminates the\r\n"
+        . "need for translation between formats) and others use formats that\r\n"
+        . "differ from the one specified in this specification, local storage is\r\n"
+        . "outside of the scope of this specification.\r\n"
+        . "\r\n"
+        . "This paragraph is not part of the specification, it has been added to\r\n"
+        . "contain the most mentions of the word message. Messages are processed\r\n"
+        . "by messaging systems, which is the message of this paragraph.\r\n"
+        . "Don't interpret too much into this message.\r\n",
+    );
+    $self->make_message("Message bar", %params) || die;
+    %params = (
+        body => "This body doesn't contain any of the search terms.\r\n",
+    );
+    $self->make_message("A subject without any matching search term", %params) || die;
+
+    $self->make_message("Message baz", %params) || die;
+    %params = (
+        body => "This body doesn't contain any of the search terms.\r\n",
+    );
+    $self->make_message("A subject with message", %params) || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch email ids";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2' ],
+    ]);
+
+    my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $foo = $m{"Message foo"}->{id};
+    my $bar = $m{"Message bar"}->{id};
+    my $baz = $m{"Message baz"}->{id};
+    $self->assert_not_null($foo);
+    $self->assert_not_null($bar);
+    $self->assert_not_null($baz);
+
+    xlog $self, "fetch snippets";
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => [ $foo, $bar ],
+            filter => { text => "message" },
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
+    $self->assert_null($res->[0][1]->{notFound});
+    %m = map { $_->{emailId} => $_ } @{$res->[0][1]{list}};
+    $self->assert_not_null($m{$foo});
+    $self->assert_not_null($m{$bar});
+
+    %m = map { $_->{emailId} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_not_equals(-1, index($m{$foo}->{subject}, "<mark>Message</mark> foo"));
+    $self->assert_num_not_equals(-1, index($m{$foo}->{preview}, "A simple <mark>message</mark>"));
+    $self->assert_num_not_equals(-1, index($m{$bar}->{subject}, "<mark>Message</mark> bar"));
+    $self->assert_num_not_equals(-1, index($m{$bar}->{preview}, ""
+        . "<mark>Messages</mark> are processed by <mark>messaging</mark> systems,"
+    ));
+
+    xlog $self, "fetch snippets with one unknown id";
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => [ $foo, "bam" ],
+            filter => { text => "message" },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
+
+    xlog $self, "fetch snippets with only a matching subject";
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => [ $baz ],
+            filter => { text => "message" },
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]->{list}[0]->{subject});
+    $self->assert(exists $res->[0][1]->{list}[0]->{preview});
+}

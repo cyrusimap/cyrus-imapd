@@ -1,0 +1,39 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.6 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.6/cyrus-imapd-3.4.6.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.6/cyrus-imapd-3.4.6.tar.gz.sig
+
+.. _relnotes-3.4.6-changes:
+
+Changes since 3.4.5
+===================
+
+Build changes
+-------------
+
+* Fixed :issue:`4561`: retired custom manpage generator
+
+Bug fixes
+---------
+
+* Fixed :issue:`4437`: murder frontends now proxy DAV PUT correctly
+* Fixed :issue:`4439`: murder frontends now proxy GETMETADATA correctly
+  (thanks Stéphane GAUBERT)
+* Fixed :issue:`4440`: uninitialized value warning from :cyrusman:`cyradm(8)`
+  ``listmailbox`` command (thanks Stéphane GAUBERT)
+* Fixed :issue:`4465`: missing calls to ``mailbox_iter_done()`` (thanks
+  Дилян Палаузов)
+* Fixed :issue:`4309`: incorrect error code used for JMAP
+  invalidResultReference errors
+* Fixed :issue:`4574`: potential crash in jmap_email_parse
+
+Other changes
+-------------
+
+* Fixed :issue:`4558`: better cyrusdb / ``ctl_cyrusdb -r`` UX

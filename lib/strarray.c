@@ -75,21 +75,30 @@ EXPORTED void strarray_free(strarray_t *sa)
     free(sa);
 }
 
+#define QUANTUM     16
+static inline int grow(int have, int want)
+{
+    int x = MAX(QUANTUM, have);
+    while (x < want)
+        x *= 2;
+    return x;
+}
+
 /*
- * Ensure the index @idx exists in the array, if necessary expanding the
+ * Ensure the index @newalloc exists in the array, if necessary expanding the
  * array, and if necessary NULL-filling all the intervening elements.
  * Note that we always ensure an empty slot past the last reported
  * index, so that we can pass data[] to execve() or other routines that
  * assume a NULL terminator.
  */
-#define QUANTUM     16
 static void ensure_alloc(strarray_t *sa, int newalloc)
 {
     if (newalloc < sa->alloc)
         return;
-    newalloc = ((newalloc + QUANTUM) / QUANTUM) * QUANTUM;
-    sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
-    memset(sa->data + sa->alloc, 0, sizeof(char *) * (newalloc - sa->alloc));
+    newalloc = grow(sa->alloc, newalloc + 1);
+    sa->data = xzrealloc(sa->data,
+                         sizeof(char *) * sa->alloc,
+                         sizeof(char *) * newalloc);
     sa->alloc = newalloc;
 }
 
@@ -187,7 +196,7 @@ EXPORTED int strarray_appendm(strarray_t *sa, char *s)
 
 static void _strarray_set(strarray_t *sa, int idx, char *s)
 {
-    xfree(sa->data[idx]);
+    free(sa->data[idx]);
     sa->data[idx] = s;
     /* adjust the count if we just sparsely expanded the array */
     if (s && idx >= sa->count)
@@ -351,12 +360,13 @@ EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)
     return buf;
 }
 
-EXPORTED strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
+EXPORTED strarray_t *strarray_splitm(strarray_t *sa, char *buf, const char *sep, int flags)
 {
-    strarray_t *sa = strarray_new();
     char *p, *q;
 
     if (!buf) return sa;
+
+    if (!sa) sa = strarray_new();
 
     if (!sep)
         sep = " \t\r\n";
@@ -374,21 +384,24 @@ EXPORTED strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
     }
 
     free(buf);
+
     return sa;
 }
 
 EXPORTED strarray_t *strarray_split(const char *line, const char *sep, int flags)
 {
-    if (!line)
-        return strarray_new();
-    return strarray_splitm(xstrdup(line), sep, flags);
+    strarray_t *sa = strarray_new();
+    if (line)
+        strarray_splitm(sa, xstrdup(line), sep, flags);
+    return sa;
 }
 
 EXPORTED strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags)
 {
-    if (!len)
-        return strarray_new();
-    return strarray_splitm(xstrndup(buf, len), sep, flags);
+    strarray_t *sa = strarray_new();
+    if (len)
+        strarray_splitm(sa, xstrndup(buf, len), sep, flags);
+    return sa;
 }
 
 EXPORTED char **strarray_takevf(strarray_t *sa)
@@ -426,6 +439,8 @@ EXPORTED void strarray_uniq(strarray_t *sa)
 static int strarray_findg(const strarray_t *sa, const char *match, int starting,
                           int (*compare)(const char *, const char *))
 {
+    if (!sa) return -1;
+
     int i;
 
     for (i = starting ; i < sa->count ; i++)
@@ -449,7 +464,7 @@ EXPORTED int strarray_intersect(const strarray_t *sa, const strarray_t *sb)
     /* XXX O(n^2)... but we don't have a proper set type */
     int i;
     for (i = 0; i < sa->count; i++)
-        if (strarray_find(sb, strarray_nth(sa, i), 0) >= 0)
+        if (strarray_contains(sb, strarray_nth(sa, i)))
             return 1;
     return 0;
 }
@@ -459,7 +474,7 @@ EXPORTED int strarray_intersect_case(const strarray_t *sa, const strarray_t *sb)
     /* XXX O(n^2)... but we don't have a proper set type */
     int i;
     for (i = 0; i < sa->count; i++)
-        if (strarray_find_case(sb, strarray_nth(sa, i), 0) >= 0)
+        if (strarray_contains_case(sb, strarray_nth(sa, i)))
             return 1;
     return 0;
 }

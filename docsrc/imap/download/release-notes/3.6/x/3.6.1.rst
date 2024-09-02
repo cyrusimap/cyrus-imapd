@@ -1,0 +1,23 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.6.1 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.1/cyrus-imapd-3.6.1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.1/cyrus-imapd-3.6.1.tar.gz.sig
+
+.. _relnotes-3.6.1-changes:
+
+Changes since 3.6.0
+===================
+
+Other changes
+-------------
+
+* Fixed :issue:`4380`: ``backend_version()`` now properly parses the remote
+  server's version string, and can recognise when it is newer than the local
+  server.  This means XFER to a newer backend no longer requires a local
+  software update to recognise the new version number first.

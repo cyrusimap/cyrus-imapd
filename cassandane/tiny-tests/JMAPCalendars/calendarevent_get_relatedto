@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_relatedto
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('relatedto');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals($id, $event->{uid});
+    $self->assert_deep_equals({
+            "58ADE31-001" => {
+                '@type' => 'Relation',
+                relation => {
+                    'first' => JSON::true,
+                }
+            },
+            "58ADE31-003" => {
+                '@type' => 'Relation',
+                relation => {
+                    'next' => JSON::true,
+                }
+            },
+            "foo" => {
+                '@type' => 'Relation',
+                relation => {
+                    'x-unknown1' => JSON::true,
+                    'x-unknown2' => JSON::true,
+                }
+            },
+            "bar" => {
+                '@type' => 'Relation',
+                relation => {}
+            },
+    }, $event->{relatedTo});
+}

@@ -125,4 +125,11 @@ int actions_init(void);
 
 int actions_setuser(const char *userid);
 
+/*
+ * Unset user after unauthentication/logout
+ *
+ */
+
+void actions_unsetuser(void);
+
 #endif

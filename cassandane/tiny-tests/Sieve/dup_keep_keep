@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_dup_keep_keep
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing duplicate suppression between 'keep' & 'keep'";
+
+    $self->{instance}->install_sieve_script(<<EOF
+keep;
+keep;
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that only one copy of the message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}

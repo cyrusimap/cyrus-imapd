@@ -101,7 +101,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
     else if (config_debug) {
         struct buf tmp = BUF_INITIALIZER;
         dlist_printbuf(dlist, 1, &tmp);
-        syslog(LOG_DEBUG, "ignoring unrecognised dlist: %s\n", buf_cstring(&tmp));
+        syslog(LOG_DEBUG, "ignoring unrecognised dlist: %s", buf_cstring(&tmp));
         buf_free(&tmp);
     }
 
@@ -111,7 +111,7 @@ HIDDEN int backup_index(struct backup *backup, struct dlist *dlist,
 static int _index_expunge(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing EXPUNGE at " OFF_T_FMT "...\n", dl_offset);
+    syslog(LOG_DEBUG, "indexing EXPUNGE at " OFF_T_FMT "...", dl_offset);
 
     const char *mboxname;
     const char *uniqueid;
@@ -184,7 +184,7 @@ static int _get_magic_flags(struct dlist *flags, int *is_expunged)
 static int _index_mailbox(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing MAILBOX at " OFF_T_FMT "...\n", dl_offset);
+    syslog(LOG_DEBUG, "indexing MAILBOX at " OFF_T_FMT "...", dl_offset);
 
     const char *uniqueid = NULL;
     const char *mboxname = NULL;
@@ -285,12 +285,12 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         r = sqldb_exec(backup->db, backup_index_mailbox_insert_sql,
                        mbox_bval, NULL, NULL);
         if (r) {
-            syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s\n",
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s",
                               __func__, r, mboxname);
         }
     }
     else if (r) {
-        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s\n",
+        syslog(LOG_DEBUG, "%s: something went wrong: %i update %s",
                           __func__, r, mboxname);
     }
 
@@ -329,7 +329,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
             /* XXX should this search for guid+size rather than just guid? */
             message_id = backup_get_message_id(backup, guid);
             if (message_id == -1) {
-                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s\n",
+                syslog(LOG_DEBUG, "%s: something went wrong: %i %s %s",
                                   __func__, r, mboxname, guid);
                 goto error;
             }
@@ -337,7 +337,7 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 /* can't link this record, we don't have a message */
                 /* possibly we're in compact, and have deleted it? */
                 /* XXX this should probably be an error too, but can't be until compact is smarter */
-                syslog(LOG_DEBUG, "%s: skipping %s record for %s: message not found\n",
+                syslog(LOG_DEBUG, "%s: skipping %s record for %s: message not found",
                                   __func__, mboxname, guid);
                 continue;
             }
@@ -349,13 +349,13 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 _get_magic_flags(flags, &is_expunged);
 
                 if (is_expunged) {
-                    syslog(LOG_DEBUG, "%s: found expunge flag for message %s\n",
+                    syslog(LOG_DEBUG, "%s: found expunge flag for message %s",
                                       __func__, guid);
                     expunged = ts;
                 }
 
                 dlist_printbuf(flags, 0, &flags_buf);
-                syslog(LOG_DEBUG, "%s: found flags for message %s: %s\n",
+                syslog(LOG_DEBUG, "%s: found flags for message %s: %s",
                                   __func__, guid, buf_cstring(&flags_buf));
             }
 
@@ -393,12 +393,12 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
                 r = sqldb_exec(backup->db, backup_index_mailbox_message_insert_sql,
                                record_bval, NULL, NULL);
                 if (r) {
-                    syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s\n",
+                    syslog(LOG_DEBUG, "%s: something went wrong: %i insert %s %s",
                                       __func__, r, mboxname, guid);
                 }
             }
             else if (r) {
-                syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s\n",
+                syslog(LOG_DEBUG, "%s: something went wrong: %i update %s %s",
                                   __func__, r, mboxname, guid);
             }
 
@@ -409,12 +409,12 @@ static int _index_mailbox(struct backup *backup, struct dlist *dl,
         }
     }
 
-    syslog(LOG_DEBUG, "%s: committing index change: %s\n", __func__, mboxname);
+    syslog(LOG_DEBUG, "%s: committing index change: %s", __func__, mboxname);
     sqldb_commit(backup->db, __func__);
     return 0;
 
 error:
-    syslog(LOG_DEBUG, "%s: rolling back index change: %s\n", __func__, mboxname);
+    syslog(LOG_DEBUG, "%s: rolling back index change: %s", __func__, mboxname);
     sqldb_rollback(backup->db, __func__);
 
     return IMAP_INTERNAL;
@@ -423,7 +423,7 @@ error:
 static int _index_unmailbox(struct backup *backup, struct dlist *dl,
                             time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing UNMAILBOX at " OFF_T_FMT "...\n", dl_offset);
+    syslog(LOG_DEBUG, "indexing UNMAILBOX at " OFF_T_FMT "...", dl_offset);
 
     const char *mboxname = dl->sval;
 
@@ -436,7 +436,7 @@ static int _index_unmailbox(struct backup *backup, struct dlist *dl,
     int r = sqldb_exec(backup->db, backup_index_mailbox_delete_sql, bval, NULL,
                         NULL);
     if (r) {
-        syslog(LOG_DEBUG, "%s: something went wrong: %i %s\n",
+        syslog(LOG_DEBUG, "%s: something went wrong: %i %s",
                           __func__, r, mboxname);
     }
 
@@ -446,7 +446,7 @@ static int _index_unmailbox(struct backup *backup, struct dlist *dl,
 static int _index_message(struct backup *backup, struct dlist *dl,
                           time_t ts, off_t dl_offset, size_t dl_len)
 {
-    syslog(LOG_DEBUG, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...\n", dl_offset, dl_len);
+    syslog(LOG_DEBUG, "indexing MESSAGE at " OFF_T_FMT " (" SIZE_T_FMT " bytes)...", dl_offset, dl_len);
     (void) ts;
 
     struct dlist *di;
@@ -477,12 +477,12 @@ static int _index_message(struct backup *backup, struct dlist *dl,
             r = sqldb_exec(backup->db, backup_index_message_insert_sql, bval,
                            NULL, NULL);
             if (r) {
-                syslog(LOG_DEBUG, "%s: something went wrong: %i insert message %s\n",
+                syslog(LOG_DEBUG, "%s: something went wrong: %i insert message %s",
                        __func__, r, message_guid_encode(guid));
             }
         }
         else if (r) {
-            syslog(LOG_DEBUG, "%s: something went wrong: %i update message %s\n",
+            syslog(LOG_DEBUG, "%s: something went wrong: %i update message %s",
                    __func__, r, message_guid_encode(guid));
         }
     }
@@ -493,7 +493,7 @@ static int _index_message(struct backup *backup, struct dlist *dl,
 static int _index_rename(struct backup *backup, struct dlist *dl,
                          time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing RENAME at " OFF_T_FMT "\n", dl_offset);
+    syslog(LOG_DEBUG, "indexing RENAME at " OFF_T_FMT, dl_offset);
     (void) ts;
 
     const char *uniqueid = NULL;
@@ -529,7 +529,7 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
                        mbox_bval, NULL, NULL);
 
     if (r) {
-        syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s\n",
+        syslog(LOG_DEBUG, "%s: something went wrong: %i rename %s => %s",
                __func__, r, oldmboxname, newmboxname);
     }
 
@@ -539,7 +539,7 @@ static int _index_rename(struct backup *backup, struct dlist *dl,
 static int _index_seen(struct backup *backup, struct dlist *dl,
                        time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT, dl->name, dl_offset);
     (void) ts;
 
     const char *uniqueid;
@@ -577,7 +577,7 @@ static int _index_seen(struct backup *backup, struct dlist *dl,
         r = sqldb_exec(backup->db, backup_index_seen_insert_sql, bval,
                        NULL, NULL);
         if (r) {
-            syslog(LOG_DEBUG, "%s: something went wrong: %i insert seen %s\n",
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert seen %s",
                    __func__, r, uniqueid);
         }
     }
@@ -592,7 +592,7 @@ static int _index_seen(struct backup *backup, struct dlist *dl,
 static int _index_sub(struct backup *backup, struct dlist *dl,
                       time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT, dl->name, dl_offset);
 
     const char *mboxname = NULL;
     int r;
@@ -623,7 +623,7 @@ static int _index_sub(struct backup *backup, struct dlist *dl,
         r = sqldb_exec(backup->db, backup_index_subscription_insert_sql, bval,
                        NULL, NULL);
         if (r) {
-            syslog(LOG_DEBUG, "%s: something went wrong: %i insert subscription %s\n",
+            syslog(LOG_DEBUG, "%s: something went wrong: %i insert subscription %s",
                    __func__, r, mboxname);
         }
     }
@@ -638,7 +638,7 @@ static int _index_sub(struct backup *backup, struct dlist *dl,
 static int _index_sieve(struct backup *backup, struct dlist *dl,
                         time_t ts, off_t dl_offset)
 {
-    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT "\n", dl->name, dl_offset);
+    syslog(LOG_DEBUG, "indexing %s at " OFF_T_FMT, dl->name, dl_offset);
 
     const char *filename;
     int r;

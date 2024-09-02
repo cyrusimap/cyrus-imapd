@@ -197,24 +197,6 @@ options in <tt>imapd.conf</tt>. Read <tt>imapd.conf(5)</tt> for
 details.</p>
 </dd>
 
-<dt><b>Q:</b> My KPOP client is complaining about TLS keys. What
-should I do?</dt>
-
-<dd>
-<p><b>A:</b> Disable TLS for the kpop service. Either set
-<tt>tls_pop3_cert_file</tt> to <b>disabled</b> in
-<tt>imapd.conf</tt> (which will also disable SSL/TLS for pop3), or
-use a separate config file for kpop. For example, change the kpop
-service in <tt>cyrus.conf</tt> to something like:</p>
-
-<pre>
-kpop    cmd="pop3d -k -C /etc/kpopd.conf" listen="kpop"
-</pre>
-
-<p>then copy <tt>/etc/imapd.conf</tt> to <tt>/etc/kpopd.conf</tt> and
-remove the <tt>tls_*</tt> options.</p>
-</dd>
-
 <dt><b>Q:</b> Eudora 5.x can't connect using STARTTLS ("SSL
 Neogotiation Failed"). What should I do?</dt>
 

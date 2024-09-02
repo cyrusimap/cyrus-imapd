@@ -1,0 +1,255 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_set_destroy
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+    ]);
+    my $cassState = $res->[0][1]{state};
+    $self->assert_not_null($cassState);
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    my $manState = $res->[0][1]{state};
+    $self->assert_not_null($manState);
+
+    xlog "create a notification that both cassandane and manifold will see";
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:
+SUMMARY:testitip
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/testitip.ics',
+        $ical, 'Content-Type' => 'text/calendar',
+               'Schedule-Sender-Address' => 'itipsender@local',
+               'Schedule-Sender-Name' => 'iTIP Sender',
+    );
+
+    xlog "fetch notifications";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            sinceState => $cassState,
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{created}});
+    $cassState = $res->[2][1]{newState};
+
+    my $notifId = $res->[1][1]{ids}[0];
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            accountId => 'cassandane',
+            sinceState => $manState,
+        }, 'R3'],
+    ]);
+    $self->{instance}->getsyslog(); # ignore seen.db DBERROR
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{created}});
+    $manState = $res->[2][1]{newState};
+
+    xlog "destroy notification as cassandane user";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/set', {
+            destroy => [$notifId],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    xlog "refetch notifications";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            sinceState => $cassState,
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{destroyed}});
+    $cassState = $res->[2][1]{newState};
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            accountId => 'cassandane',
+            sinceState => $manState,
+        }, 'R3'],
+    ]);
+    $self->{instance}->getsyslog(); # ignore seen.db DBERROR
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{destroyed}});
+    $manState = $res->[2][1]{newState};
+
+    xlog "destroy notification as sharee";
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/set', {
+            accountId => 'cassandane',
+            destroy => [$notifId],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    xlog "refetch notifications";
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            sinceState => $cassState,
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{created}});
+    # XXX this should be 0 but we err on the safe side and report duplicate destroys
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{destroyed}});
+    $cassState = $res->[2][1]{newState};
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            accountId => 'cassandane',
+            sinceState => $manState,
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{destroyed}});
+    $manState = $res->[2][1]{newState};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/get', {
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            sinceState => $cassState,
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{destroyed}});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+        }, 'R2'],
+        ['CalendarEventNotification/changes', {
+            accountId => 'cassandane',
+            sinceState => $manState,
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[2][1]{destroyed}});
+}

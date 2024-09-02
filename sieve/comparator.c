@@ -51,6 +51,7 @@
 #include <string.h>
 
 #include "comparator.h"
+#include "charset.h"
 #include "interp.h"
 #include "tree.h"
 #include "sieve/sieve_interface.h"
@@ -155,9 +156,8 @@ static int octet_contains_(const char *text, size_t tlen,
 {
     int N = tlen;
     int M = strlen(pat);
-    int i, j;
+    int i = 0, j = 0;
 
-    i = 0, j = 0;
     while ((j < M) && (i < N)) {
         if ((text[i] == pat[j]) ||
             (casemap && (toupper(text[i]) == toupper(pat[j])))) {
@@ -312,9 +312,9 @@ static int octet_matches_(const char *text, size_t tlen,
     /* never reaches */
 }
 
-static int octet_matches(const char *text, size_t tlen, const char *pat,
-                         strarray_t *match_vars,
-                         void *rock __attribute__((unused)))
+static int octet_matches_exec(const char *text, size_t tlen,
+                              const char *pat, int casemap,
+                              strarray_t *match_vars)
 {
     int ret;
     int needs_free = 0;
@@ -326,11 +326,18 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
         needs_free = 1;
     }
     strarray_add(match_vars, text);
-    ret = octet_matches_(text, tlen, pat, 0, match_vars);
+    ret = octet_matches_(text, tlen, pat, casemap, match_vars);
     if (!ret || needs_free) {
         strarray_fini(match_vars);
     }
     return ret;
+}
+
+static int octet_matches(const char *text, size_t tlen, const char *pat,
+                         strarray_t *match_vars,
+                         void *rock __attribute__((unused)))
+{
+    return octet_matches_exec(text, tlen, pat, 0, match_vars);
 }
 
 
@@ -401,21 +408,7 @@ static int ascii_casemap_matches(const char *text, size_t tlen,
                                  const char *pat, strarray_t *match_vars,
                                  void *rock __attribute__((unused)))
 {
-    int ret;
-    int needs_free = 0;
-    strarray_t temp = STRARRAY_INITIALIZER;
-    if (match_vars) {
-        strarray_fini(match_vars);
-    } else {
-      match_vars = &temp;
-        needs_free = 1;
-    }
-    strarray_add(match_vars, text);
-    ret = octet_matches_(text, tlen, pat, 1, match_vars);
-    if (!ret || needs_free) {
-        strarray_fini(match_vars);
-    }
-    return ret;
+    return octet_matches_exec(text, tlen, pat, 1, match_vars);
 }
 
 
@@ -463,6 +456,47 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
     }
 }
 
+
+/* --- i;unicode-casemap comparators (RFC 5051, Section 2) --- */
+
+static int unicode_casemap_xxx(const char *text, size_t tlen, const char *pat,
+                               strarray_t *match_vars, void *rock)
+{
+    char *uni = unicode_casemap(text, tlen);
+    long mode = (long) rock;
+    int r;
+
+    switch (mode) {
+    case B_CONTAINS:
+        r = octet_contains_(uni, strlen(uni), pat, 0);
+        break;
+
+    case B_MATCHES:
+        r = octet_matches_exec(uni, strlen(uni), pat, 0, match_vars);
+        break;
+
+#ifdef ENABLE_REGEX
+    case B_REGEX:
+        r = octet_regex(uni, strlen(uni), pat, match_vars, NULL);
+        break;
+#endif
+
+    default:
+        r = octet_cmp_(uni, strlen(uni), pat, 0);
+        break;
+    }
+
+    free(uni);
+
+    return r;
+}
+
+static int unicode_casemap_cmp(const char *text, size_t tlen, const char *pat)
+{
+    return unicode_casemap_xxx(text, tlen, pat, NULL, 0);
+}
+
+
 static comparator_t *lookup_rel(int relation)
 {
     comparator_t *ret;
@@ -506,44 +540,51 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
         *comprock = (void **) i->interp_context;
         return (comparator_t *) i->listcompare;
     }
+    else if (mode == B_IS) {
+        relation = B_EQ;
+    }
 
-    switch (comp)
-      {
-      case B_OCTET:
+    switch (comp) {
+    case B_OCTET:
         switch (mode) {
-          case B_IS:
-            ret = &rel_eq;
-            *comprock = (void **) &octet_cmp;
-            break;
-          case B_CONTAINS:
-            ret = &octet_contains;
-            break;
-          case B_MATCHES:
-            ret = &octet_matches;
-            break;
-#ifdef ENABLE_REGEX
-          case B_REGEX:
-            ret = &octet_regex;
-            break;
-#endif
-          case B_VALUE:
+        case B_IS:
+        case B_VALUE:
             ret = lookup_rel(relation);
             *comprock = (void **) &octet_cmp;
             break;
+
+        case B_CONTAINS:
+            ret = &octet_contains;
+            break;
+
+        case B_MATCHES:
+            ret = &octet_matches;
+            break;
+
+#ifdef ENABLE_REGEX
+        case B_REGEX:
+            ret = &octet_regex;
+            break;
+#endif
         }
-        break; /*end of octet */
-      case B_ASCIICASEMAP:
+        break;
+
+    case B_ASCIICASEMAP:
         switch (mode) {
         case B_IS:
-            ret = &rel_eq;
+        case B_VALUE:
+            ret = lookup_rel(relation);
             *comprock = (void **) &ascii_casemap_cmp;
             break;
+
         case B_CONTAINS:
             ret = &ascii_casemap_contains;
             break;
+
         case B_MATCHES:
             ret = &ascii_casemap_matches;
             break;
+
 #ifdef ENABLE_REGEX
         case B_REGEX:
             /* the ascii-casemap distinction is made during
@@ -551,25 +592,29 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
             ret = &octet_regex;
             break;
 #endif
-        case B_VALUE:
-            ret = lookup_rel(relation);
-            *comprock = (void **) &ascii_casemap_cmp;
-            break;
         }
-        break;/*end of ascii casemap */
-      case B_ASCIINUMERIC:
+        break;
+
+    case B_ASCIINUMERIC:
+        ret = lookup_rel(relation);
+        *comprock = (void **) &ascii_numeric_cmp;
+        break;
+
+    case B_UNICODECASEMAP:
         switch (mode) {
         case B_IS:
-            ret = &rel_eq;
-            *comprock = (void **) &ascii_numeric_cmp;
-            break;
-        case B_COUNT:
         case B_VALUE:
             ret = lookup_rel(relation);
-            *comprock = (void **) &ascii_numeric_cmp;
+            *comprock = (void **) &unicode_casemap_cmp;
+            break;
+
+        default:
+            ret = &unicode_casemap_xxx;
+            *comprock = (void *) ((long) mode);
             break;
         }
         break;
-      }
+    }
+
     return ret;
 }

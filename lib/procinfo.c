@@ -88,6 +88,17 @@ EXPORTED int sort_procinfo QSORT_R_COMPAR_ARGS(
 
 EXPORTED void deinit_piarray(piarray_t *piarray)
 {
+    unsigned i;
+
+    for (i = 0; i < piarray->count; i++) {
+        struct proc_info *p = piarray->data[i];
+        free(p->servicename);
+        free(p->host);
+        free(p->user);
+        free(p->mailbox);
+        free(p->cmdname);
+        free(p);
+    }
     free(piarray->data);
 }
 

@@ -42,6 +42,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,7 +75,17 @@ int main(int argc, char *argv[])
     int opt;
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -104,7 +115,7 @@ int main(int argc, char *argv[])
 
     if (old_db[0] != '/' || new_db[0] != '/') {
         printf("\nSorry, you cannot use this tool with relative path names.\n"
-               "This is because some database backends (mainly berkeley) do not\n"
+               "This is because some database backends do not\n"
                "always do what you would expect with them.\n"
                "\nPlease use absolute pathnames instead.\n\n");
         exit(EX_OSERR);

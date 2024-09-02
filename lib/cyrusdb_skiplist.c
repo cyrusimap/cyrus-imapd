@@ -68,6 +68,7 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define PROB (0.5)
 
@@ -229,14 +230,21 @@ static int myinit(const char *dbdir, int myflags)
         struct stat sbuf;
         char cleanfile[1024];
 
+        /* n.b. nothing in cyrus creates this file, but presumably some
+         * init.d or systemd script does
+         */
         snprintf(cleanfile, sizeof(cleanfile), "%s/skipcleanshutdown", dbdir);
 
         /* if we had a clean shutdown, we don't need to run recovery on
-         * everything */
+         * everything, unless we've never previously run it */
         if (stat(cleanfile, &sbuf) == 0) {
-            syslog(LOG_NOTICE, "skiplist: clean shutdown detected, starting normally");
-            unlink(cleanfile);
-            goto normal;
+            xunlink(cleanfile);
+
+            if (stat(sfile, &sbuf) == 0) {
+                syslog(LOG_NOTICE, "skiplist: clean shutdown detected,"
+                                   " starting normally");
+                goto normal;
+            }
         }
 
         syslog(LOG_NOTICE, "skiplist: clean shutdown file missing, updating recovery stamp");
@@ -249,7 +257,7 @@ static int myinit(const char *dbdir, int myflags)
 
         if (r != -1) r = ftruncate(fd, 0);
         net32_time = htonl(global_recovery);
-        if (r != -1) r = write(fd, &net32_time, 4);
+        if (r != -1) r = retry_write(fd, &net32_time, 4);
         xclose(fd);
 
         if (r == -1) {
@@ -261,19 +269,31 @@ static int myinit(const char *dbdir, int myflags)
     } else {
 normal:
         /* read the global recovery timestamp */
+        errno = 0;
 
-        fd = open(sfile, O_RDONLY, 0644);
-        if (fd == -1) r = -1;
-        if (r != -1) r = read(fd, &net32_time, 4);
-        xclose(fd);
+        r = fd = open(sfile, O_RDONLY, 0644);
+        if (r == -1 && errno == ENOENT) {
+            /* tell the admin what they need to do! */
+            xsyslog(LOG_INFO, "skipstamp is missing, have you run `ctl_cyrusdb -r`?",
+                              "filename=<%s>", sfile);
+        }
+
+        if (r != -1) r = retry_read(fd, &net32_time, 4);
 
         if (r == -1) {
-            xsyslog(LOG_ERR, "DBERROR: read failed, assuming the worst",
+            xsyslog(LOG_ERR, "DBERROR: skipstamp unreadable, assuming the worst",
                              "filename=<%s>", sfile);
+            /* "assuming the worst" means recovery will run for every skiplist
+             * database every time it's opened, because we can't determine that
+             * it doesn't need it.
+             */
             global_recovery = 0;
         } else {
             global_recovery = ntohl(net32_time);
         }
+
+        xclose(fd);
+        errno = 0;
     }
 
     srand(time(NULL) * getpid());
@@ -536,7 +556,7 @@ static int read_header(struct dbengine *db)
 
     if (db->maxlevel > SKIPLIST_MAXLEVEL) {
         syslog(LOG_ERR,
-               "skiplist %s: MAXLEVEL %d in database beyond maximum %d\n",
+               "skiplist %s: MAXLEVEL %d in database beyond maximum %d",
                db->fname, db->maxlevel, SKIPLIST_MAXLEVEL);
         return CYRUSDB_IOERROR;
     }
@@ -545,7 +565,7 @@ static int read_header(struct dbengine *db)
 
     if (db->curlevel > db->maxlevel) {
         syslog(LOG_ERR,
-               "skiplist %s: CURLEVEL %d in database beyond maximum %d\n",
+               "skiplist %s: CURLEVEL %d in database beyond maximum %d",
                db->fname, db->curlevel, db->maxlevel);
         return CYRUSDB_IOERROR;
     }
@@ -1853,7 +1873,7 @@ static int mycheckpoint(struct dbengine *db)
         /* clean up */
         close(db->fd);
         db->fd = oldfd;
-        unlink(fname);
+        xunlink(fname);
     }
     else {
         struct stat sbuf;
@@ -1982,7 +2002,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
             if (offset > db->map_size) {
                 syslog(LOG_ERR,
                         "skiplist inconsistent: %04X: ptr %d is %04X; "
-                        "eof is %04X\n",
+                        "eof is %04X",
                         (unsigned int) (ptr - db->map_base),
                         i, offset, (unsigned int) db->map_size);
                 if (!locked) unlock(db);
@@ -1998,7 +2018,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
                 if (cmp >= 0) {
                     syslog(LOG_ERR,
                             "skiplist inconsistent: %04X: ptr %d is %04X; "
-                            "db->compar() = %d\n",
+                            "db->compar() = %d",
                             (unsigned int) (ptr - db->map_base),
                             i,
                             offset, cmp);

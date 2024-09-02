@@ -47,6 +47,7 @@
 #include <config.h>
 #endif
 
+#include <strings.h>
 #include "util.h"
 
 #include "sieve/tree.h"
@@ -186,6 +187,11 @@ ws              [ \t]+
                                   BEGIN INITIAL;
                                   return yylval->nval = ASCIINUMERIC;
                               }
+    /* RFC 5051 */
+<QCOLLATION>\"i;unicode-casemap\" {
+                                  BEGIN INITIAL;
+                                  return yylval->nval = UNICODECASEMAP;
+                              }
 <QCOLLATION>\"[^\"]*\"        {
                                   BEGIN INITIAL;
                                   sieveerror_f(sscript,
@@ -271,10 +277,6 @@ ws              [ \t]+
 <INITIAL>hasflag              return yylval->nval = HASFLAG;
 <INITIAL>:flags               return FLAGS;
 
-    /* imapflags - draft-melnikov-sieve-imapflags-04 */
-<INITIAL>mark                 return yylval->nval = MARK;
-<INITIAL>unmark               return yylval->nval = UNMARK;
-
     /* date - RFC 5260 */
 <INITIAL>date                 return DATE;
 <INITIAL>:originalzone        return ORIGINALZONE;
@@ -313,14 +315,6 @@ ws              [ \t]+
                                   sieveerror_f(sscript,
                                                "invalid importance %s", yytext);
                               }
-
-    /* notify - draft-martin-sieve-notify-01 */
-<INITIAL>denotify             return DENOTIFY;
-<INITIAL>:method              return METHOD;
-<INITIAL>:id                  return ID;
-<INITIAL>:low                 return yylval->nval = LOW;
-<INITIAL>:normal              return yylval->nval = NORMAL;
-<INITIAL>:high                return yylval->nval = HIGH;
 
     /* ihave - RFC 5463 */
 <INITIAL>ihave                return IHAVE;
@@ -392,10 +386,40 @@ ws              [ \t]+
     /* vnd.cyrus.jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
 
+    /* processcalendar - draft-ietf-extra-processimip   */
+<INITIAL>processcalendar       return PROCESSCAL;
+<INITIAL>:allowpublic          return ALLOWPUBLIC;
+<INITIAL>:invitesonly          return INVITESONLY;  /* Fastmail-specific */
+<INITIAL>:updatesonly          return UPDATESONLY;
+<INITIAL>:deletecancelled      return DELETECANCELLED;
+    /*   :addresses            defined in 'vacation'    */
+<INITIAL>:organizers           return ORGANIZERS;
+<INITIAL>:calendarid           return CALENDARID;
+<INITIAL>:outcome              return OUTCOME;
+<INITIAL>:reason               return REASON;
+
+    /* vnd.cyrus.imip (processcalendar precursor) */
+<INITIAL>processimip           return PROCESSIMIP;
+<INITIAL>:deletecanceled       return DELETECANCELLED;
+<INITIAL>:errstr               return REASON;
+
+    /* vnd.cyrus.implicit_keep_target */
+<INITIAL>implicit_keep_target  return IKEEP_TARGET;
+    /*   :mailboxid            defined in 'mailboxid'   */
+    /*   :specialuse           defined in 'special-use' */
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */
-.                             return yytext[0];
+.                             {
+                                  /* RFC 5228: With the exceptions of strings
+                                     and comments, the language is limited to
+                                     US-ASCII characters. */
+                                  if (yytext[0] & ~0x7f) {
+                                      sieveerror(sscript, "non-ASCII character");
+                                  }
+                                  return yytext[0];
+                              }
 
 %%
 

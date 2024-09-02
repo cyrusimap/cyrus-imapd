@@ -60,6 +60,7 @@
 #include "lib/xsha1.h"
 #include "lib/xstrlcat.h"
 #include "lib/xstrlcpy.h"
+#include "lib/xunlink.h"
 
 #include "imap/dlist.h"
 #include "imap/global.h"
@@ -101,7 +102,7 @@ EXPORTED void backup_cleanup_staging_path(void)
 
             char *tmp = strconcat(name, "/", d->d_name, NULL);
             syslog(LOG_INFO, "%s: unlinking leftover stage file: %s", __func__, tmp);
-            unlink(tmp);
+            xunlink(tmp);
             free(tmp);
         }
         closedir(dirp);
@@ -159,7 +160,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
                 r = IMAP_MAILBOX_NONEXISTENT;
                 break;
             default:
-                syslog(LOG_ERR, "IOERROR: open %s: %m", backup->data_fname);
+                xsyslog(LOG_ERR, "IOERROR: open failed",
+                                 "filename=<%s>", backup->data_fname);
                 r = IMAP_IOERROR;
                 break;
             }
@@ -173,7 +175,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
                 r = IMAP_MAILBOX_LOCKED;
             }
             else {
-                syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", backup->data_fname);
+                xsyslog(LOG_ERR, "IOERROR: lock_setlock failed",
+                                 "filename=<%s>", backup->data_fname);
                 r = IMAP_IOERROR;
             }
             goto error;
@@ -182,7 +185,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
         r = fstat(fd, &sbuf1);
         if (!r) r = stat(backup->data_fname, &sbuf2);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: (f)stat %s: %m", backup->data_fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed",
+                             "filename=<%s>", backup->data_fname);
             r = IMAP_IOERROR;
             close(fd);
             goto error;
@@ -200,12 +204,14 @@ HIDDEN int backup_real_open(struct backup **backupp,
         // when reindexing, we want to move the old index out of the way
         // and create a new, empty one -- while holding the lock
         char oldindex_fname[PATH_MAX];
-        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s." INT64_FMT,
+        snprintf(oldindex_fname, sizeof(oldindex_fname), "%s.%" PRId64,
                  backup->index_fname, (int64_t) time(NULL));
 
         r = rename(backup->index_fname, oldindex_fname);
         if (r && errno != ENOENT) {
-            syslog(LOG_ERR, "IOERROR: rename %s %s: %m", backup->index_fname, oldindex_fname);
+            xsyslog(LOG_ERR, "IOERROR: rename failed",
+                             "source=<%s> dest=<%s>",
+                             backup->index_fname, oldindex_fname);
             r = IMAP_IOERROR;
             goto error;
         }
@@ -218,7 +224,8 @@ HIDDEN int backup_real_open(struct backup **backupp,
         struct stat data_statbuf;
         r = fstat(backup->fd, &data_statbuf);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                             "filename=<%s>", backup->data_fname);
             r = IMAP_IOERROR;
             goto error;
         }
@@ -226,13 +233,15 @@ HIDDEN int backup_real_open(struct backup **backupp,
             struct stat index_statbuf;
             r = stat(backup->index_fname, &index_statbuf);
             if (r && errno != ENOENT) {
-                syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+                xsyslog(LOG_ERR, "IOERROR: stat failed",
+                                 "filename=<%s>", backup->index_fname);
                 r = IMAP_IOERROR;
                 goto error;
             }
 
             if ((r && errno == ENOENT) || index_statbuf.st_size == 0) {
-                syslog(LOG_ERR, "reindex needed: %s", backup->index_fname);
+                xsyslog(LOG_ERR, "IOERROR: reindex needed",
+                                 "filename=<%s>", backup->index_fname);
                 r = IMAP_MAILBOX_BADFORMAT;
                 goto error;
             }
@@ -341,7 +350,7 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
         syslog(LOG_ERR,
                "unable to make backup path for %s: path too long",
                userid);
-        unlink(template);
+        xunlink(template);
         goto error;
     }
     ret = pathresult;
@@ -402,7 +411,7 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
 
         /* if we didn't store it in the database successfully, trash the file,
          * it won't be used */
-        if (r) unlink(backup_path);
+        if (r) xunlink(backup_path);
     }
 
     if (r) goto done;
@@ -481,7 +490,7 @@ EXPORTED int backup_close(struct backup **backupp)
         }
         else {
             if (!config_getswitch(IMAPOPT_BACKUP_KEEP_PREVIOUS)) {
-                unlink(backup->oldindex_fname);
+                xunlink(backup->oldindex_fname);
             }
         }
     }
@@ -506,8 +515,8 @@ EXPORTED int backup_unlink(struct backup **backupp)
 {
     struct backup *backup = *backupp;
 
-    unlink(backup->index_fname);
-    unlink(backup->data_fname);
+    xunlink(backup->index_fname);
+    xunlink(backup->data_fname);
 
     return backup_close(backupp);
 }
@@ -531,13 +540,15 @@ EXPORTED int backup_stat(const struct backup *backup,
 
     r = fstat(backup->fd, &data_statbuf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: fstat %s: %m", backup->data_fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed",
+                         "filename=<%s>", backup->data_fname);
         return IMAP_IOERROR;
     }
 
     r = stat(backup->index_fname, &index_statbuf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: stat %s: %m", backup->index_fname);
+        xsyslog(LOG_ERR, "IOERROR: stat failed",
+                         "filename=<%s>", backup->index_fname);
         return IMAP_IOERROR;
     }
 
@@ -555,7 +566,8 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     int r = gzuc_read(gzuc, buf, len);
 
     if (r < 0)
-        syslog(LOG_ERR, "IOERROR: gzuc_read returned %i", r);
+        xsyslog(LOG_ERR, "IOERROR: gzuc_read failed",
+                         "return=<%d>", r);
     if (r < -1)
         errno = EIO;
 
@@ -595,7 +607,6 @@ EXPORTED int backup_reindex(const char *name,
             fprintf(out, "\nfound chunk at offset " OFF_T_FMT "\n\n", member_offset);
 
         struct protstream *member = prot_readcb(_prot_fill_cb, gzuc);
-        prot_setisclient(member, 1); /* don't sync literals */
 
         // FIXME stricter timestamp sequence checks
         time_t member_start_ts = -1;
@@ -610,11 +621,11 @@ EXPORTED int backup_reindex(const char *name,
                 const char *error = prot_error(member);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %" PRIu64 ": %s",
                            name, member_offset, prot_bytes_in(member), error);
 
                     if (out)
-                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %" PRIu64 ": %s\n",
                                 member_offset, prot_bytes_in(member), error);
 
                     r = IMAP_IOERROR;
@@ -647,7 +658,7 @@ EXPORTED int backup_reindex(const char *name,
             r = backup_append(backup, dl, &ts, BACKUP_APPEND_NOFLUSH);
             if (r) {
                 // FIXME do something
-                syslog(LOG_ERR, "backup_append returned %d\n", r);
+                syslog(LOG_ERR, "backup_append returned %d", r);
                 fprintf(out, "backup_append returned %d\n", r);
             }
 
@@ -741,7 +752,8 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
                   O_RDWR | O_APPEND, /* no O_CREAT */
                   S_IRUSR | S_IWUSR);
     if (old.fd < 0) {
-        syslog(LOG_ERR, "IOERROR: open %s: %m", old.fname);
+        xsyslog(LOG_ERR, "IOERROR: open failed",
+                         "filename=<%s>", old.fname);
         r = -1;
         goto error;
     }
@@ -749,7 +761,8 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     /* non-blocking, to avoid deadlock */
     r = lock_setlock(old.fd, /*excl*/ 1, /*nb*/ 1, old.fname);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: lock_setlock: %s: %m", old.fname);
+        xsyslog(LOG_ERR, "IOERROR: lock_setlock failed",
+                         "filename=<%s>", old.fname);
         goto error;
     }
 
@@ -783,9 +796,9 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     if (r) goto error; // FIXME log
 
     /* database update succeeded. unlink old names */
-    unlink(old.fname);
+    xunlink(old.fname);
     *old.ext_ptr = '.';
-    unlink(old.fname);
+    xunlink(old.fname);
     *old.ext_ptr = '\0';
 
     /* unlock and close backup files */
@@ -805,9 +818,9 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
 error:
     /* we didn't finish, so unlink the new filenames if we got that far */
     if (new.fname) {
-        unlink(new.fname);
+        xunlink(new.fname);
         *new.ext_ptr = '.';
-        unlink(new.fname);
+        xunlink(new.fname);
         *new.ext_ptr = '\0';
     }
 

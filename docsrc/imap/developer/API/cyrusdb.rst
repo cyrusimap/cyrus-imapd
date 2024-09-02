@@ -136,7 +136,7 @@ imap/ctl_cyrusdb
         startup on every cyrus installation, so you'll find quite a lot
         of detritus has built up in this codepath over the years.
     *   EVENTS: "ctl_cyrusdb -c" (checkpoint).
-        This is run regularly (period=180 at FastMail, examples in the
+        This is run regularly (period=180 at Fastmail, examples in the
         codebase have period=5 or period=30). Both this codepath and
         cyr_expire tend to run periodically on cyrus systems, and
         cleanup code is spread between those two locations.

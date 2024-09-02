@@ -13,6 +13,14 @@ have a preferred distro, maybe consider using Debian.
 First make sure you have a :ref:`copy of the source <getcyrus>`. You can either
 fetch the latest source from git, or download one of our release tarballs.
 
+.. Note::
+
+    Cyrus does not support compiling with `Link Time Optimization
+    <https://gcc.gnu.org/onlinedocs/gccint/LTO-Overview.html>`_,
+    but some platforms now enable Link Time Optimization by default.
+    If your platform does so, you will need to override it, perhaps
+    by adding ``-fno-lto`` to ``CFLAGS`` and ``LDFLAGS``.
+
 Setting up dependencies
 =======================
 
@@ -97,8 +105,6 @@ and included in the release, and do not normally need to be re-built.
     doc/legacy/netnews.png). One day it should be merged into the current
     documentation, cause then we can get rid of it: `issues/1769`_."
     `valgrind`_, valgrind, valgrind, "no", "Performance and memory testing."
-    `xxd`_,vim-common,vim-common, "no", "Needed for the _js.h files, for CalDAV
-    and CardDAV support."
 
 SASL Authentication
 ###################
@@ -109,8 +115,6 @@ SASL Authentication
 
     `Cyrus SASL Plain`_, libsasl2-modules, cyrus-sasl-plain, "yes/no", "Required
     to pass Cyrus IMAP's PLAIN authentication unit tests."
-    `Cyrus SASL MD5`_, libsasl2-modules, cyrus-sasl-md5, "yes/no", "Required to
-    pass Cyrus IMAP's DIGEST-MD5 authentication unit tests."
     `sasl binaries`_, sasl2-bin, sasl2-bin, "no", "Administration tools for
     managing SASL."
     `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "yes/no", "Development
@@ -162,6 +166,8 @@ CalDAV, CardDAV, or JMAP (httpd subsystem)
     `wslay`_, libwslay-dev, wslay-devel, "no", "It provides WebSockets support
     in httpd. Only used with **JMAP**, otherwise not needed. Version 1.1.1 or
     higher is required when using it."
+    `xxd`_, xxd, vim-common, "yes", "Needed for the _js.h files, for CalDAV
+    and CardDAV support."
     `zlib`_, zlib1g-dev, zlib-devel, "no", "It provides gzip compression
     support for http communications."
 
@@ -186,7 +192,7 @@ Other
     to enable **ptloader** to interface with LDAP directly, for canonification
     of login usernames to mailbox names, and verification of login usernames,
     ACL subjects and group membership. Configure option: ``--with-ldap``."
-    `pcre`_, libpcre3-dev, pcre-devel, "yes", "PCRE 1 (8.x) - for utf-8/unicode
+    `pcre2`_, libpcre2-dev, pcre2-devel, "yes", "PCRE 2 (10.x) - for utf-8/unicode
     regular expression matching. Could be replaced by something else in the
     future. See `issues/1731`_ for more information."
     `perl(Term::ReadLine)`_,,, "no", "Perl library needed by **cyradm**."
@@ -211,6 +217,7 @@ Other
 .. _nghttp2: https://nghttp2.org/
 .. _openldap: http://www.openldap.org/
 .. _pcre: http://www.pcre.org/
+.. _pcre2: http://www.pcre.org/
 .. _perl(Term::ReadLine): https://metacpan.org/pod/Term::ReadLine
 .. _perl(ExtUtils::MakeMaker): http://search.cpan.org/dist/ExtUtils-MakeMaker/
 .. _perl(Pod::POM::View::Restructured): https://metacpan.org/pod/Pod::POM::View::Restructured
@@ -344,4 +351,4 @@ version, operating system and affected libraries.
 
 Next: :ref:`installing Cyrus <installing>`.
 
-.. _FastMail : https://www.fastmail.com
+.. _Fastmail : https://www.fastmail.com

@@ -651,6 +651,7 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
         return SASL_FAIL;
 
+    s->sasl_cb = NULL;
     if (!cb) {
         strlcpy(optstr, s->hostname, sizeof(optstr));
         p = strchr(optstr, '.');
@@ -670,10 +671,18 @@ static int backend_authenticate(struct backend *s, const char *userid,
                         (userid  && *userid ? SASL_NEED_PROXY : 0) |
                         (prot->u.std.sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
                         &s->saslconn);
-    if (r != SASL_OK) return r;
+    if (r != SASL_OK) {
+        free_callbacks(s->sasl_cb);
+        s->sasl_cb = NULL;
+        return r;
+    }
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
-    if (r != SASL_OK) return r;
+    if (r != SASL_OK) {
+        free_callbacks(s->sasl_cb);
+        s->sasl_cb = NULL;
+        return r;
+    }
 
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
@@ -822,7 +831,7 @@ static int backend_login(struct backend *ret, const char *userid,
                      * automatically send capabilities, so we treat it
                      * as optional.
                      */
-                    char ch;
+                    int ch;
 
                     /* wait and probe for possible auto-capability response */
                     usleep(250000);
@@ -946,7 +955,6 @@ EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
     ret->prot = prot;
 
     /* use literal+ to send literals */
-    prot_setisclient(ret->in, 1);
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */
@@ -1144,7 +1152,6 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     ret->prot = prot;
 
     /* use literal+ to send literals */
-    prot_setisclient(ret->in, 1);
     prot_setisclient(ret->out, 1);
 
     /* Start TLS if required */
@@ -1246,10 +1253,14 @@ EXPORTED void backend_disconnect(struct backend *s)
     }
 
 #ifdef HAVE_SSL
-    /* Free tlsconn */
+    /* Free tlsconn and tlssess */
     if (s->tlsconn) {
         tls_reset_servertls(&s->tlsconn);
         s->tlsconn = NULL;
+    }
+    if (s->tlssess) {
+        SSL_SESSION_free(s->tlssess);
+        s->tlssess = NULL;
     }
 #endif /* HAVE_SSL */
 
@@ -1283,7 +1294,8 @@ EXPORTED void backend_disconnect(struct backend *s)
 
 EXPORTED int backend_version(struct backend *be)
 {
-    const char *minor;
+    const char *banner_version, *two_three_minor;
+    int major, minor;
 
     /* IMPORTANT:
      *
@@ -1297,42 +1309,46 @@ EXPORTED int backend_version(struct backend *be)
      * In 3.2 and earlier, this function lives in imapd.c
      */
 
-    /* It's like looking in the mirror and not suffering from schizophrenia */
+    /* identical banner? identical version! */
     if (strstr(be->banner, CYRUS_VERSION)) {
         return MAILBOX_MINOR_VERSION;
     }
 
-    /* unstable 3.5 series ranges from 17..?? */
-    if (strstr(be->banner, "Cyrus IMAP 3.5")) {
-        /* all versions of 3.5 support at least this version */
-        return 17;
-    }
-
-    /* version 3.4 is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.4")) {
-        return 17;
-    }
-
-    /* unstable 3.3 series is 17 */
-    if (strstr(be->banner, "Cyrus IMAP 3.3")) {
-        /* all versions of 3.3 support at least this version */
-        return 17;
-    }
-
-    /* version 3.2 is 16 */
-    if (strstr(be->banner, "Cyrus IMAP 3.2")) {
-        return 16;
-    }
-
-    /* unstable 3.1 series ranges from 13..16 */
-    if (strstr(be->banner, "Cyrus IMAP 3.1")) {
-        /* all versions of 3.1 support at least this version */
-        return 13;
-    }
-
-    /* version 3.0 is 13 */
-    if (strstr(be->banner, "Cyrus IMAP 3.0")) {
-        return 13;
+    /* contemporary numbering */
+    banner_version = strstr(be->banner, "Cyrus IMAP ");
+    if (banner_version != NULL
+        && (2 == sscanf(banner_version,
+                        "Cyrus IMAP %d.%d.%*d server ready",
+                        &major, &minor)
+            || 2 == sscanf(banner_version,
+                           "Cyrus IMAP %d.%d.%*d-%*s server ready",
+                           &major, &minor)
+       ))
+    {
+        if (major > 3) {
+            /* unrecognised future version surely supports at least whatever
+             * this version supports, which is a much better assumption than 6
+             */
+            syslog(LOG_INFO, "%s: did not recognise remote Cyrus version from "
+                             "banner \"%s\". Assuming index version %d!",
+                             __func__, be->banner, MAILBOX_MINOR_VERSION);
+            return MAILBOX_MINOR_VERSION;
+        }
+        else if (major == 3) {
+            if (minor >= 3) {
+                /* all versions since 3.3 have been 17 so far */
+                return 17;
+            }
+            else if (minor == 2) {
+                /* version 3.2 is 16 */
+                return 16;
+            }
+            else {
+                /* version 3.0 and 3.1 are 13 */
+                return 13;
+            }
+        }
+        /* didn't recognise it? fall through to specific checks */
     }
 
     /* version 2.5 is 13 */
@@ -1347,16 +1363,16 @@ EXPORTED int backend_version(struct backend *be)
         return 12;
     }
 
-    minor = strstr(be->banner, "v2.3.");
-    if (!minor) goto unrecognised;
-    minor += strlen("v2.3.");
+    two_three_minor = strstr(be->banner, "v2.3.");
+    if (!two_three_minor) goto unrecognised;
+    two_three_minor += strlen("v2.3.");
 
     /* at least version 2.3.10 */
-    if (minor[1] != ' ') {
+    if (two_three_minor[1] != ' ') {
         return 10;
     }
     /* single digit version, figure out which */
-    switch (minor[0]) {
+    switch (two_three_minor[0]) {
     case '0':
     case '1':
     case '2':

@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_attach_base64_email
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    open(my $F, 'data/mime/base64-body.eml') || die $!;
+    $imap->append('INBOX', $F) || die $@;
+    close($F);
+
+    my $res = $jmap->CallMethods([
+                ['Email/query', { }, "R1"],
+                ['Email/get', {
+                        '#ids' => {
+                            resultOf => 'R1',
+                            name => 'Email/query',
+                            path => '/ids'
+                        },
+                }, "R2"],
+                ['Mailbox/get', {}, 'R3'],
+    ]);
+
+    my $blobId = $res->[1][1]{list}[0]{blobId};
+    my $size = $res->[1][1]{list}[0]{size};
+    my $name = $res->[1][1]{list}[0]{subject} . ".eml";
+
+    my $mailboxId = $res->[2][1]{list}[0]{id};
+
+    xlog $self, "Now we create an email which includes this";
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { 1 => {
+            bcc => undef,
+            bodyStructure => {
+                subParts => [{
+                    partId => "text",
+                    type => "text/plain"
+                },{
+                    blobId => $blobId,
+                    cid => undef,
+                    disposition => "attachment",
+                    name => $name,
+                    size => $size,
+                    type => "message/rfc822"
+                }],
+                type => "multipart/mixed",
+            },
+            bodyValues => {
+                text => {
+                    isTruncated => $JSON::false,
+                    value => "Hello World",
+                },
+            },
+            cc => undef,
+            from => [{
+                email => "foo\@example.com",
+                name => "Captain Foo",
+            }],
+            keywords => {
+                '$draft' => $JSON::true,
+                '$seen' => $JSON::true,
+            },
+            mailboxIds => {
+                $mailboxId => $JSON::true,
+            },
+            messageId => ["9048d4db-bd84-4ea4-9be3-ae4a136c532d\@example.com"],
+            receivedAt => "2019-05-09T12:48:08Z",
+            references => undef,
+            replyTo => undef,
+            sentAt => "2019-05-09T14:48:08+02:00",
+            subject => "Hello again",
+            to => [{
+                email => "bar\@example.com",
+                name => "Private Bar",
+            }],
+        }}}, "S1"],
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name => 'Email/query',
+                    path => '/ids'
+                },
+        }, "R2"],
+    ]);
+
+    $imap->select("INBOX");
+    my $ires = $imap->fetch('1:*', '(BODYSTRUCTURE)');
+
+    $self->assert_str_equals('RE: Hello.eml', $ires->{2}{bodystructure}{'MIME-Subparts'}[1]{'Content-Disposition'}{filename});
+    $self->assert_str_not_equals('BINARY', $ires->{2}{bodystructure}{'MIME-Subparts'}[1]{'Content-Transfer-Encoding'});
+
+    my ($replyEmail) = grep { $_->{subject} eq 'Hello again' } @{$res->[2][1]{list}};
+    $self->assert_str_equals($blobId, $replyEmail->{attachments}[0]{blobId});
+}

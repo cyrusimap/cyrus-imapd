@@ -44,6 +44,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,6 +68,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -197,7 +201,36 @@ int main(int argc, char **argv)
     struct dlist *upload = NULL;
     int opt, r = 0;
 
-    while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = ":A:C:DF:LM:P:UXaf:m:nru:vw:xz";
+
+    static const struct option long_options[] = {
+        { "override-acl", optional_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "keep-deletedprefix", no_argument, NULL, 'D' },
+        { "input-file", required_argument, NULL, 'F' },
+        { "local-only", no_argument, NULL, 'L' },
+        { "dest-mailbox", required_argument, NULL, 'M' },
+        { "dest-partition", required_argument, NULL, 'P' },
+        { "keep-uidvalidity", no_argument, NULL, 'U' },
+        { "skip-expunged", no_argument, NULL, 'X' },
+        { "all-mailboxes", no_argument, NULL, 'a' },
+        { "file", required_argument, NULL, 'f' },
+        { "mailbox", required_argument, NULL, 'm' },
+        { "dry-run", no_argument, NULL, 'n' },
+        { "recursive", no_argument, NULL, 'r' },
+        { "userid", required_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "delayed-startup", required_argument, NULL, 'w' },
+        { "only-expunged", no_argument, NULL, 'x' },
+        { "require-compression", no_argument, NULL, 'z' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();
@@ -302,7 +335,7 @@ int main(int argc, char **argv)
     /* okay, arguments seem sane, we are go */
     cyrus_init(alt_config, "restore", 0, 0);
 
-    if ((r = mboxname_init_namespace(&restore_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&restore_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&restore_namespace);
@@ -572,7 +605,7 @@ static struct sync_folder_list *restore_make_reserve_folder_list(
             /* we only care about mboxname here */
             sync_folder_list_add(folder_list, NULL, iter->mboxname,
                                 0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                                0, 0, 0, 0, NULL, 0, 0, 0, 0);
+                                0, 0, 0, 0, NULL, 0, 0, 0, NULL, 0);
         }
 
         backup_mailbox_list_empty(mailboxes);
@@ -721,7 +754,7 @@ static int restore_add_mailbox(const struct backup_mailbox *mailbox,
         const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, clone->mboxname,
                              0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                             0, 0, 0, 0, NULL, 0, 0, 0, 0);
+                             0, 0, 0, 0, NULL, 0, 0, 0, NULL, 0);
     }
 
     /* populate mailbox list */
@@ -765,7 +798,7 @@ static int restore_add_message(const struct backup_message *message,
         const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, mailbox->mboxname,
                              0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                             0, 0, 0, 0, NULL, 0, 0, 0, 0);
+                             0, 0, 0, 0, NULL, 0, 0, 0, NULL, 0);
 
         /* add to mailbox list */
         my_mailbox_list_add(mailbox_list, mailbox);

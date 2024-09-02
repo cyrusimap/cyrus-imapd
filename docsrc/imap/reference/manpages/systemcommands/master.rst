@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **master** [ **-C** *config-file* ] [ **-M** *alternate cyrus.conf* ]
-        [ **-l** *listen queue* ] [ **-p** *pidfile* ]
+        [ **-l** *listen queue* ] [ **-p** *pidfile* ] [ **-r** *ready_file* ]
         [ **-j** *janitor period* ] [ **-d** | **-D** ] [ **-L** *logfile* ]
 
 Description
@@ -64,7 +64,14 @@ Options
 .. option:: -p  pidfile
 
     Use *pidfile* as the pidfile.  If not specified, defaults to
-    ``/var/run/master.pid``
+    ``master_pid_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.pid``
+
+.. option:: -r  ready_file
+
+    Use *ready_file* as the ready file.  If not specified, uses
+    ``master_ready_file`` from :cyrusman:`imapd.conf(5)`, which
+    defaults to ``{configdirectory}/master.ready``
 
 .. option:: -d
 
@@ -113,6 +120,9 @@ The environment variable **CYRUS_VERBOSE** can be set to log additional
 debugging information. Setting the value to 1 results in base level logging.
 Setting it higher results in more log messages being generated.
 
+The :cyrusman:`cyr_info(8)` utility's ``proc`` subcommand can be used to
+list the active processes that **master** is managing.
+
 Files
 =====
 
@@ -125,4 +135,4 @@ See Also
 
 :cyrusman:`cyrus.conf(5)`, :cyrusman:`imapd.conf(5)`, :cyrusman:`imapd(8)`,
 :cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, :cyrusman:`timsieved(8)`,
-:cyrusman:`idled(8)`
+:cyrusman:`idled(8)`, :cyrusman:`cyr_info(8)`

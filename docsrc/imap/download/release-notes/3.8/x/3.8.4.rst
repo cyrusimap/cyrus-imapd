@@ -1,0 +1,31 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.8.4 Release Notes
+==============================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.4/cyrus-imapd-3.8.4.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.4/cyrus-imapd-3.8.4.tar.gz.sig
+
+.. _relnotes-3.8.4-changes:
+
+Changes since 3.8.3
+===================
+
+Build changes
+-------------
+
+Bug fixes
+---------
+
+* Fixed :issue:`4932`: LITERAL+ broken in mupdate
+* Fixed :issue:`4955`: email headers in iMIP messages were not correctly
+  encoded
+* Fixed :issue:`4947`: updating a script on a pre-sieve mailbox server
+  resulted in an empty script on a sieve-mailbox replica
+
+Other changes
+-------------
+

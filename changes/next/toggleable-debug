@@ -1,0 +1,19 @@
+Description:
+
+Running processes can now have debug logging toggled on/off by sending
+them SIGUSR1
+
+
+Config changes:
+
+debug
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+None

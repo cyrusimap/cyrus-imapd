@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_conditional_delete_collection
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $caldav = $self->{caldav};
+
+    my $calid = $caldav->NewCalendar({name => 'foo'});
+    $self->assert_not_null($calid);
+
+    my $res = $caldav->GetCalendar($calid);
+    $self->assert_not_null($res);
+    my $synctoken = $res->{syncToken};
+
+    xlog $self, "Try to delete collection with bogus state token";
+    $res = $caldav->ua->request('DELETE', $caldav->request_url($calid), {
+        headers => {
+            'Authorization' => $caldav->auth_header(),
+            'If' => '(<foobar>)'
+        }
+    });
+    $self->assert_str_equals('412', $res->{status});
+
+    xlog $self, "Delete collection with bogus sync token";
+    $res = $caldav->ua->request('DELETE', $caldav->request_url($calid), {
+        headers => {
+            'Authorization' => $caldav->auth_header(),
+            'If' => "(<$synctoken>)"
+        }
+    });
+    $self->assert_str_equals('204', $res->{status});
+}

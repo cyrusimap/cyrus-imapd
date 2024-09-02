@@ -258,7 +258,7 @@ static void print_environment(void)
     fprintf(stderr, "Cyrus DB:       %s\n", DBNAME);
 
     time_t now = time(NULL);
-    fprintf(stderr, "Date:           %s", ctime(&now));;
+    fprintf(stderr, "Date:           %s", ctime(&now));
 
     FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
     if (cpuinfo != NULL) {

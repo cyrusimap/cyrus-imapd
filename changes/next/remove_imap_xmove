@@ -1,0 +1,14 @@
+
+Description:
+
+Support for the legacy IMAP XMOVE command has been removed.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.

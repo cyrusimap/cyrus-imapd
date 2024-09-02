@@ -1,0 +1,243 @@
+#include "cunit/cyrunit.h"
+#include "xmalloc.h"
+#include "bsearch.h"
+#include "bufarray.h"
+
+/* XXX bufarray_nth does NOT follow the same semantics as the other
+ * XXX fooarray_nth's, so our tests need to be a little different too
+ */
+
+static void test_fini_null(void)
+{
+    /* _fini(NULL) is harmless */
+    bufarray_fini(NULL);
+    /* _free(NULL) is harmless */
+    bufarray_free(NULL);
+}
+
+static void test_auto(void)
+{
+    bufarray_t ba = BUFARRAY_INITIALIZER;
+    struct buf b1 = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 0);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+//    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, 0));
+//    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, -1));
+
+    buf_setcstr(&b1, "lorem ipsum");
+    bufarray_append(&ba, &b1);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 1);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &b1), 0);
+//    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, -1), &b1), 0);
+
+    buf_setcstr(&b2, "dolor sit");
+    bufarray_append(&ba, &b2);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 2);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &b1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &b2), 0);
+//    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, -1), &b2), 0);
+
+    buf_free(&b1);
+    buf_free(&b2);
+    bufarray_fini(&ba);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 0);
+    CU_ASSERT_EQUAL(ba.alloc, 0);
+    CU_ASSERT_PTR_NULL(ba.items);
+}
+
+static void test_heap(void)
+{
+    bufarray_t *ba = bufarray_new();
+    struct buf b1 = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(ba->count, 0);
+    CU_ASSERT(ba->alloc >= ba->count);
+//    CU_ASSERT_PTR_NULL(bufarray_nth(ba, 0));
+//    CU_ASSERT_PTR_NULL(bufarray_nth(ba, -1));
+
+    buf_setcstr(&b1, "lorem ipsum");
+    bufarray_append(ba, &b1);
+    CU_ASSERT_EQUAL(ba->count, 1);
+    CU_ASSERT(ba->alloc >= ba->count);
+    CU_ASSERT_PTR_NOT_NULL(ba->items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(ba, 0), &b1), 0);
+//    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, -1), &b1), 0);
+
+    buf_setcstr(&b2, "dolor sit");
+    bufarray_append(ba, &b2);
+    CU_ASSERT_EQUAL(ba->count, 2);
+    CU_ASSERT(ba->alloc >= ba->count);
+    CU_ASSERT_PTR_NOT_NULL(ba->items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(ba, 0), &b1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(ba, 1), &b2), 0);
+//    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(ba, -1), &b2), 0);
+
+    buf_free(&b1);
+    buf_free(&b2);
+    bufarray_free(&ba);
+}
+
+static void test_truncate(void)
+{
+    bufarray_t ba = BUFARRAY_INITIALIZER;
+    struct buf WORD0 = BUF_INITIALIZER;
+    struct buf WORD1 = BUF_INITIALIZER;
+    struct buf WORD2 = BUF_INITIALIZER;
+    struct buf WORD3 = BUF_INITIALIZER;
+    struct buf WORD4 = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 0);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+//    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, 0));
+//    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, -1));
+
+    buf_setcstr(&WORD0, "lorem");
+    buf_setcstr(&WORD1, "ipsum");
+    buf_setcstr(&WORD2, "dolor");
+    buf_setcstr(&WORD3, "sit");
+    buf_setcstr(&WORD4, "amet");
+
+    bufarray_append(&ba, &WORD0);
+    bufarray_append(&ba, &WORD1);
+    bufarray_append(&ba, &WORD2);
+    bufarray_append(&ba, &WORD3);
+    bufarray_append(&ba, &WORD4);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 5);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &WORD0), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &WORD1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 2), &WORD2), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 3), &WORD3), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 4), &WORD4), 0);
+
+    /* expand the array */
+    bufarray_truncate(&ba, 7);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 7);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &WORD0), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &WORD1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 2), &WORD2), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 3), &WORD3), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 4), &WORD4), 0);
+    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, 5));
+    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, 6));
+
+    /* shrink the array */
+    bufarray_truncate(&ba, 4);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 4);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &WORD0), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &WORD1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 2), &WORD2), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 3), &WORD3), 0);
+
+    /* shrink the array harder */
+    bufarray_truncate(&ba, 3);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 3);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &WORD0), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &WORD1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 2), &WORD2), 0);
+
+    /* shrink the array to nothing */
+    bufarray_truncate(&ba, 0);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 0);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    /* whether ba.items is NULL is undefined at this time */
+//    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, 0));
+//    CU_ASSERT_PTR_NULL(bufarray_nth(&ba, -1));
+
+    bufarray_fini(&ba);
+
+    buf_free(&WORD0);
+    buf_free(&WORD1);
+    buf_free(&WORD2);
+    buf_free(&WORD3);
+    buf_free(&WORD4);
+}
+
+static void test_dup(void)
+{
+    bufarray_t ba = BUFARRAY_INITIALIZER;
+    bufarray_t *dup;
+    struct buf WORD0 = BUF_INITIALIZER;
+    struct buf WORD1 = BUF_INITIALIZER;
+    struct buf WORD2 = BUF_INITIALIZER;
+    struct buf WORD3 = BUF_INITIALIZER;
+    struct buf WORD4 = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 0);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+
+    /* dup an empty array */
+    dup = bufarray_dup(&ba);
+    CU_ASSERT_PTR_NOT_NULL(dup);
+    CU_ASSERT_PTR_NOT_EQUAL(dup, &ba);
+    CU_ASSERT_EQUAL(dup->count, 0);
+    CU_ASSERT(dup->alloc >= dup->count);
+    bufarray_free(&dup);
+
+    buf_setcstr(&WORD0, "lorem");
+    buf_setcstr(&WORD1, "ipsum");
+    buf_setcstr(&WORD2, "dolor");
+    buf_setcstr(&WORD3, "sit");
+    buf_setcstr(&WORD4, "amet");
+
+    /* dup a non-empty array */
+    bufarray_append(&ba, &WORD0);
+    bufarray_append(&ba, &WORD1);
+    bufarray_append(&ba, &WORD2);
+    bufarray_append(&ba, &WORD3);
+    bufarray_append(&ba, &WORD0);
+    bufarray_append(&ba, &WORD4);
+    CU_ASSERT_EQUAL(bufarray_size(&ba), 6);
+    CU_ASSERT(ba.alloc >= bufarray_size(&ba));
+    CU_ASSERT_PTR_NOT_NULL(ba.items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 0), &WORD0), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 1), &WORD1), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 2), &WORD2), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 3), &WORD3), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 4), &WORD0), 0);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(&ba, 5), &WORD4), 0);
+
+    dup = bufarray_dup(&ba);
+    CU_ASSERT_PTR_NOT_NULL(dup);
+    CU_ASSERT_PTR_NOT_EQUAL(dup, &ba);
+    CU_ASSERT_EQUAL(dup->count, 6);
+    CU_ASSERT(dup->alloc >= dup->count);
+    CU_ASSERT_PTR_NOT_NULL(dup->items);
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(dup, 0), &WORD0), 0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)bufarray_nth(dup, 0), (void *)bufarray_nth(&ba, 0));
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(dup, 1), &WORD1), 0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)bufarray_nth(dup, 1), (void *)bufarray_nth(&ba, 1));
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(dup, 2), &WORD2), 0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)bufarray_nth(dup, 2), (void *)bufarray_nth(&ba, 2));
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(dup, 3), &WORD3), 0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)bufarray_nth(dup, 3), (void *)bufarray_nth(&ba, 3));
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(dup, 4), &WORD0), 0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)bufarray_nth(dup, 4), (void *)bufarray_nth(&ba, 4));
+    CU_ASSERT_EQUAL(buf_cmp(bufarray_nth(dup, 5), &WORD4), 0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)bufarray_nth(dup, 5), (void *)bufarray_nth(&ba, 5));
+    bufarray_free(&dup);
+
+    bufarray_fini(&ba);
+
+    buf_free(&WORD0);
+    buf_free(&WORD1);
+    buf_free(&WORD2);
+    buf_free(&WORD3);
+    buf_free(&WORD4);
+}
+
+/* vim: set ft=c: */

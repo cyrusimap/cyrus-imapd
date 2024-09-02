@@ -49,6 +49,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
 #include <jansson.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,6 +72,9 @@ EXPORTED void fatal(const char *error, int code)
 {
     fprintf(stderr, "fatal error: %s\n", error);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -352,7 +356,35 @@ int main(int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    while ((opt = getopt(argc, argv, ":AC:DFPSVcfjmpst:x:uvw")) != EOF) {
+    /* keep in alphabetical order */
+    static const char short_options[] = ":AC:DFPSVcfjmpst:uvwx:";
+
+    static const struct option long_options[] = {
+        { "all", no_argument, NULL, 'A' },
+        /* n.b. no long-option for -C */
+        { "domains", no_argument, NULL, 'D' },
+        { "force", no_argument, NULL, 'F' },
+        { "prefixes", no_argument, NULL, 'P' },
+        { "stop-on-error", no_argument, NULL, 'S' },
+        { "no-verify", no_argument, NULL, 'V' },
+        { "create", no_argument, NULL, 'c' },
+        { "filenames", no_argument, NULL, 'f' },
+        { "json", no_argument, NULL, 'j' },
+        { "mailboxes", no_argument, NULL, 'm' },
+        { "pause", no_argument, NULL, 'p' },
+        { "sqlite3", no_argument, NULL, 's' },
+        { "stale", optional_argument, NULL, 't' },
+        { "userids", no_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "wait-for-locks", no_argument, NULL, 'w' },
+        { "execute", required_argument, NULL, 'x' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'A':
             if (options.mode != CTLBU_MODE_UNSPECIFIED) usage();
@@ -476,7 +508,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_backups", 0, 0);
 
-    if ((r = mboxname_init_namespace(&ctl_backups_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&ctl_backups_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
     mboxevent_setnamespace(&ctl_backups_namespace);
@@ -715,6 +747,8 @@ static int cmd_lock_one(void *rock,
     char *userid = NULL;
     char *fname = NULL;
     int r = 0;
+
+    assert(data != NULL && data_len > 0);
 
     /* input args might not be 0-terminated, so make a safe copy */
     if (key_len)

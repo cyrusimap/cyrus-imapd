@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_participants_organame
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "showWithoutTime"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+        },
+        "participants" => {
+            'foo' => {
+                '@type' => 'Participant',
+                name => 'Foo',
+                roles => {
+                    'owner' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:foo@local',
+                },
+            },
+            'bar' => {
+                '@type' => 'Participant',
+                name => 'Bar',
+                kind => 'individual',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:bar@local',
+                },
+            },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{participants}{bar}{sendTo}{imip} = 'mailto:bar@local';
+    $self->assert_normalized_event_equals($event, $ret);
+}

@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_squatter_attachextract_unprocessable_content
+    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor :NoCheckSyslog
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir (DIR => $instance->{basedir} . "/tmp");
+    my $nrequests = 0;
+
+    xlog "Start extractor server";
+    my $handler = sub {
+        my ($conn, $req) = @_;
+
+        $nrequests++;
+
+        # touch trace file in tracedir
+        my @paths = split(q{/}, URI->new($req->uri)->path);
+        my $guid = pop(@paths);
+        my $fname = join(q{},
+            $tracedir, "/req", $nrequests, "_", $req->method, "_$guid");
+        open(my $fh, ">", $fname) or die "Can't open > $fname: $!";
+        close $fh;
+
+        my $res;
+
+        if ($req->method eq 'HEAD') {
+            $res = HTTP::Response->new(404);
+            $res->content("");
+        } elsif ($req->method eq 'GET') {
+            $res = HTTP::Response->new(404);
+            $res->content("nope");
+        } else {
+            # return HTTP 422 Unprocessable Content
+            $res = HTTP::Response->new(422);
+            $res->content("nope");
+        }
+
+        $conn->send_response($res);
+    };
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+    $instance->start_httpd($handler, $uri->port());
+
+    xlog $self, "Make message with unprocessable attachment";
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/octet-stream\r\n"
+        ."\r\n"
+        ."attachterm"
+        ."\r\n--123456789abcdef--\r\n");
+
+    xlog $self, "Run squatter (allowing partials)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-p');
+
+    xlog "Assert text body is indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Assert attachement is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert extractor got called";
+    my @tracefiles = glob($tracedir."/*");
+    $self->assert_num_equals(2, scalar @tracefiles);
+    $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+    $self->assert_matches(qr/req2_PUT_/, $tracefiles[1]);
+
+    xlog $self, "Rerun squatter for partials";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-i', '-P');
+
+    xlog "Assert text body is indexed";
+    $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "Assert attachement is not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert extractor got called no more time";
+    @tracefiles = glob($tracedir."/*");
+    $self->assert_num_equals(2, scalar @tracefiles);
+    $self->assert_matches(qr/req1_GET_/, $tracefiles[0]);
+    $self->assert_matches(qr/req2_PUT_/, $tracefiles[1]);
+}

@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_expunge
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    xlog $self, "delete the 1st and 6th";
+    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "ENABLE UIDONLY";
+    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+    $self->assert_num_equals(1, $res->{uidonly});
+
+    xlog $self, "EXPUNGE";
+    $res = $imaptalk->_imap_cmd('EXPUNGE', 0, 'vanished');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('1,6', $res->[0]);
+}
+
+1;

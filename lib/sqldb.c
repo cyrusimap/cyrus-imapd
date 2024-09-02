@@ -70,7 +70,7 @@ EXPORTED int sqldb_init(void)
         assert(!open_sqldbs);
     }
 
-    return 0;
+    return SQLDB_OK;
 }
 
 EXPORTED int sqldb_done(void)
@@ -81,7 +81,7 @@ EXPORTED int sqldb_done(void)
         assert(!open_sqldbs);
     }
 
-    return 0;
+    return SQLDB_OK;
 }
 
 static void _debug(void *fname, const char *sql)
@@ -94,7 +94,7 @@ static int _free_open(sqldb_t *open)
     int rc = sqlite3_close(open->db);
     free(open->fname);
     free(open);
-    int r = (rc == SQLITE_OK ? 0 : -1);
+    int r = (rc == SQLITE_OK ? SQLDB_OK : SQLDB_ERR_UNKNOWN);
     return r;
 }
 
@@ -105,7 +105,7 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
         *vptr = atoi(vals[0]);
     else
         abort();
-    return 0;
+    return SQLDB_OK;
 }
 
 /* Open DAV DB corresponding in file */
@@ -129,9 +129,11 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
     open = xzmalloc(sizeof(sqldb_t));
     open->fname = xstrdup(fname);
 
-    rc = stat(open->fname, &sbuf);
-    if (rc == -1 && errno == ENOENT) {
-        rc = cyrus_mkdir(open->fname, 0755);
+    if (*fname && strcmp(fname, ":memory:")) {
+        rc = stat(open->fname, &sbuf);
+        if (rc == -1 && errno == ENOENT) {
+            rc = cyrus_mkdir(open->fname, 0755);
+        }
     }
 
     rc = sqlite3_open_v2(open->fname, &open->db,
@@ -247,6 +249,10 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
             return NULL;
         }
         for (i = 0; upgrade[i].to; i++) {
+            /* Track the version through the upgrade process.
+               This allows us to leave the version as-is if we want. */
+            version = upgrade[i].to;
+
             if (upgrade[i].to <= open->version) continue;
 
             syslog(LOG_NOTICE, "sqldb_open(%s) upgrade to v%d", open->fname, upgrade[i].to);
@@ -308,7 +314,7 @@ out:
     return open;
 }
 
-static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd)
+static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd, int *rp)
 {
     int i;
     sqlite3_stmt *stmt;
@@ -323,6 +329,15 @@ static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd)
         xsyslog(LOG_ERR, "DBERROR: prepare failed",
                          "fname=<%s> cmd=<%s> error=<%s>",
                          open->fname, cmd, sqlite3_errmsg(open->db));
+
+        if (rc == SQLITE_TOOBIG ||
+                // sqlite3 uses generic SQLITE_ERROR for large trees
+                !strncasecmpsafe(sqlite3_errmsg(open->db),
+                    "Expression tree is too large", 28)) {
+            *rp = SQLDB_ERR_LIMIT;
+        }
+        else *rp = SQLDB_ERR_UNKNOWN;
+
         return NULL;
     }
     ptrarray_append(&open->stmts, stmt);
@@ -340,15 +355,60 @@ static void _finish_stmt(sqldb_t *open)
     ptrarray_fini(&open->stmts);
 }
 
-EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bval[],
+static void buf_replace_bindvals(struct buf *cmd, struct sqldb_bindval bval[])
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    for (; bval && bval->name; bval++) {
+        /* Does the command contain this bindval? */
+        char *p = strstr(buf_base(cmd), bval->name);
+        size_t matchlen = strlen(bval->name);
+        size_t off = 0;
+
+        if (!p || !strchr(" ,);", p[matchlen])) continue;
+
+        /* Construct the actual value */
+        buf_reset(&buf);
+        switch (bval->type) {
+        case SQLITE_INTEGER:
+            buf_printf(&buf, "%lld", bval->val.i);
+            break;
+
+        case SQLITE_TEXT:
+            if (bval->val.s)
+                buf_printf(&buf, "'%s'", bval->val.s);
+            else
+                buf_setcstr(&buf, "NULL");
+            break;
+
+        case SQLITE_BLOB:
+            buf_printf(&buf, "<" SIZE_T_FMT " bytes>", buf_len(&bval->val.b));
+            break;
+        }
+
+        /* Replace all instances of the bindval with actual value */
+        do {
+            off = (p - buf_base(cmd));
+            buf_replace_buf(cmd, off, matchlen, &buf);
+            off += buf_len(&buf);
+
+        } while ((p = strstr(buf_base(cmd) + off, bval->name)) &&
+                 strchr(" ,);", p[matchlen]));
+    }
+
+    buf_free(&buf);
+}
+
+EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bvals[],
                         int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock)
 {
     int rc, r = 0;
-    sqlite3_stmt *stmt = _prepare_stmt(open, cmd);
-    if (!stmt) return -1;
+    struct sqldb_bindval *bval;
+    sqlite3_stmt *stmt = _prepare_stmt(open, cmd, &r);
+    if (!stmt) return r;
 
     /* bind values */
-    for (; bval && bval->name; bval++) {
+    for (bval = bvals; bval && bval->name; bval++) {
         int cidx = sqlite3_bind_parameter_index(stmt, bval->name);
 
         switch (bval->type) {
@@ -358,6 +418,11 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
 
         case SQLITE_TEXT:
             sqlite3_bind_text(stmt, cidx, bval->val.s, -1, NULL);
+            break;
+
+        case SQLITE_BLOB:
+            sqlite3_bind_blob(stmt, cidx,
+                              buf_base(&bval->val.b), buf_len(&bval->val.b), NULL);
             break;
         }
     }
@@ -372,10 +437,15 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
     sqlite3_clear_bindings(stmt);
 
     if (!r && rc != SQLITE_DONE) {
+        struct buf newcmd = BUF_INITIALIZER;
+
+        buf_setcstr(&newcmd, cmd);
+        buf_replace_bindvals(&newcmd, bvals);
         xsyslog(LOG_ERR, "DBERROR: step failed",
                          "fname=<%s> cmd=<%s> error=<%s>",
-                         open->fname, cmd, sqlite3_errmsg(open->db));
-        r = -1;
+                open->fname, buf_cstring(&newcmd), sqlite3_errmsg(open->db));
+        buf_free(&newcmd);
+        r = SQLDB_ERR_UNKNOWN;
     }
 
     return r;
@@ -437,7 +507,7 @@ EXPORTED int sqldb_writelock(sqldb_t *open)
 
 EXPORTED int sqldb_writecommit(sqldb_t *open)
 {
-    if (!open->writelock) return 0;
+    if (!open->writelock) return SQLDB_OK;
     strarray_truncate(&open->trans, 0);
     int r = sqldb_exec(open, "COMMIT;", NULL, NULL, NULL);
     if (!r) open->writelock = 0;
@@ -446,7 +516,7 @@ EXPORTED int sqldb_writecommit(sqldb_t *open)
 
 EXPORTED int sqldb_writeabort(sqldb_t *open)
 {
-    if (!open->writelock) return 0;
+    if (!open->writelock) return SQLDB_OK;
     strarray_truncate(&open->trans, 0);
     int r = sqldb_exec(open, "ROLLBACK;", NULL, NULL, NULL);
     if (!r) open->writelock = 0;
@@ -468,11 +538,11 @@ EXPORTED int sqldb_close(sqldb_t **dbp)
 {
     sqldb_t *open, *prev = NULL;
 
-    if (!*dbp) return 0;
+    if (!*dbp) return SQLDB_OK;
 
     for (open = open_sqldbs; open; open = open->next) {
         if (*dbp == open) {
-            if (--open->refcount) return 0; /* still in use */
+            if (--open->refcount) return SQLDB_OK; /* still in use */
             if (prev)
                 prev->next = open->next;
             else
@@ -506,7 +576,7 @@ EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)
     int r = sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
     if (r) return r;
     open->attached = 1;
-    return 0;
+    return SQLDB_OK;
 }
 
 EXPORTED int sqldb_detach(sqldb_t *open)
@@ -515,5 +585,5 @@ EXPORTED int sqldb_detach(sqldb_t *open)
     int r = sqldb_exec(open, "DETACH DATABASE other;", NULL, NULL, NULL);
     if (r) return r;
     open->attached = 0;
-    return 0;
+    return SQLDB_OK;
 }

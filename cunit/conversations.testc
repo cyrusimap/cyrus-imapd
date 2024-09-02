@@ -11,6 +11,7 @@
 #include "lib/util.h"       /* for VECTOR_SIZE */
 //#include "message.h"      /* for VECTOR_SIZE */
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define DBDIR   "test-dbdir"
 #define DBNAME  DBDIR "/conversations.db"
@@ -389,6 +390,9 @@ static void test_folder_rename(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(state);
 
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
+
     /* setup the records we expect */
     r = conversations_add_msgid(state, C_MSGID1, C_CID);
     CU_ASSERT_EQUAL(r, 0);
@@ -401,22 +405,26 @@ static void test_folder_rename(void)
     CU_ASSERT_PTR_NOT_NULL(conv);
 
     int f1 = conversation_folder_number(state, FOLDER1, 1);
-    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
 
     conversation_update(state, conv,
                         &ecounts1,
                         /*size*/10, /*counts*/NULL,
                         /*modseq*/1,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     int f2 = conversation_folder_number(state, FOLDER2, 1);
-    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
 
     conversation_update(state, conv,
                         &ecounts2,
                         /*size*/20, /*counts*/NULL,
                         /*modseq*/8,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     conv->subject = xstrdup("☃");
 
@@ -490,6 +498,9 @@ static void test_folders(void)
     r = conversations_open_path(DBNAME3, NULL, 0/*shared*/, &state);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
+
     imapopts[IMAPOPT_CONVERSATIONS_COUNTED_FLAGS].val.s = NULL;
 
     CU_ASSERT_EQUAL(state->counted_flags->count, 2);
@@ -511,12 +522,14 @@ static void test_folders(void)
     counts[1] = 0;
 
     int f1 = conversation_folder_number(state, FOLDER1, 1);
-    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts1,
                         /*size*/0, counts,
                         /*modseq*/4,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     /* make sure the data we just passed to conversation_update()
      * is present in the structure */
@@ -578,12 +591,14 @@ static void test_folders(void)
     counts[1] = 2;
     /* some more updates should succeed */
     int f2 = conversation_folder_number(state, FOLDER2, 1);
-    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 1, 1, 1, 1 } };
+    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 1, 1, 1, 1 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts2,
                         /*size*/0, counts,
                         /*modseq*/7,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
     CU_ASSERT_EQUAL(conv->num_records, 2);
@@ -613,12 +628,14 @@ static void test_folders(void)
 
     counts[1] = 5;
     int f3 = conversation_folder_number(state, FOLDER3, 1);
-    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 0, 0, 1, 0, 0 } };
+    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 0, 0, 1, 0, 0 },
+                                    BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts3,
                         /*size*/0, counts,
                         /*modseq*/55,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
     CU_ASSERT_EQUAL(conv->num_records, 3);
@@ -732,12 +749,14 @@ static void test_folders(void)
     /* decrementing a folder down to zero */
     counts[0] = -1;
     counts[1] = 0;
-    struct emailcounts ecountsneg1 = { f1, 0, -1, { 1, 1, 0, 1, 1, 0 }, { 0, 0, 0, 0, 0, 0 } };
+    struct emailcounts ecountsneg1 = { f1, 0, -1, { 1, 1, 0, 1, 1, 0 }, { 0, 0, 0, 0, 0, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecountsneg1,
                         /*size*/0, counts,
                         /*modseq*/56,
-                        /*createdmodseq*/1);
+                        /*createdmodseq*/1,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL(conv->num_records, 2);
     CU_ASSERT_EQUAL(conv->exists, 1);
@@ -831,6 +850,9 @@ static void test_folder_ordering(void)
     r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
+
     /* Database is empty, so get should succeed and report no results */
     conv = NULL;
     r = conversation_load(state, C_CID, &conv);
@@ -844,20 +866,24 @@ static void test_folder_ordering(void)
 
     conv = conversation_new();
 
-    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+    struct emailcounts ecounts1 = { f1, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts1,
                         /*size*/0, counts,
                         /*modseq*/1,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     /* add folders out of order */
-    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+    struct emailcounts ecounts3 = { f3, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts3,
                         /*size*/0, counts,
                         /*modseq*/55,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     /* save and reload here just to be sure */
     r = conversation_save(state, C_CID, conv);
@@ -868,12 +894,14 @@ static void test_folder_ordering(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(conv);
 
-    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+    struct emailcounts ecounts2 = { f2, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                       BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
     conversation_update(state, conv,
                         &ecounts2,
                         /*size*/0, counts,
                         /*modseq*/7,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
 
@@ -1000,7 +1028,8 @@ static void __test_senders(void)
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/1,
-                        /*createdmodseq*/0);
+                        /*createdmodseq*/0,
+                        /*silent*/0);
 
     /* there's no function for getting sender data, oh well */
     sender1 = conv->senders;
@@ -1176,6 +1205,9 @@ static void test_dump(void)
     r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
+
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
         gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
         r = conversations_add_msgid(state, msgid, cid);
@@ -1187,12 +1219,14 @@ static void test_dump(void)
         CU_ASSERT_PTR_NOT_NULL(conv);
         for (j = 0 ; j < mboxnames.count ; j++) {
             int f = conversation_folder_number(state, mboxnames.data[j], 1);
-            struct emailcounts ecounts = { f, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 } };
+            struct emailcounts ecounts = { f, 0, -1, { 0, 0, 0, 0, 0, 0 }, { 1, 1, 0, 1, 1, 0 },
+                                            BV_INITIALIZER, BV_INITIALIZER, BV_INITIALIZER };
             conversation_update(state, conv,
                                 &ecounts,
                                 /*size*/0, /*counts*/NULL,
                                 /*modseq*/100,
-                                /*createdmodseq*/0);
+                                /*createdmodseq*/0,
+                                /*silent*/0);
         }
         r = conversation_save(state, cid, conv);
         CU_ASSERT_EQUAL(r, 0);
@@ -1290,7 +1324,7 @@ static void test_dump(void)
     CU_ASSERT_EQUAL(r, 0);
 
     fclose(fp);
-    unlink(filename);
+    xunlink(filename);
     strarray_fini(&mboxnames);
     arrayu64_fini(&cids);
 #undef N_MSGID_TO_CID
@@ -1406,3 +1440,4 @@ static int tear_down(void)
 
     return r;
 }
+/* vim: set ft=c: */

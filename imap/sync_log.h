@@ -72,7 +72,7 @@ void sync_log_reset();
     sync_log("APPEND %s\n", name)
 
 #define sync_log_mailbox(name) \
-    sync_log("MAILBOX %s\n", name)
+    do { assert(*name); sync_log("MAILBOX %s\n", name); } while (0)
 
 #define sync_log_unmailbox(name) \
     sync_log("UNMAILBOX %s\n", name)

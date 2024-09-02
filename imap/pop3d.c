@@ -71,6 +71,7 @@
 #include "util.h"
 #include "auth.h"
 #include "global.h"
+#include "slowio.h"
 #include "tls.h"
 
 #include "imapd.h"
@@ -99,17 +100,6 @@
 #ifndef MAXHOSTNAMELEN
 #define MAXHOSTNAMELEN 256
 #endif
-
-#ifdef HAVE_KRB
-/* kerberos des is purported to conflict with OpenSSL DES */
-#define DES_DEFS
-#include <krb.h>
-
-/* MIT's kpop authentication kludge */
-char klrealm[REALM_SZ];
-AUTH_DAT kdata;
-#endif /* HAVE_KRB */
-static int kflag = 0;
 
 extern int optind;
 extern char *optarg;
@@ -142,8 +132,8 @@ static struct msg {
     uint32_t uid;
     uint32_t recno;
     uint32_t size;
-    int deleted:1;
-    int seen:1;
+    unsigned int deleted:1;
+    unsigned int seen:1;
 } *popd_map = NULL;
 
 static struct io_count *io_count_start;
@@ -155,6 +145,8 @@ static int popd_starttls_done = 0;
 static int popd_tls_required = 0;
 
 static int popd_myrights;
+
+static struct proc_handle *proc_handle = NULL;
 
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
@@ -199,7 +191,6 @@ static void cmd_starttls(int pop3s);
 static int blat(int msg, int lines);
 static int openinbox(void);
 static void cmdloop(void);
-static void kpop(void);
 static unsigned parse_msgno(char **ptr);
 static void uidl_msg(uint32_t msgno);
 static int msg_exists_or_err(uint32_t msgno);
@@ -325,10 +316,10 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void popd_reset(void)
 {
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
                        count_retr, count_top, count_dele);
@@ -361,8 +352,9 @@ static void popd_reset(void)
     }
 
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
-                           session_id(), bytes_in, bytes_out);
+        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
+               session_id(), bytes_in, bytes_out);
 
     popd_in = popd_out = NULL;
 
@@ -401,21 +393,22 @@ static void popd_reset(void)
     saslprops_reset(&saslprops);
 
     popd_exists = 0;
+
+    slowio_reset();
 }
 
 /*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
  */
-int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
+int service_init(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
     int r;
     int opt;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -428,15 +421,19 @@ int service_init(int argc __attribute__((unused)),
     idle_init();
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&popd_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
 
     mboxevent_setnamespace(&popd_namespace);
 
-    while ((opt = getopt(argc, argv, "skp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hsp:")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* pop3s (do starttls right away) */
             pop3s = 1;
             if (!tls_enabled()) {
@@ -444,10 +441,6 @@ int service_init(int argc __attribute__((unused)),
                 fatal("pop3s: required OpenSSL options not present",
                       EX_CONFIG);
             }
-            break;
-
-        case 'k':
-            kflag++;
             break;
 
         case 'p': /* external protection */
@@ -524,8 +517,6 @@ int service_main(int argc __attribute__((unused)),
     prot_settimeout(popd_in, popd_timeout);
     prot_setflushonread(popd_in, popd_out);
 
-    if (kflag) kpop();
-
     /* we were connected on pop3s port so we should do
        TLS negotiation immediatly */
     if (pop3s == 1) cmd_starttls(1);
@@ -561,9 +552,6 @@ int service_main(int argc __attribute__((unused)),
         mboxevent_free(&mboxevent);
     }
 
-    /* don't bother reusing KPOP connections */
-    if (kflag) shut_down(0);
-
     /* cleanup */
     popd_reset();
 
@@ -598,12 +586,14 @@ static void usage(void)
  */
 void shut_down(int code)
 {
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     in_shutdown = 1;
 
-    proc_cleanup();
+    libcyrus_run_delayed();
+
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (popd_mailbox)
@@ -644,8 +634,9 @@ void shut_down(int code)
     }
 
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
-                           session_id(), bytes_in, bytes_out);
+        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
+               session_id(), bytes_in, bytes_out);
 
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
@@ -674,7 +665,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -683,108 +674,11 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(popd_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
-
-#ifdef HAVE_KRB
-/* translate IPv4 mapped IPv6 address to IPv4 address */
-#ifdef IN6_IS_ADDR_V4MAPPED
-static void sockaddr_unmapped(struct sockaddr *sa, socklen_t *len)
-{
-    struct sockaddr_in6 *sin6;
-    struct sockaddr_in *sin4;
-    uint32_t addr;
-    int port;
-
-    if (sa->sa_family != AF_INET6)
-        return;
-    sin6 = (struct sockaddr_in6 *)sa;
-    if (!IN6_IS_ADDR_V4MAPPED((&sin6->sin6_addr)))
-        return;
-    sin4 = (struct sockaddr_in *)sa;
-    addr = *(uint32_t *)&sin6->sin6_addr.s6_addr[12];
-    port = sin6->sin6_port;
-    memset(sin4, 0, sizeof(struct sockaddr_in));
-    sin4->sin_addr.s_addr = addr;
-    sin4->sin_port = port;
-    sin4->sin_family = AF_INET;
-#ifdef HAVE_SOCKADDR_SA_LEN
-    sin4->sin_len = sizeof(struct sockaddr_in);
-#endif
-    *len = sizeof(struct sockaddr_in);
-}
-#else
-static void sockaddr_unmapped(struct sockaddr *sa __attribute__((unused)),
-                              socklen_t *len __attribute__((unused)))
-{
-    return;
-}
-#endif
-
-
-/*
- * MIT's kludge of a kpop protocol
- * Client does a krb_sendauth() first thing
- */
-void kpop(void)
-{
-    Key_schedule schedule;
-    KTEXT_ST ticket;
-    char instance[INST_SZ];
-    char version[9];
-    const char *srvtab;
-    int r;
-    socklen_t len;
-
-    if (!popd_haveaddr) {
-        fatal("Cannot get client's IP address", EX_OSERR);
-    }
-
-    srvtab = config_getstring(IMAPOPT_SRVTAB);
-
-    sockaddr_unmapped((struct sockaddr *)&popd_remoteaddr, &len);
-    if (popd_remoteaddr.ss_family != AF_INET) {
-        prot_printf(popd_out,
-                    "-ERR [AUTH] Kerberos authentication failure: %s\r\n",
-                    "not an IPv4 connection");
-        shut_down(0);
-    }
-
-    strcpy(instance, "*");
-    r = krb_recvauth(0L, 0, &ticket, "pop", instance,
-                     (struct sockaddr_in *) &popd_remoteaddr,
-                     (struct sockaddr_in *) NULL,
-                     &kdata, (char*) srvtab, schedule, version);
-
-    if (r) {
-        prot_printf(popd_out, "-ERR [AUTH] Kerberos authentication failure: %s\r\n",
-                    krb_err_txt[r]);
-        syslog(LOG_NOTICE,
-               "badlogin: %s kpop ? %s%s%s@%s %s",
-               popd_clienthost, kdata.pname,
-               kdata.pinst[0] ? "." : "", kdata.pinst,
-               kdata.prealm, krb_err_txt[r]);
-        shut_down(0);
-    }
-
-    r = krb_get_lrealm(klrealm,1);
-    if (r) {
-        prot_printf(popd_out, "-ERR [AUTH] Kerberos failure: %s\r\n",
-                    krb_err_txt[r]);
-        syslog(LOG_NOTICE,
-               "badlogin: %s kpop ? %s%s%s@%s krb_get_lrealm: %s",
-               popd_clienthost, kdata.pname,
-               kdata.pinst[0] ? "." : "", kdata.pinst,
-               kdata.prealm, krb_err_txt[r]);
-        shut_down(0);
-    }
-}
-#else
-void kpop(void)
-{
-    usage();
-}
-#endif
 
 static int expunge_deleted(void)
 {
@@ -826,12 +720,12 @@ static int expunge_deleted(void)
 
     if (r) {
         syslog(LOG_ERR, "IOERROR: %s failed to expunge record %u uid %u, aborting",
-               popd_mailbox->name, msgno, popd_map[msgno-1].uid);
+               mailbox_name(popd_mailbox), msgno, popd_map[msgno-1].uid);
     }
 
     if (!r && (numexpunged > 0)) {
         syslog(LOG_NOTICE, "Expunged %d messages from %s",
-               numexpunged, popd_mailbox->name);
+               numexpunged, mailbox_name(popd_mailbox));
     }
 
     /* send the MessageExpunge event notification */
@@ -853,12 +747,22 @@ static void cmdloop(void)
     char *p;
     char *arg;
     uint32_t msgno = 0;
+    int r;
 
     for (;;) {
         signals_poll();
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? popd_mailbox->name : NULL, NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, popd_clienthost, popd_userid,
+                          popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                          NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, popd_clienthost, popd_userid,
+                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                      NULL);
+
+        libcyrus_run_delayed();
 
         if (backend) {
             /* create a pipe from client to backend */
@@ -890,7 +794,7 @@ static void cmdloop(void)
                 /* Mailbox has been (re)moved */
                 syslog(LOG_WARNING,
                        "Maildrop %s has been (re)moved out from under client",
-                       popd_mailbox->name);
+                       mailbox_name(popd_mailbox));
                 prot_printf(popd_out,
                             "-ERR [SYS/TEMP] "
                             "Maildrop has been (re)moved\r\n");
@@ -935,7 +839,14 @@ static void cmdloop(void)
             syslog(LOG_NOTICE, "command: %s", inputbuf);
 
         /* register process */
-        proc_register(config_ident, popd_clienthost, popd_userid, popd_mailbox ? popd_mailbox->name : NULL, inputbuf);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, popd_clienthost, popd_userid,
+                          popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                          inputbuf);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, popd_clienthost, popd_userid,
+                      popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
+                      inputbuf);
 
         if (!strcmp(inputbuf, "quit")) {
             if (!arg) {
@@ -1409,7 +1320,7 @@ static void cmd_user(char *user)
 
     /* possibly disallow USER */
     if (popd_tls_required ||
-        !(kflag || popd_starttls_done || (extprops_ssf > 1) ||
+        !(popd_starttls_done || (extprops_ssf > 1) ||
           config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
         prot_printf(popd_out,
                     "-ERR [AUTH] USER command only available under a layer\r\n");
@@ -1449,29 +1360,6 @@ static void cmd_pass(char *pass)
         prot_printf(popd_out, "-ERR [AUTH] Must give USER command\r\n");
         return;
     }
-
-#ifdef HAVE_KRB
-    if (kflag) {
-        if (strcmp(popd_userid, kdata.pname) != 0 ||
-            kdata.pinst[0] ||
-            strcmp(klrealm, kdata.prealm) != 0) {
-            prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
-            syslog(LOG_NOTICE,
-                   "badlogin: %s kpop %s %s%s%s@%s access denied",
-                   popd_clienthost, popd_userid,
-                   kdata.pname, kdata.pinst[0] ? "." : "",
-                   kdata.pinst, kdata.prealm);
-            return;
-        }
-
-        syslog(LOG_NOTICE, "login: %s %s%s KPOP%s %s SESSIONID=<%s>", popd_clienthost,
-               popd_userid, popd_subfolder ? popd_subfolder : "",
-               popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
-
-        openinbox();
-        return;
-    }
-#endif
 
     if (!strcmp(popd_userid, "anonymous")) {
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
@@ -1589,7 +1477,7 @@ static void cmd_capa(void)
     prot_printf(popd_out, "AUTH-RESP-CODE\r\n");
 
     if (!popd_tls_required && !popd_authstate &&
-        (kflag || popd_starttls_done || (extprops_ssf > 1)
+        (popd_starttls_done || (extprops_ssf > 1)
          || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
         prot_printf(popd_out, "USER\r\n");
     }
@@ -1883,7 +1771,7 @@ int openinbox(void)
                         error_message(r));
             goto fail;
         }
-        popd_myrights = cyrus_acl_myrights(popd_authstate, popd_mailbox->acl);
+        popd_myrights = cyrus_acl_myrights(popd_authstate, mailbox_acl(popd_mailbox));
         if (config_popuseacl && !(popd_myrights & ACL_READ)) {
             r = (popd_myrights & ACL_LOOKUP) ?
                  IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
@@ -2052,6 +1940,9 @@ static int blat(int msgno, int lines)
     /* Protect against messages not ending in CRLF */
     if (buf[strlen(buf)-1] != '\n') prot_printf(popd_out, "\r\n");
 
+    /* Clients may become confused when the .\r\n sequence gets split
+     * up across packets.  Flush first to prevent that. */
+    prot_flush(popd_out);
     prot_printf(popd_out, ".\r\n");
 
     /* Reset inactivity timer in case we spend a long time
@@ -2116,7 +2007,7 @@ static void bitpipe(void)
             goto done;
         }
     } while (!proxy_check_input(protin, popd_in, popd_out,
-                                backend->in, backend->out, 0));
+                                backend->in, backend->out, PROT_NO_FD, NULL, 0));
 
  done:
     /* ok, we're done. */

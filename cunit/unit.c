@@ -58,6 +58,7 @@
 
 #include "lib/retry.h"
 #include "lib/libconfig.h"
+#include "lib/xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "cunit/registers.h"
@@ -70,15 +71,21 @@ int xml_flag = 0;
 int timeouts_flag = 1;
 
 #if HAVE_VALGRIND_VALGRIND_H
-#define log1(fmt, a1) \
-    VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1))
-#define log2(fmt, a1, a2) \
-    VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1), (a2))
+#define log1(fmt, a1) do {                                                  \
+    if (RUNNING_ON_VALGRIND) VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1));      \
+    else fprintf(stderr, "\nunit: "fmt"\n", (a1));                          \
+} while (0)
+#define log2(fmt, a1, a2) do {                                              \
+    if (RUNNING_ON_VALGRIND) VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1), (a2));\
+    else fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                    \
+} while (0)
 #else
-#define log1(fmt, a1) \
-    fprintf(stderr, "\nunit: "fmt"\n", (a1))
-#define log2(fmt, a1, a2) \
-    fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2))
+#define log1(fmt, a1) do {                                                  \
+    fprintf(stderr, "\nunit: "fmt"\n", (a1));                               \
+} while (0)
+#define log2(fmt, a1, a2) do {                                              \
+    fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                         \
+} while (0)
 #endif
 
 jmp_buf fatal_jbuf;
@@ -88,14 +95,17 @@ int fatal_code;
 
 EXPORTED void fatal(const char *s, int code)
 {
-    log1("fatal(%s)", s);
     if (fatal_expected) {
+        if (verbose) {
+            log1("fatal(%s)", s);
+        }
         fatal_expected = 0;
         fatal_string = xstrdupnull(s);
         fatal_code = code;
         longjmp(fatal_jbuf, code);
     }
     else {
+        log1("fatal(%s)", s);
         exit(1);
     }
 }
@@ -306,7 +316,7 @@ EXPORTED void config_read_string(const char *s)
     retry_write(fd, s, strlen(s));
     config_reset();
     config_read(fname, 0);
-    unlink(fname);
+    xunlink(fname);
     free(fname);
     close(fd);
 }

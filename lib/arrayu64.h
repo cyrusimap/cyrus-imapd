@@ -52,8 +52,8 @@
 
 typedef struct
 {
-    int count;
-    int alloc;
+    size_t count;
+    size_t alloc;
     uint64_t *data;
 } arrayu64_t;
 
@@ -72,7 +72,7 @@ uint64_t arrayu64_remove(arrayu64_t *, int idx);
 /* returns number removed */
 int arrayu64_remove_all(arrayu64_t *, uint64_t);
 uint64_t arrayu64_nth(const arrayu64_t *, int idx);
-void arrayu64_truncate(arrayu64_t *, int newlen);
+void arrayu64_truncate(arrayu64_t *, size_t newlen);
 arrayu64_t *arrayu64_dup(const arrayu64_t *);
 
 uint64_t arrayu64_max(const arrayu64_t *);

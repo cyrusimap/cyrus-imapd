@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_participants
+    :min_version_3_4 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('participants');
+
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
+        '375507f588e65ec6eb800757ab94ccd10ad58599' => {
+            '@type' => 'Participant',
+            name => 'Monty Burns',
+            roles => {
+                'owner' => JSON::true,
+                'attendee' => JSON::true,
+            },
+            participationStatus => 'accepted',
+            sendTo => {
+                imip => 'mailto:smithers@example.com',
+            },
+            expectReply => JSON::false,
+        },
+        '39b16b858076733c1d890cbcef73eca0e874064d' => {
+            '@type' => 'Participant',
+            name => 'Homer Simpson',
+            participationStatus => 'accepted',
+            roles => {
+                'optional' => JSON::true,
+            },
+            locationId => 'loc1',
+            sendTo => {
+                imip => 'mailto:homer@example.com',
+            },
+            expectReply => JSON::false,
+        },
+        'carl' => {
+            '@type' => 'Participant',
+            name => 'Carl Carlson',
+            participationStatus => 'tentative',
+            roles => {
+                'attendee' => JSON::true,
+            },
+            scheduleSequence => 3,
+            scheduleUpdated => '2017-01-02T03:04:05Z',
+            delegatedFrom => {
+                'a6ef900d284067bb327d7be1469fb44693a5ec13' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:carl@example.com',
+            },
+            expectReply => JSON::false,
+        },
+        'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
+            '@type' => 'Participant',
+            name => 'Lenny Leonard',
+            participationStatus => 'delegated',
+            roles => {
+                'attendee' => JSON::true,
+            },
+            delegatedTo => {
+                'carl' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:lenny@example.com',
+            },
+            expectReply => JSON::false,
+        },
+        'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
+            '@type' => 'Participant',
+            name => 'Larry Burns',
+            participationStatus => 'declined',
+            roles => {
+                'attendee' => JSON::true,
+            },
+            memberOf => {
+                '29a545214b66cbd7635fdec3a35d074ff3484479' => JSON::true,
+            },
+            scheduleUpdated => '2015-09-29T14:44:23Z',
+            sendTo => {
+                imip => 'mailto:larry@example.com',
+            },
+            expectReply => JSON::false,
+        },
+    };
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
+}

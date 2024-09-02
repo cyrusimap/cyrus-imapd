@@ -4,15 +4,18 @@
 Cyrus Backups
 =============
 
-.. contents::
+.. warning::
+    This experimental feature is no longer under active development.  It
+    is considered deprecated as of 3.10, and will be removed entirely in
+    a future version.
 
+.. contents::
 
 Introduction
 ========================
 
 Cyrus Backups are a replication-based backup service for Cyrus IMAP servers.
-This is currently an experimental feature. If you have the resources to try it
-out alongside your existing backup solutions, feedback would be appreciated.
+This is a deprecated experimental feature.
 
 This document is intended to be a guide to the configuration and
 administration of Cyrus Backups.
@@ -29,7 +32,8 @@ This document assumes a passing familiarity with
 Limitations
 ===========
 
-Cyrus Backups are experimental and incomplete.
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 The following components exist and appear to work:
 
@@ -69,6 +73,9 @@ The following types of information are not currently backed up
 Architecture
 ============
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 Cyrus Backups are designed to run on one or more standalone, dedicated backup
 servers, with suitably-sized storage partitions. These servers generally do
 not run an IMAP daemon, nor do they have conventional mailbox storage.
@@ -86,6 +93,9 @@ locations
 
 Installation
 ============
+
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 Requirements
 ------------
@@ -263,6 +273,9 @@ This replicates all users to the channel *backup*.
 Administration
 ==============
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 Storage requirements
 --------------------
 
@@ -405,6 +418,9 @@ of interesting configuration possibilities to shake out. Have a rummage in the
 
 Tools
 =====
+
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 ctl\_backups
 ------------

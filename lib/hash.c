@@ -5,11 +5,13 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <syslog.h>
 
 #include "assert.h"
 #include "hash.h"
 #include "mpool.h"
 #include "strhash.h"
+#include "util.h"
 #include "xmalloc.h"
 
 /*
@@ -43,10 +45,13 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       assert(table);
       assert(size);
 
-      table->size  = size;
+      table->size = size;
+      table->count = 0;
+      table->seed = rand(); /* might be zero, that's okay */
+      table->hash_load_warned_at = 0;
 
       /* Allocate the table -- different for using memory pools and not */
-      if(use_mpool) {
+      if (use_mpool) {
           /* Allocate an initial memory pool for 32 byte keys + the hash table
            * + the buckets themselves */
           table->pool =
@@ -64,15 +69,32 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       return table;
 }
 
+#define check_load_factor(table) do {                                   \
+    hash_table *t = (table);                                            \
+    const double load_factor = t->count * 1.0 / t->size;                \
+    if (load_factor > 3.0) {                                            \
+        if (t->hash_load_warned_at == 0                                 \
+            || (int) load_factor > t->hash_load_warned_at) {            \
+            xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
+                               "table=<%p> entries=<" SIZE_T_FMT ">"    \
+                               " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
+                               t, t->count, t->size, load_factor);      \
+            t->hash_load_warned_at = (int) load_factor;                 \
+        }                                                               \
+    }                                                                   \
+    else {                                                              \
+        t->hash_load_warned_at = 0;                                     \
+    }                                                                   \
+} while(0)
+
 /*
 ** Insert 'key' into hash table.
 ** Returns a non-NULL pointer which is either the passed @data pointer
 ** or, if there was already an entry for @key, the old data pointer.
 */
-
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
-      unsigned val = strhash(key) % table->size;
+      unsigned val = strhash_seeded(table->seed, key) % table->size;
       bucket *ptr, *newptr;
       bucket **prev;
 
@@ -93,12 +115,14 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
           }
           (table->table)[val] -> next = NULL;
           (table->table)[val] -> data = data;
+          table->count++;
+          check_load_factor(table);
           return (table->table)[val] -> data;
       }
 
       /*
       ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, increment its count.
+      ** has already been inserted, and if so, replace its data
       */
       for (prev = &((table->table)[val]), ptr=(table->table)[val];
            ptr;
@@ -124,6 +148,8 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
               newptr->data = data;
               newptr->next = ptr;
               *prev = newptr;
+              table->count++;
+              check_load_factor(table);
               return data;
           }
       }
@@ -142,9 +168,10 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       newptr->data = data;
       newptr->next = NULL;
       *prev = newptr;
+      table->count++;
+      check_load_factor(table);
       return data;
 }
-
 
 /*
 ** Look up a key and return the associated data.  Returns NULL if
@@ -159,7 +186,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
       if (!table->size)
           return NULL;
 
-      val = strhash(key) % table->size;
+      val = strhash_seeded(table->seed, key) % table->size;
 
       if (!(table->table)[val])
             return NULL;
@@ -183,7 +210,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
-      unsigned val = strhash(key) % table->size;
+      unsigned val = strhash_seeded(table->seed, key) % table->size;
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -226,6 +253,7 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
                   free(ptr->key);
                   free(ptr);
               }
+              table->count--;
               return data;
           }
           if (cmpresult < 0) {
@@ -286,6 +314,7 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
       }
       table->table = NULL;
       table->size = 0;
+      table->count = 0;
 }
 
 /*
@@ -334,19 +363,8 @@ EXPORTED strarray_t *hash_keys(hash_table *table)
 
 EXPORTED int hash_numrecords(hash_table *table)
 {
-    unsigned i;
-    bucket *temp;
-    int count = 0;
-
-    for (i = 0; i < table->size; i++) {
-        temp = (table->table)[i];
-        while (temp) {
-            count++;
-            temp = temp->next;
-        }
-    }
-
-    return count;
+    /* XXX macro or inline this if we keep the count field long term */
+    return table->count;
 }
 
 EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),

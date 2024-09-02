@@ -43,12 +43,14 @@
 #ifndef __CYRUS_SEARCH_RESULT_H__
 #define __CYRUS_SEARCH_RESULT_H__
 
+#include "index.h"
 #include "mailbox.h"
 #include "message.h"
 #include "conversations.h"
 #include "util.h"
 #include "bitvector.h"
 #include "ptrarray.h"
+#include "dynarray.h"
 #include "search_engines.h"
 
 struct sortcrit;            /* imapd.h */
@@ -57,17 +59,31 @@ typedef struct search_subquery search_subquery_t;
 typedef struct search_query search_query_t;
 typedef struct search_folder search_folder_t;
 
+struct search_folder_partnum {
+    uint32_t uid;
+    uint32_t partnum;
+};
+
 struct search_folder {
     char *mboxname;
     uint32_t uidvalidity;
-    uint64_t highest_modseq; /* of returned messages, not the folder */
-    uint64_t first_modseq; /* of returned messages, not the folder */
-    uint64_t last_modseq; /* of returned messages, not the folder */
     int id;
     bitvector_t uids;
     bitvector_t found_uids;
     int found_dirty;
-    hashu64_table partids; /* maps uid to starray_t* of part ids */
+    dynarray_t partnums; /* list of struct search_folder_partnum */
+    struct {
+        /* RFC 4731 result items */
+        bitvector_t all_uids;    /* for SAVE + ALL and/or COUNT) */
+        uint32_t all_count;      /* for COUNT (of all matching messages) */
+        uint32_t uid_count;      /* number of returned messages */
+        uint32_t min_uid;        /* for MIN */
+        uint32_t max_uid;        /* for MAX */
+        uint32_t last_match;     /* msgno of last match (to inform next PARTIAL) */
+        uint64_t first_modseq;   /* of min_uid, not the folder */
+        uint64_t last_modseq;    /* of max_uid, not the folder */
+        uint64_t highest_modseq; /* of returned messages, not the folder */
+    } esearch;
 };
 
 struct search_subquery {
@@ -104,12 +120,12 @@ struct search_query {
     const struct sortcrit *sortcrit;
     int multiple;
     int need_ids;
-    int need_expunge;
     int want_expunged;
     uint32_t want_mbtype;
     int verbose;
     int ignore_timer;
     int attachments_in_any;
+    int want_partids;
 
     /*
      * A query comprises multiple sub-queries logically ORed together.
@@ -161,6 +177,15 @@ struct search_query {
      * folder, guid.
      */
     ptrarray_t merged_msgdata;
+
+    /* A map from string message part ids to a unique numeric
+     * identifier. This allows to save good chunk of string mallocs */
+    hashu64_table partid_by_num;
+    hash_table partnum_by_id;
+    uint32_t partnum_seq;
+
+    /* For INPROGRESS responses during IMAP SEARCH */
+    struct progress_rock *prock;
 };
 
 extern search_query_t *search_query_new(struct index_state *state,
@@ -171,11 +196,13 @@ extern void search_query_free(search_query_t *query);
 extern search_folder_t *search_query_find_folder(search_query_t *query,
                                                  const char *mboxname);
 extern void search_folder_use_msn(search_folder_t *, struct index_state *);
-extern struct seqset *search_folder_get_seqset(const search_folder_t *);
+extern seqset_t *search_folder_get_seqset(const search_folder_t *);
+extern seqset_t *search_folder_get_all_seqset(const search_folder_t *);
 extern int search_folder_get_array(const search_folder_t *, unsigned int **);
 extern uint32_t search_folder_get_min(const search_folder_t *);
 extern uint32_t search_folder_get_max(const search_folder_t *);
 extern unsigned int search_folder_get_count(const search_folder_t *);
+extern unsigned int search_folder_get_all_count(const search_folder_t *);
 #define search_folder_foreach(folder, u) \
     for ((u) = bv_next_set(&(folder)->uids, 0) ; \
          (u) != -1 ; \

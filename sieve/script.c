@@ -163,6 +163,30 @@ static int stub_parse_error(int lineno, const char *msg,
     return SIEVE_OK;
 }
 
+#ifdef WITH_DAV
+#include <libxml/uri.h>
+
+static int listvalidator(void *ic __attribute__((unused)),
+                         const char *list)
+{
+    const char *addrbook_urn_full = "urn:ietf:params:sieve:addrbook:";
+    const char *addrbook_urn_abbrev = ":addrbook:";
+    int ret = SIEVE_FAIL;
+
+    /* percent-decode list URI */
+    char *uri = xmlURIUnescapeString(list, strlen(list), NULL);
+
+    if (!strncmp(uri, addrbook_urn_full, strlen(addrbook_urn_full)) ||
+        !strncmp(uri, addrbook_urn_abbrev, strlen(addrbook_urn_abbrev))) {
+        ret = SIEVE_OK;
+    }
+
+    free(uri);
+
+    return ret;
+}
+#endif /* WITH_DAV */
+
 EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 {
     sieve_interp_t *interpreter = NULL;
@@ -200,20 +224,20 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
         goto done;
     }
 
     res = sieve_register_duplicate(interpreter, &stub_duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
         goto done;
     }
 
 #ifdef WITH_DAV
-    sieve_register_extlists(interpreter,
-                            (sieve_list_validator *) &stub_generic,
+    sieve_register_extlists(interpreter, &listvalidator,
                             (sieve_list_comparator *) &stub_generic);
+    sieve_register_processcal(interpreter, (sieve_callback *) &stub_generic);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
@@ -294,9 +318,13 @@ EXPORTED int sieve_script_parse_string(sieve_interp_t *interp, const char *s,
                                        char **errors, sieve_script_t **script)
 {
     struct yy_buffer_state *buffer = sieve_scan_string(s);
+    sieve_script_t *myscript = NULL;
+
+    if (!script) script = &myscript;
 
     int res = _sieve_script_parse_only(interp, errors, script);
 
+    sieve_script_free(&myscript);
     sieve_delete_buffer(buffer);
 
     return res;
@@ -690,7 +718,7 @@ static int do_sieve_error(int ret,
     }
 
     if (implicit_keep) {
-        sieve_keep_context_t keep_context = { imapflags, NULL, NULL };
+        sieve_keep_context_t keep_context = { 1, imapflags, NULL, NULL };
         int keep_ret;
 
         if (interp->edited_headers) {
@@ -907,7 +935,7 @@ static int do_action_list(sieve_interp_t *interp,
 
 
 /* execute some bytecode */
-int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
+int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_ptr, sieve_interp_t *i,
                   void *sc, void *m, variable_list_t *variables,
                   action_list_t *actions, notify_list_t *notify_list,
                   duptrack_list_t *duptrack_list, const char **errmsg);

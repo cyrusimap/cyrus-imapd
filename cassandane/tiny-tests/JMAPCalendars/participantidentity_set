@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_participantidentity_set
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['ParticipantIdentity/set', {
+            create => {
+                partid1 => {
+                    sendTo => {
+                        imip => 'mailto:foo@local',
+                    },
+                },
+            },
+            update => {
+                partid2 => {
+                    name => 'bar',
+                },
+            },
+            destroy => ['partid3'],
+        }, 'R1']
+    ]);
+
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notCreated}{partid1}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notUpdated}{partid2}{type});
+    $self->assert_str_equals('forbidden',
+        $res->[0][1]{notDestroyed}{partid3}{type});
+}

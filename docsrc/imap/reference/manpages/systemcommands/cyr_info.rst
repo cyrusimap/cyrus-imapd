@@ -66,7 +66,7 @@ configuring Cyrus easier.
 
 .. option:: proc
 
-    Print all currently connected processes in the proc directory
+    Print active processes that :cyrusman:`master(8)` is managing.
 
 Options
 =======
@@ -81,11 +81,11 @@ Options
 
     Read service specifications from *config-file* (cyrus.conf format).
 
-.. option:: -n servicename
+.. option:: -n name, --service=name
 
     Read the configuration as if for the service named *name*.
 
-.. option:: -s version
+.. option:: -s version, --since=version
 
     Highlight configuration options that have been added or whose behaviour
     has been modified since *version*.  Use this option after a server upgrade,
@@ -103,7 +103,7 @@ Examples
 
 ..
 
-        List all the proc files and who they're logged in as.
+        List the active processes that master is managing
 
 .. only:: html
 
@@ -145,4 +145,4 @@ Files
 
 See Also
 ========
-:cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`
+:cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`, :cyrusman:`master(8)`

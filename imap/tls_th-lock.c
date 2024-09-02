@@ -8,11 +8,9 @@
 #include <pthread.h>
 #include <syslog.h>
 
-#include <openssl/ssl.h>
-
-#include "tls_th-lock.h"
-
 #ifdef HAVE_SSL
+#include <openssl/ssl.h>
+#include "tls_th-lock.h"
 
 /*
  * This entire interface is obsoleted by OpenSSL 1.1.0.

@@ -53,19 +53,19 @@ sub read_conf {
         if (/^#/) {
             next;
         }
-        if (/\@include:\s+(.*)$/) {
-            print "i will include configure file $1.\n";
+        if (/\@include:\s*(.*)$/) {
+            print "I will include configure file $1.\n";
             push @configs, $1;
         }
-        if (/^configdirectory:\s+(.*)$/) {
+        if (/^configdirectory:\s*(.*)$/) {
             $confdir = $1;
-            print "i will configure directory $confdir.\n";
+            print "I will configure directory $confdir.\n";
         }
-        if (/^(?:meta)?partition-.*:\s+(.*)$/) {
+        if (/^(?:meta)?partition-.*:\s*(.*)$/) {
             if (grep /$1/, @parts) {
                 next;
             }
-            print "i saw partition $1.\n";
+            print "I saw partition $1.\n";
             push @parts, $1;
         }
     }
@@ -81,6 +81,8 @@ while ($conf = shift @configs) {
     read_conf($conf);
 }
 
+defined $confdir or die "'configdirectory:' in $imapdconf is missing";
+@parts or die "No partition defined in $imapdconf";
 $d = $confdir;
 
 print "configuring $d...\n";

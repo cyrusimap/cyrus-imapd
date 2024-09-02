@@ -13,7 +13,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **promstatsd** [ **-C** *config-file* ] [ **-v** ] [ **-f** *frequency* ] [ **-d** ]
+    **promstatsd** [ **-C** *config-file* ] [ **-v** ] [ **-f** *service-frequency* ] [ **-d** ]
 
     **promstatsd** [ **-C** *config-file* ] [ **-v** ] **-c**
 
@@ -36,11 +36,13 @@ the "/metrics" URL, if "prometheus" has been set in **httpmodules** in
 **promstatsd** |default-conf-text|
 
 In the first synopsis, **promstatsd** will run as a daemon, updating the
-report at the specified *frequency*.  If the optional **-f** *frequency*
-argument is not provided, the **prometheus_update_freq** from
-:cyrusman:`imapd.conf(5)` will be used, which defaults to 10 seconds.  This
-invocation should be run from the DAEMON section of :cyrusman:`cyrus.conf(5)`
-(see :ref:`promstatsd-examples` below).
+service and (optionally) usage reports at the frequencies set by the
+**prometheus_service_update_freq** and **prometheus_usage_update_freq**
+:cyrusman:`imapd.conf(5)` options, which default to 10s and disabled,
+respectively.  The optional **-f** *service-frequency* argument can be used to
+override **prometheus_service_update_freq**.  This invocation should be run
+from the DAEMON section of :cyrusman:`cyrus.conf(5)` (see
+:ref:`promstatsd-examples` below).
 
 In the second synopsis, **promstatsd** will clean up all statistics files and
 exit.  The statistics Cyrus maintains are only valid while Cyrus is running,
@@ -48,7 +50,7 @@ so this invocation must be run from the START section of
 :cyrusman:`cyrus.conf(5)` (see :ref:`promstatsd-examples` below) to clean up
 after the previous run, before new service processes are started.
 
-In the third synopsis, **promstatsd** will immediately update the report
+In the third synopsis, **promstatsd** will immediately update the report(s)
 once, and then exit.  This can be safely used while another **promstatsd**
 process runs in daemon form.  It is useful if you need to update the report
 *now* for some reason, rather than waiting for the daemon's next update.
@@ -69,7 +71,7 @@ Options
 
 .. option:: -1
 
-    Update the report once and exit.
+    Update the report(s) once and exit.
 
 .. option:: -c
 
@@ -80,11 +82,11 @@ Options
     Debug mode -- **promstatsd** will not background itself, for aid in
     debugging.
 
-.. option:: -f frequency
+.. option:: -f service-frequency
 
-    Update the report every *frequency* seconds.  If not specified, the
-    **prometheus_update_freq** from :cyrusman:`imapd.conf(5)` will be used,
-    which defaults to 10 seconds.
+    Update the service report every *service-frequency* seconds.  If not
+    specified, the **prometheus_service_update_freq** from
+    :cyrusman:`imapd.conf(5)` will be used, which defaults to 10 seconds.
 
 .. option:: -v
 

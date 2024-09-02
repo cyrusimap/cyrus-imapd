@@ -1,0 +1,109 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_thread_get
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+    my %params;
+    my $dt;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $drafts = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($drafts);
+
+    xlog $self, "generating email A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -3));
+    $exp{A} = $self->make_message("Email A", date => $dt, body => "a");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog $self, "generating email B";
+    $exp{B} = $self->make_message("Email B", body => "b");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog $self, "generating email C referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -2));
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "c");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "generating email D referencing A";
+    $dt = DateTime->now();
+    $dt->add(DateTime::Duration->new(hours => -1));
+    $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
+    $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
+
+    xlog $self, "fetch emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+
+    # Map messages by body contents
+    my %m = map { $_->{bodyValues}{$_->{textBody}[0]{partId}}{value} => $_ } @{$res->[1][1]{list}};
+    my $msgA = $m{"a"};
+    my $msgB = $m{"b"};
+    my $msgC = $m{"c"};
+    my $msgD = $m{"d"};
+    $self->assert_not_null($msgA);
+    $self->assert_not_null($msgB);
+    $self->assert_not_null($msgC);
+    $self->assert_not_null($msgD);
+
+    %m = map { $_->{threadId} => 1 } @{$res->[1][1]{list}};
+    my @threadids = keys %m;
+
+    xlog $self, "create draft replying to email A";
+    $res = $jmap->CallMethods(
+        [[ 'Email/set', { create => { "1" => {
+            mailboxIds           => {$drafts =>  JSON::true},
+            inReplyTo            => $msgA->{messageId},
+            from                 => [ { name => "", email => "sam\@acme.local" } ],
+            to                   => [ { name => "", email => "bugs\@acme.local" } ],
+            subject              => "Re: Email A",
+            textBody             => [{ partId => '1' }],
+            bodyValues           => { 1 => { value => "I'm givin' ya one last chance ta surrenda!" }},
+            keywords             => { '$draft' => JSON::true },
+        }}}, "R1" ]]);
+    my $draftid = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftid);
+
+    xlog $self, "get threads";
+    $res = $jmap->CallMethods([['Thread/get', { ids => \@threadids }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
+    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+
+    %m = map { $_->{id} => $_ } @{$res->[0][1]{list}};
+    my $threadA = $m{$msgA->{threadId}};
+    my $threadB = $m{$msgB->{threadId}};
+
+    # Assert all emails are listed
+    $self->assert_num_equals(4, scalar @{$threadA->{emailIds}});
+    $self->assert_num_equals(1, scalar @{$threadB->{emailIds}});
+
+    # Assert sort order by date
+    $self->assert_str_equals($msgA->{id}, $threadA->{emailIds}[0]);
+    $self->assert_str_equals($msgC->{id}, $threadA->{emailIds}[1]);
+    $self->assert_str_equals($msgD->{id}, $threadA->{emailIds}[2]);
+    $self->assert_str_equals($draftid, $threadA->{emailIds}[3]);
+}

@@ -1,0 +1,71 @@
+language: perl
+sudo: required
+dist: trusty
+group: edge
+addons:
+  apt:
+    packages:
+        libmagic-dev
+cache:
+  apt: true
+os: linux
+compiler: gcc
+install:
+- cpanm --notest experimental
+- cpanm --notest AnyEvent
+- cpanm --notest BSD::Resource
+- cpanm --notest Clone
+- cpanm --notest Config::IniFiles
+- cpanm --notest Convert::Base64
+- cpanm --notest Data::ICal
+- cpanm --notest Data::ICal::TimeZone
+- cpanm --notest Data::UUID
+- cpanm --notest DateTime
+- cpanm --notest DateTime::Format::ICal
+- cpanm --notest DateTime::Format::ISO8601
+- cpanm --notest DBD::SQLite
+- cpanm --notest Encode::IMAPUTF7
+- cpanm --notest File::LibMagic
+- cpanm --notest File::Slurp
+- cpanm --notest File::chdir
+- cpanm --notest HTTP::Tiny
+- cpanm --notest IO::Socket::INET6
+- cpanm --notest IO::Socket::SSL
+- cpanm --notest IO::Stringy
+- cpanm --notest JSON
+- cpanm --notest JSON::XS
+- cpanm --notest List::Pairwise
+- cpanm --notest MIME::Types
+- cpanm --notest Mail::IMAPTalk
+- cpanm --notest Math::Int64
+- cpanm --notest Net::LDAP::Server
+- cpanm --notest Net::Server
+- cpanm --notest News::NNTPClient
+- cpanm --notest String::CRC32
+- cpanm --notest Test::Unit
+- cpanm --notest Text::LevenshteinXS
+- cpanm --notest Text::VCardFast
+- cpanm --notest Tie::DataUUID
+- cpanm --notest Unix::Syslog
+- cpanm --notest XML::DOM
+- cpanm --notest XML::Fast
+- cpanm --notest XML::Generator
+- cpanm --notest XML::Spice
+- cpanm --notest URI;
+- cpanm --notest HTTP::Daemon;
+- cpanm --notest https://github.com/cyrusimap/Mail-JMAPTalk.git
+- cpanm --notest https://github.com/cyrusimap/Net-DAVTalk.git
+- cpanm --notest https://github.com/cyrusimap/Net-CalDAVTalk.git
+- cpanm --notest https://github.com/cyrusimap/Net-CardDAVTalk.git
+script:
+- make NOCYRUS=1
+branches:
+  only:
+  - master
+notifications:
+  slack:
+    on_pull_requests: false
+    on_success: change
+    on_failure: always
+    rooms:
+      - secure: bh4PiwcHYwn2qjKgidSKX6Ibq/Gt8+q6IL7YDWlfpDPYCuzdzSHBpm8qMpmBIjTemnsragJeR4pO9XEX20nhE9Lr7915wiBmYWqcmvcJGpJ1/nJz2lJYtBKl/dKZguQn3g4A+JgjUuXgzllI4ZsbbRkzL8dBC+py34p4ANtMKycXeGCwysnPfHav5VxQQnOsJUbIKDJiJPON2cR7e8quE6WpS1mEzUD+kaRWMUImKktMX1hrQH/71tNNMTqv0eHewci1akaZecFtXQi8D9Yfh1YBm8yxdLI9EgnglonEgbBCGG6WRODcxu/gEJlvXFMN+c4ojoyq4lNGnEqzLjDDVI1LoCNUcWbMFFhIGAA1SE+71fwDlKjLxUzodgJPb/yrWy4uwx8eBM3W8PIhFgZyo0irlV/0U3zNFWjjNPTRXUNNIZQu2XDLAhpiRZbMn4zsvydq2ngWnTdJfgpycYiBfL5zNdwdPpAQomQLl1JakWqyMSBZtz3Hbv3vRmb4rIogh5AHuwxKQrK5JNI9eZ5yPI7eUEpTq1nYD7syZPDj3gddjdteBx8ShjHH6ddteQX2OSUXwtiF90cEgYq0z8j2HxaNRIVrkeUNyeRTZXZ0wxWM7Fcz0Z7fRzsv1CXZwjDPmxARiIhbVhXxTgbED9+i2aCH9aZNrMTqoRUQWjLzgXw=

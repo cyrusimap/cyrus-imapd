@@ -3,6 +3,7 @@
 *.gcda
 *.la
 *.lo
+*.loT
 *.o
 *.orig
 *.patch
@@ -14,6 +15,7 @@
 *.tar.bz2
 *.*-cunit.c
 *~
+.clang-format
 .cunit-*.c
 .deps
 .dirstamp
@@ -32,8 +34,13 @@ backup/ctl_backups
 backup/cyr_backup
 backup/restore
 bench/cyrdbbench
-cmulocal/
+cmulocal/libtool.m4
+cmulocal/ltoptions.m4
+cmulocal/ltsugar.m4
+cmulocal/ltversion.m4
+cmulocal/lt~obsolete.m4
 compile
+confdefs.h
 config.guess
 config.h
 config.h.in
@@ -42,6 +49,7 @@ config.status
 config.status.lineno
 config.sub
 configure
+conftest*
 com_err/et/compile_et
 coverage.xml
 cscope.out
@@ -79,11 +87,14 @@ imap/cyr_deny
 imap/cyr_df
 imap/cyr_expire
 imap/cyr_info
+imap/cyr_ls
+imap/cyr_pwd
 imap/cyr_sequence
 imap/cyr_sphinxmgr
 imap/cyr_synclog
 imap/cyr_userseen
 imap/cyr_virusscan
+imap/cyr_withlock_run
 imap/cyrdump
 imap/dav_reconstruct
 imap/deliver
@@ -121,6 +132,7 @@ imap/promdata.h
 imap/promstatsd
 imap/quota
 imap/reconstruct
+imap/relocate_by_id
 imap/search_test
 imap/smmapd
 imap/squatter

@@ -68,7 +68,7 @@
 
 static int usage(const char *name);
 
-int verbose = 0;
+static int verbose = 0;
 
 /* ====================================================================== */
 
@@ -117,7 +117,7 @@ static int do_search(const char *mboxname,
     buf_putc(&querytext, '\r');
     buf_cstring(&querytext);
 
-    r = mboxname_init_namespace(&ns, /*isadmin*/0);
+    r = mboxname_init_namespace(&ns, /*options*/0);
     if (r) {
         fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
         goto out;
@@ -200,7 +200,7 @@ static int do_serialise(char **words, int nwords)
     buf_putc(&querytext, '\r');
     buf_cstring(&querytext);
 
-    r = mboxname_init_namespace(&ns, /*isadmin*/0);
+    r = mboxname_init_namespace(&ns, /*options*/0);
     if (r) {
         fprintf(stderr, "Failed to initialise namespace: %s\n", error_message(r));
         goto out;
@@ -328,10 +328,13 @@ static int usage(const char *name)
     exit(EX_USAGE);
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "search_test: %s\n", s);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

@@ -12,6 +12,7 @@ static void test_double_end(void)
     vparser.base = card;
     int vr = vparse_parse(&vparser, 0);
     CU_ASSERT_EQUAL(vr, PE_MISMATCHED_CARD);
+    vparse_free(&vparser);
 }
 
 static void test_wrap_onechar(void)
@@ -30,12 +31,13 @@ static void test_wrap_onechar(void)
     vparser.base = card;
     int vr = vparse_parse(&vparser, 0);
     CU_ASSERT_EQUAL(vr, 0);
-    struct buf *buf = buf_new(); \
-    vparse_tobuf(vparser.card, buf); \
-    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+    struct buf *buf = buf_new();
+    vparse_tobuf(vparser.card, buf);
+    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf));
     vparse_free(&vparser);
 
     // XXX test value
+    buf_destroy(buf);
 }
 
 static void test_repair_version(void)
@@ -54,10 +56,11 @@ static void test_repair_version(void)
     vparser.base = card;
     int vr = vparse_parse(&vparser, 0);
     CU_ASSERT_EQUAL(vr, 0);
-    struct buf *buf = buf_new(); \
-    vparse_tobuf(vparser.card, buf); \
-    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+    struct buf *buf = buf_new();
+    vparse_tobuf(vparser.card, buf);
+    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf));
     vparse_free(&vparser);
+    buf_destroy(buf);
 }
 
 static void test_repair_control_chars(void)
@@ -328,7 +331,7 @@ static void test_multiparam_type(void)
         struct buf *buf = vcard_as_buf(vcard); \
         CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
         vparse_free_card(vcard); \
-        buf_free(buf); \
+        buf_destroy(buf); \
     }
 
     TESTCASE(

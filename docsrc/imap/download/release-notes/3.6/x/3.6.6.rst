@@ -1,0 +1,22 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.6.6 Release Notes
+==============================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.6/cyrus-imapd-3.6.6.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.6.6/cyrus-imapd-3.6.6.tar.gz.sig
+
+.. _relnotes-3.6.6-changes:
+
+Changes since 3.6.5
+===================
+
+Bug fixes
+---------
+
+* Fixed :issue:`4932`: LITERAL+ broken in mupdate
+* Fixed :issue:`4947`: updating a script on a pre-sieve mailbox server
+  resulted in an empty script on a sieve-mailbox replica

@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_msg_replication_new_mas
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case new_mas: new message appears, on master only";
+
+    xlog $self, "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog $self, "Append a message and store an annotation";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
+
+    xlog $self, "Before replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog $self, "Before replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog $self, "After replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog $self, "After replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog $self, "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+}

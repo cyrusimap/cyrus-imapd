@@ -51,11 +51,14 @@
 #include <libical/ical.h>
 #undef icalerror_warn
 #define icalerror_warn(message) \
-{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s\n", __FUNCTION__, __FILE__, __LINE__, message);}
+{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
+#include "dav_util.h"
 #include "mailbox.h"
 
-#define PER_USER_CAL_DATA \
+#define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
+
+#define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
 #ifndef HAVE_NEW_CLONE_API
@@ -63,6 +66,12 @@
 #define icalcomponent_clone           icalcomponent_new_clone
 #define icalproperty_clone            icalproperty_new_clone
 #define icalparameter_clone           icalparameter_new_clone
+#endif
+
+#ifndef HAVE_GET_COMPONENT_NAME
+/* This should never match anything in the wild
+   which means that we can't patch X- components */
+#define icalcomponent_get_component_name(comp)  "X-CYR-"
 #endif
 
 /* Initialize libical timezones. */
@@ -74,6 +83,57 @@ extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);
 extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
+extern void icalproperty_set_xparam(icalproperty *prop,
+                                    const char *name, const char *val, int replace);
+extern const char *icalproperty_get_xparam_value(icalproperty *prop,
+                                                 const char *name);
+
+
+/* Strip per-user data to personalize iCalendar resource.
+ *
+ * COLOR and CATEGORIES properties are not stripped.
+ * Instead, they are added to the per-user VPATCH when the
+ * user overwrites them in their copy of the resource.
+ */
+#define ICAL_PERSONAL_DATA_INITIALIZER         \
+    "CALDATA %(VPATCH {324+}\r\n"         \
+    "BEGIN:VPATCH\r\n"                    \
+    "VERSION:1\r\n"                       \
+    "DTSTAMP:19760401T005545Z\r\n"        \
+    "UID:strip-owner-cal-data\r\n"        \
+    "BEGIN:PATCH\r\n"                     \
+    "PATCH-TARGET:/VCALENDAR/ANY\r\n"     \
+    "PATCH-DELETE:/VALARM\r\n"            \
+    "PATCH-DELETE:#TRANSP\r\n"            \
+    "PATCH-DELETE:#X-MOZ-LASTACK\r\n"     \
+    "PATCH-DELETE:#X-MOZ-SNOOZE-TIME\r\n" \
+    "PATCH-DELETE:#X-APPLE-DEFAULT-ALARM\r\n" \
+    "PATCH-DELETE:#X-JMAP-USEDEFAULTALERTS\r\n" \
+    "END:PATCH\r\n"                       \
+    "END:VPATCH\r\n)"
+
+extern void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata);
+extern void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struct dlist *dl);
+
+struct icalsupport_personal_data {
+    time_t lastmod;
+    modseq_t modseq;
+    int usedefaultalerts;
+    icalcomponent *vpatch;
+    struct message_guid guid; // read-only
+};
+
+extern int icalsupport_encode_personal_data(struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern int icalsupport_decode_personal_data(const struct buf *value,
+                                            struct icalsupport_personal_data *data);
+
+extern void icalsupport_personal_data_fini(struct icalsupport_personal_data *data);
+
+extern int icalcomponent_get_usedefaultalerts(icalcomponent *comp);
+extern void icalcomponent_set_usedefaultalerts(icalcomponent *comp, int use, const char *atag);
+
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
@@ -87,6 +147,8 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                    int (*callback) (icalcomponent *comp,
                                                     icaltimetype start,
                                                     icaltimetype end,
+                                                    icaltimetype recurid,
+                                                    int is_standalone,
                                                     void *data),
                                    void *callback_data);
 
@@ -104,7 +166,9 @@ extern icalcomponent *record_to_ical(struct mailbox *mailbox,
                                      const struct index_record *record,
                                      strarray_t *schedule_addresses);
 
-extern const char *get_icalcomponent_errstr(icalcomponent *ical);
+#define ICAL_SUPPORT_STRICT 0
+#define ICAL_SUPPORT_ALLOW_INVALID_IANA_TIMEZONE (1<<0)
+extern const char *get_icalcomponent_errstr(icalcomponent *ical, unsigned flags);
 
 extern void icalcomponent_remove_invitee(icalcomponent *comp,
                                          icalproperty *prop);
@@ -116,6 +180,9 @@ extern icaltimetype icalcomponent_get_recurrenceid_with_zone(icalcomponent *c);
 
 extern icalproperty *icalcomponent_get_x_property_by_name(icalcomponent *comp,
                                                           const char *name);
+
+extern void icalcomponent_remove_x_property_by_name(icalcomponent *comp,
+                                                    const char *name);
 
 extern struct icalperiodtype icalcomponent_get_utc_timespan(icalcomponent *comp,
                                                             icalcomponent_kind kind,
@@ -137,6 +204,44 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
 
+/* Functions to work around libical TZID prefixes */
+extern const char *icaltimezone_get_location_tzid(const icaltimezone *zone);
+extern const char *icaltime_get_location_tzid(icaltimetype t);
+
+extern icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid);
+
+struct observance {
+    const char *name;
+    icaltimetype onset;
+    int offset_from;
+    int offset_to;
+    int is_daylight;
+    int is_std;
+    int is_gmt;
+};
+
+extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
+                                                     icaltimetype *startp, icaltimetype *endp,
+                                                     icalarray *obsarray,
+                                                     struct observance *proleptic,
+                                                     icalcomponent **eternal_std,
+                                                     icalcomponent **eternal_dst,
+                                                     icaltimetype *last_dtstart,
+                                                     int ms_compatible);
+
+extern int ical_categories_is_color(icalproperty *cprop);
+
+/* Normalizes both standard and cyrus-extensions */
+extern void icalcomponent_normalize_x(icalcomponent *ical);
+
+/* Returns true if the component's main temporal such as dtstart is of type DATE */
+extern int icalcomponent_temporal_is_date(icalcomponent *comp);
+
+#ifdef WITH_JMAP
+extern const char *icalcomponent_get_jmapid(icalcomponent *comp);
+extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
+#endif
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 
@@ -145,14 +250,6 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
 
 #define icalcomponent_get_acknowledged_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_ACKNOWLEDGED_PROPERTY)
-
-#ifndef HAVE_RFC7986_COLOR
-
-/* Replacement for missing function in 3.0.0 <= libical < 3.0.5 */
-
-extern icalproperty *icalproperty_new_color(const char *v);
-
-#endif /* HAVE_RFC7986_COLOR */
 
 #ifndef HAVE_RSCALE
 

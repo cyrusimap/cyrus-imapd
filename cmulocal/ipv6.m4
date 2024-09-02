@@ -68,7 +68,7 @@ AC_MSG_CHECKING([whether you have ss_family in struct sockaddr_storage])
 AC_CACHE_VAL(ipv6_cv_ss_family, [dnl
 AC_TRY_COMPILE([#include <sys/types.h>
 #include <sys/socket.h>],
-        [struct sockaddr_storage ss; int i = ss.ss_family;],
+        [struct sockaddr_storage ss = {0}; int i = ss.ss_family; (void) i;],
         [ipv6_cv_ss_family=yes], [ipv6_cv_ss_family=no])])dnl
 if test $ipv6_cv_ss_family = yes; then
   ifelse([$1], , AC_DEFINE(HAVE_SS_FAMILY,[],[Is there an ss_family in sockaddr_storage?]), [$1])
@@ -84,7 +84,7 @@ AC_MSG_CHECKING([whether you have sa_len in struct sockaddr])
 AC_CACHE_VAL(ipv6_cv_sa_len, [dnl
 AC_TRY_COMPILE([#include <sys/types.h>
 #include <sys/socket.h>],
-               [struct sockaddr sa; int i = sa.sa_len;],
+               [struct sockaddr sa = {0}; int i = sa.sa_len; (void) i;],
                [ipv6_cv_sa_len=yes], [ipv6_cv_sa_len=no])])dnl
 if test $ipv6_cv_sa_len = yes; then
   ifelse([$1], , AC_DEFINE(HAVE_SOCKADDR_SA_LEN,[],[Does sockaddr have an sa_len?]), [$1])

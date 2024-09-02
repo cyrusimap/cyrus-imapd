@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_language_header
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+                create => {
+                    email1 => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        from => [{ email => q{foo1@bar} }],
+                        bodyStructure => {
+                            language => ['de-DE', 'en-CA'],
+                            partId => '1',
+                        },
+                        bodyValues => {
+                            "1" => {
+                                value => "Das ist eine Email. This is an email.",
+                            },
+                        },
+                    },
+                },
+            }, 'R1'],
+        ['Email/get', {
+                ids => ['#email1'],
+                properties => [
+                    'bodyStructure',
+                ],
+                bodyProperties => [
+                    'language',
+                    'header:Content-Language',
+                ],
+            }, 'R2'],
+    ]);
+    $self->assert_str_equals(' de-DE, en-CA',
+        $res->[1][1]{list}[0]{bodyStructure}{'header:Content-Language'});
+    $self->assert_deep_equals(['de-DE', 'en-CA'],
+        $res->[1][1]{list}[0]{bodyStructure}{language});
+}

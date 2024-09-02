@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#include "hash.h"
 #include "vparse.h"
 #include "xmalloc.h"
 
@@ -187,7 +188,7 @@ repeat:
     r = _parse_param_key(state, &haseq);
     if (r) return r;
 
-    if (state->multiparam && strarray_find_case(state->multiparam, state->param->name, 0) >= 0)
+    if (state->multiparam && strarray_contains_case(state->multiparam, state->param->name))
         multiparam = 1;
 
     /* now get the value */
@@ -422,9 +423,9 @@ out:
 
 static int _parse_entry_value(struct vparse_state *state)
 {
-    if (state->multivalsemi && strarray_find_case(state->multivalsemi, state->entry->name, 0) >= 0)
+    if (state->multivalsemi && strarray_contains_case(state->multivalsemi, state->entry->name))
         return _parse_entry_multivalue(state, ';');
-    if (state->multivalcomma && strarray_find_case(state->multivalcomma, state->entry->name, 0) >= 0)
+    if (state->multivalcomma && strarray_contains_case(state->multivalcomma, state->entry->name))
         return _parse_entry_multivalue(state, ',');
 
     NOTESTART();
@@ -683,6 +684,11 @@ EXPORTED void vparse_free_entry(struct vparse_entry *entry)
     _free_entry(entry);
 }
 
+EXPORTED void vparse_free_param(struct vparse_param *param)
+{
+    _free_param(param);
+}
+
 EXPORTED void vparse_fillpos(struct vparse_state *state, struct vparse_errorpos *pos)
 {
     int l = 1;
@@ -819,7 +825,11 @@ static void _checkwrap(unsigned char c, struct vparse_target *tgt)
     buf_putc(tgt->buf, ' ');
 }
 
-static void _value_to_tgt(const char *value, struct vparse_target *tgt)
+#define VALUE_ENCODE (1<<0)
+#define VALUE_FOLD   (1<<1)
+
+static void _value_to_tgt(const char *value, struct vparse_target *tgt,
+                          unsigned flags)
 {
     if (!value) return; /* null fields or array items are empty string */
     for (; *value; value++) {
@@ -829,7 +839,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
          *  0
          * UID:[...]
          * which is totally valid, but it was barfing and saying there was no UID */
-        if (value[1]) _checkwrap(*value, tgt);
+        if (value[1] && (flags & VALUE_FOLD)) _checkwrap(*value, tgt);
         switch (*value) {
         case '\r':
             break;
@@ -840,7 +850,7 @@ static void _value_to_tgt(const char *value, struct vparse_target *tgt)
         case ';':
         case ',':
         case '\\':
-            buf_putc(tgt->buf, '\\');
+            if (flags & VALUE_ENCODE) buf_putc(tgt->buf, '\\');
             /* fall through */
         default:
             buf_putc(tgt->buf, *value);
@@ -890,8 +900,8 @@ static void _key_to_tgt(const char *key, struct vparse_target *tgt)
 
 static int _needsquote(const char *p)
 {
-    while (*p++) {
-        switch (*p) {
+    while (*p) {
+        switch (*p++) {
         case '"':
         case ',':
         case ':':
@@ -904,9 +914,66 @@ static int _needsquote(const char *p)
     return 0;
 }
 
+static const struct prop_encode {
+    const char *name;
+    int encode;  /* 0 = no; 1 = yes; -1 = check type */
+} prop_encode_map[] = {
+    { "CALADRURI",     0 },
+    { "CALURI",        0 },
+    { "CLIENTPIDMAP",  0 },
+    { "CONTACT-URI",   0 },
+    { "FBURL",         0 },
+    { "GEO",           0 },
+    { "IMPP",          0 },
+    { "KEY",           0 },
+    { "LOGO",          0 },
+    { "MEMBER",        0 },
+    { "ORG-PROPERTY",  0 },
+    { "PHOTO",         0 },
+    { "RELATED",      -1 },
+    { "SOUND",         0 },
+    { "SOURCE",        0 },
+    { "UID",          -1 },
+    { "URL",           0 },
+    { NULL,            1 }
+};
+
+static void _entry_value_to_tgt(const struct vparse_entry *entry,
+                                struct vparse_target *tgt, int is_uri,
+                                unsigned flags)
+{
+    if (entry->multivaluesep) {
+        int i;
+
+        flags |= VALUE_ENCODE;
+        for (i = 0; i < entry->v.values->count; i++) {
+            if (i) buf_putc(tgt->buf, entry->multivaluesep);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, flags);
+        }
+    }
+    else if (is_uri == 1) {
+        _value_to_tgt(entry->v.value, tgt, flags);
+    }
+    else {
+        const struct prop_encode *prop;
+        int encode = 1;  /* default to encoding */
+
+        for (prop = prop_encode_map; prop->name; prop++) {
+            if (!strcasecmp(prop->name, entry->name)) {
+                encode = (prop->encode == -1) ? !is_uri : prop->encode;
+                break;
+            }
+        }
+
+        if (encode) flags |= VALUE_ENCODE;
+        _value_to_tgt(entry->v.value, tgt, flags);
+    }
+}
+
 static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target *tgt)
 {
     struct vparse_param *param;
+    int is_uri = -1;
 
     // RFC 6350 3.3 - it is RECOMMENDED that property and parameter names be upper-case on output.
     if (entry->group) {
@@ -928,20 +995,15 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
         else {
             _paramval_to_tgt(param->value, tgt);
         }
+
+        if (!strcasecmp(param->name, "VALUE")) {
+            is_uri = !strcasecmp(param->value, "uri");
+        }
     }
 
     buf_putc(tgt->buf, ':');
 
-    if (entry->multivaluesep) {
-        int i;
-        for (i = 0; i < entry->v.values->count; i++) {
-            if (i) buf_putc(tgt->buf, entry->multivaluesep);
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt);
-        }
-    }
-    else {
-        _value_to_tgt(entry->v.value, tgt);
-    }
+    _entry_value_to_tgt(entry, tgt, is_uri, VALUE_FOLD);
 
     _endline(tgt);
 }
@@ -1000,12 +1062,18 @@ EXPORTED struct vparse_entry *vparse_add_entry(struct vparse_card *card, const c
     return entry;
 }
 
+/*
+ * If group == NULL, return first named property regardless of group
+ * If group == "", return named property having NO group
+ * Otherwise, return named property with matching group
+ */
 EXPORTED struct vparse_entry *vparse_get_entry(struct vparse_card *card, const char *group, const char *name)
 {
     struct vparse_entry *entry = NULL;
 
     for (entry = card->properties; entry; entry = entry->next) {
-        if (!strcasecmpsafe(entry->group, group) && !strcasecmpsafe(entry->name, name))
+        if (!strcasecmpsafe(entry->name, name) &&
+            (!group || !strcasecmpsafe(entry->group, group)))
             break;
     }
 
@@ -1016,24 +1084,56 @@ EXPORTED void vparse_replace_entry(struct vparse_card *card, const char *group, 
 {
     struct vparse_entry *entry = vparse_get_entry(card, group, name);
     if (entry) {
-        if (entry->multivaluesep) {
-            /* FN isn't allowed to be a multi-value, but let's
-             * rather check than deal with corrupt memory */
-            strarray_free(entry->v.values);
-            entry->v.values = NULL;
-        } else {
-            free(entry->v.value);
-        }
-        entry->v.value = xstrdupnull(value);
-        entry->multivaluesep = '\0';
+        vparse_set_value(entry, value);
     }
     else {
         vparse_add_entry(card, group, name, value);
     }
 }
 
+EXPORTED void vparse_set_value(struct vparse_entry *entry, const char *value)
+{
+    if (!entry) return;
+
+    if (entry->multivaluesep) {
+        /* FN isn't allowed to be a multi-value, but let's
+         * rather check than deal with corrupt memory */
+        strarray_free(entry->v.values);
+        entry->v.values = NULL;
+    } else {
+        free(entry->v.value);
+    }
+    entry->v.value = xstrdupnull(value);
+    entry->multivaluesep = '\0';
+}
+
+EXPORTED char *vparse_get_value(struct vparse_entry *entry)
+{
+    if (!entry) return NULL;
+
+    struct vparse_param *param;
+    int is_uri = -1;
+
+    for (param = entry->params; param; param = param->next) {
+        if (!strcasecmp(param->name, "VALUE")) {
+            is_uri = !strcasecmp(param->value, "uri");
+            break;
+        }
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    struct vparse_target tgt = { &buf, 0 };
+
+    _entry_value_to_tgt(entry, &tgt, is_uri, 0);
+
+    return buf_release(&buf);
+}
+
 EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
 {
+    hash_table props_using_label_counts = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props_using_label_counts, 10, 0);
+
     struct vparse_entry **entryp = &card->properties;
     while (*entryp) {
         struct vparse_entry *entry = *entryp;
@@ -1043,9 +1143,39 @@ EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group,
             _free_entry(entry);
         }
         else {
+            /* Count properties associated with an Apple label */
+            if (entry->group) {
+                uintptr_t count =
+                    (uintptr_t) hash_lookup(entry->group, &props_using_label_counts);
+
+                if (strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
+                    /* NOT a label property, count it */
+                    count++;
+                }
+                hash_insert(entry->group, (void *) count, &props_using_label_counts);
+            }
+
             entryp = &((*entryp)->next);
         }
     }
+
+    /* Now remove orphaned Apple label entries */
+    entryp = &card->properties;
+    while (*entryp) {
+        struct vparse_entry *entry = *entryp;
+        if (entry->group &&
+            !strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY) &&
+            (uintptr_t) hash_lookup(entry->group, &props_using_label_counts) == 0) {
+            *entryp = entry->next;
+            entry->next = NULL; /* so free doesn't walk the chain */
+            _free_entry(entry);
+        }
+        else {
+            entryp = &((*entryp)->next);
+        }
+    }
+
+    free_hash_table(&props_using_label_counts, NULL);
 }
 
 EXPORTED struct vparse_param *vparse_get_param(struct vparse_entry *entry, const char *name)
@@ -1085,13 +1215,14 @@ EXPORTED void vparse_delete_params(struct vparse_entry *entry, const char *name)
     }
 }
 
-static const struct {
+static const struct restriction {
     const char *name;  /* property name */
     struct {
         unsigned min;  /* mandatory minimum number of occurrences */
-        unsigned max;  /* allowed maximum number of occurrences */
+        unsigned max;  /* allowed maximum number of occurrences (-1 = inf) */
     } version[3];      /* 1 min/max per vCard version */
 } restrictions[] = {
+    /*                    2.1        3.0        4.0     */
     { "VERSION",     { { 1,  1 }, { 1,  1 }, { 1,  1 } } },
     { "ANNIVERSARY", { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
     { "BDAY",        { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
@@ -1101,26 +1232,32 @@ static const struct {
     { "N",           { { 1,  1 }, { 1,  1 }, { 0,  1 } } },
     { "PRODID",      { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
     { "REV",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
-    { "UID",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } }
+    { "UID",         { { 0,  1 }, { 0,  1 }, { 0,  1 } } },
+    { "BIRTHPLACE",  { { 0,  1 }, { 0,  1 }, { 0,  1 } } },  /* RFC 6474 */
+    { "DEATHPLACE",  { { 0,  1 }, { 0,  1 }, { 0,  1 } } },  /* RFC 6474 */
+    { "DEATHDATE",   { { 0,  1 }, { 0,  1 }, { 0,  1 } } },  /* RFC 6474 */
 };
 
-#define NUM_CHECK_PROPS 10
+#define NUM_CHECK_PROPS (sizeof(restrictions) / sizeof(struct restriction))
 
 EXPORTED int vparse_restriction_check(struct vparse_card *card)
 {
     enum { VER_2_1 = 0, VER_3_0, VER_4_0 };
     struct vparse_entry *entry = NULL;
     unsigned counts[NUM_CHECK_PROPS];
-    unsigned i, ver = VER_3_0;
+    strarray_t altids[NUM_CHECK_PROPS];
+    unsigned i, ver = VER_3_0, ret = 1;
 
-    /* Zero property counts */
+    /* Zero property counts and altids */
     memset(counts, 0, NUM_CHECK_PROPS * sizeof(unsigned));
+    memset(altids, 0, NUM_CHECK_PROPS * sizeof(strarray_t));
 
     /* Count interesting properties */
     for (entry = card->properties; entry; entry = entry->next) {
         for (i = 0; i < NUM_CHECK_PROPS; i++) {
             if (!strcasecmpsafe(entry->name, restrictions[i].name)) {
-                counts[i]++;
+                struct vparse_param *param = vparse_get_param(entry, "altid");
+                const char *altid = param ? param->value : "";
 
                 if (i == 0) {
                     /* VERSION */
@@ -1129,17 +1266,25 @@ EXPORTED int vparse_restriction_check(struct vparse_card *card)
                     else if (!strcmp(entry->v.value, "4.0")) ver = VER_4_0;
                     else return 0;
                 }
+
+                /* Like-properties having the same ALTID only get counted once */
+                if (strarray_contains(&altids[i], altid)) continue;
+
+                strarray_append(&altids[i], altid);
+                counts[i]++;
             }
         }
     }
 
     /* Check property counts against restrictions */
     for (i = 0; i < NUM_CHECK_PROPS; i++) {
-        if (counts[i] < restrictions[i].version[ver].min) return 0;
-        if (counts[i] > restrictions[i].version[ver].max) return 0;
+        if (counts[i] < restrictions[i].version[ver].min) ret = 0;
+        if (counts[i] > restrictions[i].version[ver].max) ret = 0;
+
+        strarray_fini(&altids[i]);
     }
 
-    return 1;
+    return ret;
 }
 
 #if DEBUG

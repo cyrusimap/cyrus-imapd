@@ -74,6 +74,9 @@ EXPORTED int zoneinfo_open(const char *fname)
     int ret;
     char *tofree = NULL;
 
+    if (zoneinfo_dbopen)
+        return 0;
+
     if (!fname) fname = config_getstring(IMAPOPT_ZONEINFO_DB_PATH);
 
     /* create db file name */
@@ -243,7 +246,8 @@ struct findrock {
     const char *find;
     int tzid_only;
     time_t changedsince;
-    int (*proc)();
+    int (*proc)(const char *tzid, int tzidlen,
+                struct zoneinfo *zi, void *rock);
     void *rock;
 };
 

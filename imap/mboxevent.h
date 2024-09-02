@@ -45,6 +45,8 @@
 #ifndef _MBOXEVENT_H
 #define _MBOXEVENT_H
 
+#include <jansson.h>
+
 #include "strarray.h"
 
 #include "mailbox.h"
@@ -88,7 +90,8 @@ enum event_type {
     /* Other */
     EVENT_APPLEPUSHSERVICE     = (1<<23),
     EVENT_APPLEPUSHSERVICE_DAV = (1<<24),
-    EVENT_MAILBOX_MODSEQ       = (1<<25)
+    EVENT_MAILBOX_MODSEQ       = (1<<25),
+    EVENT_MESSAGES_UNSCHEDULED = (1<<26),
 };
 
 /*
@@ -126,6 +129,7 @@ enum event_param {
     /* 23 */ EVENT_MBTYPE,
     EVENT_SERVERFQDN,
     EVENT_MAILBOX_ACL,
+    EVENT_VISIBLE_USERS,
     /* 24 */ EVENT_DAV_FILENAME,
     /* 25 */ EVENT_DAV_UID,
     /* 26 */ EVENT_ENVELOPE,
@@ -139,13 +143,19 @@ enum event_param {
     EVENT_COUNTERS,
     EVENT_MESSAGE_EMAILID,
     EVENT_MESSAGE_THREADID,
+    EVENT_JMAP_EMAIL,
+    EVENT_JMAP_STATES,
     EVENT_CALENDAR_ALARM_TIME,
     EVENT_CALENDAR_ALARM_RECIPIENTS,
+    EVENT_CALENDAR_ALERTID,
     EVENT_CALENDAR_USER_ID,
     EVENT_CALENDAR_CALENDAR_ID,
     EVENT_CALENDAR_CALENDAR_NAME,
     EVENT_CALENDAR_CALENDAR_COLOR,
+    EVENT_CALENDAR_CALENDAR_OWNER,
     EVENT_CALENDAR_UID,
+    EVENT_CALENDAR_RECURID,
+    EVENT_CALENDAR_EVENTID,
     EVENT_CALENDAR_ACTION,
     EVENT_CALENDAR_SUMMARY,
     EVENT_CALENDAR_DESCRIPTION,
@@ -168,6 +178,8 @@ enum event_param {
     EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_USER,
     EVENT_APPLEPUSHSERVICE_DAV_MAILBOX_UNIQUEID,
     EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,
+    EVENT_MESSAGES_UNSCHEDULED_USERID,
+    EVENT_MESSAGES_UNSCHEDULED_COUNT,
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
@@ -177,7 +189,8 @@ enum event_param {
 enum event_param_type {
     EVENT_PARAM_INT,
     EVENT_PARAM_STRING,
-    EVENT_PARAM_ARRAY
+    EVENT_PARAM_ARRAY,
+    EVENT_PARAM_JSON
 };
 
 struct event_parameter {
@@ -188,6 +201,7 @@ struct event_parameter {
         char *s;
         uint64_t u;
         strarray_t *a;
+        json_t *j;
     } value;
     int filled;
 };
@@ -200,9 +214,9 @@ struct mboxevent {
 
     strarray_t flagnames;
     struct timeval timestamp;
-    struct seqset *uidset;
+    seqset_t *uidset;
     strarray_t midset;
-    struct seqset *olduidset;
+    seqset_t *olduidset;
 
     struct mboxevent *prev;
     struct mboxevent *next;
@@ -222,6 +236,11 @@ struct mboxevent {
 #define FILL_UNSIGNED_PARAM(e,p,v) do { \
     e->params[p].value.u = v; \
     e->params[p].type = EVENT_PARAM_INT; \
+    e->params[p].filled = 1; \
+} while (0)
+#define FILL_JSON_PARAM(e,p,v) do { \
+    e->params[p].value.j = v; \
+    e->params[p].type = EVENT_PARAM_JSON; \
     e->params[p].filled = 1; \
 } while (0)
 
@@ -300,6 +319,7 @@ void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
  * - vnd.cmu.midset from Message-Id in ENVELOPE structure
  * - messageSize
  * - bodyStructure
+ * - vnd.cmu.jmapEmail
  *
  * Called once per message and always before mboxevent_extract_mailbox
  */
@@ -313,6 +333,7 @@ void mboxevent_extract_record(struct mboxevent *event,
  * - vnd.cmu.midset from Message-Id in ENVELOPE structure
  * - messageSize
  * - bodyStructure
+ * - vnd.cmu.jmapEmail
  *
  * Called once per message and always before mboxevent_extract_mailbox
  */
@@ -408,5 +429,11 @@ void mboxevent_set_applepushservice_dav(struct mboxevent *event,
                                         const char *mailbox_uniqueid,
                                         int mbtype,
                                         unsigned int expiry);
+
+typedef void mboxevent_idlenotifier_t(json_t *msg);
+
+extern void mboxevent_set_idlenotifier(mboxevent_idlenotifier_t *notifyproc);
+
+enum event_type name_to_mboxevent(const char *name);
 
 #endif /* _MBOXEVENT_H */

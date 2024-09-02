@@ -1,0 +1,23 @@
+http://www.imapwiki.org/ImapTest
+
+Cassandane has support for the ImapTest engine.  First you need to build
+imaptest, which isn't too hard - download and build dovecot (it can just
+sit in the build target, it doesn't need to be installed) and then
+download and build imaptest.  I used mercurial and downloaded the latest
+of both.
+
+Then add this block to your cassandane.ini:
+
+---
+
+[imaptest]
+basedir=/home/brong/src/imaptest/imaptest
+suppress=append-binary fetch-binary-mime fetch-binary-mime-base64 fetch-binary-mime-qp urlauth-binary
+
+---
+
+I'm hoping to fix these!  There are also some tests that don't run because
+we don't advertise the capabilities, and I'd like to fix those as well.
+
+Finally, we should contribute tests back to ImapTest if they are generic
+tests that we think would be valuable for other servers.

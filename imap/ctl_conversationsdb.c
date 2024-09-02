@@ -44,6 +44,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -62,6 +63,7 @@
 #include "message.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -71,12 +73,13 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
 
-int verbose = 0;
+static int verbose = 0;
 
 int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
 int recalc_silent = 1;
+hashu64_table *zerocids = NULL;
 
 static int do_dump(const char *fname, const char *userid)
 {
@@ -163,6 +166,10 @@ static int zero_cid_cb(const mbentry_t *mbentry,
         if (record->cid == NULLCONVERSATION)
             continue;
 
+        /* if we're only doing some cids, check if this is one */
+        if (zerocids && !hashu64_lookup(record->cid, zerocids))
+            continue;
+
         struct index_record oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
         oldrecord.basecid = NULLCONVERSATION;
@@ -176,6 +183,29 @@ static int zero_cid_cb(const mbentry_t *mbentry,
     return r;
 }
 
+static int delannot_cb(const char *mboxname,
+                       uint32_t uid __attribute__((unused)),
+                       const char *entry,
+                       const char *userid,
+                       const struct buf *value,
+                       const struct annotate_metadata *mdata __attribute__((unused)),
+                       void *rock)
+{
+    if (zerocids) {
+        conversation_id_t keycid = NULLCONVERSATION;
+        conversation_id_t valuecid = NULLCONVERSATION;
+
+        parsehex(entry + strlen(IMAP_ANNOT_NS) + 7, NULL, 16, &keycid);
+        parsehex(value->s, NULL, 16, &valuecid);
+
+        // if neither are being zeroed, leave them
+        if (!hashu64_lookup(keycid, zerocids) && !hashu64_lookup(valuecid, zerocids))
+            return 0;
+    }
+    return annotatemore_write(mboxname, entry, userid, (const struct buf *)rock);
+}
+
+
 static int do_zero(const char *userid)
 {
     struct conversations_state *state = NULL;
@@ -187,10 +217,11 @@ static int do_zero(const char *userid)
     r = mboxlist_usermboxtree(userid, NULL, zero_cid_cb, NULL, 0);
     if (r) goto done;
 
-    /* XXX:
-     * annotatemore_findall(state->annotmboxname, IMAP_ANNOT_NS "basecid/%", &deleteannot);
-     * remove all the basecid mappings so they don't create bad splits on rebuild
-     */
+    // remove all "newcid" mappings, since we've zeroed all the basecids already
+    struct buf zerobuf = BUF_INITIALIZER;
+    r = annotatemore_findall_mboxname(state->annotmboxname, /*uid*/0, IMAP_ANNOT_NS "newcid/%",
+                                      /*modseq*/0, &delannot_cb, &zerobuf, /*flags*/0);
+    if (r) goto done;
 
 done:
     conversations_commit(&state);
@@ -227,6 +258,8 @@ static int build_cid_cb(const mbentry_t *mbentry,
             struct index_record oldrecord = *record;
             r = mailbox_cacherecord(mailbox, &oldrecord);
             if (r) goto done;
+
+            oldrecord.ignorelimits = 1;
 
             r = message_update_conversations(cstate, mailbox, &oldrecord, NULL);
             if (r) goto done;
@@ -306,7 +339,10 @@ static int do_recalc(const char *userid)
     r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    r = conversations_zero_counts(state);
+    // wipe if it's currently folders_byname, will recreate with byid
+    int wipe = state->folders_byname;
+
+    r = conversations_zero_counts(state, wipe);
     if (r) goto err;
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
@@ -605,7 +641,7 @@ int do_checkfolders(const char *userid)
     }
 
     /* don't mess with the original */
-    copy1 = strarray_dup(state->folder_names);
+    copy1 = strarray_dup(state->folders);
     /* remove empty folders first, they will duplicate for sure */
     strarray_remove_all(copy1, "-");
     copy2 = strarray_dup(copy1);
@@ -655,7 +691,7 @@ static int do_audit(const char *userid)
     assert(strcmp(filename_temp, filename_real));
 
     /* Initialise the temp copy of the database */
-    unlink(filename_temp);
+    xunlink(filename_temp);
     r = cyrusdb_copyfile(filename_real, filename_temp);
     if (r) {
         fprintf(stderr, "Cannot make temp copy of conversations db %s: %s\n",
@@ -671,7 +707,7 @@ static int do_audit(const char *userid)
         goto out;
     }
 
-    r = conversations_zero_counts(state_temp);
+    r = conversations_zero_counts(state_temp, /*wipe*/0);
     if (r) {
         fprintf(stderr, "Failed to zero counts in %s: %s\n",
                 filename_temp, error_message(r));
@@ -760,6 +796,8 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     char *fname;
     int r = 0;
 
+    signals_poll();
+
     fname = conversations_getuserpath(userid);
     if (fname == NULL) {
         fprintf(stderr, "Unable to get conversations database "
@@ -814,15 +852,48 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
     return r;
 }
 
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    libcyrus_run_delayed();
+
+    cyrus_done();
+
+    exit(code);
+}
+
 int main(int argc, char **argv)
 {
     int c;
     const char *alt_config = NULL;
     const char *userid = NULL;
-    int r = 0;
     int recursive = 0;
 
-    while ((c = getopt(argc, argv, "durzSAbvRFC:T:")) != EOF) {
+    /* keep in alphabetical order */
+    static const char short_options[] = "AC:FRST:bdruvzZ:";
+
+    static const struct option long_options[] = {
+        { "audit", no_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "check-folders", no_argument, NULL, 'F' },
+        { "update-counts", no_argument, NULL, 'R' },
+        { "split", no_argument, NULL, 'S' },
+        { "audit-temp-directory", required_argument, NULL, 'T' },
+        { "rebuild", no_argument, NULL, 'b' },
+        { "dump", no_argument, NULL, 'd' },
+        { "recursive", no_argument, NULL, 'r' },
+        { "undump", no_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "clear", no_argument, NULL, 'z' },
+        { "clearcid", required_argument, NULL, 'Z' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (c = getopt_long(argc, argv,
+                                  short_options, long_options, NULL)))
+    {
         switch (c) {
         case 'd':
             if (mode != UNKNOWN)
@@ -844,6 +915,26 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN)
                 usage(argv[0]);
             mode = ZERO;
+            break;
+
+        case 'Z':
+            if (mode != UNKNOWN && mode != ZERO)
+                usage(argv[0]);
+            mode = ZERO;
+            if (!zerocids) {
+                zerocids = xzmalloc(sizeof(hashu64_table));
+                construct_hashu64_table(zerocids, 256, 0);
+            }
+            strarray_t *ids = strarray_split(optarg, ",", 0);
+            int i;
+            for (i = 0; i < strarray_size(ids); i++) {
+                conversation_id_t cid = NULLCONVERSATION;
+                if (!conversation_id_decode(&cid, strarray_nth(ids, i)))
+                    usage(argv[0]);
+                if (cid)
+                    hashu64_insert(cid, (void*)1, zerocids);
+            }
+            strarray_free(ids);
             break;
 
         case 'b':
@@ -904,15 +995,22 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+
     if (recursive) {
         mboxlist_alluser(do_user, NULL);
     }
-    else
+    else {
         do_user(userid, NULL);
+    }
 
-    cyrus_done();
+    if (zerocids) {
+        free_hashu64_table(zerocids, NULL);
+        free(zerocids);
+    }
 
-    return r;
+    shut_down(0);
 }
 
 static int usage(const char *name)
@@ -936,10 +1034,12 @@ static int usage(const char *name)
     exit(EX_USAGE);
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "ctl_conversationsdb: %s\n", s);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
-

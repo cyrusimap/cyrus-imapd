@@ -63,7 +63,7 @@ struct backup_append_state {
     gzFile gzfile;
     int chunk_id;
     size_t wrote;
-    SHA_CTX sha_ctx;
+    SHA1_CTX sha_ctx;
 };
 
 struct backup {

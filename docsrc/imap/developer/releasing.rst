@@ -1,17 +1,23 @@
 .. _imap-developer-releasing:
 
-====================
-Releasing Cyrus IMAP
-====================
+======================================
+Releasing Cyrus IMAP - normal releases
+======================================
 
 .. contents::
 
-These instructions are specifically for doing releases from branches that
-contain RST-based documentation and infrastructure.  This includes 2.5 and
-later versions.
+These instructions are specifically for doing point releases (x.y.z) from
+branches that contain RST-based documentation and infrastructure.  This
+includes 2.5 and later versions.
+
+For snapshot releases from the master branch, see
+:ref:`imap-developer-snapshot-releasing`
 
 For new releases from ancient branches, see :ref:`imap-developer-ancient-releasing`
 
+For major (x.y) releases, you will follow this process for publishing the
+release tarballs, but there are additional steps before and around that,
+detailed at :ref:`imap-developer-major-releasing`.
 
 Prerequisites
 =============
@@ -209,5 +215,4 @@ Time to upload the release tarball and signature file!
 Tell the world
 ==============
 
-1. Update the topic in the #cyrus IRC channel.
-2. Send an announcement to the info-cyrus and cyrus-announce lists.
+1. Send an announcement to the info-cyrus and cyrus-announce lists.

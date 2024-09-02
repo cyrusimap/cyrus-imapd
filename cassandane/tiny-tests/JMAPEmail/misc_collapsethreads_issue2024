@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_collapsethreads_issue2024
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # test that the collapseThreads property is echoed back verbatim
+    # see https://github.com/cyrusimap/cyrus-imapd/issues/2024
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog $self, "generating email A";
+    $exp{A} = $self->make_message("Email A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog $self, "generating email B";
+    $exp{B} = $self->make_message("Email B");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+    xlog $self, "generating email C referencing A";
+    $exp{C} = $self->make_message("Re: Email A", references => [ $exp{A} ]);
+    $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+    $res = $jmap->CallMethods([['Email/query', { collapseThreads => JSON::true }, "R1"]]);
+    $self->assert_equals(JSON::true, $res->[0][1]->{collapseThreads});
+
+    $res = $jmap->CallMethods([['Email/query', { collapseThreads => JSON::false }, "R1"]]);
+    $self->assert_equals(JSON::false, $res->[0][1]->{collapseThreads});
+
+    $res = $jmap->CallMethods([['Email/query', { collapseThreads => undef }, "R1"]]);
+    $self->assert_null($res->[0][1]->{collapseThreads});
+
+    $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
+    $self->assert_equals(JSON::false, $res->[0][1]->{collapseThreads});
+}

@@ -75,7 +75,6 @@
  */
 
 #include <config.h>
-
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -92,6 +91,8 @@
 #include "mupdate-client.h"
 #include "proc.h"
 #include "quota.h"
+#include "slowio.h"
+#include "userdeny.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -103,7 +104,9 @@
 const char *BB;
 static int forcedowncase;
 
-extern int optind;
+extern int optind, opterr;
+extern char *optarg;
+static int skipplus;
 
 static struct protstream *map_in, *map_out;
 static const char *smmapd_clienthost;
@@ -137,6 +140,10 @@ static void smmapd_reset(void)
     map_in = map_out = NULL;
 
     cyrus_reset_stdio();
+
+    libcyrus_run_delayed();
+
+    slowio_reset();
 }
 
 void shut_down(int code) __attribute__((noreturn));
@@ -159,7 +166,8 @@ EXPORTED void fatal(const char* s, int code)
     }
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
-    abort();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
     shut_down(code);
 }
@@ -170,11 +178,10 @@ EXPORTED void fatal(const char* s, int code)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int r;
+    int r, opt;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
     signal(SIGPIPE, SIG_IGN);
@@ -183,9 +190,20 @@ int service_init(int argc, char **argv, char **envp)
     forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&map_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
+    }
+
+    while ((opt = getopt(argc, argv, "p")) != EOF) {
+        switch(opt) {
+        case 'p':
+            skipplus = 1;
+            break;
+        default:
+            syslog(LOG_ERR, "usage: smmapd [-C <alt_config>] [-U uses] [-T timeout] [-D] [-p]");
+            exit(EX_USAGE);
+        }
     }
 
     return 0;
@@ -238,14 +256,21 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
     mbname_t *mbname = mbname_from_recipient(key, &map_namespace);
 
+    if (skipplus) mbname_set_boxes(mbname, NULL);
     if (forcedowncase) mbname_downcaseuser(mbname);
 
-    /* see if its a shared mailbox address */
+    /* see if it is a shared mailbox address */
     if (!strcmpsafe(mbname_userid(mbname), BB)) {
         mbname_set_localpart(mbname, NULL);
         mbname_set_domain(mbname, NULL);
     }
 
+    char msg[MAX_MAILBOX_PATH+1];
+    if (userdeny(mbname_userid(mbname), config_ident, msg, sizeof(msg))) {
+        prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,", 9 + strlen(msg), msg);
+        mbname_free(&mbname);
+        return -1;
+    }
     /*
      * check to see if mailbox exists and we can append to it:
      *
@@ -275,7 +300,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
     if ((mbentry->mbtype & MBTYPE_REMOTE)) {
         struct hostent *hp;
         struct sockaddr_in sin,sfrom;
-        char buf[512];
+        char buf[2048];
         int soc, rc;
         socklen_t x;
         /* XXX  Perhaps we should support the VRFY command in lmtpd
@@ -317,11 +342,11 @@ static int verify_user(const char *key, struct auth_state *authstate)
             goto done;
         }
 
-        sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
+        snprintf(buf,sizeof(buf),SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
         sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
 
         x = sizeof(sfrom);
-        rc = recvfrom(soc,buf,512,0,(struct sockaddr *)&sfrom,&x);
+        rc = recvfrom(soc,buf,sizeof(buf)-1,0,(struct sockaddr *)&sfrom,&x);
 
         close(soc);
 
@@ -383,7 +408,7 @@ static int begin_handling(void)
             errstring = "request size doesn't match length";
             r = IMAP_PROTOCOL_ERROR;
         }
-        if (!r && (c = prot_getc(map_in)) != ',') {
+        if (!r && prot_getc(map_in) != ',') {
             errstring = "missing terminator";
             r = IMAP_PROTOCOL_ERROR;
         }
@@ -446,4 +471,3 @@ static int begin_handling(void)
 
     return 0;
 }
-

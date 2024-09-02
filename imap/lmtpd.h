@@ -74,7 +74,23 @@ struct imap4flags {
 };
 
 /* forward declarations */
+extern struct namespace lmtpd_namespace;
+
 extern int fuzzy_match(mbname_t *mbname);
+
+enum {
+    ACTION_NO_SIEVE =   0,
+    ACTION_SIEVE_ERROR,
+    ACTION_IMPLICIT,
+    ACTION_KEEP,
+    ACTION_FILEINTO,
+    ACTION_SNOOZE,
+    TARGET_PLUS_ADDR =  (1<<4),
+    TARGET_FUZZY =      (1<<5),
+    TARGET_SET =        (1<<6),
+};
+
+#define ACTION_MASK  0xF
 
 extern int deliver_mailbox(FILE *f,
                            struct message_content *content,
@@ -87,6 +103,7 @@ extern int deliver_mailbox(FILE *f,
                            char *id,
                            const char *user,
                            char *notifyheader,
+                           unsigned mode,
                            const char *mailboxname,
                            char *date,
                            time_t savedate,

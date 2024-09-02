@@ -56,12 +56,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include <sysexits.h>
 
 #include <string.h>
 
+#include "libconfig.h"
 #include "map.h"
 #include "times.h"
 
@@ -73,7 +76,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    exit(1);
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    exit(code);
 }
 
 static int load(int fd, bytecode_input_t ** d)
@@ -102,12 +107,28 @@ int main(int argc, char * argv[])
 {
     bytecode_input_t *bc = NULL;
     int script_fd;
-    int c, usage_error = 0, gen_script = 0;
+    int opt, usage_error = 0, gen_script = 0;
+    char *alt_config = NULL;
 
     unsigned long len;
 
-    while ((c = getopt(argc, argv, "s")) != EOF)
-        switch (c) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:s";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "as-sieve", no_argument, NULL, 's' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
         case 's':
             gen_script = 1;
             break;
@@ -115,6 +136,7 @@ int main(int argc, char * argv[])
             usage_error = 1;
             break;
         }
+    }
 
     if (usage_error || (argc - optind) < 1) {
         fprintf(stderr, "Syntax: %s [-s] <bytecode-file>\n",
@@ -129,6 +151,9 @@ int main(int argc, char * argv[])
         fprintf(stderr, "can not open script '%s'\n", argv[1]);
         exit(1);
     }
+
+    /* Load configuration file. */
+    config_read(alt_config, 0);
 
     len=load(script_fd,&bc);
     close(script_fd);
@@ -224,9 +249,10 @@ static void print_comparator(comp_t *comp)
     }
 
     switch (comp->collation) {
-    case B_OCTET:        printf(" (octet)");         break;
-    case B_ASCIICASEMAP: printf(" (ascii-casemap)"); break;
-    case B_ASCIINUMERIC: printf(" (ascii-numeric)"); break;
+    case B_OCTET:          printf(" (octet)");         break;
+    case B_ASCIICASEMAP:   printf(" (ascii-casemap)"); break;
+    case B_ASCIINUMERIC:   printf(" (ascii-numeric)"); break;
+    case B_UNICODECASEMAP: printf(" (unicode-casemap)"); break;
     }
 
     printf(" ]");
@@ -591,16 +617,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
                         printf("\n\tCREATE(%d)", cmd.u.f.create);
 
                         if (cmd.type >= B_FILEINTO_SPECIALUSE) {
-                            print_string(" SPECIALUSE", cmd.u.f.specialuse);
+                            print_string(" SPECIALUSE", cmd.u.f.t.specialuse);
 
                             if (cmd.type >= B_FILEINTO) {
-                                print_string(" MAILBOXID", cmd.u.f.mailboxid);
+                                print_string(" MAILBOXID", cmd.u.f.t.mailboxid);
                             }
                         }
                     }
                 }
             }
-            print_string(" FOLDER", cmd.u.f.folder);
+            print_string(" FOLDER", cmd.u.f.t.folder);
             break;
 
 
@@ -719,19 +745,19 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 print_string(" HANDLE", cmd.u.v.handle);
 
                 if (cmd.type >= B_VACATION_FCC_ORIG) {
-                    print_string("\n\tFCC", cmd.u.v.fcc.folder);
+                    print_string("\n\tFCC", cmd.u.v.fcc.t.folder);
 
-                    if (cmd.u.v.fcc.folder) {
+                    if (cmd.u.v.fcc.t.folder) {
                         printf(" CREATE(%d)", cmd.u.v.fcc.create);
                         print_stringlist(" FLAGS", cmd.u.v.fcc.flags);
 
                         if (cmd.type >= B_VACATION_FCC_SPLUSE) {
                             print_string("\n\tSPECIALUSE",
-                                         cmd.u.v.fcc.specialuse);
+                                         cmd.u.v.fcc.t.specialuse);
 
                             if (cmd.type >= B_VACATION) {
                                 print_string(" MAILBOXID",
-                                             cmd.u.v.fcc.mailboxid);
+                                             cmd.u.v.fcc.t.mailboxid);
                             }
                         }
                     }
@@ -810,14 +836,14 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("SNOOZE");
             if (cmd.type >= B_SNOOZE_TZID) {
                 if (cmd.type >= B_SNOOZE) {
-                    print_string(" MAILBOX", cmd.u.sn.f.folder);
-                    print_string(" MAILBOXID", cmd.u.sn.f.mailboxid);
-                    print_string(" SPECIALUSE", cmd.u.sn.f.specialuse);
+                    print_string(" MAILBOX", cmd.u.sn.f.t.folder);
+                    print_string(" MAILBOXID", cmd.u.sn.f.t.mailboxid);
+                    print_string(" SPECIALUSE", cmd.u.sn.f.t.specialuse);
                     printf(" CREATE(%d)", cmd.u.sn.f.create);
                 }
                 else {
                     print_string(cmd.u.sn.is_mboxid ? " MAILBOXID" : " MAILBOX",
-                                 cmd.u.sn.f.folder);
+                                 cmd.u.sn.f.t.folder);
                 }
 
                 print_string(" TZID", cmd.u.sn.tzid);
@@ -835,6 +861,38 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_vallist("\n\tTIMES", cmd.u.sn.times, &print_time);
             break;
         }
+
+
+        case B_PROCESSIMIP:
+            printf("PROCESSIMIP INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELED(%d)",
+                   !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+            print_string(" CALENDARID", cmd.u.cal.calendarid);
+            print_string(" OUTCOME", cmd.u.cal.outcome_var);
+            print_string(" ERRSTR", cmd.u.cal.reason_var);
+            break;
+
+
+        case B_IKEEP_TARGET:
+            printf("IMPLICIT_KEEP_TARGET");
+            print_string(" MAILBOXID", cmd.u.ikt.mailboxid);
+            print_string(" SPECIALUSE", cmd.u.ikt.specialuse);
+            print_string(" FOLDER", cmd.u.ikt.folder);
+            break;
+
+
+        case B_PROCESSCAL:
+            printf("PROCESSCALENDAR ALLOWPUBLIC(%d) INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELLED(%d)",
+                   !!cmd.u.cal.allow_public, !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+            print_stringlist(" ADDRESSES", cmd.u.cal.addresses);
+            print_string(" ORGANIZERS", cmd.u.cal.organizers);
+            print_string(" CALENDARID", cmd.u.cal.calendarid);
+            print_string(" OUTCOME", cmd.u.cal.outcome_var);
+            print_string(" REASON", cmd.u.cal.reason_var);
+            break;
 
 
         default:
@@ -937,7 +995,8 @@ static void generate_stringlist(const char *tag, const strarray_t *sl,
 
 static void generate_time(uint64_t t, struct buf *buf)
 {
-    buf_printf(buf, "\"%02lu:%02lu:%02lu\"", t / 3600, (t % 3600) / 60, t % 60);
+    buf_printf(buf, "\"%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 "\"",
+                    t / 3600, (t % 3600) / 60, t % 60);
 }
 
 static void generate_valuelist(const char *name, const arrayu64_t *vl,
@@ -959,7 +1018,7 @@ static void generate_valuelist(const char *name, const arrayu64_t *vl,
             buf_appendcstr(buf, sep);
             gen_cb(u, buf);
         }
-        else buf_printf(buf, "%s%lu", sep, u);
+        else buf_printf(buf, "%s%" PRIu64, sep, u);
         sep = ", ";
     }
     if (len > 1) buf_putc(buf, ']');
@@ -1021,6 +1080,10 @@ static void generate_comparator(const comp_t *c,
         buf_printf(buf, " :comparator \"i;ascii-numeric\"");
         *requires |= SIEVE_CAPA_COMP_NUMERIC;
         break;
+    case B_UNICODECASEMAP:
+        buf_printf(buf, " :comparator \"i;unicode-casemap\"");
+        *requires |= SIEVE_CAPA_COMP_UCASEMAP;
+        break;
     }
 }
 
@@ -1031,22 +1094,22 @@ static void generate_fileinto(struct Fileinto *f,
 {
     if (is_fcc) {
         /* Put :fcc first */
-        generate_string(":fcc", f->folder, buf);
+        generate_string(":fcc", f->t.folder, buf);
         *requires |= SIEVE_CAPA_FCC;
     }
     generate_switch_capa(":copy", f->copy,
                          SIEVE_CAPA_COPY, requires, buf);
     generate_switch_capa(":create", f->create,
                          SIEVE_CAPA_MAILBOX, requires, buf);
-    generate_string_capa(":specialuse", f->specialuse,
+    generate_string_capa(":specialuse", f->t.specialuse,
                          SIEVE_CAPA_SPECIAL_USE, requires, buf);
-    generate_string_capa(":mailboxid", f->mailboxid,
+    generate_string_capa(":mailboxid", f->t.mailboxid,
                          SIEVE_CAPA_MAILBOXID, requires, buf);
     generate_stringlist_capa(":flags", f->flags,
                              SIEVE_CAPA_IMAP4FLAGS, requires, buf);
     if (!is_fcc) {
         /* folder is positional and MUST be last for fileinto */
-        generate_string(NULL, f->folder, buf);
+        generate_string(NULL, f->t.folder, buf);
     }
 }
 
@@ -1420,13 +1483,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_MARK:
-            *requires |= SIEVE_CAPA_IMAPFLAGS;
-            generate_token("mark", indent, buf);
+            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            generate_token("addflag", indent, buf);
+            generate_string(NULL, "\\Flagged", buf);
             break;
 
         case B_UNMARK:
-            *requires |= SIEVE_CAPA_IMAPFLAGS;
-            generate_token("unmark", indent, buf);
+            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            generate_token("removeflag", indent, buf);
+            generate_string(NULL, "\\Flagged", buf);
             break;
 
         case B_ADDFLAG_ORIG:
@@ -1457,6 +1522,13 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_DENOTIFY:
+            generate_token("/*\n", indent, buf);
+            generate_token(" * NOTE: The DENOTIFY action has been deprecated since Cyrus v3.9.\n",
+                           indent, buf);
+            generate_token(" *       This script will no longer compile.\n",
+                           indent, buf);
+            generate_token(" */\n", indent, buf);
+
             *requires |= SIEVE_CAPA_NOTIFY;
             generate_token("denotify", indent, buf);
             if (cmd.u.d.pattern) {
@@ -1483,6 +1555,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_NOTIFY:
+            generate_token("/*\n", indent, buf);
+            generate_token(" * NOTE: This form of the NOTIFY action has been deprecated since Cyrus v3.9.\n",
+                           indent, buf);
+            generate_token(" *       This script will no longer compile.\n",
+                           indent, buf);
+            generate_token(" *       Update this action to use the syntax in RFC 5435. */\n",
+                           indent, buf);
+            generate_token(" */\n", indent, buf);
+
             *requires |= SIEVE_CAPA_NOTIFY;
             generate_token("notify", indent, buf);
             generate_string(":method", cmd.u.n.method, buf);
@@ -1512,7 +1593,7 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_string(":from", cmd.u.v.from, buf);
             generate_string(":handle", cmd.u.v.handle, buf);
             generate_stringlist(":addresses", cmd.u.v.addresses, buf);
-            if (cmd.u.v.fcc.folder) {
+            if (cmd.u.v.fcc.t.folder) {
                 INSERT_FOLD(indent + 4, buf);
                 generate_fileinto(&cmd.u.v.fcc, 1, requires, buf);
             }
@@ -1589,15 +1670,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         case B_SNOOZE:
             *requires |= SIEVE_CAPA_SNOOZE;
             if (cmd.u.sn.is_mboxid) {
-                cmd.u.sn.f.mailboxid = cmd.u.sn.f.folder;
-                cmd.u.sn.f.folder = NULL;
+                cmd.u.sn.f.t.mailboxid = cmd.u.sn.f.t.folder;
+                cmd.u.sn.f.t.folder = NULL;
             }
 
             generate_token("snooze", indent, buf);
-            generate_string(":mailbox", cmd.u.sn.f.folder, buf);
-            generate_string_capa(":mailboxid", cmd.u.sn.f.mailboxid,
+            generate_string(":mailbox", cmd.u.sn.f.t.folder, buf);
+            generate_string_capa(":mailboxid", cmd.u.sn.f.t.mailboxid,
                                  SIEVE_CAPA_MAILBOXID, requires, buf);
-            generate_string_capa(":specialuse", cmd.u.sn.f.specialuse,
+            generate_string_capa(":specialuse", cmd.u.sn.f.t.specialuse,
                                  SIEVE_CAPA_SPECIAL_USE, requires, buf);
             generate_switch_capa(":create", cmd.u.sn.f.create,
                                  SIEVE_CAPA_MAILBOX, requires, buf);
@@ -1621,6 +1702,41 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             }
             generate_string(":tzid", cmd.u.sn.tzid, buf);
             generate_valuelist(NULL, cmd.u.sn.times, &generate_time, buf);
+            break;
+
+        case B_PROCESSIMIP:
+            *requires |= SIEVE_CAPA_PROCESSCAL;
+            generate_token("processimip", 0, buf);
+            generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.cal.delete_cancelled, buf);
+            generate_string(":calendarid", cmd.u.cal.calendarid, buf);
+            generate_string(":outcome", cmd.u.cal.outcome_var, buf);
+            generate_string(":errstr", cmd.u.cal.reason_var, buf);
+            break;
+
+        case B_IKEEP_TARGET:
+            *requires |= SIEVE_CAPA_IKEEP_TARGET;
+            generate_token("implicit_keep_target", indent, buf);
+            generate_string_capa(":mailboxid", cmd.u.ikt.mailboxid,
+                         SIEVE_CAPA_MAILBOXID, requires, buf);
+            generate_string_capa(":specialuse", cmd.u.ikt.specialuse,
+                                 SIEVE_CAPA_SPECIAL_USE, requires, buf);
+            generate_string(NULL, cmd.u.ikt.folder, buf);
+            break;
+
+        case B_PROCESSCAL:
+            *requires |= SIEVE_CAPA_PROCESSCAL;
+            generate_token("processcalendar", 0, buf);
+            generate_switch(":allowpublic", cmd.u.cal.allow_public, buf);
+            generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
+            generate_switch(":deletecancelled", cmd.u.cal.delete_cancelled, buf);
+            generate_stringlist(":addresses", cmd.u.cal.addresses, buf);
+            generate_string(":organizers", cmd.u.cal.organizers, buf);
+            generate_string(":calendarid", cmd.u.cal.calendarid, buf);
+            generate_string(":outcome", cmd.u.cal.outcome_var, buf);
+            generate_string(":reason", cmd.u.cal.reason_var, buf);
             break;
 
         default:

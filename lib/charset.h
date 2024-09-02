@@ -45,6 +45,7 @@
 #define ENCODING_NONE 0
 #define ENCODING_QP 1
 #define ENCODING_BASE64 2
+#define ENCODING_BASE64URL 3
 #define ENCODING_UNKNOWN 255
 
 #define CHARSET_SKIPDIACRIT (1<<0)
@@ -58,10 +59,23 @@
 #define CHARSET_KEEPHTML (1<<9)
 #define CHARSET_TRIMWS (1<<10)
 #define CHARSET_UNORM_NFC (1<<11)
+#define CHARSET_KEEP_ANGLEURI (1<<12)
+#define CHARSET_UNORM_NFKC_CF (1<<13)
 
 #define CHARSET_UNKNOWN_CHARSET (NULL)
 
+/* RFC 5322, 2.1.1 */
+#define MIME_MAX_HEADER_LENGTH 78
+#define MIME_MAX_LINE_LENGTH 998
+
 #include "util.h"
+#include "xsha1.h"
+
+#define charset_base64_len_unpadded(n) \
+    ((n) * 4 / 3)
+
+#define charset_base64_len_padded(n) \
+    (charset_base64_len_unpadded(n) + 4)
 
 typedef int comp_pat;
 /*
@@ -125,13 +139,15 @@ extern int charset_searchfile(const char *substr, comp_pat *pat,
 extern const char *charset_decode_mimebody(const char *msg_base, size_t len,
                                            int encoding, char **retval,
                                            size_t *outlen);
-extern char *charset_encode_mimebody(const char *msg_base, size_t len,
-                                     char *retval, size_t *outlen,
-                                     int *outlines, int wrap);
+extern char *charset_b64encode_mimebody(const char *msg_base, size_t len,
+                                        char *retval, size_t *outlen,
+                                        int *outlines, int wrap);
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
                                        int force_quote, size_t *outlen);
-extern char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding);
+extern char *charset_to_utf8cstr(const char *msg_base, size_t len, charset_t charset, int encoding);
 extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding);
+
+extern int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset_t charset, int encoding);
 
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
@@ -141,12 +157,23 @@ extern char *charset_encode_mimephrase(const char *header);
 extern char *charset_unfold(const char *s, size_t len, int flags);
 
 extern int charset_decode(struct buf *dst, const char *src, size_t len, int encoding);
+extern int charset_encode(struct buf *dst, const char *src, size_t len, int encoding);
 
-/* Extract the body text for the message denoted by 'uid', convert its
-   text to the canonical form for searching, and pass the converted text
-   down in a series of invocations of the callback 'cb'.  This is
-   called by index_getsearchtext to extract the MIME body parts. */
-extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
+extern int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decodedlen, const char *src, size_t len, int encoding);
+
+extern int charset_decode_percent(struct buf *dst, const char *val);
+
+/* Extract the body text contained in 'data' and with character encoding
+ * 'charset' and body-part encoding 'encoding'. The 'subtype' argument
+ * defines the MIME subtype (assuming that the main type is 'text').
+ * Extraction is done by a series of invocations of the callback 'cb'.
+ * Extraction stops when either the body text is fully extracted, or
+ * 'cb' returns a non-zero value, which is then returned to the caller.
+ * If 'charset' is unknown, then the function returns early without
+ * error and never calls 'cb'.
+ * Note: This function is called by index_getsearchtext to extract
+ * the MIME body parts. */
+extern int charset_extract(int (*cb)(const struct buf *text, void *rock),
                            void *rock,
                            const struct buf *data,
                            charset_t charset, int encoding,
@@ -157,13 +184,39 @@ extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
 EXPORTED char *charset_extract_plain(const char *html);
 
 struct char_counts {
+    size_t total;
     size_t valid;
     size_t replacement;
     size_t invalid;
+    size_t cntrl;
+    size_t bytelen[5]; // n-th position = count of n-byte chars, position 0 counts surrogates and invalid code points
 };
 
 /* Count the number of valid, invalid and replacement UTF-8 characters
  * in the first INT32_MAX bytes of data. */
 extern struct char_counts charset_count_validutf8(const char *data, size_t datalen);
+
+/* Encode and append a MIME parameter 'name' and 'value' to 'buf' */
+#define CHARSET_PARAM_QENCODE 0 // use RFC 2047 encoding
+#define CHARSET_PARAM_XENCODE 1 // use RFC 2231 encoding
+#define CHARSET_PARAM_NEWLINE (1<<1) // force newline before parameter
+extern void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                      const char *name, const char *value);
+
+/* Transform the UTF-8 string 's' of length 'len' into
+ * a titlecased, canonicalized, NULL-terminated UTF-8 string
+ * per the i;unicode-casemap collation.
+ *
+ * If 'len' is -1, then 's' MUST be NULL-terminated.
+ *
+ * https://www.rfc-editor.org/rfc/rfc5051.html
+ */
+extern char *unicode_casemap(const char *s, ssize_t len);
+
+extern char *charset_idna_to_utf8(const char *domain);
+extern char *charset_idna_to_ascii(const char *domain);
+
+extern void charset_lib_init(void);
+extern void charset_lib_done(void);
 
 #endif /* INCLUDED_CHARSET_H */

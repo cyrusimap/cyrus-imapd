@@ -38,27 +38,27 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -u   user
+.. option:: -u, --user          user
 
-.. option:: -U   unuser
+.. option:: -U, --unuser        unuser
 
-.. option:: -v   sieve
+.. option:: -v, --sieve         sieve
 
-.. option:: -m   mailbox
+.. option:: -m, --mailbox       mailbox
 
-.. option:: -M   unmailbox
+.. option:: -M, --unmailbox     unmailbox
 
-.. option:: -a   append
+.. option:: -a, --append        append
 
-.. option:: -c   acl
+.. option:: -c, --acl           acl
 
-.. option:: -q   quota
+.. option:: -q, --quota         quota
 
-.. option:: -n   annotation
+.. option:: -n, --annotation    annotation
 
-.. option:: -s   seen
+.. option:: -s, --seen          seen
 
-.. option:: -b   subscription
+.. option:: -b, --subscription  subscription
 
 Examples
 ========

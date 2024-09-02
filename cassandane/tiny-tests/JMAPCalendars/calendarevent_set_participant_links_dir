@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_participant_links_dir
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my ($id, $ical) = $self->icalfile('attendeedir');
+
+    my $icshref = '/dav/calendars/user/cassandane/Default/attendeedir.ics';
+    $caldav->Request('PUT', $icshref, $ical, 'Content-Type' => 'text/calendar');
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+        }, 'R1'],
+    ]);
+    my $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event);
+
+    # Links generated from DIR parameter loop back to DIR.
+
+    my $linkId = (keys %{$event->{participants}{attendee}{links}})[0];
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event->{id} => {
+                    'participants/attendee/links' => {
+                        $linkId => {
+                            href => 'https://local/attendee/dir2',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$event->{id}});
+
+    $res = $caldav->Request('GET', $icshref);
+    $self->assert_matches(qr/DIR="https:/, $res->{content});
+}

@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_folder_delete_mboxa_dmdel
+    :DelayedDelete
+{
+    my ($self) = @_;
+
+    xlog $self, "test that per-mailbox GETMETADATA annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = delayed (BZ2685)";
+
+    $self->assert_str_equals('delayed',
+                    $self->{instance}->{config}->get('delete_mode'));
+
+    $self->folder_delete_mboxa_common();
+}

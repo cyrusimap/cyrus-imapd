@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_stem_any
+    :min_version_3_0 :needs_search_xapian
+{
+    my ($self) = @_;
+    $self->create_testmessages();
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Select INBOX";
+    $talk->select("INBOX") || die;
+
+    my $r;
+    xlog $self, 'SEARCH for body "connection"';
+    $r = $talk->search('body', { Quote => "connection" }) || die;
+    if ($self->{fuzzyalways})  {
+        $self->assert_num_equals(3, scalar @$r);
+    } else {
+        $self->assert_num_equals(1, scalar @$r);
+    }
+
+
+    xlog $self, "SEARCH for FUZZY body \"connection\"";
+    $r = $talk->search(
+        "fuzzy", ["body", { Quote => "connection" }],
+    ) || die;
+    $self->assert_num_equals(3, scalar @$r);
+}

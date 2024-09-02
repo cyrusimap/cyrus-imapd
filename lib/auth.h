@@ -56,6 +56,7 @@ struct auth_mech {
     struct auth_state *(*newstate)(const char *identifier);
     void (*freestate)(struct auth_state *auth_state);
     strarray_t *(*groups)(const struct auth_state *auth_state);
+    void (*refresh)(struct auth_state *auth_state);
 };
 
 extern struct auth_mech *auth_mechs[];
@@ -66,6 +67,9 @@ extern struct auth_mech auth_unix;
 extern struct auth_mech auth_pts;
 extern struct auth_mech auth_krb;
 extern struct auth_mech auth_krb5;
+extern struct auth_mech auth_mboxgroups;
+
+extern void register_mboxgroups_cb(int (*l)(const char *, strarray_t *));
 
 /* auth_canonifyid: canonify the given identifier and return a pointer
  *                  to a static buffer with the canonified ID, or NULL on
@@ -79,5 +83,6 @@ int auth_memberof(const struct auth_state *auth_state,
 struct auth_state *auth_newstate(const char *identifier);
 void auth_freestate(struct auth_state *auth_state);
 strarray_t *auth_groups(const struct auth_state *auth_state);
+void auth_refresh(struct auth_state *auth_state);
 
 #endif /* INCLUDED_AUTH_H */

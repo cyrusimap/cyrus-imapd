@@ -71,12 +71,11 @@ static const char base64chars[] =
 #define UTF16LOEND      0xDFFFUL
 
 /* Convert an IMAP mailbox to a URL path
- *  dst needs to have roughly 4 times the storage space of src
  *    Hex encoding can triple the size of the input
  *    UTF-7 can be slightly denser than UTF-8
  *     (worst case: 8 octets UTF-7 becomes 9 octets UTF-8)
  */
-static void MailboxToURL(char *dst, const char *src)
+static void MailboxToURL(struct buf *dst, const char *src)
 {
     unsigned char c, i, bitcount;
     unsigned long ucs4, utf16, bitbuf;
@@ -95,11 +94,11 @@ static void MailboxToURL(char *dst, const char *src)
         if (c != '&' || *src == '-') {
             if (c < ' ' || c > '~' || strchr(urlunsafe, c) != NULL) {
                 /* hex encode if necessary */
-                *dst++ = '%';
-                dst += bin_to_hex(&c, 1, dst, BH_UPPER);
+                buf_putc(dst, '%');
+                buf_bin_to_hex(dst, &c, 1, BH_UPPER);
             } else {
                 /* encode literally */
-                *dst++ = c;
+                buf_putc(dst, c);
             }
             /* skip over the '-' if this is an &- sequence */
             if (c == '&') ++src;
@@ -152,8 +151,8 @@ static void MailboxToURL(char *dst, const char *src)
                      * RFC3986 says: For consistency, URI producers and
                      * normalizers should use uppercase hexadecimal digits
                      * for all percent-encodings. */
-                    *dst++ = '%';
-                    dst += bin_to_hex(utf8, i, dst, BH_UPPER|BH_SEPARATOR('%'));
+                    buf_putc(dst, '%');
+                    buf_bin_to_hex(dst, utf8, i, BH_UPPER|BH_SEPARATOR('%'));
                 }
             }
             /* skip over trailing '-' in modified UTF-7 encoding */
@@ -161,7 +160,7 @@ static void MailboxToURL(char *dst, const char *src)
         }
     }
     /* terminate destination string */
-    *dst = '\0';
+    buf_cstring(dst);
 }
 
 /* Convert hex coded UTF-8 URL path to modified UTF-7 IMAP mailbox
@@ -449,43 +448,43 @@ EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
     return 0;
 }
 
-EXPORTED void imapurl_toURL(char *dst, const struct imapurl *url)
+EXPORTED void imapurl_toURL(struct buf *dst, const struct imapurl *url)
 {
 
     if (url->server) {
-        dst += sprintf(dst, "imap://");
-        if (url->user) dst += sprintf(dst, "%s", url->user);
-        if (url->auth) dst += sprintf(dst, ";AUTH=%s", url->auth);
+        buf_appendcstr(dst, "imap://");
+        if (url->user) buf_appendcstr(dst, url->user);
+        if (url->auth) buf_printf(dst, ";AUTH=%s", url->auth);
         if (url->user || url->auth)
-            *dst++ = '@';
-        dst += sprintf(dst, "%s", url->server);
+            buf_putc(dst, '@');
+        buf_appendcstr(dst, url->server);
     }
     if (url->mailbox) {
-        *dst++ = '/';
+        buf_putc(dst, '/');
         MailboxToURL(dst, url->mailbox);
-        dst += strlen(dst);
     }
 
     if (url->uidvalidity)
-        dst += sprintf(dst, ";UIDVALIDITY=%lu", url->uidvalidity);
+        buf_printf(dst, ";UIDVALIDITY=%lu", url->uidvalidity);
     if (url->uid) {
-        dst += sprintf(dst, "/;UID=%lu", url->uid);
-        if (url->section) dst += sprintf(dst, "/;SECTION=%s", url->section);
+        buf_printf(dst, "/;UID=%lu", url->uid);
+        if (url->section) buf_printf(dst, "/;SECTION=%s", url->section);
         if (url->start_octet || url->octet_count) {
-            dst += sprintf(dst, "/;PARTIAL=%lu", url->start_octet);
-            if (url->octet_count) dst += sprintf(dst, ".%lu", url->octet_count);
+            buf_printf(dst, "/;PARTIAL=%lu", url->start_octet);
+            if (url->octet_count) buf_printf(dst, ".%lu", url->octet_count);
         }
     }
     if (url->urlauth.access) {
         if (url->urlauth.expire) {
-            strcpy(dst, ";EXPIRE=");
-            dst += strlen(dst);
-            dst += time_to_iso8601(url->urlauth.expire, dst, INT_MAX, 1);
+            buf_appendcstr(dst, ";EXPIRE=");
+            char buf[RFC3339_DATETIME_MAX+1] = { 0 };
+            time_to_iso8601(url->urlauth.expire, buf, RFC3339_DATETIME_MAX, 1);
+            buf_appendcstr(dst, buf);
         }
-        dst += sprintf(dst, ";URLAUTH=%s", url->urlauth.access);
+        buf_printf(dst, ";URLAUTH=%s", url->urlauth.access);
         if (url->urlauth.mech) {
-            dst += sprintf(dst, ":%s", url->urlauth.mech);
-            if (url->urlauth.token) dst += sprintf(dst, ":%s", url->urlauth.token);
+            buf_printf(dst, ":%s", url->urlauth.mech);
+            if (url->urlauth.token) buf_printf(dst, ":%s", url->urlauth.token);
         }
     }
 }

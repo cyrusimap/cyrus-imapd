@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_calendarevent_query_unsupported
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $uuidgen = Data::UUID->new;
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $filter = {
+        operator => 'OR',
+        conditions => []
+    };
+
+    # evoke a sqlite error for too complex expression trees.
+    # this filter is non-
+    for (1 .. 1001) { # this is the internal sqlite3 limit
+        push(@{$filter->{conditions}}, {
+            uid => $uuidgen->create_str,
+            after => '2023-03-04T14:00:00',
+        });
+    }
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => $filter
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals("unsupportedFilter", $res->[0][1]{type});
+
+    $self->{instance}->getsyslog(); # ignore seen.db DBERROR
+}

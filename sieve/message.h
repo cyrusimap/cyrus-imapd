@@ -67,7 +67,7 @@ typedef enum {
     ACTION_UNMARK,
     ACTION_ENOTIFY,
     ACTION_NOTIFY,
-    ACTION_DENOTIFY
+    ACTION_DENOTIFY,
 } action_t;
 
 /* information */
@@ -126,18 +126,22 @@ typedef struct duptrack_list_s {
 duptrack_list_t *new_duptrack_list(void);
 void free_duptrack_list(duptrack_list_t *d);
 
+#define IMPLICIT_KEEP   (1<<0)
+#define CANCEL_KEEP     (1<<1)
+#define CREATE_MAILBOX  (1<<2)
+
 /* actions; return negative on failure.
  * these don't actually perform the actions, they just add it to the
  * action list */
 int do_reject(action_list_t *m, int action, const char *msg);
 int do_fileinto(sieve_interp_t *i, void *sc,
                 action_list_t *a, const char *mbox, const char *specialuse,
-                int cancel_keep, int do_create, const char *mailboxid,
+                unsigned flags, const char *mailboxid,
                 strarray_t *imapflags, struct buf *headers);
 int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
                 const char *dsn_notify, const char *dsn_ret,
                 int is_ext_list, int cancel_keep, struct buf *headers);
-int do_keep(sieve_interp_t *i, void *sc,
+int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
             action_list_t *m, strarray_t *imapflags, struct buf *headers);
 int do_discard(action_list_t *m);
 int do_vacation(action_list_t *m, char *addr, char *fromaddr, char *subj,

@@ -1,0 +1,132 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarsharenotification_query
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                A => {
+                    name => 'A',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{A});
+
+    sleep(1);
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                B => {
+                    name => 'B',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{B});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/query', {
+        }, 'R1'],
+        ['ShareNotification/query', {
+            sort => [{
+                property => 'created',
+                isAscending => JSON::false,
+            }],
+        }, 'R2'],
+        ['ShareNotification/get', {
+            properties => ['created'],
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{ids}});
+
+    my %notifTimestamps = map { $_->{id} => $_->{created} } @{$res->[2][1]{list}};
+    $self->assert($notifTimestamps{$res->[0][1]{ids}[0]} lt
+                  $notifTimestamps{$res->[0][1]{ids}[1]});
+    $self->assert($notifTimestamps{$res->[1][1]{ids}[0]} gt
+                  $notifTimestamps{$res->[1][1]{ids}[1]});
+
+    my $notifIdT1 = $res->[0][1]{ids}[0];
+    my $timestampT1 = $notifTimestamps{$notifIdT1};
+
+    my $notifIdT2 = $res->[0][1]{ids}[1];
+    my $timestampT2 = $notifTimestamps{$notifIdT2};
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/query', {
+            filter => {
+                before => $timestampT2,
+            },
+        }, 'R1'],
+        ['ShareNotification/query', {
+            filter => {
+                after => $timestampT2,
+            },
+        }, 'R2'],
+        ['ShareNotification/query', {
+            position => 1,
+        }, 'R3'],
+        ['ShareNotification/query', {
+            anchor => $notifIdT2,
+            anchorOffset => -1,
+            limit => 1,
+        }, 'R3'],
+    ]);
+    $self->assert_deep_equals([$notifIdT1], $res->[0][1]{ids});
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_deep_equals([$notifIdT2], $res->[1][1]{ids});
+    $self->assert_num_equals(1, $res->[1][1]{total});
+    $self->assert_deep_equals([$notifIdT2], $res->[2][1]{ids});
+    $self->assert_num_equals(2, $res->[2][1]{total});
+    $self->assert_deep_equals([$notifIdT1], $res->[3][1]{ids});
+    $self->assert_num_equals(2, $res->[2][1]{total});
+}

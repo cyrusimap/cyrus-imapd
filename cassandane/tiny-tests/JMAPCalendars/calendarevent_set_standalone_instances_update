@@ -1,0 +1,115 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_standalone_instances_update
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create standalone instances";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                instance1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance1',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-01-01T01:01:01',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+                instance2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'event1uid',
+                    title => 'instance2',
+                    start => '2021-02-02T02:02:02',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    recurrenceId => '2021-02-02T02:02:02',
+                    recurrenceIdTimeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $instance1Id = $res->[0][1]{created}{instance1}{id};
+    $self->assert_not_null($instance1Id);
+    my $instance2Id = $res->[0][1]{created}{instance2}{id};
+    $self->assert_not_null($instance2Id);
+    my $xhref1 = $res->[0][1]{created}{instance1}{'x-href'};
+    $self->assert_not_null($xhref1);
+    my $xhref2 = $res->[0][1]{created}{instance2}{'x-href'};
+    $self->assert_not_null($xhref2);
+    $self->assert_str_equals($xhref1, $xhref2);
+    my $state = $res->[0][1]{newState};
+
+    xlog "Update standalone instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    title => 'instance1Updated',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$instance1Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => [$instance2Id],
+            properties => ['title', 'recurrenceId', 'recurrenceIdTimeZone'],
+        }, 'R3'],
+        ['CalendarEvent/changes', {
+            sinceState => $state,
+        }, 'R4'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$instance1Id});
+    $self->assert_str_equals('instance1Updated', $res->[1][1]{list}[0]{title});
+    $self->assert_str_equals('instance2', $res->[2][1]{list}[0]{title});
+
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_str_not_equals($state, $res->[1][1]{state});
+    $self->assert_str_not_equals($state, $res->[2][1]{state});
+    $self->assert_str_not_equals($state, $res->[3][1]{newState});
+    $self->assert_deep_equals([], $res->[3][1]{created});
+    $self->assert_deep_equals([$instance1Id], $res->[3][1]{updated});
+    $self->assert_deep_equals([], $res->[3][1]{destroyed});
+    $state = $res->[3][1]{newState};
+
+    xlog "Assert CalDAV resource contains both instances";
+    $res = $caldav->Request('GET', $xhref1);
+    $self->assert($res->{content} =~ m/SUMMARY:instance1Updated/);
+    $self->assert($res->{content} =~ m/SUMMARY:instance2/);
+
+    xlog "Can't change the recurrenceId or recurrenceIdTimeZone property";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    recurrenceId => '2021-03-03T03:03:03',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            update => {
+                $instance1Id => {
+                    recurrenceIdTimeZone => 'America/New_York',
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['recurrenceId'],
+        $res->[0][1]{notUpdated}{$instance1Id}{properties});
+    $self->assert_deep_equals(['recurrenceIdTimeZone'],
+        $res->[1][1]{notUpdated}{$instance1Id}{properties});
+}

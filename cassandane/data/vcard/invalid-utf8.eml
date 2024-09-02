@@ -1,0 +1,20 @@
+User-Agent: cassandanetest
+From: <test@local>
+Subject: Test
+Date: Fri, 30 Oct 2020 12:19:37 -0400
+Message-ID: <123456789@local>
+Content-Type: text/vcard; version=3.0; charset=utf-8
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment;
+	filename="123456789.vcf"
+MIME-Version: 1.0
+
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//CyrusIMAP.org//Cyrus//EN
+UID:123456789
+EMAIL;TYPE=work:benoît@local
+FN:Test
+N:Test;;;;
+REV:20200708T081725Z
+END:VCARD

@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_msg_replication_new_bot_mse_gul
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case new_bot_mse_gul: new messages appear, on both master " .
+         "and replica, with equal modseqs, lower GUID on master.";
+
+    xlog $self, "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $valueA = "Hello World";
+    my $valueB = "Hello Dolly";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog $self, "Append a message and store an annotation to each store";
+    my ($msgA, $msgB) = $self->make_message_pair($master_store, $replica_store);
+    my %master_exp = ( A => $msgA );
+    my %replica_exp = ( B => $msgB );
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $valueA);
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB);
+    $replica_exp{B}->set_attribute('uid', 1);
+    $replica_exp{B}->set_annotation($entry, $attrib, $valueB);
+
+    xlog $self, "Before replication, only message A is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog $self, "Before replication, only message B is present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "After replication, both messages are now present and renumbered on the master";
+    $master_exp{B} = $replica_exp{B}->clone();
+    $master_exp{A}->set_attribute('uid', 2);
+    $master_exp{B}->set_attribute('uid', 3);
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog $self, "After replication, both messages are now present and renumbered on the replica";
+    $replica_exp{A} = $master_exp{A}->clone();
+    $replica_exp{A}->set_attribute('uid', 2);
+    $replica_exp{B}->set_attribute('uid', 3);
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog $self, "Check that annotations in the master and replica DB match";
+    $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    # We should have generated a SYNCERROR or two
+    my $pattern = qr{
+        \bSYNCERROR:\sguid\smismatch
+        (?: \suser\.cassandane\s1\b
+            | :\smailbox=<user\.cassandane>\suid=<1>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $pattern);
+}

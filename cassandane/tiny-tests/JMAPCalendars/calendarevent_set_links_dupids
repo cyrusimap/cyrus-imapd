@@ -1,0 +1,114 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_links_dupids
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $event =  {
+        calendarIds => {
+            Default => JSON::true,
+        },
+        title => 'event1',
+        calendarIds => {
+            Default => JSON::true,
+        },
+        start => '2011-01-01T04:05:06',
+        duration => 'PT1H',
+        links => {
+            link1 => {
+                href => 'https://local/link1',
+                title => 'link1',
+            },
+            link2 => {
+                href => 'https://local/link2',
+                title => 'link2',
+            },
+        },
+        locations => {
+            loc1 => {
+                name => 'loc1',
+                links => {
+                    link1 => {
+                        href => 'https://local/loc1/link1',
+                        title => 'loc1link1',
+                    },
+                    link2 => {
+                        href => 'https://local/loc1/link2',
+                        title => 'loc1link2',
+                    },
+                },
+            },
+            loc2 => {
+                name => 'loc2',
+                links => {
+                    link1 => {
+                        href => 'https://local/loc2/link1',
+                        title => 'loc2link1',
+                    },
+                    link2 => {
+                        href => 'https://local/loc2/link2',
+                        title => 'loc2link2',
+                    },
+                },
+            },
+        },
+        replyTo => {
+            imip => 'mailto:orga@local',
+        },
+        participants => {
+            part1 => {
+                email => 'part1@local',
+                sendTo => {
+                    imip => 'mailto:part1@local',
+                },
+                roles => {
+                    attendee => JSON::true,
+                },
+                links => {
+                    link1 => {
+                        href => 'https://local/part1/link1',
+                        title => 'part1link1',
+                    },
+                    link2 => {
+                        href => 'https://local/part1/link2',
+                        title => 'part1link2',
+                    },
+                },
+            },
+            part2 => {
+                email => 'part2@local',
+                sendTo => {
+                    imip => 'mailto:part2@local',
+                },
+                roles => {
+                    attendee => JSON::true,
+                },
+                links => {
+                    link1 => {
+                        href => 'https://local/part2/link1',
+                        title => 'part2link1',
+                    },
+                    link2 => {
+                        href => 'https://local/part2/link2',
+                        title => 'part2link2',
+                    },
+                },
+            },
+            orga => {
+                email => 'orga@local',
+                sendTo => {
+                    imip => 'mailto:orga@local',
+                },
+                roles => {
+                    owner => JSON::true,
+                    attendee => JSON::true,
+                },
+            },
+        }
+    };
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+}

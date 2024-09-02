@@ -62,7 +62,7 @@ struct namespace_t namespace_applepush = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ|ALLOW_POST,
-    &applepush_init, NULL, NULL, NULL, NULL, NULL,
+    &applepush_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -82,6 +82,7 @@ struct namespace_t namespace_applepush = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { NULL,                 NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -141,7 +142,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     }
 
     /* mailbox must be calendar or addressbook */
-    mbtype = mbentry->mbtype;
+    mbtype = mbtype_isa(mbentry->mbtype);
     if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK)
         goto done;
 
@@ -153,12 +154,12 @@ static int meth_get_applepush(struct transaction_t *txn,
         goto done;
     }
 
-    aps_topic = config_getstring(mbtype == MBTYPE_CALENDAR ?
+    aps_topic = config_getstring(mbtype_isa(mbtype) == MBTYPE_CALENDAR ?
                                  IMAPOPT_APS_TOPIC_CALDAV :
                                  IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
         syslog(LOG_ERR, "aps_topic_%s not configured, can't subscribe",
-               mbtype == MBTYPE_CALENDAR ? "caldav" : "carddav");
+               mbtype_isa(mbtype) == MBTYPE_CALENDAR ? "caldav" : "carddav");
         goto done;
     }
 
@@ -168,7 +169,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE_DAV);
     mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid,
                                        mailbox_userid, mailbox_uniqueid, mbtype,
-                                       86400); // XXX interval from config
+                                       config_getduration(IMAPOPT_APS_EXPIRY, 'd'));
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
@@ -287,7 +288,7 @@ int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
     /* key is userid and mailbox uniqueid */
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%s/%s",
-               fctx->req_tgt->userid, fctx->mailbox->uniqueid);
+               fctx->req_tgt->userid, mailbox_uniqueid(fctx->mailbox));
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 

@@ -176,6 +176,8 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     if (p < dend) sdata->size = strtoull(p, &p, 10);
     if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
     if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
+    if (p < dend) sdata->deleted = strtoul(p, &p, 10);
+    if (p < dend) sdata->deleted_storage = strtoull(p, &p, 10);
 
     if (*p++ != ')') return;
 
@@ -292,11 +294,12 @@ static int statuscache_store(const char *mboxname,
 
 
     buf_printf(&databuf,
-                       "I %u (%u %u %u %u %llu " MODSEQ_FMT " " MODSEQ_FMT ")",
+                       "I %u (%u %u %u %u " QUOTA_T_FMT " " MODSEQ_FMT " " MODSEQ_FMT " %u " QUOTA_T_FMT")",
                        STATUSCACHE_VERSION,
                        sdata->messages, sdata->uidnext,
                        sdata->uidvalidity, sdata->mboptions, sdata->size,
-                       sdata->createdmodseq, sdata->highestmodseq);
+                       sdata->createdmodseq, sdata->highestmodseq,
+                       sdata->deleted, sdata->deleted_storage);
 
     r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
@@ -401,10 +404,12 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     sdata->size = mailbox->i.quota_mailbox_used;
     sdata->createdmodseq = mailbox->i.createdmodseq;
     sdata->highestmodseq = mailbox->i.highestmodseq;
+    sdata->deleted = mailbox->i.deleted;
+    sdata->deleted_storage = mailbox->i.quota_deleted_used;
 
     // mbentry items are also available from an open mailbox
     sdata->uidvalidity = mailbox->i.uidvalidity;
-    sdata->mailboxid = mailbox->uniqueid;
+    sdata->mailboxid = mailbox_uniqueid(mailbox);
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
@@ -434,7 +439,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
         unsigned numrecent = 0;
         unsigned numunseen = 0;
         /* Read \Seen state */
-        struct seqset *seq = NULL;
+        seqset_t *seq = NULL;
         int internalseen = mailbox_internal_seen(mailbox, userid);
         unsigned recentuid;
 
@@ -445,7 +450,7 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
             struct seendata sd = SEENDATA_INITIALIZER;
 
             int r = seen_open(userid, SEEN_CREATE, &seendb);
-            if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+            if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
             seen_close(&seendb);
             if (r) return r;
 
@@ -470,12 +475,12 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
             }
         }
         mailbox_iter_done(&iter);
-        seqset_free(seq);
+        seqset_free(&seq);
 
         status_fill_seen(userid, sdata, numrecent, numunseen);
     }
 
-    statuscache_invalidate(mailbox->name, sdata);
+    statuscache_invalidate(mailbox_name(mailbox), sdata);
 
     return 0;
 }
@@ -569,7 +574,7 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         /* Do actual lookup of cache item. */
-        int r = statuscache_lookup(mailbox->name, userid, statusitems, sdata);
+        int r = statuscache_lookup(mailbox_name(mailbox), userid, statusitems, sdata);
 
         /* Seen/recent status uses "push" invalidation events from
          * seen_db.c.   This avoids needing to open cyrus.header to get
@@ -579,12 +584,12 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
 
         if (!r) {
             syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mailbox->name, userid, statusitems);
+                   mailbox_name(mailbox), userid, statusitems);
             return 0;
         }
 
         syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mailbox->name, userid, statusitems);
+               mailbox_name(mailbox), userid, statusitems);
     }
 
     return status_load_mailbox(mailbox, userid, statusitems, sdata);

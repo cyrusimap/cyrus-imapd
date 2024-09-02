@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_rdate_period
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('rdate_period');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my $o;
+
+    $o = $event->{recurrenceOverrides}->{"2016-03-04T15:00:00"};
+    $self->assert_not_null($o);
+    $self->assert_str_equals("PT1H", $o->{duration});
+}

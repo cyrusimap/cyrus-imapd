@@ -665,6 +665,7 @@ sub _sc_list {
     $lfh->[2]->print($$cyrref->error, "\n");
     return 1;
   }
+  $w = 0;
   foreach my $mbx (@res) {
     $l = $mbx->[0];
     if ($mbx->[1] ne '') {
@@ -1059,12 +1060,8 @@ sub _sc_delete {
     }
   }
   push(@nargv, @argv);
-  if (!@nargv || @nargv > 2) {
-    die "usage: deletemailbox mailbox [host]\n";
-  }
-  # @@ do I really care?
-  if (@nargv == 2) {
-    die "deletemailbox: host argument only supported in IMSP\n";
+  if (!@nargv || @nargv > 1) {
+    die "usage: deletemailbox mailbox\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "deletemailbox: no connection to server\n";
@@ -1769,7 +1766,7 @@ Connect to the *server* specified on the port specified.
 
 =item C<--auth> I<mechanism>
 
-Use the mechanism specified to authenticate. One of PLAIN, LOGIN, DIGEST-MD5, etc.
+Use the mechanism specified to authenticate. One of PLAIN, LOGIN, etc.
 
 =item C<--help>
 
@@ -1885,10 +1882,6 @@ Delete the specified mailbox.
 Administrators do not have implicit delete rights on mailboxes.  Use the
 L</setaclmailbox> command to grant the C<x> permission to your
 principal if you need to delete a mailbox you do not own.
-
-Note that the online help admits to an optional host argument.  This argument
-is not currently used, and will be rejected with an error if specified; it
-is reserved for IMSP.
 
 aliases: C<delete>, C<dm>
 

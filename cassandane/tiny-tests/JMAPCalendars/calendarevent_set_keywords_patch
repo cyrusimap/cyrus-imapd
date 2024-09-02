@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_keywords_patch
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+        "locale" => "en",
+        "keywords" => {
+            'foo' => JSON::true,
+            'bar' => JSON::true,
+            'baz' => JSON::true,
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+    my $eventId = $ret->{id};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'keywords/foo' => undef,
+                    'keywords/bam' => JSON::true,
+                },
+            },
+       }, 'R1'],
+       ['CalendarEvent/get', {
+            ids => [$eventId],
+       }, 'R2'],
+   ]);
+   $self->assert(exists $res->[0][1]{updated}{$eventId});
+   $ret = $res->[1][1]{list}[0];
+   $self->assert_not_null($ret);
+
+   delete $event->{keywords}{foo};
+   $event->{keywords}{bam} = JSON::true;
+   $self->assert_normalized_event_equals($event, $ret);
+}

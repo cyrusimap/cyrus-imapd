@@ -100,6 +100,7 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
 
         /* add comparators */
         buf_appendcstr(&buf, " comparator-i;ascii-numeric");
+        buf_appendcstr(&buf, " comparator-i;unicode-casemap");
 
         /* add actions */
         if (i->fileinto &&
@@ -136,6 +137,11 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->snooze &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))
             buf_appendcstr(&buf, " vnd.cyrus.snooze");
+        if (i->processcal &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))
+            buf_appendcstr(&buf, " processcalendar");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET)
+            buf_appendcstr(&buf, " vnd.cyrus.implicit_keep_target");
 
         /* add tests */
         if (i->getenvelope &&
@@ -249,6 +255,11 @@ EXPORTED void sieve_register_snooze(sieve_interp_t *interp, sieve_callback *f)
 EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->keep = f;
+}
+
+EXPORTED void sieve_register_processcal(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->processcal = f;
 }
 
 EXPORTED void sieve_register_notify(sieve_interp_t *interp,
@@ -460,7 +471,6 @@ static const struct sieve_capa_t {
 
     /* IMAP4 Flags - RFC 5232 */
     { "imap4flags", SIEVE_CAPA_IMAP4FLAGS },
-    { "imapflags",  SIEVE_CAPA_IMAP4FLAGS }, /* draft-melnikov-sieve-imapflags-04 */
 
     /* Subaddress - RFC 5233 */
     { "subaddress", SIEVE_CAPA_SUBADDRESS },
@@ -483,7 +493,7 @@ static const struct sieve_capa_t {
 
     /* Notifications - RFC 5435 */
     { "enotify", SIEVE_CAPA_ENOTIFY },
-    { "notify",  SIEVE_CAPA_NOTIFY }, /* draft-martin-sieve-notify-01 */
+    { "notify",  SIEVE_CAPA_NOTIFY }, /* deprecated draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
     { "ihave", SIEVE_CAPA_IHAVE },
@@ -495,7 +505,7 @@ static const struct sieve_capa_t {
 
     /* MIME Part Handling - RFC 5703 */
     { "enclose",      SIEVE_CAPA_ENCLOSE },
-    { "extracttest",  SIEVE_CAPA_EXTRACT },
+    { "extracttext",  SIEVE_CAPA_EXTRACT },
     { "foreverypart", SIEVE_CAPA_FOREVERYPART },
     { "mime",         SIEVE_CAPA_MIME },
     { "replace",      SIEVE_CAPA_REPLACE },
@@ -546,6 +556,16 @@ static const struct sieve_capa_t {
     { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },        // legacy capability
     { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
 
+    /* ProcessCalendar - draft-ietf-extra-processimip */
+    { "processcalendar", SIEVE_CAPA_PROCESSCAL },
+    { "vnd.cyrus.imip",  SIEVE_CAPA_PROCESSCAL },     // legacy capability
+
+    /* vnd.cyrus.implicit_keep_target */
+    { "vnd.cyrus.implicit_keep_target", SIEVE_CAPA_IKEEP_TARGET },
+
+    /* i;unicode-casemap - RFC 5051 */
+    { "comparator-i;unicode-casemap", SIEVE_CAPA_COMP_UCASEMAP },
+
     { NULL, 0 }
 };
     
@@ -580,6 +600,7 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     switch (capa) {
     case SIEVE_CAPA_BASE:
     case SIEVE_CAPA_COMP_NUMERIC:
+    case SIEVE_CAPA_COMP_UCASEMAP:
     case SIEVE_CAPA_ENCODED_CHAR:
         /* always enabled */
         break;
@@ -594,9 +615,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))) capa = 0;
         break;
 
+#ifdef ENABLE_REGEX
     case SIEVE_CAPA_REGEX:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) capa = 0;
         break;
+#endif
 
     case SIEVE_CAPA_COPY:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) capa = 0;
@@ -653,7 +676,6 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_ENOTIFY:
-    case SIEVE_CAPA_NOTIFY:
         if (!(interp->notify &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))) capa = 0;
         break;
@@ -734,15 +756,27 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG))) capa = 0;
         break;
 
+#ifdef WITH_JMAP
     case SIEVE_CAPA_JMAPQUERY:
         if (!(interp->jmapquery &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY)))
             capa = 0;
         break;
+#endif
 
     case SIEVE_CAPA_SNOOZE:
         if (!(interp->snooze &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_PROCESSCAL:
+        if (!(interp->processcal &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_IKEEP_TARGET:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET))
+            capa = 0;
         break;
 
     default:

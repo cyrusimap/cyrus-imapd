@@ -45,6 +45,7 @@
 
 #include "prot.h"
 #include "ptrarray.h"
+#include "strarray.h"
 #include "util.h"
 
 /* A parameter for SMTP envelope address, identified by key.
@@ -81,6 +82,10 @@ extern int smtp_is_valid_esmtp_keyword(const char *val);
  * as defined in RFC 5321, section 4.1.2. */
 extern int smtp_is_valid_esmtp_value(const char *val);
 
+/* Encode val as an esmtp-value
+ * as defined in RFC 5321, section 4.1.2. */
+extern void smtp_encode_esmtp_value(const char *val, struct buf *xtext);
+
 /* Set the MAIL FROM address in env and return the new value.
  * Any existing address is deallocated. */
 extern smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env, const char *addr);
@@ -107,6 +112,11 @@ extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
  * before it is written to the SMTP backend. */
 extern int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data);
 extern int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data);
+
+/* Check the SMTP envelope (and optionally size and/or From: header addresses)
+   without sending data */
+extern int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
+                                size_t size, strarray_t *fromaddr);
 
 /* Close the SMTP client and free its memory */
 extern int smtpclient_close(smtpclient_t **smp);
@@ -147,6 +157,15 @@ extern void smtpclient_set_ret(smtpclient_t *sm, const char *value);
  * Setting this to NULL resets the value. */
 extern void smtpclient_set_by(smtpclient_t *sm, const char *value);
 
+/* Add the IDENTITY=value parameter to MAIL FROM commands, if the
+ * SMTP backend advertised support for the JMAPIDENTITY extension.
+ *
+ * An IDENTITY parameter in the SMTP envelope of the smtpclient_from
+ * function overrides this value, regardless of advertised extensions.
+ *
+* Setting this to NULL resets the value. */
+extern void smtpclient_set_jmapid(smtpclient_t *sm, const char *value);
+
 /* Add the SIZE=value parameter to MAIL FROM commands, if the
  * SMTP backend advertised support for the RFC 1870 SIZE extension.
  *
@@ -167,7 +186,10 @@ extern unsigned long smtpclient_get_maxsize(smtpclient_t *sm);
  * Return NULL if the extension is not supported. */
 extern const char *smtpclient_has_ext(smtpclient_t *sm, const char *name);
 
-/* Return the text of the last SMTP response */
+/* Return the code of the last SMTP response */
+extern unsigned smtpclient_get_resp_code(smtpclient_t *sm);
+
+/* Return the text of the last SMTP response, or NULL if empty */
 extern const char *smtpclient_get_resp_text(smtpclient_t *sm);
 
 

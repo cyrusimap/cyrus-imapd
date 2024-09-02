@@ -142,7 +142,7 @@ backend_timeout(struct protstream *s __attribute__((unused)),
 EXPORTED struct backend * proxy_findserver(const char *server,          /* hostname of backend */
                  struct protocol_t *prot,       /* protocol we're speaking */
                  const char *userid,            /* proxy as userid (ext form)*/
-                 struct backend ***cache,       /* ptr to backend cache */
+                 ptrarray_t *cache,             /* ptr to backend cache */
                  struct backend **current,      /* ptr to current backend */
                  struct backend **inbox,        /* ptr to inbox backend */
                  struct protstream *clientin)   /* protstream from client to
@@ -159,17 +159,25 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
     }
 
     /* check if we already a connection to this backend */
-    while (cache && *cache && (*cache)[i]) {
-        if ((!strcmp(server, ((*cache)[i])->hostname) &&
-             !strcmp(prot->service, ((*cache)[i])->prot->service))) {
-            ret = (*cache)[i];
-            /* ping/noop the server */
-            if ((ret->sock != -1) && backend_ping(ret, userid)) {
-                backend_disconnect(ret);
+    if (cache) {
+        for (i = 0; i < ptrarray_size(cache); i++) {
+            struct backend *be = ptrarray_nth(cache, i);
+            if ((!strcmp(server, be->hostname) &&
+                 !strcmp(prot->service, be->prot->service))) {
+                ret = be;
+                /* ping/noop the server */
+                if ((ret->sock != -1) && backend_ping(ret, userid)) {
+                    backend_disconnect(ret);
+
+                    /* remove the timeout */
+                    if (ret->timeout)
+                        prot_removewaitevent(ret->clientin, ret->timeout);
+                    ret->timeout = NULL;
+                    ret->clientin = NULL;
+                }
+                break;
             }
-            break;
         }
-        i++;
     }
 
     if (!ret || (ret->sock == -1)) {
@@ -190,12 +198,7 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
     ret->inbox = inbox;
 
     /* insert server in list of cache connections */
-    if (cache && (!*cache || !(*cache)[i])) {
-        *cache = (struct backend **)
-            xrealloc(*cache, (i + 2) * sizeof(struct backend *));
-        (*cache)[i] = ret;
-        (*cache)[i + 1] = NULL;
-    }
+    if (cache) ptrarray_add(cache, ret);
 
     return ret;
 }
@@ -215,18 +218,22 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
                       struct protstream *clientout,
                       struct protstream *serverin,
                       struct protstream *serverout,
+                      int extra_read_fd,
+                      int *extra_read_flag,
                       unsigned long timeout_sec)
 {
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
     int n, ret = 0;
 
-    n = prot_select(protin, PROT_NO_FD, &protout, NULL,
+    n = prot_select(protin, extra_read_fd, &protout, extra_read_flag,
                     timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
         syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
         fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
     }
+
+    if (extra_read_flag && *extra_read_flag) n--;
 
     if (n && protout) {
         /* see who has input */

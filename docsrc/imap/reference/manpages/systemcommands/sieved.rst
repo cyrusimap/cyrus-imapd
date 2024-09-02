@@ -6,25 +6,33 @@
 **sieved**
 ==========
 
-Script to decompile a sieve script back from bytecode.
+Tool to decompile a sieve script back from bytecode.
 
 Synopsis
 ========
 
 .. parsed-literal::
 
-    **sieved** *scriptfile*
+    **sieved** [OPTIONS] *bytcodefile*
 
 Description
 ===========
 
-**sieved** decompiles the given script at *scriptfile* from bytecode, writing output to stdout.
+**sieved** decompiles the given *bytecodefile*, writing output to stdout.
 
+By default, the output is a descriptive version of the bytecode.  With the
+**-s** option, an equivalent sieve script is produced instead.
 
 Options
 =======
 
 .. program:: sieved
+
+.. option:: -s, --as-sieve
+
+   Produce a sieve script rather than describing the bytecode.
+   Note that if the bytecode contains deprecated features,
+   the resulting script will not be compilable without changes.
 
 See Also
 ========

@@ -36,11 +36,11 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Enable verbose output.
 
-.. option:: -r version-string
+.. option:: -r version-string, --rebuild=version-string
 
     Rebuild the zoneinfo database based on the directory structure of
     *configdirectory*/**zoneinfo**.  The database to be rebuilt will be
@@ -51,7 +51,7 @@ Options
     by the *tzdist* module of :manpage:`httpd(8)`.  The *version-string*
     must contain a colon between the description and the version.
 
-.. option:: -w file
+.. option:: -w file, --windows-zone-xml=file
 
     Reads Windows Zone XML file.
 

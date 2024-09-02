@@ -67,7 +67,7 @@
 static int jmap_mdn_send(jmap_req_t *req);
 static int jmap_mdn_parse(jmap_req_t *req);
 
-jmap_method_t jmap_mdn_methods_standard[] = {
+static jmap_method_t jmap_mdn_methods_standard[] = {
     {
         "MDN/send",
         JMAP_URN_MDN,
@@ -83,7 +83,7 @@ jmap_method_t jmap_mdn_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
 
-jmap_method_t jmap_mdn_methods_nonstandard[] = {
+static jmap_method_t jmap_mdn_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 
@@ -275,7 +275,7 @@ static json_t *generate_mdn(struct jmap_req *req,
     }
 
     /* Open the mailbox */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = mailbox_open_iwl(mboxname, &mbox);
     if (r) goto done;
 
     /* Load the message */
@@ -420,7 +420,7 @@ static json_t *generate_mdn(struct jmap_req *req,
   done:
     if (r && err == NULL) err = jmap_server_error(r);
     if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     free(mboxname);
     buf_free(&buf);
 
@@ -644,7 +644,7 @@ static int jmap_mdn_parse(jmap_req_t *req)
             json_array_append_new(parse.not_parsable, json_string(blobid));
         }
         msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
         message_free_body(body);
         free(body);
         buf_free(&buf);

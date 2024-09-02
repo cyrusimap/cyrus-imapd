@@ -112,7 +112,7 @@ struct namespace_t namespace_rss = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    rss_init, NULL, NULL, NULL, NULL, NULL,
+    rss_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -132,6 +132,7 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          &rss_parse_path },      /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -170,7 +171,7 @@ static int meth_get(struct transaction_t *txn,
     /* If no mailboxname, list all available feeds */
     if (!txn->req_tgt.mbentry) return list_feeds(txn);
 
-    /* Make sure its a mailbox that we are treating as an RSS feed */
+    /* Make sure it is a mailbox that we are treating as an RSS feed */
     if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
 
     /* Check ACL for current user */
@@ -218,7 +219,7 @@ static int meth_get(struct transaction_t *txn,
     /* If no UID specified, list messages as an RSS feed */
     if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
-        txn->error.desc = "Message does not exist\r\n";
+        txn->error.desc = "Message does not exist";
         ret = HTTP_NOT_FOUND;
     }
     else {
@@ -267,7 +268,7 @@ static int meth_get(struct transaction_t *txn,
 
             if (!section) {
                 /* Return entire message formatted as text/html */
-                display_message(txn, mailbox->name, &record, body, &msg_buf);
+                display_message(txn, mailbox_name(mailbox), &record, body, &msg_buf);
             }
             else if (!strcmp(section, "0")) {
                 /* Return entire message as text/plain */
@@ -438,7 +439,7 @@ static int do_list(const char *name, void *rock)
         /* Don't list deleted mailboxes */
         if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
-        /* Lookup the mailbox and make sure its readable */
+        /* Lookup the mailbox and make sure it is readable */
         r = proxy_mlookup(name, &mbentry, NULL, NULL);
         if (r) return 0;
 
@@ -700,7 +701,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     if ((r == CYRUSDB_NOTFOUND) ||
         ((record->system_flags & FLAG_DELETED) ||
          record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-        txn->error.desc = "Message has been removed\r\n";
+        txn->error.desc = "Message has been removed";
 
         /* Fill in Expires */
         txn->resp_body.maxage = 31536000;  /* 1 year */
@@ -884,7 +885,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 #endif
 
     /* Translate mailbox name to external form */
-    strlcpy(mboxname, mailbox->name, sizeof(mboxname));
+    strlcpy(mboxname, mailbox_name(mailbox), sizeof(mboxname));
 
     /* Construct base URL */
     http_proto_host(txn->req_hdrs, &proto, &host);
@@ -905,7 +906,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* <id> - required */
     buf_printf_markup(buf, level, "<id>%s%s</id>",
-                      GUID_URL_SCHEME, mailbox->uniqueid);
+                      GUID_URL_SCHEME, mailbox_uniqueid(mailbox));
 
     /* <updated> - required */
     time_to_rfc3339(lastmod, datestr, sizeof(datestr));
@@ -917,7 +918,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf_markup(buf, --level, "</author>");
 
     /* <subtitle> - optional */
-    annotatemore_lookup(mailbox->name, "/comment", "", &attrib);
+    annotatemore_lookup_mbox(mailbox, "/comment", "", &attrib);
     if (age_mark) {
         time_to_rfc5322(age_mark, datestr, sizeof(datestr));
         buf_printf_markup(buf, level,
@@ -1234,7 +1235,7 @@ static void display_part(struct transaction_t *txn,
                 charset = charset_lookupname("us-ascii");
             }
             body->decoded_body =
-                charset_to_utf8(buf_base(msg_buf) + body->content_offset,
+                charset_to_utf8cstr(buf_base(msg_buf) + body->content_offset,
                                 body->content_size, charset, encoding);
             charset_free(&charset);
             if (!ishtml) buf_printf_markup(buf, level, "<pre>");

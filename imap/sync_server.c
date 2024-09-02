@@ -82,6 +82,7 @@
 #include "global.h"
 #include "hash.h"
 #include "imparse.h"
+#include "imap_proxy.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -90,6 +91,7 @@
 #include "prot.h"
 #include "quota.h"
 #include "seen.h"
+#include "slowio.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
@@ -98,6 +100,7 @@
 #include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -132,8 +135,9 @@ static struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
-
-static int opt_force = 0;
+static int sync_sieve_mailbox_enabled = 0;
+static int sync_archive_enabled = 0;
+static struct proc_handle *proc_handle = NULL;
 
 /* commands that have specific names */
 static void cmdloop(void);
@@ -152,6 +156,7 @@ static void cmd_restore(struct dlist *kin,
 
 static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
+void shut_down_via_signal(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
                       const char *init_resp, const char *resp_prefix,
@@ -175,7 +180,7 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void sync_reset(void)
 {
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     if (sync_in) {
         prot_NONBLOCK(sync_in);
@@ -220,7 +225,12 @@ static void sync_reset(void)
     sync_starttls_done = 0;
     sync_compress_done = 0;
 
+    sync_sieve_mailbox_enabled = 0;
+    sync_archive_enabled = 0;
+
     saslprops_reset(&saslprops);
+
+    slowio_reset();
 }
 
 /*
@@ -234,10 +244,10 @@ int service_init(int argc __attribute__((unused)),
     int opt, r;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
-    signals_set_shutdown(&shut_down);
+    signals_set_shutdown(&shut_down_via_signal);
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
@@ -248,16 +258,13 @@ int service_init(int argc __attribute__((unused)),
         case 'p': /* external protection */
             extprops_ssf = atoi(optarg);
             break;
-        case 'f':
-            opt_force = 1;
-            break;
         default:
             usage();
         }
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
+    if ((r = mboxname_init_namespace(sync_namespacep, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -291,6 +298,12 @@ static void dobanner(void)
             prot_printf(sync_out, "* COMPRESS DEFLATE\r\n");
         }
 #endif
+
+        prot_printf(sync_out, "* SIEVE-MAILBOX\r\n");
+
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            prot_printf(sync_out, "* REPLICATION-ARCHIVE\r\n");
+        }
     }
 
     prot_printf(sync_out,
@@ -309,16 +322,15 @@ int service_main(int argc __attribute__((unused)),
 {
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
-    int timeout;
+    int r, timeout;
 
     signals_poll();
 
     sync_in = prot_new(0, 0);
     sync_out = prot_new(1, 1);
 
-    /* Force use of LITERAL+ so we don't need two way communications */
+    /* Allow LITERAL+ */
     prot_setisclient(sync_in, 1);
-    prot_setisclient(sync_out, 1);
 
     /* Find out name of client host */
     sync_clienthost = get_clienthost(0, &localip, &remoteip);
@@ -351,7 +363,10 @@ int service_main(int argc __attribute__((unused)),
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
-    proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, sync_clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, sync_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
@@ -396,7 +411,9 @@ void shut_down(int code)
 {
     in_shutdown = 1;
 
-    proc_cleanup();
+    libcyrus_run_delayed();
+
+    proc_cleanup(&proc_handle);
 
     seen_done();
 
@@ -424,13 +441,22 @@ void shut_down(int code)
     exit(code);
 }
 
+void shut_down_via_signal(int code __attribute__((unused)))
+{
+    if (sync_out) {
+        prot_puts(sync_out, "BYE shutting down\r\n");
+    }
+
+    shut_down(0);
+}
+
 EXPORTED void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -439,6 +465,7 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(sync_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
     shut_down(code);
 }
 
@@ -490,6 +517,8 @@ static void cmdloop(void)
     for (;;) {
         prot_flush(sync_out);
 
+        libcyrus_run_delayed();
+
         /* Parse command name */
         if ((c = getword(sync_in, &cmd)) == EOF)
             break;
@@ -537,7 +566,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Apply")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_apply(kl, reserve_list);
                     dlist_free(&kl);
@@ -565,7 +594,7 @@ static void cmdloop(void)
         case 'G':
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Get")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_get(kl);
                     dlist_free(&kl);
@@ -609,7 +638,7 @@ static void cmdloop(void)
             }
             if (!sync_userid) goto nologin;
             if (!strcmp(cmd.s, "Restore")) {
-                kl = sync_parseline(sync_in);
+                kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
                     cmd_restore(kl, reserve_list);
                     dlist_free(&kl);
@@ -756,7 +785,10 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     sync_userid = xstrdup((const char *) val);
-    proc_register(config_ident, sync_clienthost, sync_userid, NULL, NULL);
+    r = proc_register(&proc_handle, 0,
+                      config_ident, sync_clienthost, sync_userid, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
            mech, sync_starttls_done ? "+TLS" : "", "User logged in");
@@ -931,7 +963,7 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
         for (msg = res->list->head; msg; msg = msg->next) {
             if (!msg->fname) continue;
             pl = partition_list_add(res->part, pl);
-            unlink(msg->fname);
+            xunlink(msg->fname);
         }
     }
     sync_reserve_list_free(reserve_listp);
@@ -943,6 +975,13 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
         snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
                  config_partitiondir(p->name), (unsigned long)getpid());
         rmdir(buf);
+
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            /* and the archive partition too */
+            snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                    config_archivepartitiondir(p->name), (unsigned long)getpid());
+            rmdir(buf);
+        }
     }
     partition_list_free(pl);
 
@@ -962,10 +1001,25 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
 
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
+
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+
+    if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
+        sync_sieve_mailbox_enabled = 1;
+    }
+    if (sync_state.flags & SYNC_FLAG_ARCHIVE) {
+        sync_archive_enabled = 1;
+    }
+
     sync_checkpoint(sync_in);
     prot_printf(sync_out, "%s\r\n", resp);
 }
@@ -978,8 +1032,15 @@ static void cmd_get(struct dlist *kin)
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     const char *resp = sync_get(kin, &sync_state);
     prot_printf(sync_out, "%s\r\n", resp);
@@ -993,8 +1054,15 @@ static void cmd_restore(struct dlist *kin, struct sync_reserve_list *reserve_lis
         sync_authstate,
         &sync_namespace,
         sync_out,
-        0 /* local_only */
+        0 /* flags */
     };
+
+    if (sync_sieve_mailbox_enabled) {
+        sync_state.flags |= SYNC_FLAG_SIEVE_MAILBOX;
+    }
+    if (sync_archive_enabled) {
+        sync_state.flags |= SYNC_FLAG_ARCHIVE;
+    }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
     sync_checkpoint(sync_in);

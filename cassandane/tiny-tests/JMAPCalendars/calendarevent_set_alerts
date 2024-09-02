@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_alerts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $alerts = {
+        alert1 => {
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => "start",
+                offset => "-PT5M",
+            },
+            acknowledged => "2015-11-07T08:57:00Z",
+            action => "email",
+        },
+        alert2 => {
+            trigger => {
+                '@type' => 'AbsoluteTrigger',
+                when => "2019-03-04T04:05:06Z",
+            },
+            action => "display",
+            relatedTo => {
+                'alert1' => {
+                    relation => {
+                        'parent' => JSON::true,
+                    },
+                },
+            },
+        },
+        alert3 => {
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                offset => "PT1S",
+            }
+        },
+        alert4 => {
+            trigger => {
+                '@type' => 'AbsoluteTrigger',
+                when => "2019-03-04T05:06:07Z",
+            },
+            action => "display",
+            relatedTo => {
+                'alert1' => {
+                    relation => { },
+                },
+            },
+        },
+
+    };
+
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT2H",
+        "timeZone" => "Europe/London",
+        "showWithoutTime"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "alerts" => $alerts,
+        "useDefaultAlerts" => JSON::true,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{calendarIds} = $ret->{calendarIds};
+    $self->assert_normalized_event_equals($ret, $event);
+}

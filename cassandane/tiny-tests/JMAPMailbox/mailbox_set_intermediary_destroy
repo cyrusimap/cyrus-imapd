@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_intermediary_destroy
+    :min_version_3_1 :max_version_3_4 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $imap->create("INBOX.i1.i2.foo") or die;
+    $imap->create("INBOX.i1.bar") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdFoo = $mboxByName{'foo'}->{id};
+    my $mboxId2 = $mboxByName{'i2'}->{id};
+
+    xlog $self, "Destroy intermediate";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxId2, $mboxIdFoo],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
+
+    xlog $self, "Assert mailbox tree and changes";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"],
+    ]);
+
+    # Intermediaries with real children are kept.
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(3, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{bar}->{parentId});
+}

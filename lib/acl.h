@@ -107,6 +107,7 @@ extern int cyrus_acl_strtomask(const char *str, int *mask);
  *  dst must have room for 32 characters (only 20 used currently)
  *  returns dst
  */
+#define ACL_STRING_MAX 32
 extern char *cyrus_acl_masktostr(int acl, char *str);
 
 /*  cyrus_acl_myrights(acl)

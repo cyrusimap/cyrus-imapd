@@ -1,0 +1,57 @@
+# See https://git-scm.com/docs/gitmailmap, but this format is one of:
+# Proper Name <proper-email> <commit-email>
+# Proper Name <proper-email> Commit Name <commit-email>
+
+# People, alphabetical by last name.  Most recent commit used where ambiguous.
+Greg Banks <gnb@fastmail.fm> <gnb@fmeh.org>
+Greg Banks <gnb@fastmail.fm> <gnb@opera.com>
+Robert Bricheno <github2@ambrosia.org.uk> <rob@ambrosia.org.uk>
+cketti <ck@cketti.de> <cketti@gmail.com>
+Julien Coloos <julien.coloos@gmail.com> <julien.coloos@atos.net>
+Chris Davies <chris_davies@fastmail.fm> <davies@cyrus.foundation>
+Bron Gondwana <brong@fastmailteam.com> brong <brong>
+Bron Gondwana <brong@fastmailteam.com> <brong@fastmail.fm>
+Bron Gondwana <brong@fastmailteam.com> <brong@opera.com>
+Bron Gondwana <brong@fastmailteam.com> <brong@arbre.oslo.osa>
+Bron Gondwana <brong@fastmailteam.com> <brong@launde.brong.net>
+Bron Gondwana <brong@fastmailteam.com> <brong@launde.home.brong.net>
+Bron Gondwana <brong@fastmailteam.com> <brong@ravna.home.brong.net>
+Quanah Gibson-Mount <quanah@fast-mail.org> <quanah@symas.com>
+Matthew Horsfall <alh@fastmailteam.com> <wolfsage@gmail.com>
+Matthew Horsfall <alh@fastmailteam.com> alh <wolfsage@gmail.com>
+Anthony Howe <achowe@snert.com> <achowe@kitsune.snert.com>
+Neil Jenkins <neilj@fastmailteam.com> <neil@nmjenkins.com>
+Dave McMurtrie <dave64@andrew.cmu.edu> <dave64@dave64.andrew.cmu.edu>
+Rob Mueller <robm@fastmailteam.com> <robm@fastmail.fm>
+Sven Mueller <sven@debian.org> <debian@incase.de>
+Ken Murchison <murch@fastmail.com> <murch@andrew.cmu.edu>
+Ken Murchison <murch@fastmail.com> Kenneth S Murchison <murch@unix36.andrew.cmu.edu>
+David Murray <dave@murray.name> CambridgeDave <github@davidmurray.name>
+John Gardiner Myers <jm36@andrew.cmu.edu> John Gardiner Meyers <jgm@andrew.cmu.edu>
+Chris Newman <cjnewman@github.com> <chrisn@cmu.edu>
+Chris Newman <cjnewman@github.com> <nifty@andrew.cmu.edu>
+Rob N ★ <robn@fastmailteam.com> Robert Norris <rob@eatenbyagrue.org>
+Rob N ★ <robn@fastmailteam.com> <rob@robn.io>
+Rob N ★ <robn@fastmailteam.com> <robn@despairlabs.com>
+Nicola Nye <nicolan@fastmail.com> Nicola N <nicolan@fastmail.com>
+Дилян Палаузов <git-dpa@aegee.org> <dpa-github@aegee.org>
+Olivier ROLAND <olivier.roland@atosorigin.com> <olivier.roland@atos.net>
+Ricardo Signes <rjbs@fastmailteam.com> <rjbs@cpan.org>
+Ricardo Signes <rjbs@fastmailteam.com> <rjbs@semiotic.systems>
+Ricardo Signes <rjbs@fastmailteam.com> <rjbs@users.noreply.github.com>
+Jean-Francois Smigielski <jf.smigielski@gmail.com> Jean-Francois SMIGIELSKI <jf.smigielski@gmail.com>
+Robert Stepanek <rsto@fastmailteam.com> rsto@fastmailteam.com <rsto@fastmailteam.com>
+Robert Stepanek <rsto@fastmailteam.com> <rsto@paranoia.at>
+Robert Stepanek <rsto@fastmailteam.com> Robert <rsto@paranoia.at>
+Robert Stepanek <rsto@fastmailteam.com> <rsto@fastmail.com>
+Robert Stepanek <rsto@fastmailteam.com> <rost@paranoia.at>
+Robert Stepanek <rsto@fastmailteam.com> <rsto@debian>
+Ondřej Surý <ondrej@debian.org> <ondrej@sury.org>
+Partha Susarla <partha@fastmailteam.com> <ajaysusarla@gmail.com>
+Partha Susarla <partha@fastmailteam.com> <mail@spartha.org>
+ellie timoney <ellie@fastmail.com> <elliefm@users.noreply.github.com>
+ellie timoney <ellie@fastmail.com> Ellie Timoney <ellie@fastmail.com>
+ellie timoney <ellie@fastmail.com> elliefm <elliefm@users.noreply.github.com>
+
+# Mystery committers
+Mystery Person <nobody@role.fastmailteam.com> root <root@localhost.localdomain>

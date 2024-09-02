@@ -411,7 +411,7 @@ int list_wcb(int version, struct protstream *pout,
               }
 
           } else { /* NEW_VERSION */
-              /* assume it's a EOL */
+              /* assume it's an EOL */
               cb(str, 0, rock);
           }
       }

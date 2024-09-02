@@ -43,20 +43,42 @@
 #include <config.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "unicode/ucnv.h"
 
 #include "assert.h"
 #include "charset.h"
+#include "dynarray.h"
 #include "xmalloc.h"
 #include "chartable.h"
 #include "hash.h"
 #include "htmlchar.h"
 #include "util.h"
+#include "xsha1.h"
 
-#include <unicode/ustring.h>
+#include <unicode/ubrk.h>
+#include <unicode/ucasemap.h>
+#include <unicode/uidna.h>
 #include <unicode/unorm2.h>
+#include <unicode/ustring.h>
 #include <unicode/utf8.h>
+
+// for internationalized domain parsing
+static UIDNA *global_uidna = NULL;
+
+EXPORTED void charset_lib_init(void)
+{
+}
+
+EXPORTED void charset_lib_done(void)
+{
+    if (global_uidna) {
+        uidna_close(global_uidna);
+        global_uidna = NULL;
+    }
+}
+
 
 #define U_REPLACEMENT   0xfffd
 
@@ -96,6 +118,8 @@ struct qp_state {
 struct b64_state {
     int bytesleft;
     int codepoint;
+    const char *index;
+    int invalid;
 };
 
 struct unfold_state {
@@ -122,12 +146,22 @@ struct search_state {
     size_t offset;
 };
 
+struct sha1_state {
+    SHA1_CTX ctx;
+    uint8_t buf[4096];
+    size_t len;
+    size_t *outlen;
+    uint8_t *dest;
+};
+
 enum html_state {
     HDATA,
     HTAGOPEN,
     HENDTAGOPEN,
     HTAGNAME,
     HSCTAG,
+    HSCTAGNAME,
+    HSCTAGURI,
     HTAGPARAMS,
     HCHARACTER,
     HCHARACTER2,
@@ -145,17 +179,40 @@ enum html_state {
     HCOMM,
     HCOMMENDDASH,
     HCOMMEND,
-    HCOMMENDBANG
+    HCOMMENDBANG,
+    HBEFOREATTRNAME,
+    HATTRNAME,
+    HAFTERATTRNAME,
+    HBEFOREATTVAL,
+    HATTVAL
+};
+
+enum html_attr {
+    HATTR_HREF = 0,
+    HATTR_ALT,
+    HATTR_NONE
 };
 
 struct striphtml_state {
+    /* HTML tag state */
     struct buf name;
 #define HBEGIN          (1<<0)
 #define HEND            (1<<1)
     unsigned int ends;
+    int keep_angleuri;
+    /* HTML attribute state */
+    struct {
+        struct buf name;
+        uint32_t quot;
+        enum html_attr typ;
+        dynarray_t vals[HATTR_NONE]; // of uint32_t
+    } attr;
     /* state stack */
     int depth;
     enum html_state stack[2];
+    /* state for putc */
+    int prev_was_whitespace;
+    int emit_whitespace;
 };
 
 #define CHARSET_ICUBUF_BUFFER_SIZE 4096
@@ -197,7 +254,7 @@ struct charset_charset {
 struct convert_rock;
 
 static void icu_reset(struct convert_rock *rock, int to_uni);
-static void icu_flush(struct convert_rock *rock);
+static int icu_flush(struct convert_rock *rock);
 static void icu_cleanup(struct convert_rock *rock, int is_free);
 
 static void table_reset(struct convert_rock *rock, int to_uni);
@@ -205,7 +262,7 @@ static void table_cleanup(struct convert_rock *rock, int is_free);
 
 typedef void convertproc_t(struct convert_rock *rock, uint32_t c);
 typedef void cleanupconvert_t(struct convert_rock *rock, int is_free);
-typedef void flushproc_t(struct convert_rock *rock);
+typedef int flushproc_t(struct convert_rock *rock);
 
 struct convert_rock {
     convertproc_t *f;
@@ -221,7 +278,9 @@ struct convert_rock {
 int charset_debug;
 static const char *convert_name(struct convert_rock *rock);
 
-#define XX 127
+#define XS 126 // whitespace character
+#define XX 127 // unknown character
+
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
@@ -249,9 +308,9 @@ static const unsigned char index_hex[256] = {
  * Table for decoding base64
  */
 static const char index_64[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
+    XS,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,62, XX,XX,XX,63,
     52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,64,XX,XX,
     XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
     15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,XX,
@@ -266,7 +325,29 @@ static const char index_64[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
-#define CHAR64(c)  (index_64[(unsigned char)(c)])
+
+/*
+ * Table for decoding base64url
+ */
+static const char index_64url[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XS,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,62,XX,XX,
+    52,53,54,55, 56,57,58,59, 60,61,XX,XX, XX,64,XX,XX,
+    XX, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
+    15,16,17,18, 19,20,21,22, 23,24,25,XX, XX,XX,XX,63,
+    XX,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
+    41,42,43,44, 45,46,47,48, 49,50,51,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
+#define CHAR64(c, index)  (index[(unsigned char)(c)])
 
 EXPORTED int encoding_lookupname(const char *s)
 {
@@ -291,6 +372,8 @@ EXPORTED int encoding_lookupname(const char *s)
     case 'b':
         if (!strcasecmp(s, "BASE64"))
             return ENCODING_BASE64;
+        if (!strcasecmp(s, "BASE64URL"))
+            return ENCODING_BASE64URL;
         if (!strcasecmp(s, "BINARY"))
             return ENCODING_NONE;
         break;
@@ -321,17 +404,23 @@ EXPORTED const char *encoding_name(int encoding)
     case ENCODING_NONE: return "NONE";
     case ENCODING_QP: return "QUOTED-PRINTABLE";
     case ENCODING_BASE64: return "BASE64";
+    case ENCODING_BASE64URL: return "BASE64URL";
     case ENCODING_UNKNOWN: return "UNKNOWN";
     default: return "WTF";
     }
 }
 
-static void convert_flush(struct convert_rock *rock)
+static int convert_flush(struct convert_rock *rock)
 {
+    int r = 0;
     while (rock) {
-        if (rock->flush) rock->flush(rock);
+        if (rock->flush) {
+            int r2 = rock->flush(rock);
+            if (!r) r = r2;
+        }
         rock = rock->next;
     }
+    return r;
 }
 
 static inline void convert_putc(struct convert_rock *rock, uint32_t c)
@@ -354,13 +443,13 @@ static void convert_cat(struct convert_rock *rock, const char *s)
     convert_flush(rock);
 }
 
-static void convert_catn(struct convert_rock *rock, const char *s, size_t len)
+static int convert_catn(struct convert_rock *rock, const char *s, size_t len)
 {
     while (len-- > 0) {
         convert_putc(rock, (unsigned char)*s);
         s++;
     }
-    convert_flush(rock);
+    return convert_flush(rock);
 }
 
 /* convertproc_t conversion functions */
@@ -412,9 +501,10 @@ static void qp_flushline(struct convert_rock *rock, int endline)
     s->len = 0;
 }
 
-static void qp_flush(struct convert_rock *rock)
+static int qp_flush(struct convert_rock *rock)
 {
     qp_flushline(rock, 0);
+    return 0;
 }
 
 static void qp2byte(struct convert_rock *rock, uint32_t c)
@@ -443,10 +533,13 @@ static void qp2byte(struct convert_rock *rock, uint32_t c)
 static void b64_2byte(struct convert_rock *rock, uint32_t c)
 {
     struct b64_state *s = (struct b64_state *)rock->state;
-    char b = CHAR64(c);
+    char b = CHAR64(c, s->index);
 
-    /* could just be whitespace, ignore it */
-    if (b == XX) return;
+    if (b >= XS) {
+        /* ignore whitespace */
+        s->invalid = s->invalid || b == XX;
+        return;
+    }
 
     /* the padding character, reset state */
     if (b == 64) {
@@ -475,6 +568,18 @@ static void b64_2byte(struct convert_rock *rock, uint32_t c)
         s->codepoint = 0;
         s->bytesleft = 0;
     }
+}
+
+static int b64_flush(struct convert_rock *rock)
+{
+    struct b64_state *s = (struct b64_state *)rock->state;
+    if (s->invalid) {
+        if (s->index == index_64url)
+            return -1;
+        else
+            xsyslog(LOG_WARNING, "ignoring invalid base64 characters", NULL);
+    }
+    return 0;
 }
 
 /*
@@ -705,6 +810,23 @@ static void byte2buffer(struct convert_rock *rock, uint32_t c)
     struct buf *buf = (struct buf *)rock->state;
 
     buf_putc(buf, c & 0xff);
+}
+
+static void byte2sha1(struct convert_rock *rock, uint32_t c)
+{
+    struct sha1_state *state = (struct sha1_state *)rock->state;
+
+    /* batch if needed.  Testing showed that calling SHA1_Update
+     * for every char was prohibitive, and even doing 64 chars
+     * at a time (the internal block size) had overhead due to
+     * to the upfront checks, so this is a good compromise size */
+    if (state->len == 4096) {
+        SHA1Update(&state->ctx, state->buf, state->len);
+        if (state->outlen) *state->outlen += state->len;
+        state->len = 0;
+    }
+
+    state->buf[state->len++] = c & 0xff;
 }
 
 /* Given an octet c and an icu converter, convert c to
@@ -1004,7 +1126,32 @@ static int html_uiserror(uint32_t c)
         if (c2 >= ranges[i].lo && c2 <= ranges[i].hi)
             return 1;
     }
-    return 0;
+    return 0; }
+
+static void html_putc(struct convert_rock *rock, uint32_t c)
+{
+    struct striphtml_state *s = (struct striphtml_state *)rock->state;
+    int is_whitespace = u_isUWhiteSpace(c);
+
+    if (s->emit_whitespace) {
+        // Insert space between two non-whitespace characters.
+        if (!is_whitespace && !s->prev_was_whitespace) {
+            convert_putc(rock->next, ' ');
+            s->prev_was_whitespace = 1;
+        }
+        s->emit_whitespace = 0;
+    }
+    convert_putc(rock->next, c);
+    s->prev_was_whitespace = is_whitespace;
+}
+
+static int html_catn(struct convert_rock *rock, const char *s, size_t len)
+{
+    while (len-- > 0) {
+        html_putc(rock, (unsigned char)*s);
+        s++;
+    }
+    return convert_flush(rock);
 }
 
 static void html_saw_character(struct convert_rock *rock)
@@ -1086,12 +1233,12 @@ static void html_saw_character(struct convert_rock *rock)
         else if (c > 0xffff) {
             /* Hack to handle a small minority of named characters
              * which map to a sequence of two Unicode codepoints. */
-            convert_putc(rock->next, (c>>16) & 0xffff);
-            convert_putc(rock->next, c & 0xffff);
+            html_putc(rock, (c>>16) & 0xffff);
+            html_putc(rock, c & 0xffff);
             return;
         }
     }
-    convert_putc(rock->next, c);
+    html_putc(rock, c);
 }
 
 static const char *html_state_as_string(enum html_state state)
@@ -1102,6 +1249,8 @@ static const char *html_state_as_string(enum html_state state)
     case HENDTAGOPEN: return "HENDTAGOPEN";
     case HTAGNAME: return "HTAGNAME";
     case HSCTAG: return "HSCTAG";
+    case HSCTAGNAME: return "HSCTAGNAME";
+    case HSCTAGURI: return "HSCTAGURI";
     case HTAGPARAMS: return "HTAGPARAMS";
     case HCHARACTER: return "HCHARACTER";
     case HCHARACTER2: return "HCHARACTER2";
@@ -1120,6 +1269,11 @@ static const char *html_state_as_string(enum html_state state)
     case HCOMMENDDASH: return "HCOMMENDDASH";
     case HCOMMEND: return "HCOMMEND";
     case HCOMMENDBANG: return "HCOMMENDBANG";
+    case HBEFOREATTRNAME: return "HBEFOREATTRNAME";
+    case HATTRNAME: return "HATTRNAME";
+    case HAFTERATTRNAME: return "HAFTERATTRNAME";
+    case HBEFOREATTVAL: return "HBEFOREATTVAL";
+    case HATTVAL: return "HATTVAL";
     }
     return "wtf?";
 }
@@ -1154,25 +1308,85 @@ static enum html_state html_top(struct striphtml_state *s)
     return s->stack[s->depth-1];
 }
 
-static int is_phrasing(char *tag)
+static void html_attr_init(struct striphtml_state *s)
 {
-    static const char * const phrasing_tags[] = {
-        "a", "q", "cite", "em", "strong", "small",
-        "mark", "dfn", "abbr", "time", "progress",
-        "meter", "code", "var", "samp", "kbd",
-        "sub", "sup", "span", "i", "b", "bdo",
-        "ruby", "ins", "del"
-    };
-    static struct hash_table hash = HASH_TABLE_INITIALIZER;
+    s->attr.typ = HATTR_NONE;
+    s->attr.quot = 0;
 
-    if (hash.table == NULL) {
-        unsigned int i;
-        construct_hash_table(&hash, VECTOR_SIZE(phrasing_tags), 0);
-        for (i = 0 ; i < VECTOR_SIZE(phrasing_tags) ; i++)
-            hash_insert(phrasing_tags[i], (void *)1, &hash);
+    for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+        dynarray_init(&s->attr.vals[i], sizeof(uint32_t));
+    }
+}
+
+static void html_attr_reset(struct striphtml_state *s)
+{
+    s->attr.typ = HATTR_NONE;
+    s->attr.quot = 0;
+
+    for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+        dynarray_truncate(&s->attr.vals[i], 0);
+    }
+    buf_reset(&s->attr.name);
+}
+
+static void html_attr_start(struct striphtml_state *s)
+{
+    const char *tag = buf_cstring(&s->name);
+    const char *attr = buf_cstring(&s->attr.name);
+
+    s->attr.typ = HATTR_NONE;
+
+    if (!strcasecmp(tag, "a") || !strcasecmp(tag, "area")) {
+        if (!strcasecmp(attr, "href")) {
+            s->attr.typ = HATTR_HREF;
+        }
+    }
+    else if (!strcasecmp(tag, "img")) {
+        if (!strcasecmp(attr, "src")) {
+            s->attr.typ = HATTR_HREF;
+        }
+        else if (!strcasecmp(attr, "alt")) {
+            s->attr.typ = HATTR_ALT;
+        }
     }
 
-    return (hash_lookup(lcase(tag), &hash) == (void *)1);
+    if (s->attr.typ != HATTR_NONE) {
+        dynarray_truncate(&s->attr.vals[s->attr.typ], 0);
+    }
+}
+
+static void html_attr_putc(struct striphtml_state *s, uint32_t c)
+{
+    if (s->attr.typ != HATTR_NONE) {
+        dynarray_append(&s->attr.vals[s->attr.typ], &c);
+    }
+}
+
+static int html_attr_have(struct striphtml_state *s, enum html_attr typ)
+{
+    return typ != HATTR_NONE && dynarray_size(&s->attr.vals[typ]);
+}
+
+static void html_attr_cat(struct striphtml_state *s,
+                           struct convert_rock *rock,
+                           enum html_attr typ)
+{
+    if (typ != HATTR_NONE) {
+        dynarray_t *val = &s->attr.vals[typ];
+        for (int i = 0; i < dynarray_size(val); i++) {
+            html_putc(rock, *((uint32_t*)dynarray_nth(val, i)));
+        }
+    }
+}
+
+static void html_attr_stop(struct striphtml_state *s, int valid)
+{
+    s->attr.quot = 0;
+    if (!valid && s->attr.typ != HATTR_NONE) {
+        dynarray_truncate(&s->attr.vals[s->attr.typ], 0);
+    }
+    s->attr.typ = HATTR_NONE;
+    buf_reset(&s->attr.name);
 }
 
 static void html_saw_tag(struct convert_rock *rock)
@@ -1206,8 +1420,31 @@ static void html_saw_tag(struct convert_rock *rock)
             html_go(s, HDATA);
         /* BEGIN,END pair is doesn't affect state */
     }
-    else if (!is_phrasing(tag)) {
-        convert_putc(rock->next, ' ');
+    else {
+        if (s->ends & HEND) {
+            if (html_attr_have(s, HATTR_HREF)) {
+                if (s->ends == HEND)
+                    html_putc(rock, ' ');
+
+                html_putc(rock, '<');
+                html_attr_cat(s, rock, HATTR_HREF);
+                html_putc(rock, '>');
+
+                /* n.b. we only acknowledge img alt when it also has a src */
+                if (html_attr_have(s, HATTR_ALT)) {
+                    html_putc(rock, ' ');
+                    html_putc(rock, '(');
+                    html_attr_cat(s, rock, HATTR_ALT);
+                    html_putc(rock, ')');
+                }
+            }
+
+            /* finished with the attr details */
+            html_attr_reset(s);
+        }
+
+        // Insert whitespace after this tag.
+        s->emit_whitespace = 1;
     }
     /* otherwise, no change */
 }
@@ -1228,6 +1465,27 @@ static void html_saw_tag(struct convert_rock *rock)
 #define html_isspace(c) \
     ((c) == ' ' || (c) == '\t' || (c) == '\r' || (c) == '\n')
 
+static int html_maybeuri(struct buf *buf)
+{
+    if (!buf_len(buf))
+        return 0;
+
+    // returns true for string "<scheme>:", see RFC 3986, section 3.1
+
+    const char *s = buf_base(buf);
+    size_t len = buf_len(buf);
+
+    if (s[len-1] == ':' && (html_isalpha(s[0]) || html_isdigit(s[0]))) {
+        for (char c = s[--len - 1]; len; c = s[--len]) {
+            if (!html_isalpha(c) && !html_isdigit(c) && !strchr("+-.", c))
+                return 0;
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
 void striphtml2uni(struct convert_rock *rock, uint32_t c)
 {
     struct striphtml_state *s = (struct striphtml_state *)rock->state;
@@ -1244,7 +1502,7 @@ restart:
             buf_reset(&s->name);
         }
         else {
-            convert_putc(rock->next, c);
+            html_putc(rock, c);
         }
         break;
 
@@ -1266,7 +1524,7 @@ restart:
         }
         else {
             /* naked <, emit it and restart with current character */
-            convert_putc(rock->next, c);
+            html_putc(rock, c);
             html_pop(s);
             goto restart;
         }
@@ -1287,7 +1545,7 @@ restart:
         }
         else {
             /* naked <, emit it and restart with current character */
-            convert_putc(rock->next, c);
+            html_putc(rock, c);
             html_pop(s);
             goto restart;
         }
@@ -1306,7 +1564,7 @@ restart:
         }
         else {
             /* naked & - emit the & and restart */
-            convert_putc(rock->next, '&');
+            html_putc(rock, '&');
             html_go(s, HDATA);
             goto restart;
         }
@@ -1324,8 +1582,8 @@ restart:
         }
         else {
             /* naked &# - emit the &# and restart */
-            convert_putc(rock->next, '&');
-            convert_putc(rock->next, '#');
+            html_putc(rock, '&');
+            html_putc(rock, '#');
             html_go(s, HDATA);
             goto restart;
         }
@@ -1335,7 +1593,7 @@ restart:
         if (html_isalpha(c)) {
             buf_putc(&s->name, c);
             /* TODO: we're supposed to look this up
-             * to see if it's an known character so that
+             * to see if it's a known character so that
              * &notit; is parsed as the 4 chars
              * '¬' 'i' 't' ';' */
         }
@@ -1398,7 +1656,7 @@ restart:
         }
         else {
             /* apparently a naked <, emit the < and restart */
-            convert_putc(rock->next, '<');
+            html_putc(rock, '<');
             html_pop(s);
             goto restart;
         }
@@ -1419,16 +1677,18 @@ restart:
     case HTAGNAME:  /* 8.2.4.10 Tag name state */
         /* gnb:TODO handle > embedded in "param" */
         if (html_isspace(c)) {
-            html_go(s, HTAGPARAMS);
+            html_go(s, HBEFOREATTRNAME);
         }
         else if (c == '/') {
-            html_go(s, HSCTAG);
+            html_go(s, HSCTAGNAME);
         }
         else if (c == '>') {
             html_pop(s);
             html_saw_tag(rock);
         }
-        else if (html_isalpha(c)) {
+        // HTML only allows alpha and digit, but XML allows namespaces and at least
+        // outlook creates those, and we may as well handle - and _ as well.
+        else if (html_isalpha(c) || html_isdigit(c) || c == ':' || c == '-' || c == '_') {
             buf_putc(&s->name, c);
         }
         else {
@@ -1438,13 +1698,45 @@ restart:
         break;
 
     case HSCTAG:    /* 8.2.4.43 Self-closing start tag state */
+    case HSCTAGNAME:
         if (c == '>') {
             s->ends = HBEGIN|HEND;
             html_pop(s);
             html_saw_tag(rock);
         }
+        else if (html_top(s) == HSCTAGNAME && c == '/' && s->keep_angleuri) {
+            if (html_maybeuri(&s->name)) {
+                /* this could be an angle-bracketed URI */
+                html_go(s, HSCTAGURI);
+            }
+            else {
+                /* whatever, start stripping tag parameters */
+                html_go(s, HTAGPARAMS);
+            }
+        }
         else {
             /* whatever, keep stripping tag parameters */
+            html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HSCTAGURI: /* handles "<scheme://" as URI, not as XML tag */
+        if (c == '>') {
+            s->ends = HBEGIN|HEND;
+            html_pop(s);
+            html_saw_tag(rock);
+        }
+        else if (!html_isspace(c)) {
+            html_putc(rock, '<');
+            html_catn(rock, buf_base(&s->name), buf_len(&s->name));
+            html_putc(rock, '/');
+            html_putc(rock, '/');
+            html_putc(rock, c);
+            html_pop(s);
+            html_go(s, HDATA);
+        }
+        else {
+            /* whatever, start stripping tag parameters */
             html_go(s, HTAGPARAMS);
         }
         break;
@@ -1456,6 +1748,117 @@ restart:
         }
         else if (c == '/') {
             html_go(s, HSCTAG);
+        }
+        else if (html_isspace(c)) {
+            html_go(s, HBEFOREATTRNAME);
+        }
+        break;
+
+    case HBEFOREATTRNAME:    /* 13.2.5.32 Before attribute name state */
+        if (html_isalpha(c)) {
+            buf_putc(&s->attr.name, c);
+            html_go(s, HATTRNAME);
+        }
+        else if (html_isspace(c)) {
+            // stay put
+        }
+        else {
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else {
+                html_go(s, HTAGPARAMS);
+            }
+        }
+        break;
+
+    case HATTRNAME:        /* 13.2.5.33 Attribute name state */
+        if (html_isspace(c)) {
+            html_go(s, HAFTERATTRNAME);
+        }
+        else if (c == '=') {
+            html_go(s, HBEFOREATTVAL);
+        }
+        else if (html_isalpha(c)) {
+            buf_putc(&s->attr.name, c);
+        }
+        else {
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HAFTERATTRNAME:    /* 13.2.5.34 After attribute name state */
+        if (html_isspace(c)) {
+            // stay put
+        }
+        else if (c == '=') {
+            html_go(s, HBEFOREATTVAL);
+        }
+        else {
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HBEFOREATTVAL:   /* 13.2.5.35 Before attribute value state */
+        if (c == '"' || c == '\'') {
+            s->attr.quot = c;
+            html_attr_start(s);
+            html_go(s, HATTVAL);
+        }
+        else {
+            // unquoted attribute values are unsupported
+            html_attr_stop(s, 0);
+
+            if (c == '>') {
+                html_pop(s);
+                html_saw_tag(rock);
+            }
+            else if (c == '/') {
+                html_go(s, HSCTAG);
+            }
+            else html_go(s, HTAGPARAMS);
+        }
+        break;
+
+    case HATTVAL:      /* 13.2.5.{36,37} Attribute value quoted state */
+        if (c == s->attr.quot) {
+            // end of attribute value
+            html_attr_stop(s, 1);
+            html_go(s, HTAGPARAMS);
+        }
+        else if (c == '>') {
+            // regression: treat '>' as end of tag
+            html_attr_stop(s, 0);
+            html_pop(s);
+            html_saw_tag(rock);
+        }
+        else {
+            // attribute value
+            html_attr_putc(s, c);
         }
         break;
 
@@ -1538,6 +1941,7 @@ static const char *convert_name(struct convert_rock *rock)
     if (rock->f == b64_2byte) return "b64_2byte";
     if (rock->f == byte2buffer) return "byte2buffer";
     if (rock->f == byte2search) return "byte2search";
+    if (rock->f == byte2sha1) return "byte2sha1";
     if (rock->f == qp2byte) return "qp2byte";
     if (rock->f == striphtml2uni) return "striphtml2uni";
     if (rock->f == unfold2uni) return "unfold2uni";
@@ -1586,7 +1990,7 @@ static void basic_free(struct convert_rock *rock)
     }
 }
 
-static void icu_flush(struct convert_rock *rock)
+static int icu_flush(struct convert_rock *rock)
 {
     struct charset_charset *s = (struct charset_charset *) rock->state;
     s->flush = 1;
@@ -1597,6 +2001,7 @@ static void icu_flush(struct convert_rock *rock)
         uni2icu(rock, U_REPLACEMENT);
     }
     s->flush = 0;
+    return 0;
 }
 
 static void icu_cleanup(struct convert_rock *rock, int is_free)
@@ -1605,6 +2010,20 @@ static void icu_cleanup(struct convert_rock *rock, int is_free)
         if (rock->state) icu_reset(rock, -1 /*don't care*/);
         if (is_free) free(rock);
     }
+}
+
+static void sha1_cleanup(struct convert_rock *rock, int do_free)
+{
+    struct sha1_state *state = (struct sha1_state *)rock->state;
+
+    if (state->len) {
+        SHA1Update(&state->ctx, state->buf, state->len);
+        if (state->outlen) *state->outlen += state->len;
+    }
+
+    SHA1Final(state->dest, &state->ctx);
+
+    if (do_free) basic_free(rock);
 }
 
 static void icu_reset(struct convert_rock *rock, int to_uni)
@@ -1723,10 +2142,18 @@ static void striphtml_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock && rock->state) {
         struct striphtml_state *s = (struct striphtml_state *)rock->state;
-        if (is_free)
+        if (is_free) {
             buf_free(&s->name);
-        else
+            buf_free(&s->attr.name);
+            for (size_t i = 0; i < (size_t) HATTR_NONE; i++) {
+                dynarray_fini(&s->attr.vals[i]);
+            }
+        }
+        else {
             buf_reset(&s->name);
+            html_attr_reset(s);
+            s->prev_was_whitespace = 1;
+        }
     }
     if (is_free) basic_free(rock);
 }
@@ -1745,7 +2172,165 @@ static void convert_ncleanup(struct convert_rock *rock, int n, int is_free) {
 }
 #define convert_free(rock) convert_ncleanup(rock, 0, 1)
 
+struct ucharbuf {
+    UChar *s;
+    int32_t len;
+    int32_t alloc;
+};
+
+static void ucharbuf_reserve(struct ucharbuf *ubuf, int32_t nchar)
+{
+
+    if (ubuf->alloc >= nchar || nchar == 0)
+        return;
+
+    if (nchar <= 8)
+        nchar = 8;
+    else if (nchar <= 16)
+        nchar = 16;
+    else if (nchar <= 32)
+        nchar = 32;
+    else if (nchar <= 64)
+        nchar = 64;
+    else if (nchar <= 128)
+        nchar = 128;
+    else if (nchar <= 256)
+        nchar = 256;
+    else if (nchar <= 512)
+        nchar = 512;
+
+    ubuf->s = xrealloc(ubuf->s, nchar * sizeof(UChar));
+    ubuf->alloc = nchar;
+}
+
+static bool ucharbuf_putc32(struct ucharbuf *ubuf, uint32_t c)
+{
+    ucharbuf_reserve(ubuf, ubuf->len + U16_MAX_LENGTH);
+
+    UBool is_error = false;
+    int32_t newlen = ubuf->len;
+    U16_APPEND(ubuf->s, newlen, ubuf->alloc, c, is_error);
+    ubuf->len = newlen;
+
+    return is_error == false;
+}
+
+static void ucharbuf_reset(struct ucharbuf *ubuf)
+{
+    ubuf->len = 0;
+}
+
+static void ucharbuf_fini(struct ucharbuf *ubuf)
+{
+    free(ubuf->s);
+    ubuf->alloc = 0;
+    ubuf->len = 0;
+}
+
+struct unorm_state {
+    const UNormalizer2 *unorm;
+    struct ucharbuf buf;
+    struct ucharbuf out;
+};
+
+static int unorm_flush(struct convert_rock *rock)
+{
+    struct unorm_state *state = rock->state;
+
+    assert(state->out.len == 0);
+
+    if (state->buf.len) {
+        // Normalize buffered codepoints.
+        UErrorCode err = U_ZERO_ERROR;
+        int32_t outlen =
+            unorm2_normalize(state->unorm, state->buf.s, state->buf.len,
+                             state->out.s, state->out.alloc, &err);
+        if (err == U_BUFFER_OVERFLOW_ERROR) {
+            err = U_ZERO_ERROR;
+            ucharbuf_reserve(&state->out, outlen);
+            outlen =
+                unorm2_normalize(state->unorm, state->buf.s, state->buf.len,
+                                 state->out.s, state->out.alloc, &err);
+        }
+        assert(U_SUCCESS(err));
+
+        state->out.len = outlen;
+        state->buf.len = 0;
+    }
+
+    if (state->out.len) {
+        // Flush output buffer.
+        int32_t i = 0;
+        const UChar *us = state->out.s;
+        while (i < state->out.len) {
+            UChar32 c;
+            U16_NEXT_OR_FFFD(us, i, state->out.len, c);
+            convert_putc(rock->next, c);
+        }
+        state->out.len = 0;
+    }
+
+    return 0;
+}
+
+static void unorm_convert(struct convert_rock *rock, uint32_t c)
+{
+    struct unorm_state *state = rock->state;
+
+    if (0 == unorm2_getCombiningClass(state->unorm, c)) {
+        // This is what Unicode TR15 refers to as a 'starter'.
+        // Normalize and flush previously buffered codepoints.
+        unorm_flush(rock);
+    }
+
+    if (!ucharbuf_putc32(&state->buf, c)) {
+        // This can only fail if c isn't a valid codepoint.
+        // Flush what we got and pass c through.
+        unorm_flush(rock);
+        convert_putc(rock->next, c);
+    }
+}
+
+static void unorm_cleanup(struct convert_rock *rock, int is_free)
+{
+    if (!rock || !rock->state) return;
+
+    struct unorm_state *state = rock->state;
+    if (is_free) {
+        ucharbuf_fini(&state->buf);
+        ucharbuf_fini(&state->out);
+        free(state);
+        free(rock);
+    }
+    else {
+        ucharbuf_reset(&state->buf);
+        ucharbuf_reset(&state->out);
+    }
+}
+
 /* converter initialisation routines */
+
+static struct convert_rock *unorm_init(struct convert_rock *next, int flags)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct unorm_state *state = xzmalloc(sizeof(struct unorm_state));
+
+    UErrorCode err = U_ZERO_ERROR;
+    state->unorm = flags & CHARSET_UNORM_NFKC_CF
+        ? unorm2_getNFKCCasefoldInstance(&err)
+        : unorm2_getNFCInstance(&err);
+    assert(U_SUCCESS(err));
+
+    ucharbuf_reserve(&state->buf, 8);
+    ucharbuf_reserve(&state->out, 8);
+
+    rock->f = unorm_convert;
+    rock->flush = unorm_flush;
+    rock->cleanup = unorm_cleanup;
+    rock->next = next;
+    rock->state = state;
+    return rock;
+}
 
 static struct convert_rock *qp_init(int isheader, struct convert_rock *next)
 {
@@ -1759,11 +2344,14 @@ static struct convert_rock *qp_init(int isheader, struct convert_rock *next)
     return rock;
 }
 
-static struct convert_rock *b64_init(struct convert_rock *next)
+static struct convert_rock *b64_init(struct convert_rock *next, int enc)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-    rock->state = xzmalloc(sizeof(struct b64_state));
+    struct b64_state *state = xzmalloc(sizeof(struct b64_state));
+    state->index = enc == ENCODING_BASE64URL ? index_64url : index_64;
+    rock->state = state;
     rock->f = b64_2byte;
+    rock->flush = b64_flush;
     rock->next = next;
     return rock;
 }
@@ -1790,6 +2378,11 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
         rock->f = uni2searchform;
     rock->state = s;
     rock->next = next;
+
+    if (flags & (CHARSET_UNORM_NFC|CHARSET_UNORM_NFKC_CF)) {
+        rock = unorm_init(rock, flags);
+    }
+
     return rock;
 }
 
@@ -1854,6 +2447,22 @@ static struct convert_rock *buffer_init(size_t hint)
     return rock;
 }
 
+static struct convert_rock *sha1_init(uint8_t *dest, size_t *outlen)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct sha1_state *state = xzmalloc(sizeof(struct sha1_state));
+
+    SHA1Init(&state->ctx);
+    state->dest = dest;
+    state->outlen = outlen;
+
+    rock->f = byte2sha1;
+    rock->cleanup = sha1_cleanup;
+    rock->state = (void *)state;
+
+    return rock;
+}
+
 static struct convert_rock *buffer_initm(size_t hint, struct buf *buf)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
@@ -1878,11 +2487,14 @@ static void buffer_setbuf(struct convert_rock *rock, struct buf *dst)
     rock->cleanup = dont_free;
 }
 
-struct convert_rock *striphtml_init(struct convert_rock *next)
+struct convert_rock *striphtml_init(int flags, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct striphtml_state *s = xzmalloc(sizeof(struct striphtml_state));
     /* gnb:TODO: if a DOCTYPE is present, sniff it to detect XHTML rules */
+    s->keep_angleuri = flags & CHARSET_KEEP_ANGLEURI;
+    s->prev_was_whitespace = 1;
+    html_attr_init(s);
     html_push(s, HDATA);
     rock->state = (void *)s;
     rock->f = striphtml2uni;
@@ -1891,179 +2503,13 @@ struct convert_rock *striphtml_init(struct convert_rock *next)
     return rock;
 }
 
-struct unorm_state {
-    const UNormalizer2 *unorm;
-    UChar *u16buf;
-    int32_t u16cap;
-    UChar32 *u32buf;
-    int32_t u32cap;
-    int32_t u32len;
-    int32_t spanlen;
-};
-
-static void unorm_append(struct unorm_state *st, uint32_t c)
-{
-    if (st->u32len == st->u32cap) {
-        st->u32cap += 8;
-        st->u32buf = xrealloc(st->u32buf, sizeof(UChar32) * st->u32cap);
-    }
-    if (!st->spanlen && !unorm2_getCombiningClass(st->unorm, c)) {
-        /* End of the first span of composable codepoints */
-        st->spanlen = st->u32len;
-    }
-    st->u32buf[st->u32len++] = c;
-}
-
-static void unorm_drain(struct convert_rock *rock, int is_flush)
-{
-    struct unorm_state *st = rock->state;
-
-    /* Have we reached the end of a composable span? */
-    if (!st->spanlen) {
-        if (!is_flush) {
-            return;
-        }
-        st->spanlen = st->u32len;
-    }
-    if (!st->spanlen) return;
-
-    /* Insertion-sort span by combining class */
-    int i;
-    for (i = 1; i < st->spanlen; i++) {
-        UChar32 c = st->u32buf[i];
-        int j = i - 1;
-        while (j >= 0) {
-            if (unorm2_getCombiningClass(st->unorm, st->u32buf[j]) <=
-                    unorm2_getCombiningClass(st->unorm, c)) {
-                break;
-            }
-            st->u32buf[j+1] = st->u32buf[j];
-            j = j - 1;
-        }
-        st->u32buf[j+1] = c;
-    }
-
-    /* Emit composed codepoints in span */
-    UChar32 u1 = st->u32buf[0];
-    for (i = 1; i < st->spanlen; i++) {
-        UChar32 u2 = unorm2_composePair(st->unorm, u1, st->u32buf[i]);
-        if (u2 < 0) {
-            convert_putc(rock->next, u1);
-            u1 = st->u32buf[i];
-        }
-        else u1 = u2;
-    }
-    convert_putc(rock->next, u1);
-
-    /* Keep any remaining code points */
-    int j;
-    for (i = 0, j = st->spanlen; j < st->u32len; j++) {
-        st->u32buf[i++] = st->u32buf[j];
-    }
-    st->u32len -= st->spanlen;
-    st->spanlen = 0;
-    for (i = 0; i < st->u32len; i++) {
-        if (!unorm2_getCombiningClass(st->unorm, st->u32buf[i])) {
-            st->spanlen = i;
-            break;
-        }
-    }
-
-    /* In case of flush, drain all we got */
-    if (is_flush && st->u32len) {
-        unorm_drain(rock, is_flush);
-    }
-}
-
-static void unorm_cleanup(struct convert_rock *rock, int is_free)
-{
-    if (!rock || !rock->state) return;
-
-    struct unorm_state *st = rock->state;
-    if (is_free) {
-        free(st->u16buf);
-        free(st->u32buf);
-        free(st);
-        free(rock);
-    }
-    else {
-        int32_t i;
-        for (i = 0; i < st->u16cap; i++) {
-            st->u16buf[i] = 0;
-        }
-        for (i = 0; i < st->u32cap; i++) {
-            st->u32buf[i] = 0;
-        }
-        st->u32len = 0;
-    }
-}
-
-static void unorm_flush(struct convert_rock *rock)
-{
-    unorm_drain(rock, 1);
-}
-
-static void unorm_convert(struct convert_rock *rock, uint32_t c)
-{
-    struct unorm_state *st = rock->state;
-    UErrorCode err = U_ZERO_ERROR;
-
-    int32_t len = unorm2_getDecomposition(st->unorm, c, NULL, 0, &err);
-
-    if (len > 0) {
-        /* Decompose c into NFD */
-        if (len > st->u16cap) {
-            st->u16buf = xrealloc(st->u16buf, sizeof(UChar) * len);
-            st->u16cap = len;
-        }
-        err = U_ZERO_ERROR;
-        unorm2_getDecomposition(st->unorm, c, st->u16buf, st->u16cap, &err);
-        /* Append NFD codepoints */
-        if (U_SUCCESS(err)) {
-            int32_t i = 0;
-            while (i < len) {
-                U16_NEXT(st->u16buf, i, len, c);
-                unorm_append(st, c);
-            }
-        }
-    }
-
-    if (len < 0 || U_FAILURE(err)) {
-        /* Append verbatim */
-        unorm_append(st, c);
-    }
-
-    unorm_drain(rock, 0);
-}
-
-static struct convert_rock *unorm_init(struct convert_rock *next)
-{
-    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
-
-    struct unorm_state *st = xzmalloc(sizeof(struct unorm_state));
-    UErrorCode err = U_ZERO_ERROR;
-    st->unorm = unorm2_getNFCInstance(&err);
-    assert(U_SUCCESS(err));
-
-    st->u16cap = 8;
-    st->u16buf = xmalloc(sizeof(UChar) * st->u16cap);
-    st->u32cap = 8;
-    st->u32buf = xmalloc(sizeof(UChar32) * st->u32cap);
-
-    rock->f = unorm_convert;
-    rock->flush = unorm_flush;
-    rock->cleanup = unorm_cleanup;
-    rock->next = next;
-    rock->state = st;
-    return rock;
-}
-
-static char* convert_to_name(const char *to, charset_t charset,
-                             const char *src, size_t len)
+static int convert_to_name(struct buf *dst,
+                           const char *to_name,
+                           charset_t charset,
+                           const char *src, size_t len)
 {
     UErrorCode err = U_ZERO_ERROR;
     const char *from;
-    char *res = NULL;
     size_t n;
 
     /* determine the name of the source encoding */
@@ -2071,19 +2517,28 @@ static char* convert_to_name(const char *to, charset_t charset,
 
     /* allocate the target buffer */
     /* we preflight to compromise between memory and runtime efficiency */
-    n = ucnv_convert(to, from, res, 0, src, len, &err) + 1;
-    if (err != U_BUFFER_OVERFLOW_ERROR) return NULL;
-    res = xmalloc(n);
+    n = ucnv_convert(to_name, from, dst->s, 0, src, len, &err) + 1;
+    if (err != U_BUFFER_OVERFLOW_ERROR)
+        return -1;
+
+    /* ucnv_convert return value includes size with NUL byte */
+    if (n < 2) {
+        buf_cstring(dst);
+        buf_reset(dst);
+        return 0;
+    }
+    buf_ensure(dst, n);
 
     /* run the conversion */
     err = U_ZERO_ERROR;
-    ucnv_convert(to, from, res, n, src, len, &err);
+    ucnv_convert(to_name, from, dst->s, n, src, len, &err);
     if (U_FAILURE(err)) {
-        free(res);
-        return NULL;
+        return -1;
     }
 
-    return res;
+    buf_truncate(dst, n - 1);
+    buf_cstring(dst);
+    return 0;
 }
 
 static charset_t lookup_buf(const char *buf, size_t len)
@@ -2273,9 +2728,6 @@ EXPORTED charset_conv_t *charset_conv_new(charset_t charset, int flags)
     tobuffer = buffer_initm(0, &conv->dst);
     input = convert_init(conv->utf8, 0/*to_uni*/, tobuffer);
     input = canon_init(flags, input);
-    if (flags & CHARSET_UNORM_NFC) {
-        input = unorm_init(input);
-    }
     input = convert_init(conv->charset, 1/*to_uni*/, input);
 
     conv->input = input;
@@ -2330,7 +2782,7 @@ EXPORTED char *charset_convert(const char *s, charset_t charset, int flags)
 EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
-    char *res;
+    char *res = NULL;
     charset_t imaputf7;
 
     /* Initialize character set mapping */
@@ -2341,8 +2793,14 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
         return xstrdup("");
 
     /* check if we can convert the whole block at once */
-    if (encoding == ENCODING_NONE)
-        return convert_to_name("imap-mailbox-name", charset, msg_base, len);
+    if (encoding == ENCODING_NONE) {
+        struct buf buf = BUF_INITIALIZER;
+        if (convert_to_name(&buf, "imap-mailbox-name", charset, msg_base, len) < 0) {
+            buf_free(&buf);
+            return NULL;
+        }
+        else return buf_release(&buf);
+    }
 
     /* set up the conversion path */
     imaputf7 = charset_lookupname("imap-mailbox-name");
@@ -2360,7 +2818,8 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
             break;
 
         case ENCODING_BASE64:
-            input = b64_init(input);
+        case ENCODING_BASE64URL:
+            input = b64_init(input, encoding);
             /* XXX have to have nl-mapping base64 in order to
              * properly count \n as 2 raw characters
              */
@@ -2374,10 +2833,10 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
     }
 
     /* do the conversion */
-    convert_catn(input, msg_base, len);
-
-    /* extract the result */
-    res = buffer_cstring(tobuffer);
+    if (!convert_catn(input, msg_base, len)) {
+        /* extract the result */
+        res = buffer_cstring(tobuffer);
+    }
 
     /* clean up */
     convert_free(input);
@@ -2481,27 +2940,30 @@ done:
     return ret;
 }
 
-/* Convert from a given charset and encoding into utf8 */
-EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding)
+EXPORTED int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset_t charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
-    char *res;
     charset_t utf8;
 
+    buf_reset(dst);
+
     /* Initialize character set mapping */
-    if (charset == CHARSET_UNKNOWN_CHARSET) return NULL;
+    if (charset == CHARSET_UNKNOWN_CHARSET) return -1;
 
     /* check for trivial search */
     if (len == 0)
-        return xstrdup("");
+        return 0;
 
     /* check if we can convert the whole block at once */
-    if (encoding == ENCODING_NONE)
-        return convert_to_name("utf-8", charset, msg_base, len);
+    if (encoding == ENCODING_NONE) {
+        return convert_to_name(dst, "utf-8", charset, src, len);
+    }
 
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init(len);
+    buffer_setbuf(tobuffer, dst);
+
     input = convert_init(utf8, 0/*to_uni*/, tobuffer);
     input = convert_init(charset, 1/*to_uni*/, input);
 
@@ -2515,7 +2977,8 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -2525,16 +2988,29 @@ EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, charset_t chars
         /* Don't know encoding--nothing can match */
         convert_free(input);
         charset_free(&utf8);
-        return 0;
+        return -1;
     }
 
-    convert_catn(input, msg_base, len);
-    res = buffer_cstring(tobuffer);
+    int r = convert_catn(input, src, len);
+    buf_cstring(dst);
+
     convert_free(input);
     charset_free(&utf8);
 
-    return res;
+    return r;
 }
+
+/* Convert from a given charset and encoding into utf8 */
+EXPORTED char *charset_to_utf8cstr(const char *msg_base, size_t len, charset_t charset, int encoding)
+{
+    struct buf buf = BUF_INITIALIZER;
+    if (charset_to_utf8(&buf, msg_base, len, charset, encoding)) {
+        buf_free(&buf);
+        return NULL;
+    }
+    return buf_release(&buf);
+}
+
 
 /* Decode bytes from src into buffer dst */
 EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int encoding)
@@ -2563,7 +3039,108 @@ EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int en
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
+        /* XXX have to have nl-mapping base64 in order to
+         * properly count \n as 2 raw characters
+         */
+        break;
+
+    default:
+        /* Don't know encoding--nothing can match */
+        convert_free(input);
+        return -1;
+    }
+
+    int r = convert_catn(input, src, len);
+    convert_free(input);
+    return r;
+}
+
+static void encode_b64(struct buf *dst, const char *src, size_t len, int encoding)
+{
+    static const char b64std[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const char b64url[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const char *b64 = encoding == ENCODING_BASE64URL ? b64url : b64std;
+    char pad = encoding == ENCODING_BASE64URL ? '\0' : '=';
+
+    const uint8_t *s = (uint8_t*)src;
+    size_t r = len;
+    if (len >= 3) {
+        size_t i;
+        for (i = 0; i < len - 2; i += 3) {
+            buf_putc(dst, b64[s[i+0] >> 2]);
+            buf_putc(dst, b64[((s[i+0] & 0x03) << 4) | (s[i+1] >> 4)]);
+            buf_putc(dst, b64[((s[i+1] & 0x0f) << 2) | (s[i+2] >> 6)]);
+            buf_putc(dst, b64[s[i+2] & 0x3f]);
+        }
+        r = len - i;
+    }
+    if (r) {
+        buf_putc(dst, b64[s[len-r] >> 2]);
+        if (r == 1) {
+            buf_putc(dst, b64[(s[len-1] & 0x03) << 4]);
+            if (pad) buf_putc(dst, pad);
+        }
+        else {
+            buf_putc(dst, b64[((s[len-2] & 0x03) << 4) | (s[len-1] >> 4)]);
+            buf_putc(dst, b64[(s[len-1] & 0x0f) << 2]);
+        }
+        if (pad) buf_putc(dst, pad);
+    }
+}
+
+EXPORTED int charset_encode(struct buf *dst, const char *src, size_t len, int encoding)
+{
+    if (encoding == ENCODING_NONE) {
+        buf_setmap(dst, src, len);
+        return 0;
+    }
+    else if (encoding == ENCODING_BASE64 || encoding == ENCODING_BASE64URL) {
+        encode_b64(dst, src, len, encoding);
+        return 0;
+    }
+    else if (encoding == ENCODING_QP) {
+        size_t outlen = 0;
+        char *val = charset_qpencode_mimebody(src, len, 0, &outlen);
+        if (val && outlen)
+            buf_setmap(dst, val, outlen);
+        free(val);
+        return 0;
+    }
+    else return -1;
+}
+
+/* Decode bytes from src to sha1 of bytes */
+EXPORTED int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decodedlen,
+                                 const char *src, size_t len, int encoding)
+{
+    struct convert_rock *input;
+
+    if (encoding == ENCODING_NONE) {
+        // short circuit to xsha1
+        xsha1((unsigned char *)src, len, dest);
+        if (decodedlen) *decodedlen = len;
+        return 0;
+    }
+
+    /* set up the conversion path */
+    input = sha1_init(dest, decodedlen);
+
+    /* choose encoding extraction if needed */
+    switch (encoding) {
+    case ENCODING_NONE:
+        break;
+
+    case ENCODING_QP:
+        input = qp_init(0, input);
+        break;
+
+    case ENCODING_BASE64:
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -2701,7 +3278,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
                 extract = qp_init(1, input);
             }
             else {
-                extract = b64_init(input);
+                extract = b64_init(input, ENCODING_BASE64);
             }
             /* convert */
             p = encoding+3;
@@ -2766,16 +3343,15 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 EXPORTED char *charset_unfold(const char *s, size_t len, int flags)
 {
     struct convert_rock *tobuffer, *input;
-    char *res;
+    char *res = NULL;
 
     if (!s) return NULL;
 
     tobuffer = buffer_init(len);
     input = unfold_init(flags&CHARSET_UNFOLD_SKIPWS, tobuffer);
 
-    convert_catn(input, s, len);
-
-    res = buffer_cstring(tobuffer);
+    if (!convert_catn(input, s, len))
+        res = buffer_cstring(tobuffer);
 
     convert_free(input);
 
@@ -2863,7 +3439,7 @@ EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
             buf_appendmap(&buf, p++, 1);
         }
     }
-    ret = charset_to_utf8(buf_base(&buf), buf_len(&buf), cs, 0);
+    ret = charset_to_utf8cstr(buf_base(&buf), buf_len(&buf), cs, 0);
 
 done:
     charset_free(&cs);
@@ -3029,7 +3605,8 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -3057,7 +3634,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 }
 
 /* This is based on charset_searchfile above. */
-EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
+EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
                              void *rock,
                              const struct buf *data,
                              charset_t charset, int encoding,
@@ -3067,6 +3644,7 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
     struct buf *out;
     size_t i;
     charset_t utf8;
+    int r = 0;
     
     if (charset_debug)
         fprintf(stderr, "charset_extract()\n");
@@ -3085,12 +3663,12 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
             /* silently pretend we indexed it, but actually ignore it */
             convert_free(input);
             charset_free(&utf8);
-            return 1;
+            return 0;
         }
         /* this is text/html data, so we can make ourselves useful by
          * stripping html tags, css and js. */
         if (!(flags & CHARSET_KEEPHTML)) {
-            input = striphtml_init(input);
+            input = striphtml_init(flags, input);
         }
     }
 
@@ -3105,7 +3683,8 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
         break;
 
     case ENCODING_BASE64:
-        input = b64_init(input);
+    case ENCODING_BASE64URL:
+        input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
          */
@@ -3126,20 +3705,23 @@ EXPORTED int charset_extract(void (*cb)(const struct buf *, void *),
 
         /* process a block of output every so often */
         if (buf_len(out) > 4096) {
-            cb(out, rock);
+            r = cb(out, rock);
             buf_reset(out);
+            if (r) break;
         }
     }
-    /* finish it */
-    convert_flush(input);
-    if (out->len) { 
-        cb(out, rock);
+    if (!r) {
+        /* finish it */
+        convert_flush(input);
+        if (out->len) {
+            r = cb(out, rock);
+        }
     }
 
     convert_free(input);
     charset_free(&utf8);
 
-    return 1;
+    return r;
 }
 
 /*
@@ -3171,8 +3753,9 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
         break;
 
     case ENCODING_BASE64:
+    case ENCODING_BASE64URL:
         tobuffer = buffer_init(len);
-        input = b64_init(tobuffer);
+        input = b64_init(tobuffer, encoding);
         break;
 
     default:
@@ -3216,9 +3799,9 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
 static const char base_64[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
-                                       char *retval, size_t *outlen,
-                                       int *outlines, int wrap)
+EXPORTED char *charset_b64encode_mimebody(const char *msg_base, size_t len,
+                                          char *retval, size_t *outlen,
+                                          int *outlines, int wrap)
 {
     const unsigned char *s;
     unsigned char s0, s1, s2;
@@ -3258,15 +3841,17 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
             s2 = --len ? s[2] : 0;
             /* byte 3: low 4 bits (2), high 2 bits (3) */
             d[2] = base_64[((s1 & 0xf) << 2) | ((s2 & 0xc0) >> 6)];
+            if (len) {
+                --len;
+                /* byte 4: low 6 bits (3) */
+                d[3] = base_64[s2 & 0x3f];
+            } else {
+                /* byte 4: pad */
+                d[3] = '=';
+            }
         } else {
             /* byte 3: pad */
             d[2] = '=';
-        }
-        if (len) {
-            --len;
-            /* byte 4: low 6 bits (3) */
-            d[3] = base_64[s2 & 0x3f];
-        } else {
             /* byte 4: pad */
             d[3] = '=';
         }
@@ -3282,7 +3867,9 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
 }
 
 
-#define ATOM_SPECIALS  "()<>[]:;@\\,.\" \t"
+#define qp_isspace(c) ((c) == ' ' || (c) == '\t')
+
+#define ATOM_SPECIALS  "()<>[]:;@\\,.\" \t\r\n"
 
 /* Find the first email address (addr-spec) in data */
 static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
@@ -3307,7 +3894,7 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         /* domain-literal MUST end with ']' */
         if (*e++ != ']') return NULL;
     }
-    else if (!isspace(*e) && !strchr(ATOM_SPECIALS, *e)) {
+    else if (!strchr(ATOM_SPECIALS, *e)) {
         /* find end of dot-atom */
         while (++e < end && (*e == '.' || !strchr(ATOM_SPECIALS, *e)));
 
@@ -3324,13 +3911,13 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         }
 
         /* gobble trailing whitespace */
-        while (e < end && isspace(*e)) e++;
+        while (e < end && qp_isspace(*e)) e++;
 
         /* multiple addresses MUST only be separated with ',' */
         if (e < end && *e++ != ',') return NULL;
 
         /* gobble trailing whitespace */
-        while (e < end && isspace(*e)) e++;
+        while (e < end && qp_isspace(*e)) e++;
     }
 
 
@@ -3344,7 +3931,7 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         /* quoted-string must start with '"' */
         if (*(s+1) != '"') return NULL;
     }
-    else if (!isspace(*s) && !strchr(ATOM_SPECIALS, *s)) {
+    else if (!qp_isspace(*s) && !strchr(ATOM_SPECIALS, *s)) {
         /* find start of dot-atom */
         while (--s >= data && (*s == '.' || !strchr(ATOM_SPECIALS, *s)));
 
@@ -3359,9 +3946,9 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         if (*s != '<') return NULL;
 
         /* gobble leading whitespace */
-        while (s > data && isspace(*(s-1))) s--;
+        while (s > data && qp_isspace(*(s-1))) s--;
     }
-    else if (!(isspace(*s) || *s == ',')) {
+    else if (!(qp_isspace(*s) || *s == ',')) {
         /* invalid separator */
         return NULL;
     }
@@ -3387,6 +3974,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
 
     if (!force_quote) {
         size_t prev_lf = 0;
+        size_t last_sp = 0;
         for (n = 0; n < len; n++) {
             unsigned char this = data[n];
             unsigned char next = (n < len - 1) ? data[n+1] : '\0';
@@ -3394,10 +3982,17 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
                 /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
                 /* but only if the line doesn't exceed the 76 octet limit */
+
+                if (this == ' ' || this == '\t')
+                    last_sp = n;
+
                 if (n - prev_lf <= 74) continue;
 
                 if (isheader) {
-                    need_fold = 1;
+                    if (n - last_sp > 74)
+                        need_quote = 1;
+                    else
+                        need_fold = 1;
                     continue;
                 }
             }
@@ -3442,7 +4037,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
                     cnt = 11;
                 }
             }
-            else if (cnt >= ENCODED_MAX_LINE_LEN) {
+            else if (cnt >= ENCODED_MAX_LINE_LEN && next != '\r' && next != '\n') {
                 /* add soft line break to body */
                 buf_appendcstr(&buf, "=\r\n");
                 cnt = 0;
@@ -3493,20 +4088,20 @@ static char *qp_encode(const char *data, size_t len, int isheader,
         if (isheader) buf_appendcstr(&buf, "?=");
     }
     else if (need_fold) {
-        /* fold header every 78 characters (if possible) */
+        /* fold header every MIME_MAX_HEADER_LENGTH characters (if possible) */
         size_t i = 0, j = 0, last_wsp = 0;
 
-        while ((len - i > 78) && (j < len)) {
+        while ((len - i > MIME_MAX_HEADER_LENGTH) && (j < len)) {
             j += strcspn(data + j, " \t");
 
-            if (last_wsp && (j - i > 78)) {
+            if (last_wsp && (j - i > MIME_MAX_HEADER_LENGTH)) {
                 buf_appendmap(&buf, data + i, last_wsp - i);
                 buf_appendcstr(&buf, "\r\n");
                 i = last_wsp;
             }
             last_wsp = j++;
         }
-        buf_appendcstr(&buf, data + i);
+        buf_appendmap(&buf, data + i, len - i);
     }
     else {
         buf_setmap(&buf, data, len);
@@ -3588,7 +4183,11 @@ static char *encode_addrheader(const char *header, size_t len, int force_quote,
         /* jump to end of address */
         n += phrase_len + addr_len;
 
-    } while ((addr = find_addr(header + n , len - n, &addr_len)) || n < len);
+        /* reached end of header */
+        if (n >= len)
+            break;
+
+    } while ((addr = find_addr(header + n , len - n, &addr_len)));
 
     return buf_release(&buf);
 }
@@ -3674,7 +4273,7 @@ EXPORTED char *charset_encode_mimephrase(const char *data)
     return buf_release(&buf);
 }
 
-static void extract_plain_cb(const struct buf *buf, void *rock)
+static int extract_plain_cb(const struct buf *buf, void *rock)
 {
     struct buf *dst = (struct buf*) rock;
     const char *p;
@@ -3692,6 +4291,8 @@ static void extract_plain_cb(const struct buf *buf, void *rock)
         }
         buf_appendmap(dst, p, 1);
     }
+
+    return 0;
 }
 
 EXPORTED char *charset_extract_plain(const char *html) {
@@ -3710,7 +4311,7 @@ EXPORTED char *charset_extract_plain(const char *html) {
             *q++ = '\n';
             p += 4;
         }
-        else if (!strncmp(p, "p>", 3)) {
+        else if (!strncmp(p, "<p>", 3)) {
             p += 3;
         } else {
             *q++ = *p++;
@@ -3747,7 +4348,7 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t dat
         datalen = INT32_MAX;
     }
 
-    struct char_counts counts = { 0, 0, 0 };
+    struct char_counts counts = { 0 };
     int32_t i = 0;
     int32_t length = (int32_t) datalen;
     const uint8_t *data8 = (const uint8_t *) data;
@@ -3755,13 +4356,327 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t dat
     while (i < length) {
         UChar32 c;
         U8_NEXT(data8, i, length, c);
+        counts.total++;
+        counts.bytelen[U8_LENGTH(c)]++;
         if (c == 0xfffd)
             counts.replacement++;
-        else if (c >= 0)
+        else if (c >= 0) {
             counts.valid++;
+            if (u_iscntrl(c))
+                counts.cntrl++;
+        }
         else
             counts.invalid++;
     }
 
     return counts;
+}
+
+static const unsigned char hexdigit[256] = {
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+};
+
+EXPORTED int charset_decode_percent(struct buf *dst, const char *val)
+{
+    buf_reset(dst);
+    int r = 0;
+
+    for ( ; *val; val++) {
+        if (*val == '%') {
+            unsigned char v1 = hexdigit[(unsigned char)val[1]];
+            if (v1 != 0xff) {
+                unsigned char v0 = hexdigit[(unsigned char)val[2]];
+                if (v0 != 0xff) {
+                    buf_putc(dst, (v1 << 4) | v0);
+                    val += 2;
+                    continue;
+                }
+            }
+            r = -1; // invalid input, copy verbatim
+        }
+        buf_putc(dst, *val);
+    }
+
+    return r;
+}
+
+const char QSTRINGCHAR[256] = {
+/* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
+ * are not permitted, all other control characters obsolete */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+/* All printable ASCII characters (decimal values between 33 and 126) */
+/* are safe to use in quoted string. 1=use verbatim, 2=escape */
+/* XXX 32 (space) is allowed here, as most MUAs expect that */
+    1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+/* all high bits are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+EXPORTED void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                        const char *name, const char *value)
+{
+    struct buf valbuf = BUF_INITIALIZER;
+    int is_qstring = 1;
+    const char *p;
+    char *xvalue = NULL;
+    unsigned extended = flags & CHARSET_PARAM_XENCODE;
+    size_t before_val_len = buf_len(buf) + strlen(name) + 4;
+
+    /* Check if param value can be encoded as quoted string */
+    for (p = value; *p && is_qstring; p++) {
+        switch (QSTRINGCHAR[(unsigned char)*p]) {
+            case 0:
+                is_qstring = 0;
+                break;
+            case 2:
+                buf_putc(&valbuf, '\\');
+                /* fall through */
+            default:
+                buf_putc(&valbuf, *p);
+        }
+    }
+
+    /* Encode the value? */
+    if (extended && !is_qstring) {
+        /* RFC 2231 encode */
+        xvalue = charset_encode_mimexvalue(value, NULL);
+    }
+    else if (!extended &&
+             (!is_qstring ||
+              before_val_len + buf_len(&valbuf) > MIME_MAX_HEADER_LENGTH)) {
+        /* RFC 2047 encode */
+        xvalue = charset_encode_mimeheader(value, 0, /*qpencode*/1);
+    }
+    else {
+        xvalue = buf_release(&valbuf);
+    }
+
+    /* Attempt to stuff param in one line */
+    if (!(flags & CHARSET_PARAM_NEWLINE) &&
+        before_val_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH) {
+        if (extended && !is_qstring)
+            buf_printf(buf, "; %s*=%s", name, xvalue);
+        else
+            buf_printf(buf, "; %s=\"%s\"", name, xvalue);
+    }
+    else if (!extended) {
+        buf_printf(buf, ";\r\n\t%s=\"%s\"", name, xvalue);
+    }
+    else {
+        /* Break value into continuations */
+        int section = 0;
+        struct buf line = BUF_INITIALIZER;
+        for (p = xvalue; *p; section++) {
+            /* Build parameter continuation line. */
+            buf_setcstr(&line, ";\r\n\t");
+            buf_printf(&line, "%s*%d", name, section);
+            buf_appendcstr(&line, is_qstring ? "=\"" : "*=");
+            /* Write at least one character of the value */
+            int n = buf_len(&line) + 1;
+            do {
+                buf_putc(&line, *p);
+                n++;
+                p++;
+                if (!is_qstring && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
+                    break;
+            } while (*p && n < MIME_MAX_HEADER_LENGTH);
+            if (is_qstring)
+                buf_putc(&line, '"');
+            /* Write line */
+            buf_append(buf, &line);
+        }
+        buf_free(&line);
+    }
+
+    buf_free(&valbuf);
+    free(xvalue);
+}
+
+EXPORTED char *unicode_casemap(const char *s, ssize_t slen)
+{
+    int32_t ulen, tlen, nlen, olen;
+    UChar *uni = NULL, *title = NULL, *nfkd = NULL;
+    const UNormalizer2 *norm = NULL;
+    UErrorCode err = U_ZERO_ERROR;
+    UBreakIterator *bi = NULL;
+    UCaseMap *csm = NULL;
+    char *out = NULL;
+
+    /* Step 1a: Convert the UTF-8 string to UChar */
+    u_strFromUTF8(NULL, 0, &ulen, s, slen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    uni = xmalloc(ulen * sizeof(UChar));
+    u_strFromUTF8(uni, ulen, &ulen, s, slen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    /* Step 2a: Titlecase each UChar */
+    bi = ubrk_open(UBRK_CHARACTER, "", NULL, 0, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    csm = ucasemap_open("", 0, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    ucasemap_setBreakIterator(csm, bi, &err);
+    tlen = ucasemap_toTitle(csm, NULL, 0, uni, ulen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    title = xmalloc(tlen * sizeof(UChar));
+    tlen = ucasemap_toTitle(csm, title, tlen, uni, ulen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    /* Step 2b: Normalize the UChars to Form KD */
+    norm = unorm2_getNFKDInstance(&err);
+    nlen = unorm2_normalize(norm, title, tlen, NULL, 0, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    nfkd = xmalloc(nlen * sizeof(UChar));
+    nlen = unorm2_normalize(norm, title, tlen, nfkd, nlen, &err);
+    
+    /* Step 3: Convert the UChar string back to UTF-8 (NULL-terminated) */
+    u_strToUTF8(NULL, 0, &olen, nfkd, nlen, &err);
+    if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+    out = xzmalloc((olen+1) * sizeof(char));
+    u_strToUTF8(out, olen, &olen, nfkd, nlen, &err);
+    if (U_FAILURE(err)) {
+        goto done;
+    }
+    err = U_ZERO_ERROR;
+
+  done:
+    if (csm)
+        ucasemap_close(csm);
+    else if (bi)
+        ubrk_close(bi);
+
+    free(uni);
+    free(title);
+    free(nfkd);
+
+    if (U_FAILURE(err)) {
+        /* Step 1b: use original string */
+        free(out);
+        out = xstrdup(s);
+    }
+
+    return out;
+}
+
+static char *domain_to_x(const char *domain,
+                         int32_t (*conv)(
+                             const UIDNA *,
+                             const char *,
+                             int32_t,
+                             char *,
+                             int32_t,
+                             UIDNAInfo *,
+                             UErrorCode *))
+{
+    if (!global_uidna) {
+        UErrorCode uerr = U_ZERO_ERROR;
+        global_uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
+        if (U_FAILURE(uerr)) {
+            xsyslog(LOG_ERR, "could not initialize ICU IDNA", "err=<%s>",
+                    u_errorName(uerr));
+            global_uidna = NULL;
+            return NULL;
+        }
+    }
+
+    char *result = NULL;
+
+    UIDNAInfo uinfo = UIDNA_INFO_INITIALIZER;
+    UErrorCode uerr = U_ZERO_ERROR;
+    int32_t len = conv(global_uidna, domain, -1, NULL, 0, &uinfo, &uerr);
+    if (!uinfo.errors && uerr == U_BUFFER_OVERFLOW_ERROR && len) {
+        result = xmalloc(len + 1);
+        UIDNAInfo uinfo2 = UIDNA_INFO_INITIALIZER;
+        uerr = U_ZERO_ERROR;
+        conv(global_uidna, domain, -1, result, len, &uinfo2, &uerr);
+        result[len] = '\0';
+        if (U_FAILURE(uerr) || uinfo2.errors)
+            xzfree(result);
+    }
+
+    return result;
+}
+
+EXPORTED char *charset_idna_to_utf8(const char *domain)
+{
+    return domain_to_x(domain, uidna_nameToUnicodeUTF8);
+}
+
+EXPORTED char *charset_idna_to_ascii(const char *domain)
+{
+    return domain_to_x(domain, uidna_nameToASCII_UTF8);
 }

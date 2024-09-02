@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_with_timezone
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Create event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => 'event',
+                    start => '2021-08-24T14:30:00',
+                    duration => 'PT1H',
+                    timeZone => 'Etc/UTC',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+
+    my @testCases = ({
+        filter => {
+            after => '2021-08-24T14:30:00',
+        },
+        wantIds => [$eventId],
+    }, {
+        filter => {
+            after => '2021-08-25T00:30:00',
+        },
+        timeZone => 'Australia/Melbourne',
+        wantIds => [$eventId],
+    }, {
+        filter => {
+            before => '2021-08-24T15:30:00',
+        },
+        wantIds => [$eventId],
+    }, {
+        filter => {
+            before => '2021-08-25T01:30:00',
+        },
+        timeZone => 'Australia/Melbourne',
+        wantIds => [$eventId],
+    });
+
+    foreach(@testCases) {
+        my $args = {
+            filter => $_->{filter},
+        };
+        $args->{timeZone} = $_->{timeZone} if defined;
+
+        $res = $jmap->CallMethods([
+            ['CalendarEvent/query', $args, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
+}

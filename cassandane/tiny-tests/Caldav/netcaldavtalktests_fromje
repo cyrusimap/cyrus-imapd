@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_netcaldavtalktests_fromje
+    :min_version_3_1 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $cassini = Cassandane::Cassini->instance();
+    my $basedir = $cassini->val('caldavtalk', 'basedir');
+
+    unless ($basedir) {
+        xlog $self, "Not running test, no caldavtalk";
+        return;
+    }
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+
+    my $testdir = "$basedir/testdata";
+    opendir(DH, $testdir);
+    my @list;
+    while (my $item = readdir(DH)) {
+        next unless $item =~ m/(.*).ics/;
+        push @list, $1;
+    }
+    closedir(DH);
+
+    foreach my $name (sort @list) {
+        my $api = slurp($testdir, $name, 'je');
+        my $data = decode_json($api);
+        my $uid = $data->[0]{uid};
+
+        xlog $self, "put $name as application/event+json and fetch back as JSON";
+        $CalDAV->Request("PUT", "$CalendarId/$uid.ics", $api, 'Content-Type' => 'application/event+json');
+        my $serverapi = $CalDAV->Request("GET", "$CalendarId/$uid.ics", '', 'Accept' => 'application/event+json');
+        my $serverdata = decode_json($serverapi->{content});
+        $self->assert_deep_equals($CalDAV->NormaliseEvent($data->[0]), $CalDAV->NormaliseEvent($serverdata));
+    }
+}

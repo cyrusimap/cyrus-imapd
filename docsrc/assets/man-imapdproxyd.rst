@@ -8,7 +8,7 @@ Synopsis
 .. parsed-literal::
 
     **imapd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-s** ] [ **-N** ] [ **-p** *ssf* ]
+        [ **-H** ] [ **-s** ] [ **-N** ] [ **-p** *ssf* ]
 
 Description
 ===========
@@ -65,6 +65,10 @@ Options
 .. option:: -D
 
     Run external debugger specified in debug_command.
+
+.. option:: -H
+
+    Tell **imapd** to expect a HAProxy protocol header from the sender.
 
 .. option:: -s
 

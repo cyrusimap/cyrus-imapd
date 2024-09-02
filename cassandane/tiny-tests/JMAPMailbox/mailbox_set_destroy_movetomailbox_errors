@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_destroy_movetomailbox_errors
+    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog "Create mailboxes";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                },
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $mboxIdA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxIdB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxIdB);
+
+    xlog "Can't move emails to updated or destroyed mailbox";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxIdA],
+            onDestroyMoveToMailboxIfNoMailbox => $mboxIdA,
+        }, 'R1'],
+        ['Mailbox/set', {
+            update => {
+                $mboxIdB => {
+                    role => 'trash',
+                },
+            },
+            destroy => [$mboxIdA],
+            onDestroyMoveToMailboxIfNoMailbox => $mboxIdB,
+        }, 'R2'],
+    ], $using);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_deep_equals(['onDestroyMoveToMailboxIfNoMailbox'],
+            $res->[0][1]{arguments});
+    $self->assert_str_equals('invalidArguments', $res->[1][1]{type});
+    $self->assert_deep_equals(['onDestroyMoveToMailboxIfNoMailbox'],
+            $res->[1][1]{arguments});
+}

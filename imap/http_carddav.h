@@ -44,6 +44,8 @@
 #ifndef HTTP_CARDDAV_H
 #define HTTP_CARDDAV_H
 
+#define DEFAULT_ADDRBOOK "Default"
+
 /* Create the default addressbook for userid, if it doesn't exist. */
 extern int carddav_create_defaultaddressbook(const char *userid);
 

@@ -40,24 +40,24 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -a user
+.. option:: -a, --allow
 
     Allow access to all services for user *user* (remove any entry
     from the deny database).
 
-.. option:: -s services
+.. option:: -s services, --services=services
 
     Deny access only to the given *services*, which is a
     comma-separated list of wildcard patterns.  The default is "*"
     which denies access to all services.
 
 
-.. option:: -m message
+.. option:: -m message, --message=message
 
     Provide a message which is sent to the user to explain why access is
     being denied.  A default message is used if none is specified.
 
-.. option:: -l
+.. option:: -l, --list
 
     List the entries in the deny database.
 

@@ -46,6 +46,7 @@
 #include "annotate.h"
 #include "bufarray.h"
 #include "hash.h"
+#include "imparse.h"
 #include "mailbox.h"
 #include "message.h"
 #include "prot.h"
@@ -107,6 +108,8 @@ struct fetchargs {
     struct auth_state *authstate;
     hash_table *cidhash;          /* for XCONVFETCH */
     struct conversations_state *convstate; /* for FETCH_MAILBOXIDS */
+
+    range_t partial;              /* For PARTIAL */
 };
 
 /* Bitmasks for fetchitems */
@@ -176,7 +179,7 @@ struct storeargs {
     unsigned last_msgno;
     unsigned last_found;
     /* returned to caller */
-    struct seqset *modified;
+    seqset_t *modified;
 };
 
 /* values for operation */
@@ -203,16 +206,30 @@ enum {
     GETSEARCH_CHARSET_KEYWORD = 0x01,
     GETSEARCH_RETURN = 0x02,
     GETSEARCH_CHARSET_FIRST = 0x04,
+    GETSEARCH_SOURCE = 0x08,
+    GETSEARCH_MODSEQ = 0x10,
 };
 
+/* Bitmasks for search source options (RFC 7377) */
+enum {
+    SEARCH_SOURCE_SELECTED    = (1<<0),
+    SEARCH_SOURCE_PERSONAL    = (1<<1),
+    SEARCH_SOURCE_INBOXES     = (1<<2),
+    SEARCH_SOURCE_SUBSCRIBED  = (1<<3),
+    SEARCH_SOURCE_SUBTREE     = (1<<4),
+    SEARCH_SOURCE_SUBTREE_ONE = (1<<5),
+    SEARCH_SOURCE_MAILBOXES   = (1<<6)
+};
 
-/* Bitmasks for search return options */
+/* Bitmasks for search return options (RFC 4731) */
 enum {
     SEARCH_RETURN_MIN =         (1<<0),
     SEARCH_RETURN_MAX =         (1<<1),
     SEARCH_RETURN_ALL =         (1<<2),
     SEARCH_RETURN_COUNT =       (1<<3),
-    SEARCH_RETURN_RELEVANCY =   (1<<4)
+    SEARCH_RETURN_SAVE =        (1<<4),  /* RFC 5182 */
+    SEARCH_RETURN_RELEVANCY =   (1<<5),  /* RFC 6203 */
+    SEARCH_RETURN_PARTIAL =     (1<<6),  /* RFC 9394 */
 };
 
 /* Things that may be searched for */
@@ -222,6 +239,7 @@ struct searchargs {
     int state;
     /* used only during parsing */
     int fuzzy_depth;
+    uint64_t maxargssize_mark;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
@@ -230,6 +248,24 @@ struct searchargs {
     const char *userid;
     struct auth_state *authstate;
     int isadmin;
+
+    /* For MULTISEARCH */
+    struct {
+        unsigned filter;
+        strarray_t subtree;
+        strarray_t subtree_one;
+        strarray_t mailboxes;
+    } multi;
+
+    /* For SEARCHRES */
+    ptrarray_t result_vars;
+
+    /* For PARTIAL */
+    struct {
+        range_t range;
+        uint32_t start_msgno; /* based on last PARTIAL of same search */
+        uint32_t start_count; /* based on last PARTIAL of same search */
+    } partial;
 };
 
 /* Windowing arguments for the XCONVSORT command */
@@ -276,27 +312,31 @@ struct snippetargs
     } uids;
 };
 
-/* Bitmask for status queries */
+/* Bitmask for status queries (RFC 3501) */
 enum {
     STATUS_MESSAGES =           (1<<0),
     STATUS_RECENT =             (1<<1),
     STATUS_UIDNEXT =            (1<<2),
     STATUS_UIDVALIDITY =        (1<<3),
     STATUS_UNSEEN =             (1<<4),
-    STATUS_MAILBOXID =          (1<<5),
-    STATUS_SIZE =               (1<<6),
-    STATUS_HIGHESTMODSEQ =      (1<<7),
-    STATUS_XCONVEXISTS =        (1<<8),
-    STATUS_XCONVUNSEEN =        (1<<9),
-    STATUS_XCONVMODSEQ =        (1<<10),
-    STATUS_CREATEDMODSEQ =      (1<<11),
-    STATUS_MBOPTIONS =          (1<<12)
+    STATUS_HIGHESTMODSEQ =      (1<<5),  /* RFC 7162 */
+    STATUS_SIZE =               (1<<6),  /* RFC 8438 */
+    STATUS_MAILBOXID =          (1<<7),  /* RFC 8474 */
+    STATUS_DELETED =            (1<<8),  /* RFC 9051 */
+    STATUS_DELETED_STORAGE =    (1<<9),  /* RFC 9208 */
+
+    /* Non-standard */
+    STATUS_XCONVEXISTS =        (1<<11),
+    STATUS_XCONVUNSEEN =        (1<<12),
+    STATUS_XCONVMODSEQ =        (1<<13),
+    STATUS_CREATEDMODSEQ =      (1<<14),
+    STATUS_MBOPTIONS =          (1<<15)
     /* New items MUST be handled in imapd.c:list_data_remote() */
 };
 
 #define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
 #define STATUS_MBENTRYITEMS (STATUS_MAILBOXID|STATUS_UIDVALIDITY)
-#define STATUS_INDEXITEMS (STATUS_MESSAGES|STATUS_UIDNEXT|STATUS_SIZE|STATUS_HIGHESTMODSEQ|STATUS_CREATEDMODSEQ|STATUS_MBOPTIONS)
+#define STATUS_INDEXITEMS (STATUS_MESSAGES|STATUS_UIDNEXT|STATUS_SIZE|STATUS_HIGHESTMODSEQ|STATUS_CREATEDMODSEQ|STATUS_MBOPTIONS|STATUS_DELETED|STATUS_DELETED_STORAGE)
 #define STATUS_SEENITEMS (STATUS_RECENT|STATUS_UNSEEN)
 
 struct getmetadata_options {
@@ -316,10 +356,12 @@ struct listargs {
     unsigned ret;               /* Return options */
     const char *ref;            /* Reference name */
     strarray_t pat;             /* Mailbox pattern(s) */
-    const char *scan;           /* SCAN content */
     unsigned statusitems;       /* for RETURN STATUS */
     struct getmetadata_options metaopts; /* for RETURN METADATA */
     strarray_t metaitems;       /* for RETURN METADATA */
+    const char *denormalized;   /* for IMAP4rev2 OLDNAME -
+                                   Denormalized UTF-8 mailbox name from
+                                   SELECT/EXAMINE/CREATE/DELETE/RENAME/APPEND */
 };
 
 /* Value for List command variant */
@@ -330,27 +372,29 @@ enum {
     LIST_CMD_XLIST,
 };
 
-/* Bitmask for List selection options */
+/* Bitmask for List selection options (RFC 5258) */
 enum {
     LIST_SEL_SUBSCRIBED =       (1<<0),
     LIST_SEL_REMOTE =           (1<<1),
     LIST_SEL_RECURSIVEMATCH =   (1<<2),
-    LIST_SEL_SPECIALUSE =       (1<<3),
-    LIST_SEL_DAV =              (1<<4),
-    LIST_SEL_METADATA =         (1<<5),
-    LIST_SEL_INTERMEDIATES =    (1<<6),
-    LIST_SEL_DELETED =          (1<<7)
+    LIST_SEL_SPECIALUSE =       (1<<3),  /* RFC 6154 */
+
+    /* Non-standard */
+    LIST_SEL_DAV =              (1<<12),
+    LIST_SEL_METADATA =         (1<<13),
+    LIST_SEL_INTERMEDIATES =    (1<<14),
+    LIST_SEL_DELETED =          (1<<15)
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
-/* Bitmask for List return options */
+/* Bitmask for List return options (RFC 5258) */
 enum {
     LIST_RET_SUBSCRIBED =       (1<<0),
     LIST_RET_CHILDREN =         (1<<1),
-    LIST_RET_SPECIALUSE =       (1<<2),
-    LIST_RET_STATUS =           (1<<3),
-    LIST_RET_MYRIGHTS =         (1<<4),
-    LIST_RET_METADATA =         (1<<5)
+    LIST_RET_SPECIALUSE =       (1<<2),  /* RFC 6154 */
+    LIST_RET_STATUS =           (1<<3),  /* RFC 5819 */
+    LIST_RET_MYRIGHTS =         (1<<4),  /* RFC 8440 */
+    LIST_RET_METADATA =         (1<<5)   /* draft-murchison-imap-list-metadata */
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
@@ -369,7 +413,12 @@ enum {
     MBOX_ATTRIBUTE_HASCHILDREN =        (1<<7),
     MBOX_ATTRIBUTE_HASNOCHILDREN =      (1<<8),
     MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED=(1<<9),
+
+    /* from RFC 5465 */
+    MBOX_ATTRIBUTE_NOACCESS =           (1<<10),
 };
+
+#define MBOX_ATTRIBUTE_CHILDINFO_MASK   (MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
 
 struct mbox_name_attribute {
     uint32_t flag;   /* MBOX_ATTRIBUTE_* */
@@ -377,14 +426,18 @@ struct mbox_name_attribute {
 };
 
 extern const struct mbox_name_attribute mbox_name_attributes[];
+extern const struct mbox_name_attribute mbox_name_childinfo[];
 
 /* Bitmask for client capabilities */
 enum {
-    CAPA_CONDSTORE =    (1<<0),
-    CAPA_QRESYNC =      (1<<1)
+    CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
+    CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
+    CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
+    CAPA_UIDONLY =      (1<<3),  /* draft-ietf-extra-imap-uidonly */
+    CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
 };
 
-/* Bitmask for urlfetch params */
+/* Bitmask for urlfetch params (RFC 5524) */
 enum {
     URLFETCH_BODY =                     (1<<0),
     URLFETCH_BINARY =                   (1<<1),
@@ -392,5 +445,30 @@ enum {
 };
 
 extern struct protstream *imapd_out, *imapd_in;
+
+struct client_behavior_registry {
+    uint32_t did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
+    uint32_t did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
+    uint32_t did_catenate     : 1;   /* used CATENATE on APPEND  */
+    uint32_t did_condstore    : 1;   /* gave CONDSTORE on SELECT */
+    uint32_t did_compress     : 1;   /* started COMPRESS */
+    uint32_t did_idle         : 1;   /* used IDLE */
+    uint32_t did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
+    uint32_t did_metadata     : 1;   /* called GETMETADATA or SETMETADATA */
+    uint32_t did_multisearch  : 1;   /* called ESEARCH */
+    uint32_t did_move         : 1;   /* used MOVE */
+    uint32_t did_notify       : 1;   /* used NOTIFY */
+    uint32_t did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
+    uint32_t did_preview      : 1;   /* fetched PREVIEW */
+    uint32_t did_qresync      : 1;   /* gave QRESYNC on SELECT */
+    uint32_t did_savedate     : 1;   /* fetched SAVEDATE */
+    uint32_t did_searchres    : 1;   /* used SAVE on SEARCH */
+    uint32_t did_replace      : 1;   /* used REPLACE */
+    uint32_t did_uidonly      : 1;   /* used ENABLE UIDONLY  */
+    uint32_t did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
+
+    /* non-standard - track for possible deprecation */
+    uint32_t did_xlist        : 1;   /* used XLIST  */
+};
 
 #endif /* INCLUDED_IMAPD_H */

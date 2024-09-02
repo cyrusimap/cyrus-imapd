@@ -58,6 +58,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "libconfig.h"
 #include "assert.h"
@@ -66,22 +67,27 @@
 #include "comparator.h"
 #include "tree.h"
 #include "sieve/sieve.h"
+#include "imap/global.h"
 #include "imap/mailbox.h"
+#include "imap/mboxname.h"
 #include "imap/message.h"
 #include "imap/spool.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
 #ifdef WITH_JMAP
 #include "imap/jmap_mail_query.h"
-#include "imap/mboxname.h"
 #endif
 
 static char vacation_answer;
+
+/* current namespace */
+static struct namespace test_namespace;
 
 typedef struct {
     char *name;
@@ -100,6 +106,8 @@ typedef struct {
     const char *host;
     const char *remotehost;
     const char *remoteip;
+    struct auth_state *authstate;
+    struct namespace *ns;
     int edited_header;
 } script_data_t;
 
@@ -567,7 +575,7 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-static int jmapquery(void *sc, void *mc, const char *json)
+static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -582,22 +590,24 @@ static int jmapquery(void *sc, void *mc, const char *json)
 
     int r = 0;
 
-    if (!md->content.body) {
-        /* parse the message body if we haven't already */
-        r = message_parse_file_buf(md->data, &md->content.map,
-                                   &md->content.body, NULL);
-        if (r) {
-            json_decref(jfilter);
-            return 0;
+    if (!md->content.matchmime) {
+        if (!md->content.body) {
+            /* parse the message body if we haven't already */
+            r = message_parse_file_buf(md->data, &md->content.map,
+                                       &md->content.body, NULL);
+            if (r) {
+                json_decref(jfilter);
+                return 0;
+            }
         }
+        /* build the query filter */
+        md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
     }
-
-    if (!md->content.matchmime)
-        md->content.matchmime = jmap_email_matchmime_init(&md->content.map, &err);
 
     /* Run query */
     if (md->content.matchmime)
-        matches = jmap_email_matchmime(md->content.matchmime, jfilter, userid, time(NULL), &err);
+        matches = jmap_email_matchmime(md->content.matchmime, jfilter, NULL, userid,
+                sd->authstate, sd->ns, time(NULL), &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
@@ -642,13 +652,14 @@ int main(int argc, char *argv[])
     sieve_execute_t *exe = NULL;
     message_data_t *m = NULL;
     char *tmpscript = NULL, *script = NULL, *message = NULL;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
     int c, force_fail = 0;
     int fd, res;
     struct stat sbuf;
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
-    script_data_t sd = { NULL, NULL, "", NULL, 0 };
+    script_data_t sd = { NULL, NULL, "", NULL, NULL, NULL, 0 };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
@@ -704,7 +715,12 @@ int main(int argc, char *argv[])
     }
 
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    cyrus_init(alt_config, "test", 0, 0);
+
+    mboxname_init_namespace(&test_namespace, /*options*/0);
+    sd.ns = &test_namespace;
+    // anyone authstate
+    sd.authstate = auth_newstate("anyone");
 
     if (!sd.host) sd.host = config_servername;
 
@@ -716,7 +732,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
@@ -813,7 +828,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (message) {
@@ -858,6 +873,7 @@ int main(int argc, char *argv[])
         free_msg(m);
     strarray_fini(&e_from);
     strarray_fini(&e_to);
+    auth_freestate(sd.authstate);
 
     return 0;
 }
@@ -865,5 +881,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

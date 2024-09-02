@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test replication of messages APPENDed to the master
+#
+sub test_append
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    xlog $self, "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
+
+    xlog $self, "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog $self, "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog $self, "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+}

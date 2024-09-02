@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -89,9 +90,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-extern int optind;
-extern char *optarg;
-
 /* current namespace */
 static struct namespace mbexamine_namespace;
 
@@ -111,8 +109,24 @@ int main(int argc, char **argv)
     char buf[MAX_MAILBOX_PATH+1];
     char *alt_config = NULL;
     int (*cb)(struct findall_data *, void *) = &do_examine;
+    int ok_count = 0;
 
-    while ((opt = getopt(argc, argv, "C:u:s:qc")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:cqs:u:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "check-message-files", no_argument, NULL, 'c' },
+        { "check-quota", no_argument, NULL, 'q' },
+        { "seq", required_argument, NULL, 's' },
+        { "uid", required_argument, NULL, 'u' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -145,7 +159,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbexamine", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&mbexamine_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&mbexamine_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -155,16 +169,25 @@ int main(int argc, char **argv)
 
     if (optind == argc) {
         strlcpy(buf, "*", sizeof(buf));
-        mboxlist_findall(&mbexamine_namespace, buf, 1, 0, 0, cb, NULL);
+        r = mboxlist_findall(&mbexamine_namespace, buf, 1, 0, 0, cb, &ok_count);
     }
 
     for (i = optind; i < argc; i++) {
-        mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, NULL);
+        r = mboxlist_findall(&mbexamine_namespace, argv[i], 1, 0, 0, cb, &ok_count);
     }
 
     cyrus_done();
 
-    exit(0);
+    if (r && !ok_count) {
+        return r;
+    }
+    else if (!ok_count) {
+        fprintf(stderr, "No matching mailboxes found\n");
+        return EX_NOUSER; /* XXX i guess? */
+    }
+    else {
+        return 0;
+    }
 }
 
 static void usage(void)
@@ -185,13 +208,14 @@ static void print_rec(const char *name, const struct buf *citem)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-static int do_examine(struct findall_data *data, void *rock __attribute__((unused)))
+static int do_examine(struct findall_data *data, void *rock)
 {
     unsigned i, msgno;
     int r = 0;
     int flag = 0;
     struct mailbox *mailbox = NULL;
     int j;
+    int *ok_count = (int *) rock;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -207,17 +231,20 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+        return r;
+    }
 
     printf(" Mailbox Header Info:\n");
     printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox, 0));
-    printf("  Mailbox ACL: %s\n", mailbox->acl); /* xxx parse */
-    printf("  Unique ID: %s\n", mailbox->uniqueid);
+    printf("  Mailbox ACL: %s\n", mailbox_acl(mailbox)); /* xxx parse */
+    printf("  Unique ID: %s\n", mailbox_uniqueid(mailbox));
     printf("  User Flags: ");
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
-        if (!mailbox->flagname[i]) break;
-        printf("%s ", mailbox->flagname[i]);
+        if (!mailbox->h.flagname[i]) break;
+        printf("%s ", mailbox->h.flagname[i]);
     }
 
     if (!i) printf("[none]");
@@ -231,6 +258,8 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
            mailbox->i.start_offset, mailbox->i.record_size);
     printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes  Annotations Size: " QUOTA_T_FMT " bytes\n",
            mailbox->i.exists, mailbox->i.quota_mailbox_used, mailbox->i.quota_annot_used);
+    printf("    Deleted Size: " QUOTA_T_FMT " bytes  Expunged Size: " QUOTA_T_FMT " bytes\n",
+           mailbox->i.quota_deleted_used, mailbox->i.quota_expunged_used);
     printf("  Last Append Date: (" TIME_T_FMT ") %s",
            mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
     printf("  UIDValidity: %u  Last UID: %u\n",
@@ -256,7 +285,7 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     }
     printf("\n");
     printf("  Last POP3 Login: (" TIME_T_FMT ") %s", mailbox->i.pop3_last_login,
-           ctime((const time_t *) &mailbox->i.pop3_last_login));
+           ctime(&mailbox->i.pop3_last_login));
     printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
            mailbox->i.highestmodseq);
 
@@ -351,19 +380,22 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
 
     mailbox_close(&mailbox);
 
+    if (!r && ok_count) (*ok_count) ++;
+
     return r;
 }
 
 /*
  * mboxlist_findall() callback function to examine a mailbox quota usage
  */
-static int do_quota(struct findall_data *data, void *rock __attribute__((unused)))
+static int do_quota(struct findall_data *data, void *rock)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
     quota_t total = 0;
     const char *fname;
     struct stat sbuf;
+    int *ok_count = (int *) rock;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -379,7 +411,10 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+        return r;
+    }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     const message_t *msg;
@@ -389,7 +424,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
 
         if (stat(fname, &sbuf) != 0) {
             syslog(LOG_WARNING,
-                   "Can not open message file %s -- skipping\n", fname);
+                   "Can not open message file %s -- skipping", fname);
             continue;
         }
 
@@ -413,6 +448,7 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
 
  done:
     mailbox_close(&mailbox);
+    if (!r && ok_count) (*ok_count) ++;
 
     return r;
 }
@@ -428,13 +464,14 @@ int numcmp(const void *a, const void *b)
 /*
  * mboxlist_findall() callback function to compare a mailbox
  */
-static int do_compare(struct findall_data *data, void *rock __attribute__((unused)))
+static int do_compare(struct findall_data *data, void *rock)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
     DIR *dirp;
     struct dirent *dirent;
     uint32_t *uids = NULL, nalloc, count = 0, msgno;
+    int *ok_count = (int *) rock;
 
     /* don't want partial matches */
     if (!data) return 0;
@@ -450,10 +487,14 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
 
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+        return r;
+    }
 
     if (mailbox->i.minor_version < 7) {
-        printf("Mailbox version is too old for comparison\n");
+        fprintf(stderr, "%s: Mailbox version is too old for comparison\n",
+                        extname);
         goto done;
     }
 
@@ -557,20 +598,24 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
             r = record ? mailbox_cacherecord(mailbox, record) : -1;
 
             citem = r ? &empty_buf : cacheitem_buf(record, CACHE_FROM);
-            printf("   From: %-50.*s", (int) MIN(citem->len, 50), citem->s);
+            printf("   From: %-50.*s",
+                   (int) MIN(buf_len(citem), 50), buf_cstring(citem));
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
                 citem = cacheitem_buf(&fs_record, CACHE_FROM);
-                printf("\t%-50.*s", (int) MIN(citem->len, 50), citem->s);
+                printf("\t%-50.*s",
+                       (int) MIN(buf_len(citem), 50), buf_cstring(citem));
             }
             printf("\n");
 
             citem = r ? &empty_buf : cacheitem_buf(record, CACHE_SUBJECT);
-            printf("   Subj: %-50.*s", (int) MIN(citem->len, 50), citem->s);
+            printf("   Subj: %-50.*s",
+                   (int) MIN(buf_len(citem), 50), buf_cstring(citem));
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
                 citem = cacheitem_buf(&fs_record, CACHE_SUBJECT);
-                printf("\t%-50.*s", (int) MIN(citem->len, 50), citem->s);
+                printf("\t%-50.*s",
+                       (int) MIN(buf_len(citem), 50), buf_cstring(citem));
             }
             printf("\n");
             printf("\n");
@@ -583,6 +628,12 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
   done:
     mailbox_close(&mailbox);
     free(uids);
+
+    if (!r && ok_count) (*ok_count) ++;
+
+    if (r) {
+        fprintf(stderr, "%s: %s\n", extname, error_message(r));
+    }
 
     return r;
 }

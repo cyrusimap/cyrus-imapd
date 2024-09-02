@@ -84,6 +84,10 @@
 #include "index.h"
 #include "message.h"
 #include "util.h"
+#include "itip_support.h"
+#include "attachextract.h"
+
+#include "master/service.h" /* for STATUS_FD only */
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -105,6 +109,7 @@ static int allow_partials = 0;
 static int allow_duplicateparts = 0;
 static int reindex_partials = 0;
 static int reindex_minlevel = 0;
+static int cyrus_isdaemon = 0;
 static search_text_receiver_t *rx = NULL;
 
 static strarray_t *skip_domains = NULL;
@@ -157,6 +162,11 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -U, --only-upgrade           only compact if re-indexing\n"
             " --B, --skip-locked            skip users that are locked by another process\n"
             "\n"
+            "Experimental options:\n"
+            "  --attachextract-cache-dir=DIR  cache extracted attachment text in DIR\n"
+            "  --attachextract-cache-only     only extract attachment text from the cache\n"
+            "\n"
+
             "General options:\n"
             "  -v, --verbose                be verbose\n"
             "  -h, --help                   show usage\n",
@@ -204,6 +214,7 @@ static int should_index(const char *name)
     int ret = 1;
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(name);
+    const char *userid = mbname_userid(mbname);
     /* Skip remote mailboxes */
     int r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
@@ -213,7 +224,7 @@ static int should_index(const char *name)
             printf("error looking up %s: %s\n",
                    extname, error_message(r));
         }
-        syslog(LOG_INFO, "error looking up %s: %s\n",
+        syslog(LOG_INFO, "error looking up %s: %s",
                extname, error_message(r));
 
         free(extname);
@@ -233,10 +244,40 @@ static int should_index(const char *name)
         goto done;
     }
 
-    // skip COLLECTION mailboxes (just files)
-    if (mbentry->mbtype & MBTYPE_COLLECTION) {
+    // skip sieve scripts
+    if (mboxname_issievemailbox(mbentry->name, mbentry->mbtype)) {
         ret = 0;
         goto done;
+    }
+
+    // skip JMAP blobs
+    if (mboxname_isjmapuploadmailbox(mbentry->name, mbentry->mbtype)) {
+        ret = 0;
+        goto done;
+    }
+
+    // skip JMAP notifications
+    if (mboxname_isjmapnotificationsmailbox(mbentry->name, mbentry->mbtype)) {
+        ret = 0;
+        goto done;
+    }
+
+    // skip COLLECTION mailboxes (just files)
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_COLLECTION) {
+        ret = 0;
+        goto done;
+    }
+
+    // skip CalDAV scheduling Inbox
+    if ((mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR) && userid) {
+        const strarray_t *boxes = mbname_boxes(mbname);
+        if (strarray_size(boxes) == 2 &&
+            /* SCHED_INBOX ends in "/", so trim it */
+            !strncmpsafe(strarray_nth(boxes, 1),
+                         SCHED_INBOX, strlen(SCHED_INBOX)-1)) {
+            ret = 0;
+            goto done;
+        }
     }
 
     // skip deleted mailboxes
@@ -247,14 +288,13 @@ static int should_index(const char *name)
 
     // skip listed domains
     if (mbname_domain(mbname) && skip_domains &&
-        strarray_find(skip_domains, mbname_domain(mbname), 0) >= 0) {
+        strarray_contains(skip_domains, mbname_domain(mbname))) {
         ret = 0;
         goto done;
     }
 
     // skip listed users
-    if (mbname_userid(mbname) && skip_users &&
-        strarray_find(skip_users, mbname_userid(mbname), 0) >= 0) {
+    if (userid && skip_users && strarray_contains(skip_users, userid)) {
         ret = 0;
         goto done;
     }
@@ -284,6 +324,8 @@ static int index_one(const char *name, int blocking)
         flags |= SEARCH_UPDATE_REINDEX_PARTIALS;
     if (allow_duplicateparts)
         flags |= SEARCH_UPDATE_ALLOW_DUPPARTS;
+    if (verbose)
+        flags |= SEARCH_UPDATE_VERBOSE;
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
@@ -345,7 +387,7 @@ again:
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
-        syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+        syslog(LOG_INFO, "error opening %s: %s", extname, error_message(r));
         free(extname);
 
         return r;
@@ -371,7 +413,7 @@ again:
         }
     }
 
-    r = search_update_mailbox(rx, mailbox, reindex_minlevel, flags);
+    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags);
 
     mailbox_close(&mailbox);
 
@@ -408,8 +450,13 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
         else {
             /* Translate any separators in mailboxname */
             char *intname = mboxname_from_external(mboxnames[i], &squat_namespace, NULL);
-            int flags = recursive_flag ? 0 : MBOXTREE_SKIP_CHILDREN;
-            mboxlist_mboxtree(intname, addmbox, sa, flags);
+            if (!intname || *intname == '\0') {
+                fprintf(stderr, "Mailbox %s: %s\n",
+                        mboxnames[i], error_message(IMAP_MAILBOX_BADNAME));
+            } else {
+                int flags = recursive_flag ? 0 : MBOXTREE_SKIP_CHILDREN;
+                mboxlist_mboxtree(intname, addmbox, sa, flags);
+            }
             free(intname);
         }
 
@@ -528,8 +575,7 @@ error:
 }
 
 static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
-                            uint32_t uid,
-                            const strarray_t *partids __attribute__((unused)),
+                            uint32_t uid, const char *partid __attribute__((unused)),
                             void *rock)
 {
     int single = *(int *)rock;
@@ -755,8 +801,8 @@ static void do_rolling(const char *channel)
     for (;;) {
         int sig = signals_poll();
 
-        if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully\n");
+        if (sig == SIGHUP && cyrus_isdaemon) {
+            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
             sync_log_reader_end(slr);
             shut_down(0);
         }
@@ -814,6 +860,9 @@ static void do_rolling(const char *channel)
 
         strarray_free(mboxnames);
         mboxnames = NULL;
+
+        // handle any delayed compaction runs
+        libcyrus_run_delayed();
     }
 
     /* XXX - we don't really get here... */
@@ -895,7 +944,7 @@ static void shut_down(int code)
 
     cyrus_done();
 
-    index_text_extractor_destroy();
+    attachextract_destroy();
 
     exit(code);
 }
@@ -920,11 +969,19 @@ int main(int argc, char **argv)
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
            COMPACT, AUDIT, LIST } mode = UNKNOWN;
+    const char *axcachedir = NULL;
+    int axcacheonly = 0;
+    FILE *waitdaemon_status = NULL;
 
     setbuf(stdout, NULL);
 
     /* Keep these in alphabetic order */
-    static const char *short_options = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
+    static const char short_options[] = "ABC:DFL:N:PRS:T:UXZade:f:hilmn:oprs:t:uvz:";
+
+    enum squatter_long_options {
+        SQUATTER_ATTACHEXTRACT_CACHE_DIR = 1024,
+        SQUATTER_ATTACHEXTRACT_CACHE_ONLY,
+    };
 
     /* Keep these ordered by mode */
     static struct option long_options[] = {
@@ -965,13 +1022,19 @@ int main(int argc, char **argv)
 
         /* squat flags */
         {"squat-annot", no_argument, 0, 'a' },
-        {"squat-skip", optional_argument, 0, 's' },
+        {"squat-skip", required_argument, 0, 's' },
 
         /* synclog-mode flags */
         {"synclog", required_argument, 0, 'f' },
 
         {"recursive", no_argument, 0, 'r' },
         {"sleep", required_argument, 0, 'S' },
+
+        /* experimental flags */
+        {"attachextract-cache-dir", required_argument, 0,
+            SQUATTER_ATTACHEXTRACT_CACHE_DIR },
+        {"attachextract-cache-only", no_argument, 0,
+            SQUATTER_ATTACHEXTRACT_CACHE_ONLY },
 
         /* misc */
         {"help", no_argument, 0, 'h' },
@@ -981,7 +1044,9 @@ int main(int argc, char **argv)
         {0, 0, 0, 0 }
     };
 
-    while ((opt = getopt_long(argc, argv, short_options, long_options, NULL)) != EOF) {
+    int opt_index = 0;
+
+    while ((opt = getopt_long(argc, argv, short_options, long_options, &opt_index)) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -1106,16 +1171,13 @@ int main(int argc, char **argv)
 
         case 's':
             if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
-            if (optarg) {
+            {
                 char *end;
                 long val = strtol(optarg, &end, 10);
                 if (val < 0 || val > INT_MAX || *end) {
                     usage(argv[0]);
                 }
                 skip_unmodified = (int) val;
-            }
-            else {
-                skip_unmodified = 60;
             }
             mode = INDEXER;
             break;
@@ -1142,6 +1204,14 @@ int main(int argc, char **argv)
             user_mode = 1;
             break;
 
+        case SQUATTER_ATTACHEXTRACT_CACHE_DIR:
+            axcachedir = optarg;
+            break;
+
+        case SQUATTER_ATTACHEXTRACT_CACHE_ONLY:
+            axcacheonly = 1;
+            break;
+
         case 'h':
         default:
             usage("squatter");
@@ -1164,10 +1234,23 @@ int main(int argc, char **argv)
         usage("squatter");
     }
 
+    if (getenv("CYRUS_ISDAEMON"))
+        cyrus_isdaemon = atoi(getenv("CYRUS_ISDAEMON"));
+
+    /* If STATUS_FD (fd 3) is already open for writing, then we're running as a
+     * wait daemon, and need to report our readiness to master.  Need to check
+     * this very early, otherwise there's no way to tell the difference between
+     * this case and some other file being open on fd 3.
+     */
+    if (cyrus_isdaemon) {
+        waitdaemon_status = fdopen(STATUS_FD, "w");
+        if (!waitdaemon_status) errno = 0;
+    }
+
     cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&squat_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -1184,7 +1267,11 @@ int main(int argc, char **argv)
         signals_add_handlers(0);
     }
 
-    index_text_extractor_init(NULL);
+    attachextract_init(NULL);
+    if (axcachedir)
+        attachextract_set_cachedir(axcachedir);
+    if (axcacheonly)
+        attachextract_set_cacheonly(1);
 
     const char *conf;
     conf = config_getstring(IMAPOPT_SEARCH_INDEX_SKIP_DOMAINS);
@@ -1209,8 +1296,15 @@ int main(int argc, char **argv)
         r = do_search(query, !multi_folder, &mboxnames);
         break;
     case ROLLING:
-        if (background && !getenv("CYRUS_ISDAEMON"))
+        if (background && !cyrus_isdaemon) {
             become_daemon();
+        }
+        if (waitdaemon_status) {
+            fputs("ok\r\n", waitdaemon_status);
+            fclose(waitdaemon_status);
+            waitdaemon_status = NULL;
+            errno = 0;
+        }
         do_rolling(channel);
         /* never returns */
         break;

@@ -58,10 +58,14 @@
 #include "assert.h"
 #include "map.h"
 #include "sievedir.h"
-#include "sieve/bc_parse.h"
-#include "sieve/sieve_interface.h"
 #include "util.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
+
+#ifdef USE_SIEVE
+#include "sieve/bc_parse.h"
+#include "sieve/sieve_interface.h"
+#endif
 
 EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
                               int (*func)(const char *sievedir,
@@ -74,6 +78,8 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
     char path[PATH_MAX];
     int dir_len;
     int r = SIEVEDIR_OK;
+
+    assert(sievedir);
 
     if ((dp = opendir(sievedir)) == NULL) {
         if (errno == ENOENT) return SIEVEDIR_OK;
@@ -106,7 +112,7 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
                         continue;
                     }
                     if ((flags & SIEVEDIR_IGNORE_JUNK) &&
-                        strcmp(ext, BYTECODE_SUFFIX)) {
+                        strcmpnull(ext, BYTECODE_SUFFIX)) {
                         /* ignore non-bytecode */
                         continue;
                     }
@@ -137,45 +143,12 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
     return r;
 }
 
-struct count_rock {
-    int count;
-    const char *myname;
-};
-
-static int count_cb(const char *sievedir __attribute__((unused)),
-                    const char *name,
-                    struct stat *sbuf __attribute__((unused)),
-                    const char *link_target __attribute__((unused)),
-                    void *rock)
-{
-    struct count_rock *crock = (struct count_rock *) rock;
-    size_t name_len = strlen(name) - SCRIPT_SUFFIX_LEN;
-
-    if (!crock->myname ||
-        strlen(crock->myname) != name_len ||
-        strncmp(crock->myname, name, name_len)) {
-        /* and it's different from me */
-        crock->count++;
-    }
-
-    return SIEVEDIR_OK;
-}
-
-/* counts the number of scripts user has that are DIFFERENT from name */
-EXPORTED int sievedir_num_scripts(const char *sievedir, const char *name)
-{
-    struct count_rock crock = { 0, name };
-
-    sievedir_foreach(sievedir, SIEVEDIR_SCRIPTS_ONLY, &count_cb, &crock);
-
-    return crock.count;
-}
-
-
 EXPORTED struct buf *sievedir_get_script(const char *sievedir,
                                          const char *script)
 {
     struct buf buf = BUF_INITIALIZER;
+
+    assert(sievedir);
 
     buf_printf(&buf, "%s/%s", sievedir, script);
 
@@ -193,7 +166,7 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
 
     return ret;
 }
- 
+
 /* Everything but '/' and '\0' are valid. */
 EXPORTED int sievedir_valid_name(const struct buf *name)
 {
@@ -212,21 +185,13 @@ EXPORTED int sievedir_valid_name(const struct buf *name)
     return (lup < SIEVEDIR_MAX_NAME_LEN);
 }
 
-EXPORTED int sievedir_script_exists(const char *sievedir, const char *name)
-{
-    char path[PATH_MAX];
-    struct stat sbuf;
-
-    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-
-    return ((stat(path, &sbuf) == 0) && S_ISREG(sbuf.st_mode));
-}
-
 EXPORTED const char *sievedir_get_active(const char *sievedir)
 {
     static char target[PATH_MAX];
     char link[PATH_MAX];
     ssize_t tgt_len;
+
+    assert(sievedir);
 
     snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
 
@@ -257,6 +222,8 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     char active[PATH_MAX];
     char tmp[PATH_MAX+4];  /* +4 for ".NEW" */
 
+    assert(sievedir);
+
     if (sievedir_script_isactive(sievedir, name)) {
         /* already active - nothing to do here */
         return SIEVEDIR_OK;
@@ -278,7 +245,7 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     if (rename(tmp, active) < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename active script link",
                 "oldpath=<%s> newpath=<%s>", tmp, active);
-        unlink(tmp);
+        xunlink(tmp);
         return SIEVEDIR_IOERROR;
     }
 
@@ -289,8 +256,10 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 {
     char active[PATH_MAX];
 
+    assert(sievedir);
+
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
-    if (unlink(active) != 0 && errno != ENOENT) {
+    if (xunlink(active) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
                 "link=<%s>", active);
         return SIEVEDIR_IOERROR;
@@ -302,23 +271,13 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 {
     char path[PATH_MAX];
-    int r;
 
-    /* delete bytecode first, as its non-deterministic */
+    assert(sievedir);
+
+    /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    r = unlink(path);
-    if (r && errno != ENOENT) {
+    if (xunlink(path) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
-                "path=<%s>", path);
-    }
-
-    /* delete script file last, which determines result */
-    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-    r = unlink(path);
-    if (r) {
-        if (errno == ENOENT) return SIEVEDIR_NOTFOUND;
-
-        xsyslog(LOG_ERR, "IOERROR: failed to delete script file",
                 "path=<%s>", path);
         return SIEVEDIR_IOERROR;
     }
@@ -333,18 +292,7 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
     char oldpath[PATH_MAX], newpath[PATH_MAX];
     int r;
 
-    snprintf(oldpath, sizeof(oldpath),
-             "%s/%s%s", sievedir, oldname, SCRIPT_SUFFIX);
-    snprintf(newpath, sizeof(oldpath),
-             "%s/%s%s", sievedir, newname, SCRIPT_SUFFIX);
-    r = rename(oldpath, newpath);
-    if (r) {
-        if (errno == ENOENT) return SIEVEDIR_NOTFOUND;
-
-        xsyslog(LOG_ERR, "IOERROR: failed to rename script file",
-                "oldpath=<%s> newpath=<%s>", oldpath, newpath);
-        return SIEVEDIR_IOERROR;
-    }
+    assert(sievedir);
 
     snprintf(oldpath, sizeof(oldpath),
              "%s/%s%s", sievedir, oldname, BYTECODE_SUFFIX);
@@ -357,10 +305,6 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
         return SIEVEDIR_IOERROR;
     }
 
-    if (sievedir_script_isactive(sievedir, oldname)) {
-        r = sievedir_activate_script(sievedir, newname);
-    }
-
     return r;
 }
 
@@ -368,101 +312,95 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
 EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
                                  const char *content, char **errors)
 {
-    char new_path[PATH_MAX];
-    FILE *f;
+    char new_bcpath[PATH_MAX];
+    int fd = -1;
+
+    assert(sievedir);
 
     /* parse the script */
     sieve_script_t *s = NULL;
-    (void) sieve_script_parse_string(NULL, content, errors, &s);
+    char *myerrors = NULL;
+    int r = sieve_script_parse_string(NULL, content, &myerrors, &s);
+    if (errors) *errors = myerrors;
+    else free(myerrors);
+
     if (!s) return SIEVEDIR_INVALID;
-
-    /* open a new file for the script */
-    snprintf(new_path, sizeof(new_path),
-             "%s/%s%s.NEW", sievedir, name, SCRIPT_SUFFIX);
-
-    f = fopen(new_path, "w+");
-
-    if (f == NULL) {
-        xsyslog(LOG_ERR, "IOERROR: failed to open new script file",
-                "newpath=<%s>", new_path);
-        sieve_script_free(&s);
-        return SIEVEDIR_IOERROR;
-    }
-
-    size_t i, content_len = strlen(content);
-    int saw_cr = 0;
-
-    /* copy data to file - replacing any lone CR or LF with the
-     * CRLF pair so notify messages are SMTP compatible */
-    for (i = 0; i < content_len; i++) {
-        if (saw_cr) {
-            if (content[i] != '\n') putc('\n', f);
-        }
-        else if (content[i] == '\n')
-            putc('\r', f);
-
-        putc(content[i], f);
-        saw_cr = (content[i] == '\r');
-    }
-    if (saw_cr) putc('\n', f);
-
-    fflush(f);
-    fclose(f);
 
     /* generate the bytecode */
     bytecode_info_t *bc = NULL;
     if (sieve_generate_bytecode(&bc, s) == -1) {
-        unlink(new_path);
-        sieve_script_free(&s);
-        return SIEVEDIR_FAIL;
+        r = SIEVEDIR_FAIL;
+        goto done;
     }
 
-    /* open the new bytecode file */
-    char new_bcpath[PATH_MAX];
     snprintf(new_bcpath, sizeof(new_bcpath),
              "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
-    int fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+
+    r = cyrus_mkdir(new_bcpath, 0755);
+    if (r) {
+        xsyslog(LOG_ERR, "IOERROR: failed to create directory for bytecode file",
+                "path=<%s>", new_bcpath);
+        r = SIEVEDIR_IOERROR;
+        goto done;
+    }
+
+    /* make sure no stray hardlink is lying around */
+    xunlink(new_bcpath);
+
+    /* open the new bytecode file */
+    fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
     if (fd < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to open new bytecode file",
                 "newpath=<%s>", new_bcpath);
-        unlink(new_path);
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
-        return SIEVEDIR_IOERROR;
+        r = SIEVEDIR_IOERROR;
+        goto done;
     }
 
     /* emit the bytecode */
     if (sieve_emit_bytecode(fd, bc) == -1) {
-        close(fd);
-        unlink(new_path);
-        unlink(new_bcpath);
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
-        return SIEVEDIR_FAIL;
+        r = SIEVEDIR_FAIL;
+        goto done;
     }
 
-    sieve_free_bytecode(&bc);
-    sieve_script_free(&s);
-
-    close(fd);
+    if (fsync(fd) < 0) {
+        xsyslog(LOG_ERR, "IOERROR: failed to fsync new bytecode file",
+                "newpath=<%s>", new_bcpath);
+        r = SIEVEDIR_IOERROR;
+        goto done;
+    }
 
     /* rename */
     char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, SCRIPT_SUFFIX);
-    int r = rename(new_path, path);
+    snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
+    r = rename(new_bcpath, path);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: failed to rename script file",
-                "oldpath=<%s> newpath=<%s>", new_path, path);
-    }
-    else {
-        snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-        r = rename(new_bcpath, path);
-        if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
-                    "oldpath=<%s> newpath=<%s>", new_bcpath, path);
-        }
+        xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
+                "oldpath=<%s> newpath=<%s>", new_bcpath, path);
+        r = SIEVEDIR_IOERROR;
     }
 
-    return (r ? SIEVEDIR_IOERROR : SIEVEDIR_OK);
+ done:
+    if (fd >= 0) {
+        close(fd);
+        if (r) xunlink(new_bcpath);
+    }
+    if (bc) sieve_free_bytecode(&bc);
+    if (s) sieve_script_free(&s);
+
+    return (r ? r : SIEVEDIR_OK);
 }
 #endif /* USE_SIEVE */
+
+EXPORTED int sievedir_valid_path(const char *sievedir)
+{
+    if (!sievedir || *sievedir != '/') return 0;
+
+    char *resolved = realpath(sievedir, NULL);
+
+    if (!resolved && errno != ENOENT) return 0;
+
+    free(resolved);
+
+    return 1;
+}
+

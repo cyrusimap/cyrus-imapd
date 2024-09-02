@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -149,6 +150,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 printf("\n");
                 break;
 
+            case OPT_BYTESIZE:
             case OPT_DURATION:
                 if (only_changed) {
                     if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
@@ -263,6 +265,7 @@ static void do_defconf(int want_since, uint32_t since)
                 printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
                 break;
 
+            case OPT_BYTESIZE:
             case OPT_DURATION:
             case OPT_STRING:
             case OPT_STRINGLIST:
@@ -459,14 +462,26 @@ static uint32_t parse_since_version(const char *str)
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
     int opt;
     const char *alt_config = NULL;
     const char *srvname = "cyr_info";
     uint32_t since = 0;
     int want_since = 0;
 
-    while ((opt = getopt(argc, argv, "C:M:n:s:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:M:n:s:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        /* n.b. no long option for -M */
+        { "service", required_argument, NULL, 'n' },
+        { "since", required_argument, NULL, 's' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

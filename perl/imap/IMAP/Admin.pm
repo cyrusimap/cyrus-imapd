@@ -48,11 +48,6 @@ use vars qw($VERSION
 
 $VERSION = '1.00';
 
-#
-# NB:  there are hooks (which error out in all cases) for IMSP support in Tcl
-# cyradm.  I'll add them if I ever see what they're supposed to do... after
-# coming up with perl IMSP/ACAP hooks.
-#
 # ASSUMPTION:  the somewhat unwieldy cyradm names are because the interpreter
 # causes collisions, so I can get away with shorter versions here.
 #

@@ -47,6 +47,7 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -56,6 +57,7 @@
 #include <sys/types.h>
 
 #include <libical/ical.h>
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include "annotate.h" /* for strlist functionality */
@@ -67,13 +69,10 @@
 #include "xml_support.h"
 #include "zoneinfo_db.h"
 
-extern int optind;
-extern char *optarg;
-
 /* config.c stuff */
 const int config_need_data = 0;
 
-int verbose = 0;
+static int verbose = 0;
 
 /* forward declarations */
 void usage(void);
@@ -91,7 +90,20 @@ int main(int argc, char **argv)
     const char *zoneinfo_dir = NULL;
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
-    while ((opt = getopt(argc, argv, "C:r:vw:")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:r:vw:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "rebuild", required_argument, NULL, 'r' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "windows-zone-xml", required_argument, NULL, 'w' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -347,6 +359,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
     dirp = opendir(dir);
     if (!dirp) {
         fprintf(stderr, "can't open zoneinfo directory %s\n", dir);
+        return;
     }
 
     while ((dirent = readdir(dirp))) {

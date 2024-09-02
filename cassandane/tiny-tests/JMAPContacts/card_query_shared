@@ -1,0 +1,440 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_shared
+    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+
+    my $jmap      = $self->{jmap};
+    my $carddav   = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service   = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CardDAVTalk->new(
+        user      => "manifold",
+        password  => 'pass',
+        host      => $service->host(),
+        port      => $service->port(),
+        scheme    => 'http',
+        url       => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin    => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+    xlog $self, "share to user";
+    $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "create cards";
+    my $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
+            accountId => 'manifold',
+            create    => {
+                card1 => {
+                    name => {
+                        isOrdered  => JSON::false,
+                        components => [
+                            {
+                                kind  => "given",
+                                value => "given1"
+                            },
+                            {
+                                kind  => "surname",
+                                value => "last"
+                            },
+                        ],
+                        sortAs => { surname => 'aaa' }
+                    },
+                    nicknames => { 'n1' => { name => "nick1" } },
+                    emails    => {
+                        'e1' => {
+                            contexts => { private => JSON::true },
+                            address  => "card1\@example.com"
+                        }
+                    },
+                    personalInfo => {
+                        'p1' => {
+                            kind  => 'hobby',
+                            value => 'reading'
+                        }
+                    }
+                },
+                card2 => {
+                    name => {
+                        isOrdered  => JSON::false,
+                        components => [
+                            {
+                                kind  => "given",
+                                value => "given2"
+                            },
+                            {
+                                kind  => "surname",
+                                value => "last"
+                            },
+                        ]
+                    },
+                    emails => {
+                        'e1' => {
+                            contexts => { work => JSON::true },
+                            address  => "card2\@bar.org"
+                        },
+                        'e2' => {
+                            contexts => { other => JSON::true },
+                            address  => "me\@example.com"
+                        }
+                    },
+                    addresses => {
+                        'a1' => {
+                            contexts   => { private => JSON::true },
+                            isOrdered  => JSON::false,
+                            components => [
+                                {
+                                    kind  => "name",
+                                    value => "Some Lane"
+                                },
+                                {
+                                    kind  => "number",
+                                    value => "24"
+                                },
+                                {
+                                    kind  => "locality",
+                                    value => "SomeWhere City"
+                                },
+                                {
+                                    kind  => "region",
+                                    value => ""
+                                },
+                                {
+                                    kind  => "postcode",
+                                    value => "1234"
+                                }
+                            ]
+                        }
+                    }
+                },
+                card3 => {
+                    name => {
+                        isOrdered  => JSON::false,
+                        components => [
+                            {
+                                kind  => "given",
+                                value => "given3"
+                            },
+                            {
+                                kind  => "surname",
+                                value => "last"
+                            },
+                        ]
+                    },
+                    addresses => {
+                        'a1' => {
+                            contexts   => { private => JSON::true },
+                            isOrdered  => JSON::false,
+                            components => [
+                                {
+                                    kind  => "name",
+                                    value => "Some Lane"
+                                },
+                                {
+                                    kind  => "number",
+                                    value => "24"
+                                },
+                                {
+                                    kind  => "locality",
+                                    value => "SomeWhere City"
+                                },
+                                {
+                                    kind  => "region",
+                                    value => ""
+                                },
+                                {
+                                    kind  => "postcode",
+                                    value => "1234"
+                                },
+                                {
+                                    kind  => "country",
+                                    value => "Someinistan"
+                                }
+                            ]
+                        }
+                    },
+                    personalInfo => {
+                        'p1' => {
+                            kind  => 'interest',
+                            value => 'r&b music'
+                        }
+                    }
+                },
+                card4 => {
+                    name => {
+                        isOrdered  => JSON::false,
+                        components => [
+                            {
+                                kind  => "given",
+                                value => "given4"
+                            },
+                            {
+                                kind  => "surname",
+                                value => "last"
+                            },
+                        ]
+                    },
+                    nicknames => { 'n1' => { name => "bam" } },
+                    notes     => { 'n1' => { note => "hello" } }
+                }
+            }
+        },
+        "R1"
+    ] ]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
+    $self->assert_str_equals('R1',              $res->[0][2]);
+    my $id1 = $res->[0][1]{created}{"card1"}{id};
+    my $id2 = $res->[0][1]{created}{"card2"}{id};
+    my $id3 = $res->[0][1]{created}{"card3"}{id};
+    my $id4 = $res->[0][1]{created}{"card4"}{id};
+
+    xlog $self, "create card groups";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
+            accountId => 'manifold',
+            create    => {
+                group1 => {
+                    kind    => 'group',
+                    name    => { full => "group1" },
+                    members => { $id1 => JSON::true, $id2 => JSON::true }
+                },
+                group2 => {
+                    kind    => 'group',
+                    name    => { full => "group2" },
+                    members => { $id3 => JSON::true }
+                },
+                group3 => {
+                    kind    => 'group',
+                    name    => { full => "group3" },
+                    members => { $id4 => JSON::true }
+                }
+            }
+        },
+        "R1"
+    ] ]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
+    $self->assert_str_equals('R1',              $res->[0][2]);
+    my $group1 = $res->[0][1]{created}{"group1"}{id};
+    my $group2 = $res->[0][1]{created}{"group2"}{id};
+    my $group3 = $res->[0][1]{created}{"group3"}{id};
+
+    xlog $self, "get unfiltered card list";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+        },
+        "R1"
+    ] ]);
+
+    $self->assert_num_equals(7, $res->[0][1]{total});
+    $self->assert_num_equals(7, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by name (fullName)";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { name => "given1" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name (fullName)";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { name => "last" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by name/given";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { 'name/given' => "given1" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name/surname";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { 'name/surname' => "last" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by name/given and name/surname (one filter)";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { 'name/given' => "given4", 'name/surname' => "last" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name/given and name/surname (AND filter)";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    =>
+              { operator => "AND", conditions => [ { 'name/surname' => "last" }, { 'name/given' => "given3" } ] }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name/given (OR filter)";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    =>
+              { operator => "OR", conditions => [ { 'name/given' => "given2" }, { 'name/given' => "given3" } ] }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by text";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { text => "some" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by nickName";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { nickName => "nick1" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by email";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { email => "example.com" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by hobby";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { hobby => "reading" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by note";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { note => "hello" }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by inCardGroup";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => { inCardGroup => [ $group1, $group3 ] }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(3, scalar @{ $res->[0][1]{ids} });
+
+    xlog $self, "filter by inCardGroup and name/given";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            accountId => 'manifold',
+            filter    => {
+                inCardGroup  => [ $group1, $group3 ],
+                'name/given' => "given1"
+            }
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "sort by name/given";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/query',
+        {
+            filter    => { name => "last" },
+            accountId => 'manifold',
+            sort      => [ { property => "name/given" } ]
+        },
+        "R1"
+    ] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_deep_equals(
+        [ $id1, $id2, $id3, $id4 ],
+        $res->[0][1]{ids}
+    );
+}

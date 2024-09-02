@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_schedule_request
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $participants = {
+        "org" => {
+            "name" => "Cassandane",
+            roles => {
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'cassandane@example.com',
+            },
+        },
+        "att" => {
+            "name" => "Bugs Bunny",
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'bugs@example.com',
+            },
+        },
+    };
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "send invitation as organizer to attendee";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                Default => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "foo's description",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "timeZone" => "Australia/Melbourne",
+                            "duration" => "PT1H",
+                            "replyTo" => { imip => "mailto:cassandane\@example.com"},
+                            "participants" => $participants,
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+}

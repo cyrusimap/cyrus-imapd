@@ -201,7 +201,7 @@ Changes to the Cyrus IMAP Server Since Version 1.4
 *   Make "reconstruct -r" with no args reconstruct every mailbox.
 *   The configure script now defaults to using unix_pwcheck instead of unix if the file /etc/shadow exists.
 *   The location of the pwcheck socket directory now defaults to "/var/ptclient/". It is controlled by the "--with-statedir=DIR" option, which defaults to "/var".
-*   Bug fix: by using an certain address form, one could deliver to a user's mailbox bypassing the ACL's.
+*   Bug fix: by using a certain address form, one could deliver to a user's mailbox bypassing the ACL's.
 *   Bug fix: un-fold header lines when parsing for the ENVELOPE.
 *   Delete quota roots when deleting the last mailbox that uses them. Doesn't catch all cases, but should get over 99% of them.
 *   Implement plaintextloginpause configuration option, imposes artificial delay on plaintext password logins.
