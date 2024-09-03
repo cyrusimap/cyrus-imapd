@@ -890,8 +890,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   sasl_getprop(sieved_saslconn, SASL_SSF, &val);
   sasl_ssf = *((sasl_ssf_t *) val);
 
-  if (sasl_ssf &&
-      config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
+  if (sasl_ssf) {
       capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
                    sasl_ssf);
       prot_flush(sieved_out);
