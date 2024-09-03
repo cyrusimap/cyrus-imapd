@@ -119,6 +119,17 @@ sub default
             chatty => 'yes',
             debug => 'yes',
             httpprettytelemetry => 'yes',
+
+            # smtpclient_open should fail by default!
+            #
+            # If your test fails and writes something like
+            #     smptclient_open: can't connect to host: bogus:0/noauth
+            # in syslog, then Cyrus is calling smtpclient_open(), and you
+            # will need to arrange for fakesmtpd to be listening.  To do
+            # this add :want_smtpdaemon to the test attributes, or enable
+            # smtpdaemon in the suite constructor.
+            smtp_backend => 'host',
+            smtp_host => 'bogus:0',
         );
         my $defs = Cassandane::Cassini->instance()->get_section('config');
         $default->set(%$defs);

@@ -74,7 +74,8 @@ sub new
         config => $config,
         jmap => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        services => [ 'imap', 'http' ],
+        smtpdaemon => 1,
     }, @args);
 }
 
@@ -87,21 +88,6 @@ sub set_up
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
     ]);
-}
-
-sub skip_check
-{
-    my ($self) = @_;
-
-    # XXX skip tests that would hang in verbose mode for now -- see
-    # XXX detailed comment at MaxMessages::put_submission
-    if (get_verbose()
-        && $self->{_name} eq 'test_emailsubmission_set_futurerelease')
-    {
-        return 'test would hang in verbose mode';
-    }
-
-    return undef;
 }
 
 sub getinbox

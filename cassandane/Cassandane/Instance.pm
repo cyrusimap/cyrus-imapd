@@ -78,7 +78,6 @@ use Cassandane::MasterEvent;
 use Cassandane::MasterDaemon;
 use Cassandane::Cassini;
 use Cassandane::PortManager;
-use Cassandane::Net::SMTPServer;
 use Cassandane::BuildInfo;
 
 use lib '../perl/imap';
@@ -120,6 +119,7 @@ sub new
         _pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
         install_certificates => 0,
         _pid => $$,
+        smtpdaemon => 0,
     };
 
     $self->{name} = $params{name}
@@ -152,6 +152,8 @@ sub new
         if defined $params{pwcheck};
     $self->{install_certificates} = $params{install_certificates}
         if defined $params{install_certificates};
+    $self->{smtpdaemon} = $params{smtpdaemon}
+        if defined $params{smtpdaemon};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
@@ -727,13 +729,6 @@ sub _generate_imapd_conf
     );
     if ($cyrus_major_version >= 3) {
         $config->set_bits('event_groups', 'mailbox message flags calendar');
-
-        if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
-            $config->set(
-                smtp_backend => 'host',
-                smtp_host => $self->{smtphost},
-            );
-        }
     }
     else {
         $config->set_bits('event_groups', 'mailbox message flags');
@@ -1095,41 +1090,22 @@ sub _start_smtpd
 {
     my ($self) = @_;
 
-    my $basedir = $self->{basedir};
+    return if not $self->{smtpdaemon};
 
-    my $host = 'localhost';
+    my $smtp_host = $self->{config}->get('smtp_host');
+    die "smtp_host requested but not configured"
+        if not $smtp_host or $smtp_host eq 'bogus:0';
 
-    my $port = Cassandane::PortManager::alloc($host);
+    my ($host, $port) = split /:/, $smtp_host;
 
-    my $smtppid = fork();
-    unless ($smtppid) {
-        # Child process.
-        # XXX This child still has the whole test's process space
-        # XXX still mapped, and when it exits, all our destructors
-        # XXX will be called, leaving the test in who knows what
-        # XXX state...
-        $SIG{TERM} = sub { die "killed" };
-
-        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
-
-        $0 = "cassandane smtpd: $basedir";
-
-        my $smtpd = Cassandane::Net::SMTPServer->new({
-            cass_verbose => 1,
-            xmtp_personality => 'smtp',
-            host => $host,
-            port => $port,
-            max_servers => 3, # default is 50, yikes
-            control_file => "$basedir/conf/smtpd.json",
-            xmtp_tmp_dir => "$basedir/tmp/",
-            store_msg => 1,
-            messages_dir => "$basedir/smtpd/",
-        });
-        $smtpd->run() or die;
-        exit 0; # Never reached
-    }
-
-    # Parent process.
+    my $smtppid = $self->run_command({
+            cyrus => 0,
+            background => 1,
+        },
+        abs_path('utils/fakesmtpd'),
+        '-h', $host,
+        '-p', $port,
+    );
 
     # give the child a moment to actually start up
     sleep 1;
@@ -1137,21 +1113,19 @@ sub _start_smtpd
     # and then make sure it did!
     my $waitstatus = waitpid($smtppid, WNOHANG);
     if ($waitstatus == 0) {
-        $self->{smtphost} = $host . ':' . $port;
-
-        xlog "started smtpd as $smtppid";
+        xlog "started fakesmtpd as $smtppid";
         push @{$self->{_shutdowncallbacks}}, sub {
             local *__ANON__ = "kill_smtpd";
             my $self = shift;
-            xlog "killing smtpd $smtppid";
+            xlog "killing fakesmtpd $smtppid";
             kill(15, $smtppid);
-            waitpid($smtppid, 0);
+            $self->reap_command($smtppid);
         };
     }
     else {
         # child process already exited, something has gone wrong
         Cassandane::PortManager::free($port);
-        die "smtpd with pid=$smtppid failed to start";
+        die "fakesmtpd with pid=$smtppid failed to start";
     }
 }
 
@@ -1216,10 +1190,23 @@ sub start
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
 
-    if ($self->{description} =~ m/^main instance for test /) {
-        # Start SMTP server before generating imapd config, we need to
-        # to set smtp_host to the auto-assigned TCP port it listens on.
-        $self->_start_smtpd();
+    # arrange for fakesmtpd to be started by Cassandane if we need it
+    # XXX should make it a Cyrus waitdaemon instead like fakesaslauthd
+    if ($self->{smtpdaemon}) {
+        my ($maj, $min) =
+            Cassandane::Instance->get_version($self->{installation});
+
+        if ($maj > 3 || ($maj == 3 && $min >= 1)) {
+            my $host = 'localhost';
+            my $port = Cassandane::PortManager::alloc($host);
+
+            $self->{config}->set(
+                smtp_host => "$host:$port",
+            );
+        }
+        else {
+            die "smtpdaemon requested but Cyrus $maj.$min is too old";
+        }
     }
 
     # arrange for fakesaslauthd to be started by master
@@ -1288,6 +1275,7 @@ sub start
         # XXX cassandane won't know about it.
     }
     $self->setup_syslog_replacement();
+    $self->_start_smtpd() if $self->{smtpdaemon};
     $self->_start_notifyd();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();

@@ -76,6 +76,7 @@ sub new
         config => $config,
         jmap => 1,
         services => ['imap', 'http', 'sieve'],
+        smtpdaemon => 1,
     }, @_);
 }
 
@@ -91,16 +92,6 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
-}
-
-sub skip_check
-{
-    my ($self) = @_;
-
-    # XXX skip all tests from this suite in verbose mode for now -- see
-    # XXX detailed comment on put_submission below
-    my $reason = "test would hang in verbose mode";
-    return get_verbose() ? $reason : undef;
 }
 
 sub _random_vevent
@@ -246,17 +237,6 @@ sub _submissions_mailbox
     return $res->[0][1]{created}{"m$counter"}{id};
 }
 
-# XXX When creating JMAP EmailSubmissions objects, the http service
-# XXX makes a few SMTP connections to verify that from/to addresses
-# XXX are acceptable, that sort of thing.
-# XXX When Cassandane is run in verbose mode, some weird bug in the
-# XXX smtp listener results in it only handling a few connections
-# XXX before stopping, and then the test stalls while http waits for
-# XXX an SMTP connection that will never succeed.
-# XXX Until we fix the issue in the SMTP thing, these tests won't run
-# XXX correctly in verbose mode, sorry.  This affects tests in the
-# XXX JMAPEmailSubmission suite too, though it affects this one worse
-# XXX because it wants to create a lot more EmailSubmissions objects.
 sub put_submission
 {
     my ($self) = @_;
@@ -345,7 +325,7 @@ sub put_email
 
     $counter ++;
 
-    $self->make_message(subject => "message $counter");
+    $self->make_message("message $counter");
 }
 
 sub test_maxmsg_addressbook_limited
