@@ -821,6 +821,34 @@ static int check_by_array(const short *byX, short size,
     return disable;
 }
 
+static int is_supported_component(icalcomponent *ical)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    int is_supported = 0;
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+        is_supported =
+            config_getbitfield(IMAPOPT_CALDAV_ALARM_SUPPORT_COMPONENTS) &
+            IMAP_ENUM_CALDAV_ALARM_SUPPORT_COMPONENTS_VEVENT;
+        break;
+    case ICAL_VTODO_COMPONENT:
+        is_supported = config_getbitfield(IMAPOPT_CALDAV_ALARM_SUPPORT_COMPONENTS) &
+               IMAP_ENUM_CALDAV_ALARM_SUPPORT_COMPONENTS_VTODO;
+        break;
+    default:
+        ; // do nothing
+    }
+
+    if (!is_supported) {
+        xsyslog(LOG_DEBUG, "alarms are not supported for iCalendar component",
+                "kind=<%s>", icalenum_component_kind_to_string(kind));
+    }
+
+    return is_supported;
+}
+
 static int has_alarms(void *data, struct mailbox *mailbox,
                       uint32_t uid, unsigned *num_rcpts)
 {
@@ -843,6 +871,12 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 
     icalcomponent *ical = (icalcomponent *) data;
     if (ical) {
+        if (!is_supported_component(ical)) {
+            xsyslog(LOG_DEBUG, "ignoring alarms for index record",
+                    "mboxname=<%s> imap_uid=<%d>", mailbox_name(mailbox), uid);
+            return 0;
+        }
+
         /* Check iCalendar resource for VALARMs */
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -946,6 +980,17 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              icalcomponent *ical, time_t lastrun,
                              time_t runtime, int dryrun)
 {
+    if (!is_supported_component(ical)) {
+        // Ignore unsupported components that already made it into
+        // the database. They might have been added before we added
+        // support to ignore component kinds, or because an installation
+        // changed their config of supported components and did not
+        // rebuild the alarm database.
+        xsyslog(LOG_DEBUG, "ignoring alarms for index record",
+                "mboxname=<%s> imap_uid=<%d>", mboxname, imap_uid);
+        return 0;
+    }
+
     icalcomponent *myical = NULL;
 
     /* Add default alarms */
