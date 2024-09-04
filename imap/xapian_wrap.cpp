@@ -1357,7 +1357,7 @@ static int xapian_db_init(xapian_db_t *db, int is_inmemory)
         if (!is_inmemory) {
             // Determine stemmer languages (in addition to English).
             std::map<const std::string, unsigned> lang_counts;
-            size_t total_doccount = 0;
+            unsigned total_doccount = 0;
             for (const Xapian::Database& subdb : *db->subdbs) {
                 read_language_counts(subdb, lang_counts);
                 total_doccount += subdb.get_doccount();
@@ -2096,7 +2096,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
         return NULL;
     }
 
-    int min_version = *db->db_versions->begin();
+    unsigned min_version = *db->db_versions->begin();
     if (min_version < XAPIAN_DB_MIN_SUPPORTED_VERSION) {
         xsyslog(LOG_WARNING,
                 "deprecated database version, reindex required",
@@ -2105,7 +2105,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
                 db->paths->c_str());
     }
 
-    int max_version = *db->db_versions->rbegin();
+    unsigned max_version = *db->db_versions->rbegin();
 
     Xapian::Query *q = NULL;
     if (max_version >= 17) {
