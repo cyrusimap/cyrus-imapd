@@ -694,8 +694,7 @@ static int xapian_dbw_init(xapian_dbw_t *dbw)
     return 0;
 }
 
-EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp,
-                             int mode, int nosync)
+EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
 {
     xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
@@ -704,7 +703,9 @@ EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp,
     std::set<int> db_versions;
     try {
         int flags = Xapian::DB_BACKEND_GLASS|Xapian::DB_RETRY_LOCK;
-        if (nosync) flags |= Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC;
+        if (mode & XAPIAN_DBW_NOSYNC) {
+            flags |= Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC;
+        }
         try {
             dbw->database = new Xapian::WritableDatabase{thispath, flags|Xapian::DB_OPEN};
             db_versions = read_db_versions(*dbw->database);
@@ -740,7 +741,7 @@ EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp,
     }
 
     /* open the read-only databases */
-    if (mode == XAPIAN_DBW_XAPINDEXED) {
+    if (mode & XAPIAN_DBW_XAPINDEXED) {
         while (*paths) {
             try {
                 thispath = *paths;

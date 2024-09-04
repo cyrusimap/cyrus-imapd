@@ -2564,7 +2564,7 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     int r = 0;
 
     if (!tr->dbw) {
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
         if (r) goto out;
     }
 
@@ -2768,7 +2768,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         /* open the DB now, we need it to check if messages are indexed */
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
         if (r) goto out;
     }
 
@@ -3571,7 +3571,8 @@ static int reindex_mb(void *rock,
     for (i = 1; i < strarray_size(filter->destpaths); i++)
         strarray_append(&alldirs, strarray_nth(filter->destpaths, i));
 
-    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
+    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw,
+                        tr->mode | XAPIAN_DBW_NOSYNC);
     if (r) goto done;
 
     /* initialise here so it doesn't add firstunindexed
@@ -3658,7 +3659,9 @@ static int reindex_mb(void *rock,
                 strarray_insert(&alldirs, 1, buf_cstring(&buf));
 
                 // finally, re-open the database on the new empty directory with the extra path added
-                if (!r) r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
+                if (!r)
+                    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw,
+                                        tr->mode | XAPIAN_DBW_NOSYNC);
                 if (r) goto done;
                 filter->numindexed = 0;
             }
