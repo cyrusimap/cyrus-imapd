@@ -394,8 +394,11 @@ static std::string detect_language(const struct buf *part)
     bool reliable = false;
 
     buf_cstring(part);
-    CLD2::Language lang =
-        CLD2::DetectLanguage(buf_base(part), buf_len(part), 1, &reliable);
+    CLD2::Language lang = CLD2::DetectLanguage(
+        buf_base(part),
+        buf_len(part) < INT_MAX ? static_cast<int>(buf_len(part)) : INT_MAX,
+        1,
+        &reliable);
 
     if (reliable && lang != CLD2::UNKNOWN_LANGUAGE) {
         std::string code(CLD2::LanguageCode(lang));
