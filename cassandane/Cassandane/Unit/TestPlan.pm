@@ -481,6 +481,7 @@ sub add_pass
 }
 
 package Cassandane::Unit::TestPlan;
+use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
@@ -690,6 +691,77 @@ sub schedule
     }
 }
 
+sub check_sanity
+{
+    my ($self) = @_;
+
+    # collect tiny-tests directories that are used by test modules
+    my %used_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            return if not -f $fname;
+            return if $fname !~ m/\.pm$/;
+
+            open my $fh, '<', $fname or die "open $fname: $!";
+            while (<$fh>) {
+                if (m{^\s*use\s+Cassandane::Tiny::Loader\s*
+                      (['"])
+                      (.*?)
+                      \1
+                      \s*;\s*$
+                    }x)
+                {
+                    push @{$used_tt_dirs{$2}}, $fname;
+                }
+            }
+            close $fh;
+        },
+    }, @test_roots);
+
+    # collect tiny-tests directories that exist on disk
+    my %real_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            my ($tt, $suite, $test) = split q{/}, $fname, 3;
+            return if not $suite;
+
+            if (not $test) {
+                # explicit initialisation to detect directories with no files
+                $real_tt_dirs{"$tt/$suite"} //= 0;
+                return;
+            }
+
+            $real_tt_dirs{"$tt/$suite"} ++;
+        },
+    }, 'tiny-tests') if -d 'tiny-tests';
+
+    # whinge about bad test modules
+    while (my ($tt, $modules) = each %used_tt_dirs) {
+        # XXX this one might not be an error if we start doing this
+        # XXX intentionally, perhaps to run the same group of tests under
+        # XXX different setups or configurations
+        die "@{$modules} share tiny-tests directory $tt"
+            if scalar @{$modules} > 1;
+
+        die "$modules->[0] uses nonexistent tiny-tests directory $tt"
+            if not exists $real_tt_dirs{$tt};
+    }
+
+    # whinge about orphaned directories
+    while (my ($tt, $ntests) = each %real_tt_dirs) {
+        die "$tt directory is not used by any tests"
+            if not $used_tt_dirs{$tt};
+
+        die "$tt directory contains no tests"
+            if not $ntests;
+    }
+}
 
 #
 # Get the entire expanded schedule as specific {suite,testname} tuples,
