@@ -1003,7 +1003,7 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             dbw->term_generator->set_stopper(NULL);
             dbw->term_generator->index_text(Xapian::Utf8Iterator(val), 1, prefix);
         }
-        if (addr->domain && strcmp(addr->domain, "unspecified-domain")) {
+        if (addr->domain && strcmp(addr->domain, "unspecified-domain") != 0) {
             char *utf8_domain = charset_idna_to_utf8(addr->domain);
             char *puny_domain = charset_idna_to_ascii(addr->domain);
 
@@ -1522,7 +1522,8 @@ EXPORTED int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
 
 EXPORTED void xapian_query_add_stemmer(xapian_db_t *db, const char *iso_lang)
 {
-    if (strcmp(iso_lang, "en")) db->stem_languages->insert(iso_lang);
+    if (strcmp(iso_lang, "en") != 0)
+        db->stem_languages->insert(iso_lang);
 }
 
 static Xapian::Query* query_new_textmatch(const xapian_db_t *db,
