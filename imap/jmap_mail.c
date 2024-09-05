@@ -8909,6 +8909,7 @@ struct email_uidrec {
     uint32_t uid;                  /* IMAP uid in mbox */
     int is_new;                    /* Used by Email/set{update} */
     int is_snoozed;                /* Used by Email/set{update} */
+    void *rock;                    /* Used by Email/copy */
 };
 
 static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
@@ -11399,6 +11400,7 @@ struct email_mboxrecs_make_rock {
     jmap_req_t *req;
     const char *email_id;
     ptrarray_t *mboxrecs;
+    void *uidrec_rock;             /* Used by Email/copy */
 };
 
 static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
@@ -11454,6 +11456,7 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     uidrec->is_snoozed =
         ((rec->internal_flags & (FLAG_INTERNAL_SNOOZED | FLAG_INTERNAL_EXPUNGED))
          == FLAG_INTERNAL_SNOOZED);
+    uidrec->rock = rock->uidrec_rock;
     ptrarray_append(&mboxrec->uidrecs, uidrec);
 
 done:
@@ -11477,7 +11480,7 @@ static void _email_mboxrecs_read(jmap_req_t *req,
             continue;
         }
 
-        struct email_mboxrecs_make_rock rock = { req, email_id, mboxrecs };
+        struct email_mboxrecs_make_rock rock = { req, email_id, mboxrecs, NULL };
         int r = conversations_guid_foreach(cstate, _guid_from_id(email_id),
                                            _email_mboxrecs_read_cb, &rock);
         if (r) {
@@ -14033,37 +14036,6 @@ done:
     return 0;
 }
 
-struct _email_copy_checkmbox_rock {
-    jmap_req_t *req;           /* JMAP request context */
-    json_t *dst_mboxids;       /* mailboxIds argument */
-    strarray_t *dst_mboxnames; /* array of destination mailbox names */
-};
-
-static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
-{
-    struct _email_copy_checkmbox_rock *rock = _rock;
-
-    /* Ignore anything but regular and intermediate mailboxes */
-    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
-        mbtypes_unavailable(mbentry->mbtype) || (mbentry->mbtype & MBTYPE_DELETED)) {
-        return 0;
-    }
-    if (!json_object_get(rock->dst_mboxids, mbentry->uniqueid)) {
-        return 0;
-    }
-
-    /* Check read-write ACL rights */
-    int needrights = JACL_READITEMS|JACL_ADDITEMS|ACL_SETSEEN|JACL_SETMETADATA;
-    if (!jmap_hasrights_mbentry(rock->req, mbentry, needrights))
-        return IMAP_PERMISSION_DENIED;
-
-    /* Mark this mailbox as found */
-    strarray_append(rock->dst_mboxnames, mbentry->name);
-    size_t want_count = json_object_size(rock->dst_mboxids);
-    size_t have_count = strarray_size(rock->dst_mboxnames);
-    return want_count == have_count ? IMAP_OK_COMPLETED : 0;
-}
-
 struct _email_copy_writeprops_rock {
     /* Input values */
     jmap_req_t *req;
@@ -14244,154 +14216,61 @@ done:
     return r;
 }
 
-struct emailcopy_pickrecord_rock {
-    jmap_req_t *req;
-    struct mailbox *mbox;
-    msgrecord_t *mr;
-    struct email_keywords keywords;
-    int gather_keywords;
-};
-
-static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
-{
-    struct emailcopy_pickrecord_rock *rock = vrock;
-    jmap_req_t *req = rock->req;
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    mbentry_t *mbentry = NULL;
-    int r = 0;
-
-    conv_guidrec_mbentry(rec, &mbentry);
-
-    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
-        !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-        mboxlist_entry_free(&mbentry);
-        return 0;
-    }
-
-    /* Lookup record */
-    r = mailbox_open_irl(mbentry->name, &mbox);
-    mboxlist_entry_free(&mbentry);
-    if (r) goto done;
-    r = msgrecord_find(mbox, rec->uid, &mr);
-    if (r) goto done;
-
-    /* Check if this record is expunged */
-    uint32_t system_flags;
-    uint32_t internal_flags;
-    if (rec->version < 1) {
-        r = msgrecord_get_systemflags(mr, &system_flags);
-        if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-        if (r) goto done;
-    }
-    else {
-        system_flags = rec->system_flags;
-        internal_flags = rec->internal_flags;
-    }
-    if (r || system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        goto done;
-    }
-
-    /* Aggregate message record flags into JMAP keywords */
-    if (rock->gather_keywords) {
-        _email_keywords_add_msgrecord(&rock->keywords, mr);
-    }
-
-    /* Keep this message record as source to copy from? */
-    if (!rock->mbox) {
-        rock->mbox = mbox;
-        mbox = NULL;
-        rock->mr = mr;
-        mr = NULL;
-    }
-
-done:
-    msgrecord_unref(&mr);
-    mailbox_close(&mbox);
-    return r;
-}
-
 static void _email_copy(jmap_req_t *req, json_t *copy_email,
-                        const char *from_account_id,
+                        struct mailbox *src_mbox, uint32_t uid,
                         struct seen *seendb,
+                        hash_table *seenseq_by_mbox_id,
                         json_t **new_email, json_t **err)
 {
-    strarray_t dst_mboxnames = STRARRAY_INITIALIZER;
-    struct mailbox *src_mbox = NULL;
     msgrecord_t *src_mr = NULL;
-    char *src_mboxname = NULL;
     int r = 0;
     char blob_id[JMAP_BLOBID_SIZE];
     json_t *new_keywords = NULL;
-    json_t *jmailboxids = json_copy(json_object_get(copy_email, "mailboxIds"));
-
-    /* Support mailboxids by role */
-    const char *mbox_id;
-    json_t *jval;
-    void *tmp;
-    json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
-        if (*mbox_id != '$') continue;
-        const char *role = mbox_id + 1;
-        const mbentry_t *mbentry = NULL;
-        if (!jmap_findmbox_role(req, role, &mbentry)) {
-            json_object_del(jmailboxids, mbox_id);
-            json_object_set_new(jmailboxids, mbentry->uniqueid, jval);
-        }
-        else {
-            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                    "properties", "mailboxIds");
-        }
-        if (*err) goto done;
-    }
-
     const char *email_id = json_string_value(json_object_get(copy_email, "id"));
     uint32_t src_size = 0;
+    uint32_t system_flags = 0;
+    uint32_t internal_flags = 0;
+    struct message_guid guid;
+ 
+    /* Lookup source message record */
+    r = msgrecord_find(src_mbox, uid, &src_mr);
+    if (!r) r = msgrecord_get_size(src_mr, &src_size);
+    if (!r) r = msgrecord_get_guid(src_mr, &guid);
+    if (r) goto done;
+    jmap_set_blobid(&guid, blob_id);
 
-    /* Lookup source message record and gather JMAP keywords */
+    /* Check if email already exists in to_account */
+    struct _email_exists_rock data = { req, 0 };
+    conversations_guid_foreach(req->cstate, blob_id+1, _email_exists_cb, &data);
+    if (data.exists) {
+        *err = json_pack("{s:s s:s}",
+                         "type", "alreadyExists", "existingId", email_id);
+        goto done;
+    }
+
+    /* Check if this record is expunged */
+    r = msgrecord_get_systemflags(src_mr, &system_flags);
+    if (!r) msgrecord_get_internalflags(src_mr, &internal_flags);
+    if (r) goto done;
+    if (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
+        *err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
+    /* Gather JMAP keywords */
     new_keywords = json_deep_copy(json_object_get(copy_email, "keywords"));
     if (json_is_null(new_keywords)) {
         new_keywords = NULL;
     }
-    hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&seenseq_by_mbox_id, 32, 0);
-    struct emailcopy_pickrecord_rock pickrecord_rock = {
-        req, NULL, NULL, _EMAIL_KEYWORDS_INITIALIZER, 0
-    };
     if (!new_keywords) {
-        _email_keywords_init(&pickrecord_rock.keywords, req->userid, seendb, &seenseq_by_mbox_id);
-        pickrecord_rock.gather_keywords = 1;
-    }
-    if (strcmp(from_account_id, req->accountid)) {
-        struct conversations_state *mycstate = NULL;
-        r = conversations_open_user(from_account_id, 0/*shared*/, &mycstate);
-        if (!r) r = conversations_guid_foreach(mycstate, _guid_from_id(email_id),
-                _email_copy_pickrecord_cb, &pickrecord_rock);
-        if (!r) r = conversations_commit(&mycstate);
-    }
-    else {
-        r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
-                _email_copy_pickrecord_cb, &pickrecord_rock);
-    }
-    if (!r && pickrecord_rock.mbox) {
-        src_mbox = pickrecord_rock.mbox;
-        src_mr = pickrecord_rock.mr;
-        if (!new_keywords) {
-            new_keywords = _email_keywords_to_jmap(&pickrecord_rock.keywords);
-        }
-        r = msgrecord_get_size(src_mr, &src_size);
-    }
-    else if (!r) {
-        r = IMAP_NOTFOUND;
-    }
-    free_hash_table(&seenseq_by_mbox_id, _free_cached_seqset);
-    _email_keywords_fini(&pickrecord_rock.keywords);
-    if (r) {
-        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
-            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                    "properties", "id");
-            r = 0;
-        }
-        goto done;
+        /* Aggregate message record flags into JMAP keywords */
+        struct email_keywords keywords = _EMAIL_KEYWORDS_INITIALIZER;
+
+        _email_keywords_init(&keywords, req->userid, seendb, seenseq_by_mbox_id);
+        _email_keywords_add_msgrecord(&keywords, src_mr);
+        new_keywords = _email_keywords_to_jmap(&keywords);
+
+        _email_keywords_fini(&keywords);
     }
 
     /* Override hasAttachment flag */
@@ -14403,57 +14282,28 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     else
         json_object_del(new_keywords, JMAP_HAS_ATTACHMENT_FLAG);
 
-
-    struct message_guid guid;
-    r = msgrecord_get_guid(src_mr, &guid);
-    if (r) goto done;
-    jmap_set_blobid(&guid, blob_id);
-
-    /* Check if email already exists in to_account */
-    struct _email_exists_rock data = { req, 0 };
-    conversations_guid_foreach(req->cstate, blob_id+1, _email_exists_cb, &data);
-    if (data.exists) {
-        *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", email_id);
-        goto done;
-    }
-
-    /* Lookup mailbox names and make sure they are all writeable */
-    struct _email_copy_checkmbox_rock checkmbox_rock = {
-        req, jmailboxids, &dst_mboxnames
-    };
-    r = mboxlist_usermboxtree(req->accountid, httpd_authstate,
-                              _email_copy_checkmbox_cb, &checkmbox_rock,
-                              MBOXTREE_INTERMEDIATES);
-    if (r != IMAP_OK_COMPLETED) {
-        if (r == 0 || r == IMAP_PERMISSION_DENIED) {
-            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                    "properties", "mailboxIds");
-            r = 0;
-        }
-        goto done;
-    }
-
     /* Copy message record to mailboxes */
-    char *dst_mboxname;
-    while ((dst_mboxname = strarray_pop(&dst_mboxnames))) {
-        mbentry_t *mbentry = NULL;
-        r = jmap_mboxlist_lookup(dst_mboxname, &mbentry, NULL);
-        if (!r && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+    json_t *mailboxids = json_object_get(copy_email, "mailboxIds");
+    const char *mbox_id;
+    json_t *jbool;
+
+    json_object_foreach(mailboxids, mbox_id, jbool) {
+        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
+
+        if (mbentry && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
             struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
             r = mboxlist_promote_intermediary(mbentry->name);
             mboxname_release(&namespacelock);
         }
         if (!r) {
             struct mailbox *dst_mbox = NULL;
-            r = mailbox_open_iwl(dst_mboxname, &dst_mbox);
+            r = jmap_openmbox_by_uniqueid(req, mbox_id, &dst_mbox, 1);
             if (!r) {
                 r = _copy_msgrecord(httpd_authstate, req->accountid,
                         &jmap_namespace, src_mbox, dst_mbox, src_mr);
             }
             mailbox_close(&dst_mbox);
-            free(dst_mboxname);
         }
-        mboxlist_entry_free(&mbentry);
         if (r) goto done;
     }
 
@@ -14476,18 +14326,14 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     }
 
 done:
-    json_decref(jmailboxids);
     if (r && *err == NULL) {
         *err = jmap_server_error(r);
     }
-    free(src_mboxname);
-    strarray_fini(&dst_mboxnames);
     if (src_mr) msgrecord_unref(&src_mr);
-    mailbox_close(&src_mbox);
     json_decref(new_keywords);
 }
 
-static void _email_copy_validate_props(json_t *jemail,
+static void _email_copy_validate_props(jmap_req_t *req, json_t *jemail,
                                        const char *scheduled_uniqueid, json_t **err)
 {
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
@@ -14504,11 +14350,46 @@ static void _email_copy_validate_props(json_t *jemail,
         }
         else if (!strcmp(pname, "mailboxIds")) {
             jmap_parser_push(&myparser, "mailboxIds");
+            int needrights = JACL_READITEMS|JACL_ADDITEMS|ACL_SETSEEN|JACL_SETMETADATA;
             const char *mbox_id;
             json_t *jbool;
-            json_object_foreach(prop, mbox_id, jbool) {
+            void *tmp;
+
+            /* Lookup mailbox ids and make sure they are all writeable */
+            json_object_foreach_safe(prop, tmp, mbox_id, jbool) {
+                const mbentry_t *mbentry = NULL;
+
                 if (!strlen(mbox_id) || jbool != json_true() ||
                     !strcmpnull(scheduled_uniqueid, mbox_id)) {
+                    jmap_parser_invalid(&myparser, NULL);
+                    break;
+                }
+
+                /* Support mailboxids by role */
+                if (*mbox_id == '$') {
+                    const char *role = mbox_id + 1;
+
+                    if (strcmp(role, "scheduled") &&
+                        !jmap_findmbox_role(req, role, &mbentry)) {
+                        json_object_del(prop, mbox_id);
+                        json_object_set_new(prop, mbentry->uniqueid, jbool);
+                    }
+                }
+                else {
+                    mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
+                }
+                
+                /* Ignore anything but regular and intermediate mailboxes */
+                if (!mbentry ||
+                    mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) ||
+                    mbtypes_unavailable(mbentry->mbtype) ||
+                    (mbentry->mbtype & MBTYPE_DELETED)) {
+                    jmap_parser_invalid(&myparser, NULL);
+                    break;
+                }
+
+                /* Check read-write ACL rights */
+                if (!jmap_hasrights_mbentry(req, mbentry, needrights)) {
                     jmap_parser_invalid(&myparser, NULL);
                     break;
                 }
@@ -14564,17 +14445,19 @@ static void _email_copy_validate_props(json_t *jemail,
     jmap_parser_fini(&myparser);
 }
 
+struct emailcopy_rock {
+    const char *creation_id;
+    json_t *copy_email;
+};
+
 static int jmap_email_copy(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_copy copy;
     json_t *err = NULL;
     struct seen *seendb = NULL;
-    json_t *destroy_emails = json_array();
     const char *scheduled_uniqueid = NULL;
     const mbentry_t *scheduled_mbe = NULL;
-    struct mboxlock *srcnamespacelock = NULL;
-    struct mboxlock *dstnamespacelock = NULL;
     char *srcinbox = NULL;
     char *dstinbox = NULL;
 
@@ -14591,14 +14474,6 @@ static int jmap_email_copy(jmap_req_t *req)
 
     srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
     dstinbox = mboxname_user_mbox(req->accountid, NULL);
-    if (strcmp(srcinbox, dstinbox) < 0) {
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-    }
-    else {
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-    }
 
     if (copy.if_from_in_state) {
         struct mboxname_counters counters;
@@ -14620,18 +14495,19 @@ static int jmap_email_copy(jmap_req_t *req)
         copy.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     }
 
-    // now we can open the cstate
-    int r = conversations_open_user(req->accountid, 0, &req->cstate);
+    int r = seen_open(req->userid, SEEN_CREATE, &seendb);
     if (r) {
-        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
+        syslog(LOG_ERR, "jmap_email_copy: can't open seen.db: %s",
                         error_message(r));
         jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
-    r = seen_open(req->userid, SEEN_CREATE, &seendb);
+    /* Open the source cstate */
+    struct conversations_state *src_cstate = NULL;
+    r = conversations_open_user(copy.from_account_id, 0, &src_cstate);
     if (r) {
-        syslog(LOG_ERR, "jmap_email_copy: can't open seen.db: %s",
+        syslog(LOG_ERR, "jmap_email_copy: can't open source conversations: %s",
                         error_message(r));
         jmap_error(req, jmap_server_error(r));
         goto done;
@@ -14643,35 +14519,112 @@ static int jmap_email_copy(jmap_req_t *req)
     }
  
     /* Process request */
+    ptrarray_t *mboxrecs = ptrarray_new();
     const char *creation_id;
     json_t *copy_email;
     json_object_foreach(copy.create, creation_id, copy_email) {
         json_t *set_err = NULL;
-        json_t *new_email = NULL;
 
         /* Validate create */
-        _email_copy_validate_props(copy_email, scheduled_uniqueid, &set_err);
+        _email_copy_validate_props(req, copy_email, scheduled_uniqueid, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
         }
 
-        /* Copy message */
-        _email_copy(req, copy_email, copy.from_account_id,
-                    seendb, &new_email, &set_err);
-        if (set_err) {
+        /* Gather source mailboxes and message UIDs */
+        const char *email_id =
+            json_string_value(json_object_get(copy_email, "id"));
+        struct emailcopy_rock *crock = xmalloc(sizeof(struct emailcopy_rock));
+        struct email_mboxrecs_make_rock mrock =
+            { req, email_id, mboxrecs, crock };
+
+        crock->creation_id = creation_id;
+        crock->copy_email = copy_email;
+
+        r = conversations_guid_foreach(src_cstate, _guid_from_id(email_id),
+                                       _email_mboxrecs_read_cb, &mrock);
+        if (r) {
+            set_err = (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) ?
+                json_pack("{s:s}", "type", "notFound") : jmap_server_error(r);
             json_object_set_new(copy.not_created, creation_id, set_err);
+            free(crock);
             continue;
         }
-
-        /* Note the source ID for deletion */
-        json_array_append(destroy_emails, json_object_get(copy_email, "id"));
-
-        /* Report the message as created */
-        json_object_set_new(copy.created, creation_id, new_email);
-        const char *msg_id = json_string_value(json_object_get(new_email, "id"));
-        jmap_add_id(req, creation_id, msg_id);
     }
+
+    conversations_commit(&src_cstate);
+
+    /* Open the destination cstate */
+    r = conversations_open_user(req->accountid, 0, &req->cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_email_copy: can't open dest conversations: %s",
+                        error_message(r));
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
+    hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&seenseq_by_mbox_id, 32, 0);
+
+    /* Copy messages in bulk per mailbox */
+    json_t *destroy_emails = json_array();
+    int i, j;
+    for (i = 0; i < ptrarray_size(mboxrecs); i++) {
+        struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
+        struct mailbox *src_mbox = NULL;
+        json_t *new_email = NULL;
+        json_t *set_err = NULL;
+
+        r = mailbox_open_irl(mboxrec->mboxname, &src_mbox);
+        if (!r) {
+            /* Sort the UID list */
+            ptrarray_sort(&mboxrec->uidrecs, _email_uidrec_compareuid_cb);
+
+            /* Copy messages one by one, marking any failed/copied message */
+            for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
+                struct emailcopy_rock *crock = uidrec->rock;
+                const char *creation_id = crock->creation_id;
+                json_t *copy_email = crock->copy_email;
+
+                _email_copy(req, copy_email, src_mbox, uidrec->uid,
+                            seendb, &seenseq_by_mbox_id, &new_email, &set_err);
+                free(crock);
+
+                if (set_err) {
+                    json_object_set_new(copy.not_created, creation_id, set_err);
+                    continue;
+                }
+
+                /* Note the source ID for deletion */
+                json_array_append_new(destroy_emails, json_string(uidrec->email_id));
+
+                /* Report the message as created */
+                json_object_set_new(copy.created, creation_id, new_email);
+                const char *msg_id =
+                    json_string_value(json_object_get(new_email, "id"));
+                jmap_add_id(req, creation_id, msg_id);
+            }
+        }
+        else {
+            /* Mark all messages of this mailbox as failed */
+            for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
+                struct emailcopy_rock *crock = uidrec->rock;
+                const char *creation_id = crock->creation_id;
+
+                json_object_set_new(copy.not_created, creation_id,
+                                    jmap_server_error(r));
+                free(crock);
+            }
+        }
+
+        mailbox_close(&src_mbox);
+    }
+
+    free_hash_table(&seenseq_by_mbox_id, _free_cached_seqset);
+    _email_mboxrecs_free(&mboxrecs);
 
     /* Build response */
     copy.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
@@ -14689,10 +14642,9 @@ static int jmap_email_copy(jmap_req_t *req)
         jmap_add_subreq(req, "Email/set", subargs, NULL);
     }
 
-done:
-    mboxname_release(&srcnamespacelock);
-    mboxname_release(&dstnamespacelock);
     json_decref(destroy_emails);
+
+  done:
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     seen_close(&seendb);
