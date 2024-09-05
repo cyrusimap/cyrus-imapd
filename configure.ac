@@ -671,10 +671,10 @@ if test "x$enable_xapian" != xno ; then
                 [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_WORD_BREAKS | Xapian::QueryParser::FLAG_WORD_BREAKS | Xapian::MSet::SNIPPET_WORD_BREAKS; (void) cjk_flags; ]])],
             [xapian_cjkwords="yes"],
             [xapian_cjkwords="no"])
-        AC_MSG_RESULT($xapian_cjkwords)
         if test $xapian_cjkwords = yes; then
             AC_DEFINE([USE_XAPIAN_WORD_BREAKS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
             xapian_cjk_tokens=words
+            AC_MSG_RESULT($xapian_cjkwords)
         else
             dnl Xapian upstream version 1.5 used different flag names to enable
             dnl word break tokenization until March 2023.
