@@ -2333,19 +2333,16 @@ struct xapian_snipgen
 };
 
 EXPORTED xapian_snipgen_t *
-xapian_snipgen_new(xapian_db_t *db,
-                   const char *hi_start,
-                   const char *hi_end,
-                   const char *omit)
+xapian_snipgen_new(xapian_db_t *db, const struct search_snippet_markup *markup)
 {
     xapian_snipgen_t *snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
     snipgen->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer);
     snipgen->db = db;
     snipgen->memdb = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
     snipgen->buf = buf_new();
-    snipgen->hi_start = hi_start;
-    snipgen->hi_end = hi_end;
-    snipgen->omit = omit;
+    snipgen->hi_start = markup->hi_start;
+    snipgen->hi_end = markup->hi_end;
+    snipgen->omit = markup->omit;
     snipgen->max_len = (size_t) config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
 
     return snipgen;

@@ -5921,7 +5921,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     json_t *val;
     size_t i;
     char *mboxname = NULL;
-    static search_snippet_markup_t markup = { "<mark>", "</mark>", "..." };
+    static struct search_snippet_markup markup = { "<mark>", "</mark>", "..." };
     strarray_t partids = STRARRAY_INITIALIZER;
 
     ptrarray_t search_attrs = PTRARRAY_INITIALIZER;

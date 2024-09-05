@@ -91,13 +91,13 @@ struct search_builder {
     unsigned (*min_index_version)(search_builder_t*);
 };
 
-typedef struct search_snippet_markup {
+struct search_snippet_markup {
     const char *hi_start;
     const char *hi_end;
     const char *omit;
-} search_snippet_markup_t;
+};
 
-extern search_snippet_markup_t default_snippet_markup;
+extern struct search_snippet_markup default_snippet_markup;
 
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
@@ -184,7 +184,7 @@ struct search_engine {
     int (*end_update)(search_text_receiver_t *);
     search_text_receiver_t *(*begin_snippets)(void *internalised,
                                               int verbose,
-                                              search_snippet_markup_t *markup,
+                                              struct search_snippet_markup *markup,
                                               search_snippet_cb_t,
                                               void *rock);
     int (*end_snippets)(search_text_receiver_t *);
@@ -240,7 +240,7 @@ int search_end_update(search_text_receiver_t *rx);
  * to receive more snippets for this message. */
 search_text_receiver_t *search_begin_snippets(void *internalised,
                                               int verbose,
-                                              search_snippet_markup_t *markup,
+                                              struct search_snippet_markup *markup,
                                               search_snippet_cb_t proc,
                                               void *rock);
 int search_end_snippets(search_text_receiver_t *rx);

@@ -2201,7 +2201,7 @@ struct xapian_snippet_receiver
     search_snippet_cb_t proc;
     void *rock;
     struct xapiandb_lock lock;
-    const search_snippet_markup_t *markup;
+    const struct search_snippet_markup *markup;
 };
 
 struct is_indexed_rock {
@@ -3018,8 +3018,7 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     if (r) goto out;
     if (!tr->lock.activedirs || !tr->lock.activedirs->count) goto out;
 
-    tr->snipgen = xapian_snipgen_new(tr->lock.db, tr->markup->hi_start,
-                                     tr->markup->hi_end, tr->markup->omit);
+    tr->snipgen = xapian_snipgen_new(tr->lock.db, tr->markup);
 
 out:
     return r;
@@ -3170,7 +3169,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 
 static search_text_receiver_t *begin_snippets(void *internalised,
                                               int verbose,
-                                              search_snippet_markup_t *m,
+                                              struct search_snippet_markup *m,
                                               search_snippet_cb_t proc,
                                               void *rock)
 {
