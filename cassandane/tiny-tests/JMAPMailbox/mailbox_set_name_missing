@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_name_missing
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1
 {
     my ($self) = @_;
 
