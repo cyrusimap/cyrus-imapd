@@ -1,0 +1,12 @@
+Description:
+
+The CalDAV and CardDAV HTML administration pages allow editing
+the DAV:displayname property.
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None

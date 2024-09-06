@@ -184,6 +184,19 @@ function share(i, share) {
     req.send(doc);
 }
 
+function changeDisplayname(i) {
+    const oldName = document.getElementById(i).children[0].innerText;
+    const newValue = window.prompt('Provide new name for ' + (calendar ? 'calendar': 'addressbook') + ' ' + oldName, oldName);
+    if (newValue == null || newValue == oldName) return;
+
+    const pu = propupdate(newValue != '', i);
+    const displayname = pu[0].createElementNS(XML_DAV_NS, "displayname");
+    pu[1].appendChild(displayname);
+    if (newValue != '')
+        displayname.appendChild(pu[0].createTextNode(newValue));
+    pu[2].addEventListener('load', () => document.location.reload());
+    pu[2].submit();
+}
 
 // Make a calendar collection transparent/opaque
 function transpCalendar(i, transp) {

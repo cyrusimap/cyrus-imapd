@@ -1962,7 +1962,8 @@ enum {
     CAL_CAN_DELETE =    (1<<1),
     CAL_CAN_ADMIN =     (1<<2),
     CAL_IS_PUBLIC =     (1<<3),
-    CAL_IS_TRANSP =     (1<<4)
+    CAL_IS_TRANSP =     (1<<4),
+    CAL_CAN_PROPCOL =   (1<<5)
 };
 
 struct list_cal_rock {
@@ -2027,6 +2028,10 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     strlcpy(cal->shortname, shortname, MAX_MAILBOX_NAME);
     strlcpy(cal->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
     cal->flags = 0;
+
+    if (rights & DACL_PROPCOL) {
+        cal->flags |= CAL_CAN_PROPCOL;
+    }
 
     /* Is this the default calendar? */
     if (len == lrock->defaultlen &&
@@ -2279,6 +2284,9 @@ static int list_calendars(struct transaction_t *txn)
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
     charset_t utf8 = charset_lookupname("utf-8");
+    buf_printf_markup(body, level, "<thead>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
+    buf_printf_markup(body, level, "</thead><tbody>");
 
     /* Add available calendars with action items */
     for (i = 0; i < lrock.len; i++) {
@@ -2293,10 +2301,16 @@ static int list_calendars(struct transaction_t *txn)
 
         /* Calendar name */
         buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, cal->shortname);
-        buf_printf_markup(body, level, "<td>%s%s%s",
-                          (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
-                          displayname,
-                          (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+                              (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "", i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
         free(displayname);
 
         /* Supported components list */
@@ -2355,7 +2369,7 @@ static int list_calendars(struct transaction_t *txn)
     free(lrock.cal);
 
     /* Finish list */
-    buf_printf_markup(body, --level, "</table>");
+    buf_printf_markup(body, --level, "</tbody></table>");
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");

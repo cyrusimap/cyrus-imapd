@@ -1038,7 +1038,8 @@ enum {
     ADDR_IS_DEFAULT =    (1<<0),
     ADDR_CAN_DELETE =    (1<<1),
     ADDR_CAN_ADMIN =     (1<<2),
-    ADDR_IS_PUBLIC =     (1<<3)
+    ADDR_IS_PUBLIC =     (1<<3),
+    ADDR_CAN_PROPCOL =   (1<<4)
 };
 
 struct list_addr_rock {
@@ -1103,6 +1104,9 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     /* Can we admin this addressbook? */
     if (rights & DACL_ADMIN) {
         addr->flags |= ADDR_CAN_ADMIN;
+    }
+    if (rights & DACL_PROPCOL) {
+        addr->flags |= ADDR_CAN_PROPCOL;
     }
 
     /* Is this addressbook public? */
@@ -1266,6 +1270,10 @@ static int list_addressbooks(struct transaction_t *txn)
 
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
+    buf_printf_markup(body, level, "<thead>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'></th><th>Public</th></tr>"
+);
+    buf_printf_markup(body, level, "</thead><tbody>");
     charset_t utf8 = charset_lookupname("utf-8");
 
     /* Add available addressbooks with action items */
@@ -1281,10 +1289,16 @@ static int list_addressbooks(struct transaction_t *txn)
 
         /* Addressbook name */
         buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, addr->shortname);
-        buf_printf_markup(body, level, "<td>%s%s%s",
-                          (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
-                          displayname,
-                          (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+        if (addr->flags & ADDR_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "", i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
         free(displayname);
 
         /* Download link */
@@ -1316,7 +1330,7 @@ static int list_addressbooks(struct transaction_t *txn)
     free(lrock.addr);
 
     /* Finish list */
-    buf_printf_markup(body, --level, "</table>");
+    buf_printf_markup(body, --level, "</tbody></table>");
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");
