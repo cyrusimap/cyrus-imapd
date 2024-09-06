@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_emailsubmission_scheduled_send_fail
-    :min_version_3_7 :needs_component_jmap :needs_component_calalarmd :JMAPExtensions
+    :min_version_3_7 :needs_component_calalarmd :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
