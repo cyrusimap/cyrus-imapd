@@ -112,6 +112,26 @@ sub _skip_version
     return;
 }
 
+sub is_feature_missing
+{
+    my ($self, $category, $key, $want_value) = @_;
+
+    if (defined $want_value) {
+        my $actual = $buildinfo->get($category, $key);
+        if ($actual ne $want_value) {
+            xlog "$category.$key not '$want_value' (is '$actual'),",
+                 "$self->{_name} will be skipped";
+            return 1;
+        }
+    }
+    elsif (not $buildinfo->get($category, $key)) {
+        xlog "$category.$key not enabled, $self->{_name} will be skipped";
+        return 1;
+    }
+
+    return;
+}
+
 sub filter
 {
     my ($self) = @_;
@@ -144,19 +164,7 @@ sub filter
             foreach my $attr (attributes::get($sub)) {
                 next if $attr !~
                     m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
-
-                if (defined $3) {
-                    my $actual = $buildinfo->get($1, $2);
-                    if ($actual ne $3) {
-                        xlog "$1.$2 not '$3' (is '$actual'),",
-                             "$self->{_name} will be skipped";
-                        return 1;
-                    }
-                }
-                elsif (not $buildinfo->get($1, $2)) {
-                    xlog "$1.$2 not enabled, $self->{_name} will be skipped";
-                    return 1;
-                }
+                return 1 if $self->is_feature_missing($1, $2, $3);
             }
             return;
         },
