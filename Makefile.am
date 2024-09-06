@@ -709,7 +709,7 @@ cunit/registers.h: $(CUNIT_PROJECT)
 VALGRIND = libtool --mode=execute valgrind \
             --tool=memcheck \
             --leak-check=full \
-            --suppressions=vg.supp \
+            --suppressions=${abs_top_srcdir}/cunit/vg.supp \
             --error-exitcode=75
 
 check-local:
