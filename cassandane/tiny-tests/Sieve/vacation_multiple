@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_vacation_multiple
     :min_version_3_1
-    :needs_component_sieve
 {
     my ($self) = @_;
 

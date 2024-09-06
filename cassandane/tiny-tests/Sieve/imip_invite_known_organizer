@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_imip_invite_known_organizer
-    :needs_component_sieve :needs_component_httpd :want_service_http
+    :needs_component_httpd :want_service_http
 {
     my ($self) = @_;
 

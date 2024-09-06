@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_error_flag
-    :needs_component_sieve :min_version_3_3
+    :min_version_3_3
 {
     my ($self) = @_;
 

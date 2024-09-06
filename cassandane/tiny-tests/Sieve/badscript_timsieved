@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_badscript_timsieved
-    :needs_component_sieve
 {
     my ($self) = @_;
 

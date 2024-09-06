@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_deliver_fileinto_create_globalshared
-    :needs_component_sieve :min_version_3_0 :NoAltNameSpace
+    :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 

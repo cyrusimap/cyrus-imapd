@@ -2,8 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_unicode_casemap
-    :min_version_3_9
-    :needs_component_sieve :needs_component_sieve :NoAltNameSpace :NoMunge8bit
+    :min_version_3_9 :NoAltNameSpace :NoMunge8bit
 {
     my ($self) = @_;
 

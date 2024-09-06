@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_implicit_keep_target_none
-    :min_version_3_9 :needs_component_sieve :NoAltNameSpace
+    :min_version_3_9 :NoAltNameSpace
 {
     my ($self) = @_;
 

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_deliver_multiple_users
-    :needs_component_sieve :NoAltNameSpace
+    :NoAltNameSpace
     :want_smtpdaemon
 {
     my ($self) = @_;
