@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_too_large
-    :min_version_3_5 :needs_component_jmap :iCalendarMaxSize10k
+    :min_version_3_5 :iCalendarMaxSize10k
 {
     my ($self) = @_;
 

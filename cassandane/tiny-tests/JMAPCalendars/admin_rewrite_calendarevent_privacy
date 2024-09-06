@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 use DBI;
 
 sub test_admin_rewrite_calendarevent_privacy
-    :needs_component_jmap :min_version_3_7
+    :min_version_3_7
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

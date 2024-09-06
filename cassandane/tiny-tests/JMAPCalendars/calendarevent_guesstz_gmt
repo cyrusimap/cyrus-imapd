@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_guesstz_gmt
-    :min_version_3_5 :needs_component_jmap :needs_dependency_guesstz
+    :min_version_3_5 :needs_dependency_guesstz
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

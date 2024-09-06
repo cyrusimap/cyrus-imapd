@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 use Data::UUID;
 
 sub test_calendar_set_defaultalerts_shared
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9
 {
     my ($self) = @_;
 
