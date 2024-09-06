@@ -166,6 +166,14 @@ sub filter
                     m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
                 return 1 if $self->is_feature_missing($1, $2, $3);
             }
+            return if not exists $self->{needs};
+            while (my ($category, $subhash) = each %{$self->{needs}}) {
+                while (my ($key, $want_value) = each %{$subhash}) {
+                    return 1 if $self->is_feature_missing($category,
+                                                          $key,
+                                                          $want_value);
+                }
+            }
             return;
         },
         skip_slow => sub
