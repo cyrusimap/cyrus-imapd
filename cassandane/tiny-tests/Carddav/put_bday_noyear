@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_put_bday_noyear
-    :needs_component_httpd :needs_dependency_icalvcard
+    :needs_dependency_icalvcard
 {
     my ($self) = @_;
 

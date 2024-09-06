@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_delete_default_addressbook
-    :min_version_3_6 :needs_component_httpd
+    :min_version_3_6
 {
     my ($self) = @_;
 
