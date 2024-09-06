@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_query_language_french_contractions
-    :min_version_3_3 :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :JMAPExtensions
     :needs_component_sieve :SearchLanguage :needs_dependency_cld2
 {
     my ($self) = @_;

@@ -7,7 +7,6 @@ use Clone 'clone';
 use Data::UUID;
 
 sub test_email_set_create_encoding
-    :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

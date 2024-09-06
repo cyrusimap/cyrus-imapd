@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_query_header
-    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :min_version_3_5 :needs_component_sieve
     :JMAPExtensions :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;

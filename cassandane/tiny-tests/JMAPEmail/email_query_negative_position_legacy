@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 sub test_email_query_negative_position_legacy
     :min_version_3_1 :max_version_3_4 :needs_component_sieve
-    :needs_component_jmap :JMAPSearchDBLegacy :JMAPExtensions
+    :JMAPSearchDBLegacy :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

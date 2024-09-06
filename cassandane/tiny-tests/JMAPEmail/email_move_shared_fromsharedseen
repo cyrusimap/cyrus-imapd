@@ -9,7 +9,7 @@ use Cassandane::Tiny;
 # IOERROR: append_addseen failed to open DB for foo@example.com
 
 sub test_email_move_shared_fromsharedseen
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
