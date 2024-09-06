@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_blob_upload_type
-    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+    :min_version_3_7 :JMAPExtensions
 {
     my $self = shift;
     my $jmap = $self->{jmap};

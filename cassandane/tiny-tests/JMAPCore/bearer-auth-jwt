@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_bearer_auth_jwt
-    :min_version_3_5 :needs_component_jmap :NoAltNameSpace :HttpJWTAuthRSA
+    :min_version_3_5 :NoAltNameSpace :HttpJWTAuthRSA
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

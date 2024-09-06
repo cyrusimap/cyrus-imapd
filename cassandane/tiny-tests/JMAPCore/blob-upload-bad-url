@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_blob_upload_bad_url
-    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+    :min_version_3_9 :JMAPExtensions
 {
     my $self = shift;
     my $jmap = $self->{jmap};

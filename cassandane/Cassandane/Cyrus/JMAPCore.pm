@@ -69,12 +69,15 @@ sub new
                  jmap_max_size_upload => '1k',
                  httpallowcompress => 'no');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
         services => [ 'imap', 'http' ]
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPCore';
