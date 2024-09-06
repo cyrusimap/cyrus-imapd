@@ -72,12 +72,16 @@ sub new
         vcard_max_size => 100000,
     );
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         services => ['imap', 'http', 'sieve'],
         smtpdaemon => 1,
     }, @_);
+
+    $self->needs('component', 'jmap');
+    $self->needs('component', 'sieve');
+    return $self;
 }
 
 sub set_up
@@ -329,9 +333,7 @@ sub put_email
 }
 
 sub test_maxmsg_addressbook_limited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-    :NoStartInstances
+    :JMAPExtensions :NoStartInstances
 {
     my ($self) = @_;
 
@@ -388,9 +390,7 @@ sub test_maxmsg_addressbook_limited
 }
 
 sub test_maxmsg_calendar_limited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-    :NoStartInstances
+    :JMAPExtensions :NoStartInstances
 {
     my ($self) = @_;
 
@@ -447,9 +447,7 @@ sub test_maxmsg_calendar_limited
 }
 
 sub test_maxmsg_email_limited
-    :needs_component_sieve :needs_component_jmap
-    :JMAPExtensions
-    :NoStartInstances
+    :JMAPExtensions :NoStartInstances
 {
     my ($self) = @_;
 
@@ -505,7 +503,6 @@ sub test_maxmsg_email_limited
 }
 
 sub test_maxmsg_unlimited
-    :needs_component_sieve :needs_component_jmap
     :JMAPExtensions
 {
     my ($self) = @_;
