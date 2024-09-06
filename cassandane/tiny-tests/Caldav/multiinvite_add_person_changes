@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_multiinvite_add_person_changes
-    :needs_component_httpd
 {
     my ($self) = @_;
 

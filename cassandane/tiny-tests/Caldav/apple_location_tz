@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_apple_location_tz
-    :needs_component_httpd
 {
     my ($self) = @_;
 
