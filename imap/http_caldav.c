@@ -2224,7 +2224,7 @@ static int list_calendars(struct transaction_t *txn)
         buf_printf_markup(body, level++, "<td>");
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level,
-                              "<input type=checkbox%s name=comp value=%s>%s",
+                              "<label><input type=checkbox%s name=comp value=%s>%s</label>",
                               !strcmp(comp->name, "VEVENT") ? " checked" : "",
                               comp->name, comp->name);
         }
