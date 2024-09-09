@@ -358,31 +358,29 @@ static int xapstat(const char *path)
 {
     struct stat sbuf;
     int r;
+    int i;
+    const char *known_files[] = {
+        "cyrus.indexed.db",
+        "iamglass",
+        "position.glass",
+        "postlist.glass",
+        "termlist.glass",
+        NULL
+    };
 
-    /* is there a glass file? */
-    char *glass = strconcat(path, "/iamglass", (char *)NULL);
-    r = stat(glass, &sbuf);
-    free(glass);
-
-    /* zero byte file is the same as no database */
-    if (!r && !sbuf.st_size) {
-         r = -1;
-         errno = ENOENT;
-    }
-    if (!r) return 0;
-
-    /* check for old chert file */
-    char *chert = strconcat(path, "/iamchert", (char *)NULL);
-    r = stat(chert, &sbuf);
-    free(chert);
-
-    /* zero byte file is the same as no database */
-    if (!r && !sbuf.st_size) {
-         r = -1;
-         errno = ENOENT;
+    for (i = 0; known_files[i]; i++) {
+        char *fname = strconcat(path, "/", known_files[i], (char *)NULL);
+        r = stat(fname, &sbuf);
+        free(fname);
+        /* zero byte file is the same as no database */
+        if (!r && !sbuf.st_size) {
+            r = -1;
+            errno = ENOENT;
+        }
+        if (r) return r;
     }
 
-    return r;
+    return 0;
 }
 
 /* given an item from the activefile file, and the mboxname and partition
