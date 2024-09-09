@@ -891,7 +891,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
         return;
     }
 
-    /* all events needs uri parameter */
+    /* all events need uri parameter */
     memset(&imapurl, 0, sizeof(struct imapurl));
     imapurl.server = config_servername;
 
@@ -1593,12 +1593,9 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
         char *extname = mboxname_to_external(quota->root, &namespace, NULL);
         imapurl.mailbox = extname;
 
-        if (!event->params[EVENT_URI].filled) {
-            struct buf url = BUF_INITIALIZER;
-            imapurl_toURL(&url, &imapurl);
-            FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
-        }
-
+        struct buf url = BUF_INITIALIZER;
+        imapurl_toURL(&url, &imapurl);
+        FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
         xzfree(extname);
 
         /* Note that userbuf for shared folders is NULL, and xstrdup
@@ -1699,7 +1696,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         event->uidset = NULL;
     }
 
-    /* all events needs uri parameter */
+    /* all events need uri parameter */
     struct buf url = BUF_INITIALIZER;
     imapurl_toURL(&url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
