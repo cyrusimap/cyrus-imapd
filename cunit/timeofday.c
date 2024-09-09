@@ -188,22 +188,48 @@ void time_restore(void)
 
 #if defined(__GLIBC__)
 
-/* XXX Annoyingly, we can't just include <config.h> in this file,
- * XXX because for whatever reason it breaks the gettimeofday
- * XXX replacement.  Assume we just have this flag for now, and
- * XXX define EXPORTED ourselves
+/* Must not include <config.h> in this file, because doing so will bring in
+ * the libc gettimeofday(), which we don't want because we're trying to
+ * replace it.  So we need to define EXPORTED ourselves rather than rely on
+ * config.h to figure it out. Just assume __attribute__ is supported.
  */
 #define EXPORTED __attribute__((__visibility__("default")))
 
 /* call the real libc function */
 static int real_gettimeofday(struct timeval *tv, ...)
 {
-#if defined(__USE_TIME_BITS64)
+    /* On 32- or 64-bit systems where time_t size is the word size,
+     * we just want __gettimeofday().  __gettimeofday64() does not exist.
+     *
+     * On 32-bit systems with 64-bit time_t, __gettimeofday() is 32-bits.
+     * We want __gettimeofday64() instead, so we need to detect this case.
+     *
+     * With glibc < 2.39,
+     *    __USE_TIME_BITS64 is set in this case specifically
+     *
+     * With glibc >= 2.39,
+     *    __USE_TIME64_REDIRECTS is set in this case specifically
+     *    __USE_TIME_BITS64 is always set when time_t is 64 bits (not useful)
+     *
+     * So we need to check the glibc version to figure out which macro to base
+     * our feature check on.
+     */
+#if __GLIBC__ > 2 || ( __GLIBC__ == 2 && __GLIBC_MINOR__ >= 39 )
+# if defined(__USE_TIME64_REDIRECTS)
     extern int __gettimeofday64(struct timeval *, ...);
     return __gettimeofday64(tv, NULL);
-#else
+# else
     extern int __gettimeofday(struct timeval *, ...);
     return __gettimeofday(tv, NULL);
+# endif
+#else
+# if defined(__USE_TIME_BITS64)
+    extern int __gettimeofday64(struct timeval *, ...);
+    return __gettimeofday64(tv, NULL);
+# else
+    extern int __gettimeofday(struct timeval *, ...);
+    return __gettimeofday(tv, NULL);
+# endif
 #endif
 }
 
