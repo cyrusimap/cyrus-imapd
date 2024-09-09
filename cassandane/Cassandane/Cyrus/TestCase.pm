@@ -225,6 +225,18 @@ sub want_services
 
 }
 
+sub needs
+{
+    my ($self, $category, $key, $want_value) = @_;
+
+    # $category and $key are as per cyr_buildinfo output. $want_value is
+    # optional and defaults to '1', but can be a particular value for
+    # category=>key pairs that aren't boolean.
+    # See Cassandane::Unit:TestCase::is_feature_missing to see how
+    # needs are used.
+    $self->{needs}->{$category}->{$key} = $want_value // 1;
+}
+
 sub config_set
 {
     my ($self, %pairs) = @_;
