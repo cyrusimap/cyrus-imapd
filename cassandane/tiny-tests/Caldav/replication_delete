@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_replication_delete
-    :needs_component_replication
+    :want_replica
 {
     my ($self) = @_;
 

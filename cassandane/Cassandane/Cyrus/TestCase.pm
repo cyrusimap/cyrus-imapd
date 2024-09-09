@@ -237,6 +237,7 @@ sub want
 
     if ($want_needs->{$name}) {
         foreach my $need (@{$want_needs->{$name}}) {
+            xlog "XXX want '$name' implies need @{$need}";
             $self->needs(@{$need});
         }
     }
