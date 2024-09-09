@@ -135,7 +135,7 @@ sub new
     # the needs mappings (but shush logging "who wants it")
     $self->{_current_magic} = '';
     while (my ($name, $value) = each %{$want}) {
-        $self->want($name, $value);
+        $self->want($name, $value) if $value;
     }
 
     return $self;
