@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 # trying to reproduce error reported in https://git.cyrus.foundation/T228
 sub test_alternate_globalannots
-    :NoStartInstances :needs_component_replication
+    :NoStartInstances
 {
     my ($self) = @_;
 

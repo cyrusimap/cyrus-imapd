@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_clean_remote_shutdown_while_rolling
     :CSyncReplication :SyncLog :min_version_3_5
-    :needs_component_replication
 {
     my ($self) = @_;
 

@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test non-empty mailbox causes replication to abort
 #
 sub test_splitbrain_different_uniqueid_nonempty
-    :min_version_3_5 :needs_component_replication :NoReplicaonly
+    :min_version_3_5 :NoReplicaonly
 {
     my ($self) = @_;
 

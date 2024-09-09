@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_sieve_replication_exists_unixhs
     :needs_component_sieve :UnixHierarchySep
-    :needs_component_replication
 {
     my ($self) = @_;
 

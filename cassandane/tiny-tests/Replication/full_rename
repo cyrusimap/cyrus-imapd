@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test replication of mailbox only after a rename
 #
 sub test_full_rename
-    :NoAltNameSpace :needs_component_replication :AllowMoves :Replication :SyncLog :DelayedDelete
+    :NoAltNameSpace :AllowMoves :Replication :SyncLog :DelayedDelete
 {
     my ($self) = @_;
 
