@@ -1146,7 +1146,7 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
                             h--;
 
                         // Lookup "Etc/GMT+X" timezone
-                        buf_printf(&idbuf, "Etc/GMT%+d", h);
+                        buf_printf(&idbuf, "Etc/GMT%+d", -h);
                         if (!get_cyrus_timezone_from_tzid(buf_cstring(&idbuf), 0))
                             buf_reset(&idbuf);
                     }

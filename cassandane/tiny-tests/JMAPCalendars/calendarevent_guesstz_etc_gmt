@@ -51,5 +51,5 @@ EOF
             properties => ['timeZone'],
         }, 'R1']
     ]);
-    $self->assert_str_equals('Etc/GMT-10', $res->[0][1]{list}[0]{timeZone});
+    $self->assert_str_equals('Etc/GMT+10', $res->[0][1]{list}[0]{timeZone});
 }
