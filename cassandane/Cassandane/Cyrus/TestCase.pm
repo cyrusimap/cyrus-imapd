@@ -214,6 +214,7 @@ sub _who_wants_it
 }
 
 my $want_needs = {
+    'replica' => [ [ 'component', 'replication' ] ],
 };
 
 sub want
