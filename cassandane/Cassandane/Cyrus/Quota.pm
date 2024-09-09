@@ -346,7 +346,6 @@ sub XXtest_getset_multiple
 
 # Magic: the word 'replication' in the name enables a replica
 sub XXtest_replication_multiple
-    :needs_component_replication
 {
     my ($self) = @_;
 
