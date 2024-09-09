@@ -1128,6 +1128,8 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg);
             if (c <= EOF) goto missingarg;
             bytestring_match(parent, arg.s, criteria.s, base);
+
+            base->did_objectid = 1;
         }
         else goto badcri;
         break;
@@ -1415,6 +1417,8 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg);
             if (c <= EOF) goto missingarg;
             bytestring_match(parent, arg.s, criteria.s, base);
+
+            base->did_objectid = 1;
         }
         else goto badcri;
         break;

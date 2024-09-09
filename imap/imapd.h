@@ -240,6 +240,7 @@ struct searchargs {
     /* used only during parsing */
     int fuzzy_depth;
     uint64_t maxargssize_mark;
+    unsigned did_objectid : 1;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
@@ -447,7 +448,8 @@ enum {
 extern struct protstream *imapd_out, *imapd_in;
 
 struct client_behavior_registry {
-    uint32_t did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
+    uint32_t did_annotate     : 1;   /* used SETANNOTATION or
+                                        FETCH-ed ANNOTATION */
     uint32_t did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
     uint32_t did_catenate     : 1;   /* used CATENATE on APPEND  */
     uint32_t did_condstore    : 1;   /* gave CONDSTORE on SELECT */
@@ -458,6 +460,8 @@ struct client_behavior_registry {
     uint32_t did_multisearch  : 1;   /* called ESEARCH */
     uint32_t did_move         : 1;   /* used MOVE */
     uint32_t did_notify       : 1;   /* used NOTIFY */
+    uint32_t did_objectid     : 1;   /* used STATUS MAILBOXID or
+                                        SEARCH/FETCH EMAILID/THREADID */
     uint32_t did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
     uint32_t did_preview      : 1;   /* fetched PREVIEW */
     uint32_t did_qresync      : 1;   /* gave QRESYNC on SELECT */

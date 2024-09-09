@@ -895,7 +895,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s%s%s"
+                        "%s%s%s%s"
                         "%s",
 
                         session_id(),
@@ -915,13 +915,14 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_move        ? " move=<1>"         : "",
                         client_behavior.did_multisearch ? " multisearch=<1>"  : "",
                         client_behavior.did_notify      ? " notify=<1>"       : "",
-                        client_behavior.did_partial     ? " partial=<1>"      : "",
+                        client_behavior.did_objectid    ? " objectid=<1>"     : "",
 
+                        client_behavior.did_partial     ? " partial=<1>"      : "",
                         client_behavior.did_preview     ? " preview=<1>"      : "",
                         client_behavior.did_qresync     ? " qresync=<1>"      : "",
                         client_behavior.did_replace     ? " replace=<1>"      : "",
-                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
 
+                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
                         client_behavior.did_searchres   ? " searchres=<1>"    : "",
                         client_behavior.did_uidonly     ? " uidonly=<1>"      : "",
                         client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
@@ -5763,6 +5764,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior.did_annotate = 1;
 
+    if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID))
+        client_behavior.did_objectid = 1;
+
     if (fetchargs.fetchitems & FETCH_PREVIEW)
         client_behavior.did_preview = 1;
 
@@ -6361,6 +6365,8 @@ static void cmd_search(char *tag, char *cmd)
 
     if (searchargs->returnopts & SEARCH_RETURN_PARTIAL)
         client_behavior.did_partial = 1;
+
+    client_behavior.did_objectid = searchargs->did_objectid;
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
@@ -9802,6 +9808,12 @@ static void cmd_status(char *tag, char *name)
         goto done;
     }
 
+    if (statusitems & STATUS_HIGHESTMODSEQ)
+        condstore_enabled("STATUS (HIGHESTMODSEQ)");
+
+    if (statusitems & STATUS_MAILBOXID)
+        client_behavior.did_objectid = 1;
+
     /* check permissions */
     if (!r) {
         int myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
@@ -9815,9 +9827,6 @@ static void cmd_status(char *tag, char *name)
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
         imapd_check(NULL, TELL_EXPUNGED);
-
-    if (statusitems & STATUS_HIGHESTMODSEQ)
-        condstore_enabled("STATUS (HIGHESTMODSEQ)");
 
     if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
 
