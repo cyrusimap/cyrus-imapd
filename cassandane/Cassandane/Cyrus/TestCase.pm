@@ -127,9 +127,16 @@ sub new
         if length($leftovers);
 
     my $self = $class->SUPER::new(@args);
+
     $self->{_name} = $args[0] || 'unknown';
-    $self->{_want} = $want;
     $self->{_instance_params} = $instance_params;
+
+    # process constructor wants through sub want() because it knows about
+    # the needs mappings (but shush logging "who wants it")
+    $self->{_current_magic} = '';
+    while (my ($name, $value) = each %{$want}) {
+        $self->want($name, $value);
+    }
 
     return $self;
 }
@@ -206,13 +213,36 @@ sub _who_wants_it
     return "Test " . $self->{_name};
 }
 
+my $want_needs = {
+};
+
 sub want
 {
     my ($self, $name, $value) = @_;
+
+    if ($name eq 'services') {
+        # smoothly work around services being a subcategory of want
+        $self->want_services(@{$value});
+        return;
+    }
+
     $value = 1 if !defined $value;
     $self->{_want}->{$name} = $value;
-    xlog $self->_who_wants_it() .  " wants $name = $value";
+
+    my $who_wants_it = $self->_who_wants_it();
+    if ($who_wants_it) {
+        xlog $self->_who_wants_it() .  " wants $name = $value";
+    }
+
+    if ($want_needs->{$name}) {
+        foreach my $need (@{$want_needs->{$name}}) {
+            $self->needs(@{$need});
+        }
+    }
 }
+
+my $want_service_needs = {
+};
 
 sub want_services
 {
@@ -220,8 +250,19 @@ sub want_services
 
     @{$self->{_want}->{services}} = uniq(@{$self->{_want}->{services}},
                                          @services);
-    xlog $self->_who_wants_it() . " wants services " . join(', ', @services);
 
+    my $who_wants_it = $self->_who_wants_it();
+    if ($who_wants_it) {
+        xlog $who_wants_it . " wants services " . join(', ', @services);
+    }
+
+    foreach my $name (@services) {
+        if ($want_service_needs->{$name}) {
+            foreach my $need (@{$want_service_needs->{$name}}) {
+                $self->needs(@{$need});
+            }
+        }
+    }
 }
 
 sub needs
