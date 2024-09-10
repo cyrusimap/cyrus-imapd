@@ -11921,11 +11921,15 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
     json_t *err = jmap_server_error(errcode);
     int i;
     for (i = 0; i < ptrarray_size(&plan->copy); i++) {
-        struct email_uidrec *uidrec = ptrarray_nth(&plan->copy, i);
-        if (json_object_get(set_errors, uidrec->email_id)) {
-            continue;
+        ptrarray_t *uidrecs = ptrarray_nth(&plan->copy, i);
+        int j;
+        for (j = 0; j < ptrarray_size(uidrecs); j++) {
+            struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+            if (json_object_get(set_errors, uidrec->email_id)) {
+                continue;
+            }
+            json_object_set(set_errors, uidrec->email_id, err);
         }
-        json_object_set(set_errors, uidrec->email_id, err);
     }
     for (i = 0; i < ptrarray_size(&plan->setflags); i++) {
         struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, i);
@@ -12684,7 +12688,7 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
         hash_iter_reset(plan_iter);
         while (hash_iter_next(plan_iter)) {
             struct email_updateplan *plan = hash_iter_val(plan_iter);
-            if (hash_lookup(plan->mbox_id, &erroneous_plans))
+            if (!hash_lookup(plan->mbox_id, &erroneous_plans))
                 continue;
 
             int i;
