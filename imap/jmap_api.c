@@ -3190,6 +3190,12 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
     return _mbentry_by_uniqueid(req, id, 1/*scope*/);
 }
 
+EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req,
+                                                       const char *id)
+{
+    return _mbentry_by_uniqueid(req, id, 0/*scope*/);
+}
+
 EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
 {
     const mbentry_t *mbentry = _mbentry_by_uniqueid(req, id, 1/*scope*/);
