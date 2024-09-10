@@ -1602,6 +1602,7 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
           * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
             switch (i) {
+                case SEARCH_PART_ANY:
                 case SEARCH_PART_LISTID:
                 case SEARCH_PART_TYPE:
                 case SEARCH_PART_LANGUAGE:
