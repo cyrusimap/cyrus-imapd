@@ -143,8 +143,8 @@ static int compact_closerename(struct backup **originalp,
     struct buf ts_index_fname = BUF_INITIALIZER;
     int r;
 
-    buf_printf(&ts_data_fname, "%s.%ld", original->data_fname, now);
-    buf_printf(&ts_index_fname, "%s.%ld", original->index_fname, now);
+    buf_printf(&ts_data_fname, "%s." TIME_T_FMT, original->data_fname, now);
+    buf_printf(&ts_index_fname, "%s." TIME_T_FMT, original->index_fname, now);
 
     /* link original files into timestamped names */
     r = link(original->data_fname, buf_cstring(&ts_data_fname));

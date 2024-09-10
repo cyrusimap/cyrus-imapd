@@ -3053,10 +3053,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     txn->conn->begin_resp_headers(txn, code);
 
 
+    now = time(0);
     switch (code) {
     default:
         /* Final response */
-        now = time(0);
         httpdate_gen(datestr, sizeof(datestr), now);
         simple_hdr(txn, "Date", "%s", datestr);
 
