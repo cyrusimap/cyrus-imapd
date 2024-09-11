@@ -138,6 +138,13 @@ sub new
         $self->want($name, $value) if $value;
     }
 
+    # initialise config and run magic early, so needs are determined before
+    # we try to use them to skip tests whose features are missing
+    my $config = $self->{_instance_params}->{config}
+                 || Cassandane::Config->default();
+    $self->{_config} = $config->clone();
+    $self->_run_magic();
+
     return $self;
 }
 
@@ -581,11 +588,6 @@ sub _create_instances
     my $frontend_service_port;
     my $backend1_service_port;
     my $backend2_service_port;
-
-    $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
-    $self->{_config} = $self->{_config}->clone();
-
-    $self->_run_magic();
 
     my $want = $self->{_want};
     my %instance_params = %{$self->{_instance_params}};
