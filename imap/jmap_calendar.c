@@ -325,11 +325,7 @@ jmap_method_t jmap_calendar_methods_nonstandard[] = {
 
 HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-
-    for (mp = jmap_calendar_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_calendar_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CALENDARS, json_object());
@@ -345,9 +341,7 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_CALENDARS_EXTENSION, json_pack("{s:b}", "isRFC", 1));
 
-        for (mp = jmap_calendar_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_calendar_methods_nonstandard, settings);
     }
 
     ptrarray_append(&settings->getblob_handlers, jmap_calendarevent_getblob);

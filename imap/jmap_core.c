@@ -201,10 +201,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                                       "capabilitiesOverrides"));
     }
 
-    jmap_method_t *mp;
-    for (mp = jmap_core_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_core_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
@@ -239,9 +236,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_USERCOUNTERS_EXTENSION, json_object());
 
-        for (mp = jmap_core_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_core_methods_nonstandard, settings);
     }
 
 }

@@ -406,9 +406,20 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
     req->perf_details = NULL;
 }
 
-static jmap_method_t *find_methodproc(const char *name, hash_table *jmap_methods)
+static jmap_method_t *find_methodproc(const char *name,
+                                      hash_table *jmap_methods,
+                                      strarray_t *using_capabilities)
 {
-    return hash_lookup(name, jmap_methods);
+    ptrarray_t *pa = hash_lookup(name, jmap_methods);
+    int i;
+
+    for (i = 0; i < ptrarray_size(pa); i++) {
+        jmap_method_t *mp = ptrarray_nth(pa, i);
+
+        if (strarray_contains(using_capabilities, mp->capability)) return mp;
+    }
+
+    return NULL;
 }
 
 struct mbstate {
@@ -698,8 +709,8 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         json_incref(args);
 
         /* Find the message processor */
-        mp = find_methodproc(mname, &settings->methods);
-        if (!mp || !strarray_contains(&using_capabilities, mp->capability)) {
+        mp = find_methodproc(mname, &settings->methods, &using_capabilities);
+        if (!mp) {
             json_array_append_new(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             json_decref(args);
@@ -3367,4 +3378,21 @@ EXPORTED int jmap_findmbox_role(jmap_req_t *req, const char *role,
     free(specialuse);
 
     return r;
+}
+
+EXPORTED void jmap_add_methods(jmap_method_t methods[],
+                               jmap_settings_t *settings)
+{
+    jmap_method_t *mp;
+
+    for (mp = methods; mp->name; mp++) {
+        ptrarray_t *pa = hash_lookup(mp->name, &settings->methods);
+
+        if (!pa) {
+            pa = ptrarray_new();
+            hash_insert(mp->name, pa, &settings->methods);
+        }
+
+        ptrarray_append(pa, mp);
+    }
 }

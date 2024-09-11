@@ -238,7 +238,8 @@ static void jmap_reset(void)
 
 static void jmap_shutdown(void)
 {
-    free_hash_table(&my_jmap_settings.methods, NULL);
+    free_hash_table(&my_jmap_settings.methods,
+                    (void (*)(void *)) &ptrarray_free);
     json_decref(my_jmap_settings.server_capabilities);
     ptrarray_fini(&my_jmap_settings.getblob_handlers);
     int i;

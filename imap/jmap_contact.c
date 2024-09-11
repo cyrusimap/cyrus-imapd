@@ -254,10 +254,7 @@ static char *_prodid = NULL;
 
 HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_contact_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_contact_methods_standard, settings);
 
 #ifdef HAVE_LIBICALVCARD
     json_object_set_new(settings->server_capabilities,
@@ -268,9 +265,7 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_CONTACTS_EXTENSION, json_object());
 
-        for (mp = jmap_contact_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_contact_methods_nonstandard, settings);
     }
 
     ptrarray_append(&settings->getblob_handlers, jmap_contact_getblob);

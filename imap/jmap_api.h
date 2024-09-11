@@ -595,4 +595,6 @@ extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
 extern int jmap_findmbox_role(jmap_req_t *req, const char *role,
                               const mbentry_t **mbentryptr);
 
+extern void jmap_add_methods(jmap_method_t methods[], jmap_settings_t *settings);
+
 #endif /* JMAP_API_H */
