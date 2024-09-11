@@ -91,7 +91,7 @@
 
 struct segment
 {
-    int part;
+    enum search_part part;
     struct message_guid guid;
     char doctype;
     int sequence;       /* forces stable sort order JIC */
@@ -2034,7 +2034,7 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     ptrarray_pop(&bb->stack);
 }
 
-static void matchlist(search_builder_t *bx, int part, const strarray_t *vals)
+static void matchlist(search_builder_t *bx, enum search_part part, const strarray_t *vals)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     struct opnode *top = ptrarray_tail(&bb->stack);
@@ -2055,7 +2055,7 @@ static void matchlist(search_builder_t *bx, int part, const strarray_t *vals)
         bb->root = on;
 }
 
-static void match(search_builder_t *bx, int part, const char *val)
+static void match(search_builder_t *bx, enum search_part part, const char *val)
 {
     strarray_t items = STRARRAY_INITIALIZER;
     strarray_append(&items, val);
@@ -2166,7 +2166,7 @@ struct xapian_receiver
     struct message_guid guid;
     uint32_t uid;
     time_t internaldate;
-    int part;
+    enum search_part part;
     const struct message_guid *part_guid;
     const char *partid;
     unsigned int part_total;
@@ -2423,7 +2423,7 @@ static int begin_bodypart(search_text_receiver_t *rx,
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part)
+static void begin_part(search_text_receiver_t *rx, enum search_part part)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
@@ -2477,7 +2477,7 @@ static int append_text(search_text_receiver_t *rx,
 }
 
 static void end_part(search_text_receiver_t *rx,
-                     int part __attribute__((unused)))
+                     enum search_part part __attribute__((unused)))
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
     struct segment *seg;
@@ -3028,7 +3028,7 @@ out:
 /* Find match terms for the given part and add them to the Xapian
  * snippet generator.  */
 static void generate_snippet_terms(xapian_snipgen_t *snipgen,
-                                   int part,
+                                   enum search_part part,
                                    struct opnode *on)
 {
     struct opnode *child;
@@ -4304,7 +4304,7 @@ out:
     return r;
 }
 
-static int can_match(enum search_op matchop, int partnum)
+static int can_match(enum search_op matchop, enum search_part partnum)
 {
     return (matchop == SEOP_FUZZYMATCH && partnum != SEARCH_PART_NONE) ||
            (matchop == SEOP_MATCH && (partnum == SEARCH_PART_MESSAGEID ||

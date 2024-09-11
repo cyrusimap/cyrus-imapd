@@ -525,7 +525,7 @@ static int _matchmime_tr_begin_bodypart(search_text_receiver_t *rx __attribute__
 }
 
 static void _matchmime_tr_begin_part(search_text_receiver_t *rx __attribute__((unused)),
-                                     int part __attribute__((unused)))
+                                     enum search_part part __attribute__((unused)))
 {
 }
 
@@ -552,7 +552,7 @@ static int _matchmime_tr_append_text(search_text_receiver_t *rx,
     return 0;
 }
 
-static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
+static void _matchmime_tr_end_part(search_text_receiver_t *rx, enum search_part part)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
     xapian_dbw_doc_part(tr->matchmime->dbw, &tr->buf, part);
@@ -916,6 +916,7 @@ static int _email_matchmime_evaluate(json_t *filter,
         int i;
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
             switch (i) {
+                case SEARCH_PART_ANY:
                 case SEARCH_PART_LISTID:
                 case SEARCH_PART_TYPE:
                 case SEARCH_PART_LANGUAGE:
