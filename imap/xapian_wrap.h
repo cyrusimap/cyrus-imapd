@@ -98,7 +98,7 @@ extern xapian_snipgen_t *xapian_snipgen_new(xapian_db_t *db, const struct search
 extern void xapian_snipgen_free(xapian_snipgen_t *);
 extern int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match);
 extern int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, const struct message_guid *guid, char doctype);
-extern int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part, enum search_part);
+extern int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part);
 extern int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *);
 
 /* filter interface */

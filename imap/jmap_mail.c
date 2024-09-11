@@ -5841,11 +5841,11 @@ static int _snippet_tr_append_text(search_text_receiver_t *rx,
         sr->next->append_text(sr->next, text) : 0;
 }
 
-static void _snippet_tr_end_part(search_text_receiver_t *rx, int part)
+static void _snippet_tr_end_part(search_text_receiver_t *rx)
 {
     struct snippet_receiver *sr = (struct snippet_receiver*) rx;
     sr->search_part = -1;
-    if (sr->next->end_part) sr->next->end_part(sr->next, part);
+    if (sr->next->end_part) sr->next->end_part(sr->next);
 }
 
 static void _snippet_tr_end_bodypart(search_text_receiver_t *rx)

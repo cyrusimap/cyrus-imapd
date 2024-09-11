@@ -484,6 +484,7 @@ struct matchmime_receiver {
     struct search_text_receiver super;
     struct matchmime *matchmime;
     struct buf buf;
+    enum search_part part;
 };
 
 static int _matchmime_tr_begin_mailbox(search_text_receiver_t *rx __attribute__((unused)),
@@ -524,9 +525,10 @@ static int _matchmime_tr_begin_bodypart(search_text_receiver_t *rx __attribute__
     return 0;
 }
 
-static void _matchmime_tr_begin_part(search_text_receiver_t *rx __attribute__((unused)),
-                                     enum search_part part __attribute__((unused)))
+static void _matchmime_tr_begin_part(search_text_receiver_t *rx, enum search_part part)
 {
+    struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
+    tr->part = part;
 }
 
 static int _matchmime_tr_append_text(search_text_receiver_t *rx,
@@ -552,11 +554,12 @@ static int _matchmime_tr_append_text(search_text_receiver_t *rx,
     return 0;
 }
 
-static void _matchmime_tr_end_part(search_text_receiver_t *rx, enum search_part part)
+static void _matchmime_tr_end_part(search_text_receiver_t *rx)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    xapian_dbw_doc_part(tr->matchmime->dbw, &tr->buf, part);
+    xapian_dbw_doc_part(tr->matchmime->dbw, &tr->buf, tr->part);
     buf_reset(&tr->buf);
+    tr->part = SEARCH_PART_NONE;
 }
 
 static void _matchmime_tr_end_bodypart(search_text_receiver_t *rx __attribute__((unused)))
@@ -1258,7 +1261,8 @@ static int _matchmime_index_message(matchmime_t *matchmime, json_t *jfilter)
             _matchmime_tr_index_charset_flags,
             _matchmime_tr_index_message_format
         },
-        matchmime, BUF_INITIALIZER
+        matchmime, BUF_INITIALIZER,
+        SEARCH_PART_NONE
     };
 
     /* Determine if we need to extract text from attachments for this

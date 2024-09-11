@@ -703,8 +703,7 @@ static int append_text(search_text_receiver_t *rx,
     return r;
 }
 
-static void end_part(search_text_receiver_t *rx,
-                     enum search_part part __attribute__((unused)))
+static void end_part(search_text_receiver_t *rx)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     int s = 0;      /* SQUAT error */

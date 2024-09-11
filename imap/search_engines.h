@@ -112,7 +112,7 @@ extern struct search_snippet_markup default_snippet_markup;
        ...
        receiver->begin_part(<partN>)
        receiver->append_text(<text>)     (1 or more times)
-       receiver->end_part(<partN>)
+       receiver->end_part()
        receiver->begin_bodypart(<bodypart1>)
 
        receiver->end_message()
@@ -137,7 +137,7 @@ struct search_text_receiver {
     void (*begin_part)(search_text_receiver_t *, enum search_part);
     /* Returns IMAP_MESSAGE_TOO_LARGE if no more bytes are accepted */
     int  (*append_text)(search_text_receiver_t *, const struct buf *);
-    void (*end_part)(search_text_receiver_t *, enum search_part);
+    void (*end_part)(search_text_receiver_t *);
     void (*end_bodypart)(search_text_receiver_t *);
 #define SEARCH_INDEXLEVEL_BASIC 1
 #define SEARCH_INDEXLEVEL_ATTACH 3

@@ -2484,8 +2484,7 @@ EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
 }
 
 EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
-                                     const struct buf *part,
-                                     enum search_part partnum __attribute__((unused)))
+                                     const struct buf *part)
 {
     // Ignore empty queries.
     if (!snipgen->loose_terms && !snipgen->queries) return 0;

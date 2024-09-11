@@ -2476,8 +2476,7 @@ static int append_text(search_text_receiver_t *rx,
     return 0;
 }
 
-static void end_part(search_text_receiver_t *rx,
-                     enum search_part part __attribute__((unused)))
+static void end_part(search_text_receiver_t *rx)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
     struct segment *seg;
@@ -3127,7 +3126,7 @@ static int flush_snippets(search_text_receiver_t *rx)
             last_part = -1;
         }
 
-        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
+        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text);
         last_partid = seg->partid;
         last_part = seg->part;
         if (r) break;
