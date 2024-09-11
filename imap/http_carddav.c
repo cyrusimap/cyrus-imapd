@@ -1267,10 +1267,12 @@ static int list_addressbooks(struct transaction_t *txn)
 
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
+    charset_t utf8 = charset_lookupname("utf-8");
 
     /* Add available addressbooks with action items */
     for (i = 0; i < lrock.len; i++) {
         struct addr_info *addr = &lrock.addr[i];
+        char *displayname = charset_convert(addr->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -1280,10 +1282,11 @@ static int list_addressbooks(struct transaction_t *txn)
 
         /* Addressbook name */
         buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td>%s%s%s",
+        buf_printf_markup(body, level, "<td id='%i'>%s%s%s", i,
                           (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
-                          addr->displayname,
+                          displayname,
                           (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+        free(displayname);
 
         /* Download link */
         buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
@@ -1292,9 +1295,9 @@ static int list_addressbooks(struct transaction_t *txn)
         /* Delete button */
         buf_printf_markup(body, level,
                           "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteAddressbook('%s%s', '%s')\"></td>",
+                          " onclick=\"deleteAddressbook('%s%s', '%i')\"></td>",
                           !(addr->flags & ADDR_CAN_DELETE) ? " disabled" : "",
-                          base_path, addr->shortname, addr->displayname);
+                          base_path, addr->shortname, i);
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
@@ -1308,6 +1311,7 @@ static int list_addressbooks(struct transaction_t *txn)
         buf_printf_markup(body, --level, "</tr>");
     }
 
+    charset_free(&utf8);
     free(lrock.addr);
 
     /* Finish list */

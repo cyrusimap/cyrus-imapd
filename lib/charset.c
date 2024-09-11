@@ -1090,7 +1090,7 @@ static void table2uni(struct convert_rock *rock, uint32_t c)
     struct charmap *map;
 
     if (c == U_REPLACEMENT) {
-        convert_putc(rock->next, c);
+        convert_putc(rock->next, U_REPLACEMENT);
         return;
     }
 
