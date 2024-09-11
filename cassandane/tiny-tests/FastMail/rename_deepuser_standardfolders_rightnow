@@ -4,6 +4,7 @@ use Cassandane::Tiny;
 sub test_rename_deepuser_standardfolders_rightnow
     :AllowMoves :Replication :min_version_3_3 :needs_component_sieve
     :needs_component_jmap :JMAPExtensions :RightNow
+    :needs_component_replication
 {
     my ($self) = @_;
 

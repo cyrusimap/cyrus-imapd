@@ -79,7 +79,7 @@ sub fudge_mtimes
 }
 
 sub test_dump_undump
-    :AltNamespace :UnixHierarchySep
+    :needs_component_sieve :AltNamespace :UnixHierarchySep
 {
     my ($self) = @_;
 

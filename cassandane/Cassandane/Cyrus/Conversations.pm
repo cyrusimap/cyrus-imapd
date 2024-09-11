@@ -83,7 +83,10 @@ sub new
                      conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                      ctl_conversationsdb_conversations_max_thread => 5);
 
-        return $class->SUPER::new({ config => $config }, @args);
+        return $class->SUPER::new({
+            config => $config,
+            adminstore => 1,
+        }, @args);
     }
 }
 
@@ -1112,7 +1115,7 @@ sub test_rename_between_users
 # Test user rename without splitting conversations
 #
 sub test_rename_user_nosplitconv
-    :AllowMoves :Replication
+    :AllowMoves :Replication :needs_component_replication
 {
     my ($self) = @_;
 

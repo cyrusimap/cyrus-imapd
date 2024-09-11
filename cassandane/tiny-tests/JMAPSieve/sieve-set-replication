@@ -3,6 +3,7 @@ use Cassandane::Tiny;
 
 sub test_sieve_set_replication
     :min_version_3_3 :JMAPExtensions
+    :needs_component_replication
 {
     my ($self) = @_;
 
