@@ -716,6 +716,16 @@ sub check_sanity
         die "$tt directory contains no tests"
             if not $ntests;
     }
+
+    # whinge about 'tiny-tests' directories in unexpected places
+    # start searching in the parent directory so that we're checking the
+    # whole cyrus-imapd repository
+    my @unexpected_tt_dirs = grep {
+        chomp;
+        $_ ne '../cassandane/tiny-tests';
+    } qx{find .. -type d -name tiny-tests};
+    die "unexpected extra tiny-tests directories: @unexpected_tt_dirs"
+        if @unexpected_tt_dirs;
 }
 
 #
