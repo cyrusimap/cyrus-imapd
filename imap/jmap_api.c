@@ -1010,6 +1010,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
 
     json_t *jprimary = json_string(httpd_userid);
 
+    json_object_set(primary_accounts, JMAP_URN_BLOB, jprimary);
     json_object_set(primary_accounts, JMAP_URN_MAIL, jprimary);
     json_object_set(primary_accounts, JMAP_URN_SUBMISSION, jprimary);
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);

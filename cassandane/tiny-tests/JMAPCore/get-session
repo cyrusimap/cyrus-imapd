@@ -79,6 +79,7 @@ sub test_get_session
     $self->assert($coreCapability->{maxObjectsInGet} > 0);
     $self->assert($coreCapability->{maxObjectsInSet} > 0);
     $self->assert(exists $coreCapability->{collationAlgorithms});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:blob'});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:submission'});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:calendars'});
@@ -99,6 +100,7 @@ sub test_get_session
 
     # primaryAccounts
     my $expect_primaryAccounts = {
+        'urn:ietf:params:jmap:blob' => 'cassandane',
         'urn:ietf:params:jmap:mail' => 'cassandane',
         'urn:ietf:params:jmap:submission' => 'cassandane',
         'urn:ietf:params:jmap:calendars' => 'cassandane',
@@ -143,6 +145,7 @@ sub test_get_session
     $self->assert_equals(JSON::false, $primaryAccount->{isReadOnly});
     $self->assert_equals(JSON::true, $primaryAccount->{isPersonal});
     my $accountCapabilities = $primaryAccount->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:blob'});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
@@ -158,6 +161,7 @@ sub test_get_session
     $self->assert_equals(JSON::true, $account1->{isReadOnly});
     $self->assert_equals(JSON::false, $account1->{isPersonal});
     $accountCapabilities = $account1->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:blob'});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_equals(JSON::false, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
@@ -173,6 +177,7 @@ sub test_get_session
     $self->assert_equals(JSON::false, $account2->{isReadOnly});
     $self->assert_equals(JSON::false, $account2->{isPersonal});
     $accountCapabilities = $account2->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:blob'});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});

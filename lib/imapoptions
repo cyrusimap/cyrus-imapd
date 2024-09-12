@@ -1319,7 +1319,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "jmap_max_catenate_items", 100, INT, "3.6.0" }
 /* The maximum number of items that can be catenated together by
-   a JMAP Blob/set action.  Returned as the maxCatenateItems property
+   a JMAP Blob/upload action.  Returned as the maxDataSources property
    value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
    Default value is 100. */
 
@@ -1332,9 +1332,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    */
 
 { "jmap_max_size_blob_set", "4M", BYTESIZE, "3.8.0" }
-/* The maximum size that the JMAP API accepts for Blob/set. Returned as the
+/* The maximum size that the JMAP API accepts for Blob/upload. Returned as the
    maxSizeBlobSet property value of the JMAP
-   \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
+   \"urn:ietf:params:jmap:blob\" capabilities object.
 .PP
    For backward compatibility, if no unit is specified, kibibytes is assumed.
    */

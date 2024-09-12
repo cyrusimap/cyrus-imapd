@@ -65,12 +65,31 @@ static int jmap_blob_lookup(jmap_req_t *req);
 static int jmap_blob_upload(jmap_req_t *req);
 
 static jmap_method_t jmap_blob_methods_standard[] = {
-    /* JMAP Core API */
+    /* RFC 8620 */
     {
         "Blob/copy",
         JMAP_URN_CORE,
         &jmap_blob_copy,
         JMAP_READ_WRITE // no conversations, we need to get lock ordering first
+    },
+    /* RFC 9404 */
+    {
+        "Blob/get",
+        JMAP_URN_BLOB,
+        &jmap_blob_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Blob/lookup",
+        JMAP_URN_BLOB,
+        &jmap_blob_lookup,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Blob/upload",
+        JMAP_URN_BLOB,
+        &jmap_blob_upload,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -97,26 +116,43 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 
+static json_t *blob_capabilities = NULL;
+
 HIDDEN void jmap_blob_init(jmap_settings_t *settings)
 {
+    json_t *typenames = json_array();
+    // XXX - have a way to register these from each object?  Would
+    // also need to register the lookup logic at the same time though
+    json_array_append_new(typenames, json_string("Mailbox"));
+    json_array_append_new(typenames, json_string("Thread"));
+    json_array_append_new(typenames, json_string("Email"));
+    json_t *algorithms = json_array();
+    json_array_append_new(algorithms, json_string("md5"));
+    json_array_append_new(algorithms, json_string("sha"));
+#ifdef HAVE_SSL
+    json_array_append_new(algorithms, json_string("sha-256"));
+#endif
+
+    blob_capabilities =
+        json_pack("{s:i, s:i, s:o, s:o}",
+                  "maxSizeBlobSet",
+                  settings->limits[MAX_SIZE_BLOB_SET] / 1024,
+                  "maxdataSources",
+                  settings->limits[MAX_CATENATE_ITEMS],
+                  "supportedTypeNames",
+                  typenames,
+                  "supportedDigestAlgorithms",
+                  algorithms);
+
+    json_object_set_new(settings->server_capabilities,
+                        JMAP_URN_BLOB, json_object());
+
     jmap_add_methods(jmap_blob_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_t *typenames = json_array();
-        // XXX - have a way to register these from each object?  Would
-        // also need to register the lookup logic at the same time though
-        json_array_append_new(typenames, json_string("Mailbox"));
-        json_array_append_new(typenames, json_string("Thread"));
-        json_array_append_new(typenames, json_string("Email"));
-        json_t *algorithms = json_array();
-        json_array_append_new(algorithms, json_string("md5"));
-        json_array_append_new(algorithms, json_string("sha"));
-#ifdef HAVE_SSL
-        json_array_append_new(algorithms, json_string("sha-256"));
-#endif
         json_object_set_new(settings->server_capabilities,
                 JMAP_BLOB_EXTENSION,
-                json_pack("{s:i, s:i, s:o, s:o}",
+                json_pack("{s:i, s:i, s:O, s:O}",
                     "maxSizeBlobSet",
                     settings->limits[MAX_SIZE_BLOB_SET] / 1024,
                     "maxCatenateItems",
@@ -133,6 +169,8 @@ HIDDEN void jmap_blob_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_blob_capabilities(json_t *account_capabilities)
 {
+    json_object_set(account_capabilities, JMAP_URN_BLOB, blob_capabilities);
+
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities,
                 JMAP_BLOB_EXTENSION, json_object());
@@ -590,7 +628,8 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
     int32_t *datatypesp = rock;
 
     // support both "types" and "typeNames" selectors for now
-    if (!strcmp(key, "types") || !strcmp(key, "typeNames")) {
+    if (!strcmp(key, "typeNames") ||
+        (jmap_is_using(req, JMAP_BLOB_EXTENSION) && !strcmp(key, "types"))) {
         if (!json_is_array(arg)) {
             jmap_parser_invalid(parser, key);
             // field known, type wrong
@@ -999,7 +1038,7 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
             }
         }
     }
-    else {
+    else if (jmap_is_using(req, JMAP_BLOB_EXTENSION)) {
         jitem = json_object_get(arg, "catenate");
         if (JNOTNULL(jitem) && json_is_array(jitem)) {
             if (seen_one++) return IMAP_MAILBOX_EXISTS;
