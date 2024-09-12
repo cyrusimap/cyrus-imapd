@@ -62,6 +62,9 @@ ec LMTP_SERVER_FULL,
 ec LMTP_SERVER_FAILURE,
    "451 4.4.3 %s"
 
+ec LMTP_SERVER_BUSY,
+   "451 4.4.5 %s"
+
 ec LMTP_MAILBOX_FULL,
    "452 4.2.2 %s SESSIONID=<%s>"
 

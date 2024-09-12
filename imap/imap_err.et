@@ -56,6 +56,12 @@ ec IMAP_SYS_ERROR,
 ec IMAP_NOSPACE,
    "mail system storage has been exceeded"
 
+ec IMAP_LIMIT_USER,
+   "Too many connections from this user"
+
+ec IMAP_LIMIT_HOST,
+   "Too many connections from this host"
+
 ec IMAP_PERMISSION_DENIED,
    "Permission denied"
 

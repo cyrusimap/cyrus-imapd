@@ -149,6 +149,11 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
         code = LMTP_OK;
         break;
 
+    case IMAP_LIMIT_HOST:
+    case IMAP_LIMIT_USER:
+        code = LMTP_SERVER_BUSY;
+        break;
+
     case IMAP_SERVER_UNAVAILABLE:
     case MUPDATE_NOCONN:
     case MUPDATE_NOAUTH:
