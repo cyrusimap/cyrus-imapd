@@ -1,0 +1,185 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_get_session
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions :NoAltNameSpace
+    :want_smtpdaemon
+{
+    my ($self) = @_;
+
+    # need to version-gate jmap features that aren't in 3.2...
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    my $buildinfo = Cassandane::BuildInfo->new();
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "setup shared accounts";
+    $self->{instance}->create_user("account1");
+    $self->{instance}->create_user("account2");
+    $self->{instance}->create_user("account3");
+    $self->{instance}->create_user("account4");
+
+    # Account 1: read-only mail, calendars. No contacts.
+    my $httpService = $self->{instance}->get_service("http");
+    my $account1CalDAVTalk = Net::CalDAVTalk->new(
+        user => "account1",
+        password => 'pass',
+        host => $httpService->host(),
+        port => $httpService->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $account1CalendarId = $account1CalDAVTalk->NewCalendar({name => 'calendar1'});
+    $admintalk->setacl("user.account1", "cassandane", "lr") or die;
+    $admintalk->setacl("user.account1.#calendars.Default", "cassandane" => 'lr') or die;
+    $admintalk->setacl("user.account1.#addressbooks.Default", "cassandane" => '') or die;
+    # Account 2: read/write mail
+    $admintalk->setacl("user.account2", "cassandane", "lrswipkxtecdn") or die;
+    # Account 3: no access
+
+    # GET session
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+
+    # Validate session
+    $self->assert_not_null($session->{username});
+    $self->assert_not_null($session->{apiUrl});
+    $self->assert_not_null($session->{downloadUrl});
+    $self->assert_not_null($session->{uploadUrl});
+    if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+        $self->assert_not_null($session->{eventSourceUrl});
+    }
+    $self->assert_not_null($session->{state});
+
+    # Validate server capabilities
+    my $capabilities = $session->{capabilities};
+    $self->assert_not_null($capabilities);
+    my $coreCapability = $capabilities->{'urn:ietf:params:jmap:core'};
+    $self->assert_not_null($coreCapability);
+    $self->assert($coreCapability->{maxSizeUpload} > 0);
+    $self->assert($coreCapability->{maxConcurrentUpload} > 0);
+    $self->assert($coreCapability->{maxSizeRequest} > 0);
+    $self->assert($coreCapability->{maxConcurrentRequests} > 0);
+    $self->assert($coreCapability->{maxCallsInRequest} > 0);
+    $self->assert($coreCapability->{maxObjectsInGet} > 0);
+    $self->assert($coreCapability->{maxObjectsInSet} > 0);
+    $self->assert(exists $coreCapability->{collationAlgorithms});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:calendars'});
+    $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_deep_equals({ isRFC => JSON::true },
+        , $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
+        if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+            # jmap sieve added in 3.3
+            $self->assert_not_null($capabilities->{'urn:ietf:params:jmap:sieve'}->{implementation});
+            $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/sieve'});
+        }
+    }
+    if ($buildinfo->get('dependency', 'icalvcard')) {
+        $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:contacts'});
+    }
+
+    # primaryAccounts
+    my $expect_primaryAccounts = {
+        'urn:ietf:params:jmap:mail' => 'cassandane',
+        'urn:ietf:params:jmap:submission' => 'cassandane',
+        'urn:ietf:params:jmap:calendars' => 'cassandane',
+        'urn:ietf:params:jmap:principals' => 'cassandane',
+        'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
+        'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
+    };
+    if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+        # jmap backup and sieve added in 3.3
+        $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/backup'}
+            = 'cassandane';
+    }
+    if ($buildinfo->get('component', 'sieve')) {
+        $expect_primaryAccounts->{'urn:ietf:params:jmap:vacationresponse'}
+            = 'cassandane';
+        if ($maj > 3 || ($maj == 3 && $min >= 3)) {
+            # jmap sieve added in 3.3
+            $expect_primaryAccounts->{'urn:ietf:params:jmap:sieve'}
+            = 'cassandane';
+            $expect_primaryAccounts->{'https://cyrusimap.org/ns/jmap/sieve'}
+            = 'cassandane';
+        }
+    }
+    if ($buildinfo->get('dependency', 'icalvcard')) {
+        $expect_primaryAccounts->{'urn:ietf:params:jmap:contacts'}
+            = 'cassandane';
+    }
+    $self->assert_deep_equals($expect_primaryAccounts,
+                              $session->{primaryAccounts});
+
+    $self->assert_num_equals(3, scalar keys %{$session->{accounts}});
+    $self->assert_not_null($session->{accounts}{cassandane});
+
+    my $primaryAccount = $session->{accounts}{cassandane};
+    $self->assert_not_null($primaryAccount);
+    my $account1 = $session->{accounts}{account1};
+    $self->assert_not_null($account1);
+    my $account2 = $session->{accounts}{account2};
+    $self->assert_not_null($account2);
+
+    $self->assert_str_equals('cassandane', $primaryAccount->{name});
+    $self->assert_equals(JSON::false, $primaryAccount->{isReadOnly});
+    $self->assert_equals(JSON::true, $primaryAccount->{isPersonal});
+    my $accountCapabilities = $primaryAccount->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    }
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:calendars'});
+    $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+
+    # Account 1: read-only mail, calendars. No contacts.
+    $self->assert_str_equals('account1', $account1->{name});
+    $self->assert_equals(JSON::true, $account1->{isReadOnly});
+    $self->assert_equals(JSON::false, $account1->{isPersonal});
+    $accountCapabilities = $account1->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_equals(JSON::false, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    }
+    $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:calendars'});
+    $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+
+    # Account 2: read/write mail
+    $self->assert_str_equals('account2', $account2->{name});
+    $self->assert_equals(JSON::false, $account2->{isReadOnly});
+    $self->assert_equals(JSON::false, $account2->{isPersonal});
+    $accountCapabilities = $account2->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    if ($buildinfo->get('component', 'sieve')) {
+        $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    }
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:calendars'});
+    $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
+}
