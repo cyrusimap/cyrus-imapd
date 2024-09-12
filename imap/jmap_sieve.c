@@ -89,6 +89,30 @@ static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
 
 static jmap_method_t jmap_sieve_methods_standard[] = {
+    {
+        "SieveScript/get",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_get,
+        /*flags*/0
+    },
+    {
+        "SieveScript/set",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "SieveScript/query",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_query,
+        /*flags*/0
+    },
+    {
+        "SieveScript/validate",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_validate,
+        JMAP_NEED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
@@ -144,9 +168,15 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
     jmap_add_methods(jmap_sieve_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
-            JMAP_SIEVE_EXTENSION, json_object());
+                        JMAP_URN_SIEVE,
+                        json_pack("{s:s+}",
+                                  "implementation",
+                                  "Cyrus JMAP ", CYRUS_VERSION));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(settings->server_capabilities,
+                            JMAP_SIEVE_EXTENSION, json_object());
+
         jmap_add_methods(jmap_sieve_methods_nonstandard, settings);
     }
 
@@ -162,10 +192,10 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
         sieve_interp_t *interp = sieve_build_nonexec_interp();
         const strarray_t *ext = NULL;
 
-        sieve_capabilities = json_pack("{s:b s:n s:i s:I}",
-                                       "supportsTest", 1,
+        sieve_capabilities = json_pack("{s:n s:i s:i s:I}",
                                        "maxRedirects",
                                        "maxNumberScripts", maxscripts,
+                                       "maxSizeScriptName", SIEVEDIR_MAX_NAME_LEN,
                                        "maxSizeScript", maxscriptsize);
 
         if (interp && (ext = sieve_listextensions(interp))) {
@@ -195,7 +225,12 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
         if (interp) sieve_interp_free(&interp);
     }
 
-    json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
+    json_object_set(account_capabilities, JMAP_URN_SIEVE, sieve_capabilities);
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set(account_capabilities,
+                        JMAP_SIEVE_EXTENSION, sieve_capabilities);
+    }
 }
 
 static const jmap_property_t sieve_props[] = {
@@ -718,7 +753,8 @@ static void set_activate(const char *id,
 }
 
 struct sieve_set_args {
-    json_t *onSuccessActivate;
+    const char *onSuccessActivate;
+    int onSuccessDeactivate;
 };
 
 static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
@@ -731,9 +767,17 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
     int r = 1;
 
     if (!strcmp(key, "onSuccessActivateScript")) {
-        if (json_is_string(arg) || json_is_null(arg))
-            set->onSuccessActivate = arg;
+        if (json_is_string(arg))
+            set->onSuccessActivate = json_string_value(arg);
+        else if (json_is_null(arg) &&
+                 jmap_is_using(req, JMAP_SIEVE_EXTENSION))
+            set->onSuccessDeactivate = 1;
         else r = 0;
+    }
+
+    else if (json_is_boolean(arg) &&
+             !strcmp(key, "onSuccessDeactivatescript")) {
+        set->onSuccessDeactivate = json_boolean_value(arg);
     }
 
     else r = 0;
@@ -745,7 +789,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
-    struct sieve_set_args sub_args = { NULL };
+    struct sieve_set_args sub_args = { NULL, 0 };
     json_t *jerr = NULL;
     struct mailbox *mailbox = NULL;
     struct sieve_db *db = NULL;
@@ -764,8 +808,8 @@ static int jmap_sieve_set(struct jmap_req *req)
     }
 
     /* Validate scriptId in onSuccessActivateScript */
-    if (JNOTNULL(sub_args.onSuccessActivate)) {
-        const char *id = json_string_value(sub_args.onSuccessActivate);
+    if (sub_args.onSuccessActivate) {
+        const char *id = sub_args.onSuccessActivate;
         int found;
 
         jmap_parser_push(&parser, "onSuccessActivateScript");
@@ -854,13 +898,14 @@ static int jmap_sieve_set(struct jmap_req *req)
         set_destroy(script_id, mailbox, db, &set);
     }
 
-    if (sub_args.onSuccessActivate &&
-        !json_object_size(set.not_created) &&
+    if (!json_object_size(set.not_created) &&
         !json_object_size(set.not_updated) &&
         !json_array_size(set.not_destroyed)) {
 
-        id = json_string_value(sub_args.onSuccessActivate);
-        set_activate(id, mailbox, db, &set);
+        if (sub_args.onSuccessActivate)
+            set_activate(sub_args.onSuccessActivate, mailbox, db, &set);
+        else if (sub_args.onSuccessDeactivate)
+            set_activate(NULL, mailbox, db, &set);
     }
 
     /* Build response */

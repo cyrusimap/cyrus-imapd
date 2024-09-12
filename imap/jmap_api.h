@@ -62,6 +62,7 @@
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
+#define JMAP_URN_SIEVE      "urn:ietf:params:jmap:sieve"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
 #define JMAP_URN_CONTACTS   "urn:ietf:params:jmap:contacts"

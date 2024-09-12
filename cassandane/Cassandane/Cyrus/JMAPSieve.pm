@@ -101,7 +101,8 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/sieve',
+        'urn:ietf:params:jmap:sieve',
+        'https://cyrusimap.org/ns/jmap/sieve',  # for SieveScript/test
         'https://cyrusimap.org/ns/jmap/blob',
     ]);
 }
@@ -266,7 +267,7 @@ EOF
                     name => "bar"
                 }
             },
-            onSuccessActivateScript => JSON::null
+            onSuccessDeactivatescript => JSON::true
          }, "R3"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
@@ -320,7 +321,7 @@ EOF
     xlog "delete active script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
-            onSuccessActivateScript => JSON::null
+            onSuccessDeactivatescript => JSON::true
          }, "R8"],
         ['SieveScript/set', {
             destroy => [ $id1 ],
@@ -430,6 +431,7 @@ EOF
                     name => "bar"
                 }
             },
+            # legacy deactivation prior to onSuccessDeactivateScript
             onSuccessActivateScript => JSON::null
          }, "R3"]
     ]);
@@ -496,6 +498,7 @@ EOF
     xlog "delete active script";
     $res = $jmap->CallMethods([
         ['SieveScript/set', {
+            # legacy deactivation prior to onSuccessDeactivateScript
             onSuccessActivateScript => JSON::null
          }, "R8"],
         ['SieveScript/set', {

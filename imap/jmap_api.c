@@ -1020,6 +1020,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_BACKUP_EXTENSION, jprimary);
 #ifdef USE_SIEVE
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_SIEVE, jprimary);
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
