@@ -2957,7 +2957,7 @@ static int checklimits(const char *tag)
 {
     struct proc_limits limits;
 
-    limits.procname = "imapd";
+    limits.servicename = config_ident;
     limits.clienthost = imapd_clienthost;
     limits.userid = imapd_userid;
 
