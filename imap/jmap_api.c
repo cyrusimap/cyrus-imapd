@@ -555,6 +555,7 @@ static json_t *lookup_capabilities(const char *accountid,
     if (!strcmp(authuserid, accountid)) {
         /* Primary account has all capabilities */
         jmap_core_capabilities(capas);
+        jmap_blob_capabilities(capas);
         jmap_mail_capabilities(capas, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
@@ -578,6 +579,7 @@ static json_t *lookup_capabilities(const char *accountid,
                               &rock, MBOXTREE_INTERMEDIATES);
         if (rock.is_visible) {
             jmap_core_capabilities(capas);
+            jmap_blob_capabilities(capas);
             if (rock.has_mail) {
                 // we don't offer emailsubmission or vacation
                 // for shared accounts right now

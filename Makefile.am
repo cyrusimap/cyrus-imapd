@@ -1361,6 +1361,7 @@ imap_httpd_SOURCES += \
 	imap/jmap_calendar.c \
 	imap/jmap_calendar.h \
 	imap/jmap_contact.c \
+	imap/jmap_blob.c \
 	imap/jmap_core.c \
 	imap/jmap_ical.c \
 	imap/jmap_ical.h \

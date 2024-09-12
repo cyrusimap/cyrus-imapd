@@ -235,6 +235,7 @@ extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
+extern void jmap_blob_init(jmap_settings_t *settings);
 extern void jmap_mail_init(jmap_settings_t *settings);
 extern void jmap_mdn_init(jmap_settings_t *settings);
 extern void jmap_contact_init(jmap_settings_t *settings);
@@ -246,6 +247,7 @@ extern void jmap_sieve_init(jmap_settings_t *settings);
 extern void jmap_admin_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
+extern void jmap_blob_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
