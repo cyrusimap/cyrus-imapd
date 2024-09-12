@@ -1839,7 +1839,7 @@ int openinbox(void)
         mailbox_unlock_index(popd_mailbox, NULL);
     }
 
-    limits.procname = "pop3d";
+    limits.servicename = config_ident;
     limits.clienthost = popd_clienthost;
     limits.userid = popd_userid;
     if (proc_checklimits(&limits)) {
