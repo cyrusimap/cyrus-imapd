@@ -63,12 +63,15 @@ sub new
 
     $config->set(conversations => 'yes');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         deliver => 1,
         adminstore => 1,
         services => [ 'imap', 'sieve' ]
     }, @args);
+
+    $self->needs('component', 'sieve');
+    return $self;
 }
 
 sub set_up
