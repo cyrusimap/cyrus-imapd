@@ -1631,7 +1631,7 @@ static Xapian::Query *query_new_messageid(const xapian_db_t *db __attribute__((u
                                           enum search_part partnum,
                                           const char *str)
 {
-    return new Xapian::Query(std::string(get_term_prefix(partnum)) + str);
+    return new Xapian::Query(get_term_prefix(partnum) + str);
 }
 
 static Xapian::Query *query_new_email(const xapian_db_t *db,
