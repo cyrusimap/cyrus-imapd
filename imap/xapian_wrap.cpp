@@ -2092,8 +2092,6 @@ xapian_query_new_match(const xapian_db_t *db, enum search_part partnum, const ch
         return NULL;
     }
 
-    std::string(get_term_prefix(partnum));
-
     unsigned min_version = *db->db_versions->begin();
     if (min_version < XAPIAN_DB_MIN_SUPPORTED_VERSION) {
         xsyslog(LOG_WARNING,
