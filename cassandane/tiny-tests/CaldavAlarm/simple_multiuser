@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_simple_multiuser
-    :min_version_3_1 :needs_component_calalarmd :NoAltNameSpace
+    :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 
