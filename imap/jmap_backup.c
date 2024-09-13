@@ -115,18 +115,13 @@ static jmap_method_t jmap_backup_methods_nonstandard[] = {
 
 HIDDEN void jmap_backup_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_backup_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_backup_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                             JMAP_BACKUP_EXTENSION, json_object());
 
-        for (mp = jmap_backup_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_backup_methods_nonstandard, settings);
     }
 
     /* Initialize PRODID value

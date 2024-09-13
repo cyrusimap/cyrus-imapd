@@ -288,10 +288,7 @@ static int emailquery_cache_max_age = 0;
 
 HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_mail_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_mail_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_MAIL, json_object());
@@ -300,9 +297,7 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_MAIL_EXTENSION, json_object());
 
-        for (mp = jmap_mail_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_mail_methods_nonstandard, settings);
     }
 
     ptrarray_append(&settings->getblob_handlers, jmap_emailheader_getblob);

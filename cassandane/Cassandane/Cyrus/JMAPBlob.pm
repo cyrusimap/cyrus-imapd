@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011-2017 FastMail Pty Ltd. All rights reserved.
+#  Copyright (c) 2011-2024 FastMail Pty Ltd. All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions
@@ -37,19 +37,14 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::JMAPCore;
+package Cassandane::Cyrus::JMAPBlob;
 use strict;
 use warnings;
 use DateTime;
 use JSON::XS;
-use Net::CalDAVTalk 0.09;
-use Net::CardDAVTalk 0.03;
 use Mail::JMAPTalk 0.15;
 use Data::Dumper;
-use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
-use Encode qw(decode_utf8);
-use Cwd qw(abs_path getcwd);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -63,9 +58,8 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
-                 httpmodules => 'carddav caldav jmap',
+    $config->set(conversations => 'yes',
+                 httpmodules => 'jmap',
                  jmap_max_size_upload => '1k',
                  httpallowcompress => 'no');
 
@@ -77,6 +71,6 @@ sub new
     }, @args);
 }
 
-use Cassandane::Tiny::Loader 'tiny-tests/JMAPCore';
+use Cassandane::Tiny::Loader 'tiny-tests/JMAPBlob';
 
 1;

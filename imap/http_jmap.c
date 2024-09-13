@@ -185,6 +185,7 @@ static void jmap_init(struct buf *serverinfo)
     my_jmap_settings.server_capabilities = json_object();
 
     jmap_core_init(&my_jmap_settings);
+    jmap_blob_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
     jmap_mdn_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
@@ -238,7 +239,8 @@ static void jmap_reset(void)
 
 static void jmap_shutdown(void)
 {
-    free_hash_table(&my_jmap_settings.methods, NULL);
+    free_hash_table(&my_jmap_settings.methods,
+                    (void (*)(void *)) &ptrarray_free);
     json_decref(my_jmap_settings.server_capabilities);
     ptrarray_fini(&my_jmap_settings.getblob_handlers);
     int i;

@@ -59,9 +59,11 @@
 
 #define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
 #define JMAP_URN_CORE_INFO  "urn:ietf:params:jmap:core:backendInfo"
+#define JMAP_URN_BLOB       "urn:ietf:params:jmap:blob"
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
+#define JMAP_URN_SIEVE      "urn:ietf:params:jmap:sieve"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
 #define JMAP_URN_CONTACTS   "urn:ietf:params:jmap:contacts"
@@ -234,6 +236,7 @@ extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
+extern void jmap_blob_init(jmap_settings_t *settings);
 extern void jmap_mail_init(jmap_settings_t *settings);
 extern void jmap_mdn_init(jmap_settings_t *settings);
 extern void jmap_contact_init(jmap_settings_t *settings);
@@ -245,6 +248,7 @@ extern void jmap_sieve_init(jmap_settings_t *settings);
 extern void jmap_admin_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
+extern void jmap_blob_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
@@ -594,5 +598,7 @@ extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
 
 extern int jmap_findmbox_role(jmap_req_t *req, const char *role,
                               const mbentry_t **mbentryptr);
+
+extern void jmap_add_methods(jmap_method_t methods[], jmap_settings_t *settings);
 
 #endif /* JMAP_API_H */

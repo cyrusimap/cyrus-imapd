@@ -124,18 +124,13 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 
     if (!sieve_vacation_enabled) return;
 
-    jmap_method_t *mp;
-    for (mp = jmap_vacation_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_vacation_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_VACATION, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_vacation_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_vacation_methods_nonstandard, settings);
     }
 }
 

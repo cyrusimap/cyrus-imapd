@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_using_unknown_capability
+    :min_version_3_1 :needs_component_jmap
+{
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        },
+        content => encode_json({
+            using => [
+                'urn:ietf:params:jmap:core',
+                'urn:foo' # Unknown capability
+            ],
+            methodCalls => [['Core/echo', { hello => JSON::true }, 'R1']],
+        }),
+    };
+    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('400', $RawResponse->{status});
+
+    my $Response = eval { decode_json($RawResponse->{content}) };
+    $self->assert_str_equals('urn:ietf:params:jmap:error:unknownCapability', $Response->{type});
+}
