@@ -65,11 +65,14 @@ sub new
         'xlist-sent' => 'Sent',
         'xlist-trash' => 'Trash',
     );
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         adminstore => 1,
         deliver => 1,
     }, @_);
+
+    $self->needs('component', 'autocreate');
+    return $self;
 }
 
 sub set_up
@@ -85,7 +88,7 @@ sub tear_down
 }
 
 sub test_autocreate_specialuse
-     :min_version_3_0 :needs_component_autocreate :NoAltNameSpace
+     :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -115,7 +118,7 @@ sub test_autocreate_specialuse
 }
 
 sub test_autocreate_sieve_script_generation
-    :min_version_3_0 :needs_component_autocreate :needs_component_sieve
+    :min_version_3_0 :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -144,7 +147,7 @@ sub test_autocreate_sieve_script_generation
 }
 
 sub test_autocreate_acl
-    :min_version_3_1 :needs_component_autocreate :needs_component_sieve :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :NoAltNameSpace
 {
     my ($self) = @_;
 
