@@ -51,7 +51,11 @@ use Cassandane::Util::Words;
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({ gen => 0, services => ['nntp'] }, @args);
+
+    my $self = $class->SUPER::new({ gen => 0, services => ['nntp'] }, @args);
+
+    $self->needs('component', 'nttpd');
+    return $self;
 }
 
 sub set_up
@@ -86,7 +90,6 @@ sub tear_down
 my $stack_slosh = 256;
 
 sub test_cve_2011_3208_list_newsgroups
-    :needs_component_nttpd
 {
     my ($self) = @_;
 
@@ -103,7 +106,6 @@ sub test_cve_2011_3208_list_newsgroups
 }
 
 sub test_cve_2011_3208_list_active
-    :needs_component_nttpd
 {
     my ($self) = @_;
 
@@ -125,7 +127,7 @@ Cassandane::Cyrus::TestCase::magic(AllowNewNews => sub {
 });
 
 sub test_cve_2011_3208_newnews
-    :AllowNewNews :needs_component_nttpd
+    :AllowNewNews
 {
     my ($self) = @_;
 
