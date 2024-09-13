@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_copy_messages
-    :needs_search_xapian
 {
     my ($self) = @_;
 

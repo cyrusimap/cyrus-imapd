@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_squatter_attachextract_nolock
-    :min_version_3_9 :needs_search_xapian :SearchAttachmentExtractor
+    :min_version_3_9 :SearchAttachmentExtractor
 {
     my ($self) = @_;
     my $instance = $self->{instance};

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_stem_verbs
-    :min_version_3_0 :needs_search_xapian :JMAPExtensions
+    :min_version_3_0 :JMAPExtensions
 {
     my ($self) = @_;
     $self->create_testmessages();

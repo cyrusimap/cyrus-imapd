@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_noindex_multipartheaders
-    :needs_search_xapian
 {
     my ($self) = @_;
 

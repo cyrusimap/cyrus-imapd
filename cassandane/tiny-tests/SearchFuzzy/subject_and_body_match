@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_subject_and_body_match
-    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2
+    :min_version_3_0 :needs_dependency_cld2
 {
     my ($self) = @_;
 

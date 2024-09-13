@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_search_subjectsnippet
-    :min_version_3_0 :needs_search_xapian
+    :min_version_3_0
 {
     my ($self) = @_;
 
