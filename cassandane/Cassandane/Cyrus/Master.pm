@@ -531,6 +531,10 @@ sub test_service_exit_during_start
     $self->assert_null($lemm);
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
+
+    xlog $self, "check that the error was syslogged";
+    my @loglines = $self->{instance}->getsyslog();
+    $self->assert(grep { m/too many failures for service/ } @loglines);
 }
 
 sub test_startup
