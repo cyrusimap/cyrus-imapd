@@ -1425,12 +1425,21 @@ static void reap_child(void)
                         }
                         s->lastreadyfail = now;
                         if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
-                            syslog(LOG_ERR, "too many failures for "
-                                   "service %s/%s, disabling until next SIGHUP",
-                                   SERVICEPARAM(s->name),
-                                   SERVICEPARAM(s->familyname));
-                            service_forget_exec(s);
-                            xclose(s->socket);
+                            if (s->babysit) {
+                                syslog(LOG_ERR, "too many failures for"
+                                       "service %s/%s, disabling for %d seconds",
+                                       SERVICEPARAM(s->name),
+                                       SERVICEPARAM(s->familyname),
+                                       MAX_READY_FAIL_INTERVAL);
+                            }
+                            else {
+                                syslog(LOG_ERR, "too many failures for "
+                                       "service %s/%s, disabling until next SIGHUP",
+                                       SERVICEPARAM(s->name),
+                                       SERVICEPARAM(s->familyname));
+                                service_forget_exec(s);
+                                xclose(s->socket);
+                            }
                         }
                     }
                     break;
@@ -2838,6 +2847,18 @@ static void check_undermanned(struct service *s, int si, int wdi)
     } else if (s->exec
                 && s->babysit
                 && s->nactive == 0) {
+        if (s->nreadyfails >= MAX_READY_FAILS) {
+            // if not yet timed out, just wait
+            time_t now = time(NULL);
+            if (now - s->lastreadyfail <= MAX_READY_FAIL_INTERVAL)
+                return;
+            // otherwise, start but if we die again within the next
+            // MAX_READY_FAIL_INTERVAL, only try once more.  If we
+            // last more than that time without dying, the reap_child
+            // loop will zero out the fail counter.
+            s->nreadyfails--;
+            s->lastreadyfail = now;
+        }
         syslog(LOG_ERR,
                "lost all children for service: %s/%s.  " \
                "Applying babysitter.",
