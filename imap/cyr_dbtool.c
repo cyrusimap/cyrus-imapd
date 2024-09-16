@@ -327,6 +327,11 @@ int main(int argc, char *argv[])
 
         fprintf(stderr, "\n");
         fprintf(stderr, "\n");
+        fprintf(stderr, "Options:\n");
+        fprintf(stderr, "  -c     convert database to named backend if not already\n");
+        fprintf(stderr, "  -M     use \"improved_mboxlist_sort\" order\n");
+        fprintf(stderr, "  -n     create the database if it doesn't exist\n");
+        fprintf(stderr, "\n");
         fprintf(stderr, "Actions:\n");
         fprintf(stderr, "* show [<prefix>]\n");
         fprintf(stderr, "* get <key>\n");
