@@ -49,16 +49,21 @@
 
 typedef struct bitvector bitvector_t;
 
+#define BV_NOALLOCSIZE 8
+
 struct bitvector
 {
     unsigned int length;
     unsigned int alloc;
     /* TODO: should use natural word size, uint32_t or uint64_t,
      * for faster searching in bv_next_set() */
-    unsigned char *bits;
+    union {
+        unsigned char *alloced;
+        unsigned char _noalloc[BV_NOALLOCSIZE];
+    } bits;
 };
 
-#define BV_INITIALIZER  { 0, 0, NULL }
+#define BV_INITIALIZER  { 0, 0, {0} }
 
 extern void bv_init(bitvector_t *);
 extern void bv_setsize(bitvector_t *, unsigned int i);
@@ -77,6 +82,6 @@ extern int bv_first_set(const bitvector_t *);
 extern int bv_last_set(const bitvector_t *);
 extern unsigned bv_count(const bitvector_t *);
 extern char *bv_cstring(const bitvector_t *);
-extern void bv_free(bitvector_t *);
+extern void bv_fini(bitvector_t *);
 
 #endif /* __CYRUS_LIB_BITVECTOR_H__ */

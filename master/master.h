@@ -7,7 +7,6 @@
 #include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
 #include "strarray.h"
 
-/* needed for possible SNMP monitoring */
 struct service {
     char *name;                 /* name of service */
     char *listen;               /* port/socket to listen to */

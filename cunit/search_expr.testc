@@ -1,4 +1,8 @@
 #include "config.h"
+
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
+
 #include "cunit/cyrunit.h"
 #include "prot.h"
 #include "xmalloc.h"
@@ -14,11 +18,15 @@ static const char *userid = "fred";
 static struct auth_state *authstate = NULL;
 static int isadmin = 0;
 
+extern hash_table attrs_by_name; /* expose some search_expr internals */
+
 #define DATE1_RFC3501   "8-Dec-2012"
 #define DATE1_BEGIN     "1354885200"
 #define DATE1_MID       "1354928400"
 #define DATE1_END       "1354971600"
 #define DATE1_MID_TIME  1354928400
+
+#define DBDIR   "test-dbdir"
 
 static void test_get_search_program(void)
 {
@@ -44,7 +52,7 @@ static void test_get_search_program(void)
         buf_cstring(&actual_errs); \
         CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs); \
         if (c != EOF) { \
-            CU_ASSERT_STRING_EQUAL(charset_name(searchargs->charset), "us-ascii"); \
+            CU_ASSERT_STRING_EQUAL(charset_canon_name(searchargs->charset), "us-ascii"); \
             CU_ASSERT_PTR_NOT_NULL(searchargs->root); \
             actual_out = search_expr_serialise(searchargs->root); \
             CU_ASSERT_STRING_EQUAL(actual_out, expected_out); \
@@ -83,7 +91,7 @@ static void test_get_search_program(void)
 
     /* BCC <string> */
     TESTCASE("bcc \"shoreditch\"\r\n",
-             "(and (match bcc \"SHOREDITCH\"))");
+             "(and (match bcc \"shoreditch\"))");
 
     /* BEFORE <date> */
     TESTCASE("before "DATE1_RFC3501"\r\n",
@@ -91,11 +99,11 @@ static void test_get_search_program(void)
 
     /* BODY <string> */
     TESTCASE("body \"williamsburg\"\r\n",
-             "(and (match body \"WILLIAMSBURG\"))");
+             "(and (match body \"williamsburg\"))");
 
     /* CC <string> */
     TESTCASE("cc \"brooklyn\"\r\n",
-             "(and (match cc \"BROOKLYN\"))");
+             "(and (match cc \"brooklyn\"))");
 
     /* DELETED */
     TESTCASE("deleted\r\n",
@@ -111,11 +119,11 @@ static void test_get_search_program(void)
 
     /* FROM <string> */
     TESTCASE("from \"dreamcatcher\"\r\n",
-             "(and (match from \"DREAMCATCHER\"))");
+             "(and (match from \"dreamcatcher\"))");
 
     /* HEADER <field-name> <string> */
     TESTCASE("header \"Cosby\" \"Sweater\"\r\n",
-             "(and (match header:cosby \"SWEATER\"))");
+             "(and (match header:cosby \"Sweater\"))");
 
     /* KEYWORD <flag> */
     TESTCASE("keyword $Mustache\r\n",
@@ -139,7 +147,7 @@ static void test_get_search_program(void)
 
     /* NOT <search-key> */
     TESTCASE("not subject \"tumblr\"\r\n",
-             "(and (not (match subject \"TUMBLR\")))");
+             "(and (not (match subject \"tumblr\")))");
 
     /* OLD */
     /* inexplicably, the RFC specifies OLD != NOT NEW */
@@ -160,9 +168,9 @@ static void test_get_search_program(void)
     TESTCASE("or subject \"black\" subject \"white\"\r\n",
              "(and "
                 "(or "
-                    "(match subject \"BLACK\")"
+                    "(match subject \"black\")"
                     " "
-                    "(match subject \"WHITE\")"
+                    "(match subject \"white\")"
                 ")"
              ")");
 
@@ -205,15 +213,15 @@ static void test_get_search_program(void)
 
     /* SUBJECT <string> */
     TESTCASE("subject \"selvage\"\r\n",
-             "(and (match subject \"SELVAGE\"))");
+             "(and (match subject \"selvage\"))");
 
     /* TEXT <string> */
     TESTCASE("text \"letterpress\"\r\n",
-             "(and (match text \"LETTERPRESS\"))");
+             "(and (match text \"letterpress\"))");
 
     /* TO <string> */
     TESTCASE("to \"readymade\"\r\n",
-             "(and (match to \"READYMADE\"))");
+             "(and (match to \"readymade\"))");
 
     /* UID <sequence set> */
     TESTCASE("uid 1\r\n",
@@ -255,18 +263,18 @@ static void test_get_search_program(void)
     TESTCASE("(subject \"bicycle\" to \"rights\")\r\n",
              "(and "
                 "(and "
-                    "(match subject \"BICYCLE\")"
+                    "(match subject \"bicycle\")"
                     " "
-                    "(match to \"RIGHTS\")"
+                    "(match to \"rights\")"
                 ")"
              ")");
     TESTCASE("not (subject \"bicycle\" to \"rights\")\r\n",
              "(and "
                 "(not "
                     "(and "
-                        "(match subject \"BICYCLE\")"
+                        "(match subject \"bicycle\")"
                         " "
-                        "(match to \"RIGHTS\")"
+                        "(match to \"rights\")"
                     ")"
                 ")"
              ")");
@@ -274,12 +282,12 @@ static void test_get_search_program(void)
              "(and "
                 "(or "
                     "(and "
-                        "(match subject \"BICYCLE\")"
+                        "(match subject \"bicycle\")"
                         " "
-                        "(match to \"RIGHTS\")"
+                        "(match to \"rights\")"
                     ")"
                     " "
-                    "(match from \"QUINOA\")"
+                    "(match from \"quinoa\")"
                 ")"
              ")");
 
@@ -324,16 +332,16 @@ static void test_get_search_program(void)
     /* YOUNGER <nz-number> in seconds ago */
     /* Inexplicably, the RFC defines that *both*  YOUNGER and OLDER
      * include the specified second */
-    //time_push_fixed(DATE1_MID_TIME);
-    //TESTCASE("older 0\r\n",
-             //"(and (le internaldate "DATE1_MID"))");
-    //TESTCASE("older 43200\r\n",
-             //"(and (le internaldate "DATE1_BEGIN"))");
-    //TESTCASE("younger 0\r\n",
-             //"(and (ge internaldate "DATE1_MID"))");
-    //TESTCASE("younger 43200\r\n",
-             //"(and (ge internaldate "DATE1_BEGIN"))");
-    //time_pop();
+    time_push_fixed(DATE1_MID_TIME);
+    TESTCASE("older 0\r\n",
+             "(and (le internaldate "DATE1_MID"))");
+    TESTCASE("older 43200\r\n",
+             "(and (le internaldate "DATE1_BEGIN"))");
+    TESTCASE("younger 0\r\n",
+             "(and (ge internaldate "DATE1_MID"))");
+    TESTCASE("younger 43200\r\n",
+             "(and (ge internaldate "DATE1_BEGIN"))");
+    time_pop();
 
     /*
      * Search criteria from RFC 5257
@@ -357,17 +365,17 @@ static void test_get_search_program(void)
 
     /* XLISTID <string> */
     TESTCASE("xlistid \"semiotics\"\r\n",
-             "(and (match listid \"SEMIOTICS\"))");
+             "(and (match listid \"semiotics\"))");
 
     /* XCONTENTTYPE <string> */
     TESTCASE("xcontenttype text\r\n",
-             "(and (match contenttype \"TEXT\"))");
+             "(and (match contenttype \"text\"))");
     TESTCASE("xcontenttype \"text\"\r\n",
-             "(and (match contenttype \"TEXT\"))");
+             "(and (match contenttype \"text\"))");
     TESTCASE("xcontenttype \"plain\"\r\n",
-             "(and (match contenttype \"PLAIN\"))");
+             "(and (match contenttype \"plain\"))");
     TESTCASE("xcontenttype \"text_plain\"\r\n",
-             "(and (match contenttype \"TEXT_PLAIN\"))");
+             "(and (match contenttype \"text_plain\"))");
 
 /* TODO: test that conv* are rejected if conversations:off */
     /* CONVFLAG <flag> */
@@ -646,6 +654,7 @@ static void test_normalise(void)
         s = search_expr_serialise(e); \
         CU_ASSERT_STRING_EQUAL(s, expected_out); \
         search_expr_free(e); \
+        free(s); \
     }
 
     /*
@@ -672,9 +681,9 @@ static void test_normalise(void)
      * under a NOT node is already in DNF.
      */
     TESTCASE("(not (false))",
-             "(not (false))");
+             "(true)");
     TESTCASE("(not (true))",
-             "(not (true))");
+             "(false)");
     TESTCASE("(not (match subject \"ETSY\"))",
              "(not (match subject \"ETSY\"))");
     TESTCASE("(not (le size 123))",
@@ -740,7 +749,7 @@ static void test_normalise(void)
     TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
              "(and (le size 123) (match subject \"ETSY\"))");
     TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
-             "(and (match subject \"ETSY\") (not (le size 123)))");
+             "(and (not (le size 123)) (match subject \"ETSY\"))");
     TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
              "(and (le size 123) (not (match subject \"ETSY\")))");
 
@@ -752,7 +761,7 @@ static void test_normalise(void)
     TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
              "(or (le size 123) (match subject \"ETSY\"))");
     TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
-             "(or (match subject \"ETSY\") (not (le size 123)))");
+             "(or (not (le size 123)) (match subject \"ETSY\"))");
     TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
              "(or (le size 123) (not (match subject \"ETSY\")))");
 
@@ -788,11 +797,11 @@ static void test_normalise(void)
                 ")"
                 " "
                 "(and "
-                    "(match subject \"TUMBLR\")"
-                    " "
                     "(not "
                         "(le size 456)"
                     ")"
+                    " "
+                    "(match subject \"TUMBLR\")"
                 ")"
              ")");
 
@@ -1047,6 +1056,115 @@ static void test_normalise(void)
                 "(match subject \"ETSY\")"
              ")");
 
+    // Detrivialisation.
+
+    TESTCASE("(or "
+                "(not (true))"
+                " "
+                "(not (le size 123))"
+            ")",
+            "(not (le size 123))");
+
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(not (le size 789))"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(not (true))"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+            ")",
+            "(and "
+                "(not (le size 789))"
+                " "
+                "(match subject \"ETSY\")"
+            ")");
+
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(not (le size 123))"
+                    " "
+                    "(match body \"COSBY\")"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(not (true))"
+                    " "
+                    "(match body \"COSBY\")"
+                ")"
+            ")",
+            "(and "
+                "(not (le size 123))"
+                " "
+                "(match body \"COSBY\")"
+            ")");
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(true)"
+                    " "
+                    "(match subject \"ETSY\")"
+                    " "
+                    "(not (le size 789))"
+                    " "
+                    "(match body \"COSBY\")"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(true)"
+                    " "
+                    "(not (true))"
+                    " "
+                    "(match body \"COSBY\")"
+                    " "
+                    "(match subject \"ETSY\")"
+                ")"
+            ")",
+            "(and "
+                "(not (le size 789))"
+                " "
+                "(match subject \"ETSY\")"
+                " "
+                "(match body \"COSBY\")"
+            ")");
+
+    TESTCASE("(or "
+                "(and "
+                    "(true)"
+                    " "
+                    "(ge size 5)"
+                ")"
+                " "
+                "(and "
+                    "(true)"
+                    " "
+                    "(le size 10)"
+                ")"
+            ")",
+            "(or "
+                "(le size 10)"
+                " "
+                "(ge size 5)"
+            ")");
+
+
+
+
 #undef TESTCASE
 }
 
@@ -1153,14 +1271,14 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(not (match folder \"INBOX.Cosby.Sweater\"))",
              "(not (match folder \"INBOX.Cosby.Sweater\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))",
-             "(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))\n");
+             "(and (not (match folder \"INBOX.Cosby.Sweater\")) (match message-id \"ETSY\"))\n");
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
     TESTCASE("(and (match message-id \"ETSY\") (le size 123))",
              "(and (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (le size 123)))",
-             "(and (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(and (not (le size 123)) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
              "(and (le size 123) (not (match message-id \"ETSY\")))\n");
 
@@ -1180,7 +1298,7 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(or (match message-id \"ETSY\") (le size 123))",
              "(or (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (match message-id \"ETSY\") (not (le size 123)))",
-             "(or (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(or (not (le size 123)) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
              "(or (le size 123) (not (match message-id \"ETSY\")))\n");
 
@@ -1249,24 +1367,43 @@ static int set_up(void)
 {
     int r;
 
+    /* n.b. initalising like this skips the on-shutdown cleanup... */
     search_attr_init();
+
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "conversations: yes\n"
+    );
 
     r = mboxname_init_namespace(&ns, isadmin);
     if (r) return r;
 
     push_tz(TZ_MELBOURNE);
 
-    imapopts[IMAPOPT_CONVERSATIONS].val.b = 1;
-
     return 0;
 }
 
 static int tear_down(void)
 {
-    imapopts[IMAPOPT_CONVERSATIONS].val.b = 0;
+    int r;
+
+    /* ... so we need to reach in deep and clean up ourselves */
+    hash_iter *iter = hash_table_iter(&attrs_by_name);
+    while (hash_iter_next(iter)) {
+        struct search_attr *attr = hash_iter_val(iter);
+        if (attr->freeattr) attr->freeattr(&attr);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&attrs_by_name, NULL);
+
+    config_reset();
     restore_tz();
     time_restore();
-    return 0;
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 /* vim: set ft=c: */

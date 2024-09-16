@@ -1,0 +1,107 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_utcstart
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Initialize calendar timezone.
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    timeZone => 'America/New_York',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    # Assert utcStart for main event and recurrenceOverrides.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event1",
+                    start => "2019-12-06T11:21:01",
+                    duration => "PT5M",
+                    timeZone => "Europe/Vienna",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                    recurrenceOverrides => {
+                        '2019-12-07T11:21:01.8' => {
+                            start => '2019-12-07T13:00:00',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1'],
+            properties => ['utcStart', 'utcEnd', 'recurrenceOverrides'],
+        }, 'R2']
+    ]);
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId1);
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+
+    $self->assert_str_equals('2019-12-06T10:21:01Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-06T10:26:01Z', $event->{utcEnd});
+    $self->assert_str_equals('2019-12-07T12:00:00Z',
+        $event->{recurrenceOverrides}{'2019-12-07T11:21:01'}{utcStart});
+    $self->assert_str_equals('2019-12-07T12:05:00Z',
+        $event->{recurrenceOverrides}{'2019-12-07T11:21:01'}{utcEnd});
+
+    # Assert utcStart for regular recurrence instance.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [encode_eventid('eventuid1local', '20191208T112101')],
+            properties => ['utcStart', 'utcEnd'],
+        }, 'R2']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event);
+
+    $self->assert_str_equals('2019-12-08T10:21:01Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-08T10:26:01Z', $event->{utcEnd});
+
+    # Assert utcStart for floating event with calendar timeZone.
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                2 => {
+                    uid => 'eventuid2local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "event2",
+                    start => "2019-12-08T23:30:00",
+                    duration => "PT2H",
+                    timeZone => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#2'],
+            properties => ['utcStart', 'utcEnd', 'timeZone'],
+        }, 'R2']
+    ]);
+    my $eventId2 = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($eventId2);
+    $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+
+    # Floating event time falls back to calendar time zone America/New_York.
+    $self->assert_str_equals('2019-12-09T04:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-09T06:30:00Z', $event->{utcEnd});
+}

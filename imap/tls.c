@@ -69,7 +69,7 @@
 *
 *       tls_stop_servertls() sends the "close notify" alert via
 *       SSL_shutdown() to the peer and resets all connection specific
-*       TLS data. As RFC2487 does not specify a separate shutdown, it
+*       TLS data. As RFC 2487 does not specify a separate shutdown, it
 *       is supposed that the underlying TCP connection is shut down
 *       immediately afterwards, so we don't care about additional data
 *       coming through the channel.
@@ -149,7 +149,7 @@ static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;         /* actively dumping protocol? */
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
 static DH *dh_params = NULL;
 #endif
 
@@ -165,7 +165,7 @@ EXPORTED int tls_enabled(void)
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
     if (config_getswitch(IMAPOPT_CHATTY))
-            syslog(LOG_INFO, "TLS is available.");
+            xsyslog(LOG_INFO, "TLS is available.", NULL);
 
     return 1;
 }
@@ -240,7 +240,7 @@ static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
 }
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
  * in case no DH params in server_key or server_cert.
@@ -250,7 +250,7 @@ static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
  */
 static DH *get_dh1024(void)
 {
-    /* Second Oakley group 1024-bits MODP group from RFC2409 */
+    /* Second Oakley group 1024-bits MODP group from RFC 2409 */
     DH *dh;
     BIGNUM *p = NULL, *g = NULL;
 
@@ -453,43 +453,78 @@ static int tls_dump(const char *s, int len)
 static int set_cert_stuff(SSL_CTX * ctx,
                           const char *cert_file, const char *key_file)
 {
+    if (!cert_file) return 1;
+
+    int res = 0; // error state for any early exit
     int err;
-    if (cert_file != NULL) {
-        /* SSL_CTX_use_certificate_chain_file() requires an empty error stack.
-         * To make sure there is no error from previous op, we clear it here...
-         */
-        ERR_clear_error();
-        if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
+    char *cf1 = xstrdup(cert_file);
+    char *kf1 = xstrdup(key_file ? key_file : cert_file);
+    char *cf2 = strchr(cf1, ',');
+    char *kf2 = strchr(kf1, ',');
+    /* SSL_CTX_use_certificate_chain_file() requires an empty error stack.
+     * To make sure there is no error from previous op, we clear it here...
+     */
+    ERR_clear_error();
+
+    /* if two comma-separated files provided in cert_file or key_file,
+     * split here */
+    if (cf2) *cf2++ = '\0';
+    if (kf2) *kf2++ = '\0';
+
+    if (SSL_CTX_use_certificate_chain_file(ctx, cf1) <= 0) {
+        err = ERR_get_error();
+        syslog(LOG_ERR, "unable to get certificate from '%s': %s",
+               cf1, ERR_reason_error_string(err));
+        goto done;
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, kf1, SSL_FILETYPE_PEM) <= 0) {
+        err = ERR_get_error();
+        syslog(LOG_ERR, "unable to get private key from '%s': %s",
+               kf1, ERR_reason_error_string(err));
+        goto done;
+    }
+    /* Now we know that a key and cert have been set against
+     * the SSL context */
+    if (!SSL_CTX_check_private_key(ctx)) {
+        err = ERR_get_error();
+        syslog(LOG_ERR, "Private key '%s' does not match public key '%s': %s",
+               kf1, cf1, ERR_reason_error_string(err));
+        goto done;
+    }
+
+    if (cf2) {
+        /* Load second certificate */
+        if (SSL_CTX_use_certificate_chain_file(ctx, cf2) <= 0) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "unable to get certificate from '%s'", cert_file);
-            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
-            return 0;
+            syslog(LOG_ERR, "unable to get certificate from '%s': %s",
+                   cf2, ERR_reason_error_string(err));
+            goto done;
         }
-        if (key_file == NULL)
-            key_file = cert_file;
-        if (SSL_CTX_use_PrivateKey_file(ctx, key_file,
-                                        SSL_FILETYPE_PEM) <= 0) {
+        // if no second key file, use second certificate file
+        if (!kf2) kf2 = cf2;
+        if (SSL_CTX_use_PrivateKey_file(ctx, kf2, SSL_FILETYPE_PEM) <= 0) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "unable to get private key from '%s'", key_file);
-            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
-            return 0;
+            syslog(LOG_ERR, "unable to get private key from '%s': %s",
+                   kf2, ERR_reason_error_string(err));
+            goto done;
         }
         /* Now we know that a key and cert have been set against
          * the SSL context */
         if (!SSL_CTX_check_private_key(ctx)) {
             err = ERR_get_error();
-            syslog(
-                    LOG_ERR,
-                    "Private key '%s' does not match public key '%s'",
-                    cert_file,
-                    key_file
-                );
-            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
-            return 0;
+            syslog(LOG_ERR, "Private key '%s' does not match public key '%s': %s",
+                   kf2, cf2, ERR_reason_error_string(err));
+            goto done;
         }
     }
 
-    return 1;
+    // set success
+    res = 1;
+
+ done:
+    free(cf1);
+    free(kf1);
+    return res;
 }
 
 /*
@@ -704,7 +739,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char   *client_ca_file;
     const char   *server_ca_file;
     const char   *server_cert_file;
-    const char   *server_dhparam_file;
     const char   *server_key_file;
     const char   *crl_file_path;
     enum enum_value tls_client_certs;
@@ -750,6 +784,15 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     off |= SSL_OP_NO_COMPRESSION; /* Disable TLS compression */
 
     const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
+
+    if (strstr(tls_versions, "tls1_3") == NULL) {
+#if (OPENSSL_VERSION_NUMBER >= 0x1010100fL)
+        //syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.3");
+        off |= SSL_OP_NO_TLSv1_3;
+#else
+        syslog(LOG_ERR, "ERROR: TLSv1.3 configured, OpenSSL < 1.1.1 insufficient");
+#endif // (OPENSSL_VERSION_NUMBER >= 0x1010100fL)
+    }
 
     if (strstr(tls_versions, "tls1_2") == NULL) {
 #if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
@@ -839,7 +882,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
     server_cert_file = config_getstring(IMAPOPT_TLS_SERVER_CERT);
-    server_dhparam_file = config_getstring(IMAPOPT_TLS_SERVER_DHPARAM);
     server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
 
     if (config_debug) {
@@ -905,8 +947,11 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    SSL_CTX_set_dh_auto(s_ctx, 1);
+#elif (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     /* Load DH params for DHE-* key exchanges */
+    const char *server_dhparam_file = config_getstring(IMAPOPT_TLS_SERVER_DHPARAM);
     dh_params = load_dh_param(server_dhparam_file, server_key_file, server_cert_file);
     SSL_CTX_set_tmp_dh(s_ctx, dh_params);
 #endif
@@ -915,12 +960,16 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
     int openssl_nid = OBJ_sn2nid(ec);
     if (openssl_nid != 0) {
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+        SSL_CTX_set1_curves(s_ctx, &openssl_nid, 1);
+#else
         EC_KEY *ecdh;
         ecdh = EC_KEY_new_by_curve_name(openssl_nid);
         if (ecdh != NULL) {
             SSL_CTX_set_tmp_ecdh(s_ctx, ecdh);
             EC_KEY_free(ecdh);
         }
+#endif
     }
 #endif
 
@@ -992,10 +1041,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                                    SSL_SESS_CACHE_NO_AUTO_CLEAR |
                                    SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
 
-    /* Get the session timeout from the config file (in minutes) */
-    timeout = config_getint(IMAPOPT_TLS_SESSION_TIMEOUT);
+    /* Get the session timeout from the config file */
+    timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT, 'm');
     if (timeout < 0) timeout = 0;
-    if (timeout > 1440) timeout = 1440; /* 24 hours max */
+    if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
 
     /* A timeout of zero disables session caching */
     if (timeout) {
@@ -1006,8 +1055,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         /* Set the context for session reuse -- use the service ident */
         SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
 
-        /* Set the timeout for the internal/external cache (in seconds) */
-        SSL_CTX_set_timeout(s_ctx, timeout*60);
+        /* Set the timeout for the internal/external cache */
+        SSL_CTX_set_timeout(s_ctx, timeout);
 
         /* Set the callback functions for the external session cache */
         SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
@@ -1025,7 +1074,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &sessdb);
         if (r != 0) {
             syslog(LOG_ERR, "DBERROR: opening %s: %s",
-                   fname, cyrusdb_strerror(ret));
+                   fname, cyrusdb_strerror(r));
         }
         else
             sess_dbopen = 1;
@@ -1042,20 +1091,22 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
 /* taken from OpenSSL apps/s_cb.c */
 
-static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-                        long argl __attribute__((unused)), long ret)
+static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
+                        size_t len __attribute__((unused)), int argi,
+                        long argl __attribute__((unused)), int ret,
+                        size_t *processed __attribute__((unused)))
 {
     if (!do_dump)
         return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-        printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))",
+        printf("read from %08lX [%08lX] (%d bytes => %d (0x%X))",
                (unsigned long)bio, (unsigned long)argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
         return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-        printf("write to %08lX [%08lX] (%d bytes => %ld (0x%lX))",
+        printf("write to %08lX [%08lX] (%d bytes => %d (0x%X))",
                (unsigned long) bio, (unsigned long)argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
@@ -1127,7 +1178,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
      * created for us, so we can use it for debugging purposes.
      */
     if (var_imapd_tls_loglevel >= 3)
-        BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+        BIO_set_callback_ex(SSL_get_rbio(tls_conn), bio_dump_cb);
 
     /* Dump the negotiation for loglevels 3 and 4*/
     if (var_imapd_tls_loglevel >= 3)
@@ -1324,7 +1375,7 @@ EXPORTED int tls_reset_servertls(SSL **conn)
         if (TLS_FAST_SHUTDOWN) {
             /*
              * Don't bother spending time closing the TLS session,
-             * but make sure its available for reuse.
+             * but make sure it is available for reuse.
              */
             SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
         }
@@ -1358,7 +1409,7 @@ EXPORTED int tls_shutdown_serverengine(void)
             sess_dbopen = 0;
         }
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
         if (dh_params) DH_free(dh_params);
 #endif
     }
@@ -1488,8 +1539,8 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     int     verify_flags = SSL_VERIFY_NONE;
     const char   *server_ca_dir;
     const char   *server_ca_file;
-    char   *client_cert;
-    char   *client_key;
+    const char   *client_cert;
+    const char   *client_key;
 
     if (tls_clientengine)
         return (0);                             /* already running */
@@ -1542,17 +1593,17 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     if (!var_server_cert || strlen(var_server_cert) == 0)
         client_cert = NULL;
     else
-        client_cert = xstrdup(var_server_cert);
+        client_cert = var_server_cert;
 
     if (!var_server_key || strlen(var_server_key) == 0)
         client_key = NULL;
     else
-        client_key = xstrdup(var_server_key);
+        client_key = var_server_key;
 
     if (client_cert || client_key) {
         if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
             syslog(LOG_ERR,"TLS client engine: cannot load cert/key data, may be a cert/key mismatch?");
-            return (-1);
+            return -1;
         }
     }
 
@@ -1571,7 +1622,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
                         int *layerbits, char **authid, SSL **ret,
                         SSL_SESSION **sess)
 {
-    int     sts;
     const SSL_CIPHER *cipher;
     X509   *peer;
     const char *tls_protocol = NULL;
@@ -1615,7 +1665,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
      * created for us, so we can use it for debugging purposes.
      */
     if (var_proxy_tls_loglevel >= 3)
-        BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+        BIO_set_callback_ex(SSL_get_rbio(tls_conn), bio_dump_cb);
 
     /* Dump the negotiation for loglevels 3 and 4*/
     if (var_proxy_tls_loglevel >= 3)
@@ -1624,16 +1674,26 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     if (sess && *sess)  /* Reuse a session if we have one */
         SSL_set_session(tls_conn, *sess);
 
-    if ((sts = SSL_connect(tls_conn)) <= 0) {
+    if (SSL_connect(tls_conn) <= 0) {
         SSL_SESSION *session = SSL_get_session(tls_conn);
         if (session) {
             SSL_CTX_remove_session(c_ctx, session);
         }
-        if (sess) *sess = NULL;
+        if (sess) {
+            if (*sess)
+                SSL_SESSION_free(*sess);
+            *sess = NULL;
+        }
         r = -1;
         goto done;
     }
-    if (sess) *sess = SSL_get_session(tls_conn);
+
+    /* Session may have been renegotiated; make sure we cache the right one */
+    if (sess) {
+        if (*sess)
+            SSL_SESSION_free(*sess);
+        *sess = SSL_get1_session(tls_conn);
+    }
 
     /* Only loglevel==4 dumps everything */
     if (var_proxy_tls_loglevel < 4)
@@ -1689,6 +1749,41 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     *ret = tls_conn;
 
     return r;
+}
+
+/* Select an application protocol from the client list in order of preference */
+EXPORTED int tls_alpn_select(SSL *ssl __attribute__((unused)),
+                             const unsigned char **out, unsigned char *outlen,
+                             const unsigned char *in, unsigned int inlen,
+                             void *server_list)
+{
+    strarray_t ids = STRARRAY_INITIALIZER;
+
+    for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
+        struct tls_alpn_t *alpn;
+
+        for (alpn = (struct tls_alpn_t *) server_list; alpn->id; alpn++) {
+            if ((in[0] == strlen(alpn->id)) &&
+                memcmp(alpn->id, in + 1, in[0]) == 0 &&
+                (!alpn->check_availabilty || alpn->check_availabilty(alpn->rock))) {
+
+                strarray_fini(&ids);
+
+                *out = in + 1;
+                *outlen = in[0];
+                return SSL_TLSEXT_ERR_OK;
+            }
+        }
+
+        strarray_appendm(&ids, xstrndup((const char *) in + 1, in[0]));
+    }
+
+    char *proto = strarray_join(&ids, ", ");
+    xsyslog(LOG_NOTICE, "ALPN failed", "proto=<%s>", proto);
+    free(proto);
+    strarray_fini(&ids);
+
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
 #else

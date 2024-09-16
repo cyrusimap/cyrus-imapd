@@ -88,18 +88,25 @@ static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
 };
 
 /* IMAP atoms for various quota resources */
-EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
-    "STORAGE",                  /* QUOTA_STORAGE -- RFC2087 */
-    "MESSAGE",                  /* QUOTA_MESSAGE -- RFC2087 */
+EXPORTED const char * const legacy_quota_names[QUOTA_NUMRESOURCES] = {
+    "STORAGE",                  /* QUOTA_STORAGE -- RFC 2087 */
+    "MESSAGE",                  /* QUOTA_MESSAGE -- RFC 2087 */
     "X-ANNOTATION-STORAGE",     /* QUOTA_ANNOTSTORAGE */
     "X-NUM-FOLDERS"             /* QUOTA_NUMFOLDERS */
 };
 
+EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
+    "STORAGE",                  /* QUOTA_STORAGE      -- RFC 9208 */
+    "MESSAGE",                  /* QUOTA_MESSAGE      -- RFC 9208 */
+    "ANNOTATION-STORAGE",       /* QUOTA_ANNOTSTORAGE -- RFC 9208 */
+    "MAILBOX"                   /* QUOTA_NUMFOLDERS   -- RFC 9208 */
+};
+
 EXPORTED const quota_t quota_units[QUOTA_NUMRESOURCES] = {
-    1024,               /* QUOTA_STORAGE -- RFC2087 */
-    1,                  /* QUOTA_MESSAGE -- RFC2087 */
-    1024,               /* QUOTA_ANNOTSTORAGE */
-    1                   /* QUOTA_NUMFOLDERS */
+    1024,               /* QUOTA_STORAGE      -- RFC 9208 */
+    1,                  /* QUOTA_MESSAGE      -- RFC 9208 */
+    1024,               /* QUOTA_ANNOTSTORAGE -- RFC 9208 */
+    1                   /* QUOTA_NUMFOLDERS   -- RFC 9208 */
 };
 
 EXPORTED int quota_name_to_resource(const char *str)
@@ -231,6 +238,30 @@ out:
     return r;
 }
 
+EXPORTED int quota_read_withconversations(struct quota *quota)
+{
+    int r = quota_read(quota, NULL, 0);
+    if (r) return r;
+
+    if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
+        struct conversations_state *local_cstate = NULL;
+        struct conversations_state *cstate = conversations_get_mbox(quota->root);
+        if (!cstate) {
+            conversations_open_mbox(quota->root, /*shared*/1, &local_cstate);
+            cstate = local_cstate;
+        }
+        if (cstate) {
+            struct conv_quota q = CONV_QUOTA_INIT;
+            conversations_read_quota(cstate, &q);
+            quota->useds[QUOTA_STORAGE] = q.storage;
+            quota->useds[QUOTA_MESSAGE] = q.emails;
+        }
+        if (local_cstate) conversations_commit(&local_cstate);
+    }
+
+    return 0;
+}
+
 /*
  * Read the quota entry 'quota'
  */
@@ -321,6 +352,8 @@ EXPORTED int quota_check(const struct quota *q,
 EXPORTED void quota_use(struct quota *q,
                enum quota_resource res, quota_t delta)
 {
+    if (delta)
+        q->dirty = 1;
     /* prevent underflow */
     if ((delta < 0) && (-delta > q->useds[res])) {
         syslog(LOG_INFO, "Quota underflow for root %s, resource %s,"
@@ -427,7 +460,7 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    if (mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
+    if (quota->dirty && mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
         if (silent)
             quota->modseq = mboxname_setquotamodseq(quota->root, quota->modseq);
         else
@@ -480,7 +513,8 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
 
 EXPORTED int quota_update_useds(const char *quotaroot,
                        const quota_t diff[QUOTA_NUMRESOURCES],
-                       const char *mboxname)
+                       const char *mboxname,
+                       int silent)
 {
     struct quota q;
     struct txn *tid = NULL;
@@ -495,11 +529,12 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     quota_init(&q, quotaroot);
 
     r = quota_read(&q, &tid, 1);
+    if (r) syslog(LOG_ERR, "QUOTAERROR: failed to read quota for %s (%s)", mboxname, error_message(r));
 
     if (!r) {
         int res;
         int cmp = 1;
-        if (q.scanmbox) {
+        if (mboxname && q.scanmbox) {
             cmp = cyrusdb_compar(qdb, mboxname, strlen(mboxname),
                                  q.scanmbox, strlen(q.scanmbox));
         }
@@ -515,7 +550,8 @@ EXPORTED int quota_update_useds(const char *quotaroot,
                 mboxevent_extract_quota(mboxevent, &q, res);
             }
         }
-        r = quota_write(&q, 0/*force*/, &tid);
+        r = quota_write(&q, silent, &tid);
+        if (r) syslog(LOG_ERR, "QUOTAERROR: failed to write quota for %s (%s)", mboxname, error_message(r));
     }
 
     if (r) {
@@ -562,7 +598,7 @@ EXPORTED int quota_check_useds(const char *quotaroot,
         return 0;           /* all negative */
 
     quota_init(&q, quotaroot);
-    r = quota_read(&q, NULL, /*wrlock*/0);
+    r = quota_read_withconversations(&q);
 
     if (r == IMAP_QUOTAROOT_NONEXISTENT) {
         r = 0;
@@ -684,9 +720,6 @@ EXPORTED void quotadb_open(const char *fname)
         tofree = strconcat(config_dir, FNAME_QUOTADB, (char *)NULL);
         fname = tofree;
     }
-
-    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
-        flags |= CYRUSDB_MBOXSORT;
 
     ret = cyrusdb_open(QDB, fname, flags, &qdb);
     if (ret != 0) {

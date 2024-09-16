@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_recurrenceinstances
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog $self, "create event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    uid => 'event1uid',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        count => 5,
+                    }, {
+                        frequency => 'daily',
+                        count => 2,
+                    }],
+                    recurrenceOverrides => {
+                        '2019-01-15T09:00:00' => {
+                            title => 'override1',
+                        },
+                        '2019-01-10T12:00:00' => {
+                            # rdate
+                        },
+                        '2019-01-22T09:00:00' => {
+                            excluded => JSON::true,
+                        },
+                    },
+                },
+            }
+        }, 'R1']
+    ]);
+
+    my @ids = (
+        encode_eventid('event1uid','20190108T090000'),
+        encode_eventid('event1uid','20190115T090000'),
+        encode_eventid('event1uid','20190110T120000'),
+        encode_eventid('event1uid','20190122T090000'), # is excluded
+        encode_eventid('event1uid','20191201T090000'), # does not exist
+        encode_eventid('event1uid','20190102T090000'), # from second rrule
+    );
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+                ids => \@ids,
+                properties => ['start', 'title', 'recurrenceId'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{list}});
+
+    $self->assert_str_equals($ids[0], $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{start});
+    $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{recurrenceId});
+
+    $self->assert_str_equals($ids[1], $res->[0][1]{list}[1]{id});
+    $self->assert_str_equals('override1', $res->[0][1]{list}[1]{title});
+    $self->assert_str_equals('2019-01-15T09:00:00', $res->[0][1]{list}[1]{start});
+    $self->assert_str_equals('2019-01-15T09:00:00', $res->[0][1]{list}[1]{recurrenceId});
+
+    $self->assert_str_equals($ids[2], $res->[0][1]{list}[2]{id});
+    $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{start});
+    $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{recurrenceId});
+
+    $self->assert_str_equals($ids[5], $res->[0][1]{list}[3]{id});
+    $self->assert_str_equals('2019-01-02T09:00:00', $res->[0][1]{list}[3]{start});
+    $self->assert_str_equals('2019-01-02T09:00:00', $res->[0][1]{list}[3]{recurrenceId});
+
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{notFound}});
+    $self->assert_str_equals($ids[3], $res->[0][1]{notFound}[0]);
+    $self->assert_str_equals($ids[4], $res->[0][1]{notFound}[1]);
+}

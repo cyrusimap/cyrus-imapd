@@ -405,8 +405,18 @@ int main(int argc, char **argv, char **envp)
         int ret;
         const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
         if (debugger) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wformat-security"
+            /* This is exactly the kind of usage that -Wformat is designed to
+             * complain about (using user-supplied string as format argument),
+             * but in this case the "user" is the server administrator, and
+             * they're about to attach a debugger, so worrying about leaking
+             * contents of memory here is a little silly! :)
+             */
             snprintf(debugbuf, sizeof(debugbuf), debugger,
                      argv[0], getpid(), service);
+#pragma GCC diagnostic pop
             syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
             ret = system(debugbuf); /* run debugger */
             syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
@@ -611,22 +621,25 @@ int main(int argc, char **argv, char **envp)
         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
         syslog(LOG_DEBUG, "accepted connection");
 
-        if (fd != 0 && dup2(fd, 0) < 0) {
+        if (fd != STDIN_FILENO && dup2(fd, STDIN_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
-        if (fd != 1 && dup2(fd, 1) < 0) {
+        if (fd != STDOUT_FILENO && dup2(fd, STDOUT_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
-        if (fd != 2 && dup2(fd, 2) < 0) {
+#if 0  /* XXX  This appears to have no valid use (and breaks wire protocols).
+          We should look into capturing stderr and sending it to syslog. */
+        if (fd != STDERR_FILENO && dup2(fd, STDERR_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
+#endif
 
         /* tcp only */
         if(soctype == SOCK_STREAM) {
-            if (fd > 2) close(fd);
+            if (fd > STDERR_FILENO) close(fd);
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);

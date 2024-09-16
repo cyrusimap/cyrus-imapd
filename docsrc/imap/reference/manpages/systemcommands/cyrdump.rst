@@ -30,7 +30,7 @@ Options
 
     Alternate config file.
     
-.. option:: -v
+.. option:: -v, --verbose
 
     Produce verbose output on errors.
 

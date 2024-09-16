@@ -1,0 +1,159 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_recurrenceinstances
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog $self, "create event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarIds => {
+                        $calid => JSON::true,
+                    },
+                    uid => 'event1uid',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'weekly',
+                        count => 5,
+                    }],
+                },
+            }
+        }, 'R1']
+    ]);
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId1);
+
+    # This test hard-codes the ids of recurrence instances.
+    # This might break if we change the id scheme.
+
+    xlog $self, "Override a regular recurrence instance";
+    my $overrideId1 = encode_eventid('event1uid','20190115T090000');
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $overrideId1 => {
+                    title => "override1",
+                },
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
+    $self->assert_deep_equals({
+            '2019-01-15T09:00:00' => {
+                title => "override1",
+            },
+        }, $res->[1][1]{list}[0]{recurrenceOverrides}
+    );
+
+    xlog $self, "Update an existing override";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $overrideId1 => {
+                    title => "override1_updated",
+                },
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
+    $self->assert_deep_equals({
+            '2019-01-15T09:00:00' => {
+                title => "override1_updated",
+            },
+        }, $res->[1][1]{list}[0]{recurrenceOverrides}
+    );
+
+    xlog $self, "Revert an override into a regular recurrence";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $overrideId1 => {
+                    title => "event1", # original title
+                },
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$overrideId1});
+    $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
+
+    xlog $self, "Set regular recurrence excluded";
+    my $overrideId2 = encode_eventid('event1uid','20190108T090000');
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $overrideId2 => {
+                    excluded => JSON::true,
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$overrideId2});
+    $self->assert_deep_equals({
+        '2019-01-08T09:00:00' => {
+            excluded => JSON::true,
+        }
+    }, $res->[1][1]{list}[0]{recurrenceOverrides});
+
+    xlog $self, "Reset overrides";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId1 => {
+                    recurrenceOverrides => undef,
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId1],
+            properties => ['recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId1});
+    $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
+
+    xlog $self, "Destroy regular recurrence instance";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [$overrideId2],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['event1uid'],
+            properties => ['recurrenceOverrides'],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals($overrideId2, $res->[0][1]{destroyed}[0]);
+    $self->assert_deep_equals({
+        '2019-01-08T09:00:00' => {
+            excluded => JSON::true,
+        }
+    }, $res->[1][1]{list}[0]{recurrenceOverrides});
+}

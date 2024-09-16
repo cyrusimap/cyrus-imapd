@@ -1,0 +1,112 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_itip_preserve_partstat
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my ($otherJmap, $otherCalDAV) = $self->create_user('other');
+
+    xlog 'create event and invite other user';
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    uid => 'event1uidlocal',
+                    title => 'event1',
+                    start => '2020-01-01T09:00:00',
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        other => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:other@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog 'Other user accepts invitation';
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['participants'],
+        }, 'R1'],
+    ]);
+    my $otherId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($otherId);
+    $self->assert_str_equals('needs-action',
+        $res->[0][1]{list}[0]{participants}{other}{participationStatus});
+
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $otherId => {
+                    'participants/other/participationStatus' => 'accepted',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$otherId});
+
+    xlog 'Reschedule event and send to other user';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['participants'],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('accepted',
+        $res->[0][1]{list}[0]{participants}{other}{participationStatus});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    start => '2020-01-08T09:00:00',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', { }, 'R2'],
+
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog 'Other user receives updated event, is still accepted';
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/get', {
+            properties => ['start', 'participants'],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('2020-01-08T09:00:00',
+        $res->[0][1]{list}[0]{start});
+    $self->assert_str_equals('accepted',
+        $res->[0][1]{list}[0]{participants}{other}{participationStatus});
+}

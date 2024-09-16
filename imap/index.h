@@ -58,7 +58,7 @@
 #include "annotate.h" /* for strlist functionality */
 #include "search_engines.h"
 #include "message_guid.h"
-#include "sequence.h"
+#include "seqset.h"
 #include "strarray.h"
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
@@ -72,7 +72,7 @@ extern unsigned client_capa;
 struct message;
 
 struct vanished_params {
-    unsigned long uidvalidity;
+    uint32_t uidvalidity;
     modseq_t modseq;
     const char *match_seq;
     const char *match_uid;
@@ -90,7 +90,7 @@ struct index_init {
     uint32_t want_mbtype;
     int want_expunged;
     struct vanished_params vanished;
-    struct seqset *vanishedlist;
+    seqset_t *vanishedlist;
 };
 
 struct index_map {
@@ -130,12 +130,21 @@ struct index_state {
     char *flagname[MAX_USER_FLAGS];
     char *userid;
     char *mboxname;
+    char *mboxid;
     struct protstream *out;
     struct auth_state *authstate;
     int want_dav;
     uint32_t want_mbtype;
     int want_expunged;
     unsigned num_expunged;
+    message_t *m;
+    seqset_t *searchres; /* RFC 5182 SEARCH results */
+    struct {             /* RFC 9394 last SEARCH PARTIAL (to inform next one) */
+        char *expr;
+        range_t range;
+        uint32_t last_match;
+        uint64_t highestmodseq; /* of the folder */
+    } last_partial;
 };
 
 struct copyargs {
@@ -155,8 +164,10 @@ typedef struct msgdata {
     time_t sentdate;            /* sent date & time of message
                                    from Date: header (adjusted by time zone) */
     time_t internaldate;        /* internaldate */
+    time_t savedate;            /* savedate */
     size_t size;                /* message size */
     modseq_t modseq;            /* modseq of record*/
+    modseq_t createdmodseq;     /* createdmodseq of record*/
     bit32 hasflag;              /* hasflag values (up to 32 of them) */
     struct message_guid guid;   /* message guid */
     uint32_t system_flags;      /* system flags */
@@ -181,6 +192,8 @@ typedef struct msgdata {
     char *xsubj;                /* extracted subject text */
     unsigned xsubj_hash;        /* hash of extracted subject text */
     int is_refwd;               /* is message a reply or forward? */
+
+    /* items from the annotations database */
     strarray_t annot;           /* array of annotation attribute values
                                    (stored in order of sortcrit) */
 } MsgData;
@@ -223,13 +236,28 @@ enum index_warmup_flags
     WARMUP_ALL              = (~WARMUP_SEARCH)
 };
 
+enum index_changes_flags
+{
+    TELL_UID                = (1<<0),
+    TELL_MODSEQ             = (1<<1),
+    TELL_EXPUNGED           = (1<<2),
+    TELL_SILENT             = (1<<3),
+};
+
+struct progress_rock {
+    void (*cb)(unsigned count, unsigned total, void *rock);
+    const char *tag;
+    time_t last_resp;
+    unsigned no_count : 1;
+};
+
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
-void index_fetchresponses(struct index_state *state,
-                                 struct seqset *seq,
-                                 int usinguid,
-                                 const struct fetchargs *fetchargs,
-                                 int *fetchedsomething);
+int index_fetchresponses(struct index_state *state,
+                         seqset_t *seq,
+                         int usinguid,
+                         const struct fetchargs *fetchargs,
+                         int *fetchedsomething);
 extern int index_fetch(struct index_state *state,
                        const char* sequence,
                        int usinguid,
@@ -242,9 +270,10 @@ extern int index_run_annotator(struct index_state *state,
                                const char *sequence, int usinguid,
                                struct namespace *namespace, int isadmin);
 extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
-                        struct seqset *uids);
+                        seqset_t *uids);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
-                      struct searchargs *searchargs, int usinguid);
+                      struct searchargs *searchargs, int usinguid,
+                      struct progress_rock *prock);
 extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
@@ -259,12 +288,11 @@ extern int index_convupdates(struct index_state *state, struct sortcrit *sortcri
                       struct searchargs *searchargs,
                       const struct windowargs * windowargs);
 extern int index_thread(struct index_state *state, int algorithm,
-                        struct searchargs *searchargs, int usinguid);
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock);
 extern int index_search(struct index_state *state,
-                        struct searchargs *searchargs,
-                        int usinguid);
-extern int index_scan(struct index_state *state,
-                      const char *contents);
+                        struct searchargs *searchargs, int usinguid,
+                        struct progress_rock *prock);
 extern int index_copy(struct index_state *state,
                       char *sequence,
                       int usinguid,
@@ -274,7 +302,8 @@ extern int index_copy(struct index_state *state,
                       struct namespace *namespace,
                       int isadmin,
                       int ismove,
-                      int ignorequota);
+                      int ignorequota,
+                      struct progress_rock *prock);
 extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,
@@ -287,20 +316,25 @@ extern void index_select(struct index_state *state, struct index_init *init);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
 extern void index_release(struct index_state *state);
 extern void index_close(struct index_state **stateptr);
-extern uint32_t index_finduid(struct index_state *state, uint32_t uid);
+
+enum {
+    FIND_EQ = 0,
+    FIND_GE,
+    FIND_LE
+};
+
+extern uint32_t index_finduid(struct index_state *state, uint32_t uid, int mode);
 extern uint32_t index_getuid(struct index_state *state, uint32_t msgno);
-extern void index_tellchanges(struct index_state *state, int canexpunge,
-                              int printuid, int printmodseq);
+extern void index_tellchanges(struct index_state *state, unsigned tell_flags);
 extern modseq_t index_highestmodseq(struct index_state *state);
-extern int index_check(struct index_state *state, int usinguid, int printuid);
-extern struct seqset *index_vanished(struct index_state *state,
+extern int index_check(struct index_state *state, unsigned tell_flags);
+extern seqset_t *index_vanished(struct index_state *state,
                                     struct vanished_params *params);
 extern int index_urlfetch(struct index_state *state, uint32_t msgno,
                           unsigned params, const char *section,
                           unsigned long start_octet, unsigned long octet_count,
-                          struct protstream *pout, unsigned long *size);
+                          struct protstream *pout, size_t maxsize, unsigned long *size);
 extern char *index_get_msgid(struct index_state *state, uint32_t msgno);
-extern struct message *index_get_message(struct index_state *state, uint32_t msgno);
 extern struct nntp_overview *index_overview(struct index_state *state,
                                             uint32_t msgno);
 extern char *index_getheader(struct index_state *state, uint32_t msgno,
@@ -316,7 +350,6 @@ struct searchargs *new_searchargs(const char *tag, int state,
                                   struct auth_state *authstate,
                                   int isadmin);
 
-void freesequencelist(struct seqset *l);
 void freesearchargs(struct searchargs *s);
 char *sortcrit_as_string(const struct sortcrit *sortcrit);
 void freesortcrit(struct sortcrit *s);
@@ -330,20 +363,37 @@ extern int index_search_evaluate(struct index_state *state, const search_expr_t 
 extern int index_expunge(struct index_state *state, char *uidsequence,
                          int need_deleted);
 
-extern int index_getsearchtext(struct message *msg,
+/* Extract text for snippets: first look in message bodies, then attachments */
+#define INDEX_GETSEARCHTEXT_SNIPPET  (1<<0)
+/* Allow messages being indexed partially, if the attachment extractor
+ * returned an error. If this flag is not set, then the first attachment
+ * extractor error causes getsearchtext to return with an error. */
+#define INDEX_GETSEARCHTEXT_ALLOW_PARTIALS (1<<1)
+/* Do not log a warning if messages could only be indexed partially
+ * (implies allowing partial message indexes) */
+#define INDEX_GETSEARCHTEXT_NOLOG_PARTIALS \
+    (INDEX_GETSEARCHTEXT_ALLOW_PARTIALS | (1<<2))
+/* Disable calling the attachment extractor. The message is marked as
+ * partially indexed, regardless of the ALLOW_PARTIALs flag. */
+#define INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT (1<<3)
+extern int index_getsearchtext(struct message *msg, const strarray_t *partids,
                                struct search_text_receiver *receiver,
-                               int snippet);
+                               int flag);
 
 extern int index_getuidsequence(struct index_state *state,
                                 struct searchargs *searchargs,
                                 unsigned **uid_list);
 
 extern const char *index_mboxname(const struct index_state *state);
+extern const char *index_mboxid(const struct index_state *state);
 extern int index_hasrights(const struct index_state *state, int rights);
 
 extern int index_reload_record(struct index_state *state,
                                uint32_t msgno,
                                struct index_record *record);
 
+extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
+
+extern int index_want_attachextract(const char *type, const char *subtype);
 
 #endif /* INDEX_H */

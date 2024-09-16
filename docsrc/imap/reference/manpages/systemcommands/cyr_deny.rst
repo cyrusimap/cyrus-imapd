@@ -26,7 +26,8 @@ Description
 The first synopsis denies user *user* access to Cyrus services, the
 second synopsis allows access again.  **cyr_deny** works by adding an
 entry to the Cyrus ``user_deny.db`` database; the third synopsis lists
-the entries in the database.
+the entries in the database.  The service names to be matched are those
+as used in :cyrusman:`cyrus.conf(5)`.
 
 **cyr_deny** |default-conf-text|
 
@@ -39,24 +40,24 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -a user
+.. option:: -a, --allow
 
     Allow access to all services for user *user* (remove any entry
     from the deny database).
 
-.. option:: -s services
+.. option:: -s services, --services=services
 
     Deny access only to the given *services*, which is a
     comma-separated list of wildcard patterns.  The default is "*"
     which denies access to all services.
 
 
-.. option:: -m message
+.. option:: -m message, --message=message
 
     Provide a message which is sent to the user to explain why access is
     being denied.  A default message is used if none is specified.
 
-.. option:: -l
+.. option:: -l, --list
 
     List the entries in the deny database.
 

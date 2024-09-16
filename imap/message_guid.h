@@ -43,6 +43,7 @@
 #ifndef MESSAGE_GUID_H
 #define MESSAGE_GUID_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Public interface */
@@ -60,12 +61,15 @@ struct message_guid {
     unsigned char value[MESSAGE_GUID_SIZE];
 };
 
+#define MESSAGE_GUID_INITIALIZER { GUID_UNKNOWN, { 0 } }
+
 /* Generate GUID from message */
 void message_guid_generate(struct message_guid *guid,
                            const char *msg_base, unsigned long msg_len);
 
 /* Copy a GUID */
 void message_guid_copy(struct message_guid *dst, const struct message_guid *src);
+struct message_guid message_guid_clone(const struct message_guid *src);
 
 /* Compare a pair of GUIDs: Returns 1 => match. */
 int message_guid_equal(const struct message_guid *guid1,

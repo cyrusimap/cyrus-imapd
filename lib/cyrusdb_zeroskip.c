@@ -59,7 +59,7 @@
 #include "xmalloc.h"
 
 #include <libzeroskip/zeroskip.h>
-#include <libzeroskip/btree.h>
+#include <libzeroskip/memtree.h>
 
 struct txn {
     struct zsdb_txn *t;
@@ -112,7 +112,7 @@ static int create_or_reuse_txn(struct dbengine *db,
     return CYRUSDB_OK;
 }
 
-btree_memcmp_fn(
+memtree_memcmp_fn(
   mbox,
   ,
   bsearch_memtree_mbox(k, keylen, b, blen)
@@ -148,6 +148,19 @@ HIDDEN int cyrusdb_zeroskip_unlink(const char *fname __attribute__((unused)),
     return CYRUSDB_OK;
 }
 
+HIDDEN int cyrusdb_zeroskip_lock(struct dbengine *dbe, struct txn **mytid,
+                                 int flags __attribute__((unused)))
+{
+    struct txn *tid = xmalloc(sizeof(struct txn));
+    int r = zsdb_transaction_begin(dbe->db, &tid->t);
+    if (r != ZS_OK) {
+        free(tid);
+        return CYRUSDB_INTERNAL;
+    }
+    *mytid = tid;
+    return 0;
+}
+
 static int cyrusdb_zeroskip_open(const char *fname,
                                  int flags,
                                  struct dbengine **ret,
@@ -157,7 +170,7 @@ static int cyrusdb_zeroskip_open(const char *fname,
     int r = CYRUSDB_OK;
     int zsdbflags = MODE_RDWR;
     zsdb_cmp_fn dbcmpfn = NULL;
-    btree_search_cb_t btcmpfn = NULL;
+    memtree_search_cb_t btcmpfn = NULL;
 
     dbe = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
@@ -167,7 +180,7 @@ static int cyrusdb_zeroskip_open(const char *fname,
     if (flags & CYRUSDB_MBOXSORT) {
         zsdbflags |= MODE_CUSTOMSEARCH;
         dbcmpfn = bsearch_uncompare_mbox;
-        btcmpfn = btree_memcmp_mbox;
+        btcmpfn = memtree_memcmp_mbox;
     }
 
     if (zsdb_init(&dbe->db, dbcmpfn, btcmpfn) != ZS_OK) {
@@ -185,12 +198,8 @@ static int cyrusdb_zeroskip_open(const char *fname,
     *ret = dbe;
 
     if (mytid) {
-        *mytid = xmalloc(sizeof(struct txn));
-        r = zsdb_transaction_begin(dbe->db, &(*mytid)->t);
-        if (r != ZS_OK) {
-            r = CYRUSDB_INTERNAL;
-            goto close_db;
-        }
+        r = cyrusdb_zeroskip_lock(dbe, mytid, flags);
+        if (r) goto close_db;
     }
 
     r = CYRUSDB_OK;
@@ -593,6 +602,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_zeroskip =
     &cyrusdb_zeroskip_store,
     &cyrusdb_zeroskip_delete,
 
+    &cyrusdb_zeroskip_lock,
     &cyrusdb_zeroskip_commit,
     &cyrusdb_zeroskip_abort,
 

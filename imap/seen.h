@@ -45,6 +45,8 @@
 
 struct seen;
 
+#define FNAME_SEENSUFFIX "seen" /* per user seen state extension */
+
 #define SEEN_CREATE 0x01
 #define SEEN_SILENT 0x02
 

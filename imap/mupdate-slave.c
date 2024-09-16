@@ -68,6 +68,7 @@
 #include "global.h"
 #include "mpool.h"
 #include "mupdate.h"
+#include "xunlink.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)
@@ -86,7 +87,7 @@ static int open_kick_socket(void)
     strlcpy(fnamebuf, config_dir, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_MUPDATE_TARGET_SOCK, sizeof(fnamebuf));
 
-    (void) unlink(fnamebuf);
+    (void) xunlink(fnamebuf);
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strlcpy(srvaddr.sun_path, fnamebuf, sizeof(srvaddr.sun_path));

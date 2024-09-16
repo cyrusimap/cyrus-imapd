@@ -47,7 +47,7 @@
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
 
-#include "httpd.h"
+#include "global.h"
 #include "ical_support.h"
 #include "json_support.h"
 #include "jcal.h"
@@ -184,8 +184,13 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
         struct icalgeotype geo = icalvalue_get_geo(value);
 
         obj = json_array();
+#ifdef ICAL_GEO_LEN
+        json_array_append_new(obj, json_real(atof(geo.lat)));
+        json_array_append_new(obj, json_real(atof(geo.lon)));
+#else
         json_array_append_new(obj, json_real(geo.lat));
         json_array_append_new(obj, json_real(geo.lon));
+#endif
         return obj;
     }
 
@@ -249,11 +254,9 @@ static void icalparameter_as_json_object_member(icalparameter *param,
         kind_string = icalparameter_get_xname(param);
         break;
 
-#ifdef HAVE_IANA_PARAMS
     case ICAL_IANA_PARAMETER:
         kind_string = icalparameter_get_iana_name(param);
         break;
-#endif
 
     default:                    /* XXX: Is the default case here deliberate?? */
         kind_string = icalparameter_kind_to_string(kind);
@@ -369,7 +372,7 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
 /*
  * Construct a JSON array for an iCalendar component.
  */
-static json_t *icalcomponent_as_json_array(icalcomponent *comp)
+EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
 {
     icalcomponent *c;
     icalproperty *p;
@@ -420,7 +423,7 @@ static json_t *icalcomponent_as_json_array(icalcomponent *comp)
          c;
          c = icalcomponent_get_next_component(comp, ICAL_ANY_COMPONENT)) {
 
-        json_array_append_new(jsubs, icalcomponent_as_json_array(c));
+        json_array_append_new(jsubs, icalcomponent_as_jcal_array(c));
     }
     json_array_append_new(jcomp, jsubs);
 
@@ -440,7 +443,7 @@ struct buf *icalcomponent_as_jcal_string(icalcomponent *ical)
 
     if (!ical) return NULL;
 
-    jcal = icalcomponent_as_json_array(ical);
+    jcal = icalcomponent_as_jcal_array(ical);
 
     flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
     buf = json_dumps(jcal, flags);
@@ -525,11 +528,16 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
                  i++);
             if (i == len) {
                 struct icalgeotype geo;
+                double lat = json_real_value(json_array_get(jvalue, 0));
+                double lon = json_real_value(json_array_get(jvalue, 1));
 
-                geo.lat =
-                    json_real_value(json_array_get(jvalue, 0));
-                geo.lon =
-                    json_real_value(json_array_get(jvalue, 1));
+#ifdef ICAL_GEO_LEN
+                snprintf(geo.lat, ICAL_GEO_LEN-1, "%lf", lat);
+                snprintf(geo.lon, ICAL_GEO_LEN-1, "%lf", lon);
+#else
+                geo.lat = lat;
+                geo.lon = lon;
+#endif
 
                 value = icalvalue_new_geo(geo);
             }
@@ -755,7 +763,7 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
 /*
  * Construct an iCalendar component from a JSON object.
  */
-static icalcomponent *json_object_to_icalcomponent(json_t *jobj)
+EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
 {
     json_t *jtype, *jprops, *jsubs;
     const char *type;
@@ -807,7 +815,7 @@ static icalcomponent *json_object_to_icalcomponent(json_t *jobj)
     /* Add sub-components */
     for (i = 0; i < json_array_size(jsubs); i++) {
         icalcomponent *sub =
-            json_object_to_icalcomponent(json_array_get(jsubs, i));
+            jcal_array_as_icalcomponent(json_array_get(jsubs, i));
 
         if (!sub) goto error;
 
@@ -840,7 +848,7 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = json_object_to_icalcomponent(jcal);
+    ical = jcal_array_as_icalcomponent(jcal);
 
     json_decref(jcal);
 

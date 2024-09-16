@@ -103,6 +103,7 @@
 #include "util.h"
 #include "index.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* A simple write-buffering module which avoids copying of the output data. */
 
@@ -115,7 +116,6 @@ typedef struct {
 
 static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd)
 {
-    buf_init(&b->buf);
     buf_ensure(&b->buf, buf_size);
     b->fd = fd;
     b->total_output_bytes = 0;
@@ -238,7 +238,10 @@ typedef struct _SquatWordTable {
   SquatWordTableEntry entries[256];
 } SquatWordTable;
 
-/* Map docIDs in existing index to docIDs in the new index */
+/* Map docIDs in existing index to docIDs in the new index.
+ * n.b. docIDs start at one.  Index zero in this map is always
+ * zero.
+ */
 struct doc_ID_map {
     int *map;
     int alloc;
@@ -335,7 +338,7 @@ static int squat_index_copy_document(SquatIndex *index, char const *name,
 static void doc_ID_map_init(struct doc_ID_map *doc_ID_map)
 {
     doc_ID_map->alloc = 50;
-    doc_ID_map->map = xmalloc(doc_ID_map->alloc * sizeof(int));
+    doc_ID_map->map = xzmalloc(doc_ID_map->alloc * sizeof(int));
     doc_ID_map->max = 0;
     doc_ID_map->new = 0;
 }
@@ -350,39 +353,63 @@ static void doc_ID_map_free(struct doc_ID_map *doc_ID_map)
 
 static void doc_ID_map_add(struct doc_ID_map *doc_ID_map, int exists)
 {
-    if (doc_ID_map->max == doc_ID_map->alloc) {
-        doc_ID_map->alloc *= 2;
-        doc_ID_map->map =
-            xrealloc(doc_ID_map->map, doc_ID_map->alloc * sizeof(int));
+    /* n.b. "max" is the highest docID mapped, NOT the number of elements
+     * in the array.  there is already an initial allocation, thanks to
+     * doc_ID_map_init().  array index zero always contains 0, because
+     * docIDs start at 1.
+     */
+    assert(doc_ID_map->max >= 0);
+    assert(doc_ID_map->max < doc_ID_map->alloc);
+
+    if (doc_ID_map->max == doc_ID_map->alloc - 1) {
+        int new_alloc = doc_ID_map->alloc * 2;
+        doc_ID_map->map = xzrealloc(doc_ID_map->map,
+                                    doc_ID_map->alloc * sizeof(int),
+                                    new_alloc * sizeof(int));
+        doc_ID_map->alloc = new_alloc;
     }
+
     if (exists) {
-        doc_ID_map->map[doc_ID_map->max++] = doc_ID_map->new++;
-    } else {
-        doc_ID_map->map[doc_ID_map->max++] = 0; /* Does not exist in new index */
+        doc_ID_map->map[++ doc_ID_map->max] = ++ doc_ID_map->new;
+    }
+    else {
+        doc_ID_map->map[++ doc_ID_map->max] = 0; /* Does not exist in new index */
     }
 }
 
 static int doc_ID_map_lookup(struct doc_ID_map *doc_ID_map, int docID)
 {
-    if ((docID < 1) || (docID > doc_ID_map->max))
-        return (0);
+    assert(doc_ID_map->max >= 0);
+    assert(doc_ID_map->max < doc_ID_map->alloc);
+    assert(docID >= 0);
 
-    return (doc_ID_map->map[docID]);
+    if (docID > doc_ID_map->max) {
+        return 0;
+    }
+
+    return doc_ID_map->map[docID];
 }
 
 static int copy_docIDs(void *closure, SquatListDoc const *doc)
 {
     SquatIndex *index = (SquatIndex *) closure;
     struct doc_ID_map *doc_ID_map = &index->doc_ID_map;
-    int choice = (index->select_doc) (index->select_doc_closure, doc);
+
+    /* n.b. this is calling doc_check() in search_squat.c */
+    int choice = index->select_doc(index->select_doc_closure, doc);
 
     if (choice > 0) {
+        /* XXX possible bug here if squat_index_copy_document fails
+         * XXX after we already mapped it as existing */
         doc_ID_map_add(doc_ID_map, 1);
-        return (squat_index_copy_document
-                (index, doc->doc_name, doc->size));
+        return squat_index_copy_document(index, doc->doc_name, doc->size);
     }
 
-    /* This docID no longer exists */
+    /* This docID no longer exists
+     * n.b. This is incredibly rare, because doc_check() in search_squat.c
+     * checks only for doc_name validity, kinda.  In practice, this means
+     * that doc_ID_map entries almost always just map to the same docIDs.
+     */
     doc_ID_map_add(doc_ID_map, 0);
     return SQUAT_CALLBACK_CONTINUE;
 }
@@ -442,7 +469,7 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 
     squat_set_last_error(SQUAT_ERR_OK);
 
-    index = (SquatIndex *) xmalloc(sizeof(SquatIndex));
+    index = (SquatIndex *) xzmalloc(sizeof(SquatIndex));
 
     /* Copy processed options into the SquatIndex */
     if (options != NULL
@@ -478,7 +505,6 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 
     /* Finish initializing the SquatIndex */
     for (i = 0; i < VECTOR_SIZE(index->index_buffers); i++) {
-        buf_init(&index->index_buffers[i].buf);
         index->index_buffers[i].fd = -1;
     }
 
@@ -539,7 +565,7 @@ static int init_write_buffer_to_temp(SquatIndex *index,
         return SQUAT_ERR;
     }
 
-    if (unlink(tmp_path) < 0) {
+    if (xunlink(tmp_path) < 0) {
         squat_set_last_error(SQUAT_ERR_SYSERR);
         goto cleanup_fd;
     }
@@ -566,10 +592,11 @@ int squat_index_open_document(SquatIndex *index, char const *name)
 
     /* Grow the document ID array as necessary */
     if (index->current_doc_ID >= index->doc_ID_list_size) {
-        index->doc_ID_list_size *= 2;
-        index->doc_ID_list =
-            (char *)xrealloc(index->doc_ID_list,
-                             index->doc_ID_list_size * sizeof(SquatInt32));
+        int new_size = index->doc_ID_list_size * 2;
+        index->doc_ID_list = xzrealloc(index->doc_ID_list,
+                                       index->doc_ID_list_size * sizeof(SquatInt32),
+                                       new_size * sizeof(SquatInt32));
+        index->doc_ID_list_size = new_size;
     }
 
     /* Store the offset of the new document record into the array */
@@ -1164,7 +1191,6 @@ static int dump_doc_list_present_bits(SquatIndex *index,
     int start_present = docs->first_valid_entry;
     int end_present = docs->last_valid_entry;
     char *buf;
-    int present_count;
 
     /* If the leaf is empty, we should never get here! */
     assert(start_present <= end_present);
@@ -1176,7 +1202,6 @@ static int dump_doc_list_present_bits(SquatIndex *index,
             return SQUAT_ERR;
         } else {
             *buf++ = (char)end_present;
-            present_count = 1;
         }
     } else {
         int first_byte = start_present >> 3;
@@ -1192,10 +1217,8 @@ static int dump_doc_list_present_bits(SquatIndex *index,
             *buf++ = (char)first_byte;
             *buf++ = (char)byte_count - 1;
             memset(buf, 0, byte_count);
-            present_count = 0;
             for (i = start_present; i <= end_present; i++) {
                 if (docs->docs[i] != NULL) {
-                    present_count++;
                     buf[(i >> 3) - first_byte] |= 1 << (i & 7);
                 }
             }

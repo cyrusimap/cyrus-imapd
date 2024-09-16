@@ -1,0 +1,8 @@
+custom notification! with ½ as much 8bit as regular milk
+Mailbox: %MAILBOX%
+Virus: %VIRUS%
+Message-ID: %MSG_ID%
+Date: %MSG_DATE%
+From: %MSG_FROM%
+Subject: %MSG_SUBJECT%
+IMAP UID: %MSG_UID%

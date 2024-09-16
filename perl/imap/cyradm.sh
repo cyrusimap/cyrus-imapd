@@ -127,10 +127,6 @@ Administrators do not have implicit delete rights on mailboxes.  Use the
 B<setaclmailbox> command to grant the C<x> permission to your
 principal if you need to delete a mailbox you do not own.
 
-Note that the online help admits to an optional host argument.  This argument
-is not currently used, and will be rejected with an error if specified; it
-is reserved for IMSP.
-
 =item C<disconnect>
 
 =item C<disc>

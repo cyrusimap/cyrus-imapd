@@ -29,7 +29,7 @@ Use a release packaged tarball
 The Cyrus team produce packaged tarballs containing full source and
 pre-built documentation.
 
-Download a versioned tarball using `FTP`_ or `HTTPS`_. Latest stable
+Download a versioned tarball using `HTTPS`_. Latest stable
 version is |imap_current_stable_version|.
 
 Extract the tarball:
@@ -38,9 +38,7 @@ Extract the tarball:
 
     $ :command:`tar xzvf cyrus-imapd-x.y.z.tar.gz`
 
-.. _FTP: ftp://ftp.cyrusimap.org/cyrus-imapd/
-
-.. _HTTPS: https://www.cyrusimap.org/releases/
+.. _HTTPS: https://github.com/cyrusimap/cyrus-imapd/releases
 
 Use the source from Git
 -----------------------

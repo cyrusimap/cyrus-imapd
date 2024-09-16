@@ -251,4 +251,5 @@ HIDDEN struct auth_mech auth_krb5 =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh */
 };

@@ -425,7 +425,7 @@ You need to add the filename of your new test to the definition of the
         cunit/binhex.testc \
         cunit/bitvector.testc \
         cunit/buf.testc \
-        cunit/byteorder64.testc \
+        cunit/byteorder.testc \
         cunit/charset.testc \
         cunit/crc32.testc \
         cunit/dlist.testc \
@@ -595,7 +595,7 @@ global state that the functions under test rely on, in such a way that
 their state is predictable and always the same no matter who runs the
 test or when or how many times. Similarly the suite teardown function
 should clean up any state which might possibly interfere with other test
-suites. Note that some suites will need an setup function but not
+suites. Note that some suites will need a setup function but not
 necessarily a teardown function.
 
 Adding these functions is very easy: you just write functions of the

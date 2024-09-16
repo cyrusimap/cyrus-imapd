@@ -241,7 +241,7 @@ diff -cr cyrus-imapd-2.1.3-orig/imap/lmtpd.c cyrus-imapd-2.1.3/imap/lmtpd.c
 +     free (msg_buf);
 +     close (s);
 +
-+     syslog(LOG_DEBUG, "spam result: %d\n", ret);
++     syslog(LOG_DEBUG, "spam result: %d", ret);
 +     return ret;
 + }
 +
@@ -257,13 +257,13 @@ diff -cr cyrus-imapd-2.1.3-orig/imap/lmtpd.c cyrus-imapd-2.1.3/imap/lmtpd.c
 
 +     res = sieve_register_spam(sieve_interp, &spam);
 +     if (res != SIEVE_OK) {
-+       syslog(LOG_ERR, "sieve_register_spam() returns %d\n", res);
++       syslog(LOG_ERR, "sieve_register_spam() returns %d", res);
 +       fatal("sieve_register_spam()", EX_SOFTWARE);
 +     }
 +
       res = sieve_register_parse_error(sieve_interp, &sieve_parse_error_handler);
       if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_parse_error() returns %d", res);
 ***************
 *** 1148,1154 ****
       mydata.notifyheader = generate_notify(msgdata);
@@ -452,11 +452,11 @@ diff -cr cyrus-imapd-2.1.3-orig/timsieved/scripttest.c cyrus-imapd-2.1.3/timsiev
 
 +     res = sieve_register_spam(i, (sieve_spam *) &foo);
 +     if (res != SIEVE_OK) {
-+       syslog (LOG_ERR, "sieve_register_spam() returns %d\n", res);
++       syslog (LOG_ERR, "sieve_register_spam() returns %d", res);
 +       return TIMSIEVE_FAIL;
 +     }
 +
       res = sieve_register_parse_error(i, &mysieve_error);
       if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_parse_error() returns %d\n", res);
+        syslog(LOG_ERR, "sieve_register_parse_error() returns %d", res);
 

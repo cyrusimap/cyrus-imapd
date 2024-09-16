@@ -60,11 +60,13 @@
 #include "cyrusdb.h"
 #include "imap/global.h"
 #include "libconfig.h"
+#include "proc.h"
 #include "retry.h"
 #include "xmalloc.h"
 #include "ptloader.h"
 
 struct pts_module *pts_modules[] = {
+    &pts_http,
 #ifdef HAVE_LDAP
     &pts_ldap,
 #endif
@@ -72,8 +74,6 @@ struct pts_module *pts_modules[] = {
     &pts_afskrb,
 #endif
     NULL };
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
 
 static struct pts_module *pts_fromname()
 {
@@ -116,6 +116,113 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     return pts->make_authstate(identifier, size, reply, dsize);
 }
 
+/* xxx this just uses the UNIX canonicalization semantics, which is
+ * most likely wrong */
+
+/* Map of which characters are allowed by auth_canonifyid.
+ * Key: 0 -> not allowed (special, ctrl, or would confuse Unix or imapd)
+ *      1 -> allowed, but requires an alpha somewhere else in the string
+ *      2 -> allowed, and is an alpha
+ *
+ * At least one character must be an alpha.
+ *
+ * This may not be restrictive enough.
+ * Here are the reasons for the restrictions:
+ *
+ * &    forbidden because of MUTF-7.  (This could be fixed.)
+ * :    forbidden because it's special in /etc/passwd
+ * /    forbidden because it can't be used in a mailbox name
+ * * %  forbidden because they're IMAP magic in the LIST/LSUB commands
+ * ?    it just scares me
+ * ctrl chars, DEL
+ *      can't send them as IMAP characters in plain folder names, I think
+ * 80-FF forbidden because you can't send them in IMAP anyway
+ *       (and they're forbidden as folder names). (This could be fixed.)
+ *
+ * + and - are *allowed* although '+' is probably used for userid+detail
+ * subaddressing and qmail users use '-' for subaddressing.
+ *
+ * Identifiers don't require a digit, really, so that should probably be
+ * relaxed, too.
+ */
+static char allowedchars[256] = {
+ /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
+    1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 20-2F */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 30-3F */
+
+    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 40-4F */
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, /* 50-5F */
+    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 60-6F */
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, /* 70-7F */
+
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+/*
+ * Convert 'identifier' into canonical form.
+ * Returns a pointer to a static buffer containing the canonical form
+ * or NULL if 'identifier' is invalid.
+ *
+ * XXX If any of the characters marked with 0 are valid and are cropping up,
+ * the right thing to do is probably to canonicalize the identifier to two
+ * representations: one for getpwent calls and one for folder names.  The
+ * latter canonicalizes to a MUTF7 representation.
+ */
+char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
+{
+    static char retbuf[81];
+    char sawalpha;
+    char *p;
+    int username_tolower = 0;
+    int i = 0;
+
+    if(!len) len = strlen(identifier);
+    if(len >= sizeof(retbuf)) return NULL;
+
+    memcpy(retbuf, identifier, len);
+    retbuf[len] = '\0';
+
+    if (!strncmp(retbuf, "group:", 6))
+        i = 6;
+
+    /* Copy the string and look up values in the allowedchars array above.
+     * If we see any we don't like, reject the string.
+     * Lowercase usernames if requested.
+     */
+    username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
+    sawalpha = 0;
+    for(p = retbuf+i; *p; p++) {
+        if (username_tolower && Uisupper(*p))
+            *p = tolower((unsigned char)*p);
+
+        switch (allowedchars[*(unsigned char*) p]) {
+        case 0:
+            return NULL;
+
+        case 2:
+            sawalpha = 1;
+            /* FALL THROUGH */
+
+        default:
+            ;
+        }
+    }
+
+    if (!sawalpha) return NULL;  /* has to be one alpha char */
+
+    return retbuf;
+}
+
 /* config.c info (libimap) */
 const int config_need_data = 0;
 
@@ -131,7 +238,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     char *tofree = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
@@ -162,7 +269,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+               cyrusdb_strerror(r));
         fatal("can't read pts database", EX_TEMPFAIL);
     }
 
@@ -264,6 +371,8 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 EXPORTED void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
+
+    if (exitcode != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(exitcode);
 }
-

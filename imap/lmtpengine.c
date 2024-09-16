@@ -80,7 +80,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 #include "imap/lmtp_err.h"
-#include "imap/lmtpstats.h"
 #include "imap/mupdate_err.h"
 
 #include "lmtpengine.h"
@@ -131,23 +130,6 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
-
-#ifdef USING_SNMPGEN
-/* round to nearest 1024 bytes and return number of Kbytes.
- used for SNMP updates. */
-static int roundToK(int x)
-{
-    double rd = (x*1.0)/1024.0;
-    int ri = x/1024;
-
-    if (rd-ri < 0.5)
-        return ri;
-    else
-        return ri+1;
-}
-#else
-#define roundToK(x)
-#endif /* USING_SNMPGEN */
 
 static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 {
@@ -701,12 +683,8 @@ static int savemsg(struct clientdata *cd,
 
     /* now, using our header cache, fill in the data that we want */
 
-    /* first check x-me-message-id, then resent-message-id */
-    if ((body = msg_getheader(m, "x-me-message-id")) && body[0][0]) {
-        m->id = xstrdup(body[0]);
-    } else if ((body = msg_getheader(m, "resent-message-id")) && body[0][0]) {
-        m->id = xstrdup(body[0]);
-    } else if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
+    /* get message-id */
+    if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
         m->id = xstrdup(body[0]);
     } else if (body) {
         r = IMAP_MESSAGE_BADHEADER;  /* empty message-id */
@@ -930,7 +908,7 @@ void lmtpmode(struct lmtp_func *func,
               int fd)
 {
     message_data_t *msg = NULL;
-    int max_msgsize;
+    int64_t max_msgsize;
     char buf[4096];
     char *p;
     int r;
@@ -952,10 +930,10 @@ void lmtpmode(struct lmtp_func *func,
 #endif
     cd.starttls_done = 0;
 
-    max_msgsize = config_getint(IMAPOPT_MAXMESSAGESIZE);
+    max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
 
-    /* If max_msgsize is 0, allow any size */
-    if(!max_msgsize) max_msgsize = INT_MAX;
+    /* 0 means "unlimited", which really means our internally-defined limit */
+    if (max_msgsize <= 0) max_msgsize = BYTESIZE_UNLIMITED;
 
     msg_new(&msg, func->namespace);
 
@@ -965,7 +943,7 @@ void lmtpmode(struct lmtp_func *func,
     /* determine who we're talking to */
     cd.clienthost = get_clienthost(fd, &localip, &remoteip);
     if (!strcmp(cd.clienthost, UNIX_SOCKET)) {
-        /* we're not connected to a internet socket! */
+        /* we're not connected to an internet socket! */
         func->preauth = 1;
     }
     else if (localip && remoteip) {
@@ -1080,6 +1058,7 @@ void lmtpmode(struct lmtp_func *func,
 
               if (r) {
                   const char *errorstring = NULL;
+                  const char *userid = "-notset-";
 
                   switch (r) {
                   case IMAP_SASL_CANCEL:
@@ -1100,13 +1079,13 @@ void lmtpmode(struct lmtp_func *func,
                           continue;
                       }
                       else {
-                          syslog(LOG_ERR, "badlogin: %s %s %s",
-                                 cd.clienthost, mech, sasl_errdetail(cd.conn));
+                          if (r != SASL_NOUSER)
+                              sasl_getprop(cd.conn, SASL_USERNAME, (const void **) &userid);
+
+                          syslog(LOG_ERR, "badlogin: %s %s (%s) [%s]",
+                                 cd.clienthost, mech, userid, sasl_errdetail(cd.conn));
 
                           prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
-                          snmp_increment_args(AUTHENTICATION_NO, 1,
-                                              VARIABLE_AUTH, hash_simple(mech),
-                                              VARIABLE_LISTEND);
 
                           prot_printf(pout, "501 5.5.4 %s\r\n",
                                       sasl_errstring((r == SASL_NOUSER ?
@@ -1140,9 +1119,6 @@ void lmtpmode(struct lmtp_func *func,
               /* authenticated successfully! */
 
               prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
-              snmp_increment_args(AUTHENTICATION_YES,1,
-                                  VARIABLE_AUTH, hash_simple(mech),
-                                  VARIABLE_LISTEND);
               syslog(LOG_NOTICE, "login: %s %s %s%s %s",
                      cd.clienthost, user, mech,
                      cd.starttls_done ? "+TLS" : "", "User logged in");
@@ -1176,7 +1152,7 @@ void lmtpmode(struct lmtp_func *func,
                 if (msg->size > max_msgsize) {
                     prot_printf(pout,
                                 "552 5.2.3 Message size (%d) exceeds fixed "
-                                "maximum message size (%d)\r\n",
+                                "maximum message size (%" PRIi64 ")\r\n",
                                 msg->size, max_msgsize);
                     continue;
                 }
@@ -1185,12 +1161,9 @@ void lmtpmode(struct lmtp_func *func,
                 prometheus_apply_delta(CYRUS_LMTP_RECEIVED_BYTES_TOTAL, msg->size);
                 prometheus_apply_delta(CYRUS_LMTP_RECEIVED_RECIPIENTS_TOTAL, msg->rcpt_num);
 
-                snmp_increment(mtaReceivedMessages, 1);
-                snmp_increment(mtaReceivedVolume, roundToK(msg->size));
-                snmp_increment(mtaReceivedRecipients, msg->rcpt_num);
-
                 /* do delivery, report status */
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
+
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
                     send_lmtp_error(pout, msg->rcpt[j]->status,
@@ -1200,9 +1173,6 @@ void lmtpmode(struct lmtp_func *func,
                 prometheus_increment(CYRUS_LMTP_TRANSMITTED_MESSAGES_TOTAL);
                 prometheus_apply_delta(CYRUS_LMTP_TRANSMITTED_BYTES_TOTAL, delivered * msg->size);
 
-                snmp_increment(mtaTransmittedMessages, delivered);
-                snmp_increment(mtaTransmittedVolume,
-                               roundToK(delivered * msg->size));
                 goto rset;
             }
             goto syntaxerr;
@@ -1214,14 +1184,12 @@ void lmtpmode(struct lmtp_func *func,
               const char *mechs;
 
               prot_printf(pout, "250-%s\r\n"
-                          "250-8BITMIME\r\n"
-                          "250-ENHANCEDSTATUSCODES\r\n"
-                          "250-PIPELINING\r\n",
-                          config_servername);
-              if (max_msgsize < INT_MAX)
-                  prot_printf(pout, "250-SIZE %d\r\n", max_msgsize);
-              else
-                  prot_printf(pout, "250-SIZE\r\n");
+                                "250-8BITMIME\r\n"
+                                "250-ENHANCEDSTATUSCODES\r\n"
+                                "250-PIPELINING\r\n"
+                                "250-SIZE %" PRIu64 "\r\n",
+                          config_servername, max_msgsize);
+
               if (tls_enabled() && !cd.starttls_done &&
                   cd.authenticated == NOAUTH) {
                   prot_printf(pout, "250-STARTTLS\r\n");
@@ -1325,7 +1293,7 @@ void lmtpmode(struct lmtp_func *func,
                             msg->size > max_msgsize) {
                             prot_printf(pout,
                                         "552 5.2.3 Message SIZE exceeds fixed "
-                                        "maximum message size (%d)\r\n",
+                                        "maximum message size (%" PRIi64 ")\r\n",
                                         max_msgsize);
                             goto nextcmd;
                         }

@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_supports_event
+    :min_version_3_1 :needs_component_httpd :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $Calendar = $CalDAV->GetCalendar($CalendarId);
+
+    $self->assert($Calendar->{_can_event});
+}

@@ -1,0 +1,126 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_baseeventid
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $event1Uid = '1cf5da26-38e9-47ac-8449-04354ae3772d';
+    my $event2Uid = '20623313-524c-487f-bd20-beab02e87f88';
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    uid => $event1Uid,
+                    title => "event1",
+                    start => "2023-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                },
+                event2 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    uid => $event2Uid,
+                    title => "event2",
+                    start => "2023-02-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRules => [{
+                        frequency => 'daily',
+                        count => 3,
+                    }],
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $event1Id = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($event1Id);
+    my $event2Id = $res->[0][1]{created}{event2}{id};
+    $self->assert_not_null($event2Id);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                before => '2023-01-03T00:00:00',
+            },
+            sort => [{
+                property => 'start',
+            }],
+            expandRecurrences => JSON::true,
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['baseEventId', 'utcStart',],
+        }, 'R2'],
+    ]);
+
+    my $eventInstance1Id = encode_eventid($event1Uid, '20230101T090000');
+    my $eventInstance2Id = encode_eventid($event1Uid, '20230102T090000');
+
+    $self->assert_deep_equals([
+        $eventInstance1Id, $eventInstance2Id
+    ], $res->[0][1]{ids});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                rdate => {
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    baseEventId => $event1Id,
+                    recurrenceId => '20230101T230000',
+                    recurrenceIdTimeZone => 'Europe/Vienna',
+                    start => '20230101T230000',
+                    title => 'rdateevent',
+                },
+            },
+            update => {
+                $event1Id => {
+                    baseEventId => $event2Id,
+                },
+                $eventInstance1Id => {
+                    baseEventId => $event2Id,
+                },
+                $eventInstance2Id => {
+                    baseEventId => $event1Id,
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    # Can't create an event with a baseEventId
+    $self->assert(grep $_ eq 'baseEventId',
+        @{$res->[0][1]{notCreated}{rdate}{properties}});
+
+    # Can't set the baseEventId on a non-instance
+    $self->assert(grep $_ eq 'baseEventId',
+        @{$res->[0][1]{notUpdated}{$event1Id}{properties}});
+
+    # Can't change the baseEventId of an instance
+    $self->assert(grep $_ eq 'baseEventId',
+        @{$res->[0][1]{notUpdated}{$eventInstance1Id}{properties}});
+
+    # Can keep the baseEventId of an instance
+    $self->assert(exists $res->[0][1]{updated}{$eventInstance2Id});
+
+
+}

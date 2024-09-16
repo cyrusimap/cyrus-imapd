@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_empty_filter_conds
+    :min_version_3_7 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message('test');
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{ }],
+            },
+        }, 'R0'],
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [],
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{ }],
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [],
+            },
+        }, 'R3'],
+    ], $using);
+
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
+    $self->assert_num_equals(0, scalar @{$res->[3][1]{ids}});
+}

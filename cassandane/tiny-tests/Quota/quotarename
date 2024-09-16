@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test renames
+#
+sub test_quotarename
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    # Right - let's set ourselves a basic usage quota
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(
+        storage => 100000,
+        message => 50000,
+        $self->res_annot_storage => 10000,
+    );
+    $self->_check_usages(
+        storage => 0,
+        message => 0,
+        $self->res_annot_storage => 0,
+    );
+
+    my $expected_storage = 0;
+    my $expected_message = 0;
+    my $expected_annotation_storage = 0;
+    my $uid = 1;
+    for (1..10) {
+        my $msg = $self->make_message("Message $_", extra_lines => 5000);
+        $expected_storage += length($msg->as_string());
+        $expected_message++;
+
+        my $annotation = $self->make_random_data(1);
+        $expected_annotation_storage += length($annotation);
+        $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $uid++;
+    }
+
+    $self->_check_usages(
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        $self->res_annot_storage => int($expected_annotation_storage/1024),
+    );
+
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
+    $self->{store}->set_folder("INBOX.sub");
+    $talk->select($self->{store}->{folder}) || die;
+    my $expected_storage_more = $expected_storage;
+    my $expected_message_more = $expected_message;
+    my $expected_annotation_storage_more = $expected_annotation_storage;
+    $uid = 1;
+    for (1..10) {
+
+        my $msg = $self->make_message("Message $_",
+                                      extra_lines => 10 + rand(5000));
+        $expected_storage_more += length($msg->as_string());
+        $expected_message_more++;
+
+        my $annotation = $self->make_random_data(1);
+        $expected_annotation_storage_more += length($annotation);
+        $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $uid++;
+    }
+    $self->{store}->set_folder("INBOX");
+    $talk->select($self->{store}->{folder}) || die;
+
+    $self->_check_usages(
+        storage => int($expected_storage_more/1024),
+        message => $expected_message_more,
+        $self->res_annot_storage => int($expected_annotation_storage_more/1024),
+    );
+
+    $talk->rename("INBOX.sub", "INBOX.othersub") || die;
+    $talk->select("INBOX.othersub") || die;
+
+    # usage should be the same after a rename
+    $self->_check_usages(
+        storage => int($expected_storage_more/1024),
+        message => $expected_message_more,
+        $self->res_annot_storage => int($expected_annotation_storage_more/1024),
+    );
+
+    $talk->delete("INBOX.othersub") || die;
+
+    $self->_check_usages(
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        $self->res_annot_storage => int($expected_annotation_storage/1024),
+    );
+}

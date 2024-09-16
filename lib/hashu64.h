@@ -76,6 +76,10 @@ void *hashu64_del(uint64_t key,hashu64_table *table);
 void hashu64_enumerate(hashu64_table *table,void (*func)(uint64_t ,void *,void *),
                     void *rock);
 
+
+/* just count how many items are in the table */
+size_t hashu64_count(hashu64_table *table);
+
 /*
 ** Frees a hash table.  For each node that was inserted in the table,
 ** it calls the function whose address it was passed, with a pointer

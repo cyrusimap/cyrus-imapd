@@ -188,7 +188,7 @@ EXPORTED msgrecord_t *msgrecord_from_recno(struct mailbox *mbox, uint32_t recno)
 }
 
 EXPORTED msgrecord_t *msgrecord_from_index_record(struct mailbox *mbox,
-                                                  struct index_record *record)
+                                                  const struct index_record *record)
 {
     assert(record->recno);
     assert(record->uid);
@@ -295,6 +295,29 @@ EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t)
     return 0;
 }
 
+EXPORTED int msgrecord_get_savedate(msgrecord_t *mr, time_t *t)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    if (mr->record.savedate)
+        *t = mr->record.savedate;
+    else
+        *t = mr->record.internaldate;
+    return 0;
+}
+
+EXPORTED int msgrecord_get_lastupdated(msgrecord_t *mr, time_t *t)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *t = mr->record.last_updated;
+    return 0;
+}
+
 EXPORTED int msgrecord_get_cid(msgrecord_t *mr, bit64 *cid)
 {
     if (!mr->isappend) {
@@ -369,6 +392,16 @@ EXPORTED int msgrecord_get_createdmodseq(msgrecord_t *mr, modseq_t *modseq)
 EXPORTED int msgrecord_load_cache(msgrecord_t *mr)
 {
     return msgrecord_need(mr, M_CACHE);
+}
+
+EXPORTED int msgrecord_get_cache_version(msgrecord_t *mr, int *cache_version)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *cache_version = mr->record.cache_version;
+    return 0;
 }
 
 EXPORTED int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok)
@@ -463,7 +496,7 @@ EXPORTED int msgrecord_annot_lookup(msgrecord_t *mr, const char *entry,
     int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
 
-    return annotatemore_msg_lookup(mr->mbox->name, mr->record.uid, entry, userid, value);
+    return annotatemore_msg_lookup(mr->mbox, mr->record.uid, entry, userid, value);
 }
 
 
@@ -474,7 +507,7 @@ EXPORTED int msgrecord_annot_findall(msgrecord_t *mr,
 {
     int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
-    return annotatemore_findall(mr->mbox->name, mr->record.uid, entry, /*modseq*/0,
+    return annotatemore_findall_mailbox(mr->mbox, mr->record.uid, entry, /*modseq*/0,
                                 proc, rock, /*flags*/0);
 }
 
@@ -494,9 +527,14 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
                                    const char *userid,
                                    const struct buf *value)
 {
-    int r = msgrecord_need(mr, M_ANNOTATIONS);
+    int r = msgrecord_need(mr, M_ANNOTATIONS|M_RECORD);
     if (r) return r;
     annotate_state_begin(mr->annot_state);
+
+    if (!strcmpsafe(userid, "") && !strcmp(entry, IMAP_ANNOT_NS "snoozed")) {
+        if (buf_len(value)) mr->record.internal_flags |= FLAG_INTERNAL_SNOOZED;
+        else mr->record.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    }
 
     return annotate_state_write(mr->annot_state, entry, userid, value);
 }
@@ -506,6 +544,17 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
     int r = msgrecord_need(mr, M_ANNOTATIONS);
     if (r) return r;
     annotate_state_begin(mr->annot_state);
+
+    struct entryattlist *e;
+    struct attvaluelist *av;
+    for (e = l; e; e = e->next) {
+        if (strcmp(e->entry, IMAP_ANNOT_NS "snoozed")) continue;
+        for (av = e->attvalues; av; av = av->next) {
+            if (strcmp(av->attrib, "value.shared")) continue;
+            if (buf_len(&av->value)) mr->record.internal_flags |= FLAG_INTERNAL_SNOOZED;
+            else mr->record.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+        }
+    }
 
     return annotate_state_store(mr->annot_state, l);
 }
@@ -738,7 +787,7 @@ static int msgrecord_save(msgrecord_t *mr)
 
     if (!mailbox_index_islocked(mr->mbox, 1)) {
         syslog(LOG_ERR, "msgrecord: need mailbox lock to save %s:%d",
-                mr->mbox->name, mr->record.uid);
+                mailbox_name(mr->mbox), mr->record.uid);
         return IMAP_INTERNAL;
     }
     if (mr->isappend) {
@@ -746,7 +795,8 @@ static int msgrecord_save(msgrecord_t *mr)
         mr->isappend = 0;
     }
     else {
-        r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
+        r = msgrecord_need(mr, M_RECORD);
+        if (!r) r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
     }
     return r;
 }
@@ -755,7 +805,7 @@ EXPORTED int msgrecord_append(msgrecord_t *mr)
 {
     if (!mr->isappend) {
         syslog(LOG_ERR, "msgrecord: can't append, record %s:%d already exists",
-                mr->mbox->name, mr->record.uid);
+                mailbox_name(mr->mbox), mr->record.uid);
         return IMAP_INTERNAL;
     }
     return msgrecord_save(mr);

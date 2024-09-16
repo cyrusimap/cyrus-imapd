@@ -15,17 +15,18 @@ Synopsis
 
 .. parsed-literal::
 
-    **mbpath** [ **-C** *config-file* ] [ **-q** ] [ **-s** ] [ **-m** ] [ *mailbox-names*... ]
+    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** | **-p** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
 
 Description
 ===========
 
 Given a mailbox name or a space separated list of mailbox names,
-**mbpath** outputs the filesystem path to the mailbox.
-
+**mbpath** outputs the filesystem path(s) of the mailbox.  By default,
+the mailboxes' data partition paths are shown (same as **-D**).
+See `Selectors`_ for selecting which filesystem path(s) to output.
 
 **mbpath** |default-conf-text| It uses <configdirectory>/mailboxes.db
-to locate the mailbox on disk.
+to locate the mailboxes on disk.
 
 Options
 =======
@@ -36,18 +37,57 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -q
+.. option:: -l, --local-only
 
-    Suppress any error output.
-
-.. option:: -s
-
-    If any error occurs, stop processing the list of mailboxes and exit.
+    Local mailboxes only (exits with error for remote or nonexistent mailboxes)
 
 .. option:: -m
 
     Output the path to the metadata files (if different from the
-    message files).
+    message files).  Legacy, use **-M**.
+
+.. option:: -q, --quiet
+
+    Suppress any error output.
+
+.. option:: -s, --stop
+
+    If any error occurs, stop processing the list of mailboxes and exit.
+
+.. option:: -u, --userids
+
+    The specified *mailbox-names* are userids, not mailboxes.
+
+.. option:: -p, --paths
+
+    The specified *mailbox-names* are UNIX mailbox paths, not mailboxes.
+
+Selectors
+=========
+
+.. option:: -A, --archive
+
+    Show the mailbox archive path
+
+.. option:: -D, --data
+
+    Show the mailbox data path (*default*)
+
+.. option:: -M, --metadata
+
+    Show the mailbox metadata path (same as **-m**)
+
+.. option:: -S, --sieve
+
+    Show the user sieve scripts path
+
+.. option:: -U, --user-files
+
+    Show the user files path (seen, sub, etc)
+
+.. option:: -a, --all
+
+    Show all paths, as if all selectors were specified
 
 Examples
 ========
@@ -58,7 +98,7 @@ Examples
 
 ..
 
-        Display the path for mailbox *user.jsmith*.
+        Display the data path for mailbox *user.jsmith*.
 
 .. only:: html
 
@@ -68,7 +108,7 @@ Examples
 
 .. parsed-literal::
 
-    **mbpath -m** *user.jsmith*
+    **mbpath -M** *user.jsmith*
 
 ..
 
@@ -79,6 +119,20 @@ Examples
     ::
 
         /var/spool/meta/imap/user/jsmith
+
+.. parsed-literal::
+
+    **mbpath -u -S** *jsmith*
+
+..
+
+        Display the sieve scripts path for user *jsmith*.
+
+.. only:: html
+
+    ::
+
+        /var/spool/sieve/j/jsmith
 
 Files
 =====

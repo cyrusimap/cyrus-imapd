@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_list_special_use_return_subscribed
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+        [ 'subscribe' => [qw( SentMail Trash) ] ],
+    ]);
+
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "*",
+                                  'RETURN', [qw(SUBSCRIBED)]);
+
+    xlog $self, Dumper $alldata;
+    $self->assert_mailbox_structure($alldata, '/', {
+        'SentMail'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren \\Subscribed )],
+    });
+
+}

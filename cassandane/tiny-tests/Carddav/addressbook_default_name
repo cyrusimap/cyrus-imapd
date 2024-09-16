@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_default_name
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $carddav = $self->{carddav};
+
+    xlog $self, 'PROPFIND default displayname';
+    my $res = $carddav->Request(
+        'PROPFIND',
+        'Default',
+        x('D:propfind', $carddav->NS(),
+            x('D:prop',
+                x('D:displayname'),
+            ),
+        ),
+        'Content-Type' => 'application/xml',
+        'Depth' => '0'
+    );
+
+    $self->assert_str_equals('Personal', $res->{'{DAV:}response'}[0]{
+        '{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}displayname'}{content});
+
+    xlog $self, "PROPPATCH remove displayname";
+    $res = $carddav->Request(
+        'PROPPATCH',
+        'Default',
+        x('D:propertyupdate', $carddav->NS(),
+            x('D:remove',
+                x('D:prop',
+                    x('D:displayname'),
+                )
+            )
+        ),
+    );
+
+    xlog $self, 'PROPFIND default displayname';
+    $res = $carddav->Request(
+        'PROPFIND',
+        'Default',
+        x('D:propfind', $carddav->NS(),
+            x('D:prop',
+                x('D:displayname'),
+            ),
+        ),
+        'Content-Type' => 'application/xml',
+        'Depth' => '0'
+    );
+    $self->assert_str_equals('Default', $res->{'{DAV:}response'}[0]{
+        '{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}displayname'}{content});
+}

@@ -53,6 +53,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
+#include <inttypes.h>
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
@@ -121,7 +122,7 @@ static int timeout_select(int sock, int op, int sec)
 
 static int nb_connect(int s, struct sockaddr *sa, socklen_t slen, int sec)
 {
-  int flags, r, rc=0;
+  int flags, rc=0;
 
   if ((flags = fcntl(s, F_GETFL,0)) == -1) {
     syslog(LOG_ERR, "unable to get socket flags");
@@ -133,7 +134,7 @@ static int nb_connect(int s, struct sockaddr *sa, socklen_t slen, int sec)
     return -1;
   }
 
-  if ((r = connect(s, sa, slen)) < 0) {
+  if (connect(s, sa, slen) < 0) {
     if (errno != EINPROGRESS) {
       rc = -1;
       goto done;
@@ -364,7 +365,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     r = cyrusdb_open(the_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+               cyrusdb_strerror(r));
         free(tofree);
         *state = NULL;
         return -1;
@@ -400,7 +401,7 @@ static int ptload(const char *identifier, struct auth_state **state)
 
         syslog(LOG_DEBUG,
                "ptload(): fetched cache record (%s)" \
-               "(mark %ld, current %ld, limit %ld)", identifier,
+               "(mark " TIME_T_FMT ", current " TIME_T_FMT ", limit " TIME_T_FMT ")", identifier,
                fetched->mark, now, now - timeout);
 
         if (fetched->mark > (now - timeout)) {
@@ -533,7 +534,6 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
         return NULL;
 
     sa = strarray_new();
-    strarray_truncate(sa, auth_state->ngroups);
     for (i = 0; i < auth_state->ngroups; i++) {
         strarray_append(sa, auth_state->groups[i].id);
     }
@@ -550,4 +550,5 @@ HIDDEN struct auth_mech auth_pts =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh */
 };

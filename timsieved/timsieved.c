@@ -65,6 +65,7 @@
 
 #include "auth.h"
 #include "libconfig.h"
+#include "slowio.h"
 #include "xmalloc.h"
 #include "imap/backend.h"
 #include "imap/global.h"
@@ -84,7 +85,6 @@ const int config_need_data = 0;
 int sieved_tls_required = 0;
 
 sieve_interp_t *interp = NULL;
-static int build_sieve_interp(void);
 
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
@@ -129,6 +129,14 @@ void shut_down(int code)
         free(backend);
     }
 
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
+
+    saslprops_free(&saslprops);
+
+    cyrus_done();
+
     /* cleanup */
     if (sieved_out) {
         prot_flush(sieved_out);
@@ -137,14 +145,6 @@ void shut_down(int code)
     if (sieved_in) prot_free(sieved_in);
 
     if (sieved_logfd != -1) close(sieved_logfd);
-
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
-
-    saslprops_free(&saslprops);
-
-    cyrus_done();
 
     cyrus_reset_stdio();
 
@@ -198,6 +198,8 @@ EXPORTED void fatal(const char *s, int code)
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(EX_TEMPFAIL);
 }
 
@@ -208,15 +210,27 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-EXPORTED int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
+EXPORTED int service_init(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
+    int opt;
+
     global_sasl_init(1, 1, mysasl_cb);
 
-    /* open mailboxes */
+    /* build interpreter for compiling */
+    interp = sieve_build_nonexec_interp();
+    if (interp == NULL) shut_down(EX_SOFTWARE);
 
-    if (build_sieve_interp() != TIMSIEVE_OK) shut_down(EX_SOFTWARE);
+    while ((opt = getopt(argc, argv, "H")) != EOF) {
+        switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
 
     return 0;
 }
@@ -240,9 +254,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
 
-    sieved_timeout = config_getint(IMAPOPT_TIMEOUT);
-    if (sieved_timeout < 10) sieved_timeout = 10;
-    sieved_timeout *= 60;
+    sieved_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    if (sieved_timeout < 10 * 60) sieved_timeout = 10 * 60;
     prot_settimeout(sieved_in, sieved_timeout);
     prot_setflushonread(sieved_in, sieved_out);
 
@@ -275,6 +288,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     cmdloop();
+
+    slowio_reset();
 
     /* never reaches */
     exit(EX_SOFTWARE);
@@ -332,7 +347,7 @@ static void bitpipe(void)
             goto done;
         }
     } while (!proxy_check_input(protin, sieved_in, sieved_out,
-                                backend->in, backend->out, 0));
+                                backend->in, backend->out, PROT_NO_FD, NULL, 0));
 
  done:
     /* ok, we're done. */
@@ -341,85 +356,4 @@ static void bitpipe(void)
     if (shutdown) prot_printf(sieved_out, "NO \"%s\"\r\n", buf);
 
     return;
-}
-
-static void timsieved_generic_cb(void)
-{
-    fatal("stub function called", 0);
-}
-
-static sieve_vacation_t timsieved_vacation_cbs = {
-    0,                                          /* min response */
-    0,                                          /* max response */
-    (sieve_callback *) &timsieved_generic_cb,   /* autorespond() */
-    (sieve_callback *) &timsieved_generic_cb,   /* send_response() */
-};
-
-static sieve_duplicate_t timsieved_duplicate_cbs = {
-    0,                                          /* max expiration */
-    (sieve_callback *) &timsieved_generic_cb,   /* check() */
-    (sieve_callback *) &timsieved_generic_cb,   /* track() */
-};
-
-static int timsieved_notify_cb(void *ac __attribute__((unused)),
-                               void *interp_context __attribute__((unused)),
-                               void *script_context __attribute__((unused)),
-                               void *message_context __attribute__((unused)),
-                               const char **errmsg __attribute__((unused)))
-{
-    fatal("stub function called", 0);
-    return SIEVE_FAIL;
-}
-
-static int timsieved_parse_error_cb(int lineno, const char *msg,
-                                    void *interp_context __attribute__((unused)),
-                                    void *script_context)
-{
-    struct buf *errors = (struct buf *) script_context;
-    buf_printf(errors, "line %d: %s\r\n", lineno, msg);
-    return SIEVE_OK;
-}
-
-/* returns TIMSIEVE_OK or TIMSIEVE_FAIL */
-static int build_sieve_interp(void)
-{
-    int res;
-
-    interp = sieve_interp_alloc(NULL);
-    assert(interp != NULL);
-
-    sieve_register_redirect(interp, (sieve_callback *) &timsieved_generic_cb);
-    sieve_register_discard(interp, (sieve_callback *) &timsieved_generic_cb);
-    sieve_register_reject(interp, (sieve_callback *) &timsieved_generic_cb);
-    sieve_register_fileinto(interp, (sieve_callback *) &timsieved_generic_cb);
-    sieve_register_keep(interp, (sieve_callback *) &timsieved_generic_cb);
-    sieve_register_imapflags(interp, NULL);
-    sieve_register_size(interp, (sieve_get_size *) &timsieved_generic_cb);
-    sieve_register_mailboxexists(interp, (sieve_get_mailboxexists *) &timsieved_generic_cb);
-    sieve_register_mailboxidexists(interp, (sieve_get_mailboxidexists *) &timsieved_generic_cb);
-    sieve_register_metadata(interp, (sieve_get_metadata *) &timsieved_generic_cb);
-    sieve_register_header(interp, (sieve_get_header *) &timsieved_generic_cb);
-    sieve_register_addheader(interp, (sieve_add_header *) &timsieved_generic_cb);
-    sieve_register_deleteheader(interp, (sieve_delete_header *) &timsieved_generic_cb);
-    sieve_register_envelope(interp, (sieve_get_envelope *) &timsieved_generic_cb);
-    sieve_register_environment(interp, (sieve_get_environment *) &timsieved_generic_cb);
-    sieve_register_body(interp, (sieve_get_body *) &timsieved_generic_cb);
-    sieve_register_include(interp, (sieve_get_include *) &timsieved_generic_cb);
-
-    res = sieve_register_vacation(interp, &timsieved_vacation_cbs);
-    if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-        return TIMSIEVE_FAIL;
-    }
-
-    res = sieve_register_duplicate(interp, &timsieved_duplicate_cbs);
-    if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
-        return TIMSIEVE_FAIL;
-    }
-
-    sieve_register_notify(interp, &timsieved_notify_cb, NULL);
-    sieve_register_parse_error(interp, &timsieved_parse_error_cb);
-
-    return TIMSIEVE_OK;
 }

@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+# Magic: the word 'replication' in the name enables a replica
+sub test_replication_message
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    xlog $self, "testing replication of MESSAGE quota";
+
+    my $mastertalk = $self->{master_adminstore}->get_client();
+    my $replicatalk = $self->{replica_adminstore}->get_client();
+
+    my $folder = "user.cassandane";
+    my @res;
+
+    xlog $self, "checking there are no initial quotas";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
+    $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
+    $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
+
+    xlog $self, "set a STORAGE quota on the master";
+    $mastertalk->setquota($folder, "(message 12345)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals(['MESSAGE', 0, 12345], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals(['MESSAGE', 0, 12345], \@res);
+
+    xlog $self, "change the MESSAGE quota on the master";
+    $mastertalk->setquota($folder, "(message 67890)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals(['MESSAGE', 0, 67890], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals(['MESSAGE', 0, 67890], \@res);
+
+    xlog $self, "clear the MESSAGE quota on the master";
+    $mastertalk->setquota($folder, "()");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "run replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
+
+    xlog $self, "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+}

@@ -3,6 +3,7 @@
 #include "cunit/cyrunit.h"
 #include <sys/stat.h>
 #include "command.h"
+#include "xunlink.h"
 
 const char canary[] = "canary.txt";
 
@@ -12,7 +13,7 @@ static void test_run(void)
     struct stat sb;
 
     /* make sure the file isnt there */
-    r = unlink(canary);
+    r = xunlink(canary);
     if (r < 0) r = errno;
     if (r == ENOENT) r = 0;
     CU_ASSERT_EQUAL_FATAL(r, 0);
@@ -23,7 +24,7 @@ static void test_run(void)
     r = stat(canary, &sb);
     if (r < 0) r = errno;
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    unlink(canary);
+    xunlink(canary);
 }
 
 static void test_popen_r(void)
@@ -59,7 +60,7 @@ static void test_popen_w(void)
     char buf[32];
 
     /* make sure the file isnt there */
-    r = unlink(canary);
+    r = xunlink(canary);
     if (r < 0) r = errno;
     if (r == ENOENT) r = 0;
     CU_ASSERT_EQUAL_FATAL(r, 0);
@@ -86,7 +87,7 @@ static void test_popen_w(void)
     CU_ASSERT_STRING_EQUAL(buf, WORD0);
     fclose(fp);
 
-    unlink(canary);
+    xunlink(canary);
 #undef WORD0
 }
 

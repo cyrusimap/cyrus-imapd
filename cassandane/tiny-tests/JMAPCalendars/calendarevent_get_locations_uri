@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_locations_uri
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('locations-uri');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    my @locations = values %{$event->{locations}};
+    $self->assert_num_equals(1, scalar @locations);
+
+    $self->assert_str_equals("On planet Earth", $locations[0]->{name});
+
+    my @links = values %{$locations[0]->{links}};
+    $self->assert_num_equals(1, scalar @links);
+    $self->assert_equals("skype:foo", $links[0]->{href});
+}

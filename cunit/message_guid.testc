@@ -1,0 +1,13 @@
+#include "cunit/cyrunit.h"
+#include "imap/message_guid.h"
+
+static void test_clone(void)
+{
+    struct message_guid guid_a = MESSAGE_GUID_INITIALIZER;
+
+    message_guid_generate(&guid_a, "foobar", 6);
+    struct message_guid guid_b = message_guid_clone(&guid_a);
+
+    CU_ASSERT_EQUAL(0, memcmp(guid_a.value, guid_b.value, MESSAGE_GUID_SIZE));
+    CU_ASSERT_EQUAL(guid_a.status, guid_b.status);
+}

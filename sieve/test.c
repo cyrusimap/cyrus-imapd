@@ -58,6 +58,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "libconfig.h"
 #include "assert.h"
@@ -66,16 +67,27 @@
 #include "comparator.h"
 #include "tree.h"
 #include "sieve/sieve.h"
+#include "imap/global.h"
 #include "imap/mailbox.h"
+#include "imap/mboxname.h"
 #include "imap/message.h"
+#include "imap/spool.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
+#ifdef WITH_JMAP
+#include "imap/jmap_mail_query.h"
+#endif
+
 static char vacation_answer;
+
+/* current namespace */
+static struct namespace test_namespace;
 
 typedef struct {
     char *name;
@@ -84,145 +96,28 @@ typedef struct {
     struct message_content content;
 
     int cache_full;
-    struct hash_table cache;
+    hdrcache_t cache;
     strarray_t *env_from;
     strarray_t *env_to;
 } message_data_t;
 
 typedef struct {
+    const char *userid;
     const char *host;
     const char *remotehost;
     const char *remoteip;
+    struct auth_state *authstate;
+    struct namespace *ns;
+    int edited_header;
 } script_data_t;
-
-/* take a list of headers, pull the first one out and return it in
-   name and contents.
-
-   returns 0 on success, negative on failure */
-typedef enum {
-    HDR_NAME_START,
-    HDR_NAME,
-    COLON,
-    HDR_CONTENT_START,
-    HDR_CONTENT
-} state;
-
-static int parseheader(FILE *f, char **headname, char **contents)
-{
-    int c;
-    static struct buf name = BUF_INITIALIZER;
-    static struct buf body = BUF_INITIALIZER;
-    state s = HDR_NAME_START;
-
-    buf_reset(&name);
-    buf_reset(&body);
-
-    /* there are two ways out of this loop, both via gotos:
-       either we successfully read a character (got_header)
-       or we hit an error (ph_error) */
-    while ((c = getc(f))) {     /* examine each character */
-        switch (s) {
-        case HDR_NAME_START:
-            if (c == '\r' || c == '\n') {
-                /* no header here! */
-                goto ph_error;
-            }
-            if (!isalpha(c))
-                goto ph_error;
-            buf_putc(&name, TOLOWER(c));
-            s = HDR_NAME;
-            break;
-
-        case HDR_NAME:
-            if (c == ' ' || c == '\t' || c == ':') {
-                buf_cstring(&name);
-                s = (c == ':' ? HDR_CONTENT_START : COLON);
-                break;
-            }
-            if (iscntrl(c)) {
-                goto ph_error;
-            }
-            buf_putc(&name, TOLOWER(c));
-            break;
-
-        case COLON:
-            if (c == ':') {
-                s = HDR_CONTENT_START;
-            } else if (c != ' ' && c != '\t') {
-                goto ph_error;
-            }
-            break;
-
-        case HDR_CONTENT_START:
-            if (c == ' ' || c == '\t') /* eat the whitespace */
-                break;
-            buf_reset(&body);
-            s = HDR_CONTENT;
-            /* falls through! */
-        case HDR_CONTENT:
-            if (c == '\r' || c == '\n') {
-                int peek = getc(f);
-
-                /* we should peek ahead to see if it's folded whitespace */
-                if (c == '\r' && peek == '\n') {
-                    c = getc(f);
-                } else {
-                    c = peek; /* single newline separator */
-                }
-                if (c != ' ' && c != '\t') {
-                    /* this is the end of the header */
-                    buf_cstring(&body);
-                    ungetc(c, f);
-                    goto got_header;
-                }
-                /* http://www.faqs.org/rfcs/rfc2822.html
-                 *
-                 * > Unfolding is accomplished by simply removing any CRLF
-                 * > that is immediately followed by WSP
-                 *
-                 * So keep the actual WSP character
-                 */
-            }
-            /* just an ordinary character */
-            buf_putc(&body, c);
-            break;
-        }
-    }
-
-    /* if we fall off the end of the loop, we hit some sort of error
-       condition */
-
- ph_error:
-    if (headname != NULL) *headname = NULL;
-    if (contents != NULL) *contents = NULL;
-    return -1;
-
- got_header:
-    if (headname != NULL) *headname = xstrdup(name.s);
-    if (contents != NULL) *contents = xstrdup(body.s);
-
-    return 0;
-}
 
 static void fill_cache(message_data_t *m)
 {
-    rewind(m->data);
+    struct protstream *pin = prot_new(fileno(m->data), 0);
 
-    /* let's fill that header cache */
-    for (;;) {
-        char *name, *body;
-        strarray_t *contents;
-
-        if (parseheader(m->data, &name, &body) < 0) {
-            break;
-        }
-        /* put it in the hash table */
-        contents = (strarray_t *)hash_lookup(name, &m->cache);
-        if (!contents)
-            contents = hash_insert(name, strarray_new(), &m->cache);
-        strarray_appendm(contents, body);
-        free(name);
-    }
+    prot_rewind(pin);
+    spool_fill_hdrcache(pin, NULL, m->cache, NULL);
+    prot_free(pin);
 
     m->cache_full = 1;
 }
@@ -249,8 +144,6 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
-    strarray_t *contents;
-    char *head;
 
     *body = NULL;
 
@@ -258,22 +151,71 @@ static int getheader(void *v, const char *phead, const char ***body)
         fill_cache(m);
     }
 
-    /* copy header parameter so we can mangle it */
-    head = xstrdup(phead);
-    lcase(head);
-
-    /* check the cache */
-    contents = (strarray_t *)hash_lookup(head, &m->cache);
-    if (contents)
-        *body = (const char **) contents->data;
-
-    free(head);
+    *body = spool_getheader(m->cache, phead);
 
     if (*body) {
         return SIEVE_OK;
     } else {
         return SIEVE_FAIL;
     }
+}
+
+static void getheaders_cb(const char *name, const char *value,
+                          const char *raw, void *rock)
+{
+    struct buf *contents = (struct buf *) rock;
+
+    if (raw) buf_appendcstr(contents, raw);
+    else buf_printf(contents, "%s: %s\r\n", name, value);
+}
+
+static int getheadersection(void *mc, struct buf **contents)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    *contents = buf_new();
+
+    spool_enum_hdrcache(m->cache, &getheaders_cb, *contents);
+
+    return SIEVE_OK;
+}
+
+/* adds the header "head" with body "body" to msg */
+static int addheader(void *mc, const char *head, const char *body, int index)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    if (head == NULL || body == NULL) return SIEVE_FAIL;
+
+    if (index < 0) {
+        printf("appending header '%s: %s'\n", head, body);
+        spool_append_header(xstrdup(head), xstrdup(body), m->cache);
+    }
+    else {
+        printf("prepending header '%s: %s'\n", head, body);
+        spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
+    }
+
+    return SIEVE_OK;
+}
+
+/* deletes (instance "index" of) the header "head" from msg */
+static int deleteheader(void *mc, const char *head, int index)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    if (head == NULL) return SIEVE_FAIL;
+
+    if (!index) {
+        printf("removing all headers '%s'\n", head);
+        spool_remove_header(xstrdup(head), m->cache);
+    }
+    else {
+        printf("removing header '%s[%d]'\n", head, index);
+        spool_remove_header_instance(xstrdup(head), index, m->cache);
+    }
+
+    return SIEVE_OK;
 }
 
 static int getenvironment(void *sc, const char *keyname, char **res)
@@ -334,14 +276,18 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
     m->data = msg;
     m->size = size;
     m->name = xstrdup(name);
-    construct_hash_table(&m->cache, 1000, 0);
+    m->cache = spool_new_hdrcache();
 
     return m;
 }
 
 static void free_msg(message_data_t *m)
 {
-    free_hash_table(&m->cache, (void(*)(void*))strarray_free);
+#ifdef WITH_JMAP
+    jmap_email_matchmime_free(&m->content.matchmime);
+#endif
+    buf_free(&m->content.map);
+    spool_free_hdrcache(m->cache);
     free(m->name);
     free(m);
 }
@@ -361,8 +307,8 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
 
     if (!m->content.body) {
         /* parse the message body if we haven't already */
-        r = message_parse_file(m->data, &m->content.base,
-                               &m->content.len, &m->content.body);
+        r = message_parse_file_buf(m->data, &m->content.map,
+                                   &m->content.body, NULL);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as
@@ -429,10 +375,71 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
 
+    if (!m) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
+
     printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
     if (fc->imapflags->count) {
         char *s = strarray_join(fc->imapflags, "' '");
+        if (s) {
+            printf("\twith flags '%s'\n", s);
+            free(s);
+        }
+    }
+
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
+}
+
+static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
+                  void *mc, const char **errmsg __attribute__((unused)))
+{
+    sieve_snooze_context_t *sn = (sieve_snooze_context_t *) ac;
+    message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
+
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    int day_inc = -1;
+    unsigned t;
+    size_t i;
+
+    if (sn->days & (1 << tm->tm_wday)) {
+        /* We have times for today - see if a future one is still available */
+        unsigned now_min = 60 * tm->tm_hour + tm->tm_min;
+
+        for (i = 0; i < arrayu64_size(sn->times); i++) {
+            t = arrayu64_nth(sn->times, i);
+            if (t >= now_min) {
+                day_inc = 0;
+                break;
+            }
+        }
+    }
+    if (day_inc == -1) {
+        /* Use first time on next available day */
+        t = arrayu64_nth(sn->times, 0);
+
+        /* Find next available day */
+        for (i = tm->tm_wday+1; i < 14; i++) {
+            if (sn->days & (1 << (i % 7))) {
+                day_inc = i - tm->tm_wday;
+                break;
+            }
+        }
+    }
+
+    tm->tm_mday += day_inc;
+    tm->tm_hour = t / 60;
+    tm->tm_min = t % 60;
+    tm->tm_sec = 0;
+    mktime(tm);
+
+    printf("snoozing message '%s' until %s\n", m->name, asctime(tm));
+    if (sn->imapflags->count) {
+        char *s = strarray_join(sn->imapflags, "' '");
         if (s) {
             printf("\twith flags '%s'\n", s);
             free(s);
@@ -448,6 +455,11 @@ static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
+
+    if (!m) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
 
     printf("keeping message '%s'\n", m->name);
     if (kc->imapflags->count) {
@@ -467,24 +479,27 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     int *force_fail = (int*) ic;
-    int flag = 0;
 
     printf("notify ");
     if (nc->method) {
-        const char **opts = nc->options;
-
         printf("%s(", nc->method);
-        while (opts && *opts) {
-            if (flag) printf(", ");
-            printf("%s", *opts);
-            opts++;
-            flag = 1;
+        if (nc->options) {
+            int i;
+            for (i = 0; i < strarray_size(nc->options); i++) {
+                if (i) printf(", ");
+                printf("%s", strarray_nth(nc->options, i));
+            }
         }
         printf("), ");
     }
     printf("msg = '%s' with priority = %s\n",nc->message, nc->priority);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
+}
+
+void sieve_log(void *sc __attribute__((unused)), void *mc __attribute__((unused)), const char *text)
+{
+    printf("sieve log: text=%s\n", text);
 }
 
 static int mysieve_error(int lineno, const char *msg,
@@ -540,8 +555,8 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     return SIEVE_FAIL;
 }
 
-static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
-                         void *mc, const char **errmsg __attribute__((unused)))
+static int send_response(void *ac, void *ic, void *sc,
+                         void *mc, const char **errmsg)
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -550,8 +565,62 @@ static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
     printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
            src->msg, src->subj, src->addr, m->name, src->fromaddr);
 
+    if (src->fcc.mailbox) {
+        message_data_t vmc = { .name = "vacation-autoresponse" };
+
+        (void) fileinto(&src->fcc, ic, sc, &vmc, errmsg);
+    }
+
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
+
+#ifdef WITH_JMAP
+static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const char *json)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *md = (message_data_t *) mc;
+    const char *userid = sd->userid;
+    json_error_t jerr;
+    json_t *jfilter, *err = NULL;
+    int matches = 0;
+
+    /* Create filter from json */
+    jfilter = json_loads(json, 0, &jerr);
+    if (!jfilter) return 0;
+
+    int r = 0;
+
+    if (!md->content.matchmime) {
+        if (!md->content.body) {
+            /* parse the message body if we haven't already */
+            r = message_parse_file_buf(md->data, &md->content.map,
+                                       &md->content.body, NULL);
+            if (r) {
+                json_decref(jfilter);
+                return 0;
+            }
+        }
+        /* build the query filter */
+        md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
+    }
+
+    /* Run query */
+    if (md->content.matchmime)
+        matches = jmap_email_matchmime(md->content.matchmime, jfilter, NULL, userid,
+                sd->authstate, sd->ns, time(NULL), &err);
+
+    if (err) {
+        char *errstr = json_dumps(err, JSON_COMPACT);
+        fprintf(stderr, "sieve: jmapquery: %s\n", errstr);
+
+        free(errstr);
+    }
+
+    json_decref(jfilter);
+
+    return matches;
+}
+#endif
 
 static sieve_vacation_t vacation = {
     0,                          /* min response */
@@ -567,6 +636,7 @@ static int usage(const char *argv0)
     fprintf(stderr, "%s -v script\n", argv0);
     fprintf(stderr, "%s [opts] message script\n", argv0);
     fprintf(stderr, "\n");
+    fprintf(stderr, "   -u userid\n");
     fprintf(stderr, "   -e envelope_from\n");
     fprintf(stderr, "   -t envelope_to\n");
     fprintf(stderr, "   -r y|n - have sent vacation response already? (if required)\n");
@@ -582,21 +652,21 @@ int main(int argc, char *argv[])
     sieve_execute_t *exe = NULL;
     message_data_t *m = NULL;
     char *tmpscript = NULL, *script = NULL, *message = NULL;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
     int c, force_fail = 0;
     int fd, res;
     struct stat sbuf;
-    static strarray_t mark = STRARRAY_INITIALIZER;
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
-    script_data_t sd = { NULL, "", NULL };
+    script_data_t sd = { NULL, NULL, "", NULL, NULL, NULL, 0 };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
     strarray_append(&e_to, "");
 
-    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:")) != EOF)
+    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:u:")) != EOF)
         switch (c) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -627,6 +697,9 @@ int main(int argc, char *argv[])
         case 'I':
             sd.remoteip = optarg;
             break;
+        case 'u':
+            sd.userid = optarg;
+            break;
         default:
             usage(argv[0]);
             break;
@@ -642,7 +715,12 @@ int main(int argc, char *argv[])
     }
 
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    cyrus_init(alt_config, "test", 0, 0);
+
+    mboxname_init_namespace(&test_namespace, /*options*/0);
+    sd.ns = &test_namespace;
+    // anyone authstate
+    sd.authstate = auth_newstate("anyone");
 
     if (!sd.host) sd.host = config_servername;
 
@@ -654,13 +732,12 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
 
         if (fread(magic, BYTECODE_MAGIC_LEN, 1, f) <= 0 ||
-            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN != 0)) {
+            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) != 0) {
             /* Not Sieve bytecode - try to parse as text */
 
             if (sieve_script_parse_only(f, &err, &s) != SIEVE_OK) {
@@ -716,13 +793,18 @@ int main(int argc, char *argv[])
     sieve_register_discard(i, discard);
     sieve_register_reject(i, reject);
     sieve_register_fileinto(i, fileinto);
+    sieve_register_snooze(i, snooze);
     sieve_register_keep(i, keep);
     sieve_register_size(i, getsize);
     sieve_register_header(i, getheader);
+    sieve_register_headersection(i, getheadersection);
+    sieve_register_addheader(i, addheader);
+    sieve_register_deleteheader(i, deleteheader);
     sieve_register_envelope(i, getenvelope);
     sieve_register_environment(i, getenvironment);
     sieve_register_body(i, getbody);
     sieve_register_include(i, getinclude);
+    sieve_register_logger(i, sieve_log);
 
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {
@@ -730,12 +812,13 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    strarray_append(&mark, "\\flagged");
-    sieve_register_imapflags(i, &mark);
-
     sieve_register_notify(i, notify, NULL);
     sieve_register_parse_error(i, mysieve_error);
     sieve_register_execute_error(i, mysieve_execute_error);
+
+#ifdef WITH_JMAP
+    sieve_register_jmapquery(i, &jmapquery);
+#endif
 
     res = sieve_script_load(script, &exe);
     if (res != SIEVE_OK) {
@@ -745,7 +828,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (message) {
@@ -790,7 +873,7 @@ int main(int argc, char *argv[])
         free_msg(m);
     strarray_fini(&e_from);
     strarray_fini(&e_to);
-    strarray_fini(&mark);
+    auth_freestate(sd.authstate);
 
     return 0;
 }
@@ -798,5 +881,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

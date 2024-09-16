@@ -51,10 +51,13 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "http_ws.h"
+#include "jmap_push.h"
 #include "mboxname.h"
 #include "proxy.h"
 #include "times.h"
+#include "sync_support.h"
 #include "syslog.h"
+#include "user.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -70,6 +73,8 @@
 #define JMAP_UPLOAD_TPL    "{accountId}/"
 #define JMAP_DOWNLOAD_COL  "download/"
 #define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}?accept={type}"
+#define JMAP_EVENTSOURCE_COL  "eventsource/"
+#define JMAP_EVENTSOURCE_TPL  "?types={types}&closeafter={closeafter}&ping={ping}"
 
 struct namespace jmap_namespace;
 
@@ -80,60 +85,58 @@ static time_t compile_time;
 static void jmap_init(struct buf *serverinfo);
 static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
+static void jmap_reset(void);
 static void jmap_shutdown(void);
+static int  jmap_parse_path(const char *path, struct request_target_t *tgt,
+                            const char **resultstr);
 
 /* HTTP method handlers */
-static int jmap_get(struct transaction_t *txn, void *params);
-static int jmap_options(struct transaction_t *txn, void *params);
-static int jmap_post(struct transaction_t *txn, void *params);
+static int meth_get(struct transaction_t *txn, void *params);
+static int meth_post(struct transaction_t *txn, void *params);
 
 /* JMAP Requests */
-static int jmap_settings(struct transaction_t *txn);
+static int jmap_get_session(struct transaction_t *txn);
 static int jmap_download(struct transaction_t *txn);
 static int jmap_upload(struct transaction_t *txn);
-
-/* JMAP Core API Methods */
-static int jmap_blob_get(jmap_req_t *req);
-static int jmap_blob_copy(jmap_req_t *req);
-static int jmap_core_echo(jmap_req_t *req);
+static int jmap_eventsource(struct transaction_t *txn);
 
 /* WebSocket handler */
 #define JMAP_WS_PROTOCOL   "jmap"
 
-static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
+static ws_data_callback jmap_ws;
 
 static struct connect_params ws_params = {
-    JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws
+    &jmap_parse_path, { JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws }
 };
 
 
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "jmap", JMAP_ROOT, "/.well-known/jmap",
-    jmap_need_auth, /*authschemes*/0,
+    jmap_need_auth, 0,
     /*mbtype*/0, 
-    (ALLOW_READ | ALLOW_POST),
-    &jmap_init, &jmap_auth, NULL, &jmap_shutdown, NULL, /*bearer*/NULL,
+    (ALLOW_READ | ALLOW_POST | ALLOW_READONLY),
+    &jmap_init, &jmap_auth, &jmap_reset, &jmap_shutdown, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
         { &meth_connect,        &ws_params },           /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
-        { &jmap_get,            NULL },                 /* GET          */
-        { &jmap_get,            NULL },                 /* HEAD         */
+        { &meth_get,            NULL },                 /* GET          */
+        { &meth_get,            NULL },                 /* HEAD         */
         { NULL,                 NULL },                 /* LOCK         */
         { NULL,                 NULL },                 /* MKCALENDAR   */
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
-        { &jmap_options,        NULL },                 /* OPTIONS      */
+        { &meth_options,        &jmap_parse_path },     /* OPTIONS      */
         { NULL,                 NULL },                 /* PATCH        */
-        { &jmap_post,           NULL },                 /* POST         */
+        { &meth_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -146,88 +149,31 @@ struct namespace_t namespace_jmap = {
  */
 
 static jmap_settings_t my_jmap_settings = {
-    HASH_TABLE_INITIALIZER, STRARRAY_INITIALIZER, NULL, { 0 }
+    HASH_TABLE_INITIALIZER,
+    NULL,
+    { 0 },
+    PTRARRAY_INITIALIZER,
+    PTRARRAY_INITIALIZER
 };
 
-jmap_method_t jmap_core_methods[] = {
-    { "Blob/copy",    &jmap_blob_copy, 0/*flags*/ },
-    { "Blob/get",     &jmap_blob_get,  JMAP_SHARED_CSTATE },
-    { "Core/echo",    &jmap_core_echo, JMAP_SHARED_CSTATE },
-    { NULL,           NULL, 0/*flags*/ }
-};
-
-static void jmap_core_init()
+static void jmap_init(struct buf *serverinfo)
 {
-#define _read_opt(val, optkey) \
-    val = config_getint(optkey); \
-    if (val <= 0) { \
-        syslog(LOG_ERR, "jmap: invalid property value: %s", \
-                imapopts[optkey].optname); \
-        val = 0; \
-    }
-    _read_opt(my_jmap_settings.limits[MAX_SIZE_UPLOAD],
-              IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
-    my_jmap_settings.limits[MAX_SIZE_UPLOAD] *= 1024;
-    _read_opt(my_jmap_settings.limits[MAX_CONCURRENT_UPLOAD],
-              IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
-    _read_opt(my_jmap_settings.limits[MAX_SIZE_REQUEST],
-              IMAPOPT_JMAP_MAX_SIZE_REQUEST);
-    my_jmap_settings.limits[MAX_SIZE_REQUEST] *= 1024;
-    _read_opt(my_jmap_settings.limits[MAX_CONCURRENT_REQUESTS],
-              IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
-    _read_opt(my_jmap_settings.limits[MAX_CALLS_IN_REQUEST],
-              IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
-    _read_opt(my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
-              IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
-    _read_opt(my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
-              IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
-#undef _read_opt
+#ifdef USE_XAPIAN
+#include "xapian_wrap.h"
+    buf_printf(serverinfo, " Xapian/%s", xapian_version_string());
+#endif
 
-    strarray_push(&my_jmap_settings.can_use, JMAP_URN_CORE);
- 
-    construct_hash_table(&my_jmap_settings.methods, 128, 0);
-
-    jmap_method_t *mp;
-    for (mp = jmap_core_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, &my_jmap_settings.methods);
-    }
-}
-
-static void jmap_core_capabilities()
-{
-    my_jmap_settings.capabilities =
-        json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
-                  JMAP_URN_CORE,
-                  "maxSizeUpload",
-                  my_jmap_settings.limits[MAX_SIZE_UPLOAD],
-                  "maxConcurrentUpload",
-                  my_jmap_settings.limits[MAX_CONCURRENT_UPLOAD],
-                  "maxSizeRequest",
-                  my_jmap_settings.limits[MAX_SIZE_REQUEST],
-                  "maxConcurrentRequests",
-                  my_jmap_settings.limits[MAX_CONCURRENT_REQUESTS],
-                  "maxCallsInRequest",
-                  my_jmap_settings.limits[MAX_CALLS_IN_REQUEST],
-                  "maxObjectsInGet",
-                  my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
-                  "maxObjectsInSet",
-                  my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
-                  "collationAlgorithms", json_array()
-            );
-
-    if (ws_enabled()) {
-        json_object_set_new(my_jmap_settings.capabilities, JMAP_URN_WEBSOCKET,
-                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL JMAP_WS_COL));
-    }
-
-    json_object_set_new(my_jmap_settings.capabilities,
-                        XML_NS_CYRUS "performance", json_object());
-}
-
-static void jmap_init(struct buf *serverinfo __attribute__((unused)))
-{
     namespace_jmap.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
+
+    if (namespace_jmap.enabled && !config_getswitch(IMAPOPT_CONVERSATIONS) &&
+        /* proxy servers don't need conversations */
+        (!config_mupdate_server || config_getstring(IMAPOPT_PROXYSERVERS))) {
+        syslog(LOG_ERR,
+               "ERROR: cannot enable %s module with conversations disabled",
+               namespace_jmap.name);
+        namespace_jmap.enabled = 0;
+    }
 
     if (!namespace_jmap.enabled) return;
 
@@ -235,18 +181,41 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 
     initialize_JMAP_error_table();
 
-    jmap_core_init();
-    jmap_user_init(&my_jmap_settings);
+    construct_hash_table(&my_jmap_settings.methods, 128, 0);
+    my_jmap_settings.server_capabilities = json_object();
+
+    jmap_core_init(&my_jmap_settings);
+    jmap_blob_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
+    jmap_mdn_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
     jmap_calendar_init(&my_jmap_settings);
+    jmap_backup_init(&my_jmap_settings);
+    jmap_notes_init(&my_jmap_settings);
+#ifdef USE_SIEVE
+    jmap_sieve_init(&my_jmap_settings);
+#endif
+    jmap_admin_init(&my_jmap_settings);
+
+    if (ws_enabled) {
+        jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
+        if (jmap_push_poll < 0) jmap_push_poll = 0;
+
+        json_object_set_new(my_jmap_settings.server_capabilities,
+                JMAP_URN_WEBSOCKET,
+                json_pack("{s:s s:b}",
+                          "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
+                          "supportsPush", jmap_push_poll));
+    }
 }
 
 static int jmap_auth(const char *userid __attribute__((unused)))
 {
     /* Set namespace */
-    mboxname_init_namespace(&jmap_namespace,
-                            httpd_userisadmin || httpd_userisproxyadmin);
+    unsigned options =
+        (httpd_userisadmin || httpd_userisproxyadmin) ? NAMESPACE_OPTION_ADMIN : 0;
+    mboxname_init_namespace(&jmap_namespace, options);
+
     return 0;
 }
 
@@ -256,12 +225,34 @@ static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
     return HTTP_UNAUTHORIZED;
 }
 
+static void jmap_reset(void)
+{
+    int i;
+    for (i = 0; i < ptrarray_size(&my_jmap_settings.event_handlers); i++) {
+        struct jmap_handler *h =
+            ptrarray_nth(&my_jmap_settings.event_handlers, i);
+        if (h->eventmask & JMAP_HANDLE_CLOSE_CONN) {
+            h->handler(JMAP_HANDLE_CLOSE_CONN, NULL, h->rock);
+        }
+    }
+}
+
 static void jmap_shutdown(void)
 {
-    free_hash_table(&my_jmap_settings.methods, NULL);
-    strarray_fini(&my_jmap_settings.can_use);
-    if (my_jmap_settings.capabilities)
-        json_decref(my_jmap_settings.capabilities);
+    free_hash_table(&my_jmap_settings.methods,
+                    (void (*)(void *)) &ptrarray_free);
+    json_decref(my_jmap_settings.server_capabilities);
+    ptrarray_fini(&my_jmap_settings.getblob_handlers);
+    int i;
+    for (i = 0; i < ptrarray_size(&my_jmap_settings.event_handlers); i++) {
+        struct jmap_handler *h =
+            ptrarray_nth(&my_jmap_settings.event_handlers, i);
+        if (h->eventmask & JMAP_HANDLE_SHUTDOWN) {
+            h->handler(JMAP_HANDLE_SHUTDOWN, NULL, h->rock);
+        }
+        free(h);
+    }
+    ptrarray_fini(&my_jmap_settings.event_handlers);
 }   
 
 
@@ -273,47 +264,47 @@ enum {
     JMAP_ENDPOINT_API,
     JMAP_ENDPOINT_WS,
     JMAP_ENDPOINT_UPLOAD,
-    JMAP_ENDPOINT_DOWNLOAD
+    JMAP_ENDPOINT_DOWNLOAD,
+    JMAP_ENDPOINT_EVENTSOURCE
 };
 
-static int jmap_parse_path(struct transaction_t *txn)
+static int jmap_parse_path(const char *path, struct request_target_t *tgt,
+                           const char **resultstr)
 {
-    struct request_target_t *tgt = &txn->req_tgt;
     size_t len;
     char *p;
 
     if (*tgt->path) return 0;  /* Already parsed */
 
     /* Make a working copy of target path */
-    strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
+    strlcpy(tgt->path, path, sizeof(tgt->path));
     p = tgt->path;
 
     /* Sanity check namespace */
     len = strlen(namespace_jmap.prefix);
     if (strlen(p) < len ||
         strncmp(namespace_jmap.prefix, p, len) ||
-        (tgt->path[len] && tgt->path[len] != '/')) {
-        txn->error.desc = "Namespace mismatch request target path";
+        (path[len] && path[len] != '/')) {
+        *resultstr = "Namespace mismatch request target path";
         return HTTP_FORBIDDEN;
     }
 
+    /* Always allow read, even if no content */
+    tgt->allow = ALLOW_READ;
+
     /* Skip namespace */
     p += len;
-    if (!*p) {
-        /* Canonicalize URL */
-        txn->location = JMAP_BASE_URL;
-        return HTTP_MOVED;
-    }
 
     /* Check for path after prefix */
-    if (*++p) {
+    if (*p == '/') p++;
+    if (*p) {
         /* Get "collection" */
         tgt->collection = p;
 
         if (!strncmp(tgt->collection, JMAP_UPLOAD_COL,
                           strlen(JMAP_UPLOAD_COL))) {
             tgt->flags = JMAP_ENDPOINT_UPLOAD;
-            tgt->allow = ALLOW_POST;
+            tgt->allow |= ALLOW_POST;
 
             /* Get "resource" which must be the accountId */
             tgt->resource = tgt->collection + strlen(JMAP_UPLOAD_COL);
@@ -321,14 +312,17 @@ static int jmap_parse_path(struct transaction_t *txn)
         else if (!strncmp(tgt->collection,
                           JMAP_DOWNLOAD_COL, strlen(JMAP_DOWNLOAD_COL))) {
             tgt->flags = JMAP_ENDPOINT_DOWNLOAD;
-            tgt->allow = ALLOW_READ;
 
             /* Get "resource" */
             tgt->resource = tgt->collection + strlen(JMAP_DOWNLOAD_COL);
         }
-        else if (ws_enabled() && !strcmp(tgt->collection, JMAP_WS_COL)) {
+        else if (ws_enabled && !strcmp(tgt->collection, JMAP_WS_COL)) {
             tgt->flags = JMAP_ENDPOINT_WS;
-            tgt->allow = (txn->flags.ver == VER_2) ? ALLOW_CONNECT : ALLOW_READ;
+            tgt->allow |= ALLOW_CONNECT;
+        }
+        else if (!strncmp(tgt->collection,
+                          JMAP_EVENTSOURCE_COL, strlen(JMAP_EVENTSOURCE_COL))) {
+            tgt->flags = JMAP_ENDPOINT_EVENTSOURCE;
         }
         else {
             return HTTP_NOT_FOUND;
@@ -336,25 +330,71 @@ static int jmap_parse_path(struct transaction_t *txn)
     }
     else {
         tgt->flags = JMAP_ENDPOINT_API;
-        tgt->allow = ALLOW_POST|ALLOW_READ;
+        tgt->allow |= ALLOW_POST;
+    }
+
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        /* Locate the authenticated user's INBOX */
+        char *inbox = mboxname_user_mbox(httpd_userid, NULL);
+        int r = proxy_mlookup(inbox, &tgt->mbentry, NULL, NULL);
+
+        if (r) {
+            syslog(LOG_ERR, "mlookup(%s) failed: %s", inbox, error_message(r));
+        }
+        free(inbox);
+
+        switch (r) {
+        case 0:
+            break;
+
+        case IMAP_PERMISSION_DENIED:
+            return HTTP_FORBIDDEN;
+
+        case IMAP_MAILBOX_NONEXISTENT:
+            return HTTP_NOT_FOUND;
+
+        default:
+            return HTTP_SERVER_ERROR;
+        }
     }
 
     return 0;
 }
 
 /* Perform a GET/HEAD request */
-static int jmap_get(struct transaction_t *txn,
+static int meth_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
-    int r = jmap_parse_path(txn);
+    int r = jmap_parse_path(txn->req_uri->path,
+                            &txn->req_tgt, &txn->error.desc);
 
+    if (r) return r;
     if (!(txn->req_tgt.allow & ALLOW_READ)) {
         return HTTP_NOT_FOUND;
     }
-    else if (r) return r;
+
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        r = http_pipe_req_resp(be, txn);
+        if (!r && (txn->req_tgt.flags == JMAP_ENDPOINT_WS)) {
+            txn->be = be;
+
+            /* Adjust inactivity timer */
+            prot_settimeout(httpd_in,
+                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
+        }
+        return r;
+    }
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
-        return jmap_settings(txn);
+        return jmap_get_session(txn);
     }
     else if (txn->req_tgt.flags == JMAP_ENDPOINT_DOWNLOAD) {
         return jmap_download(txn);
@@ -364,8 +404,30 @@ static int jmap_get(struct transaction_t *txn,
              (txn->flags.upgrade & UPGRADE_WS)) {
         return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
     }
+    else if (txn->req_tgt.flags == JMAP_ENDPOINT_EVENTSOURCE) {
+        return jmap_eventsource(txn);
+    }
 
     return HTTP_NO_CONTENT;
+}
+
+static int parse_json_body(struct transaction_t *txn, json_t **req)
+{
+    json_error_t jerr;
+
+    /* Parse the JSON request */
+    *req = json_loadb(buf_base(&txn->req_body.payload),
+                      buf_len(&txn->req_body.payload),
+                      0, &jerr);
+    if (!*req) {
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf,
+                   "Unable to parse JSON request body: %s", jerr.text);
+        txn->error.desc = buf_cstring(&txn->buf);
+        return JMAP_NOT_JSON;
+    }
+
+    return 0;
 }
 
 static int json_response(int code, struct transaction_t *txn, json_t *root)
@@ -385,6 +447,11 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
 
     /* Output the JSON object */
     switch (code) {
+    case 0:
+        /* API request over WebSocket */
+        buf_initm(&txn->resp_body.payload, buf, strlen(buf));
+        return 0;
+
     case HTTP_OK:
     case HTTP_CREATED:
         txn->resp_body.type = "application/json; charset=utf-8";
@@ -401,17 +468,30 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
 }
 
 /* Perform a POST request */
-static int jmap_post(struct transaction_t *txn,
+static int meth_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
     int ret;
-    json_t *res = NULL;
+    json_t *req = NULL, *res = NULL;
 
-    ret = jmap_parse_path(txn);
+    ret = jmap_parse_path(txn->req_uri->path,
+                          &txn->req_tgt, &txn->error.desc);
 
     if (ret) return ret;
     if (!(txn->req_tgt.allow & ALLOW_POST)) {
         return HTTP_NOT_ALLOWED;
+    }
+
+    if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
+        /* Remote mailbox */
+        struct backend *be;
+
+        be = proxy_findserver(txn->req_tgt.mbentry->server,
+                              &http_protocol, httpd_userid,
+                              &backend_cached, NULL, NULL, httpd_in);
+        if (!be) return HTTP_UNAVAILABLE;
+
+        return http_pipe_req_resp(be, txn);
     }
 
     /* Handle uploads */
@@ -420,25 +500,43 @@ static int jmap_post(struct transaction_t *txn,
     }
 
     /* Regular JMAP API request */
-    ret = jmap_api(txn, &res, &my_jmap_settings);
+    txn->req_body.flags |= BODY_DECODE;
 
-    if (!ret) {
-        /* Output the JSON object */
-        ret = json_response(HTTP_OK, txn, res);
+    /* Check Content-Type */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    if (!hdr ||
+        !is_mediatype("application/json", hdr[0])) {
+        txn->error.desc = "This method requires a JSON request body";
+        ret = HTTP_BAD_MEDIATYPE;
     }
 
-    syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
+    /* Read body */
+    else if ((ret = http_read_req_body(txn))) {
+        txn->flags.conn = CONN_CLOSE;
+    }
+
+    /* Parse the JSON request */
+    else if (!(ret = parse_json_body(txn, &req))) {
+        ret = jmap_api(txn, req, &res, &my_jmap_settings);
+        json_decref(req);
+    }
+
+    if (ret) ret = jmap_error_response(txn, ret, &res);
+        
+    /* ensure we didn't leak anything! */
+    assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
+
+    // checkpoint before we reply
+    sync_checkpoint(httpd_in);
+
+    if (res) {
+        /* Output the JSON object */
+        ret = json_response(ret ? ret : HTTP_OK, txn, res);
+    }
+
+    syslog(LOG_DEBUG, ">>>> jmap_post: Exit");
     return ret;
-}
-
-/* Perform an OPTIONS request */
-static int jmap_options(struct transaction_t *txn, void *params)
-{
-    /* Parse the path */
-    int r = jmap_parse_path(txn);
-    if (r) return r;
-
-    return meth_options(txn, params);
 }
 
 
@@ -449,8 +547,9 @@ static int jmap_options(struct transaction_t *txn, void *params)
 static char *parse_accept_header(const char **hdr)
 {
     char *val = NULL;
-    struct accept *accept = parse_accept(hdr);
-    if (accept) {
+    dynarray_t *da = parse_accept(hdr);
+    if (dynarray_size(da)) {
+        struct accept *accept = dynarray_nth(da, 0);
         char *type = NULL;
         char *subtype = NULL;
         struct param *params = NULL;
@@ -460,13 +559,119 @@ static char *parse_accept_header(const char **hdr)
         free(type);
         free(subtype);
         param_free(&params);
-        struct accept *tmp;
-        for (tmp = accept; tmp && tmp->token; tmp++) {
-            free(tmp->token);
+
+        int i;
+        for (i = 0; i < dynarray_size(da); i++) {
+            accept = dynarray_nth(da, i);
+            free_accept(accept);
         }
-        free(accept);
+        dynarray_free(&da);
     }
     return val;
+}
+
+static int jmap_getblob_default_handler(jmap_req_t *req,
+                                        jmap_getblob_context_t *ctx)
+{
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    struct body *body = NULL;
+    const struct body *part = NULL;
+    int res = HTTP_OK;
+
+    /* Find part containing blob */
+    int r = jmap_findblob(req, ctx->from_accountid, ctx->blobid,
+                          &mbox, &mr, &body, &part, &ctx->blob);
+    if (r) {
+        res = HTTP_NOT_FOUND; // XXX errors?
+        ctx->errstr = "failed to find blob by id";
+        goto done;
+    }
+
+    // default with no part is the whole message
+
+    if (ctx->accept_mime) {
+        /* XXX  Can we be smarter here and test against part->[sub]type ? */
+        buf_setcstr(&ctx->content_type, ctx->accept_mime);
+    }
+
+    if (part) {
+        // map into just this part
+        const char *base = buf_base(&ctx->blob) + part->content_offset;
+        size_t len = part->content_size;
+        char *decbuf = NULL;
+
+        // binary decode if needed
+        int encoding = part->charset_enc & 0xff;
+        if (!encoding && part->encoding) {
+            encoding = encoding_lookupname(part->encoding);
+        }
+        base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+
+        if (!base) {
+            res = HTTP_NOT_FOUND; // XXX errors?
+            ctx->errstr = "failed to decode blob";
+            goto done;
+        }
+        else if (decbuf) {
+            buf_initm(&ctx->blob, decbuf, len);
+            buf_setcstr(&ctx->encoding, "BINARY");
+        }
+        else {
+            /* Skip headers */
+            buf_remove(&ctx->blob, 0, part->content_offset);
+            buf_truncate(&ctx->blob, part->content_size);
+            buf_setcstr(&ctx->encoding, part->encoding);
+        }
+    }
+
+    if (ctx->mboxp) {
+        *ctx->mboxp = mbox;
+        mbox = NULL;
+
+        if (mr && ctx->recordp) {
+            msgrecord_get_index_record(mr, ctx->recordp);
+        }
+    }
+
+ done:
+    mailbox_close(&mbox);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    if (mr) {
+        msgrecord_unref(&mr);
+    }
+    return res;
+}
+
+HIDDEN int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
+{
+    int res = 0;
+
+    if (!ctx->blobid) return HTTP_NOT_FOUND;
+
+    /* Call getblob handlers */
+    int i;
+    for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
+        jmap_getblob_handler *handler =
+            ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
+
+        jmap_getblob_ctx_reset(ctx);
+        res = handler(req, ctx);
+        if (res) break;
+    }
+
+    if (!res) {
+        /* Try default getblob handler */
+        jmap_getblob_ctx_reset(ctx);
+        res = jmap_getblob_default_handler(req, ctx);
+    }
+
+    if (res == HTTP_OK) return 0;
+
+    return res;
 }
 
 /* Handle a GET on the download endpoint */
@@ -479,16 +684,6 @@ static int jmap_download(struct transaction_t *txn)
         return HTTP_NOT_FOUND;
     }
 
-#if 0
-    size_t userlen = slash - userid;
-
-    /* invalid user? */
-    if (!strncmp(userid, httpd_userid, userlen)) {
-        txn->error.desc = "failed to match userid";
-        return HTTP_BAD_REQUEST;
-    }
-#endif
-
     const char *blobbase = slash + 1;
     slash = strchr(blobbase, '/');
     if (!slash) {
@@ -497,19 +692,9 @@ static int jmap_download(struct transaction_t *txn)
         return HTTP_BAD_REQUEST;
     }
     size_t bloblen = slash - blobbase;
+    const char *fname = slash + 1;
 
-    if (*blobbase != 'G') {
-        txn->error.desc = "invalid blobid (doesn't start with G)";
-        return HTTP_BAD_REQUEST;
-    }
-
-    if (bloblen != 41) {
-        /* incomplete or incorrect blobid */
-        txn->error.desc = "invalid blobid (not 41 chars)";
-        return HTTP_BAD_REQUEST;
-    }
-
-    const char *name = slash + 1;
+    /* now we're allocating memory, so don't return from here! */
 
     char *accountid = xstrndup(userid, strchr(userid, '/') - userid);
     int res = 0;
@@ -523,10 +708,8 @@ static int jmap_download(struct transaction_t *txn)
         return res;
     }
 
-    /* now we're allocating memory, so don't return from here! */
-
     char *blobid = NULL;
-    char *ctype = NULL;
+    char *accept_mime = NULL;
 
     /* Initialize request context */
     struct jmap_req req;
@@ -538,41 +721,12 @@ static int jmap_download(struct transaction_t *txn)
     req.authstate = httpd_authstate;
     req.txn = txn;
 
-
     /* Initialize ACL mailbox cache for findblob */
-    hash_table mboxrights = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mboxrights, 64, 0);
-    req.mboxrights = &mboxrights;
+    hash_table mbstates = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&mbstates, 64, 0);
+    req.mbstates = &mbstates;
 
     blobid = xstrndup(blobbase, bloblen);
-
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    struct body *body = NULL;
-    const struct body *part = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
-    char *decbuf = NULL;
-    strarray_t headers = STRARRAY_INITIALIZER;
-    char *accept_mime = NULL;
-
-    /* Find part containing blob */
-    r = jmap_findblob(&req, NULL/*accountid*/, blobid,
-                      &mbox, &mr, &body, &part, &msg_buf);
-    if (r) {
-        res = HTTP_NOT_FOUND; // XXX errors?
-        txn->error.desc = "failed to find blob by id";
-        goto done;
-    }
-
-    if (!buf_base(&msg_buf)) {
-        /* Map the message into memory */
-        r = msgrecord_get_body(mr, &msg_buf);
-        if (r) {
-            res = HTTP_NOT_FOUND; // XXX errors?
-            txn->error.desc = "failed to map record";
-            goto done;
-        }
-    }
 
     struct strlist *param;
     if ((param = hash_lookup("accept", &txn->req_qparams))) {
@@ -583,57 +737,83 @@ static int jmap_download(struct transaction_t *txn)
     if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
         accept_mime = parse_accept_header(hdr);
     }
-    if (!accept_mime) accept_mime = xstrdup("application/octet-stream");
 
-    // default with no part is the whole message
-    const char *base = msg_buf.s;
-    size_t len = msg_buf.len;
-    txn->resp_body.type = accept_mime;
+    /* Call blob download handlers */
+    jmap_getblob_context_t ctx;
+    jmap_getblob_ctx_init(&ctx, accountid, blobid, accept_mime, 1);
+    res = jmap_getblob(&req, &ctx);
+    if (res) {
+        txn->error.desc = ctx.errstr ? ctx.errstr : error_message(res);
+    }
+    else {
+        /* Set Content-Disposition header */
+        txn->resp_body.dispo.attach = fname != NULL;
+        txn->resp_body.dispo.fname = fname;
 
-    if (part) {
-        // map into just this part
-        base += part->content_offset;
-        len = part->content_size;
+        /* Set Cache-Control directives */
+        txn->resp_body.maxage = 604800;  /* 7 days */
+        txn->flags.cc |= CC_MAXAGE | CC_PRIVATE | CC_IMMUTABLE;
 
-        // binary decode if needed
-        int encoding = part->charset_enc & 0xff;
-        base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+        /* Write body */
+        txn->resp_body.type = buf_len(&ctx.content_type) ?
+            buf_cstring(&ctx.content_type) : "application/octet-stream";
+        txn->resp_body.len = buf_len(&ctx.blob);
+        write_body(HTTP_OK, txn, buf_base(&ctx.blob), buf_len(&ctx.blob));
     }
 
-    txn->resp_body.len = len;
-    txn->resp_body.dispo.fname = name;
-
-    write_body(HTTP_OK, txn, base, len);
-
- done:
-    free(accept_mime);
-    free_hash_table(&mboxrights, free);
-    free(accountid);
-    free(decbuf);
-    free(ctype);
-    strarray_fini(&headers);
-    if (mbox) jmap_closembox(&req, &mbox);
+    jmap_getblob_ctx_fini(&ctx);
+    free_hash_table(&mbstates, free);
     conversations_commit(&cstate);
-    if (body) {
-        message_free_body(body);
-        free(body);
-    }
-    if (mr) {
-        msgrecord_unref(&mr);
-    }
-    buf_free(&msg_buf);
+    free(accept_mime);
+    free(accountid);
     free(blobid);
     jmap_finireq(&req);
     return res;
 }
 
-static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
+static int has_shared_rw_rights_cb(const mbentry_t *mbentry, void *vrock)
+{
+    int *rights = (int *) vrock;
+
+    /* skip any special use folders */
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_EMAIL:
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
+        return 0;
+    }
+
+    *rights |= (httpd_myrights(httpd_authstate, mbentry) & JACL_ADDITEMS);
+
+    if (*rights) {
+        /* one writable mailbox is enough to short-circuit the search */
+        return CYRUSDB_DONE;
+    }
+    
+    return 0;
+}
+
+/* See if this account has shared any mailbox with the authenticated user */
+static int has_shared_rw_rights(const char *accountid)
+{
+    int rights = 0;
+
+    mboxlist_usermboxtree(accountid, NULL, &has_shared_rw_rights_cb, &rights, 0);
+
+    return rights;
+}
+
+/* NOTE: This function can fill a synthetic mbentry with just a name and mbtype
+ * if it returns IMAP_MAILBOX_NONEXISTENT */
+static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
 {
     mbname_t *mbname;
     const char *uploadname;
     int r;
 
-    /* Create notification mailbox name from the parsed path */
+    /* Create upload mailbox name from the parsed path */
     mbname = mbname_from_userid(accountid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
 
@@ -650,34 +830,35 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 
     /* Locate the mailbox */
     uploadname = mbname_intname(mbname);
-    r = http_mlookup(uploadname, mbentry, NULL);
+    r = proxy_mlookup(uploadname, mbentryp, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(mbentryp);
+
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(accountid, NULL);
+        mbentry_t *inboxentry = NULL;
 
-        int r1 = http_mlookup(inboxname, mbentry, NULL);
-        free(inboxname);
+        int r1 = proxy_mlookup(inboxname, &inboxentry, NULL, NULL);
         if (r1 == IMAP_MAILBOX_NONEXISTENT) {
+            mboxlist_entry_free(&inboxentry);
             r = IMAP_INVALID_USER;
-            goto done;
         }
 
-        int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_CREATE)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
+        if (!strcmp(accountid, httpd_userid)) {
+            int rights = httpd_myrights(httpd_authstate, inboxentry);
+            if (!(rights & ACL_CREATE)) {
+                r = IMAP_PERMISSION_DENIED;
+            }
         }
 
-        if (*mbentry) free((*mbentry)->name);
-        else *mbentry = mboxlist_entry_create();
-        (*mbentry)->name = xstrdup(uploadname);
-    }
-    else if (!r) {
-        int rights = httpd_myrights(httpd_authstate, *mbentry);
-        if (!(rights & ACL_INSERT)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
-        }
+        free(inboxname);
+        mboxlist_entry_free(&inboxentry);
+
+        if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+        /* create the synthetic entry for with the mailbox name inside */
+        *mbentryp = mboxlist_entry_create();
+        (*mbentryp)->name = xstrdup(uploadname);
+        (*mbentryp)->mbtype = MBTYPE_COLLECTION;
     }
 
   done:
@@ -685,53 +866,127 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
     return r;
 }
 
+static int jmap_upload_rights = ACL_INSERT|ACL_EXPUNGE|ACL_DELETEMSG;
 
-static int create_upload_collection(const char *accountid,
-                                    struct mailbox **mailbox)
+/* this takes a namespace lock and tries to either create or
+ * grant access to the target upload collection.  You can only
+ * write to somebody's upload collection if you have write access
+ * to something else in their account */
+static int _create_upload_collection(const char *accountid,
+                                     struct mailbox **mailboxp)
 {
-    /* notifications collection */
+    /* upload collection */
+    struct mboxlock *namespacelock = user_namespacelock(accountid);
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
+    int need_setacl = 0;
 
-    if (r == IMAP_INVALID_USER) {
-        goto done;
-    }
-    else if (r == IMAP_PERMISSION_DENIED) {
-        goto done;
+    if (!r) {
+        int rights = httpd_myrights(httpd_authstate, mbentry);
+        if ((rights & jmap_upload_rights) != jmap_upload_rights) {
+            if (!has_shared_rw_rights(accountid)) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
+            need_setacl = 1;
+        }
+
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbentry->name, mailboxp);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mbentry->name, error_message(r));
+            goto done;
+        }
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (!mbentry) goto done;
-        else if (mbentry->server) {
+        if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             goto done;
         }
 
-        r = mboxlist_createmailbox(mbentry->name, MBTYPE_COLLECTION,
-                                   NULL, 1 /* admin */, accountid,
-                                   httpd_authstate, 0, 0, 0, 0, mailbox);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        else {
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mbentry->name, error_message(r));
+        if (strcmp(accountid, httpd_userid)) {
+            if (!(has_shared_rw_rights(accountid))) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
             }
+            need_setacl = 1;
+        }
+
+        /* create the mailbox and keep it open for writing */
+        r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, accountid, httpd_authstate,
+                                   0/*flags*/, mailboxp);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                   mbentry->name, error_message(r));
             goto done;
         }
     }
-    else if (r) goto done;
+    else {
+        // got an error looking up mailbox, we're definitely out of here
+        goto done;
+    }
 
-    if (mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
+    if (need_setacl) {
+        /* add rights for the sharee */
+        char *newacl = xstrdupnull(mailbox_acl(*mailboxp));
+
+        cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
+                      JACL_READITEMS | JACL_WRITE, NULL, NULL);
+
+        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> oldacl=<%s> newacl=<%s>",
+                httpd_userid, mailbox_acl(*mailboxp), newacl);
+
+        /* ok, change the mailboxes database */
+        r = mboxlist_setacls(mbentry->name, newacl, mailbox_modseq_dirty(*mailboxp), /*silent*/0);
         if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+            syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                    mbentry->name, error_message(r));
         }
+        else {
+            /* ok, change the backup in cyrus.header */
+            mailbox_set_acl(*mailboxp, newacl);
+        }
+        free(newacl);
     }
 
  done:
+    mboxname_release(&namespacelock);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+HIDDEN int jmap_open_upload_collection(const char *accountid,
+                                       struct mailbox **mailboxp)
+{
+    /* upload collection */
+    mbentry_t *mbentry = NULL;
+    int r = lookup_upload_collection(accountid, &mbentry);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        mboxlist_entry_free(&mbentry);
+        return _create_upload_collection(accountid, mailboxp);
+    }
+    else if (r) {
+        mboxlist_entry_free(&mbentry);
+        return r;
+    }
+
+    int rights = httpd_myrights(httpd_authstate, mbentry);
+    if ((rights & jmap_upload_rights) != jmap_upload_rights) {
+        mboxlist_entry_free(&mbentry);
+        return _create_upload_collection(accountid, mailboxp);
+    }
+
+    /* Open mailbox for writing */
+    r = mailbox_open_iwl(mbentry->name, mailboxp);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+               mbentry->name, error_message(r));
+    }
+
     mboxlist_entry_free(&mbentry);
     return r;
 }
@@ -763,14 +1018,18 @@ static int jmap_upload(struct transaction_t *txn)
 
     struct body *body = NULL;
 
-    int ret = HTTP_CREATED;
+    int ret = HTTP_SERVER_ERROR;
+    json_t *resp = NULL;
     hdrcache_t hdrcache = txn->req_hdrs;
     struct stagemsg *stage = NULL;
     FILE *f = NULL;
     const char **hdr;
     time_t now = time(NULL);
     struct appendstate as;
-
+    char *accountid = NULL;
+    char *normalisedtype = NULL;
+    int rawmessage = 0;
+    struct conversations_state *cstate = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
 
@@ -787,32 +1046,77 @@ static int jmap_upload(struct transaction_t *txn)
 
     if (datalen > (size_t) my_jmap_settings.limits[MAX_SIZE_UPLOAD]) {
         txn->error.desc = "JSON upload byte size exceeds maxSizeUpload";
-        return HTTP_PAYLOAD_TOO_LARGE;
+        ret = HTTP_CONTENT_TOO_LARGE;
+        goto done;
     }
 
     /* Resource must be {accountId}/ with no trailing path */
-    char *accountid = xstrdup(txn->req_tgt.resource);
+    accountid = xstrdup(txn->req_tgt.resource);
     char *slash = strchr(accountid, '/');
     if (!slash || *(slash + 1) != '\0') {
         ret = HTTP_NOT_FOUND;
+        txn->error.desc = "unknown uploadUrl";
         goto done;
     }
     *slash = '\0';
 
-    r = create_upload_collection(accountid, &mailbox);
+    r = conversations_open_user(accountid, 0, &cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_upload: can't open conversations db for %s: %s",
+               accountid, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "can't open upload conversations db";
+        goto done;
+    }
+
+    r = jmap_open_upload_collection(accountid, &mailbox);
     if (r) {
         syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
-               error_message(r), accountid);
+               accountid, error_message(r));
         ret = HTTP_NOT_FOUND;
+        txn->error.desc = "can't open upload collection";
         goto done;
     }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
+    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         txn->error.desc = "append_newstage() failed";
         ret = HTTP_SERVER_ERROR;
         goto done;
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+        // Strip any parameters from Content-Type header
+        char *maintype = NULL, *subtype = NULL;
+        struct param *param = NULL;
+        message_parse_type(hdr[0], &maintype, &subtype, &param);
+        if (maintype && subtype) {
+            lcase(maintype);
+            lcase(subtype);
+            normalisedtype = strconcat(maintype, "/", subtype, NULL);
+        }
+        free(maintype);
+        free(subtype);
+        param_free(&param);
+    }
+    if (!normalisedtype)
+        normalisedtype = xstrdup("application/octet-stream");
+
+    if (!strcasecmp(normalisedtype, "message/rfc822")) {
+        struct protstream *stream = prot_readmap(data, datalen);
+        r = message_copy_strict(stream, f, datalen, 0);
+        prot_free(stream);
+        if (!r) {
+            rawmessage = 1;
+            goto wrotebody;
+        }
+        // otherwise we gotta clean up and make it an attachment
+        if (ftruncate(fileno(f), 0L) < 0 || fseek(f, 0L, SEEK_SET) < 0) {
+            syslog(LOG_ERR, "IOERROR: failed to reset file in JMAP upload");
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
     }
 
     /* Create RFC 5322 header for resource */
@@ -859,11 +1163,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    const char *type = "application/octet-stream";
-    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
-        type = hdr[0];
-    }
-    fprintf(f, "Content-Type: %s\r\n", type);
+    fputs("Content-Type: application/octet-stream\r\n", f);
 
     int domain = data_domain(data, datalen);
     switch (domain) {
@@ -877,20 +1177,15 @@ static int jmap_upload(struct transaction_t *txn)
             break; // no CTE == 7bit
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
-        fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
-        fprintf(f, "Content-Description: %s\r\n", hdr[0]);
-    }
-
     fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
 
     fputs("MIME-Version: 1.0\r\n\r\n", f);
 
     /* Write the data to the file */
     fwrite(data, datalen, 1, f);
+
+wrotebody:
+
     fclose(f);
 
     /* Prepare to append the message to the mailbox */
@@ -898,7 +1193,7 @@ static int jmap_upload(struct transaction_t *txn)
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_setup() failed";
         goto done;
@@ -912,16 +1207,23 @@ static int jmap_upload(struct transaction_t *txn)
     if (r) {
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox->name, error_message(r));
-        ret = HTTP_SERVER_ERROR;
-        txn->error.desc = "append_fromstage() failed";
+               mailbox_name(mailbox), error_message(r));
+        if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
+            /* XXX  Should never happen, but DTRT anyways */
+            ret = HTTP_NO_STORAGE;
+            txn->error.desc = "Mailbox is over quota";
+        }
+        else {
+            ret = HTTP_SERVER_ERROR;
+            txn->error.desc = "append_fromstage() failed";
+        }
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox->name, error_message(r));
+               mailbox_name(mailbox), error_message(r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_commit() failed";
         goto done;
@@ -931,23 +1233,19 @@ static int jmap_upload(struct transaction_t *txn)
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
     char blob_id[JMAP_BLOBID_SIZE];
-    jmap_set_blobid(&body->content_guid, blob_id);
+    jmap_set_blobid(rawmessage ? &body->guid : &body->content_guid, blob_id);
 
     /* Create response object */
-    json_t *resp = json_pack("{s:s}", "accountId", accountid);
+    resp = json_pack("{s:s}", "accountId", accountid);
     json_object_set_new(resp, "blobId", json_string(blob_id));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
-
-    /* Remove CFWS and encodings from type */
-    char *normalisedtype = charset_decode_mimeheader(type, CHARSET_SNIPPET);
     json_object_set_new(resp, "type", json_string(normalisedtype));
-    free(normalisedtype);
 
-    /* Output the JSON object */
-    ret = json_response(HTTP_CREATED, txn, resp);
+    ret = HTTP_CREATED;
 
 done:
+    free(normalisedtype);
     free(accountid);
     if (body) {
         message_free_body(body);
@@ -960,519 +1258,168 @@ done:
         else r = mailbox_commit(mailbox);
         mailbox_close(&mailbox);
     }
+    if (cstate) {
+        if (r) conversations_abort(&cstate);
+        else conversations_commit(&cstate);
+    }
 
-    return ret;
+    /* ensure we didn't leak anything! */
+    assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
+
+    // checkpoint before replying
+    sync_checkpoint(httpd_in);
+
+    if (!resp) {
+        /* Create Problem Details Object */
+        const char *type, *limit;
+
+        if (ret == HTTP_CONTENT_TOO_LARGE) {
+            type = "urn:ietf:params:jmap:error:limit";
+            limit = "maxSizeUpload";
+        }
+        else {
+            type = "about:blank";
+            limit = NULL;
+        }
+
+        resp = json_pack("{s:s s:s* s:s s:i s:s}",
+                         "type", type,
+                         "limit", limit,
+                         "title", error_message(ret) + 4,
+                         "status", atoi(error_message(ret)),
+                         "detail", txn->error.desc);
+    }
+
+    /* Output the JSON object */
+    return json_response(ret, txn, resp);
 }
 
-struct findaccounts_data {
-    json_t *accounts;
-    struct buf userid;
-    int rw;
-    int has_mail;
-    int has_contacts;
-    int has_calendars;
-};
-
-static void findaccounts_add(struct findaccounts_data *ctx)
+/* Handle a GET on the session endpoint */
+static int jmap_get_session(struct transaction_t *txn)
 {
-    if (!buf_len(&ctx->userid))
-        return;
+    json_t *jsession = json_object();
 
-    const char *userid = buf_cstring(&ctx->userid);
+    /* URLs */
+    json_object_set_new(jsession, "username", json_string(httpd_userid));
+    json_object_set_new(jsession, "apiUrl", json_string(JMAP_BASE_URL));
+    json_object_set_new(jsession, "downloadUrl",
+            json_string(JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL));
+    json_object_set_new(jsession, "uploadUrl",
+            json_string(JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL));
+    json_object_set_new(jsession, "eventSourceUrl",
+            json_string(JMAP_BASE_URL JMAP_EVENTSOURCE_COL JMAP_EVENTSOURCE_TPL));
 
-    json_t *has_data_for = json_array();
-    if (ctx->has_mail) {
-        json_array_append_new(has_data_for, json_string(JMAP_URN_MAIL));
-        json_array_append_new(has_data_for, json_string(JMAP_URN_SUBMISSION));
-    }
-    if (ctx->has_contacts)
-        json_array_append_new(has_data_for, json_string(JMAP_URN_CONTACTS));
-    if (ctx->has_calendars)
-        json_array_append_new(has_data_for, json_string(JMAP_URN_CALENDARS));
-
-    json_t *account = json_object();
-    json_object_set_new(account, "name", json_string(userid));
-    json_object_set_new(account, "isPrimary", json_false());
-    json_object_set_new(account, "isReadOnly", json_boolean(!ctx->rw));
-    json_object_set_new(account, "hasDataFor", has_data_for);
-
-    json_object_set_new(ctx->accounts, userid, account);
-}
-
-static int findaccounts_cb(struct findall_data *data, void *rock)
-{
-    if (!data || !data->mbentry)
-        return 0;
-
-    const mbentry_t *mbentry = data->mbentry;
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    const char *userid = mbname_userid(mbname);
-    struct findaccounts_data *ctx = rock;
-    const strarray_t *boxes = mbname_boxes(mbname);
-
-    if (strcmp(buf_cstring(&ctx->userid), userid)) {
-        /* We haven't yet seen this account.
-           Add any previous account and reset state */
-        findaccounts_add(ctx);
-        buf_setcstr(&ctx->userid, userid);
-        ctx->rw = 0;
-        ctx->has_mail = 0;
-        ctx->has_contacts = 0;
-        ctx->has_calendars = 0;
-    }
-
-    if (!ctx->rw) {
-        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
-    }
-    if (!ctx->has_mail) {
-        ctx->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
-    }
-    if (!ctx->has_contacts) {
-        /* Only count children of user.foo.#addressbooks */
-        const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-        ctx->has_contacts =
-            strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
-    }
-    if (!ctx->has_calendars) {
-        /* Only count children of user.foo.#calendars */
-        const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-        ctx->has_calendars =
-            strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
-    }
-
-    mbname_free(&mbname);
-    return 0;
-}
-
-static json_t *user_settings(const char *userid)
-{
-    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s,s,s,s]}}",
-            userid, "name", userid,
-            "isPrimary", 1,
-            "isReadOnly", 0,
-            /* JMAP autoprovisions calendars and contacts,
-             * so these JMAP types always are available
-             * for the primary account */
-            "hasDataFor",
-            JMAP_URN_MAIL,
-            JMAP_URN_SUBMISSION,
-            JMAP_URN_CONTACTS,
-            JMAP_URN_CALENDARS);
-
-    /* Find all shared accounts */
-    strarray_t patterns = STRARRAY_INITIALIZER;
-    char *userpat = xstrdup("user.*");
-    userpat[4] = jmap_namespace.hier_sep;
-    strarray_append(&patterns, userpat);
-    struct findaccounts_data ctx = { accounts, BUF_INITIALIZER, 0, 0, 0, 0 };
-    int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, userid,
-                                  httpd_authstate, findaccounts_cb, &ctx);
-    free(userpat);
-    strarray_fini(&patterns);
-    if (r) {
-        syslog(LOG_ERR, "Can't determine shared JMAP accounts for user %s: %s",
-                userid, error_message(r));
-    }
-    /* Finalise last seen account */
-    findaccounts_add(&ctx);
-    buf_free(&ctx.userid);
-
-    char *inboxname = mboxname_user_mbox(userid, NULL);
+    /* state */
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
     struct buf state = BUF_INITIALIZER;
     buf_printf(&state, MODSEQ_FMT, mboxname_readraclmodseq(inboxname));
+    json_object_set_new(jsession, "state", json_string(buf_cstring(&state)));
     free(inboxname);
-
-    json_t *jsettings = json_pack("{s:s s:o s:O s:s s:s s:s s:s}",
-            "username", userid,
-            "accounts", accounts,
-            "capabilities", my_jmap_settings.capabilities,
-            "apiUrl", JMAP_BASE_URL,
-            "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
-            /* FIXME eventSourceUrl */
-            "uploadUrl", JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL,
-            "state", buf_cstring(&state));
-
     buf_free(&state);
-    return jsettings;
-}
 
-/* Handle a GET on the settings endpoint */
-static int jmap_settings(struct transaction_t *txn)
-{
-    assert(httpd_userid);
-
-    if (!my_jmap_settings.capabilities) {
-        jmap_core_capabilities();
-        jmap_user_capabilities(&my_jmap_settings);
-        jmap_mail_capabilities(&my_jmap_settings);
-        jmap_contact_capabilities(&my_jmap_settings);
-        jmap_calendar_capabilities(&my_jmap_settings);
-    }
-
-    /* Create the response object */
-    json_t *res = user_settings(httpd_userid);
-    if (!res) {
-        syslog(LOG_ERR, "JMAP auth: cannot determine user settings for %s",
-                httpd_userid);
-        return HTTP_SERVER_ERROR;
-    }
+    /* capabilities */
+    json_object_set(jsession, "capabilities", my_jmap_settings.server_capabilities);
+    json_t *accounts = json_object();
+    json_t *primary_accounts = json_object();
+    jmap_accounts(accounts, primary_accounts);
+    json_object_set_new(jsession, "accounts", accounts);
+    json_object_set_new(jsession, "primaryAccounts", primary_accounts);
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE | CC_NOSTORE | CC_REVALIDATE;
 
     /* Write the JSON response */
-    return json_response(HTTP_OK, txn, res);
+    return json_response(HTTP_OK, txn, jsession);
 }
 
 
-/*
- * JMAP Core API Methods
- */
-
-/* Core/echo method */
-static int jmap_core_echo(jmap_req_t *req)
+static void buf_appendjson(struct buf *buf, json_t *json, size_t flags)
 {
-    json_array_append_new(req->response,
-                          json_pack("[s,O,s]", "Core/echo", req->args, req->tag));
-    return 0;
+    /* Determine length of JSON encoding */
+    size_t size = json_dumpb(json, NULL, 0, flags);
+
+    /* Grow the buffer */
+    buf_ensure(buf, size);
+
+    /* Append the JSON encoding */
+    size = json_dumpb(json, (char *) buf_base(buf) + buf_len(buf), size, flags);
+
+    /* Set the new buffer length */
+    buf_truncate(buf, buf_len(buf) + size);
 }
 
-static int jmap_copyblob(jmap_req_t *req,
-                         const char *blobid,
-                         const char *from_accountid,
-                         struct mailbox *to_mbox)
+static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused)),
+                                      struct prot_waitevent *ev,
+                                      void *rock)
 {
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    struct body *body = NULL;
-    const struct body *part = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
-    FILE *to_fp = NULL;
-    struct stagemsg *stage = NULL;
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jstate = jmap_push_get_state(jpush);
+    struct buf *buf = &jpush->buf;
 
-    int r = jmap_findblob(req, from_accountid, blobid,
-                          &mbox, &mr, &body, &part, &msg_buf);
-    if (r) return r;
+    xsyslog(LOG_DEBUG, "JMAP WS push", "accountid=<%s>", jpush->accountid);
 
-    if (!part)
-        part = body;
+    if (jstate) {
+        /* Add pushState */
+        buf_reset(buf);
+        buf_printf(buf, MODSEQ_FMT, jpush->counters.highestmodseq);
 
-    if (!buf_base(&msg_buf)) {
-        /* Map the message into memory */
-        r = msgrecord_get_body(mr, &msg_buf);
-        if (r) {
-            syslog(LOG_ERR, "jmap_copyblob(%s): msgrecord_get_body: %s",
-                   blobid, error_message(r));
-            goto done;
-        }
+        json_object_set_new(jstate, "pushState", json_string(buf_cstring(buf)));
+
+        /* Send the StateChange object */
+        size_t flags = JSON_PRESERVE_ORDER |
+            (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+        buf_reset(buf);
+        buf_appendjson(buf, jstate, flags);
+
+        ws_send(txn, buf);
+        prot_flush(txn->conn->pout);
     }
 
-    /* Create staging file */
-    time_t internaldate = time(NULL);
-    if (!(to_fp = append_newstage(to_mbox->name, internaldate, 0, &stage))) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_newstage(%s) failed",
-                blobid, mbox->name);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
+    json_decref(jstate);
 
-    /* Copy blob. Keep the original MIME headers, we wouldn't really
-     * know which ones are safe to rewrite for arbitrary blobs. */
-    fwrite(buf_base(&msg_buf) + part->header_offset,
-           part->header_size + part->content_size, 1, to_fp);
-    if (ferror(to_fp)) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): tofp=%s: %s",
-               blobid, append_stagefname(stage), strerror(errno));
-        r = IMAP_IOERROR;
-        goto done;
-    }
-    fclose(to_fp);
-    to_fp = NULL;
+    /* Schedule our next event */
+    ev->mark = time(NULL) + jmap_push_poll;
 
-    /* Append blob to mailbox */
-    struct body *to_body = NULL;
-    struct appendstate as;
-    r = append_setup_mbox(&as, to_mbox, httpd_userid, httpd_authstate,
-            0, /*quota*/NULL, 0, 0, /*event*/0);
-    if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_setup_mbox: %s",
-                blobid, error_message(r));
-        goto done;
-    }
-    strarray_t flags = STRARRAY_INITIALIZER;
-    strarray_append(&flags, "\\Deleted");
-    strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
-	r = append_fromstage(&as, &to_body, stage, 0, internaldate, &flags, 0, NULL);
-    strarray_fini(&flags);
-	if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_fromstage: %s",
-                blobid, error_message(r));
-		append_abort(&as);
-		goto done;
-	}
-	message_free_body(to_body);
-	free(to_body);
-	r = append_commit(&as);
-	if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_commit: %s",
-                blobid, error_message(r));
-        goto done;
-    }
-
-done:
-    if (stage) append_removestage(stage);
-    if (to_fp) fclose(to_fp);
-    buf_free(&msg_buf);
-    message_free_body(body);
-    free(body);
-    msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
-    return r;
+    return ev;
 }
 
-/* Blob/copy method */
-static int jmap_blob_copy(jmap_req_t *req)
+static void ws_push_enable(struct transaction_t *txn, json_t *req)
 {
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_copy copy;
-    json_t *val, *err = NULL;
-    size_t i = 0;
-    int r = 0;
-    struct mailbox *to_mbox = NULL;
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jtypes = json_object_get(req, "dataTypes");
+    json_t *pushState = json_object_get(req, "pushState");
+    strarray_t types = STRARRAY_INITIALIZER;
+    modseq_t lastmodseq = ULLONG_MAX;
 
-    /* Parse request */
-    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto cleanup;
+    xsyslog(LOG_DEBUG, "JMAP WS push enable",
+            "jpush=<%p>, jtypes=<%p>", jpush, jtypes);
+
+    if (!json_array_size(jtypes)) {
+        jmap_push_done(txn);
+        return;
     }
 
-    /* Check if we can upload to toAccountId */
-    r = create_upload_collection(req->accountid, &to_mbox);
-    if (r == IMAP_PERMISSION_DENIED) {
-        json_array_foreach(copy.create, i, val) {
-            json_object_set(copy.not_created, json_string_value(val),
-                    json_pack("{s:s}", "type", "toAccountNotFound"));
-        }
-        goto done;
-    } else if (r) {
-        syslog(LOG_ERR, "jmap_blob_copy: create_upload_collection(%s): %s",
-               req->accountid, error_message(r));
-        goto cleanup;
-    }
-
-    /* Copy blobs one by one. XXX should we batch copy here? */
-    json_array_foreach(copy.create, i, val) {
-        const char *blobid = json_string_value(val);
-        r = jmap_copyblob(req, blobid, copy.from_account_id, to_mbox);
-        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
-            json_object_set_new(copy.not_created, blobid,
-                    json_pack("{s:s}", "type", "blobNotFound"));
-        }
-        else if (r) goto cleanup;
-        else json_object_set_new(copy.created, blobid, json_string(blobid));
-    }
-
-done:
-    /* Build response */
-    jmap_ok(req, jmap_copy_reply(&copy));
-    r = 0;
-
-cleanup:
-    jmap_parser_fini(&parser);
-    jmap_copy_fini(&copy);
-    mailbox_close(&to_mbox);
-    return r;
-}
-
-/* Blob/get method */
-
-struct getblob_rec {
-    const char *blob_id;
-    uint32_t uid;
-    char *part;
-};
-
-struct getblob_cb_rock {
-    jmap_req_t *req;
-    const char *blob_id;
-    hash_table *getblobs_by_mboxname;
-};
-
-static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
-{
-    struct getblob_cb_rock *rock = vrock;
-
-    struct getblob_rec *getblob = xzmalloc(sizeof(struct getblob_rec));
-    getblob->blob_id = rock->blob_id;
-    getblob->uid = rec->uid;
-    getblob->part = xstrdupnull(rec->part);
-
-    ptrarray_t *getblobs = hash_lookup(rec->mboxname, rock->getblobs_by_mboxname);
-    if (!getblobs) {
-        getblobs = ptrarray_new();
-        hash_insert(rec->mboxname, getblobs, rock->getblobs_by_mboxname);
-    }
-    ptrarray_append(getblobs, getblob);
-
-    return 0;
-}
-
-static const jmap_property_t blob_props[] = {
-    { "mailboxIds",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "threadIds",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "emailIds",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { NULL,             0 }
-};
-
-static int jmap_blob_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-    json_t *jval;
     size_t i;
-
-    /* Parse request */
-    jmap_get_parse(req->args, &parser, req, blob_props, NULL, NULL, &get, 0, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
+    json_t *jval;
+    json_array_foreach(jtypes, i, jval) {
+        strarray_append(&types, json_string_value(jval));
     }
 
-    /* Sort blob lookups by mailbox */
-    hash_table getblobs_by_mboxname = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&getblobs_by_mboxname, 128, 0);
-    json_array_foreach(get.ids, i, jval) {
-        const char *blob_id = json_string_value(jval);
-        if (*blob_id == 'G') {
-            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_mboxname };
-            int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
-            if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
-                        blob_id, error_message(r));
-            }
-        }
+    if (json_is_string(pushState)) {
+        lastmodseq = atomodseq_t(json_string_value(pushState));
     }
 
-    /* Lookup blobs by mailbox */
-    json_t *found = json_object();
-    hash_iter *iter = hash_table_iter(&getblobs_by_mboxname);
-    while (hash_iter_next(iter)) {
-        const char *mboxname = hash_iter_key(iter);
-        ptrarray_t *getblobs = hash_iter_val(iter);
-        struct mailbox *mbox = NULL;
+    jpush = jmap_push_init(txn, httpd_userid, &types, lastmodseq, &ws_push);
 
-        /* Open mailbox */
-        if (!jmap_hasrights_byname(req, mboxname, ACL_READ|ACL_LOOKUP)) {
-            continue;
-        }
-        int r = jmap_openmbox(req, mboxname, &mbox, 0);
-        if (r) {
-            syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
-                    mboxname, error_message(r));
-            continue;
-        }
-
-        int j;
-        for (j = 0; j < ptrarray_size(getblobs); j++) {
-            struct getblob_rec *getblob = ptrarray_nth(getblobs, j);
-
-            /* Read message record */
-            struct message_guid guid;
-            bit64 cid;
-            msgrecord_t *mr = NULL;
-            r = msgrecord_find(mbox, getblob->uid, &mr);
-            if (!r) r = msgrecord_get_guid(mr, &guid);
-            if (!r) r = msgrecord_get_cid(mr, &cid);
-            msgrecord_unref(&mr);
-            if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
-                        mboxname, getblob->uid, error_message(r));
-                continue;
-            }
-
-            /* Report Blob entry */
-            json_t *jblob = json_object_get(found, getblob->blob_id);
-            if (!jblob) {
-                jblob = json_object();
-                json_object_set_new(found, getblob->blob_id, jblob);
-            }
-            if (jmap_wantprop(get.props, "mailboxIds")) {
-                json_t *jmailboxIds = json_object_get(jblob, "mailboxIds");
-                if (!jmailboxIds) {
-                    jmailboxIds = json_object();
-                    json_object_set_new(jblob, "mailboxIds", jmailboxIds);
-                }
-                json_object_set_new(jmailboxIds, mbox->uniqueid, json_true());
-            }
-            if (jmap_wantprop(get.props, "emailIds")) {
-                json_t *jemailIds = json_object_get(jblob, "emailIds");
-                if (!jemailIds) {
-                    jemailIds = json_object();
-                    json_object_set_new(jblob, "emailIds", jemailIds);
-                }
-                char emailid[JMAP_EMAILID_SIZE];
-                jmap_set_emailid(&guid, emailid);
-                json_object_set_new(jemailIds, emailid, json_true());
-            }
-            if (jmap_wantprop(get.props, "threadIds")) {
-                json_t *jthreadIds = json_object_get(jblob, "threadIds");
-                if (!jthreadIds) {
-                    jthreadIds = json_object();
-                    json_object_set_new(jblob, "threadIds", jthreadIds);
-                }
-                char threadid[JMAP_THREADID_SIZE];
-                jmap_set_threadid(cid, threadid);
-                json_object_set_new(jthreadIds, threadid, json_true());
-            }
-        }
-
-       jmap_closembox(req, &mbox);
+    if (jpush && (lastmodseq < ULLONG_MAX)) {
+        /* Send all changes now */
+        ws_push(txn->conn->pin, jpush->wait, txn);
     }
 
-    /* Clean up memory */
-    hash_iter_reset(iter);
-    while (hash_iter_next(iter)) {
-        ptrarray_t *getblobs = hash_iter_val(iter);
-        struct getblob_rec *getblob;
-        while ((getblob = ptrarray_pop(getblobs))) {
-            free(getblob->part);
-            free(getblob);
-        }
-        ptrarray_free(getblobs);
-    }
-    hash_iter_free(&iter);
-    free_hash_table(&getblobs_by_mboxname, NULL);
-
-    /* Report found blobs */
-    if (json_object_size(found)) {
-        const char *blob_id;
-        json_t *jblob;
-        json_object_foreach(found, blob_id, jblob) {
-            json_array_append(get.list, jblob);
-        }
-    }
-
-    /* Report unknown or erroneous blobs */
-    json_array_foreach(get.ids, i, jval) {
-        const char *blob_id = json_string_value(jval);
-        if (!json_object_get(found, blob_id)) {
-            json_array_append_new(get.not_found, json_string(blob_id));
-        }
-    }
-
-    json_decref(found);
-
-    /* Reply */
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-    return 0;
+    strarray_fini(&types);
 }
-
 
 /*
  * WebSockets data callback ('jmap' sub-protocol): Process JMAP API request.
@@ -1481,45 +1428,69 @@ done:
  *   https://github.com/websockets/wscat
  *   https://chrome.google.com/webstore/detail/web-socket-client/lifhekgaodigcpmnakfhaaaboididbdn
  *
- * WebSockets over HTTP/2 currently only available in:
- *   https://www.google.com/chrome/browser/canary.html
+ * WebSockets over HTTP/2 currently only available in Chrome:
+ *   https://www.chromestatus.com/feature/6251293127475200
+ *   (using --enable-experimental-web-platform-features)
  */
-static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock)
+static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
+                   struct buf *inbuf, struct buf *outbuf, struct buf *logbuf)
 {
-    struct transaction_t **txnp = (struct transaction_t **) rock;
-    struct transaction_t *txn = *txnp;
-    json_t *res = NULL;
+    json_t *req = NULL, *res = NULL;
     int ret;
 
-    if (!txn) {
-        /* Create a transaction rock to use for API requests */
-        txn = *txnp = xzmalloc(sizeof(struct transaction_t));
-        txn->req_body.flags = BODY_DONE;
-
-        /* Create header cache */
-        txn->req_hdrs = spool_new_hdrcache();
-        if (!txn->req_hdrs) {
-            free(txn);
-            return HTTP_SERVER_ERROR;
-        }
-
-        /* Set Content-Type of request payload */
-        spool_cache_header(xstrdup("Content-Type"),
-                           xstrdup("application/json"), txn->req_hdrs);
-    }
-    else if (!inbuf) {
-        /* Free transaction rock */
-        transaction_free(txn);
-        free(txn);
-        return 0;
+    if (opcode != WSLAY_TEXT_FRAME) {
+        /* Only accept text frames */
+        return HTTP_NOT_ACCEPTABLE;
     }
 
     /* Set request payload */
     buf_init_ro(&txn->req_body.payload, buf_base(inbuf), buf_len(inbuf));
 
-    /* Process the API request */
-    ret = jmap_api(txn, &res, &my_jmap_settings);
+    /* Always start with fresh working buffer */
+    buf_reset(&txn->buf);
+
+    /* Parse the JSON request */
+    ret = parse_json_body(txn, &req);
+    if (ret) {
+        ret = jmap_error_response(txn, ret, &res);
+    }
+    else {
+        const char *type = json_string_value(json_object_get(req, "@type"));
+
+        if (!strcmpsafe(type, "Request")) {
+            /* Process the API request */
+            ret = jmap_api(txn, req, &res, &my_jmap_settings);
+        }
+        else if (!strcmpsafe(type, "WebSocketPushEnable")) {
+            /* Log request */
+            spool_replace_header(xstrdup(":jmap"),
+                                 xstrdup("WebSocketPushEnable"), txn->req_hdrs);
+            ws_push_enable(txn, req);
+            ret = HTTP_NO_CONTENT;
+        }
+        else if (!strcmpsafe(type, "WebSocketPushDisable")) {
+            /* Log request */
+            spool_replace_header(xstrdup(":jmap"),
+                                 xstrdup("WebSocketPushDisable"), txn->req_hdrs);
+            jmap_push_done(txn);
+            ret = HTTP_NO_CONTENT;
+        }
+        else {
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf,
+                       "Unknown request @type: %s", type ? type : "null");
+            txn->error.desc = buf_cstring(&txn->buf);
+
+            ret = jmap_error_response(txn, JMAP_NOT_REQUEST, &res);
+        }
+    }
+
+    /* ensure we didn't leak anything! */
+    assert(!open_mailboxes_exist());
+    assert(!open_mboxlocks_exist());
+
+    // checkpoint before we reply
+    sync_checkpoint(httpd_in);
 
     /* Free request payload */
     buf_free(&txn->req_body.payload);
@@ -1529,20 +1500,192 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         const char **hdr = spool_getheader(txn->req_hdrs, ":jmap");
 
         if (hdr) buf_printf(logbuf, "; jmap=%s", hdr[0]);
+
+        /* Add logheaders */
+        if (strarray_size(httpd_log_headers)) {
+            json_t *jlogHeaders = json_object_get(req, "logHeaders");
+            const char *hdrname;
+            json_t *jval;
+
+            json_object_foreach(jlogHeaders, hdrname, jval) {
+                const char *val = json_string_value(jval);
+
+                if (val &&
+                    strarray_contains_case(httpd_log_headers, hdrname)) {
+                    buf_printf(logbuf, "; %s=\"%s\"", hdrname, val);
+                }
+            }
+        }
     }
 
-    if (!ret) {
+    if (res) {
+        /* Add @type */
+        json_object_set_new(res, "@type",
+                            json_string(ret ? "RequestError" : "Response"));
+
+        /* Add requestId */
+        json_t *id = json_object_get(req, "id");
+        if (id) {
+            json_object_set(res, "requestId", id);
+        }
+
         /* Return the JSON object */
-        size_t flags = JSON_PRESERVE_ORDER;
-        char *buf;
-
-        /* Dump JSON object into a text buffer */
-        flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-        buf = json_dumps(res, flags);
-        json_decref(res);
-
-        buf_initm(outbuf, buf, strlen(buf));
+        ret = json_response(0, txn, res);
+        buf_move(outbuf, &txn->resp_body.payload);
     }
+
+    /* Clear error string */
+    txn->error.desc = NULL;
+
+    json_decref(req);
 
     return ret;
+}
+
+static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused)),
+                                      struct prot_waitevent *ev,
+                                      void *rock)
+{
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
+    json_t *jstate = NULL;
+    struct buf *buf = &jpush->buf;
+    const char *event = NULL;
+    time_t now = time(NULL);
+    int do_close = 0;
+
+    xsyslog(LOG_DEBUG, "JMAP eventSource push",
+            "accountid=<%s>, now=<" TIME_T_FMT ">,"
+            " next_poll=<" TIME_T_FMT ">, next_ping=<" TIME_T_FMT ">",
+            jpush->accountid, now, jpush->next_poll, jpush->next_ping);
+
+    buf_reset(buf);
+
+    if (now >= jpush->next_poll) {
+        jstate = jmap_push_get_state(jpush);
+
+        jpush->next_poll = now + jmap_push_poll;
+
+        if (jstate) {
+            /* 'state' event */
+            event = "state";
+            buf_reset(buf);
+            buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+
+            if (jpush->closeafter) {
+                do_close = 1;
+            }
+        }
+    }
+    else {
+        /* 'ping' event */
+        event = "ping";
+        jstate = json_pack("{ s:i }", "interval", jpush->ping);
+    }
+
+    if (jstate) {
+        /* Build the response */
+        buf_printf(buf, "event: %s\ndata: ", event);
+        buf_appendjson(buf, jstate, JSON_PRESERVE_ORDER | JSON_COMPACT);
+        buf_appendcstr(buf, "\n\n");
+
+        /* Send the response */
+        write_body(0, txn, buf_base(buf), buf_len(buf));
+        prot_flush(txn->conn->pout);
+
+        /* Cleanup */
+        json_decref(jstate);
+
+        if (do_close) {
+            jmap_push_done(txn);
+
+            if (txn->flags.ver >= VER_2) {
+                /* End of stream */
+                write_body(0, txn, NULL, 0);
+                prot_flush(txn->conn->pout);
+            }
+            else {
+                /* Force exit out of blocking read */
+                shutdown(txn->conn->pin->fd, SHUT_RD);
+            }
+
+            return NULL;
+        }
+
+        jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
+    }
+
+    /* Schedule our next event */
+    ev->mark = MIN(jpush->next_ping, jpush->next_poll);
+
+    return ev;
+}
+
+/* Handle a GET on the eventsource endpoint */
+static int jmap_eventsource(struct transaction_t *txn)
+{
+    if (!jmap_push_poll) return HTTP_NO_CONTENT;
+
+    jmap_push_ctx_t *jpush = NULL;
+    modseq_t lastmodseq = ULLONG_MAX;
+    time_t now = time(NULL);
+
+    const char **hdr;
+    if (txn->req_hdrs &&
+        (hdr = spool_getheader(txn->req_hdrs, "Last-Event-Id"))) {
+        lastmodseq = atomodseq_t(*hdr);
+    }
+
+    struct strlist *param;
+    if ((param = hash_lookup("types", &txn->req_qparams))) {
+        strarray_t *types = strarray_split(param->s, ",", STRARRAY_TRIM);
+
+        jpush = jmap_push_init(txn, httpd_userid, types, lastmodseq, &es_push);
+        strarray_free(types);
+    }
+
+    if (!jpush) {
+        return HTTP_NO_CONTENT;
+    }
+
+    if ((param = hash_lookup("closeafter", &txn->req_qparams)) &&
+        !strcmpsafe(param->s, "state")) {
+        jpush->closeafter = 1;
+    }
+
+    if ((param = hash_lookup("ping", &txn->req_qparams))) {
+        jpush->ping = atoi(param->s);
+    }
+    jpush->next_ping = (jpush->ping > 0) ? now + jpush->ping : INT_MAX;
+
+    txn->meth = METH_CONNECT;  /* Suppress Content-Length & Accept-Ranges */
+    txn->resp_body.type = "text/event-stream";
+    txn->flags.conn = CONN_KEEPALIVE;
+    txn->flags.cc = CC_NOCACHE;
+
+    if (txn->flags.ver >= VER_2) {
+        /* Prevent end of stream */
+        txn->flags.te = TE_CHUNKED;
+    }
+
+    response_header(HTTP_OK, txn);
+
+    if (lastmodseq < ULLONG_MAX) {
+        /* Send all changes now */
+        jpush->next_poll = now;
+    }
+    else {
+        jpush->next_poll = now + jmap_push_poll;
+    }
+
+    /* Schedule our first event */
+    jpush->wait->mark = MIN(jpush->next_ping, jpush->next_poll);
+
+    if (txn->flags.ver < VER_2) {
+        /* Block until we timeout or get unexpected input */
+        prot_peek(txn->conn->pin);
+        txn->flags.conn |= CONN_CLOSE;
+    }
+
+    return 0;
 }

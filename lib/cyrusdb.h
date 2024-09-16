@@ -62,8 +62,6 @@ enum cyrusdb_ret {
     CYRUSDB_READONLY = -9
 };
 
-#define cyrusdb_strerror(c) ("cyrusdb error")
-
 enum cyrusdb_initflags {
     CYRUSDB_RECOVER = 0x01
 };
@@ -77,7 +75,8 @@ enum cyrusdb_openflags {
     CYRUSDB_MBOXSORT  = 0x02,    /* Use mailbox sort order ('.' sorts 1st) */
     CYRUSDB_CONVERT   = 0x04,    /* Convert to the named format if not already */
     CYRUSDB_NOCOMPACT = 0x08,    /* Don't run any database compaction routines */
-    CYRUSDB_SHARED    = 0x10     /* Open in shared lock mode */
+    CYRUSDB_SHARED    = 0x10,    /* Open in shared lock mode */
+    CYRUSDB_NOCRC     = 0x20     /* Don't check CRC32 on read */
 };
 
 typedef int foreach_p(void *rock,
@@ -209,6 +208,9 @@ struct cyrusdb_backend {
                    struct txn **tid,
                    int force); /* 1 = ignore not found errors */
 
+    /* start a transaction (shared if flags & CYRUSDB_SHARED) */
+    int (*lock)(struct dbengine *db, struct txn **tid, int flags);
+
     /* Commit the transaction.  When commit() returns, the tid will no longer
      * be valid, regardless of if the commit succeeded or failed */
     int (*commit)(struct dbengine *db, struct txn *tid);
@@ -287,6 +289,7 @@ extern int cyrusdb_store(struct db *db,
 extern int cyrusdb_delete(struct db *db,
                           const char *key, size_t keylen,
                           struct txn **tid, int force);
+extern int cyrusdb_lock(struct db *db, struct txn **tid, int flags);
 extern int cyrusdb_commit(struct db *db, struct txn *tid);
 extern int cyrusdb_abort(struct db *db, struct txn *tid);
 extern int cyrusdb_dump(struct db *db, int detail);
@@ -310,5 +313,7 @@ int cyrusdb_generic_done(void);
 int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_noarchive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_unlink(const char *fname, int flags);
+
+extern const char *cyrusdb_strerror(int r);
 
 #endif /* INCLUDED_CYRUSDB_H */

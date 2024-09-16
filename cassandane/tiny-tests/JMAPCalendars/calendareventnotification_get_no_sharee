@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_get_no_sharee
+    :min_version_3_7 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create('user.cassandane.#jmapnotification') or die;
+    $admin->setacl('user.cassandane.#jmapnotification',
+        'cassandane' => 'lrswipkxtecdan') or die;
+
+    xlog "Create event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    title => 'event1',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    start => '2011-01-01T04:05:06',
+                    duration => 'PT1H',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
+
+    $self->assert_num_equals(0,
+        $admin->message_count('user.cassandane.#jmapnotification'));
+
+    xlog "Update event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'event1Updated',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $self->assert_num_equals(0,
+        $admin->message_count('user.cassandane.#jmapnotification'));
+
+    xlog "Destroy event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy =>  [ $eventId ],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$eventId], $res->[0][1]{destroyed});
+
+    $self->assert_num_equals(0,
+        $admin->message_count('user.cassandane.#jmapnotification'));
+}

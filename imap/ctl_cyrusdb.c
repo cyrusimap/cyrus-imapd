@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -83,6 +84,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 #ifdef ENABLE_BACKUP
 #include "backup/backup.h"
@@ -129,11 +131,12 @@ static void usage(void)
 static int fixmbox(const mbentry_t *mbentry,
                    void *rock __attribute__((unused)))
 {
-    int r;
+    int r, r2;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = mboxlist_deletemailbox(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1, 0);
+        r = mboxlist_deletemailboxlock(mbentry->name, 1, NULL, NULL, NULL,
+                                       MBOXLIST_DELETE_FORCE);
         if (r) {
             /* log the error */
             syslog(LOG_ERR,
@@ -158,26 +161,74 @@ static int fixmbox(const mbentry_t *mbentry,
             free(userid);
         }
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
-        /* XXX - const correctness */
-        free(copy->legacy_specialuse);
-        copy->legacy_specialuse = NULL;
-        mboxlist_update(copy, /*localonly*/1);
+        xzfree(copy->legacy_specialuse);
+        mboxlist_updatelock(copy, /*localonly*/1);
         mboxlist_entry_free(&copy);
     }
 
-    r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, /*modseq*/0);
-    if (r) {
-        syslog(LOG_ERR,
-               "failed to update intermediaries to mailboxes list for %s: %s",
-               mbentry->name, cyrusdb_strerror(r));
+    /* make sure every local mbentry has a uniqueid!  */
+    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
+        struct mailbox *mailbox = NULL;
+        mbentry_t *copy = NULL;
+
+        r = mailbox_open_from_mbe(mbentry, &mailbox);
+        if (r) {
+            /* XXX what does it mean if there's an mbentry, but the mailbox
+             * XXX was not openable?
+             */
+            syslog(LOG_DEBUG, "%s: mailbox_open_from_mbe %s returned %s",
+                              __func__, mbentry->name, error_message(r));
+            goto skip_uniqueid;
+        }
+
+        if (!mailbox->h.uniqueid) {
+            /* yikes, no uniqueid in header either! */
+            mailbox_make_uniqueid(mailbox);
+            xsyslog(LOG_INFO, "mailbox header had no uniqueid, creating one",
+                              "mboxname=<%s> newuniqueid=<%s>",
+                              mbentry->name, mailbox->h.uniqueid);
+        }
+
+        copy = mboxlist_entry_copy(mbentry);
+        copy->uniqueid = xstrdup(mailbox->h.uniqueid);
+        xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
+                          "mboxname=<%s> newuniqueid=<%s>",
+                          copy->name, copy->uniqueid);
+
+        r = mboxlist_updatelock(copy, /*localonly*/1);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to update mboxlist",
+                             "mboxname=<%s> error=<%s>",
+                             mbentry->name, error_message(r));
+            r2 = mailbox_abort(mailbox);
+            if (r2) {
+                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            }
+        }
+        else {
+            r2 = mailbox_commit(mailbox);
+            if (r2) {
+                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            }
+        }
+        mailbox_close(&mailbox);
+        mboxlist_entry_free(&copy);
+
+skip_uniqueid:
+        ;   /* hush "label at end of compound statement" warning */
     }
 
     return 0;
 }
 
-static void process_mboxlist(void)
+static void process_mboxlist(int *upgraded)
 {
-    /* build a list of mailboxes - we're using internal names here */
+    /* upgrade database to new mailboxes-by-id records */
+    mboxlist_upgrade(upgraded);
+
+    /* run fixmbox across all mboxlist entries */
     mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
 
     /* enable or disable RACLs per config */
@@ -203,7 +254,7 @@ static const char *dbfname(struct cyrusdb *db)
     else if (!strcmp(db->name, FNAME_DELIVERDB))
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
     else if (!strcmp(db->name, FNAME_TLSSESSIONS))
-        fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+        fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
     else if (!strcmp(db->name, FNAME_PTSDB))
         fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
     else if (!strcmp(db->name, FNAME_STATUSCACHEDB))
@@ -247,8 +298,7 @@ static void check_convert(struct cyrusdb *db, const char *fname)
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
-    int opt, r, r2;
+    int opt, r = 0, r2 = 0;
     char *alt_config = NULL;
     int reserve_flag = 1;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
@@ -257,9 +307,21 @@ int main(int argc, char *argv[])
     char *msg = "";
     int i, rotated = 0;
 
-    r = r2 = 0;
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:crx";
 
-    while ((opt = getopt(argc, argv, "C:rxc")) != EOF) {
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "checkpoint", no_argument, NULL, 'c' },
+        { "recover", no_argument, NULL, 'r' },
+        { "no-cleanup", no_argument, NULL, 'x' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -346,7 +408,7 @@ int main(int argc, char *argv[])
                     while ((dirent = readdir(dirp)) != NULL) {
                         if (dirent->d_name[0] == '.') continue;
                         file = strconcat(backup2, "/", dirent->d_name, (char *)NULL);
-                        unlink(file);
+                        xunlink(file);
                         free(file);
                     }
 
@@ -388,8 +450,11 @@ int main(int argc, char *argv[])
 
     strarray_fini(&files);
 
-    if(op == RECOVER && reserve_flag)
-        process_mboxlist();
+    if (op == RECOVER && reserve_flag) {
+        int upgraded = 0;
+        process_mboxlist(&upgraded);
+        if (upgraded) annotatemore_upgrade();
+    }
 
     free(dirname);
     free(backup1);

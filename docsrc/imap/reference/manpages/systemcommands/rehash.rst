@@ -17,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **rehash** [**-v**] [**-n**] [**-f**|**-F**] [**-i**|**-I**] imapd.conf
+    **rehash** [**-v**] [**-n**] [**-f**\|\ **-F**] [**-i**\|\ **-I**] imapd.conf
 
 Description
 ===========
@@ -50,12 +50,12 @@ Options
     In -n "no change" mode, it will just print the changes.  Note,
     verbose is always turned on in no-change mode.
 
-.. option:: -f | -F
+.. option:: -f \| -F
 
     | -f forces fulldirhash: no
     | -F forces fulldirhash: yes
 
-.. option:: -i
+.. option:: -i \| -I
 
     |  -i forces hashimapspool: no
     |  -I forces hashimapspool: yes

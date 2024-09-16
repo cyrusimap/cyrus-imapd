@@ -37,11 +37,11 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -v
+.. option:: -v, --verbose
 
   Verbose mode.
 
-.. option:: -f
+.. option:: -f, --force
 
   Force operation. Without this flag **sync_reset** just bails out with
   an error.  Principally here to try and prevent accidents with command

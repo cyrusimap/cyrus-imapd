@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_import_issue2918
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $binary = slurp_file(abs_path('data/mime/issue2918.eml'));
+    my $data = $jmap->Upload($binary, "message/rfc822");
+    my $blobId = $data->{blobId};
+
+    # Not crashing here is enough.
+
+    my $res = $jmap->CallMethods([
+		['Email/import', {
+			emails => {
+				"1" => {
+					blobId => $blobId,
+					mailboxIds => {
+						'$inbox' =>  JSON::true},
+				},
+			},
+		}, "R1"]
+	]);
+}

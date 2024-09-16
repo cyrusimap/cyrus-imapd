@@ -8,7 +8,7 @@ once, creating a tiered database structure.  To use Xapian, these tiers
 must be defined in :cyrusman:`imapd.conf(5)` with the
 `defaultsearchtier` and `searchpartition-name` settings.
 
-Default Search Tier name
+Default Search Tier Name
 ------------------------
 
 Specify the name of the default search tier using the `defaultsearchtier`
@@ -18,7 +18,7 @@ setting:
         :start-after: startblob defaultsearchtier
         :end-before: endblob defaultsearchtier
 
-Search Tier Partition location
+Search Tier Partition Location
 ------------------------------
 
 Each search tier to be used requires a partition location be specified

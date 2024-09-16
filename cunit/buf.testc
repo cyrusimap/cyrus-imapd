@@ -98,10 +98,27 @@ static void test_initm(void)
     buf_free(&b);
 }
 
+static void test_initmcstr(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    /* data thanks to hipsteripsum.me */
+    char *s = xstrdup("terry richardson fanny pack");
+
+    buf_initmcstr(&b, s);
+    CU_ASSERT_EQUAL(b.len, strlen(s));
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, s, strlen(s)));
+
+    /* we don't free(s) - the buf_free() should do that */
+    buf_free(&b);
+}
+
 static void test_long(void)
 {
     struct buf b = BUF_INITIALIZER;
-    int i;
+    uint16_t i;
     char *exp;
 #define SZ  6
 #define N 10000
@@ -113,7 +130,7 @@ static void test_long(void)
     CU_ASSERT_PTR_NULL(b.s);
 
     for (i = 0 ; i < N ; i++) {
-        snprintf(tt, sizeof(tt), "%c%05d", 'A'+(i%26), i);
+        snprintf(tt, sizeof(tt), "%c%05d", 'A'+(char)(i%26), i);
         buf_appendcstr(&b, tt);
     }
     buf_cstring(&b);
@@ -125,7 +142,7 @@ static void test_long(void)
 
     exp = xmalloc(SZ*N+1);
     for (i = 0 ; i < N ; i++)
-        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(char)(i%26), i);
     CU_ASSERT(!strcmp(b.s, exp));
     free(exp);
 
@@ -397,7 +414,7 @@ static void test_printf(void)
 static void test_long_printf(void)
 {
     struct buf b = BUF_INITIALIZER;
-    int i;
+    uint16_t i;
     const char *s;
     char *exp;
 #define SZ  6
@@ -410,7 +427,7 @@ static void test_long_printf(void)
 
     exp = xmalloc(SZ*N+1);
     for (i = 0 ; i < N ; i++)
-        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+        snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(char)(i%26), i);
 
     buf_printf(&b, "x%sy", exp);
     s = buf_cstring(&b);
@@ -629,7 +646,7 @@ static void test_replace_all(void)
         CU_ASSERT_STRING_EQUAL(b.s, _in); \
  \
         r = regcomp(&re, _reg, REG_EXTENDED); \
-        CU_ASSERT_EQUAL(r, 0);
+        CU_ASSERT_EQUAL_FATAL(r, 0);
 #define TESTCASE_MIDDLE \
         n = buf_replace_one_re(&b, &re, _rep);
 #define TESTCASE_END \
@@ -1553,7 +1570,89 @@ static void test_trim(void)
     _trimsto("\t  ", "");
 }
 
+static void test_appendoverlap(void)
+{
+    struct testcase {
+        const char *buf;
+        const char *str;
+        const char *want;
+    };
 
+    struct testcase testcases[] = {{
+        "abcdef", "efg", "abcdefg"
+    }, {
+        "abcd", "efg", "abcdefg"
+    }, {
+        "ab", "cdefg", "abcdefg"
+    }, {
+        "ab", "abcdefg", "abcdefg"
+    }, {
+        "a", "abcdefg", "abcdefg"
+    }, {
+        "", "abcdefg", "abcdefg"
+    }, {
+        "abcdefg", "", "abcdefg"
+    }, {
+        "abcdefg", "efg", "abcdefg"
+    }};
+
+    struct buf buf = BUF_INITIALIZER;
+
+    size_t i;
+    for (i = 0; i < sizeof(testcases) / sizeof(testcases[0]); i++) {
+        struct testcase tc = testcases[i];
+        buf_setcstr(&buf, tc.buf);
+        buf_appendoverlap(&buf, tc.str);
+        CU_ASSERT_STRING_EQUAL(tc.want, buf_cstring(&buf));
+        buf_reset(&buf);
+    }
+    buf_free(&buf);
+}
+
+static void test_tocrlf(void)
+{
+    struct testcase {
+        char *input;
+        char *expect;
+    };
+
+    struct testcase testcases[] = {
+        { "\rleading bare cr", "\r\nleading bare cr" },
+        { "\nleading bare lf", "\r\nleading bare lf" },
+        { "\r\nleading crlf", "\r\nleading crlf" },
+        { "bare\rcr", "bare\r\ncr" },
+        { "bare\nlf", "bare\r\nlf" },
+        { "correct\r\ncrlf", "correct\r\ncrlf" },
+        { "trailing bare cr\r", "trailing bare cr\r\n" },
+        { "trailing bare lf\n", "trailing bare lf\r\n" },
+        { "trailing crlf\r\n", "trailing crlf\r\n" },
+        { "multiple\rbare\rcr", "multiple\r\nbare\r\ncr" },
+        { "multiple\nbare\nlf", "multiple\r\nbare\r\nlf" },
+        { "multiple\r\ncrlf\r\n", "multiple\r\ncrlf\r\n" },
+        { "mixed cr\rand\nlf", "mixed cr\r\nand\r\nlf" },
+        { "mixed bare\rcr, bare\nlf and\r\ncrlf",
+           "mixed bare\r\ncr, bare\r\nlf and\r\ncrlf" },
+        { "adjacent\r\rbare cr", "adjacent\r\n\r\nbare cr" },
+        { "adjacent\n\nbare lf", "adjacent\r\n\r\nbare lf" },
+        { "adjacent\r\n\r\ncrlf", "adjacent\r\n\r\ncrlf" },
+        { "more adjacent\r\r\rbare cr", "more adjacent\r\n\r\n\r\nbare cr" },
+        { "more adjacent\n\n\nbare lf", "more adjacent\r\n\r\n\r\nbare lf" },
+        { "more adjacent\r\n\r\n\r\ncrlf", "more adjacent\r\n\r\n\r\ncrlf" },
+        { "adjacent\n\nbare\r\rmixed", "adjacent\r\n\r\nbare\r\n\r\nmixed" },
+        { "tricksy\r\r\n\nsplit", "tricksy\r\n\r\n\r\nsplit" },
+    };
+
+    struct buf buf = BUF_INITIALIZER;
+    size_t i;
+    for (i = 0; i < sizeof(testcases) / sizeof(testcases[0]); i++) {
+        struct testcase tc = testcases[i];
+        buf_setcstr(&buf, tc.input);
+        buf_tocrlf(&buf);
+        CU_ASSERT_STRING_EQUAL(tc.expect, buf_cstring(&buf));
+        buf_reset(&buf);
+    }
+    buf_free(&buf);
+}
 
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */

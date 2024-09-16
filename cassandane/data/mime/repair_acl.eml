@@ -1,0 +1,21 @@
+From "someone@example.com" Wed Jun 8 19:27:14 2022
+Return-Path: <someone@example.com>
+Date: Wed, 08 Jun 2022 15:26:53 -0400
+From: <someone@example.com>
+To: asdasd@example.com
+Message-ID: <45c35132-221c-40e2-bd37-62eb4de329be@example.com>
+Subject: Let's try this out
+Mime-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary=b647b28f23304467afa2c0b3dcca48ac
+Content-Transfer-Encoding: 7bit
+
+--b647b28f23304467afa2c0b3dcca48ac
+Content-Type: text/plain
+
+Wow so cool
+--b647b28f23304467afa2c0b3dcca48ac
+Content-Type: text/html
+
+<!DOCTYPE html><html><head><title></title><style type="text/css">p.MsoNormal,p.MsoNoSpacing{margin:0}</style></head><body><div>Wow so cool<br></div></body></html>
+--b647b28f23304467afa2c0b3dcca48ac--

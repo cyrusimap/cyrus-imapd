@@ -69,7 +69,7 @@
 
 static int usage(const char *name);
 
-int verbose = 0;
+static int verbose = 0;
 enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
@@ -115,12 +115,14 @@ static int dump_one_section(int partno, charset_t charset, int encoding,
                             const struct param *type_params __attribute__((unused)),
                             const char *disposition __attribute__((unused)),
                             const struct param *disposition_params __attribute__((unused)),
+                            const struct message_guid *content_guid __attribute__((unused)),
+                            const char *part __attribute__((unused)),
                             struct buf *data,
                             void *rock __attribute__((unused)))
 {
 #define MAX_TEXT    512
     printf("SECTION partno=%d length=%llu subtype=%s charset=%s encoding=%s\n",
-            partno, (unsigned long long)data->len, subtype, charset_name(charset), encoding_name(encoding));
+            partno, (unsigned long long)data->len, subtype, charset_alias_name(charset), encoding_name(encoding));
     dump_buf(stdout, data);
     return 0;
 #undef MAX_TEXT
@@ -305,10 +307,13 @@ static int usage(const char *name)
     exit(EX_USAGE);
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "message_test: %s\n", s);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

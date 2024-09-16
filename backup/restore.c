@@ -44,6 +44,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,10 +62,15 @@
 
 #include "backup/backup.h"
 
+static struct namespace restore_namespace;
+
 EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -167,9 +173,6 @@ static int restore_add_message(const struct backup_message *message,
 static struct sync_folder_list *restore_make_reserve_folder_list(
                               struct backup *backup);
 
-static struct backend *restore_connect(const char *servername,
-                                       struct buf *tagbuf,
-                                       const struct restore_options *options);
 
 int main(int argc, char **argv)
 {
@@ -194,12 +197,40 @@ int main(int argc, char **argv)
     struct backup_mailbox_list *mailbox_list = NULL;
     struct sync_folder_list *reserve_folder_list = NULL;
     struct sync_reserve_list *reserve_list = NULL;
-    struct buf tagbuf = BUF_INITIALIZER;
-    struct backend *backend = NULL;
+    struct sync_client_state sync_cs = SYNC_CLIENT_STATE_INITIALIZER;
     struct dlist *upload = NULL;
-    int opt, r;
+    int opt, r = 0;
 
-    while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = ":A:C:DF:LM:P:UXaf:m:nru:vw:xz";
+
+    static const struct option long_options[] = {
+        { "override-acl", optional_argument, NULL, 'A' },
+        /* n.b. no long option for -C */
+        { "keep-deletedprefix", no_argument, NULL, 'D' },
+        { "input-file", required_argument, NULL, 'F' },
+        { "local-only", no_argument, NULL, 'L' },
+        { "dest-mailbox", required_argument, NULL, 'M' },
+        { "dest-partition", required_argument, NULL, 'P' },
+        { "keep-uidvalidity", no_argument, NULL, 'U' },
+        { "skip-expunged", no_argument, NULL, 'X' },
+        { "all-mailboxes", no_argument, NULL, 'a' },
+        { "file", required_argument, NULL, 'f' },
+        { "mailbox", required_argument, NULL, 'm' },
+        { "dry-run", no_argument, NULL, 'n' },
+        { "recursive", no_argument, NULL, 'r' },
+        { "userid", required_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "delayed-startup", required_argument, NULL, 'w' },
+        { "only-expunged", no_argument, NULL, 'x' },
+        { "require-compression", no_argument, NULL, 'z' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'A':
             if (options.keep_uidvalidity) usage();
@@ -304,6 +335,11 @@ int main(int argc, char **argv)
     /* okay, arguments seem sane, we are go */
     cyrus_init(alt_config, "restore", 0, 0);
 
+    if ((r = mboxname_init_namespace(&restore_namespace, NAMESPACE_OPTION_ADMIN))) {
+        fatal(error_message(r), EX_CONFIG);
+    }
+    mboxevent_setnamespace(&restore_namespace);
+
     /* load the SASL plugins */
     global_sasl_init(1, 0, mysasl_cb);
 
@@ -320,7 +356,7 @@ int main(int argc, char **argv)
                               BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
         break;
     case RESTORE_MODE_MBOXNAME:
-        mbname = mbname_from_intname(backup_name);
+        mbname = mbname_from_extname(backup_name, &restore_namespace, NULL);
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
                         BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
@@ -413,9 +449,11 @@ int main(int argc, char **argv)
     }
 
     /* connect to destination */
-    backend = restore_connect(servername, &tagbuf, &options);
+    sync_cs.servername = servername;
+    sync_cs.flags = options.verbose ? SYNC_FLAG_VERBOSE : 0;
+    sync_connect(&sync_cs);
 
-    if (!backend) {
+    if (!sync_cs.backend) {
         // FIXME
         r = -1;
         goto done;
@@ -425,10 +463,9 @@ int main(int argc, char **argv)
     struct sync_reserve *reserve;
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
         /* send APPLY RESERVE and parse missing lists */
-        r = sync_reserve_partition(reserve->part,
+        r = sync_reserve_partition(&sync_cs, reserve->part,
                                    reserve_folder_list,
-                                   reserve->list,
-                                   backend);
+                                   reserve->list);
         if (r) goto done;
 
         /* send APPLY MESSAGEs */
@@ -441,8 +478,8 @@ int main(int argc, char **argv)
         /* upload in small(ish) blocks to avoid timeouts */
         while (upload->head) {
             struct dlist *block = dlist_splice(upload, 1024);
-            sync_send_apply(block, backend->out);
-            r = sync_parse_response("MESSAGE", backend->in, NULL);
+            sync_send_apply(block, sync_cs.backend->out);
+            r = sync_parse_response("MESSAGE", sync_cs.backend->in, NULL);
             dlist_unlink_files(block);
             dlist_free(&block);
             if (r) goto done;
@@ -474,8 +511,8 @@ int main(int argc, char **argv)
             dl->name = xstrdup("LOCAL_MAILBOX");
         }
 
-        sync_send_restore(dl, backend->out);
-        r = sync_parse_response("MAILBOX", backend->in, NULL);
+        sync_send_restore(dl, sync_cs.backend->out);
+        r = sync_parse_response("MAILBOX", sync_cs.backend->in, NULL);
         dlist_free(&dl);
         if (r) goto done;
     }
@@ -487,9 +524,6 @@ done:
     /* release lock asap */
     if (backup)
         backup_close(&backup);
-
-    if (backend)
-        backend_disconnect(backend);
 
     if (upload) {
         dlist_unlink_files(upload);
@@ -507,103 +541,13 @@ done:
     if (reserve_list)
         sync_reserve_list_free(&reserve_list);
 
-    buf_free(&tagbuf);
+    sync_disconnect(&sync_cs);
+    free(sync_cs.backend);
 
     backup_cleanup_staging_path();
     cyrus_done();
 
     exit(r ? EX_TEMPFAIL : EX_OK);
-}
-
-static struct backend *restore_connect(const char *servername,
-                                       struct buf *tagbuf,
-                                       const struct restore_options *options)
-{
-    struct backend *backend = NULL;
-    sasl_callback_t *cb;
-    int timeout;
-    const char *auth_status = NULL;
-
-    cb = mysasl_callbacks(NULL,
-                          config_getstring(IMAPOPT_RESTORE_AUTHNAME),
-                          config_getstring(IMAPOPT_RESTORE_REALM),
-                          config_getstring(IMAPOPT_RESTORE_PASSWORD));
-
-    /* try to connect over IMAP */
-    backend = backend_connect(backend, servername,
-                              &imap_csync_protocol, "", cb, &auth_status,
-                              (options->verbose > 1 ? fileno(stderr) : -1));
-
-    if (backend) {
-        if (backend->capability & CAPA_REPLICATION) {
-            /* attach our IMAP tag buffer to our protstreams as userdata */
-            backend->in->userdata = backend->out->userdata = tagbuf;
-        }
-        else {
-            backend_disconnect(backend);
-            backend = NULL;
-        }
-    }
-
-    /* if that didn't work, fall back to csync */
-    if (!backend) {
-        backend = backend_connect(backend, servername,
-                                  &csync_protocol, "", cb, NULL,
-                                  (options->verbose > 1 ? fileno(stderr) : -1));
-    }
-
-    free_callbacks(cb);
-    cb = NULL;
-
-    if (!backend) {
-        fprintf(stderr, "Can not connect to server '%s'\n", servername);
-        syslog(LOG_ERR, "Can not connect to server '%s'", servername);
-        return NULL;
-    }
-
-    if (servername[0] != '/' && backend->sock >= 0) {
-        tcp_disable_nagle(backend->sock);
-        tcp_enable_keepalive(backend->sock);
-    }
-
-#ifdef HAVE_ZLIB
-    /* Does the backend support compression? */
-    if (CAPA(backend, CAPA_COMPRESS)) {
-        prot_printf(backend->out, "%s\r\n",
-                    backend->prot->u.std.compress_cmd.cmd);
-        prot_flush(backend->out);
-
-        if (sync_parse_response("COMPRESS", backend->in, NULL)) {
-            if (options->require_compression)
-                fatal("Failed to enable compression, aborting", EX_SOFTWARE);
-            syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
-        }
-        else {
-            prot_setcompress(backend->in);
-            prot_setcompress(backend->out);
-        }
-    }
-    else if (options->require_compression) {
-        fatal("Backend does not support compression, aborting", EX_SOFTWARE);
-    }
-#endif
-
-    if (options->verbose > 1) {
-        /* XXX did we do this during backend_connect already? */
-        prot_setlog(backend->in, fileno(stderr));
-        prot_setlog(backend->out, fileno(stderr));
-    }
-
-    /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
-    if (timeout < 3) timeout = 3;
-    prot_settimeout(backend->in, timeout);
-
-    /* Force use of LITERAL+ so we don't need two way communications */
-    prot_setisclient(backend->in, 1);
-    prot_setisclient(backend->out, 1);
-
-    return backend;
 }
 
 static void my_mailbox_list_add(struct backup_mailbox_list *mailbox_list,
@@ -661,7 +605,7 @@ static struct sync_folder_list *restore_make_reserve_folder_list(
             /* we only care about mboxname here */
             sync_folder_list_add(folder_list, NULL, iter->mboxname,
                                 0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                                0, 0, 0, 0, NULL, 0, 0, 0);
+                                0, 0, 0, 0, NULL, 0, 0, 0, NULL, 0);
         }
 
         backup_mailbox_list_empty(mailboxes);
@@ -810,7 +754,7 @@ static int restore_add_mailbox(const struct backup_mailbox *mailbox,
         const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, clone->mboxname,
                              0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                             0, 0, 0, 0, NULL, 0, 0, 0);
+                             0, 0, 0, 0, NULL, 0, 0, 0, NULL, 0);
     }
 
     /* populate mailbox list */
@@ -854,7 +798,7 @@ static int restore_add_message(const struct backup_message *message,
         const struct synccrcs synccrcs = {0, 0};
         sync_folder_list_add(reserve_folder_list, NULL, mailbox->mboxname,
                              0, NULL, NULL, 0, 0, 0, 0, synccrcs,
-                             0, 0, 0, 0, NULL, 0, 0, 0);
+                             0, 0, 0, 0, NULL, 0, 0, 0, NULL, 0);
 
         /* add to mailbox list */
         my_mailbox_list_add(mailbox_list, mailbox);
@@ -933,14 +877,16 @@ static int restore_add_object(const char *object_name,
     }
     else if (strchr(object_name, '.')) {
         /* has a dot, might be an mboxname */
-        mbname_t *mbname = mbname_from_intname(object_name);
+        mbname_t *mbname = mbname_from_extname(object_name,
+                                               &restore_namespace, NULL);
         mailbox = backup_get_mailbox_by_name(backup, mbname,
                                              BACKUP_MAILBOX_ALL_RECORDS);
         mbname_free(&mbname);
     }
     else {
         /* not sure what it is, guess mboxname? */
-        mbname_t *mbname = mbname_from_intname(object_name);
+        mbname_t *mbname = mbname_from_extname(object_name,
+                                               &restore_namespace, NULL);
         mailbox = backup_get_mailbox_by_name(backup, mbname,
                                              BACKUP_MAILBOX_ALL_RECORDS);
         mbname_free(&mbname);

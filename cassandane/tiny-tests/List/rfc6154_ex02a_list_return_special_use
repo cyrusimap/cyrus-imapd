@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rfc6154_ex02a_list_return_special_use
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+    ]);
+
+    $imaptalk->setmetadata("SentMail", "/private/specialuse", "\\Sent");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("MyDrafts", "/private/specialuse", "\\Drafts");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $alldata = $imaptalk->list("", "%", 'RETURN', [qw( SPECIAL-USE )]);
+
+    $self->assert_mailbox_structure($alldata, '/', {
+        'INBOX'                 => [qw( \\HasNoChildren )],
+        'ToDo'                  => [qw( \\HasNoChildren )],
+        'Projects'              => [qw( \\HasChildren )],
+        'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+    });
+}

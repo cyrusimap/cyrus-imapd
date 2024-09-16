@@ -46,6 +46,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -70,9 +71,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 /* current namespace */
 static struct namespace recon_namespace;
@@ -100,7 +98,19 @@ int main(int argc, char **argv)
     int allusers = 0;
     const char *audit_tool = NULL;
 
-    while ((opt = getopt(argc, argv, "C:A:a")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:A:a";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "all", no_argument, NULL, 'a' },
+        { "audit-tool", required_argument, NULL, 'A' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -120,9 +130,10 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "dav_reconstruct", 0, 0);
+    global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&recon_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -130,9 +141,6 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
     sqldb_init();
-
-    /* Initialize libical */
-    ical_support_init();
 
     if (allusers) {
         mboxlist_alluser(do_user, (void *)audit_tool);
@@ -145,6 +153,10 @@ int main(int argc, char **argv)
         for (i = optind; i < argc; i++)
             do_user(argv[i], (void *)audit_tool);
     }
+
+    libcyrus_run_delayed();
+    sqldb_done();
+    cyrus_done();
 
     exit(code);
 }
@@ -164,6 +176,8 @@ void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     in_shutdown = 1;
+
+    libcyrus_run_delayed();
 
     mboxlist_close();
     mboxlist_done();

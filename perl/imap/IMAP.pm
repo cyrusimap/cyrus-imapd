@@ -68,7 +68,7 @@ use IO::File;
 # *   %s -- astring (will be quoted or literalized as needed)
 # *   %d -- decimal
 # *   %u -- unsigned decimal
-# *   %v -- #astring (arg is an null-terminated array of (char *)
+# *   %v -- #astring (arg is a null-terminated array of (char *)
 # *         which are written as space separated astrings)
 # *   %B -- (internal use only) base64-encoded data at end of command line
 #
@@ -219,7 +219,7 @@ sub authenticate {
   $opts{-authz} = "" if (!defined($opts{-authz}));
   $rc = 0;
 
-  # Fetch all relevent capabilities
+  # Fetch all relevant capabilities
   $self->addcallback({-trigger => 'CAPABILITY',
                       -callback => sub {my %a = @_;
                                         map {
@@ -263,7 +263,7 @@ sub authenticate {
 
       $self->_starttls($opts{-tlskey}, $opts{-tlskey}, $opts{-cafile}, $opts{-capath});
 
-      # Refetch all relevent capabilities
+      # Refetch all relevant capabilities
       ($starttls, $logindisabled, $availmechs) = (0, 0, "");
       $self->send(undef, undef, 'CAPABILITY');
       $opts{-mechanism} = $availmechs if ($opts{-mechanism} eq '');
@@ -285,7 +285,7 @@ sub authenticate {
   if (!$rc && $logindisabled) {
     $self->_starttls('', '', $opts{-cafile}, $opts{-capath}) || return undef;
 
-    # Refetch all relevent capabilities
+    # Refetch all relevant capabilities
     ($starttls, $logindisabled, $availmechs) = (0, 0, "");
     $self->send(undef, undef, 'CAPABILITY');
 

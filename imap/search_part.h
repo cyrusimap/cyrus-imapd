@@ -58,9 +58,18 @@
 #define SEARCH_PART_BODY            9
 #define SEARCH_PART_LOCATION        10
 #define SEARCH_PART_ATTACHMENTNAME  11
-#define SEARCH_NUM_PARTS            12
+#define SEARCH_PART_ATTACHMENTBODY  12
+#define SEARCH_PART_DELIVEREDTO     13
+#define SEARCH_PART_LANGUAGE        14 /* ISO 639 two or three letter code */
+#define SEARCH_PART_PRIORITY        15 /* String-encoded decimal integer > 0 */
+#define SEARCH_PART_MESSAGEID       16
+#define SEARCH_PART_REFERENCES      17
+#define SEARCH_PART_INREPLYTO       18
+#define SEARCH_NUM_PARTS            19
 
 /* Implemented in search_engines.c */
 extern const char *search_part_as_string(int part);
+
+extern int search_part_is_body(int part);
 
 #endif

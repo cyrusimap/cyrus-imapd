@@ -1,0 +1,112 @@
+#!perl
+use warnings;
+use strict;
+
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_imip_encode_address
+    :needs_component_httpd
+    :NoStartInstances
+    :want_smtpdaemon
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('imipnotifier' => undef);
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $service = $self->{instance}->get_service("http");
+    my $caldav  = $self->{caldav};
+
+    my @testCases = (
+        { mailto => 'a@example.com',
+          cn     => 'A',
+          expect => 'A <a@example.com>',
+        },
+        { mailto => 'b@example.com',
+          cn     => 'A <B>',
+          expect => '"A <B>" <b@example.com>',
+        },
+        { mailto => 'c@example.com',
+          cn     => "A \N{TOMATO} B",
+          expect => '=?UTF-8?Q?A_=F0=9F=8D=85_B?= <c@example.com>',
+        },
+        { mailto => 'd@example.com',
+          cn     => 'A "T" B',
+          expect => '"A \"T\" B" <d@example.com>',
+        },
+        { mailto => 'e@example.com',
+          cn     => 'A \ B',
+          expect => '"A \\\\ B" <e@example.com>',
+        },
+        { mailto => 'f@example.com',
+          cn     => 'A,B',
+          expect => '"A,B" <f@example.com>',
+        },
+        { mailto => 'g@example.com',
+          cn     => undef,
+          expect => 'g@example.com',
+        },
+    );
+
+    my $uuidgen = Data::UUID->new;
+
+    foreach my $tc (@testCases) {
+        my $uid  = $uuidgen->create_str;
+        my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uid
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART:20240703T153000Z
+DTSTAMP:20240703T153000Z
+SEQUENCE:0
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+EOF
+        if ($tc->{cn}) {
+            $ical .= "ORGANIZER;CN=$tc->{cn}:MAILTO:$tc->{mailto}\n";
+        } else {
+            $ical .= "ORGANIZER:MAILTO:$tc->{mailto}\n";
+        }
+
+        $ical .= <<EOF;
+END:VEVENT
+END:VCALENDAR
+EOF
+        $caldav->Request(
+            'PUT', "Default/$uid.ics", $ical,
+            'Content-Type' => 'text/calendar; charset=utf-8'
+        );
+    }
+
+    my %recipients = ();
+
+    my $messages_dir = $self->{instance}->get_basedir() . '/smtpd';
+    opendir(my $dh, $messages_dir) or die "opendir $messages_dir: $!";
+    while (readdir $dh) {
+        next if not m/\.smtp$/;
+
+        my $message_file = "$messages_dir/$_";
+        open(my $fh, '<', $message_file) or die "open $message_file: $!";
+        while (<$fh>) {
+            s/[\x0d\x0a]{1,2}$//; # leniently chomp eol chars
+            last if not $_; # empty line: end of headers
+
+            if (m/^To: (.*(\w+\@example\.com)>?)$/) {
+                $recipients{$2} = $1;
+            }
+        }
+        close $fh;
+    }
+    closedir $dh;
+
+    foreach my $tc (@testCases) {
+        $self->assert_str_equals($tc->{expect},
+                                 $recipients{$tc->{mailto}});
+    }
+}

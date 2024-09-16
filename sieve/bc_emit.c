@@ -166,6 +166,48 @@ static int bc_stringlist_emit(int fd, int *codep, bytecode_info_t *bc)
     return wrote;
 }
 
+/* Write out a valuelist to a given file descriptor.
+ * return # of bytes written on success and -1 on error */
+
+/* valuelist: <# listitems>
+              <pos of listend (bytes)>
+              <int value>
+*/
+static int bc_vallist_emit(int fd, int *codep, bytecode_info_t *bc)
+{
+    int len = bc->data[(*codep)++].u.listlen;
+    int i;
+    int ret;
+    int wrote = 2*sizeof(int);
+    int begin,end;
+
+    /* Write out number of items in the list */
+    if (write_int(fd, len)== -1) return -1 ;
+
+    /* skip one spot end of list position*/
+    begin = lseek(fd, 0, SEEK_CUR);
+    lseek(fd, sizeof(int), SEEK_CUR);
+
+    /* Loop through all the items of the list, writing out length and string
+     * in sequence */
+    for (i = 0; i < len; i++) {
+        ret = write_int(fd, bc->data[(*codep)++].u.value);
+        if (ret == -1) return -1;
+
+        wrote += ret;
+    }
+    end = lseek(fd, 0, SEEK_CUR);
+    if (end < 0) return -1;
+
+    /* go back and write end of list position */
+    lseek(fd, begin, SEEK_SET);
+    if (write_int(fd, end) == -1) return -1;
+
+    /* return to the end */
+    lseek(fd, end, SEEK_SET);
+    return wrote;
+}
+
 static int bc_params_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
 {
     int ret;
@@ -186,8 +228,12 @@ static int bc_params_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc
             ret = bc_string_emit(fd, codep, bc);
             break;
 
-        case BT_LISTLEN:
+        case BT_STRLISTLEN:
             ret = bc_stringlist_emit(fd, codep, bc);
+            break;
+
+        case BT_VALLISTLEN:
+            ret = bc_vallist_emit(fd, codep, bc);
             break;
 
         default:
@@ -210,7 +256,7 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc);
  * return # of bytes written on success and -1 on error */
 static int bc_testlist_emit(int fd, int *codep, bytecode_info_t *bc)
 {
-    assert(bc->data[*codep].type == BT_LISTLEN);
+    assert(bc->data[*codep].type == BT_STRLISTLEN);
 
     int len = bc->data[(*codep)++].u.listlen;
     int i;
@@ -306,6 +352,7 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
     case BC_DATE:
     case BC_CURRENTDATE:
     case BC_DUPLICATE:
+    case BC_JMAPQUERY:
         ret = bc_params_emit(fd, codep, stopcodep, bc);
         break;
 
@@ -465,19 +512,21 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_ADDFLAG:
         case B_REMOVEFLAG:
         case B_ENOTIFY:
-        case B_NOTIFY:
-        case B_DENOTIFY:
         case B_VACATION:
         case B_INCLUDE:
         case B_SET:
         case B_ADDHEADER:
         case B_DELETEHEADER:
+        case B_LOG:
         case B_NULL:
         case B_STOP:
         case B_DISCARD:
         case B_MARK:
         case B_UNMARK:
         case B_RETURN:
+        case B_SNOOZE:
+        case B_PROCESSCAL:
+        case B_IKEEP_TARGET:
             /* Spew the action parameters */
             ret = bc_params_emit(fd, &codep, stopcodep, bc);
             if (ret < 0) return -1;

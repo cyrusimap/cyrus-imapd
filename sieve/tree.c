@@ -51,7 +51,7 @@
 #include "tree.h"
 #include "script.h"
 #include "sieve/sieve_interface.h"
-#include "sieve/sieve.h"
+#include "sieve/bytecode.h"
 
 extern void sieveerror_c(sieve_script_t *parse_script, int code, ...);
 
@@ -62,12 +62,37 @@ static void init_comptags(comp_t *c)
 
 comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
 {
-    if (c->match == -1) c->match = IS;
-    if (c->collation == -1) c->collation = ASCIICASEMAP;
-    if (c->match == COUNT && c->collation != ASCIINUMERIC) {
-        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
-                     ":count", "i;ascii-numeric");
+    if (c->match == -1) c->match = B_IS;
+    if (c->collation == -1) c->collation = B_ASCIICASEMAP;
+
+    /* i;ascii-numeric is only supported for IS, COUNT, and VALUE match-types */
+    if (c->collation == B_ASCIINUMERIC) {
+        const char *invalid_match = NULL;
+
+        switch (c->match) {
+        case B_CONTAINS: invalid_match = ":contains"; break;
+        case B_MATCHES:  invalid_match = ":matches";  break;
+        case B_REGEX:    invalid_match = ":regex";    break;
+        }
+
+        if (invalid_match) {
+            sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
+                         invalid_match, "i;ascii-numeric");
+        }
     }
+    else if (c->match == B_COUNT) {
+        const char *invalid_collation;
+
+        switch (c->collation) {
+        case B_OCTET:          invalid_collation = "i;octet";           break;
+        case B_UNICODECASEMAP: invalid_collation = "i;unicode-casemap"; break;
+        default:               invalid_collation = "i;ascii-casemap";   break;
+        }
+
+        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
+                     ":count", invalid_collation);
+    }
+
     return c;
 }
 
@@ -80,42 +105,42 @@ test_t *new_test(int type, sieve_script_t *parse_script)
     p->type = type;
 
     switch (p->type) {
-    case HEADERT:
+    case BC_HEADER:
         init_comptags(&p->u.hhs.comp);
         break;
 
-    case HASFLAG:
+    case BC_HASFLAG:
         capability = "imap4flags";
         supported = parse_script->support & SIEVE_CAPA_IMAP4FLAGS;
 
         init_comptags(&p->u.hhs.comp);
         break;
 
-    case STRINGT:
+    case BC_STRING:
         capability = "variables";
         supported = parse_script->support & SIEVE_CAPA_VARIABLES;
 
         init_comptags(&p->u.hhs.comp);
         break;
 
-    case ENVELOPE:
+    case BC_ENVELOPE:
         capability = "envelope";
         supported = parse_script->support & SIEVE_CAPA_ENVELOPE;
         GCC_FALLTHROUGH
 
-    case ADDRESS:
+    case BC_ADDRESS:
         init_comptags(&p->u.ae.comp);
         p->u.ae.addrpart = -1;
         break;
 
-    case ENVIRONMENT:
+    case BC_ENVIRONMENT:
         capability = "environment";
         supported = parse_script->support & SIEVE_CAPA_ENVIRONMENT;
 
         init_comptags(&p->u.mm.comp);
         break;
 
-    case BODY:
+    case BC_BODY:
         capability = "body";
         supported = parse_script->support & SIEVE_CAPA_BODY;
 
@@ -123,72 +148,77 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         p->u.b.transform = p->u.b.offset = -1;
         break;
 
-    case DATE:
-    case CURRENTDATE:
+    case BC_DATE:
+    case BC_CURRENTDATE:
         capability = "date";
         supported = parse_script->support & SIEVE_CAPA_DATE;
 
         init_comptags(&p->u.dt.comp);
-        p->u.dt.zonetag = -1;
+        p->u.dt.zone.tag = -1;
         break;
 
-    case NOTIFYMETHODCAPABILITY:
+    case BC_NOTIFYMETHODCAPABILITY:
         init_comptags(&p->u.mm.comp);
         GCC_FALLTHROUGH
 
-    case VALIDNOTIFYMETHOD:
+    case BC_VALIDNOTIFYMETHOD:
         capability = "enotify";
         supported = parse_script->support & SIEVE_CAPA_ENOTIFY;
         break;
 
-    case IHAVE:
+    case BC_IHAVE:
         capability = "ihave";
         supported = parse_script->support & SIEVE_CAPA_IHAVE;
         break;
 
-    case MAILBOXEXISTS:
+    case BC_MAILBOXEXISTS:
         capability = "mailbox";
         supported = parse_script->support & SIEVE_CAPA_MAILBOX;
         break;
 
-    case METADATA:
+    case BC_METADATA:
         init_comptags(&p->u.mm.comp);
         GCC_FALLTHROUGH
 
-    case METADATAEXISTS:
+    case BC_METADATAEXISTS:
         capability = "mboxmetadata";
         supported = parse_script->support & SIEVE_CAPA_MBOXMETA;
         break;
 
-    case SERVERMETADATA:
+    case BC_SERVERMETADATA:
         init_comptags(&p->u.mm.comp);
         GCC_FALLTHROUGH
 
-    case SERVERMETADATAEXISTS:
+    case BC_SERVERMETADATAEXISTS:
         capability = "servermetadata";
         supported = parse_script->support & SIEVE_CAPA_SERVERMETA;
         break;
 
-    case VALIDEXTLIST:
+    case BC_VALIDEXTLIST:
         capability = "extlists";
         supported = parse_script->support & SIEVE_CAPA_EXTLISTS;
         break;
 
-    case DUPLICATE:
+    case BC_DUPLICATE:
         capability = "duplicate";
         supported = parse_script->support & SIEVE_CAPA_DUPLICATE;
         p->u.dup.idtype = p->u.dup.seconds = -1;
         break;
 
-    case SPECIALUSEEXISTS:
+    case BC_SPECIALUSEEXISTS:
         capability = "special-use";
         supported = parse_script->support & SIEVE_CAPA_SPECIAL_USE;
         init_comptags(&p->u.mm.comp);
         break;
 
-    case MAILBOXIDEXISTS:
+    case BC_MAILBOXIDEXISTS:
         capability = "mailboxid";
         supported = parse_script->support & SIEVE_CAPA_MAILBOXID;
+        break;
+
+    case BC_JMAPQUERY:
+        capability = "vnd.cyrus.jmapquery";
+        supported = parse_script->support & SIEVE_CAPA_JMAPQUERY;
         break;
     }
 
@@ -217,83 +247,87 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     p->next = NULL;
 
     switch (type) {
-    case FILEINTO:
+    case B_FILEINTO:
         capability = "fileinto";
         supported = parse_script->support & SIEVE_CAPA_FILEINTO;
         break;
 
-    case REJCT:
+    case B_REJECT:
         capability = "reject";
         supported = parse_script->support & SIEVE_CAPA_REJECT;
         break;
 
-    case EREJECT:
+    case B_EREJECT:
         capability = "ereject";
         supported = parse_script->support & SIEVE_CAPA_EREJECT;
         break;
 
-    case VACATION:
+    case B_VACATION:
         capability = "vacation";
         supported = parse_script->support & SIEVE_CAPA_VACATION;
 
         p->u.v.seconds = p->u.v.mime = -1;
         break;
 
-    case SETFLAG:
-    case ADDFLAG:
-    case REMOVEFLAG:
-        capability = "imap[4]flags";
-        supported =
-            parse_script->support & (SIEVE_CAPA_IMAP4FLAGS | SIEVE_CAPA_IMAPFLAGS);
+    case B_SETFLAG:
+    case B_ADDFLAG:
+    case B_REMOVEFLAG:
+        capability = "imap4flags";
+        supported = parse_script->support & SIEVE_CAPA_IMAP4FLAGS;
         break;
 
-    case MARK:
-    case UNMARK:
-        capability = "imapflags";
-        supported = parse_script->support & SIEVE_CAPA_IMAPFLAGS;
-        break;
-
-    case DENOTIFY:
-        capability = "notify";
-        supported = parse_script->support & SIEVE_CAPA_NOTIFY;
-        init_comptags(&p->u.d.comp);
-        p->u.d.comp.collation = ASCIICASEMAP;
-        p->u.d.priority = -1;
-        break;
-
-    case NOTIFY:
-    case ENOTIFY:
-        /* actual type and availability will be determined by parser */
+    case B_ENOTIFY:
+        capability = "enotify";
+        supported = parse_script->support & SIEVE_CAPA_ENOTIFY;
         p->u.n.priority = -1;
         break;
 
-    case ERROR:
+    case B_ERROR:
         capability = "ihave";
         supported = parse_script->support & SIEVE_CAPA_IHAVE;
         break;
 
-    case INCLUDE:
+    case B_INCLUDE:
         p->u.inc.once = p->u.inc.location = p->u.inc.optional = -1;
         GCC_FALLTHROUGH
 
-    case RETURN:
+    case B_RETURN:
         capability = "include";
         supported = parse_script->support & SIEVE_CAPA_INCLUDE;
         break;
 
-    case SET:
+    case B_SET:
         capability = "variables";
         supported = parse_script->support & SIEVE_CAPA_VARIABLES;
         break;
 
-    case DELETEHEADER:
+    case B_DELETEHEADER:
         init_comptags(&p->u.dh.comp);
         GCC_FALLTHROUGH
 
-    case ADDHEADER:
+    case B_ADDHEADER:
         capability = "editheader";
         supported = parse_script->support & SIEVE_CAPA_EDITHEADER;
         break;
+
+    case B_LOG:
+        capability = "vnd.cyrus.log";
+        supported = parse_script->support & SIEVE_CAPA_LOG;
+        break;
+
+    case B_SNOOZE:
+        capability = "vnd.cyrus.snooze";
+        supported = parse_script->support & SIEVE_CAPA_SNOOZE;
+        break;
+
+    case B_PROCESSCAL:
+        capability = "processcal";
+        supported = parse_script->support & SIEVE_CAPA_PROCESSCAL;
+        break;
+
+    case B_IKEEP_TARGET:
+        capability = "vnd.cyrus.implicit_keep_target";
+        supported = parse_script->support & SIEVE_CAPA_IKEEP_TARGET;
     }
 
     if (!supported) {
@@ -307,7 +341,7 @@ commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
 {
     commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
 
-    p->type = IF;
+    p->type = B_IF;
     p->u.i.t = t;
     p->u.i.do_then = y;
     p->u.i.do_else = n;
@@ -335,77 +369,91 @@ void free_test(test_t *t)
     if (t == NULL) return;
 
     switch (t->type) {
-    case ANYOF:
-    case ALLOF:
+    case BC_ANYOF:
+    case BC_ALLOF:
         free_testlist(t->u.tl);
         break;
 
-    case EXISTS:
-    case IHAVE:
-    case VALIDEXTLIST:
+    case BC_NOT:
+        free_test(t->u.t);
+        break;
+
+    case BC_EXISTS:
+    case BC_IHAVE:
+    case BC_VALIDEXTLIST:
+    case BC_VALIDNOTIFYMETHOD:
         strarray_free(t->u.sl);
         break;
 
-    case SIZE:
-    case SFALSE:
-    case STRUE:
+    case BC_SIZE:
+    case BC_FALSE:
+    case BC_TRUE:
         break;
 
-    case HASFLAG:
-    case HEADERT:
-    case STRINGT:
+    case BC_HASFLAG:
+    case BC_HEADER:
+    case BC_HEADER_PRE_INDEX:
+    case BC_STRING:
         strarray_free(t->u.hhs.sl);
         strarray_free(t->u.hhs.pl);
         break;
 
-    case ADDRESS:
-    case ENVELOPE:
+    case BC_ADDRESS:
+    case BC_ADDRESS_PRE_INDEX:
+    case BC_ENVELOPE:
         strarray_free(t->u.ae.sl);
         strarray_free(t->u.ae.pl);
         break;
 
-    case BODY:
+    case BC_BODY:
         strarray_free(t->u.b.content_types);
         strarray_free(t->u.b.pl);
         break;
 
-    case NOT:
-        free_test(t->u.t);
-        break;
-
-    case DATE:
-    case CURRENTDATE:
+    case BC_DATE:
+    case BC_CURRENTDATE:
+        free(t->u.dt.zone.offset);
         free(t->u.dt.header_name);
         strarray_free(t->u.dt.kl);
         break;
 
-    case ENVIRONMENT:
-    case MAILBOXEXISTS:
-    case MAILBOXIDEXISTS:
-    case METADATA:
-    case METADATAEXISTS:
-    case SERVERMETADATA:
-    case SERVERMETADATAEXISTS:
-    case SPECIALUSEEXISTS:
+    case BC_ENVIRONMENT:
+    case BC_MAILBOXEXISTS:
+    case BC_MAILBOXIDEXISTS:
+    case BC_METADATA:
+    case BC_METADATAEXISTS:
+    case BC_SERVERMETADATA:
+    case BC_SERVERMETADATAEXISTS:
+    case BC_SPECIALUSEEXISTS:
+    case BC_NOTIFYMETHODCAPABILITY:
         free(t->u.mm.extname);
         free(t->u.mm.keyname);
         strarray_free(t->u.mm.keylist);
         break;
 
-    case DUPLICATE:
+    case BC_DUPLICATE:
         free(t->u.dup.idval);
         free(t->u.dup.handle);
+        break;
+
+    case BC_JMAPQUERY:
+        free(t->u.jquery);
         break;
     }
 
     free(t);
 }
 
+static void free_target_mailbox(struct TargetMailbox *t)
+{
+    free(t->folder);
+    free(t->specialuse);
+    free(t->mailboxid);
+}
+
 static void free_fileinto(struct Fileinto *f)
 {
-    free(f->folder);
-    free(f->specialuse);
-    free(f->mailboxid);
+    free_target_mailbox(&f->t);
     strarray_free(f->flags);
 }
 
@@ -416,28 +464,28 @@ void free_tree(commandlist_t *cl)
     while (cl != NULL) {
         cl2 = cl->next;
         switch (cl->type) {
-        case IF:
+        case B_IF:
             free_test(cl->u.i.t);
             free_tree(cl->u.i.do_then);
             free_tree(cl->u.i.do_else);
             break;
 
-        case INCLUDE:
+        case B_INCLUDE:
             free(cl->u.inc.script);
             break;
 
-        case SETFLAG:
-        case ADDFLAG:
-        case REMOVEFLAG:
+        case B_SETFLAG:
+        case B_ADDFLAG:
+        case B_REMOVEFLAG:
             free(cl->u.fl.variable);
             strarray_free(cl->u.fl.flags);
             break;
 
-        case FILEINTO:
+        case B_FILEINTO:
             free_fileinto(&cl->u.f);
             break;
 
-        case REDIRECT:
+        case B_REDIRECT:
             free(cl->u.r.address);
             free(cl->u.r.bytime);
             free(cl->u.r.bymode);
@@ -445,13 +493,13 @@ void free_tree(commandlist_t *cl)
             free(cl->u.r.dsn_ret);
             break;
 
-        case REJCT:
-        case EREJECT:
-        case ERROR:
+        case B_REJECT:
+        case B_EREJECT:
+        case B_ERROR:
             free(cl->u.str);
             break;
 
-        case VACATION:
+        case B_VACATION:
             free(cl->u.v.subject);
             strarray_free(cl->u.v.addresses);
             free(cl->u.v.message);
@@ -460,17 +508,17 @@ void free_tree(commandlist_t *cl)
             free_fileinto(&cl->u.v.fcc);
             break;
 
-        case KEEP:
+        case B_KEEP:
             strarray_free(cl->u.k.flags);
             break;
 
-        case STOP:
-        case DISCARD:
-        case RETURN:
+        case B_STOP:
+        case B_DISCARD:
+        case B_RETURN:
             break;
 
-        case ENOTIFY:
-        case NOTIFY:
+        case B_ENOTIFY:
+        case B_NOTIFY:
             free(cl->u.n.method);
             free(cl->u.n.id);
             free(cl->u.n.from);
@@ -479,23 +527,47 @@ void free_tree(commandlist_t *cl)
             free_fileinto(&cl->u.n.fcc);
             break;
 
-        case DENOTIFY:
+        case B_DENOTIFY:
             free(cl->u.d.pattern);
             break;
 
-        case SET:
+        case B_SET:
             free(cl->u.s.variable);
             free(cl->u.s.value);
             break;
 
-        case ADDHEADER:
+        case B_ADDHEADER:
             free(cl->u.ah.name);
             free(cl->u.ah.value);
             break;
 
-        case DELETEHEADER:
+        case B_DELETEHEADER:
             free(cl->u.dh.name);
             strarray_free(cl->u.dh.values);
+            break;
+
+        case B_LOG:
+            free(cl->u.l.text);
+            break;
+
+        case B_SNOOZE:
+            free_fileinto(&cl->u.sn.f);
+            strarray_free(cl->u.sn.addflags);
+            strarray_free(cl->u.sn.removeflags);
+            arrayu64_free(cl->u.sn.times);
+            free(cl->u.sn.tzid);
+            break;
+
+        case B_PROCESSCAL:
+            strarray_free(cl->u.cal.addresses);
+            free(cl->u.cal.organizers);
+            free(cl->u.cal.calendarid);
+            free(cl->u.cal.outcome_var);
+            free(cl->u.cal.reason_var);
+            break;
+
+        case B_IKEEP_TARGET:
+            free_target_mailbox(&cl->u.ikt);
             break;
         }
 

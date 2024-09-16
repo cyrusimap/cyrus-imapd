@@ -50,6 +50,7 @@
 #endif
 
 #include "retry.h"
+#include "slowio.h"
 #include "xmalloc.h"
 
 /*
@@ -74,6 +75,8 @@ EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
         }
 
         nread += n;
+
+        slowio_maybe_delay_read(n);
     }
 
     return nread;
@@ -99,6 +102,8 @@ EXPORTED ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
         }
 
         written += n;
+
+        slowio_maybe_delay_write(n);
     }
 
     return written;
@@ -136,33 +141,9 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
         len += srciov[i].iov_len;
     }
 
-    n = written = writev(fd, srciov, iovcnt > iov_max ? iov_max : iovcnt);
-
-    /* did we get lucky and write it all? */
-    if (written == len)
-        return written;
-
-    /* oh well, welcome to the slow path - we have copies */
-    baseiov = iov = (struct iovec *)xmalloc(iovcnt * sizeof(struct iovec));
-    for (i = 0; i < iovcnt; i++) {
-        iov[i].iov_base = srciov[i].iov_base;
-        iov[i].iov_len = srciov[i].iov_len;
-    }
-
     for (;;) {
-        for (i = 0; i < iovcnt; i++) {
-            if (iov[i].iov_len > (size_t)n) {
-                iov[i].iov_base += n;
-                iov[i].iov_len -= n;
-                break;
-            }
-            n -= iov[i].iov_len;
-            iov++;
-            iovcnt--;
-            if (!iovcnt) fatal("ran out of iov", EX_SOFTWARE);
-        }
-
-        n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
+        /* Try to write the (remaining) iov */
+        n = writev(fd, srciov, iovcnt > iov_max ? iov_max : iovcnt);
         if (n == -1) {
             if (errno == EINVAL && iov_max > 10) {
                 iov_max /= 2;
@@ -175,7 +156,32 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 
         written += n;
 
+        slowio_maybe_delay_write(n);
+
         if (written == len) break;
+
+        /* Oh well, welcome to the slow path - we have copies */
+        if (!baseiov) {
+            iov = baseiov = xmalloc(iovcnt * sizeof(struct iovec));
+            for (i = 0; i < iovcnt; i++) {
+                iov[i].iov_base = srciov[i].iov_base;
+                iov[i].iov_len = srciov[i].iov_len;
+            }
+        }
+
+        /* Skip any iov that may have been written in full */
+        while ((size_t) n >= iov->iov_len) {
+            n -= iov->iov_len;
+            iov++;
+            iovcnt--;
+            if (!iovcnt) fatal("ran out of iov", EX_SOFTWARE);
+        }
+
+        /* Skip whatever portion of the current iov that has been written */
+        iov->iov_base += n;
+        iov->iov_len -= n;
+
+        srciov = iov;
     }
 
     free(baseiov);

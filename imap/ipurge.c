@@ -48,6 +48,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -65,12 +66,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-/* globals for getopt routines */
-extern char *optarg;
-extern int  optind;
-extern int  opterr;
-extern int  optopt;
-
 /* globals for callback functions */
 static int days = -1;
 static int size = -1;
@@ -82,12 +77,10 @@ static int invertmatch = 0;
 
 /* for statistical purposes */
 typedef struct mbox_stats_s {
-
     uint64_t total;         /* total including those deleted */
     uint64_t total_bytes;
     uint64_t deleted;
     uint64_t deleted_bytes;
-
 } mbox_stats_t;
 
 static int dryrun = 0;
@@ -108,117 +101,142 @@ static void print_record(struct mailbox *mailbox,
 static void print_stats(mbox_stats_t *stats);
 
 int main (int argc, char *argv[]) {
-  int option;           /* getopt() returns an int */
-  char *alt_config = NULL;
-  int matchmailbox = 0;
+    char *alt_config = NULL;
+    int matchmailbox = 0;
+    int r, opt;
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsMXionv")) != EOF) {
-    switch (option) {
-    case 'C': /* alt config file */
-      alt_config = optarg;
-      break;
-    case 'd': {
-      if (optarg == 0) {
-        usage(argv[0]);
-      }
-      days = atoi(optarg) * 86400 /* nominal # of seconds in a 'day' */;
-    } break;
-    case 'b': {
-      if (optarg == 0) {
-        usage(argv[0]);
-      }
-      size = atoi(optarg);
-    } break;
-    case 'k': {
-      if (optarg == 0) {
-        usage(argv[0]);
-      }
-      size = atoi(optarg) * 1024; /* make it bytes */
-    } break;
-    case 'm': {
-      if (optarg == 0) {
-        usage(argv[0]);
-      }
-      size = atoi(optarg) * 1048576; /* 1024 * 1024 */
-    } break;
-    case 'n' : {
-      dryrun = 1;
-    } break;
-    case 'v' : {
-      verbose++;
-    } break;
-    case 'x' : {
-      exact = 1;
-    } break;
-    case 'f' : {
-      forceall = 1;
-    } break;
-    case 's' : {
-      skipflagged = 1;
-    } break;
-    case 'M' : {
-      matchmailbox = 1;
-    } break;
-    case 'X' : {
-      use_sentdate = 0;
-    } break;
-    case 'i' : {
-      invertmatch = 1;
-    } break;
-    case 'o' : {
-      onlydeleted = 1;
-    } break;
-    case 'h':
-    default: usage(argv[0]);
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:MXb:d:fhik:m:nosvx";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "no-recursive", no_argument, NULL, 'M' },
+        { "delivery-time", no_argument, NULL, 'X' },
+        { "bytes", required_argument, NULL, 'b' },
+        { "days", required_argument, NULL, 'd' },
+        { "include-user-mailboxes", no_argument, NULL, 'f' },
+        { "invert-match", no_argument, NULL, 'i' },
+        { "kbytes", required_argument, NULL, 'k' },
+        { "mbytes", required_argument, NULL, 'm' },
+        { "dry-run", no_argument, NULL, 'n' },
+        { "only-deleted", no_argument, NULL, 'o' },
+        { "skip-flagged", no_argument, NULL, 's' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "exact-match", no_argument, NULL, 'x' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+        case 'd':
+            if (optarg == 0) {
+                usage(argv[0]);
+            }
+            days = atoi(optarg) * 86400 /* nominal # of seconds in a 'day' */;
+            break;
+        case 'b':
+            if (optarg == 0) {
+                usage(argv[0]);
+            }
+            size = atoi(optarg);
+            break;
+        case 'k':
+            if (optarg == 0) {
+                usage(argv[0]);
+            }
+            size = atoi(optarg) * 1024; /* make it bytes */
+            break;
+        case 'm':
+            if (optarg == 0) {
+                usage(argv[0]);
+            }
+            size = atoi(optarg) * 1048576; /* 1024 * 1024 */
+            break;
+        case 'n':
+            dryrun = 1;
+            break;
+        case 'v':
+            verbose++;
+            break;
+        case 'x':
+            exact = 1;
+            break;
+        case 'f':
+            forceall = 1;
+            break;
+        case 's':
+            skipflagged = 1;
+            break;
+        case 'M':
+            matchmailbox = 1;
+            break;
+        case 'X':
+            use_sentdate = 0;
+            break;
+        case 'i':
+            invertmatch = 1;
+            break;
+        case 'o':
+            onlydeleted = 1;
+            break;
+        case 'h':
+        default:
+            usage(argv[0]);
+        }
     }
-  }
-  if ((days == -1 ) && (size == -1)) {
-    printf("One of these must be specified -d, -b -k, -m\n");
-    usage(argv[0]);
-  }
+    if ((days == -1 ) && (size == -1)) {
+        printf("One of these must be specified -d, -b -k, -m\n");
+        usage(argv[0]);
+    }
 
-  cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
 
-  if (optind == argc) { /* do the whole partition */
-    mboxlist_findall(NULL, "*", 1, 0, 0, purge_findall, NULL);
-  } else if (matchmailbox) {
-    int r;
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&purge_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
-    expand_mboxnames(argc-optind, (const char **)argv+optind);
-  } else {
-    /* do all matching mailboxes in one pass */
-    strarray_t *array = strarray_new();
-    for (; optind < argc; optind++) {
-      strarray_append(array, argv[optind]);
+    mboxevent_setnamespace(&purge_namespace);
+
+    if (optind == argc) { /* do the whole partition */
+        mboxlist_findall(NULL, "*", 1, 0, 0, purge_findall, NULL);
+    } else if (matchmailbox) {
+        expand_mboxnames(argc-optind, (const char **)argv+optind);
+    } else {
+        /* do all matching mailboxes in one pass */
+        strarray_t *array = strarray_new();
+        for (; optind < argc; optind++) {
+            strarray_append(array, argv[optind]);
+        }
+        if (array->count)
+            mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_findall, NULL);
+        strarray_free(array);
     }
-    if (array->count)
-      mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_findall, NULL);
-    strarray_free(array);
-  }
 
-  cyrus_done();
+    cyrus_done();
 
-  return 0;
+    return 0;
 }
 
 static int usage(const char *name)
 {
-  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] [-o] [-n] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
-  printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
-  printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
-  printf("\t -x specifies an exact match for days or size\n");
-  printf("\t -f force also to delete mail below user.* and INBOX.*\n");
-  printf("\t -s skip over messages that are flagged.\n");
-  printf("\t -X use delivery time instead of date header for date matches.\n");
-  printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
-  printf("\t -M don't recurse mailboxes.\n");
-  printf("\t -o only purge messages that are deleted.\n");
-  printf("\t -n only print messages that would be deleted (dry run).\n");
-  printf("\t -v enable verbose output/logging.\n");
-  exit(0);
+    printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] [-o] [-n] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+    printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
+    printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
+    printf("\t -x specifies an exact match for days or size\n");
+    printf("\t -f force also to delete mail below user.* and INBOX.*\n");
+    printf("\t -s skip over messages that are flagged.\n");
+    printf("\t -X use delivery time instead of date header for date matches.\n");
+    printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
+    printf("\t -M don't recurse mailboxes.\n");
+    printf("\t -o only purge messages that are deleted.\n");
+    printf("\t -n only print messages that would be deleted (dry run).\n");
+    printf("\t -v enable verbose output/logging.\n");
+    exit(0);
 }
 
 /* we don't check what comes in on matchlen and category, should we? */
@@ -247,7 +265,7 @@ static int purge_one(const mbname_t *mbname)
         return r;
     }
 
-    mailbox_expunge(mailbox, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, NULL, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
 
     mailbox_close(&mailbox);
 
@@ -258,7 +276,8 @@ static int purge_one(const mbname_t *mbname)
 
 static int purge_findall(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     return purge_one(data->mbname);
 }
 
@@ -292,76 +311,76 @@ static void deleteit(bit32 msgsize, mbox_stats_t *stats)
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 static unsigned purge_check(struct mailbox *mailbox,
-                     const struct index_record *record,
-                     void *deciderock)
+                            const struct index_record *record,
+                            void *deciderock)
 {
-  time_t my_time;
-  time_t senttime;
-  mbox_stats_t *stats = (mbox_stats_t *) deciderock;
+    time_t my_time;
+    time_t senttime;
+    mbox_stats_t *stats = (mbox_stats_t *) deciderock;
 
-  my_time = time(0);
-  senttime = use_sentdate ? record->sentdate : record->internaldate;
+    my_time = time(0);
+    senttime = use_sentdate ? record->sentdate : record->internaldate;
 
-  stats->total++;
-  stats->total_bytes += record->size;
+    stats->total++;
+    stats->total_bytes += record->size;
 
-  if (skipflagged && record->system_flags & FLAG_FLAGGED)
-    return 0;
+    if (skipflagged && record->system_flags & FLAG_FLAGGED)
+        return 0;
 
-  if (onlydeleted && !(record->system_flags & FLAG_DELETED))
-    return 0;
+    if (onlydeleted && !(record->system_flags & FLAG_DELETED))
+        return 0;
 
-  if (exact == 1) {
-    if (days >= 0) {
-      /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
-          if (invertmatch) return 0;
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      } else {
-          if (!invertmatch) return 0;
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      }
+    if (exact == 1) {
+        if (days >= 0) {
+            /* printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
+            if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
+                if (invertmatch) return 0;
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            } else {
+                if (!invertmatch) return 0;
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            }
+        }
+        if (size >= 0) {
+            /* check size */
+            if (record->size == (unsigned)size) {
+                if (invertmatch) return 0;
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            } else {
+                if (!invertmatch) return 0;
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            }
+        }
+        return 0;
+    } else {
+        if (days >= 0) {
+            /* printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
+            if (!invertmatch && ((my_time - (time_t) senttime) > days)) {
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            }
+            if (invertmatch && ((my_time - (time_t) senttime) < days)) {
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            }
+        }
+        if (size >= 0) {
+            /* check size */
+            if (!invertmatch && ((int) record->size > size)) {
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            }
+                if (invertmatch && ((int) record->size < size)) {
+                deleteit(record->size, stats);
+                return dryrun ? (void)print_record(mailbox, record), 0 : 1;
+            }
+        }
+        return 0;
     }
-    if (size >= 0) {
-      /* check size */
-        if (record->size == (unsigned)size) {
-          if (invertmatch) return 0;
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      } else {
-          if (!invertmatch) return 0;
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      }
-    }
-    return 0;
-  } else {
-    if (days >= 0) {
-      /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
-      if (!invertmatch && ((my_time - (time_t) senttime) > days)) {
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      }
-      if (invertmatch && ((my_time - (time_t) senttime) < days)) {
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      }
-    }
-    if (size >= 0) {
-      /* check size */
-        if (!invertmatch && ((int) record->size > size)) {
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      }
-        if (invertmatch && ((int) record->size < size)) {
-          deleteit(record->size, stats);
-          return dryrun ? print_record(mailbox, record), 0 : 1;
-      }
-    }
-    return 0;
-  }
 }
 
 static void print_record(struct mailbox *mailbox,
@@ -396,7 +415,8 @@ static void print_stats(mbox_stats_t *stats)
     printf("Total bytes       \t\t %llu\n", (long long unsigned)stats->total_bytes);
     printf("Deleted messages  \t\t %llu\n", (long long unsigned)stats->deleted);
     printf("Deleted bytes     \t\t %llu\n", (long long unsigned)stats->deleted_bytes);
-    printf("Remaining messages\t\t %llu\n", (long long unsigned)stats->total - stats->deleted);
+    printf("Remaining messages\t\t %llu\n",
+           (long long unsigned)stats->total - stats->deleted);
     printf("Remaining bytes   \t\t %llu\n",
-            (long long unsigned)stats->total_bytes - stats->deleted_bytes);
+           (long long unsigned)stats->total_bytes - stats->deleted_bytes);
 }

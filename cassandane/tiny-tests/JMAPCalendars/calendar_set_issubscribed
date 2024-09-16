@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_issubscribed
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create calendar
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                '1' => {
+                    name => 'A',
+                    color => 'blue',
+                }
+            },
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => ['#1'],
+            properties => ['isSubscribed']
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{created}{1});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isSubscribed});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    # Can't unsubscribe own calendars
+    $res = $jmap->CallMethods([
+        ['Calendar/set',
+            { update => {
+                $id => {
+                    isSubscribed => JSON::false,
+                }
+            }
+        }, "R1"],
+        ['Calendar/get', {
+            ids => [$id],
+            properties => ['isSubscribed']
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isSubscribed});
+}

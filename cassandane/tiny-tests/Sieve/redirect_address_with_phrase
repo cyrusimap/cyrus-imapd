@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_redirect_address_with_phrase
+    :needs_component_sieve
+    :want_smtpdaemon
+{
+    my ($self) = @_;
+
+    xlog $self, "Install a script";
+    $self->{instance}->install_sieve_script(<<EOF
+redirect "Foo <foo\@example.com>";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    # Verify that message was redirected (no RCPT TO error)
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/RCPT TO: code=553 text=5.1.1/);
+
+    xlog $self, "Make sure that message is NOT in INBOX (due to runtime error)";
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+}

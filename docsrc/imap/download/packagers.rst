@@ -1,9 +1,8 @@
-===================
 Notes for Packagers
 ===================
 
 Binary naming
-=============
+-------------
 
 Prevent namespace clashes. We suggest renaming all binaries with ``cyr_`` at
 the front, including renaming the ``ctl_*`` to ``cyr_``.
@@ -12,7 +11,7 @@ The Cyrus team are looking to fix this in the core bundle in upcoming releases
 so packagers have less to do.
 
 Sample configuration files
-==========================
+--------------------------
 
 There are several samples of :cyrusman:`cyrus.conf(5)` and
 :cyrusman:`imapd.conf(5)` located in the ``doc/examples`` directory of
@@ -21,10 +20,10 @@ documentation directory (i.e. ``/usr/share/doc/cyrus-imapd``) as a
 reference for your users.
 
 Predefined configurations
-=========================
+-------------------------
 
 The configuration file for master: cyrus.conf
----------------------------------------------
+`````````````````````````````````````````````
 
 When installing a predefined :cyrusman:`cyrus.conf(5)` for your users,
 please pay attention to new features and how these may impact users.
@@ -73,7 +72,7 @@ sections are:
       it should shut down and clean up after.
 
 The configuration file for the various programs: imapd.conf
------------------------------------------------------------
+```````````````````````````````````````````````````````````
 
 The sample :cyrusman:`imapd.conf(5)` files must be adapted for use from
 site to site.  Here, therefore, we'll attempt to point you towards some
@@ -109,64 +108,30 @@ files.  In this example, the filesystem ``/run`` is on tmpfs::
 New default settings
 ####################
 
-With the introduction of version 3.0, the defaults for some settings
-have changed.  Please consult :ref:`upgrade` for details.
+A new stable series means the defaults for some settings may have changed.
+Please consult :ref:`upgrade` for details.
 
-New features
-############
+New or improved features
+########################
 
-There are several features either new to version 3.0, or newly improved.
-Some of these may be features which previously were not considered ripe
-for packaging, but merit new consideration.
+A new stable series means new features, and improvements to existing features.
+Some of these may be features which previously were not considered ripe for
+packaging, but merit new consideration.
 
-Please see the release notes :ref:`relnotes-3.0.0-changes` for more
-details and other recent changes.
-
-*   Conversations
-
-    *   Server-side threading with reduced protocol chatter for mobile
-        or other high-latency clients.
-    *   Required for JMAP support.
-    *   See the ``conversations`` options in :cyrusman:`imapd.conf(5)`
-
-*   JMAP
-
-    *   JSON Mail Access Protocol
-    *   Follow-on successor to IMAP ("J comes after I") with a special
-        focus on mobile and other clients with high-latency or
-        unreliable connectivity.
-    *   Includes Calendaring, Contacts, Conversations, message delivery.
-    *   See ``httpmodules`` in :cyrusman:`imapd.conf(5)`
-
-*   Xapian
-
-    *   Higher quality full-text search support.
-    *   Required for JMAP support.
-    *   See the ``search_engine`` option in :cyrusman:`imapd.conf(5)`
-        and ``doc/README.xapian`` in the source distribution.
-
-*   Archive partitions
-
-    *   Automatically migrate messages from posh, fast storage (think
-        SSD) to cheap, slow storage (spinning rust).
-    *   Requires addition of an archive partition for each data
-        partition.
-    *   See ``archive_*`` options in :cyrusman:`imapd.conf(5)`
-
-*   Backup
-
-    *   Replication-based backup to dedicated instance with efficient,
-        compact scheme.
-    *   See :ref:`Cyrus Backups <cyrus-backups>`
-
-Please consider enabling these features in the :cyrusman:`imapd.conf(5)`
-you ship  in your packages.
+Please see :ref:`imap-release-notes-3.2` for details, and consider enabling
+these features in the :cyrusman:`imapd.conf(5)` you ship in your packages.
 
 Services in ``/etc/services``
-=============================
+-----------------------------
 
-Listing named services through ``/etc/services`` aids in cross-system consistency and cross-platform interoperability. Furthermore, it enables administrators and users to refer to the service by name (for example in ``/etc/cyrus.conf``, 'listen=mupdate' can be specified instead of 'listen=3905').
+Listing named services through ``/etc/services`` aids in cross-system
+consistency and cross-platform interoperability. Furthermore, it enables
+administrators and users to refer to the service by name (for example in
+``/etc/cyrus.conf``, 'listen=mupdate' can be specified instead of
+'listen=3905').
 
-Some of the services Cyrus IMAP would like to see available through ``/etc/services`` have not been assigned an IANA port number, and few have configuration options.
+Some of the services Cyrus IMAP would like to see available through
+``/etc/services`` have not been assigned an IANA port number, and few have
+configuration options.
 
 ..  include:: /assets/services.rst

@@ -110,6 +110,7 @@ enum {
     METH_PROPPATCH,
     METH_PUT,
     METH_REPORT,
+    METH_SEARCH,
     METH_TRACE,
     METH_UNBIND,
     METH_UNLOCK,
@@ -128,6 +129,7 @@ extern int http_read_body(struct protstream *pin, hdrcache_t hdrs,
 extern int http_read_response(struct backend *be, unsigned meth, unsigned *code,
                               hdrcache_t *hdrs, struct body_t *body,
                               const char **errstr);
+extern long http_status_to_code(unsigned status);
 extern int http_parse_auth_params(const char *params,
                                   const char **realm, unsigned int *realm_len,
                                   const char **sid, unsigned int *sid_len,

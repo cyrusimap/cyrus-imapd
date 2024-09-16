@@ -17,8 +17,17 @@ from docutils.parsers.rst.roles import set_classes
 from string import Template
 import re
 
+try:
+    from sphinx.util import logging
+    logger = logging.getLogger(__name__)
+except:
+    logger = None
+
 def setup(app):
-    app.info('Initializing cyrusman plugin')
+    global logger
+    if logger is None:
+        logger = app
+    logger.info('Initializing cyrusman plugin')
     app.add_crossref_type('cyrusman', 'cyrusman', '%s', nodes.generated)
     return
 

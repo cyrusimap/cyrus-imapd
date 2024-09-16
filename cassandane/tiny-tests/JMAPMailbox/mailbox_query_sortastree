@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_query_sortastree
+    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.A1") || die;
+    $imaptalk->create("INBOX.A.A2") || die;
+    $imaptalk->create("INBOX.A.A2.A2A") || die;
+    $imaptalk->create("INBOX.B") || die;
+    $imaptalk->create("INBOX.C") || die;
+    $imaptalk->create("INBOX.C.C1") || die;
+    $imaptalk->create("INBOX.C.C1.C1A") || die;
+    $imaptalk->create("INBOX.C.C2") || die;
+    $imaptalk->create("INBOX.D") || die;
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"] }, 'R1' ]]);
+    $self->assert_num_equals(11, scalar @{$res->[0][1]{list}});
+    my %mboxIds = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sortAsTree => JSON::true,
+            sort => [{ property => 'name' }]
+        }, "R1"]
+    ]);
+
+    my $wantMboxIds = [
+        $mboxIds{'A'}, $mboxIds{'A1'}, $mboxIds{'A2'}, $mboxIds{'A2A'},
+        $mboxIds{'B'},
+        $mboxIds{'C'}, $mboxIds{'C1'}, $mboxIds{'C1A'}, $mboxIds{'C2'},
+        $mboxIds{'D'},
+        $mboxIds{'Inbox'},
+    ];
+    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sortAsTree => JSON::true,
+            sort => [{ property => 'name', isAscending => JSON::false }]
+        }, "R1"]
+    ]);
+    $wantMboxIds = [
+        $mboxIds{'Inbox'},
+        $mboxIds{'D'},
+        $mboxIds{'C'}, $mboxIds{'C2'}, $mboxIds{'C1'}, $mboxIds{'C1A'},
+        $mboxIds{'B'},
+        $mboxIds{'A'}, $mboxIds{'A2'}, $mboxIds{'A2A'}, $mboxIds{'A1'},
+    ];
+    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+}

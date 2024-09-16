@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_delete_unsubscribe
+    :UnixHierarchySep :AltNamespace :NoStartInstances :min_version_3_0
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('delete_unsubscribe' => 'yes');
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
+        [ 'subscribe' => [qw( deltest deltest/sub2 )] ],
+        [ 'delete' => 'deltest/sub2' ],
+    ]);
+
+    my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+
+    $self->assert_mailbox_structure($subdata, '/', {
+        'INBOX'        => '\\Subscribed',
+        'deltest'      => '\\Subscribed',
+    });
+}

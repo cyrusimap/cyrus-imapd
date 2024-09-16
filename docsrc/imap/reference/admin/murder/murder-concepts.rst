@@ -43,8 +43,8 @@ acceptable compromise; however, trying to share mailboxes becomes
 difficult or even impossible. Specific examples can be found in `Appendix 
 A: DNS Name Load Balancing`_ and `Appendix B: IMAP Multiplexing`_). 
 
-We propose a new approach to overcome these problems. We call it the the 
-Cyrus IMAP Aggregator. The Cyrus aggregator takes a :ref:`murder <def_murder>` of IMAP 
+We propose a new approach to overcome these problems. We call it the Cyrus
+IMAP Aggregator. The Cyrus aggregator takes a :ref:`murder <def_murder>` of IMAP
 servers and presents a server independent view to the clients. That is, 
 **all the mailboxes across all the IMAP servers are aggregated to a single 
 image**, thereby appearing to be only one IMAP server to the clients. 
@@ -58,7 +58,7 @@ The Cyrus IMAP Aggregator has three classes of servers:
     3. MUPDATE. 
     
 The frontend servers act as the primary communication point between the 
-end user clients and the backendservers. The frontends use the MUPDATE 
+end user clients and the backend servers. The frontends use the MUPDATE
 server as an authoritative source for mailbox names, locations, and 
 permissions. The backend servers store the actual IMAP data (and keep 
 the MUPDATE server appraised as to changes in the Mailbox list). 
@@ -270,7 +270,7 @@ COPY is somewhat special as it acts upon messages in the currently
 SELECT'd mailbox but then interacts with another mailbox.
 
 In the case where the destination mailbox is on the same backend server 
-as the the source folder, the COPY command is issued to the backend 
+as the source folder, the COPY command is issued to the backend
 server and the backend server takes care of the command.
 
 If the destination folder is on a different backend server, the 
@@ -579,7 +579,7 @@ IMAP connection
 client
     A client is a process on a remote computer that communicates with
     the set of servers distributing mail data, be they ACAP, IMAP,
-    LDAP, or IMSP servers. A client opens one or more connections to
+    or LDAP servers. A client opens one or more connections to
     various servers.
     
 mailbox tree

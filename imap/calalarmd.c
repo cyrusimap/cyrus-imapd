@@ -66,6 +66,8 @@ extern char *optarg;
 
 static int debugmode = 0;
 
+struct namespace calalarmd_namespace;
+
 EXPORTED void fatal(const char *msg, int err)
 {
     if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
@@ -73,6 +75,8 @@ EXPORTED void fatal(const char *msg, int err)
     syslog(LOG_NOTICE, "exiting");
 
     cyrus_done();
+
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
 
     exit(err);
 }
@@ -115,13 +119,16 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
 
+    mboxname_init_namespace(&calalarmd_namespace, NAMESPACE_OPTION_ADMIN);
+    mboxevent_setnamespace(&calalarmd_namespace);
+
     if (upgrade) {
         caldav_alarm_upgrade();
         shut_down(0);
     }
 
     if (runattime) {
-        caldav_alarm_process(runattime);
+        caldav_alarm_process(runattime, NULL, /*dryrun*/0);
         shut_down(0);
     }
 
@@ -148,19 +155,23 @@ int main(int argc, char **argv)
         struct timeval start, end;
         double totaltime;
         int tosleep;
+        time_t interval = 10;
 
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process(0);
+        caldav_alarm_process(0, &interval, /*dryrun*/0);
+        libcyrus_run_delayed();
         gettimeofday(&end, 0);
 
         signals_poll();
 
         totaltime = timesub(&start, &end);
-        tosleep = 10 - (int) (totaltime + 0.5); /* round to nearest int */
+        tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
         if (tosleep > 0)
             sleep(tosleep);
+
+        session_new_id();  // so we know which actions happened in the same run
     }
 
     /* NOTREACHED */

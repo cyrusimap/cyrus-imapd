@@ -1,0 +1,116 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_inmailboxotherthan
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create mailboxes";
+    $talk->create("INBOX.A") || die;
+    $talk->create("INBOX.B") || die;
+    $talk->create("INBOX.C") || die;
+
+    $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $m{"A"}->{id};
+    my $mboxIdB = $m{"B"}->{id};
+    my $mboxIdC = $m{"C"}->{id};
+    $self->assert_not_null($mboxIdA);
+    $self->assert_not_null($mboxIdB);
+    $self->assert_not_null($mboxIdC);
+
+    xlog $self, "create emails";
+    $store->set_folder("INBOX.A");
+    $res = $self->make_message("email1") || die;
+    $talk->copy(1, "INBOX.B") || die;
+    $talk->copy(1, "INBOX.C") || die;
+
+    $store->set_folder("INBOX.B");
+    $self->make_message("email2") || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog $self, "fetch emails without filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            }
+        }, 'R2'],
+    ], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]->{list}});
+
+    %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $emailId1 = $m{"email1"}->{id};
+    my $emailId2 = $m{"email2"}->{id};
+    $self->assert_not_null($emailId1);
+    $self->assert_not_null($emailId2);
+
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            inMailboxOtherThan => [$mboxIdB],
+        },
+        sort => [{ property => 'subject' }],
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            inMailboxOtherThan => [$mboxIdA],
+        },
+        sort => [{ property => 'subject' }],
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
+
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            inMailboxOtherThan => [$mboxIdA, $mboxIdC],
+        },
+        sort => [{ property => 'subject' }],
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
+
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                inMailboxOtherThan => [$mboxIdB],
+            }],
+        },
+        sort => [{ property => 'subject' }],
+        disableGuidSearch => JSON::true,
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
+}

@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_participantidentity_get
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+        }, 'R1'],
+    ]);
+
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{list}[0]{sendTo});
+    my $partId1 = $res->[0][1]{list}[0]{id};
+
+    $caldav->Request(
+      'PROPPATCH',
+      '',
+      x('D:propertyupdate', $caldav->NS(),
+        x('D:set',
+          x('D:prop',
+            x('C:calendar-user-address-set',
+              x('D:href', 'mailto:cassandane@example.com'),
+              x('D:href', 'mailto:foo@local'),
+            )
+          )
+        )
+      )
+    );
+
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/get', {
+            ids => [$partId1, 'nope'],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals({
+        imip => 'mailto:cassandane@example.com',
+    }, $res->[0][1]{list}[0]{sendTo});
+    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+}

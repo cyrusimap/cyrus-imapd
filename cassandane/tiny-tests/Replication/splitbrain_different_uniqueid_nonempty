@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test non-empty mailbox causes replication to abort
+#
+sub test_splitbrain_different_uniqueid_nonempty
+    :min_version_3_5 :needs_component_replication :NoReplicaonly
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mtalk = $master_store->get_client();
+    my $rtalk = $replica_store->get_client();
+
+    $mtalk->create('INBOX.subfolder');
+    my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $mid = $mres->{mailboxid}[0];
+    $rtalk->create('INBOX.subfolder');
+    my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    my $rid = $rres->{mailboxid}[0];
+
+    $self->assert_not_null($mid);
+    $self->assert_not_null($rid);
+    $self->assert_str_not_equals($mid, $rid);
+
+    $master_store->set_folder("INBOX.subfolder");
+    $replica_store->set_folder("INBOX.subfolder");
+
+    $self->make_message("Message A", store => $master_store);
+    $self->make_message("Message B", store => $replica_store);
+
+    # this will fail
+    eval {
+        $self->run_replication();
+    };
+
+    # sync_client should have logged the failure
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @mlines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
+        $self->assert_matches(qr/MAILBOX received NO response: IMAP_MAILBOX_MOVED/, "@mlines");
+
+    }
+
+    # sync server should have logged the failure
+    $self->assert_syslog_matches(
+        $self->{replica},
+        qr/SYNCERROR: mailbox uniqueid changed - retry/
+    );
+
+    $rtalk = $replica_store->get_client();
+    $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
+    $rid = $rres->{mailboxid}[0];
+
+    $self->assert_str_not_equals($mid, $rid);
+}

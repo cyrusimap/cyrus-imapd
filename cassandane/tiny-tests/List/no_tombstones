@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_no_tombstones
+    :UnixHierarchySep :AltNamespace :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( INBOX/Tombstone )] ],
+        [ 'subscribe' => [qw( INBOX/Tombstone )] ],
+        [ 'delete' => 'INBOX/Tombstone' ],
+    ]);
+
+    my $tombstone_name = 'user.cassandane.INBOX.Tombstone';
+
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    $self->assert_matches(qr{d}, $mailboxesdb->{$tombstone_name}->{mbtype});
+
+    # basic list
+    my $data = $imaptalk->list("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # basic xlist
+    $data = $imaptalk->xlist("", "*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # partial match list
+    $data = $imaptalk->list("", "INB*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # partial match xlist
+    $data = $imaptalk->xlist("", "INB*");
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX' => [qw( \\HasNoChildren )],
+    });
+
+    # direct list
+    $data = $imaptalk->list("", "INBOX/Tombstone");
+    $self->assert_mailbox_structure($data, '/', {});
+
+    # direct xlist
+    $data = $imaptalk->xlist("", "INBOX/Tombstone");
+    $self->assert_str_equals('ok', $data); # no mailboxes listed
+}

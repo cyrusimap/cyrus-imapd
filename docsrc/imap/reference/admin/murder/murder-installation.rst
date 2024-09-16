@@ -201,7 +201,6 @@ The front end SERVICES section should now look like this::
   imaps         cmd="imap -s" listen="imaps" prefork=1
   pop3          cmd="pop3d" listen="pop3" prefork=0
   pop3s         cmd="pop3d -s" listen="pop3s" prefork=0
-  kpop          cmd="pop3d -k" listen="kpop" prefork=0
   nntp          cmd="nntpd" listen="nntp" prefork=0
   nntps         cmd="nntpd -s" listen="nntps" prefork=0
   http          cmd="httpd" listen="http" prefork=0
@@ -439,3 +438,10 @@ Troubleshooting
 **Databases are never created on the frontends/slaves**
     Check to ensure that the mupdate slave process is started, (is
     prefork=1)
+
+**mupdate crashes with SIGSERV when using STARTTLS**
+    The OpenSSL code in Cyrus Imap is for single-threaded applications and
+    mupdate is a multi-threaded application.  Do not encrypt the communication
+    with mupdate.  See also the discussion “SIGSEGV in cyrus-imapd 3.0.7 mupdate”
+    on `cyrus-devel from July 2018 <https://lists.andrew.cmu.edu/pipermail/cyrus-devel/2018-July/>`_
+    and https://github.com/cyrusimap/cyrus-imapd/issues/2774 .

@@ -57,7 +57,7 @@ use strict;
 
 use IO::File;
 use Cyrus::IMAP::Admin;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case);
 use Exporter;
 use POSIX ();
 use Carp qw(confess);
@@ -483,7 +483,7 @@ sub shell {
                           -mechanism => $mech, -password => $pw,
                           -tlskey => $tlskey, -notls => $notls,
                           -cafile => $cacert, -capath => $capath)
-      or die "cyradm: cannot authenticate to server with $mech as $auth\n";
+      or die "cyradm: cannot authenticate to server" . (defined($mech)?" with $mech":"") . " as $auth\n";
   }
   my $fstk = [*STDIN, *STDOUT, *STDERR];
   if ($dorc && $systemrc ne '' && -f $systemrc) {
@@ -665,6 +665,7 @@ sub _sc_list {
     $lfh->[2]->print($$cyrref->error, "\n");
     return 1;
   }
+  $w = 0;
   foreach my $mbx (@res) {
     $l = $mbx->[0];
     if ($mbx->[1] ne '') {
@@ -716,23 +717,6 @@ sub _sc_listacl {
   }
   if (!$cyrref || !$$cyrref) {
     die "listaclmailbox: no connection to server\n";
-  }
-
-  sub showacl($@) {
-    my $spaces = shift;
-    my @nargv = shift;
-    my %acl = $$cyrref->listaclmailbox(@nargv);
-    if (defined $$cyrref->error) {
-      $lfh->[2]->print($$cyrref->error, "\n");
-      return 1;
-    }
-    foreach my $acl (keys %acl) {
-      for(my $i = 0; $i < $spaces; $i++) {
-        $lfh->[1]->print(" ");
-      }
-      $lfh->[1]->print($acl, " ", $acl{$acl}, "\n");
-    }
-    return 0;
   }
 
   if($nargv[0] =~ /(\*|%)/) {
@@ -1076,12 +1060,8 @@ sub _sc_delete {
     }
   }
   push(@nargv, @argv);
-  if (!@nargv || @nargv > 2) {
-    die "usage: deletemailbox mailbox [host]\n";
-  }
-  # @@ do I really care?
-  if (@nargv == 2) {
-    die "deletemailbox: host argument only supported in IMSP\n";
+  if (!@nargv || @nargv > 1) {
+    die "usage: deletemailbox mailbox\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "deletemailbox: no connection to server\n";
@@ -1786,7 +1766,7 @@ Connect to the *server* specified on the port specified.
 
 =item C<--auth> I<mechanism>
 
-Use the mechanism specified to authenticate. One of PLAIN, LOGIN, DIGEST-MD5, etc.
+Use the mechanism specified to authenticate. One of PLAIN, LOGIN, etc.
 
 =item C<--help>
 
@@ -1902,10 +1882,6 @@ Delete the specified mailbox.
 Administrators do not have implicit delete rights on mailboxes.  Use the
 L</setaclmailbox> command to grant the C<x> permission to your
 principal if you need to delete a mailbox you do not own.
-
-Note that the online help admits to an optional host argument.  This argument
-is not currently used, and will be rejected with an error if specified; it
-is reserved for IMSP.
 
 aliases: C<delete>, C<dm>
 

@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_getquota
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    $self->_set_quotaroot('user.cassandane');
+    xlog $self, "set ourselves a basic limit";
+    $self->_set_quotalimits(storage => 1000); # that's 1000 * 1024 bytes
+
+    my $jmap = $self->{jmap};
+    my $service = $self->{instance}->get_service("http");
+    my $inboxId = $self->getinbox()->{id};
+
+    # we need 'https://cyrusimap.org/ns/jmap/quota' capability for
+    # Quota/get method
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/quota';
+    $jmap->DefaultUsing(\@using);
+
+    my $res;
+
+    $res = $jmap->CallMethods([
+        ['Quota/get', {
+            accountId => 'cassandane',
+            ids => undef,
+        }, 'R1'],
+    ]);
+
+    my $mailQuota = $res->[0][1]{list}[0];
+    $self->assert_str_equals('mail', $mailQuota->{id});
+    $self->assert_num_equals(0, $mailQuota->{used});
+    $self->assert_num_equals(1000 * 1024, $mailQuota->{total});
+    my $quotaState = $res->[0][1]{state};
+    $self->assert_not_null($quotaState);
+
+    xlog $self, "Create email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                msgA1 => {
+                    mailboxIds => {
+                        $inboxId => JSON::true,
+                    },
+                    from => [{
+                            email => q{test1@local},
+                            name => q{}
+                        }],
+                    to => [{
+                            email => q{test2@local},
+                            name => '',
+                        }],
+                    subject => 'foo',
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                },
+            }
+        }, "R1"],
+        ['Quota/get', {}, 'R2'],
+    ]);
+
+    $self->assert_str_equals('Quota/get', $res->[1][0]);
+    $mailQuota = $res->[1][1]{list}[0];
+    $self->assert_str_equals('mail', $mailQuota->{id});
+    $self->assert_num_not_equals(0, $mailQuota->{used});
+    $self->assert_num_equals(1000 * 1024, $mailQuota->{total});
+    $self->assert_str_not_equals($quotaState, $res->[1][1]{state});
+}

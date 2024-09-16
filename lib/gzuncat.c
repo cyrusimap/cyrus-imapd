@@ -146,10 +146,10 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 
     memset(gz->in_buf, 0, gz->in_buf_size);
 
-    int r = lseek(gz->fd, offset, SEEK_SET);
-    if (r < 0) return Z_ERRNO;
+    off_t p = lseek(gz->fd, offset, SEEK_SET);
+    if (p < 0) return Z_ERRNO;
 
-    r = _inflate_init(&gz->strm, gz->in_buf);
+    int r = _inflate_init(&gz->strm, gz->in_buf);
     if (r) return r;
 
     // anything else to initialise?
@@ -273,10 +273,10 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
             // object, then we've read too much (we're starting to see the next section of the file)
             // so we need to seek back to the right spot and update next_offset
             if (gz->strm.avail_in) {
-                r = lseek(gz->fd, 0 - (off_t) gz->strm.avail_in, SEEK_CUR);
-                if (r < 0) {
+                off_t p = lseek(gz->fd, 0 - (off_t) gz->strm.avail_in, SEEK_CUR);
+                if (p < 0) {
                     syslog(LOG_ERR, "IOERROR: %s: lseek %d: %m", __func__, gz->fd);
-                    return r;
+                    return -1;
                 }
                 gz->strm.avail_in = 0;
                 gz->strm.next_in = gz->in_buf;
@@ -329,11 +329,11 @@ EXPORTED int gzuc_seekto(struct gzuncat *gz, size_t pos)
     if (pos == gz->bytes_read) return 0;
 
     if (pos < gz->bytes_read) {
-        int r = lseek(gz->fd, gz->current_offset, SEEK_SET);
-        if (r < 0) return r;
+        off_t p = lseek(gz->fd, gz->current_offset, SEEK_SET);
+        if (p < 0) return -1;
 
         inflateEnd(&gz->strm);
-        r = _inflate_init(&gz->strm, gz->in_buf);
+        int r = _inflate_init(&gz->strm, gz->in_buf);
         if (r) return r;
 
         gz->bytes_read = 0;

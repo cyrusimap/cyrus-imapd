@@ -44,14 +44,43 @@
 #ifndef TREE_H
 #define TREE_H
 
+#include <jansson.h>
+
 #include "comparator.h"
 #include "strarray.h"
+#include "arrayu64.h"
+
+#define MAX_CMD_ARGS 12  /* bump if required (currently vacation needs 11) */
 
 /* abstract syntax tree for sieve */
 typedef struct Commandlist commandlist_t;
 typedef struct Test test_t;
 typedef struct Testlist testlist_t;
 typedef struct Comp comp_t;
+typedef struct Zone zone_t;
+typedef struct CmdArg cmdarg_t;
+
+struct CmdArg {
+    unsigned char type;  /* argument data type */
+    union {
+        int i;
+        const char *s;
+        const strarray_t *sa;
+        const arrayu64_t *ua;
+        const comp_t *c;
+        const test_t *t;
+        const testlist_t *tl;
+    } u;
+};
+
+enum argument_data_type {
+    AT_INT      = 'i',
+    AT_STR      = 's',
+    AT_STRARRAY = 'S',
+    AT_ARRAYU64 = 'U',
+    AT_TEST     = 't',
+    AT_TESTLIST = 'T'
+};
 
 struct Comp {
     int match;
@@ -60,8 +89,13 @@ struct Comp {
     int index;      /* only used where index extension is defined */
 };
 
+struct Zone {
+    int tag;
+    char *offset;   /* time-zone offset string (+/-hhmm) */
+};
+
 struct Test {
-    int type;
+    unsigned type;
     int ignore_err;
     union {
         test_t *t; /* not */
@@ -95,8 +129,7 @@ struct Test {
         } sz;
         struct { /* it's a date test */
             comp_t comp;
-            int zonetag;
-            int zone;  /* time-zone offset in minutes */
+            zone_t zone;
             int date_part;
             char *header_name;
             strarray_t *kl;
@@ -107,14 +140,18 @@ struct Test {
             char *keyname;
             strarray_t *keylist;
         } mm;
-        struct { /* its a duplicate test */
+        struct { /* it's a duplicate test */
             int idtype;
             char *idval;
             char *handle;
             int seconds;
             int last;
         } dup;
+        char *jquery; /* jmapquery */
     } u;
+
+    unsigned nargs;
+    cmdarg_t args[MAX_CMD_ARGS]; /* only used for precompilation */
 };
 
 struct Testlist {
@@ -122,20 +159,24 @@ struct Testlist {
     testlist_t *next;
 };
 
-struct Fileinto {
-    strarray_t *flags;
+struct TargetMailbox {
     char *folder;
     char *specialuse;
-    int copy;
-    int create;
     char *mailboxid;
 };
 
+struct Fileinto {
+    struct TargetMailbox t;
+    strarray_t *flags;
+    int copy;
+    int create;
+};
+
 struct Commandlist {
-    int type;
+    unsigned type;
     union {
         int jump; /* bytecode parsing/eval only */
-        char *str; /* its a reject or error action */
+        char *str; /* it's a reject or error action */
         struct { /* it's an if statement */
             test_t *t;
             int testend; /* offset to end of test (bytecode parsing/eval only) */
@@ -149,11 +190,7 @@ struct Commandlist {
             char *script;
         } inc;
         struct { /* it's a set action */
-            int mod40; /* :lower or :upper */
-            int mod30; /* :lowerfirst or :upperfirst */
-            int mod20; /* :quotewildcard */
-            int mod15; /* :encodeurl */
-            int mod10; /* :length */
+            unsigned modifiers;
             char *variable;
             char *value;
         } s;
@@ -209,8 +246,35 @@ struct Commandlist {
             char *name;
             strarray_t *values;
         } dh;
+        struct { /* it's a log action */
+            char *text;
+        } l;
+        struct { /* it's a snooze action */
+            struct Fileinto f;
+            int is_mboxid;  /* only used for parsing pre- 0x1D scripts */
+            strarray_t *addflags;
+            strarray_t *removeflags;
+            unsigned char days;
+            arrayu64_t *times;
+            char *tzid;
+        } sn;
+        struct { /* it's a processcalendar action */
+            int allow_public;
+            int invites_only;
+            int updates_only;
+            int delete_cancelled;
+            strarray_t *addresses;
+            char *organizers;
+            char *calendarid;
+            char *outcome_var;
+            char *reason_var;
+        } cal;
+        struct TargetMailbox ikt; /* it's an implicit keep target */
     } u;
     struct Commandlist *next;
+
+    unsigned nargs;
+    cmdarg_t args[MAX_CMD_ARGS]; /* only used for compilation */
 };
 
 comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script);

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -c
-#  Copyright (c) 2017 Fastmail.  All rights reserved.
+#  Copyright (c) 2017-2022 Fastmail.  All rights reserved.
 #
 # Author: Bron Gondwana <brong@fastmail.fm>
 #
@@ -93,6 +93,15 @@ sub add_perl {
 
   elsif (ref($val) eq 'HASH') {
     my $child = $Self->add_kvlist($key);
+    my $order = delete $val->{__kvlist_order};
+
+    if ($order) {
+      die "Unknown order " . ref($order) if ref($order) ne 'ARRAY';
+      foreach my $k (grep { exists $val->{$_} } @{$order}) {
+        $child->add_perl($k, delete $val->{$k});
+      }
+    }
+
     $child->add_perl($_, $val->{$_}) for sort keys %$val;
   }
 
@@ -243,11 +252,14 @@ sub _parse_string {
     elsif ($$ref =~ s/^\{//) {
       die unless $$ref;
       my $partition = _getword($ref);
+      die "No partition" unless length($partition);
       $$ref =~ s/^\s+//;
       my $guid = _getword($ref);
+      die "No guid" unless length($guid);
       $$ref =~ s/^\s+//;
-      my $size = _getword($ref);
-      $$ref =~ s/^}\r?\n//;
+      die "no size" unless $$ref =~ s/^(\d+)//;
+      my $size = $1;
+      die "no file-pattern end" unless $$ref =~ s/^\+?\}\r?\n//;
       my $content = substr($$ref, 0, $size, '');
       $Self->add_file($key, $partition, $guid, $size, $content);
     }
@@ -280,7 +292,7 @@ sub _printastring {
       return '"' . $str . '"';
     }
   }
-  return '{' . length($str) . "}\r\n" . $str;
+  return '{' . length($str) . "+}\r\n" . $str;
 }
 
 sub as_string {
@@ -307,7 +319,16 @@ sub as_perl {
   my $Self = shift;
 
   if ($Self->{type} eq 'kvlist') {
-    return { map { $_->{key} => $_->as_perl() } @{$Self->{data}} };
+    my $kvlist = {};
+    my @order;
+
+    foreach my $datum (@{$Self->{data}}) {
+      push @order, $datum->{key};
+      $kvlist->{$datum->{key}} = $datum->as_perl();
+    }
+
+    $kvlist->{__kvlist_order} = [ @order ];
+    return $kvlist;
   }
   elsif ($Self->{type} eq 'list') {
     return [ map { $_->as_perl() } @{$Self->{data}} ];

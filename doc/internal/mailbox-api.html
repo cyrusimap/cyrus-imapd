@@ -157,6 +157,7 @@ no mailbox with that name.</p>
 int mailbox_rename_copy(struct mailbox *oldmailbox,
                         const char *newname, const char *newpart,
                         const char *userid, int ignorequota,
+                        int silent,
                         struct mailbox **newmailboxptr);
 </pre>
 

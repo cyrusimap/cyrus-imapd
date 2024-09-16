@@ -23,7 +23,7 @@ Synopsis
 Description
 ===========
 
-**sync_server** is the server side of the the replication system.  It
+**sync_server** is the server side of the replication system.  It
 runs on the target (replica) system and listens for connections from
 :cyrusman:`sync_client(8)` which provides instructions for synchronizing
 the replica system with the master system.

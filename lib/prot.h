@@ -131,9 +131,9 @@ struct protstream {
     struct buf *writetobuf;
 
     int can_unget;
-    int bytes_in;
-    int bytes_out;
-    int isclient;
+    uint64_t bytes_in;
+    uint64_t bytes_out;
+    int isclient; /* read/write IMAP LITERAL+ */
 
     /* Events */
     prot_readcallback_t *readcallback_proc;
@@ -224,8 +224,8 @@ extern int prot_free(struct protstream *s);
 extern int prot_setlog(struct protstream *s, int fd);
 
 /* Get traffic counts */
-extern int prot_bytes_in(struct protstream *s);
-extern int prot_bytes_out(struct protstream *s);
+extern uint64_t prot_bytes_in(struct protstream *s);
+extern uint64_t prot_bytes_out(struct protstream *s);
 #define prot_bytes_in(s) ((s)->bytes_in)
 #define prot_bytes_out(s) ((s)->bytes_out)
 
@@ -287,15 +287,12 @@ extern int prot_flush(struct protstream *s);
 
 /* These are protlayer versions of the specified functions */
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
-extern int prot_putbuf(struct protstream *s, struct buf *buf);
+extern int prot_putbuf(struct protstream *s, const struct buf *buf);
 extern int prot_puts(struct protstream *s, const char *str);
-extern int prot_vprintf(struct protstream *, const char *, va_list);
+extern int prot_vprintf(struct protstream *, const char *, va_list)
+    __attribute__((format(printf, 2, 0)));
 extern int prot_printf(struct protstream *, const char *, ...)
-#ifdef __GNUC__
-    __attribute__ ((format (printf, 2, 3)));
-#else
-    ;
-#endif
+    __attribute__((format(printf, 2, 3)));
 extern int prot_printliteral(struct protstream *out, const char *s,
                              size_t size);
 extern int prot_printstring(struct protstream *out, const char *s);

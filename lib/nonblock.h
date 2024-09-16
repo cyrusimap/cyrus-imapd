@@ -43,7 +43,7 @@
 #ifndef INCLUDED_NONBLOCK_H
 #define INCLUDED_NONBLOCK_H
 
-extern const char *nonblock_method_desc;
+extern const char nonblock_method_desc[];
 
 extern void nonblock(int fd, int mode);
 

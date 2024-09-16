@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_parse_charset
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    # LF in raw headers will be replaced to CRLF later.
+
+    my @testCases = ({
+        desc => "Canonical charset parameter",
+        rawHeader => "text/plain; charset=utf-8",
+        wantContentType => 'text/plain',
+        wantCharset => 'utf-8',
+    }, {
+        desc => "Folded charset parameter",
+        rawHeader => "text/plain;\n charset=\n utf-8",
+        wantContentType => 'text/plain',
+        wantCharset => 'utf-8',
+    }, {
+        desc => "Aliased charset parameter",
+        rawHeader => "text/plain; charset=latin1",
+        wantContentType => 'text/plain',
+        wantCharset => 'latin1',
+    });
+
+    foreach (@testCases) {
+        xlog $self, "Running test: $_->{desc}";
+        my $rawEmail = ""
+        . "From: foo\@local\n"
+        . "To: bar\@local\n"
+        . "Subject: test email\n"
+        . "Date: Wed, 7 Dec 2016 00:21:50 -0500\n"
+        . "Content-Type: " . $_->{rawHeader} . "\n"
+        . "MIME-Version: 1.0\n"
+        . "\n"
+        . "This is a test email.\n";
+
+        $rawEmail =~ s/\r?\n/\r\n/gs;
+        my $data = $jmap->Upload($rawEmail, "application/octet-stream");
+        my $blobId = $data->{blobId};
+
+        my $res = $jmap->CallMethods([
+            ['Email/import', {
+                emails => {
+                    1 => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        blobId => $blobId,
+                    },
+                },
+            }, 'R1'],
+            ['Email/get', {
+                ids => ['#1'],
+                properties => ['bodyStructure'],
+                bodyProperties => ['charset'],
+            }, '$2'],
+        ]);
+        my $email = $res->[1][1]{list}[0];
+        if (defined $_->{wantCharset}) {
+            $self->assert_str_equals($_->{wantCharset}, $email->{bodyStructure}{charset});
+        } else {
+            $self->assert_null($email->{bodyStructure}{charset});
+        }
+    }
+}

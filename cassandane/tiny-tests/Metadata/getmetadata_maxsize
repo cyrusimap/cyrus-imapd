@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_getmetadata_maxsize
+{
+    my ($self) = @_;
+
+    xlog $self, "test the GETMETADATA command with the MAXSIZE option";
+
+    my $imaptalk = $self->{store}->get_client();
+    # data thanks to hipsteripsum.me
+    my $folder = 'INBOX.denim';
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $res;
+
+    xlog $self, "Create folder";
+    $imaptalk->create($folder)
+        or die "Cannot create mailbox $folder: $@";
+
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+
+    my $uuid = $res->{$folder}{$entry};
+    $self->assert_not_null($uuid);
+    $self->assert($uuid =~ m/^[0-9a-z-]+$/);
+
+    xlog $self, "Getting metadata with no MAXSIZE";
+    $res = getmetadata($imaptalk, $folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+
+    xlog $self, "Getting metadata with a large MAXSIZE in the right place";
+    $res = getmetadata($imaptalk, [ MAXSIZE => 2048 ], $folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+
+    xlog $self, "Getting metadata with a small MAXSIZE in the right place";
+    $res = getmetadata($imaptalk, [ MAXSIZE => 8 ], $folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({ longentries => length($uuid) } , $res);
+
+    xlog $self, "Getting metadata with a large MAXSIZE in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 2048 ], $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+
+    xlog $self, "Getting metadata with a small MAXSIZE in the wrong place";
+    $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 8 ], $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({ longentries => length($uuid) } , $res);
+}

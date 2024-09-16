@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_creationids
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create and get calendar and event";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', { create => { "c1" => {
+            name => "foo",
+            color => "coral",
+            sortOrder => 2,
+            isVisible => \1,
+        }}}, 'R1'],
+        ['CalendarEvent/set', { create => { "e1" => {
+            calendarIds => {
+                '#c1' => JSON::true,
+            },
+            "title" => "bar",
+            "description" => "description",
+            "freeBusyStatus" => "busy",
+            "showWithoutTime" => JSON::true,
+            "start" => "2015-10-06T00:00:00",
+        }}}, "R2"],
+        ['CalendarEvent/get', {ids => ["#e1"]}, "R3"],
+        ['Calendar/get', {ids => ["#c1"]}, "R4"],
+    ]);
+    my $event = $res->[2][1]{list}[0];
+    $self->assert_str_equals("bar", $event->{title});
+
+    my $calendar = $res->[3][1]{list}[0];
+    $self->assert_str_equals("foo", $calendar->{name});
+
+    $self->assert_deep_equals({$calendar->{id} => JSON::true}, $event->{calendarIds});
+}

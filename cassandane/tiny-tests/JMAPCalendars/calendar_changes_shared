@@ -1,0 +1,227 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_changes_shared
+    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    my $assert_changes = sub
+    {
+        my ($sinceState, $changes) = @_;
+
+        my $res = $jmap->CallMethods([
+            ['Calendar/changes', {
+                    accountId => 'sharer',
+                    sinceState => $sinceState,
+                }, 'R1']
+        ]);
+
+        $self->assert_deep_equals($changes->{created}, $res->[0][1]{created});
+        $self->assert_deep_equals($changes->{updated}, $res->[0][1]{updated});
+        $self->assert_deep_equals($changes->{destroyed}, $res->[0][1]{destroyed});
+        $self->assert_str_equals($sinceState, $res->[0][1]{oldState});
+
+        return $res->[0][1]{newState};
+    };
+
+    my $assert_calendars = sub
+    {
+        my ($calendars) = @_;
+
+        my $res = $jmap->CallMethods([
+            ['Calendar/get', {
+                accountId => 'sharer',
+                properties => ['id'],
+            }, 'R1']
+        ]);
+
+        my @wantCalendars = sort @{$calendars};
+        my @haveCalendars = sort map { $_->{id} } @{$res->[0][1]{list}};
+        $self->assert_deep_equals(\@wantCalendars, \@haveCalendars);
+    };
+
+    xlog $self, "Create sharer and share default calendar";
+    my ($sharerJmap) = $self->create_user('sharer');
+    $admin->setacl("user.sharer.#calendars.Default", cassandane => 'lrs');
+
+    xlog $self, "Sharee gets initial calendar state";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            accountId => 'sharer',
+        }, 'R1']
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+    $assert_calendars->(['Default']);
+
+    xlog $self, "Sharer creates unshared calendars A and B";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calA => {
+                    name => 'A',
+                },
+                calB => {
+                    name => 'B',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $calendarA = $res->[0][1]{created}{calA}{id};
+    $self->assert_not_null($calendarA);
+    my $calendarB = $res->[0][1]{created}{calB}{id};
+    $self->assert_not_null($calendarB);
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [],
+        destroyed => []
+    });
+    $assert_calendars->(['Default']);
+
+    xlog $self, "Sharer creates and shares calendar C";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calC => {
+                    name => 'C',
+                    shareWith => {
+                        cassandane => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayRSVP => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $calendarC = $res->[0][1]{created}{calC}{id};
+    $self->assert_not_null($calendarC);
+
+    $state = $assert_changes->($state, {
+        created => [$calendarC],
+        updated => [],
+        destroyed => []
+    });
+    $assert_calendars->(['Default', $calendarC]);
+
+    xlog $self, "Sharer shares calendar A";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarA => {
+                    shareWith => {
+                        cassandane => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarA});
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [$calendarA], # XXX this might better be in 'created'
+        destroyed => []
+    });
+    $assert_calendars->(['Default', $calendarA, $calendarC]);
+
+    xlog $self, "Sharer shares calendar B with anyone";
+    $admin->setacl("user.sharer.#calendars.$calendarB", anyone => 'lrs');
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [$calendarB], # XXX this might better be in 'created'
+        destroyed => []
+    });
+    $assert_calendars->(['Default', $calendarA, $calendarB, $calendarC]);
+
+    xlog $self, "Sharee gets write rights on calendar C";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarC => {
+                    'shareWith/cassandane/mayWriteAll' => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [$calendarC],
+        destroyed => []
+    });
+    $assert_calendars->(['Default', $calendarA, $calendarB, $calendarC]);
+
+    xlog $self, "Sharee looses write rights on calendar C";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarC => {
+                    'shareWith/cassandane/mayWriteAll' => JSON::false,
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [$calendarC],
+        destroyed => []
+    });
+    $assert_calendars->(['Default', $calendarA, $calendarB, $calendarC]);
+
+    xlog $self, "Sharer unshares calendar C";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarC => {
+                    'shareWith/cassandane' => undef,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $assert_calendars->(['Default', $calendarA, $calendarB]);
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [],
+        destroyed => [$calendarC]
+    });
+
+    xlog $self, "Sharer unshares calendar B for anyone";
+    $admin->setacl("user.sharer.#calendars.$calendarB", anyone => '');
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [],
+        destroyed => [$calendarB]
+    });
+    $assert_calendars->(['Default', $calendarA]);
+
+    xlog $self, "Sharer destroys calendar A";
+    $res = $sharerJmap->CallMethods([
+        ['Calendar/set', {
+            destroy => [$calendarA],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([$calendarA], $res->[0][1]{destroyed});
+
+    $state = $assert_changes->($state, {
+        created => [],
+        updated => [],
+        destroyed => [$calendarA]
+    });
+    $assert_calendars->(['Default']);
+}
+
+

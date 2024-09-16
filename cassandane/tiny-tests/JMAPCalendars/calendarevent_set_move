@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_move
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create calendars A and B";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => {
+                        "1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true,
+                        },
+                        "2" => {
+                            name => "B", color => "blue", sortOrder => 1, isVisible => JSON::true
+                        }
+             }}, "R1"]
+    ]);
+    my $calidA = $res->[0][1]{created}{"1"}{id};
+    my $calidB = $res->[0][1]{created}{"2"}{id};
+
+    xlog $self, "create event in calendar $calidA";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                $calidA => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "foo's description",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                        }
+                    }}, "R1"]]);
+    my $state = $res->[0][1]{newState};
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get calendar $id";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
+    my $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($id, $event->{id});
+    $self->assert_deep_equals({$calidA => JSON::true}, $event->{calendarIds});
+    $self->assert_str_equals($state, $res->[0][1]{state});
+
+    xlog $self, "move event to unknown calendar";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
+                        $id => {
+                            calendarIds => {
+                                nope => JSON::true,
+                            },
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+
+    xlog $self, "get calendar $id from untouched calendar $calidA";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($id, $event->{id});
+    $self->assert_deep_equals({$calidA => JSON::true}, $event->{calendarIds});
+
+    xlog $self, "move event to calendar $calidB";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
+                        $id => {
+                            calendarIds => {
+                                $calidB => JSON::true,
+                            },
+                        }
+                    }}, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get calendar $id";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_str_equals($id, $event->{id});
+    $self->assert_deep_equals({$calidB => JSON::true}, $event->{calendarIds});
+}

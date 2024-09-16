@@ -80,12 +80,12 @@ struct mailbox_header_cache {
     bit32 min_cache_version;
 };
 
-#define TOTAL_KEYWORDS 46
+#define TOTAL_KEYWORDS 49
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 31
 #define MIN_HASH_VALUE 4
-#define MAX_HASH_VALUE 71
-/* maximum key range = 68, duplicates = 0 */
+#define MAX_HASH_VALUE 65
+/* maximum key range = 62, duplicates = 0 */
 
 #ifndef GPERF_DOWNCASE
 #define GPERF_DOWNCASE 1
@@ -140,32 +140,32 @@ mailbox_header_cache_hash (register const char *str, register size_t len)
 {
   static unsigned char asso_values[] =
     {
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72,  2, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 35, 72, 72,
-      72, 72, 72, 72, 72,  1, 42,  1,  2,  1,
-      21, 72, 15, 28, 72, 72, 10,  1, 22, 12,
-      15, 72,  7,  2, 18, 11, 25, 14,  1, 20,
-      72, 72, 72, 72, 72, 72, 72,  1, 42,  1,
-       2,  1, 21, 72, 15, 28, 72, 72, 10,  1,
-      22, 12, 15, 72,  7,  2, 18, 11, 25, 14,
-       1, 20, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
-      72, 72, 72, 72, 72, 72
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66,  3, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 35, 66, 66,
+      66, 66, 66, 66, 66,  1,  2,  1,  2,  1,
+      26,  2, 15, 23, 66, 66, 10,  1, 27, 17,
+      12, 66,  7,  2, 18, 16, 21,  8,  1, 13,
+      66, 66, 66, 66, 66, 66, 66,  1,  2,  1,
+       2,  1, 26,  2, 15, 23, 66, 66, 10,  1,
+      27, 17, 12, 66,  7,  2, 18, 16, 21,  8,
+       1, 13, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66, 66, 66, 66, 66,
+      66, 66, 66, 66, 66, 66
     };
   register unsigned int hval = len;
 
@@ -190,8 +190,10 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
       {"",0}, {"",0}, {"",0}, {"",0},
 #line 71 "imap/mailbox_header_cache.gperf"
       {"cc", BIT32_MAX},
-      {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
-      {"",0},
+      {"",0}, {"",0},
+#line 70 "imap/mailbox_header_cache.gperf"
+      {"bcc", BIT32_MAX},
+      {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
 #line 62 "imap/mailbox_header_cache.gperf"
       {"x-msoesrec", 2},
 #line 66 "imap/mailbox_header_cache.gperf"
@@ -224,68 +226,69 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
       {"x-trace", 1},
 #line 90 "imap/mailbox_header_cache.gperf"
       {"x-apple-base-url", 6},
-#line 65 "imap/mailbox_header_cache.gperf"
-      {"x-delivered-to", 3},
+#line 82 "imap/mailbox_header_cache.gperf"
+      {"subject", BIT32_MAX},
 #line 94 "imap/mailbox_header_cache.gperf"
       {"arc-authentication-results", BIT32_MAX},
 #line 97 "imap/mailbox_header_cache.gperf"
       {"archived-at", BIT32_MAX},
+#line 61 "imap/mailbox_header_cache.gperf"
+      {"x-msmail-priority", 2},
+#line 98 "imap/mailbox_header_cache.gperf"
+      {"listbox-message-date", BIT32_MAX},
+#line 65 "imap/mailbox_header_cache.gperf"
+      {"x-delivered-to", 3},
+#line 91 "imap/mailbox_header_cache.gperf"
+      {"x-apple-mail-remote-attachments", 6},
+#line 60 "imap/mailbox_header_cache.gperf"
+      {"x-priority", 2},
 #line 83 "imap/mailbox_header_cache.gperf"
       {"to", BIT32_MAX},
 #line 64 "imap/mailbox_header_cache.gperf"
       {"x-resolved-to", 3},
 #line 59 "imap/mailbox_header_cache.gperf"
       {"x-ref", 2},
-#line 91 "imap/mailbox_header_cache.gperf"
-      {"x-apple-mail-remote-attachments", 6},
+#line 84 "imap/mailbox_header_cache.gperf"
+      {"dkim-signature", BIT32_MAX},
 #line 77 "imap/mailbox_header_cache.gperf"
       {"mime-version", BIT32_MAX},
 #line 81 "imap/mailbox_header_cache.gperf"
       {"sender", 7},
-#line 75 "imap/mailbox_header_cache.gperf"
-      {"from", BIT32_MAX},
-#line 61 "imap/mailbox_header_cache.gperf"
-      {"x-msmail-priority", 2},
+#line 95 "imap/mailbox_header_cache.gperf"
+      {"authentication-results", BIT32_MAX},
+#line 78 "imap/mailbox_header_cache.gperf"
+      {"reply-to", 7},
 #line 53 "imap/mailbox_header_cache.gperf"
       {"references", 0},
 #line 96 "imap/mailbox_header_cache.gperf"
       {"received-spf", BIT32_MAX},
-#line 78 "imap/mailbox_header_cache.gperf"
-      {"reply-to", 7},
-#line 95 "imap/mailbox_header_cache.gperf"
-      {"authentication-results", BIT32_MAX},
-#line 89 "imap/mailbox_header_cache.gperf"
-      {"x-uniform-type-identifier", 6},
-#line 84 "imap/mailbox_header_cache.gperf"
-      {"dkim-signature", BIT32_MAX},
-#line 60 "imap/mailbox_header_cache.gperf"
-      {"x-priority", 2},
-#line 70 "imap/mailbox_header_cache.gperf"
-      {"bcc", BIT32_MAX},
 #line 55 "imap/mailbox_header_cache.gperf"
       {"newsgroups", 0},
+#line 75 "imap/mailbox_header_cache.gperf"
+      {"from", BIT32_MAX},
+#line 89 "imap/mailbox_header_cache.gperf"
+      {"x-uniform-type-identifier", 6},
 #line 74 "imap/mailbox_header_cache.gperf"
       {"envelope-to", BIT32_MAX},
-#line 88 "imap/mailbox_header_cache.gperf"
-      {"x-universally-unique-identifier", 6},
 #line 80 "imap/mailbox_header_cache.gperf"
       {"return-path", BIT32_MAX},
 #line 86 "imap/mailbox_header_cache.gperf"
       {"domainkey-x509", BIT32_MAX},
+#line 99 "imap/mailbox_header_cache.gperf"
+      {"topicbox-message-uuid", BIT32_MAX},
 #line 76 "imap/mailbox_header_cache.gperf"
       {"in-reply-to", BIT32_MAX},
+#line 88 "imap/mailbox_header_cache.gperf"
+      {"x-universally-unique-identifier", 6},
+#line 52 "imap/mailbox_header_cache.gperf"
+      {"priority", 0},
+#line 100 "imap/mailbox_header_cache.gperf"
+      {"topicbox-policy-reasoning", BIT32_MAX},
+      {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
 #line 56 "imap/mailbox_header_cache.gperf"
       {"followup-to", 0},
-      {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
 #line 67 "imap/mailbox_header_cache.gperf"
-      {"x-truedomain-domain", 3},
-      {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
-      {"",0},
-#line 82 "imap/mailbox_header_cache.gperf"
-      {"subject", BIT32_MAX},
-      {"",0},
-#line 52 "imap/mailbox_header_cache.gperf"
-      {"priority", 0}
+      {"x-truedomain-domain", 3}
     };
 
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)

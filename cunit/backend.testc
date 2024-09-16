@@ -14,10 +14,16 @@
 #include "prot.h"
 #include "imap/backend.h"
 
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
+#include "lib/util.h"
+#include "lib/xstrlcpy.h"
+
+#define DBDIR   "test-dbdir"
+
 struct server_config {
     int sasl_plain;
     int sasl_login;
-    int sasl_digestmd5;
     int starttls;
     int deflate;
     int caps_one_per_line;
@@ -39,6 +45,7 @@ struct server_state {
 
     /* global state */
     int rend_sock;
+    char banner[64];
 
     /* per-connection state */
     int is_connected;
@@ -52,7 +59,6 @@ struct server_state {
     struct protstream *out;
 };
 
-
 #define HOST            "localhost"
 #define SASLSERVICE     "vorpal"
 #define USERID          "fbloggs"
@@ -64,7 +70,6 @@ static struct server_state *server_state;
 static const struct server_config default_server_config = {
     .sasl_plain = 1,
     .sasl_login = 0,
-    .sasl_digestmd5 = 0,
     .starttls = 0,
     .deflate = 0,
     .caps_one_per_line = 1
@@ -75,6 +80,7 @@ static const struct capa_t default_capa[] = {
     { "CCCOMPRESS=DEFLATE", CAPA_COMPRESS },
     { NULL, 0 }
 };
+static const char default_banner[] = "Toy Test server v0.0.1";
 static char default_service[32];
 
 static int init_sasl(int isclient);
@@ -132,6 +138,10 @@ static struct protocol_t test_prot =
     }
 };
 
+static void server_set_banner(struct server_state *state, const char *str)
+{
+    strlcpy(state->banner, str ? str : default_banner, sizeof(state->banner));
+}
 
 /*
  * Setup default test conditions, on both the client and server.
@@ -139,6 +149,7 @@ static struct protocol_t test_prot =
 static void default_conditions(void)
 {
     server_state->config = default_server_config;
+    server_set_banner(server_state, NULL);
 
     test_prot.service = default_service;
     memcpy(&test_prot.u.std.capa_cmd.capa, default_capa, sizeof(default_capa));
@@ -178,6 +189,329 @@ static void test_badservice(void)
                          USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NULL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 0);
+}
+
+/*
+ * Test that backend_version detects the remote version correctly.
+ */
+struct backend_version_data {
+    char banner[64];
+    int version;
+};
+
+static void backend_version_common(void)
+{
+    size_t i, n_tests;
+    struct backend_version_data data[] = {
+        /* 2.3 changed index versions a few times */
+        { "Cyrus IMAP v2.3.0", 7 },
+        { "Cyrus IMAP v2.3.1", 7 },
+        { "Cyrus IMAP v2.3.2", 7 },
+        { "Cyrus IMAP v2.3.3", 7 },
+        { "Cyrus IMAP v2.3.4", 8 },
+        { "Cyrus IMAP v2.3.5", 8 },
+        { "Cyrus IMAP v2.3.6", 8 },
+        { "Cyrus IMAP v2.3.7", 9 },
+        { "Cyrus IMAP v2.3.8", 9 },
+        { "Cyrus IMAP v2.3.9", 9 },
+        { "Cyrus IMAP v2.3.10", 10 },
+        { "Cyrus IMAP v2.3.11", 10 },
+        { "Cyrus IMAP v2.3.12", 10 },
+        { "Cyrus IMAP v2.3.13", 10 },
+        { "Cyrus IMAP v2.3.14", 10 },
+        { "Cyrus IMAP v2.3.15", 10 },
+        { "Cyrus IMAP v2.3.16", 10 },
+        { "Cyrus IMAP v2.3.17", 10 },
+        { "Cyrus IMAP v2.3.18", 10 },
+        { "Cyrus IMAP v2.3.19", 10 },
+        { "Cyrus IMAP v2.3.20", 10 },
+
+        /* 2.4 only had a single index version */
+        { "Cyrus IMAP v2.4.0", 12 },
+        { "Cyrus IMAP v2.4.1", 12 },
+        { "Cyrus IMAP v2.4.2", 12 },
+        { "Cyrus IMAP v2.4.3", 12 },
+        { "Cyrus IMAP v2.4.4", 12 },
+        { "Cyrus IMAP v2.4.5", 12 },
+        { "Cyrus IMAP v2.4.6", 12 },
+        { "Cyrus IMAP v2.4.7", 12 },
+        { "Cyrus IMAP v2.4.8", 12 },
+        { "Cyrus IMAP v2.4.9", 12 },
+        { "Cyrus IMAP v2.4.10", 12 },
+        { "Cyrus IMAP v2.4.11", 12 },
+        { "Cyrus IMAP v2.4.12", 12 },
+        { "Cyrus IMAP v2.4.13", 12 },
+        { "Cyrus IMAP v2.4.14", 12 },
+        { "Cyrus IMAP v2.4.15", 12 },
+        { "Cyrus IMAP v2.4.16", 12 },
+        { "Cyrus IMAP v2.4.17", 12 },
+        { "Cyrus IMAP v2.4.18", 12 },
+        { "Cyrus IMAP v2.4.19", 12 },
+        { "Cyrus IMAP v2.4.20", 12 },
+
+        /* and a weirdly-named one, apparently? */
+        { "Cyrus IMAP git2.4.0", 12 },
+
+        /* 2.5 just had one */
+        { "Cyrus IMAP 2.5.0", 13 },
+        { "Cyrus IMAP 2.5.1", 13 },
+        { "Cyrus IMAP 2.5.2", 13 },
+        { "Cyrus IMAP 2.5.3", 13 },
+        { "Cyrus IMAP 2.5.4", 13 },
+        { "Cyrus IMAP 2.5.5", 13 },
+        { "Cyrus IMAP 2.5.6", 13 },
+        { "Cyrus IMAP 2.5.7", 13 },
+        { "Cyrus IMAP 2.5.8", 13 },
+        { "Cyrus IMAP 2.5.8", 13 },
+        { "Cyrus IMAP 2.5.10", 13 },
+        { "Cyrus IMAP 2.5.11", 13 },
+        { "Cyrus IMAP 2.5.12", 13 },
+        { "Cyrus IMAP 2.5.13", 13 },
+        { "Cyrus IMAP 2.5.14", 13 },
+        { "Cyrus IMAP 2.5.15", 13 },
+
+        /* and some weirdly named ones? */
+        { "Cyrus IMAP Murder 2.5.0", 13 },
+        { "Cyrus IMAP git2.5.0", 13 },
+
+        /* 3.0 had just one */
+        { "Cyrus IMAP 3.0.0", 13 },
+        { "Cyrus IMAP 3.0.1", 13 },
+        { "Cyrus IMAP 3.0.2", 13 },
+        { "Cyrus IMAP 3.0.3", 13 },
+        { "Cyrus IMAP 3.0.4", 13 },
+        { "Cyrus IMAP 3.0.5", 13 },
+        { "Cyrus IMAP 3.0.6", 13 },
+        { "Cyrus IMAP 3.0.7", 13 },
+        { "Cyrus IMAP 3.0.8", 13 },
+        { "Cyrus IMAP 3.0.8", 13 },
+        { "Cyrus IMAP 3.0.10", 13 },
+        { "Cyrus IMAP 3.0.11", 13 },
+        { "Cyrus IMAP 3.0.12", 13 },
+        { "Cyrus IMAP 3.0.13", 13 },
+
+        /* 3.1 supported 13..16 but we don't bother detecting that microscopically */
+        /* n.b. there was no 3.1.0 */
+        { "Cyrus IMAP 3.1.1", 13 },
+        { "Cyrus IMAP 3.1.2", 13 },
+        { "Cyrus IMAP 3.1.3", 13 },
+        { "Cyrus IMAP 3.1.4", 13 },
+        { "Cyrus IMAP 3.1.5", 13 },
+        { "Cyrus IMAP 3.1.6", 13 },
+        { "Cyrus IMAP 3.1.7", 13 },
+        { "Cyrus IMAP 3.1.8", 13 },
+        { "Cyrus IMAP 3.1.9", 13 },
+
+        /* 3.2 had just one */
+        { "Cyrus IMAP 3.2.0", 16 },
+        { "Cyrus IMAP 3.2.1", 16 },
+        { "Cyrus IMAP 3.2.2", 16 },
+        { "Cyrus IMAP 3.2.3", 16 },
+        { "Cyrus IMAP 3.2.4", 16 },
+        { "Cyrus IMAP 3.2.5", 16 },
+        { "Cyrus IMAP 3.2.6", 16 },
+        { "Cyrus IMAP 3.2.7", 16 },
+        { "Cyrus IMAP 3.2.8", 16 },
+        { "Cyrus IMAP 3.2.9", 16 },
+
+        /* 3.3 had just one */
+        { "Cyrus IMAP 3.3.0", 17 },
+        { "Cyrus IMAP 3.3.1", 17 },
+        { "Cyrus IMAP 3.3.2", 17 },
+        { "Cyrus IMAP 3.3.3", 17 },
+        { "Cyrus IMAP 3.3.4", 17 },
+        { "Cyrus IMAP 3.3.5", 17 },
+        { "Cyrus IMAP 3.3.6", 17 },
+        { "Cyrus IMAP 3.3.7", 17 },
+        { "Cyrus IMAP 3.3.8", 17 },
+        { "Cyrus IMAP 3.3.9", 17 },
+
+        /* 3.4 had just one */
+        { "Cyrus IMAP 3.4.0", 17 },
+        { "Cyrus IMAP 3.4.1", 17 },
+        { "Cyrus IMAP 3.4.2", 17 },
+        { "Cyrus IMAP 3.4.3", 17 },
+        { "Cyrus IMAP 3.4.4", 17 },
+        { "Cyrus IMAP 3.4.5", 17 },
+        { "Cyrus IMAP 3.4.6", 17 },
+        { "Cyrus IMAP 3.4.7", 17 },
+        { "Cyrus IMAP 3.4.8", 17 },
+        { "Cyrus IMAP 3.4.9", 17 },
+
+        /* 3.5 had just one */
+        { "Cyrus IMAP 3.5.0", 17 },
+        { "Cyrus IMAP 3.5.1", 17 },
+        { "Cyrus IMAP 3.5.2", 17 },
+        { "Cyrus IMAP 3.5.3", 17 },
+        { "Cyrus IMAP 3.5.4", 17 },
+        { "Cyrus IMAP 3.5.5", 17 },
+        { "Cyrus IMAP 3.5.6", 17 },
+        { "Cyrus IMAP 3.5.7", 17 },
+        { "Cyrus IMAP 3.5.8", 17 },
+        { "Cyrus IMAP 3.5.9", 17 },
+
+        /* 3.6 had just one */
+        { "Cyrus IMAP 3.6.0", 17 },
+        { "Cyrus IMAP 3.6.1", 17 },
+        { "Cyrus IMAP 3.6.2", 17 },
+        { "Cyrus IMAP 3.6.3", 17 },
+        { "Cyrus IMAP 3.6.4", 17 },
+        { "Cyrus IMAP 3.6.5", 17 },
+        { "Cyrus IMAP 3.6.6", 17 },
+        { "Cyrus IMAP 3.6.7", 17 },
+        { "Cyrus IMAP 3.6.8", 17 },
+        { "Cyrus IMAP 3.6.9", 17 },
+
+        /* 3.7 had just one */
+        { "Cyrus IMAP 3.7.0", 17 },
+        { "Cyrus IMAP 3.7.1", 17 },
+        { "Cyrus IMAP 3.7.2", 17 },
+        { "Cyrus IMAP 3.7.3", 17 },
+        { "Cyrus IMAP 3.7.4", 17 },
+        { "Cyrus IMAP 3.7.5", 17 },
+        { "Cyrus IMAP 3.7.6", 17 },
+        { "Cyrus IMAP 3.7.7", 17 },
+        { "Cyrus IMAP 3.7.8", 17 },
+        { "Cyrus IMAP 3.7.9", 17 },
+
+        /* 3.8 had just one */
+        { "Cyrus IMAP 3.8.0", 17 },
+        { "Cyrus IMAP 3.8.1", 17 },
+        { "Cyrus IMAP 3.8.2", 17 },
+        { "Cyrus IMAP 3.8.3", 17 },
+        { "Cyrus IMAP 3.8.4", 17 },
+        { "Cyrus IMAP 3.8.5", 17 },
+        { "Cyrus IMAP 3.8.6", 17 },
+        { "Cyrus IMAP 3.8.7", 17 },
+        { "Cyrus IMAP 3.8.8", 17 },
+        { "Cyrus IMAP 3.8.9", 17 },
+
+        /* 3.9 supported 17..?? but we don't bother detecting that microscopically */
+        { "Cyrus IMAP 3.9.0", 17 },
+        { "Cyrus IMAP 3.9.1", 17 },
+        { "Cyrus IMAP 3.9.2", 17 },
+        { "Cyrus IMAP 3.9.3", 17 },
+        { "Cyrus IMAP 3.9.4", 17 },
+        { "Cyrus IMAP 3.9.5", 17 },
+        { "Cyrus IMAP 3.9.6", 17 },
+        { "Cyrus IMAP 3.9.7", 17 },
+        { "Cyrus IMAP 3.9.8", 17 },
+        { "Cyrus IMAP 3.9.9", 17 },
+
+        /* better test some pre-release version strings too, would be bad if
+         * the parser chokes on them!
+         */
+        { "Cyrus IMAP 3.0.0-rc1", 13 },
+        { "Cyrus IMAP 3.2.0-beta4", 16 },
+        { "Cyrus IMAP 3.6.0-beta2", 17 },
+        { "Cyrus IMAP 3.7.0-alpha0-1155-gf86d12f44a", 17 },
+    };
+
+    /* XXX there's something wrong with the toy test server that results in
+     * XXX the banner not being set with auto_capa enabled???
+     */
+    test_prot.u.std.banner.auto_capa = 0;
+
+    n_tests = sizeof(data) / sizeof(data[0]);
+
+    CU_ASSERT_NOT_EQUAL_FATAL(n_tests, 0);
+
+    for (i = 0; i < n_tests; i++) {
+        struct backend *be;
+        const char *auth_status = NULL;
+        int got_version;
+
+        server_set_banner(server_state, data[i].banner);
+
+        be = backend_connect(NULL, HOST, &test_prot,
+                             USERID, callbacks, &auth_status, /*fd*/-1);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+        CU_ASSERT_EQUAL(server_state->is_connected, 1);
+        CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+        CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+        got_version = backend_version(be);
+        CU_ASSERT_EQUAL(got_version, data[i].version);
+
+        backend_disconnect(be);
+        free(be);
+    }
+}
+
+static void test_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    backend_version_common();
+}
+
+static void test_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    backend_version_common();
+}
+
+static void unrecognised_backend_version_common(void)
+{
+    size_t i, n_tests;
+    struct backend_version_data data[] = {
+        { "BOGUS", 6 }, /* completely unrecognised */
+        { "Cyrus IMAP v2.3.B (OGUS)", 6 }, /* junk 2.3 revision */
+        { "Cyrus IMAP 10.0.0", MAILBOX_MINOR_VERSION }, /* unknown future version */
+        { "Cyrus IMAP 10.0.0-rc1", MAILBOX_MINOR_VERSION },
+        { "Cyrus IMAP 10.0.0-alpha0-57-g1f6140ee54", MAILBOX_MINOR_VERSION },
+    };
+
+    /* XXX there's something wrong with the toy test server that results in
+     * XXX the banner not being set with auto_capa enabled???
+     */
+    test_prot.u.std.banner.auto_capa = 0;
+
+    n_tests = sizeof(data) / sizeof(data[0]);
+
+    CU_ASSERT_NOT_EQUAL_FATAL(n_tests, 0);
+
+    for (i = 0; i < n_tests; i++) {
+        struct backend *be;
+        const char *auth_status = NULL;
+        int got_version;
+
+        server_set_banner(server_state, data[i].banner);
+
+        be = backend_connect(NULL, HOST, &test_prot,
+                             USERID, callbacks, &auth_status, /*fd*/-1);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+        CU_ASSERT_EQUAL(server_state->is_connected, 1);
+        CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+        CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+        CU_SYSLOG_MATCH("Assuming index version [0-9]+!");
+        got_version = backend_version(be);
+        CU_ASSERT_EQUAL(got_version, data[i].version);
+        CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+        backend_disconnect(be);
+        free(be);
+    }
+}
+
+static void test_unrecognised_backend_version_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    unrecognised_backend_version_common();
+}
+
+static void test_unrecognised_backend_version_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.u.std.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    unrecognised_backend_version_common();
 }
 
 /*
@@ -245,38 +579,6 @@ static void not_test_sasl_login(void)
     free(be);
 }
 #endif
-
-/*
- * Test authenticating with the DIGEST-MD5 mechanism.
- */
-static void test_sasl_digestmd5(void)
-{
-    struct backend *be;
-    const char *auth_status = NULL;
-    char *mechs;
-    int r;
-
-    default_conditions();
-    server_state->config.sasl_plain = 0;
-    server_state->config.sasl_digestmd5 = 1;
-
-    be = backend_connect(NULL, HOST, &test_prot,
-                         USERID, callbacks, &auth_status, /*fd*/-1);
-    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
-    CU_ASSERT_EQUAL(server_state->is_connected, 1);
-    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
-    CU_ASSERT_EQUAL(server_state->is_tls, 0);
-
-    mechs = backend_get_cap_params(be, CAPA_AUTH);
-    CU_ASSERT_STRING_EQUAL(mechs, "DIGEST-MD5");
-    free(mechs);
-
-    r = backend_ping(be, NULL);
-    CU_ASSERT_EQUAL(r, 0);
-
-    backend_disconnect(be);
-    free(be);
-}
 
 /* Common routine to test the semantics of capabilities */
 static void caps_common(void)
@@ -621,10 +923,9 @@ static void server_unaccept(struct server_state *state)
 /*
  * Main routine for pushing text back to the client.
  */
-static void server_printf(struct server_state *, const char *fmt, ...)
-    __attribute__((format(printf,2,3)));
-
-static void server_printf(struct server_state *state, const char *fmt, ...)
+static void
+__attribute__((format(printf, 2, 3)))
+server_printf(struct server_state *state, const char *fmt, ...)
 {
     va_list args;
     int r;
@@ -693,7 +994,6 @@ static void server_emit_caps(struct server_state *state)
                                  * NAME, VALUE, NULL,
                                  * NULL */
     char line[1024];
-    static const char banner[] = "Toy Test server v0.0.1";
 
     /*
      * The ccSASL cap reports a list of SASL mechanism names.
@@ -702,7 +1002,6 @@ static void server_emit_caps(struct server_state *state)
     if (!state->config.starttls || state->is_tls) {
         int got_login = 0;
         int got_plain = 0;
-        int got_digestmd5 = 0;
 
         /* First see what mechanisms SASL has; no point reporting
          * mechanisms which aren't actually available. */
@@ -719,13 +1018,9 @@ static void server_emit_caps(struct server_state *state)
                 words[n++] = "LOGIN";
                 got_login = 1;
             }
-            if (!strcasecmp(p, "LOGIN") && state->config.sasl_plain) {
+            if (!strcasecmp(p, "PLAIN") && state->config.sasl_plain) {
                 words[n++] = "PLAIN";
                 got_plain = 1;
-            }
-            if (!strcasecmp(p, "DIGEST-MD5") && state->config.sasl_digestmd5) {
-                words[n++] = "DIGEST-MD5";
-                got_digestmd5 = 1;
             }
         }
         words[n++] = NULL;
@@ -737,9 +1032,6 @@ static void server_emit_caps(struct server_state *state)
         if (state->config.sasl_plain && !got_plain)
             fprintf(stderr, "Server failed to find requested "
                             "SASL mechanism \"PLAIN\"\n");
-        if (state->config.sasl_digestmd5 && !got_digestmd5)
-            fprintf(stderr, "Server failed to find requested "
-                            "SASL mechanism \"DIGEST-MD5\"\n");
     }
 
     /*
@@ -804,7 +1096,7 @@ static void server_emit_caps(struct server_state *state)
             n++;
             server_printf(state, "* %s%s\r\n", name, line);
         }
-        server_printf(state, "OK %s\r\n", banner);
+        server_printf(state, "OK %s server ready\r\n", state->banner);
     } else {
         /* One-line, NAME=VALUE pairs inside IMAP-style response code */
         line[0] = '\0';
@@ -822,7 +1114,8 @@ static void server_emit_caps(struct server_state *state)
             }
             n++;
         }
-        server_printf(state, "OK [CAPABILITY%s] %s\r\n", line, banner);
+        server_printf(state, "OK [CAPABILITY%s] %s server ready\r\n",
+                      line, state->banner);
     }
     server_flush(state);
 }
@@ -1127,8 +1420,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
     if (!prop)
         return AUXPROP_RET;
     for ( ; prop->name ; prop++) {
-        if (!strcmp(prop->name, "*userPassword") ||
-            !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
+        if (!strcmp(prop->name, "*userPassword")) {
             if (prop->values)
                 sparams->utils->prop_erase(sparams->propctx, prop->name);
             sparams->utils->prop_set(sparams->propctx, prop->name,
@@ -1141,7 +1433,7 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
 
 /*
  * Helps create a fake "auxiliary property plugin" for the SASL library,
- * which is how we hook into the DIGEST-MD5 mechanism when it wants to
+ * which is how we hook into the DIGEST-MD5? mechanism when it wants to
  * get a plaintext password to check against the hash received from the
  * client.
  */
@@ -1193,8 +1485,10 @@ static int init_sasl(int isclient)
         }
 
         callbacks = mysasl_callbacks(USERID, USERID, NULL, PASSWORD);
-        if (!callbacks)
+        if (!callbacks) {
+            fprintf(stderr, "could not init sasl client callbacks\n");
             return -1;
+        }
     } else {
         static const struct sasl_callback server_cb[] = {
             { SASL_CB_SERVER_USERDB_CHECKPASS, (void *)&server_checkpass, NULL },
@@ -1219,11 +1513,6 @@ static int init_sasl(int isclient)
 static struct server_state *server_state;
 static pid_t server_pid;
 static int sasl_initialised;
-static int old_session_timeout;
-static char *old_config_dir;
-static char *old_tls_ca_file;
-static char *old_tls_cert_file;
-static char *old_tls_key_file;
 
 /*
  * Test suite setup function.  Sets up the global
@@ -1235,7 +1524,8 @@ static int set_up(void)
 {
     int rend_sock, port = 0;
     char *sr;
-    static char cwd[PATH_MAX];
+    char cwd[PATH_MAX];
+    struct buf myconfig = BUF_INITIALIZER;
 
     if (verbose > 1)
         fprintf(stderr, "Starting server!\n");
@@ -1246,24 +1536,20 @@ static int set_up(void)
         return -1;
     }
 
-    old_config_dir = (char *)config_dir;
-    config_dir = xstrdup(cwd);
+    /* we need config for these tests */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    buf_printf(&myconfig, "configdirectory: %s/conf\n", DBDIR);
 
-    old_tls_ca_file = (char *)imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s;
-    imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s =
-            strconcat(cwd, "/cacert.pem", (char *)NULL);
-
-    old_tls_cert_file = (char *)imapopts[IMAPOPT_TLS_SERVER_CERT].val.s;
-    imapopts[IMAPOPT_TLS_SERVER_CERT].val.s =
-            strconcat(cwd, "/cert.pem", (char *)NULL);
-
-    old_tls_key_file = (char *)imapopts[IMAPOPT_TLS_SERVER_KEY].val.s;
-    imapopts[IMAPOPT_TLS_SERVER_KEY].val.s =
-            strconcat(cwd, "/key.pem", (char *)NULL);
+    /* certs are in current directory */
+    buf_printf(&myconfig, "tls_server_ca_file: %s/cacert.pm\n", cwd);
+    buf_printf(&myconfig, "tls_server_cert: %s/cert.pem\n", cwd);
+    buf_printf(&myconfig, "tls_server_key: %s/key.pem\n", cwd);
 
     /* disable SSL session caching */
-    old_session_timeout = imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i;
-    imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i = 0;
+    buf_printf(&myconfig, "tls_session_timeout: 0\n");
+
+    config_read_string(buf_cstring(&myconfig));
+    buf_free(&myconfig);
 
     rend_sock = create_server_socket(&port);
     if (rend_sock < 0)
@@ -1305,6 +1591,10 @@ static int set_up(void)
  */
 static int tear_down(void)
 {
+    int r;
+
+    config_reset();
+
     if (verbose > 1)
         fprintf(stderr, "Cleaning up server! NOT.\n");
     if (server_pid > 1)
@@ -1320,21 +1610,9 @@ static int tear_down(void)
         sasl_initialised = 0;
     }
 
-    free((char *)config_dir);
-    config_dir = old_config_dir;
+    r = system("rm -rf " DBDIR);
 
-    imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i = old_session_timeout;
-
-    free((char *)imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s);
-    imapopts[IMAPOPT_TLS_SERVER_CA_FILE].val.s = old_tls_ca_file;
-
-    free((char *)imapopts[IMAPOPT_TLS_SERVER_CERT].val.s);
-    imapopts[IMAPOPT_TLS_SERVER_CERT].val.s = old_tls_cert_file;
-
-    free((char *)imapopts[IMAPOPT_TLS_SERVER_KEY].val.s);
-    imapopts[IMAPOPT_TLS_SERVER_KEY].val.s = old_tls_key_file;
-
-    return 0;
+    return r;
 }
 
 /* ====================================================================== */

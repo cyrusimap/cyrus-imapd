@@ -38,8 +38,6 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id$
  */
 
 #include <config.h>
@@ -90,7 +88,7 @@ char* notify_external(const char *class, const char *priority,
 
     if (pipe(fds) < 0) {
        syslog(LOG_ERR,
-              "notify_external: pipe() returned %s\n", strerror(errno));
+              "notify_external: pipe() returned %s", strerror(errno));
        return strdup("NO notify_external pipe failed");
     }
 
@@ -98,7 +96,7 @@ char* notify_external(const char *class, const char *priority,
         /* i'm the child! run notify */
         close(fds[1]);
         /* make the pipe be stdin */
-        dup2(fds[0], 0);
+        dup2(fds[0], STDIN_FILENO);
         execv(notify, (char **) buf);
 
         /* should never reach here */

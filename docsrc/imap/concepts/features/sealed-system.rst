@@ -13,7 +13,7 @@ user.
 
 The message spool directory or directories are held privately by the
 Cyrus IMAP software, and can be accessed by user through IMAP, POP, NNTP
-or KPOP protocols.
+or JMAP protocols.
 
 This design concept vastly increases the efficiency, scalability and
 security of Cyrus IMAP, and makes it easier to configure, maintain,

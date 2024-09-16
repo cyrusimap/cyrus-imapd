@@ -19,3 +19,6 @@ In-memory filesystems are faster then disk filesystems, but are limited in space
     Cyrus IMAP requires the parent directories to exist, and be writeable by the POSIX user account Cyrus IMAP runs under, prior to starting the ``master`` process.
 
 
+Certificates
+------------
+Cyrus IMAP can be configured to provide as server two kind of certificates: EC and RSA.  The EC certificates are only sent to the client, if the client supports them.  EC certificates have the advantage of requiring less computational resources compared to RSA, while offering comparatively the same security.

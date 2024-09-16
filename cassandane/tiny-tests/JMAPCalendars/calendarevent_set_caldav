@@ -1,0 +1,137 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_caldav
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => {
+                        "1" => {
+                            name => "A", color => "coral", sortOrder => 1, isVisible => JSON::true
+                        }
+             }}, "R1"]]);
+    my $calid = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "create event in calendar";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                $calid => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                            "duration" => "P1D",
+                            "timeZone" => undef,
+                        }
+                    }}, "R1"]]);
+    my $eventId1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get x-href of event $eventId1";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$eventId1]}, "R1"]]);
+    my $xhref = $res->[0][1]{list}[0]{"x-href"};
+    my $state = $res->[0][1]{state};
+
+    xlog $self, "GET event $eventId1 in CalDAV";
+    $res = $caldav->Request('GET', $xhref);
+    my $ical = $res->{content};
+    $self->assert_matches(qr/SUMMARY:foo/, $ical);
+
+    xlog $self, "DELETE event $eventId1 via CalDAV";
+    $res = $caldav->Request('DELETE', $xhref);
+
+    xlog $self, "get (non-existent) event $eventId1";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$eventId1]}, "R1"]]);
+    $self->assert_str_equals($eventId1, $res->[0][1]{notFound}[0]);
+
+    xlog $self, "get calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($eventId1, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]{newState};
+
+    my $uid2 = '97c46ea4-4182-493c-87ef-aee4edc2d38b';
+    $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uid2
+SUMMARY:bar
+DESCRIPTION:
+TRANSP:OPAQUE
+DTSTART;VALUE=DATE:20151008
+DTEND;VALUE=DATE:20151009
+END:VEVENT
+END:VCALENDAR
+EOF
+    my $eventId2 = encode_eventid($uid2);
+
+    xlog $self, "PUT event with UID $uid2";
+    $res = $caldav->Request('PUT', "$calid/$uid2.ics", $ical, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "get calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_equals($eventId2, $res->[0][1]{created}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "get x-href of event $eventId2";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$eventId2]}, "R1"]]);
+    $xhref = $res->[0][1]{list}[0]{"x-href"};
+    $state = $res->[0][1]{state};
+
+    xlog $self, "update event $eventId2";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
+                        "$eventId2" => {
+                            calendarIds => {
+                                $calid => JSON::true,
+                            },
+                            "title" => "bam",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-10T00:00:00",
+                            "duration" => "P1D",
+                            "timeZone" => undef,
+                        }
+                    }}, "R1"]]);
+
+    xlog $self, "GET event $eventId2 in CalDAV";
+    $res = $caldav->Request('GET', $xhref);
+    $ical = $res->{content};
+    $self->assert_matches(qr/SUMMARY:bam/, $ical);
+
+    xlog $self, "destroy event $eventId2";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { destroy => [$eventId2] }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_equals($eventId2, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "PROPFIND calendar $calid for non-existent event UID $uid2 in CalDAV";
+    # We'd like to GET the just destroyed event, to make sure that it also
+    # vanished on the CalDAV layer. Unfortunately, that GET would cause
+    # Net-DAVTalk to burst into flames with a 404 error. Instead, issue a
+    # PROPFIND and make sure that the event id doesn't show  in the returned
+    # DAV resources.
+    my $xml = <<EOF;
+<?xml version="1.0"?>
+<a:propfind xmlns:a="DAV:">
+ <a:prop><a:resourcetype/></a:prop>
+</a:propfind>
+EOF
+    $res = $caldav->Request('PROPFIND', "$calid", $xml,
+        'Content-Type' => 'application/xml',
+        'Depth' => '1'
+    );
+    $self->assert_does_not_match(qr{$uid2}, $res);
+}

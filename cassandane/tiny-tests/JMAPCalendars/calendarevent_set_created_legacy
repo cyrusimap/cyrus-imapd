@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_created_legacy
+    :min_version_3_1 :max_version_3_6 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+    my $eventId = $ret->{id};
+    my $created = $ret->{created};
+    $self->assert_not_null($created);
+    my $updated = $ret->{updated};
+    $self->assert_not_null($updated);
+
+    sleep 1;
+
+    # Created is preserved, updated isn't.
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'bar',
+                },
+            },
+       }, 'R1'],
+       ['CalendarEvent/get', {
+            ids => [$eventId],
+       }, 'R2'],
+   ]);
+   $self->assert(exists $res->[0][1]{updated}{$eventId});
+   $ret = $res->[1][1]{list}[0];
+   $self->assert_str_equals($created, $ret->{created});
+   $self->assert_str_not_equals($updated, $ret->{updated});
+
+   # Client can overwrite created and updated
+   $created = '2015-01-01T00:00:01Z';
+   $updated = '2015-01-01T00:00:02Z';
+   $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    created => $created,
+                    updated => $updated
+                },
+            },
+       }, 'R1'],
+       ['CalendarEvent/get', {
+            ids => [$eventId],
+       }, 'R2'],
+   ]);
+   $self->assert(exists $res->[0][1]{updated}{$eventId});
+   $ret = $res->[1][1]{list}[0];
+   $self->assert_str_equals($created, $ret->{created});
+   $self->assert_str_equals($updated, $ret->{updated});
+}

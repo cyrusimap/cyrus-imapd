@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_import_mailboxid_by_role
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsMboxId = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsMboxId);
+
+    xlog $self, "import email from blob $blobid";
+    $res = eval {
+        $jmap->CallMethods([['Email/import', {
+            emails => {
+                "1" => {
+                    blobId => $blobid,
+                    mailboxIds => {
+                        '$drafts'=>  JSON::true
+                    },
+                    keywords => {
+                        '$draft' => JSON::true,
+                    },
+                },
+            },
+        }, "R1"], ['Email/get', {ids => ["#1"]}, "R2"]]);
+    };
+
+    $self->assert_str_equals("Email/import", $res->[0][0]);
+    $self->assert_not_null($res->[1][1]{list}[0]->{mailboxIds}{$draftsMboxId});
+}

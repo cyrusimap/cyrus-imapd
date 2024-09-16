@@ -47,13 +47,15 @@
 #include <sqlite3.h>
 #include "ptrarray.h"
 #include "strarray.h"
+#include "util.h"
 
 struct sqldb_bindval {
     const char *name;
     int type;
-    union {
+    union sqldb_sqlval {
         sqlite3_int64 i;
         const char *s;
+        struct buf b;
     } val;
 };
 
@@ -65,6 +67,7 @@ struct sqldb {
     int version;
     int refcount;
     int writelock;
+    int attached;
     strarray_t trans;
     ptrarray_t stmts;
     struct sqldb *next;
@@ -86,9 +89,17 @@ int sqldb_done(void);
 
 #define SQLDB_DEFAULT_TIMEOUT  20000 /* 20 seconds is an eternity */
 
+#define SQLDB_DONE         1
+#define SQLDB_OK           0
+#define SQLDB_ERR_UNKNOWN -1
+#define SQLDB_ERR_LIMIT   -2
+
 sqldb_t *sqldb_open(const char *fname, const char *initsql,
                    int version, const struct sqldb_upgrade *upgradesql,
                    int timeout_ms);
+
+int sqldb_attach(sqldb_t *open, const char *fname);
+int sqldb_detach(sqldb_t *open);
 
 /* execute 'cmd' and process results with 'cb'
    'cmd' is prepared as 'stmt' with 'bval' as bound values */

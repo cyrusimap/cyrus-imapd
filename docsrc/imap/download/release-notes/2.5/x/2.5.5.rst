@@ -11,15 +11,10 @@ Cyrus IMAP 2.5.5 Release Notes
     Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
     about the 2.5 series, including upgrading instructions.
 
-Download via HTTP:
+Download from GitHub:
 
-    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz
-    *   http://www.cyrusimap.org/releases/old/cyrus-imapd-2.5.5.tar.gz.sig
-
-Download via FTP:
-
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/OLD-VERSIONS/cyrus-imapd-2.5.5.tar.gz.sig
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.5/cyrus-imapd-2.5.5.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.5/cyrus-imapd-2.5.5.tar.gz.sig
 
 .. _relnotes-2.5.5-changes:
 

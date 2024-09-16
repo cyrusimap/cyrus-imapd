@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    # Call CalDAV once to create manifold's calendar home #calendars
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "share calendar home read-only to user";
+    $admintalk->setacl("user.manifold.#calendars", cassandane => 'lr') or die;
+
+    xlog $self, "create calendar (should fail)";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'manifold',
+                    create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals("accountReadOnly", $res->[0][1]{notCreated}{1}{type});
+
+    xlog $self, "share calendar home read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "create calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'manifold',
+                    create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    my $CalendarId = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "share calendar read-only to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+
+    xlog $self, "update calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'manifold',
+                    update => {$CalendarId => {
+                            name => "bar",
+                            isVisible => \0
+            }}}, "R1"]
+    ]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert(exists $res->[0][1]{updated}{$CalendarId});
+
+    xlog $self, "destroy calendar $CalendarId (should fail)";
+    $res = $jmap->CallMethods([['Calendar/set', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals("accountReadOnly", $res->[0][1]{notDestroyed}{$CalendarId}{type});
+
+    xlog $self, "share read-writable to user";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "destroy calendar $CalendarId";
+    $res = $jmap->CallMethods([['Calendar/set', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
+    $self->assert_str_equals('manifold', $res->[0][1]{accountId});
+    $self->assert_str_equals($CalendarId, $res->[0][1]{destroyed}[0]);
+}

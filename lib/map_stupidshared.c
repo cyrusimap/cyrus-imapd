@@ -49,9 +49,10 @@
 #include <syslog.h>
 
 #include "map.h"
+#include "slowio.h"
 #include "xmalloc.h"
 
-EXPORTED const char *map_method_desc = "stupidshared";
+EXPORTED const char map_method_desc[] = "stupidshared";
 
 #ifndef MAP_FAILED
 #define MAP_FAILED ((void *)-1)
@@ -93,7 +94,10 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     flags |= MAP_VARIABLE;
 #endif
 
-    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, flags, fd, 0L);
+    /* always map one extra byte so there's a trailing NULL to protect
+     * us from overruns.  This does NOT mean that we should treat this
+     * memory as a cstring */
+    *base = (char *)mmap((caddr_t)0, newlen+1, PROT_READ, flags, fd, 0L);
     if (*base == (char *)MAP_FAILED) {
         syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
                mboxname ? " for " : "", mboxname ? mboxname : "");
@@ -101,6 +105,8 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
         fatal(buf, EX_IOERR);
     }
     *len = newlen;
+
+    slowio_maybe_delay_read(newlen);
 }
 
 /*

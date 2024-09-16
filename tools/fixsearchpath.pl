@@ -75,6 +75,8 @@ my @dirvars = (
 
 my $boilerplate = << 'EOT'
 ## Boilerplate added by Cyrus fixsearchpath.pl
+## XXX This might all be for naught because the top-level Cyrus build does
+## XXX not pass DESTDIR down to the perl modules anyway.
 my $__cyrus_destdir;
 BEGIN {
     $__cyrus_destdir = '';
@@ -82,7 +84,9 @@ BEGIN {
         my $d = $0;
 EOT
 ;
-$boilerplate .= "       my \$bindir = " . quote($configure_bindir) . ";\n";
+$boilerplate .= "        my \$bindir = "
+                . quote($configure_prefix . $configure_bindir)
+                . ";\n";
 $boilerplate .= << 'EOT'
         # remove the filename, $d is now the installed bindir
         $d =~ s/\/[^\/]+$//;
@@ -103,7 +107,7 @@ foreach my $dv (@dirvars) {
         # Expect to be installed into a non-default location
         # because Cyrus was built with a non-default --prefix
         my $install_prefix = normalise($Config{$dv->{prefix}});
-        $dir = $configure_prefix . substr($dir, length($install_prefix))
+        $dir = $configure_prefix . substr($dir, length($install_prefix));
     }
     $boilerplate .= 'use lib $__cyrus_destdir . ' . quote($dir) .  ";\n";
 }

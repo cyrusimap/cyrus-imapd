@@ -9,8 +9,8 @@ How to run gdb on Cyrus components
     imapd, lmtpd (and some others), but does *not* include the command line
     tools.
 
-An easy way to debug something in a service daemon is to write a `Cassandane
-<https://github.com/cyrusimap/cassandane>`_ test that tries to reproduce the
+An easy way to debug something in a service daemon is to write a
+:ref:`Cassandane test <developer-testing>` that tries to reproduce the
 bug. Cassandane has a ``[gdb]`` section in cassandane.ini which allows for
 starting service daemons in a debugger.
 

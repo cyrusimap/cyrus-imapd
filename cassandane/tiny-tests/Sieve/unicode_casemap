@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_unicode_casemap
+    :min_version_3_9
+    :needs_component_sieve :needs_component_sieve :NoAltNameSpace :NoMunge8bit
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing the \"i;unicode-casemap\" collation";
+
+    my $miss     = "INBOX";
+    my $is       = "INBOX.is";
+    my $contains = "INBOX.contains";
+    my $matches  = "INBOX.matches";
+    my $regex    = "INBOX.regex";
+
+    xlog $self, "Actually create the target folders";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($is)
+         or die "Cannot create $is: $@";
+    $imaptalk->create($contains)
+         or die "Cannot create $contains: $@";
+    $imaptalk->create($matches)
+         or die "Cannot create $match: $@";
+    $imaptalk->create($regex)
+         or die "Cannot create $regex: $@";
+
+    xlog $self, "Install the sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "comparator-i;unicode-casemap", "regex"];
+if header :comparator "i;unicode-casemap" :is "Subject" "Hello World!" {
+    fileinto "$is";
+}
+elsif header :comparator "i;unicode-casemap" :is "Subject" "Pâté" {
+    fileinto "$is";
+}
+elsif header :comparator "i;unicode-casemap" :regex "Subject" ".+(Don't|Won't).+Pâté.*" {
+    fileinto "$regex";
+}
+elsif header :comparator "i;unicode-casemap" :matches "Subject" "*Pâté*Lot" {
+    fileinto "$matches";
+}
+elsif header :comparator "i;unicode-casemap" :contains "Subject" "Pâté" {
+    fileinto "$contains";
+}
+EOF
+    );
+
+    my @cases = (
+        { subject => 'hello world!', filedto => $is },
+        { subject => 'pÂTé', filedto => $is },
+        { subject => 'pate', filedto => $miss },
+        { subject => 'I like pâTé', filedto => $contains },
+        { subject => 'I like pâTé a lot', filedto => $matches },
+        { subject => "I don't like pâTé very much", filedto => $regex },
+        { subject => "I won't eat pâTé", filedto => $regex },
+    );
+
+    my %uid = ($is => 1, $contains => 1, $matches => 1, $regex => 1, $miss => 1);
+    my %exp;
+    foreach my $case (@cases)
+    {
+        xlog $self, "Deliver a message with subject \"$case->{subject}\"";
+        my $msg = $self->{gen}->generate(subject => $case->{subject});
+        $msg->set_attribute(uid => $uid{$case->{filedto}});
+        $uid{$case->{filedto}}++;
+        $self->{instance}->deliver($msg);
+        $exp{$case->{filedto}}->{$case->{subject}} = $msg;
+    }
+
+    xlog $self, "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}

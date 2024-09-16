@@ -48,6 +48,7 @@
 
 #include "lib/gzuncat.h"
 #include "lib/libconfig.h"
+#include "lib/xunlink.h"
 
 #include "imap/imap_err.h"
 #include "imap/sync_support.h"
@@ -67,12 +68,12 @@ static void compact_readconfig(void)
     /* read and normalise config values */
     if (compact_minsize == 0) {
         compact_minsize = (size_t)
-            MAX(0, 1024 * config_getint(IMAPOPT_BACKUP_COMPACT_MINSIZE));
+            MAX(0, config_getbytesize(IMAPOPT_BACKUP_COMPACT_MINSIZE, 'K'));
     }
 
     if (compact_maxsize == 0) {
         compact_maxsize = (size_t)
-            MAX(0, 1024 * config_getint(IMAPOPT_BACKUP_COMPACT_MAXSIZE));
+            MAX(0, config_getbytesize(IMAPOPT_BACKUP_COMPACT_MAXSIZE, 'K'));
     }
 
     if (compact_work_threshold == 0) {
@@ -142,8 +143,8 @@ static int compact_closerename(struct backup **originalp,
     struct buf ts_index_fname = BUF_INITIALIZER;
     int r;
 
-    buf_printf(&ts_data_fname, "%s.%ld", original->data_fname, now);
-    buf_printf(&ts_index_fname, "%s.%ld", original->index_fname, now);
+    buf_printf(&ts_data_fname, "%s." TIME_T_FMT, original->data_fname, now);
+    buf_printf(&ts_index_fname, "%s." TIME_T_FMT, original->index_fname, now);
 
     /* link original files into timestamped names */
     r = link(original->data_fname, buf_cstring(&ts_data_fname));
@@ -151,8 +152,8 @@ static int compact_closerename(struct backup **originalp,
 
     if (r) {
         /* on error, trash the new links and bail out */
-        unlink(buf_cstring(&ts_data_fname));
-        unlink(buf_cstring(&ts_index_fname));
+        xunlink(buf_cstring(&ts_data_fname));
+        xunlink(buf_cstring(&ts_index_fname));
         goto done;
     }
 
@@ -162,19 +163,25 @@ static int compact_closerename(struct backup **originalp,
 
     if (r) {
         /* on error, put original files back */
-        unlink(original->data_fname);
-        unlink(original->index_fname);
+        xunlink(original->data_fname);
+        xunlink(original->index_fname);
         if (link(buf_cstring(&ts_data_fname), original->data_fname))
-            syslog(LOG_ERR, "IOERROR: failed to link file back (%s %s)!", buf_cstring(&ts_data_fname), original->data_fname);
+            xsyslog(LOG_ERR, "IOERROR: failed to link file back!",
+                             "source=<%s> dest=<%s>",
+                             buf_cstring(&ts_data_fname),
+                             original->data_fname);
         if (link(buf_cstring(&ts_index_fname), original->index_fname))
-            syslog(LOG_ERR, "IOERROR: failed to link file back (%s %s)!", buf_cstring(&ts_index_fname), original->index_fname);
+            xsyslog(LOG_ERR, "IOERROR: failed to link file back!",
+                             "source=<%s> dest=<%s>",
+                             buf_cstring(&ts_index_fname),
+                             original->index_fname);
         goto done;
     }
 
     /* finally, clean up the timestamped ones */
     if (!config_getswitch(IMAPOPT_BACKUP_KEEP_PREVIOUS)) {
-        unlink(buf_cstring(&ts_data_fname));
-        unlink(buf_cstring(&ts_index_fname));
+        xunlink(buf_cstring(&ts_data_fname));
+        xunlink(buf_cstring(&ts_index_fname));
     }
 
     /* release our locks */
@@ -419,7 +426,8 @@ static ssize_t _prot_fill_cb(unsigned char *buf, size_t len, void *rock)
     int r = gzuc_read(gzuc, buf, len);
 
     if (r < 0)
-        syslog(LOG_ERR, "IOERROR: gzuc_read returned %i", r);
+        xsyslog(LOG_ERR, "IOERROR: gzuc_read failed",
+                         "return=<%d>", r);
     if (r < -1)
         errno = EIO;
 
@@ -462,12 +470,12 @@ EXPORTED int backup_compact(const char *name,
     /* calculate current time after obtaining locks, in case of a wait */
     const time_t now = time(NULL);
 
-    const int retention_days = config_getint(IMAPOPT_BACKUP_RETENTION_DAYS);
-    if (retention_days > 0) {
-        since = now - (retention_days * 24 * 60 * 60);
+    const int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
+    if (retention > 0) {
+        since = now - retention;
     }
     else {
-        /* zero or negative retention days means "keep forever" */
+        /* zero or negative retention means "keep forever" */
         since = -1;
     }
 
@@ -521,11 +529,11 @@ EXPORTED int backup_compact(const char *name,
                 const char *error = prot_error(in);
                 if (error && 0 != strcmp(error, PROT_EOF_STRING)) {
                     syslog(LOG_ERR,
-                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                           "IOERROR: %s: error reading chunk at offset " OFF_T_FMT ", byte %" PRIu64 ": %s",
                            name, chunk->offset, prot_bytes_in(in), error);
 
                     if (out)
-                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %i: %s\n",
+                        fprintf(out, "error reading chunk at offset " OFF_T_FMT ", byte %" PRIu64 ": %s\n",
                                 chunk->offset, prot_bytes_in(in), error);
 
                     /* chunk is corrupt, discard the rest of it and get on with

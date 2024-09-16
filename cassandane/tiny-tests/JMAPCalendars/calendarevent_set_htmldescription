@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_htmldescription
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "showWithoutTime"=> JSON::false,
+        "description"=> '<html><body>HTML with special chars : and ; and "</body></html>',
+        "descriptionContentType" => 'text/html',
+        "privacy" => "secret",
+    };
+
+    # This actually tests that Cyrus doesn't support HTML descriptions!
+    my $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => { "1" => $event, }
+    }, "R1"]]);
+    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals("descriptionContentType", $res->[0][1]{notCreated}{"1"}{properties}[0]);
+}

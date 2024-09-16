@@ -109,8 +109,8 @@ Replication
 Replication is not Aggregation or :ref:`Cyrus Murder<architecture_murder>`.
 Replication provides high availability and hot backups. It is designed to
 replicate the mailstore on a standalone Cyrus install, or multiple backend
-servers in a :ref:`murder <architecture_murder>` configuration. (It does
-not replicate mupdate master servers (frontends have no state to replicate).
+servers in a :ref:`murder <architecture_murder>` configuration. It does
+not replicate mupdate master servers: frontends have no state to replicate.
 
 .. image:: images/image3-replication.jpg
     :height: 385 px 
@@ -147,7 +147,7 @@ know the imap credentials on the replica to allow it to send details to
 the replica. It is the port configuration on the replica to know where
 to listen for change updates.
 
-There's two standard channel configurations:
+There are two standard channel configurations:
 
 1. Single master keeping all replicas up to date.
 

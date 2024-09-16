@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_url_virtdom_extradomain
+    :VirtDomains :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+    my $caltalk = Net::CalDAVTalk->new(
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "create calendar";
+    my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "fetch again";
+    my $Calendar = $caltalk->GetCalendar($CalendarId);
+    $self->assert_not_null($Calendar);
+
+    xlog $self, "check that the href has domain";
+    $self->assert_str_equals("/dav/calendars/user/cassandane\@example.com/$CalendarId/", $Calendar->{href});
+}

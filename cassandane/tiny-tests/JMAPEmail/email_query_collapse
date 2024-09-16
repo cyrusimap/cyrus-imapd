@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_collapse
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("test");
+    $admintalk->setacl("user.test", "cassandane", "lrwkx") or die;
+
+    # run tests for both the main and "test" account
+    foreach (undef, "test") {
+        my $account = $_;
+        my $store = defined $account ? $self->{adminstore} : $self->{store};
+        my $mboxprefix = defined $account ? "user.$account" : "INBOX";
+        my $talk = $store->get_client();
+
+        my %params = (store => $store);
+        $store->set_folder($mboxprefix);
+
+        xlog $self, "generating email A";
+        $exp{A} = $self->make_message("Email A", %params);
+        $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+        xlog $self, "generating email B";
+        $exp{B} = $self->make_message("Email B", %params);
+        $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+
+        xlog $self, "generating email C referencing A";
+        %params = (
+            references => [ $exp{A} ],
+            store => $store,
+        );
+        $exp{C} = $self->make_message("Re: Email A", %params);
+        $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
+
+        xlog $self, "list uncollapsed threads";
+        $res = $jmap->CallMethods([['Email/query', { accountId => $account }, "R1"]]);
+        $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+
+        $res = $jmap->CallMethods([['Email/query', { accountId => $account, collapseThreads => JSON::true }, "R1"]]);
+        $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    }
+}

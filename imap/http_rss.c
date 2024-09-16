@@ -112,7 +112,7 @@ struct namespace_t namespace_rss = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    rss_init, NULL, NULL, NULL, NULL, NULL,
+    rss_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -132,6 +132,7 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          &rss_parse_path },      /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -170,7 +171,7 @@ static int meth_get(struct transaction_t *txn,
     /* If no mailboxname, list all available feeds */
     if (!txn->req_tgt.mbentry) return list_feeds(txn);
 
-    /* Make sure its a mailbox that we are treating as an RSS feed */
+    /* Make sure it is a mailbox that we are treating as an RSS feed */
     if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
 
     /* Check ACL for current user */
@@ -218,7 +219,7 @@ static int meth_get(struct transaction_t *txn,
     /* If no UID specified, list messages as an RSS feed */
     if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
-        txn->error.desc = "Message does not exist\r\n";
+        txn->error.desc = "Message does not exist";
         ret = HTTP_NOT_FOUND;
     }
     else {
@@ -253,6 +254,7 @@ static int meth_get(struct transaction_t *txn,
                 resp_body->lastmod = lastmod;
                 resp_body->maxage = 31536000;  /* 1 year */
                 txn->flags.cc |= CC_MAXAGE;
+                if (httpd_userid) txn->flags.cc |= CC_PRIVATE;
 
                 if (precond != HTTP_NOT_MODIFIED) break;
 
@@ -266,7 +268,7 @@ static int meth_get(struct transaction_t *txn,
 
             if (!section) {
                 /* Return entire message formatted as text/html */
-                display_message(txn, mailbox->name, &record, body, &msg_buf);
+                display_message(txn, mailbox_name(mailbox), &record, body, &msg_buf);
             }
             else if (!strcmp(section, "0")) {
                 /* Return entire message as text/plain */
@@ -361,7 +363,7 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
             else if (mboxname[len-1] == '.') mboxname[len-1] = '^';
         }
 
-        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+        int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
                    mboxname, error_message(r));
@@ -437,8 +439,8 @@ static int do_list(const char *name, void *rock)
         /* Don't list deleted mailboxes */
         if (mboxname_isdeletedmailbox(name, NULL)) return 0;
 
-        /* Lookup the mailbox and make sure its readable */
-        r = http_mlookup(name, &mbentry, NULL);
+        /* Lookup the mailbox and make sure it is readable */
+        r = proxy_mlookup(name, &mbentry, NULL, NULL);
         if (r) return 0;
 
         rights = httpd_myrights(httpd_authstate, mbentry);
@@ -536,7 +538,7 @@ static int do_list(const char *name, void *rock)
 
 static int list_cb(struct findall_data *data, void *rock)
 {
-    if (data && data->mbname)
+    if (data && data->is_exactmatch)
         return do_list(mbname_intname(data->mbname), rock);
     return do_list(NULL, rock);
 }
@@ -612,12 +614,12 @@ static int list_feeds(struct transaction_t *txn)
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
     stat(mboxlist, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
 
     /* stat() imapd.conf for Last-Modified and ETag */
     stat(config_filename, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-%ld-%ld", sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
 
     /* Check any preconditions */
     precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
@@ -699,7 +701,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     if ((r == CYRUSDB_NOTFOUND) ||
         ((record->system_flags & FLAG_DELETED) ||
          record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-        txn->error.desc = "Message has been removed\r\n";
+        txn->error.desc = "Message has been removed";
 
         /* Fill in Expires */
         txn->resp_body.maxage = 31536000;  /* 1 year */
@@ -842,8 +844,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 
     /* Get maximum age of items to display */
-    max_age = config_getint(IMAPOPT_RSS_MAXAGE);
-    if (max_age > 0) age_mark = time(0) - (max_age * 60 * 60 * 24);
+    max_age = config_getduration(IMAPOPT_RSS_MAXAGE, 'd');
+    if (max_age > 0) age_mark = time(0) - max_age;
 
     /* Get number of items to display */
     max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
@@ -883,7 +885,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 #endif
 
     /* Translate mailbox name to external form */
-    strlcpy(mboxname, mailbox->name, sizeof(mboxname));
+    strlcpy(mboxname, mailbox_name(mailbox), sizeof(mboxname));
 
     /* Construct base URL */
     http_proto_host(txn->req_hdrs, &proto, &host);
@@ -904,7 +906,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* <id> - required */
     buf_printf_markup(buf, level, "<id>%s%s</id>",
-                      GUID_URL_SCHEME, mailbox->uniqueid);
+                      GUID_URL_SCHEME, mailbox_uniqueid(mailbox));
 
     /* <updated> - required */
     time_to_rfc3339(lastmod, datestr, sizeof(datestr));
@@ -916,7 +918,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf_markup(buf, --level, "</author>");
 
     /* <subtitle> - optional */
-    annotatemore_lookup(mailbox->name, "/comment", NULL, &attrib);
+    annotatemore_lookup_mbox(mailbox, "/comment", "", &attrib);
     if (age_mark) {
         time_to_rfc5322(age_mark, datestr, sizeof(datestr));
         buf_printf_markup(buf, level,
@@ -949,12 +951,11 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     for (recno = mailbox->i.num_records, nitems = 0;
          recno >= 1 && (!max_items || nitems < max_items); recno--) {
         struct index_record record;
-        struct buf msg_buf = BUF_INITIALIZER;
         struct body *body = NULL;
         char *subj;
         struct address *addr = NULL;
         const char *content_types[] = { "text", NULL };
-        struct message_content content;
+        struct message_content content = MESSAGE_CONTENT_INITIALIZER;
         struct bodypart **parts;
 
         /* Send a body chunk once in a while */
@@ -965,7 +966,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
         /* Fetch the message */
         if (fetch_message(txn, mailbox, recno, 0,
-                          &record, &body, &msg_buf)) {
+                          &record, &body, &content.map)) {
             continue;
         }
 
@@ -1036,8 +1037,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         }
 
         /* <summary> - optional (find and use the first text/ part) */
-        content.base = buf_base(&msg_buf);
-        content.len = buf_len(&msg_buf);
         content.body = body;
         message_fetch_part(&content, content_types, &parts);
 
@@ -1064,7 +1063,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
             free(body);
         }
 
-        buf_free(&msg_buf);
+        buf_free(&content.map);
     }
 
     /* End of Atom <feed> */
@@ -1236,7 +1235,7 @@ static void display_part(struct transaction_t *txn,
                 charset = charset_lookupname("us-ascii");
             }
             body->decoded_body =
-                charset_to_utf8(buf_base(msg_buf) + body->content_offset,
+                charset_to_utf8cstr(buf_base(msg_buf) + body->content_offset,
                                 body->content_size, charset, encoding);
             charset_free(&charset);
             if (!ishtml) buf_printf_markup(buf, level, "<pre>");

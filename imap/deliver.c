@@ -46,6 +46,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,9 +75,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 static int logdebug = 0;
 
@@ -129,6 +127,9 @@ EXPORTED void fatal(const char* s, int code)
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -149,7 +150,7 @@ void pipe_through(struct backend *conn)
         prot_flush(conn->out);
 
     } while (!proxy_check_input(protin, deliver_in, deliver_out,
-                                conn->in, conn->out, 0));
+                                conn->in, conn->out, PROT_NO_FD, NULL, 0));
 
     /* ok, we're done. */
     protgroup_free(protin);
@@ -169,7 +170,23 @@ int main(int argc, char **argv)
     char buf[1024];
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:df:r:m:a:F:eE:lqD")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:DE:F:a:def:lm:qr:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "debug", no_argument, NULL, 'D' }, /* XXX undocumented */
+        { "auth-id", required_argument, NULL, 'a' },
+        { "lmtp", no_argument, NULL, 'l' },
+        { "mailbox", required_argument, NULL, 'm' },
+        { "ignore-quota", no_argument, NULL, 'q' },
+        { "return-path", required_argument, NULL, 'r' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

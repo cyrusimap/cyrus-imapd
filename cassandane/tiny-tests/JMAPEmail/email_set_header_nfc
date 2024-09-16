@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64);
+use MIME::QuotedPrint qw(encode_qp);
+
+sub test_email_set_header_nfc
+    :needs_component_jmap :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $jmap = $self->{jmap};
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $nonNfcEmailAddress =
+        "\N{U+1F71}\N{U+1F73}\N{U+1F75}" . '@' .
+        "\N{U+1F77}\N{U+1F79}\N{U+1F7B}.local";
+    my $normalizedEmailAddress =
+        "\N{U+03AC}\N{U+03AD}\N{U+03AE}" . '@' .
+        "\N{U+03AF}\N{U+03CC}\N{U+03CD}.local";
+    my $normalizedEmailAddressEncoded =
+        "\N{U+03AC}\N{U+03AD}\N{U+03AE}" . '@' .
+        "xn--kxa2dd.local";
+
+    my $nonNfcXHeaderValue =       "0.5\N{U+212B}";
+    my $normalizedXHeaderValue =   "0.5\N{U+00C5}";
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    to => [{
+                        email => $nonNfcEmailAddress,
+                    }],
+                    'header:x-my-header' => $nonNfcXHeaderValue,
+                    'header:x-my-header2:asText' => $nonNfcXHeaderValue,
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        },
+                    },
+                    subject => 'test',
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#email'],
+            properties => [
+                'to',
+                'header:to',
+                'header:x-my-header:asText',
+                'header:x-my-header',
+                'header:x-my-header2:asText',
+                'header:x-my-header2',
+            ],
+        }, 'R2'],
+    ]);
+
+    $self->assert_str_equals($normalizedEmailAddressEncoded,
+        $res->[1][1]{list}[0]{to}[0]{email});
+    $self->assert_str_equals(" $normalizedEmailAddress",
+        $res->[1][1]{list}[0]{'header:to'});
+    $self->assert_str_equals($normalizedXHeaderValue,
+        $res->[1][1]{list}[0]{'header:x-my-header:asText'});
+    $self->assert_str_equals(" $nonNfcXHeaderValue",
+        $res->[1][1]{list}[0]{'header:x-my-header'});
+    $self->assert_str_equals($normalizedXHeaderValue,
+        $res->[1][1]{list}[0]{'header:x-my-header2:asText'});
+    $self->assert_str_equals(" =?UTF-8?Q?0.5=C3=85?=",
+        $res->[1][1]{list}[0]{'header:x-my-header2'});
+}

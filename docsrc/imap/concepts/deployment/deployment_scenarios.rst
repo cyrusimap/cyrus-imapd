@@ -42,7 +42,7 @@ IMAP Proxy
 
 An IMAP proxy like NGINX could sit in front of a number of stand-alone Cyrus IMAP servers, proxying client connections through to the correct stand-alone Cyrus IMAP server for a user.
 
-Note that in this type of setup, it is the user authentication that directs the proxy to the correct stand-alone Cyrus IMAP server. As such, shared mailboxes can only exist on the stand-alone Cyrus IMAP server to which the user is proxied &ndash;in other words, on which the user's own mailbox is supposed to exist.
+Note that in this type of setup, it is the user authentication that directs the proxy to the correct stand-alone Cyrus IMAP server. As such, shared mailboxes can only exist on the stand-alone Cyrus IMAP server to which the user is proxied -- in other words, on which the user's own mailbox is supposed to exist.
 
 
 .. _cyrus_imap_murder:

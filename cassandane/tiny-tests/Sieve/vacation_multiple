@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_multiple
+    :min_version_3_1
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    # can't do anything without captured syslog
+    if (!$self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "can't examine syslog, test is useless";
+        return;
+    }
+
+    xlog $self, "Install a sieve script with vacation action";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["vacation"];
+
+vacation :days 3 :addresses ["cassandane@example.com"] text:
+I am out of the office today. I will answer your email as soon as I can.
+.
+;
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1",
+                                      to => Cassandane::Address->new(localpart => 'cassandane', domain => 'example.com'));
+    $self->{instance}->deliver($msg1);
+
+    sleep 1;
+
+    xlog $self, "Deliver another message";
+    my $msg2 = $self->{gen}->generate(subject => "Message 2",
+                                      to => Cassandane::Address->new(localpart => 'cassandane', domain => 'example.com'));
+    $self->{instance}->deliver($msg2);
+
+    # Make sure that we only sent one response
+    my @resp = $self->{instance}->getsyslog(qr/smtpclient_open:/);
+    $self->assert_num_equals(1, scalar @resp);
+}

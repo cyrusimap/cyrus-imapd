@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_attach_contact_by_blobid
+    :min_version_3_5 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    push @using, 'https://cyrusimap.org/ns/jmap/contacts';
+    $jmap->DefaultUsing(\@using);
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $contact = {
+        firstName => "first",
+        lastName => "last"
+    };
+
+    $res = $jmap->CallMethods([['Contact/set',
+                                {create => {"1" => $contact }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $blobid = $res->[0][1]{created}{"1"}{blobId};
+    my $size = $res->[0][1]{created}{"1"}{size};
+
+    $res = $jmap->CallMethods([['Email/set', {
+        create => {
+            k1 => {
+                bcc => undef,
+                bodyStructure => {
+                    subParts => [{
+                        partId => 'text',
+                        type => 'text/plain',
+                    },{
+                        blobId => $blobid,
+                        cid => undef,
+                        disposition => 'attachment',
+                        height => undef,
+                        name => 'last.vcf',
+                        size => $size,
+                        type => 'text/vcard',
+                        width => undef,
+                    }],
+                    type => 'multipart/mixed',
+                },
+                bodyValues => {
+                    text => {
+                        isTruncated => $JSON::false,
+                        value => "Hello world",
+                    },
+                },
+                mailboxIds => { $inboxid => JSON::true },
+                subject => 'email with vCard',
+                from => [ {email => 'foo@example.com', name => 'foo' } ],
+                to => [ {email => 'foo@example.com', name => 'foo' } ],
+            },
+        },
+    }, "R1"]]);
+
+    my $id = $res->[0][1]{created}{k1}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$id],
+        properties => ['bodyStructure'],
+    }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+
+    my $newpart = $msg->{bodyStructure}{subParts}[1];
+    $self->assert_str_equals("last.vcf", $newpart->{name});
+    $self->assert_str_equals("text/vcard", $newpart->{type});
+    $self->assert_num_equals($size, $newpart->{size});
+
+}

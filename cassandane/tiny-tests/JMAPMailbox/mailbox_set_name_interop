@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_name_interop
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailbox via IMAP";
+    $imaptalk->create("INBOX.foo")
+        or die "Cannot create mailbox INBOX.foo: $@";
+
+    xlog $self, "get foo mailbox";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $foo = $m{"foo"};
+    my $id = $foo->{id};
+    $self->assert_str_equals("foo", $foo->{name});
+
+    xlog $self, "rename mailbox foo to oof via JMAP";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { update => { $id => { name => "oof" }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "get mailbox via IMAP";
+    my $data = $imaptalk->list("INBOX.oof", "%");
+    $self->assert_num_equals(1, scalar @{$data});
+
+    xlog $self, "rename mailbox oof to bar via IMAP";
+    $imaptalk->rename("INBOX.oof", "INBOX.bar")
+        or die "Cannot rename mailbox: $@";
+
+    xlog $self, "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals("bar", $res->[0][1]{list}[0]->{name});
+
+    xlog $self, "rename mailbox bar to baz via JMAP";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { update => { $id => { name => "baz" }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog $self, "get mailbox via IMAP";
+    $data = $imaptalk->list("INBOX.baz", "%");
+    $self->assert_num_equals(1, scalar @{$data});
+
+    xlog $self, "rename mailbox baz to IFeel\N{WHITE SMILING FACE} via IMAP";
+    $imaptalk->rename("INBOX.baz", "INBOX.IFeel\N{WHITE SMILING FACE}")
+        or die "Cannot rename mailbox: $@";
+
+    xlog $self, "get mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
+    $self->assert_str_equals("IFeel\N{WHITE SMILING FACE}", $res->[0][1]{list}[0]->{name});
+}

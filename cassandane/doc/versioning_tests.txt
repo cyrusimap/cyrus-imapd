@@ -1,0 +1,65 @@
+From: ellie timoney via Cyrus-devel <cyrus-devel@lists.andrew.cmu.edu>
+To: cyrus-devel@lists.andrew.cmu.edu
+Subject: new cassandane feature: skip tests based on cyrus version being tested
+Date: Tuesday, August 23, 2016 12:43 PM
+
+I've just pushed up a new feature in Cassandane for marking tests as
+only applying to particular version ranges.  So if you're writing tests
+for a new Cyrus feature, you can mark them appropriately, and Cassandane
+can still run cleanly when testing versions prior to that feature's
+introduction.
+
+There's two new magical subroutine attribute patterns:
+        :min_version_x_y_z
+        :max_version_x_y_z
+(where in both cases y and z are optional).
+
+These only apply to test suites inheriting from
+Cassandane::Cyrus::TestCase.  Test suites inheriting from
+Cassandane::Unit::TestCase will ignore these attributes entirely -- but
+you probably shouldn't inherit from this anyway (unless you're testing
+Cassandane itself).
+
+So for example, you might test a feature that's new in master with
+something like:
+
+    sub test_my_new_feature
+        :min_version_3_0
+    {
+         # [...]
+    }
+
+And you might continue to test some hypothetical feature that's been
+discontinued on master but still exists in the stable branch with
+something like:
+
+    sub test_my_obsolete_feature
+        :max_version_2_5
+    {
+        # [...]
+    }
+
+There's also a new class method on Cassandane::Instance: get_version().
+It's able to detect versions as far back as 2.5.0.  So if you need to do
+some version-based conditionalisation within a test function (or within
+infrastructure), you can use something like:
+
+    my ($major, $minor, $revision, $extra) =
+    Cassandane::Instance->get_version()
+    # [...]
+
+And there's a new infrastructure test suite, Cassandane::Test::Skip,
+which tests the implementation of the skip handling.
+
+The end goal here is to no longer need a separate "for-cyrus-2.5" branch
+in Cassandane -- I want to be able to use the same test suite for
+testing all future releases (I don't plan for it to support 2.4 or
+earlier).  There's still some work to go in this respect, in terms of
+attributing our existing tests appropriately and other little tweaks to
+accommodate 2.5.  But this feature now exists for use in development of
+new tests.
+
+I've already converted the Archive, Delete and JMAP test suites to
+attribute their version requirements appropriately (so have a look at my
+recent commits to these modules for real world examples), and am working
+through the rest (low hanging fruit first).

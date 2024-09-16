@@ -1,0 +1,49 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.2.3 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.3/cyrus-imapd-3.2.3.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.3/cyrus-imapd-3.2.3.tar.gz.sig
+
+.. _relnotes-3.2.3-changes:
+
+Changes since 3.2.2
+===================
+
+Build changes
+-------------
+
+* Fixed :issue:`3073`: misleading message when Xapian "words" tokenisation
+  unavailable
+* Fixed :issue:`3102`: removed checks for unused CLD2 dependency (thanks
+  Anatoli)
+* Fixed :issue:`3102`: removed unused Castagnoli CRC32 implementation
+  (thanks Anatoli)
+* Upstreamed compatibility patches from OpenBSD (thanks Anatoli)
+* Fixed: Cyrus::SIEVE::managesieve was not linked correctly
+* Fixed :issue:`3143`: removed unnecessary autoreconf dependency on /bin/bash
+* Fixed: support zlib versions that do not provide deflatePending function
+
+Bug fixes
+---------
+
+* Fixed: handling of bad HOLDFOR/HOLDUNTIL values in JMAP email submissions
+* Fixed: protection against underflow of unseen and recent counts
+* Fixed :issue:`3116`: :cyrusman:`cyr_info(8)` now correctly validates
+  archivepartition- settings
+* Fixed :issue:`3115`: imapd/pop3d connection details were lost during TLS
+  setup
+* Fixed: pop3d LOGOUT event was missing clientAddress field (thanks akschu)
+* Fixed: Sieve regexes may have optional matches
+* Fixed: XFER now correctly distinguishes between 2.3.x releases
+* Fixed :issue:`3123`: XFER now recognises 3.1, 3.2 and 3.3 backends
+* Fixed: XFER now syslogs a warning when it doesn't recognise the backend
+  Cyrus version
+* Fixed: crash in Sieve "date :regex" matches
+* Fixed :issue:`3152`: DAV crash when no displayname and path is one segment
+  (thanks Felix J. Ogris)
+* Fixed: cunit tests no longer depend on nonstandard malloc.h header

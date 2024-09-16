@@ -23,18 +23,6 @@ static char *backend = CUNIT_PARAM("skiplist,flat,twoskip,zeroskip");
 static char *filename;
 static char *filename2;
 
-static void config_read_string(const char *s)
-{
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
-    int fd = mkstemp(fname);
-    retry_write(fd, s, strlen(s));
-    config_reset();
-    config_read(fname, 0);
-    unlink(fname);
-    free(fname);
-    close(fd);
-}
-
 static int fexists(const char *fname)
 {
     struct stat sb;
@@ -1167,6 +1155,8 @@ static void test_binary_keys(void)
                                  0x10, 0x20, 0x40, 0x80,
                                  0x00/*unused*/};
     static const char DATA5[] = "farm-to-table";
+    static const char KEY6[] = " BLANK\x07\xa0";
+    static const char DATA6[] = "magic blank in key!";
     struct binary_result *results = NULL;
     int r;
 
@@ -1182,6 +1172,7 @@ static void test_binary_keys(void)
     CANNOTFETCH(KEY3, sizeof(KEY3)-1, CYRUSDB_NOTFOUND);
     CANNOTFETCH(KEY4, sizeof(KEY4)-1, CYRUSDB_NOTFOUND);
     CANNOTFETCH(KEY5, sizeof(KEY5)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY6, sizeof(KEY6)-1, CYRUSDB_NOTFOUND);
 
     /* store()ing a record succeeds */
     CANSTORE(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
@@ -1189,6 +1180,7 @@ static void test_binary_keys(void)
     CANSTORE(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANSTORE(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANSTORE(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANSTORE(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* the record can be fetched back */
     CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
@@ -1196,6 +1188,7 @@ static void test_binary_keys(void)
     CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANFETCH(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* commit succeeds */
     CANCOMMIT();
@@ -1206,6 +1199,7 @@ static void test_binary_keys(void)
     CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANFETCH(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
@@ -1216,6 +1210,7 @@ static void test_binary_keys(void)
 
     /* got the expected keys in the expected order */
     GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
     GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
     GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
     GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
@@ -1235,6 +1230,7 @@ static void test_binary_keys(void)
     CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANFETCH(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
@@ -1245,6 +1241,7 @@ static void test_binary_keys(void)
 
     /* got the expected keys in the expected order */
     GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
     GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
     GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
     GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
@@ -1275,6 +1272,8 @@ static void test_binary_data(void)
     static const char DATA5[] = { 0x01, 0x02, 0x04, 0x08,
                                   0x10, 0x20, 0x40, 0x80,
                                   0x00/*unused*/};
+    static const char KEY6[] = "magic blank in data!";
+    static const char DATA6[] = " BLANK\x07\xa0";
     struct binary_result *results = NULL;
     int r;
 
@@ -1290,6 +1289,7 @@ static void test_binary_data(void)
     CANNOTFETCH(KEY3, sizeof(KEY3)-1, CYRUSDB_NOTFOUND);
     CANNOTFETCH(KEY4, sizeof(KEY4)-1, CYRUSDB_NOTFOUND);
     CANNOTFETCH(KEY5, sizeof(KEY5)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY6, sizeof(KEY6)-1, CYRUSDB_NOTFOUND);
 
     /* store()ing a record succeeds */
     CANSTORE(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
@@ -1297,6 +1297,7 @@ static void test_binary_data(void)
     CANSTORE(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANSTORE(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANSTORE(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANSTORE(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* the record can be fetched back */
     CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
@@ -1304,6 +1305,7 @@ static void test_binary_data(void)
     CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANFETCH(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* commit succeeds */
     CANCOMMIT();
@@ -1314,6 +1316,7 @@ static void test_binary_data(void)
     CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANFETCH(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
@@ -1326,6 +1329,7 @@ static void test_binary_data(void)
     GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
     GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
     GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
     /* foreach iterated over exactly all the keys */
@@ -1343,6 +1347,7 @@ static void test_binary_data(void)
     CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    CANFETCH(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
 
     /* foreach still succeeds */
     r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
@@ -1352,6 +1357,7 @@ static void test_binary_data(void)
     GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
     GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
     GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY6, sizeof(KEY6)-1, DATA6, sizeof(DATA6)-1);
     GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
     /* foreach iterated over exactly all the keys */
@@ -1573,7 +1579,6 @@ static int set_up(void)
 {
     char buf[PATH_MAX];
     static const char * const reldirs[] = {
-        "db",
         "conf",
         "conf/lock/",
         "conf/lock/user",
@@ -1602,6 +1607,8 @@ static int tear_down(void)
     int r = 0;
 
     cyrusdb_done();
+
+    config_reset();
 
     if (basedir) {
         char buf[PATH_MAX];

@@ -29,6 +29,9 @@ Synopsis
 Description
 ===========
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 **cyr_backup** is a tool for inspecting the contents of a Cyrus backup.
 
 **cyr_backup** |default-conf-text|
@@ -101,7 +104,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Increase the verbosity.  Can be specified multiple times.
 
@@ -110,12 +113,12 @@ Options
 Modes
 =====
 
-.. option:: -f
+.. option:: -f, --filename
 
     *backup* is interpreted as a filename.  The named file does not need to be
     known about in the backups database.
 
-.. option:: -m
+.. option:: -m, --mailbox
 
     *backup* is interpreted as a mailbox name.  There must be a known backup
     for the user whose mailbox this is.
@@ -123,7 +126,7 @@ Modes
     Known backups are recorded in the database specified by the **backup_db**
     and **backup_db_path** configuration options.
 
-.. option:: -u
+.. option:: -u, --userid
 
     *backup* is interpreted as a userid.  There must be a known backup for
     the specified user.

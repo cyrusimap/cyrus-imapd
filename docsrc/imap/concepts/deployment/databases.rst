@@ -46,40 +46,50 @@ One per user:
 * `Mailbox Keys (<userid>.mboxkey)`_
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
-* `Search Indexes (cyrus.squat, <userid>.xapianactive)`_
+* `Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)`_
 
 .. _imap-concepts-deployment-db-mailboxes:
 
 Mailbox List (mailboxes.db)
 ---------------------------
 
-This database contains the master list of all mailboxes on the system. The database is indexed by mailbox name and each data record contains the mailbox type, the partition on which the mailbox resides and the ACL on the mailbox. The format of each record is as follows::
+This database contains the master list of all mailboxes on the system. The
+database is indexed by mailbox name and each data record contains the mailbox
+type, the partition on which the mailbox resides and the ACL on the mailbox.
+The format of each record is as follows::
 
     Key: <Mailbox Name>
 
     Data: <Type Number>SP<Partition>SP<ACL (space-separated userid/rights pairs)>
 
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, or `twoskip`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `sql`_.
 
 .. _imap-concepts-deployment-db-annotations:
 
 Annotations (annotations.db)
 ----------------------------
 
-This database contains mailbox and server annotations. The database is indexed by mailbox name (empty for server annotations) + annotation name + userid (empty for shared annotations) and each data record contains the value size, value data, content-type of the data and timestamp of the record. The format is each record is as follows::
+This database contains mailbox and server annotations, including WebDAV
+properties. The database is indexed by mailbox name (empty for server
+annotations) + annotation name + userid (empty for shared annotations) and each
+data record contains the value size, value data, content-type of the data and
+timestamp of the record. The format is each record is as follows::
 
     Key: <Mailbox Name>\0<Annotation Name>\0<Userid>\0
 
     Data: <Value Size (4 bytes)><Value>\0<Content-Type>\0<Timestamp (4 bytes)>
 
-File type can be `twoskip`_  (default), or `skiplist`_.
+File type can be: `twoskip`_  (default) or `skiplist`_.
 
 .. _imap-concepts-deployment-db-quotas:
 
 Quotas (quotas.db)
 ------------------
 
-This database contains the master list of quotaroots on the system. The database is indexed by quota root and each data record contains the current usage of all mailboxes under the quota root and the limit of the quota root. The format of each record is as follows::
+This database contains the master list of quotaroots on the system. The
+database is indexed by quota root and each data record contains the current
+usage of all mailboxes under the quota root and the limit of the quota root.
+The format of each record is as follows::
 
     Key: <Quota Root>
 
@@ -90,21 +100,31 @@ File type can be: `quotalegacy`_ (default), `flat`_, `skiplist`_, `sql`_, or `tw
 
 **Legacy Quotas**
 
-The legacy quota database uses a distributed system in which each quota root is stored in a separate file named by quota root and the contents had the following format in older versions::
+The legacy quota database uses a distributed system in which each quota root is
+stored in a separate file named by quota root and the contents had the
+following format in older versions::
 
     <Usage (in bytes)>\n
     <Limit (in Kbytes)>\n
 
-Newer versions are stored as a DList file with keys for each type of quota, and values with both usage and limit for each type.  A limit value of -1 means no limit.
+Newer versions are stored as a DList file with keys for each type of quota, and
+values with both usage and limit for each type.  A limit value of -1 means no
+limit.
 
-The translation to/from this data record format is handled by the quota_legacy cyrusdb backend.
+The translation to/from this data record format is handled by the quota_legacy
+cyrusdb backend.
 
 .. _imap-concepts-deployment-db-deliver:
 
 Duplicate Delivery (deliver.db)
 -------------------------------
 
-This database is used for duplicate delivery suppression, retrieving usenet articles by message-id, and tracking Sieve redirects and vacation responses. The database is indexed by message-id + recipient (either mailbox or email address) and each data record contains the timestamp of the record and the UID of the message within the mailbox (if delivered locally). The format of each record is as follows::
+This database is used for duplicate delivery suppression, retrieving usenet
+articles by message-id, and tracking Sieve redirects and vacation responses.
+The database is indexed by message-id + recipient (either mailbox or email
+address) and each data record contains the timestamp of the record and the
+UID of the message within the mailbox (if delivered locally). The format of
+each record is as follows::
 
     Key: <Message-ID>\0<Recipient>\0
 
@@ -118,7 +138,11 @@ File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
 TLS cache (tls_sessions.db)
 ---------------------------
 
-This database caches SSL/TLS sessions so that subsequent connections using the same session-id can bypass the SSL/TLS handshaking, resulting is shorter connection times. The database is indexed by session-id and each data record contains the timestamp of the record and the ASN1 representation of the session data. The format of each record is as follows::
+This database caches SSL/TLS sessions so that subsequent connections using the
+same session-id can bypass the SSL/TLS handshaking, resulting is shorter
+connection times. The database is indexed by session-id and each data record
+contains the timestamp of the record and the ASN1 representation of the session
+data. The format of each record is as follows::
 
     Key: <Session-ID (multi-byte)>
 
@@ -132,13 +156,16 @@ File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
 PTS cache (ptscache.db)
 -----------------------
 
-This database caches authentication state records, resulting in shorter authentication/canonicalization times. The database is indexed by userid and each data record contains an authentication state for the userid. The format of each record is as follows::
+This database caches authentication state records, resulting in shorter
+authentication/canonicalization times. The database is indexed by userid and
+each data record contains an authentication state for the userid. The format
+of each record is as follows::
 
     Key: <Userid>
 
     Data: <Auth State (multi-byte)>
 
-File type can be: `twoskip`_ (default), or `skiplist`_.
+File type can be: `twoskip`_ (default) or `skiplist`_.
 
 
 .. _imap-concepts-deployment-db-status:
@@ -146,7 +173,15 @@ File type can be: `twoskip`_ (default), or `skiplist`_.
 STATUS cache (statuscache.db)
 -----------------------------
 
-This database caches IMAP STATUS information resulting in less I/O when the STATUS information hasn't changed (mailbox and \Seen state unchanged). The database is indexed by mailbox name + userid and each data record contains the database version number, a bitmask of the stored status items, the mtime, inode, and size of the cyrus.index file at the time the record was written, the total number of messages in the mailbox, the number of recent messages, the next UID value, the mailbox UID validity value, the number of unseen messages, and the highest modification sequence in the mailbox. The format of each record is as follows::
+This database caches IMAP STATUS information resulting in less I/O when the
+STATUS information hasn't changed (mailbox and \Seen state unchanged). The
+database is indexed by mailbox name + userid and each data record contains
+the database version number, a bitmask of the stored status items, the mtime,
+inode, and size of the cyrus.index file at the time the record was written,
+the total number of messages in the mailbox, the number of recent messages,
+the next UID value, the mailbox UID validity value, the number of unseen
+messages, and the highest modification sequence in the mailbox. The format of
+each record is as follows::
 
     Key: <Mailbox Name>\0<Userid>\0
 
@@ -160,7 +195,13 @@ File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
 User Access (user_deny.db)
 --------------------------
 
-This database contains a list of users that are denied access to Cyrus services. The database is indexed by userid and each data record contains the database version number (currently 2), a list of wildmat patterns specifying Cyrus services to be denied, and a text message to be displayed to the user upon denial. The service names to be matched are those as used in cyrus.conf(5). The format of each record is as follows::
+This database contains a list of users that are denied access to Cyrus
+services. The database is indexed by userid and each data record contains the
+database version number (currently 2), a list of "wildmat" patterns (per
+:rfc:`3977#section-4`) specifying Cyrus services to be denied, and a text
+message to be displayed to the user upon denial. The service names to be
+matched are those as used in :cyrusman:`cyrus.conf(5)`. The format of each
+record is as follows::
 
     Key: <Userid>
 
@@ -173,8 +214,9 @@ File type can be: `flat`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
 Backups (backups.db)
 --------------------
 
-This database maps userids to the location of their backup files.  It only exists
-on Cyrus Backup servers (compiled with the `--enable-backup` configure option).
+This database maps userids to the location of their backup files.  It only
+exists on Cyrus Backup servers (compiled with the `--enable-backup` configure
+option).
 
 File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
 
@@ -213,13 +255,19 @@ File format not selectable.
 
 .. _imap-concepts-deployment-db-search:
 
-Search Indexes (cyrus.squat, <userid>.xapianactive)
----------------------------------------------------
+Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)
+---------------------------------------------------------------------
 
-This is either cyrus.squat in each folder, or if you're using xapian a single
-<userid>.xapianactive file listing active databases by tier name and number.
+This is either cyrus.squat in each folder, or if you're using Xapian a single
+<userid>.xapianactive file listing active databases with tier name and number.
 
-File type can be: `twoskip`_ (default), `flat`_, or `skiplist`_.
+cyrus.indexed.db is used by the Xapian search engine.  Its file type
+can be: `twoskip`_ (default), `flat`_, `skiplist`_, or ``zeroskip`` and is
+determined by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
+
+The xapianactive file contains a space separated list of tiers and databases within
+the tier.  The first element is the active tier/database, to which new entries are
+added by `squatter -R`.
 
 .. _imap-concepts-deployment-db-zoneinfo:
 
@@ -244,7 +292,12 @@ File type can be: `twoskip`_ (default), `flat`_, or `skiplist`_.
 Seen State (<userid>.seen)
 --------------------------
 
-This database is a per-user database and maintains the list of messages that the user has read in each mailbox. The database is indexed by mailbox unique-id and each data record contains the database version number, the timestamp of when a message was last read, the message unique-id of the last read message, the timestamp of the last record change and a list of message unique-ids which have been read. The format of each record is as follows::
+This database is a per-user database and maintains the list of messages that
+the user has read in each mailbox. The database is indexed by mailbox
+unique-id and each data record contains the database version number, the
+timestamp of when a message was last read, the message unique-id of the last
+read message, the timestamp of the last record change and a list of message
+unique-ids which have been read. The format of each record is as follows::
 
     Key: <Mailbox UID>
 
@@ -257,7 +310,9 @@ File type can be: `twoskip`_ (default), `flat`_, or `skiplist`_.
 Subscriptions (<userid>.sub)
 ----------------------------
 
-This database is a per-user database and contains the list of mailboxes to which the user has subscribed. The database is indexed by mailbox name and each data record contains no data. The format of each record is follows::
+This database is a per-user database and contains the list of mailboxes to
+which the user has subscribed. The database is indexed by mailbox name and
+each data record contains no data. The format of each record is follows::
 
     Key: <Mailbox Name>
 
@@ -278,13 +333,16 @@ TODO
 Mailbox Keys (<userid>.mboxkey)
 -------------------------------
 
-This database is a per-user database and contains the list of mailbox access keys which are used for generating URLAUTH-authorized URLs. The database is indexed by mailbox name and each data record contains the database version number and the associated access key. The format of each record is follows::
+This database is a per-user database and contains the list of mailbox access
+keys which are used for generating URLAUTH-authorized URLs. The database is
+indexed by mailbox name and each data record contains the database version
+number and the associated access key. The format of each record is follows::
 
     Key: <Mailbox Name>
 
     Data: <Version (2 bytes)><Access Key (multi-byte)>
 
-File type can be: `twoskip`_ (default), or `skiplist`_.
+File type can be: `twoskip`_ (default) or `skiplist`_.
 
 .. _imap-concepts-deployment-db-userdav:
 
@@ -294,7 +352,7 @@ DAV Index (<userid>.dav)
 This embedded SQLite database is per-user and primarily maintains a
 mapping from DAV resource names (URLs) to the corresponding Cyrus
 mailboxes and IMAP message UIDs.  The database is designed to have
-one table per resource type (iCalendar, vCard, etc) with each table
+one table per resource type (iCalendar, vCard, Sieve, etc) with each table
 containing metadata specific to that resource type.
 
 CalDAV
@@ -354,6 +412,35 @@ The format of the vCard table used by CardDAV is as follows::
         email TEXT,
         UNIQUE( mailbox, resource )
     );
+
+
+Sieve
+#######
+
+The format of the Sieve table used by JMAP and ManageSieve is as follows::
+
+    CREATE TABLE sieve_scripts (
+        rowid INTEGER PRIMARY KEY,
+        creationdate INTEGER,
+        lastupdated INTEGER,
+        mailbox TEXT NOT NULL,
+        imap_uid INTEGER,
+        modseq INTEGER,
+        createdmodseq INTEGER,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        content TEXT NOT NULL,
+        isactive INTEGER,
+        alive INTEGER,
+        UNIQUE( mailbox, imap_uid ),
+        UNIQUE( id )
+    );
+
+
+Because ManageSieve requires the server to locate a resource
+by name, the Sieve table has an additional index as follows::
+
+  CREATE INDEX idx_sieve_name ON sieve_scripts ( name );
 
 
 .. _storagetypes:

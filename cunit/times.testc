@@ -103,72 +103,72 @@ test_military_timezones(void)
     time_t zulu = 813727192;
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-Z", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 Z", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-z", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 z", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-A", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 A", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-B", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 B", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-2*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-I", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 I", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-9*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS-z" */
+     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-J", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 J", &t);
     CU_ASSERT_EQUAL(r, -1);
     CU_ASSERT_EQUAL(t, UNINIT_TIMET);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-K", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 K", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-10*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-M", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 M", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-12*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-N", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 N", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-Y", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 Y", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+12*3600);
 }
@@ -330,6 +330,13 @@ test_parse_iso8601(void)
     CU_ASSERT_EQUAL(r, 20);
     struct tm *tm = gmtime(&t);
     CU_ASSERT_EQUAL(tm->tm_year, 69);
+
+    static const char DATETIME_NEG2[] = "1965-01-02T03:04:05Z";
+    t = UNINIT_TIMET;
+    r = time_from_iso8601(DATETIME_NEG2, &t);
+    CU_ASSERT_EQUAL(r, 20);
+    tm = gmtime(&t);
+    CU_ASSERT_EQUAL(tm->tm_year, 65);
 }
 
 static void
@@ -467,22 +474,20 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 0);
 
-    /* Zero Hour */
+    /* Zero Hour - we don't allow it any more, because the date returns negative */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("WED, 31 DEC 1969 19:36:29 -0500", &t, DATETIME_FULL); /* NYC */
-    CU_ASSERT_EQUAL(r, 31);
-    CU_ASSERT_EQUAL(t, 2189);
+    CU_ASSERT_EQUAL(r, -1);
 
     t = UNINIT_TIMET;
     r = time_from_rfc5322(" 1-JAN-1970 11:36:29 +1100", &t, DATETIME_FULL); /* MEL */
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 2189);
 
-    /* Pre Jan 1 1970 */
+    /* Pre Jan 1 1970 - we don't allow */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("WED, 31 DEC 1969 19:36:29", &t, DATETIME_FULL);
-    CU_ASSERT_EQUAL(r, 25);
-    CU_ASSERT_EQUAL(t, -15811);
+    CU_ASSERT_EQUAL(r, -1);
 
     /* Well-formed full RFC5322 format with 2-digit day
      * "dd-mmm-yyyy HH:MM:SS zzzzz" */
@@ -538,6 +543,11 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 1290741722);
 
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322("THU, 25 NOV 2010 22:22:02 EST", &t, DATETIME_FULL); /* NYC */
+    CU_ASSERT_EQUAL(r, 29);
+    CU_ASSERT_EQUAL(t, 1290741722);
+
 
     /* Time with period as separator */
     t = UNINIT_TIMET;
@@ -545,22 +555,26 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1230969900);
 
+#if SIZEOF_TIME_T >= 8
     /* Year 9999 */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("Fri, 31-Dec-9999 23:59:59 +0000", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 253402300799);
+#endif
 
     /* Year 1 - This will fail*/
     t = UNINIT_TIMET;
     r = time_from_rfc5322("1 Jan 1 00:00:00 +0000", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, -1);
 
+#if SIZEOF_TIME_T >= 8
     /* 5 digit year */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("Sat, 1 Jan 10000 00:00:00", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, 253402300800);
+#endif
 
     /* Invalid date */
     t = UNINIT_TIMET;
@@ -596,72 +610,72 @@ test_military_timezones_using_rfc5322(void)
     time_t zulu = 813727192;
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-Z", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 Z", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-z", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 z", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-A", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 A", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-B", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 B", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-2*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-I", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 I", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-9*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS-z" */
+     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-J", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 J", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, 813727192);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-K", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 K", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-10*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-M", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 M", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-12*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-N", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 N", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-Y", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 Y", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+12*3600);
 }
@@ -697,5 +711,84 @@ test_leapyear_rfc5322(void)
     CU_ASSERT_EQUAL(t, FEB2004_TIMET);
 }
 
+static void
+test_offsettime_iso8601(void)
+{
+#define TESTCASE(ts, want_n, want_wday, want_yday) \
+    { \
+        const char *_ts = (ts); \
+        int _want_n = (want_n); \
+        int _want_wday = (want_wday); \
+        int _want_yday = (want_yday); \
+        struct offsettime _ot; \
+        char buf[30]; \
+        int r = offsettime_from_iso8601(_ts, &_ot); \
+        CU_ASSERT_EQUAL(_want_n, r); \
+        CU_ASSERT_EQUAL(_want_wday, _ot.tm.tm_wday); \
+        CU_ASSERT_EQUAL(_want_yday, _ot.tm.tm_yday); \
+        r = offsettime_to_iso8601(&_ot, buf, sizeof(buf), 1); \
+        CU_ASSERT_EQUAL(_want_n, r); \
+        CU_ASSERT_STRING_EQUAL(_ts, buf); \
+    }
+
+    TESTCASE("2019-05-02T03:15:00+07:00", 25, 4, 122);
+    TESTCASE("2010-11-26T14:22:02+11:00", 25, 5, 330);
+    TESTCASE("2010-11-26T03:22:02Z", 20, 5, 330);
+    TESTCASE("2010-11-25T22:22:02-05:00", 25, 4, 329);
+    TESTCASE("1969-12-31T23:59:59Z", 20, 3, 365);
+
+#undef TESTCASE
+}
+
+static void
+test_offsettime_rfc5322(void)
+{
+#define TESTCASE(ts, want_n, want_wday, want_yday) \
+    { \
+        const char *_ts = (ts); \
+        int _want_n = (want_n); \
+        int _want_wday = (want_wday); \
+        int _want_yday = (want_yday); \
+        struct offsettime _ot; \
+        char buf[RFC822_DATETIME_MAX+1]; \
+        int r = offsettime_from_rfc5322(_ts, &_ot, DATETIME_FULL); \
+        CU_ASSERT_EQUAL(_want_n, r); \
+        CU_ASSERT_EQUAL(_want_wday, _ot.tm.tm_wday); \
+        CU_ASSERT_EQUAL(_want_yday, _ot.tm.tm_yday); \
+        r = offsettime_to_rfc5322(&_ot, buf, sizeof(buf)); \
+        CU_ASSERT_EQUAL(_want_n, r); \
+        CU_ASSERT_STRING_EQUAL(_ts, buf); \
+    }
+
+    TESTCASE("Thu, 02 May 2019 03:15:00 +0700", 31, 4, 122);
+    TESTCASE("Fri, 26 Nov 2010 14:22:02 +1100", 31, 5, 330);
+    TESTCASE("Fri, 26 Nov 2010 03:22:02 +0000", 31, 5, 330);
+    TESTCASE("Thu, 25 Nov 2010 22:22:02 -0500", 31, 4, 329);
+    TESTCASE("Wed, 31 Dec 1969 23:59:59 +0000", 31, 3, 365);
+
+#undef TESTCASE
+}
+
+static void
+test_offsettime_rfc5322_ignore_wday(void)
+{
+#define TESTCASE(ts, want_wday, want_yday) \
+    { \
+        const char *_ts = (ts); \
+        int _want_wday = (want_wday); \
+        int _want_yday = (want_yday); \
+        struct offsettime _ot; \
+        int r = offsettime_from_rfc5322(_ts, &_ot, DATETIME_FULL); \
+        CU_ASSERT(r > 0); \
+        CU_ASSERT_EQUAL(_want_wday, _ot.tm.tm_wday); \
+        CU_ASSERT_EQUAL(_want_yday, _ot.tm.tm_yday); \
+    }
+
+    /* Bogus week days are ignored */
+    TESTCASE("Sat, 02 May 2019 03:15:00 +0700", 4, 122); // Should be "Thu"
+
+
+#undef TESTCASE
+}
 
 /* vim: set ft=c: */

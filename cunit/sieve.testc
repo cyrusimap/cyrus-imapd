@@ -24,6 +24,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define DBDIR       "test-sieve-dbdir"
 #define PARTITION   "default"
@@ -327,10 +328,10 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
         /* parse the message body if we haven't already */
         FILE *fp = fopen(msg->filename, "r");
         CU_ASSERT_PTR_NOT_NULL(fp);
-        r = message_parse_file(fp,
-                               &msg->content.base,
-                               &msg->content.len,
-                               &msg->content.body);
+        r = message_parse_file_buf(fp,
+                               &msg->content.map,
+                               &msg->content.body,
+                               msg->filename);
         CU_ASSERT_EQUAL(r, 0);
         fclose(fp);
     }
@@ -403,11 +404,16 @@ static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
-                    void *mc __attribute__((unused)),
+                    void *mc,
                     const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *)ac;
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
+
+    if (!mc) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
 
     ctx->stats.actions++;
     ctx->stats.fileintos++;
@@ -423,11 +429,16 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
-                void *mc __attribute__((unused)),
+                void *mc,
                 const char **errmsg __attribute__((unused)))
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *)ac;
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
+
+    if (!mc) {
+        /* just doing destination mailbox resolution */
+        return SIEVE_OK;
+    }
 
     ctx->stats.actions++;
     ctx->stats.keeps++;
@@ -447,12 +458,12 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
     sieve_notify_context_t *nc = (sieve_notify_context_t *)ac;
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
     struct buf opts = BUF_INITIALIZER;
-    const char **p;
+    int i;
 
-    for (p = nc->options ; *p ; p++) {
+    for (i = 0; i < strarray_size(nc->options); i++) {
         if (opts.len)
             buf_putc(&opts, ' ');
-        buf_appendcstr(&opts, *p);
+        buf_appendcstr(&opts, strarray_nth(nc->options, i));
     }
 
     ctx->stats.actions++;
@@ -539,18 +550,6 @@ static FILE *fmemopen(const void *buf, size_t len, const char *mode)
 }
 #endif
 
-static void config_read_string(const char *s)
-{
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
-    int fd = mkstemp(fname);
-    retry_write(fd, s, strlen(s));
-    config_reset();
-    config_read(fname, 0);
-    unlink(fname);
-    free(fname);
-    close(fd);
-}
-
 static int set_up(void)
 {
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
@@ -569,31 +568,33 @@ static int set_up(void)
 
 static int tear_down(void)
 {
+    int r;
+
     libcyrus_done();
-    return 0;
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 static void context_setup(sieve_test_context_t *ctx,
                           const char *script)
 {
     int r;
-    static strarray_t mark = STRARRAY_INITIALIZER;
     static sieve_vacation_t vacation = {
         0,                      /* min response */
         0,                      /* max response */
         &autorespond,           /* autorespond() */
         &send_response          /* send_response() */
     };
-    int len = strlen(script);
+    char *errors = NULL;
     int fd;
-    FILE *fp;
     sieve_script_t *scr = NULL;
     bytecode_info_t *bytecode = NULL;
     char tempfile[32];
 
     memset(ctx, 0, sizeof(*ctx));
-    if (!mark.count)
-        strarray_append(&mark, "\\flagged");
 
     ctx->compile_errors = strarray_new();
     ctx->run_errors = strarray_new();
@@ -610,17 +611,13 @@ static void context_setup(sieve_test_context_t *ctx,
     sieve_register_body(ctx->interp, getbody);
     sieve_register_include(ctx->interp, getinclude);
     sieve_register_vacation(ctx->interp, &vacation);
-    sieve_register_imapflags(ctx->interp, &mark);
     sieve_register_notify(ctx->interp, notify, NULL);
     sieve_register_parse_error(ctx->interp, mysieve_error);
     sieve_register_execute_error(ctx->interp, mysieve_execute_error);
 
-    /* Here we pretend to be the sieve compiler, and generate
-     * a file of compiled bytecode from the script string */
-    fp = fmemopen((void *)script, len, "r");
-    r = sieve_script_parse(ctx->interp, fp, ctx, &scr);
+    r = sieve_script_parse_string(ctx->interp, script, &errors, &scr);
     CU_ASSERT_EQUAL(r, SIEVE_OK);
-    fclose(fp);
+    free(errors);
 
     r = sieve_generate_bytecode(&bytecode, scr);
     CU_ASSERT(r > 0);
@@ -635,7 +632,7 @@ static void context_setup(sieve_test_context_t *ctx,
     /* Now load the compiled bytecode */
     r = sieve_script_load(tempfile, &ctx->exe);
     CU_ASSERT_EQUAL(r, SIEVE_OK);
-    unlink(tempfile);
+    xunlink(tempfile);
 }
 
 static void context_cleanup(sieve_test_context_t *ctx)
@@ -756,9 +753,8 @@ static void message_free(sieve_test_message_t *msg)
     spool_free_hdrcache(msg->headers);
     if (msg->content.body)
         message_free_body(msg->content.body);
-    if (msg->content.base)
-        map_free(&msg->content.base, &msg->content.len);
-    unlink(msg->filename);
+    buf_free(&msg->content.map);
+    xunlink(msg->filename);
     free(msg->filename);
     free(msg);
 }

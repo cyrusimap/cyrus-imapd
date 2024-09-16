@@ -58,11 +58,14 @@
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
+#include "lib/times.h"
+#include "cyr_qsort_r.h"
 #include "global.h"
 #include "httpd.h"
 #include "http_proxy.h"
 #include "../master/masterconf.h"
 #include "proc.h"
+#include "procinfo.h"
 #include "proxy.h"
 #include "ptrarray.h"
 #include "time.h"
@@ -95,7 +98,7 @@ struct namespace_t namespace_admin = {
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
-    admin_init, NULL, NULL, NULL, NULL, NULL,
+    admin_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -115,6 +118,7 @@ struct namespace_t namespace_admin = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -227,7 +231,7 @@ static int action_murder(struct transaction_t *txn)
         /* Add HTML header */
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>",
                           "Available Backend Servers");
@@ -253,7 +257,7 @@ static int action_murder(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
@@ -292,7 +296,7 @@ static int action_murder(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>",
                           "Available Backend Servers");
@@ -339,7 +343,7 @@ static int action_menu(struct transaction_t *txn)
      * Extend this to include config file size/mtime if we add run-time options.
      */
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "%ld", (long) compile_time);
+    buf_printf(&txn->buf, TIME_T_FMT, compile_time);
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
 
@@ -373,7 +377,7 @@ static int action_menu(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[0].desc);
         buf_printf_markup(&resp, --level, "</head>");
@@ -404,193 +408,16 @@ static int action_menu(struct transaction_t *txn)
 }
 
 
-struct proc_info {
-    pid_t pid;
-    char *servicename;
-    char *user;
-    char *host;
-    char *mailbox;
-    char *cmdname;
-    char state;
-    time_t start;
-    unsigned long vmsize;
-};
-
-typedef struct {
-    unsigned count;
-    unsigned alloc;
-    struct proc_info **data;
-} piarray_t;
-
-static int add_procinfo(pid_t pid,
-                        const char *servicename, const char *host,
-                        const char *user, const char *mailbox,
-                        const char *cmdname,
-                        void *rock)
-{
-    piarray_t *piarray = (piarray_t *) rock;
-    struct proc_info *pinfo;
-    char procpath[100];
-    struct stat sbuf;
-    FILE *f;
-
-    snprintf(procpath, sizeof(procpath), "/proc/%d", pid);
-    if (stat(procpath, &sbuf)) return 0;
-
-    if (piarray->count >= piarray->alloc) {
-        piarray->alloc += 100;
-        piarray->data = xrealloc(piarray->data,
-                                 piarray->alloc * sizeof(struct proc_info *));
-    }
-
-    pinfo = piarray->data[piarray->count++] =
-        (struct proc_info *) xzmalloc(sizeof(struct proc_info));
-    pinfo->pid = pid;
-    pinfo->servicename = xstrdupsafe(servicename);
-    pinfo->host = xstrdupsafe(host);
-    pinfo->user = xstrdupsafe(user);
-    pinfo->mailbox = xstrdupsafe(mailbox);
-    pinfo->cmdname = xstrdupsafe(cmdname);
-
-    strlcat(procpath, "/stat", sizeof(procpath));
-    f = fopen(procpath, "r");
-    if (f) {
-        int d;
-        long ld;
-        unsigned u;
-        unsigned long vmsize = 0, lu;
-        unsigned long long starttime = 0;
-        char state = 0, *s = NULL;
-
-        int c = fscanf(f, "%d %ms %c " /* 1-3 */
-               "%d %d %d %d %d %u " /* 4-9 */
-               "%lu %lu %lu %lu %lu %lu " /* 10-15 */
-               "%ld %ld %ld %ld %ld %ld " /* 16-21 */
-               "%llu %lu %ld", /* 22-24 */
-               &d, &s, &state,
-               &d, &d, &d, &d, &d, &u,
-               &lu, &lu, &lu, &lu, &lu, &lu,
-               &ld, &ld, &ld, &ld, &ld, &ld,
-               &starttime, &vmsize, &ld);
-
-        free(s);
-        fclose(f);
-
-        if (c != EOF) {
-            pinfo->state = state;
-            pinfo->vmsize = vmsize;
-            pinfo->start = starttime/sysconf(_SC_CLK_TCK);
-        }
-    }
-
-    return 0;
-}
-
-#if defined(_GNU_SOURCE) && defined (__GLIBC__) && \
-	((__GLIBC__ > 2) || ((__GLIBC__ == 2) && (__GLIBC_MINOR__ >=0)))
-#define HAVE_GLIBC_QSORT_R
-#endif
-
-#if defined(__NEWLIB__) && \
-	((__NEWLIB__ > 2) || ((__NEWLIB__ == 2) && (__NEWLIB_MINOR__ >= 2)))
-#if defined(_GNU_SOURCE)
-#define HAVE_GLIBC_QSORT_R
-#else
-#define HAVE_BSD_QSORT_R
-#endif
-#endif
-
-#if !defined(HAVE_GLIBC_QSORT_R) && \
-	(defined(__FreeBSD__) || defined(__DragonFly__) || defined(__APPLE__))
-#define HAVE_BSD_QSORT_R
-#endif
-
-#ifdef HAVE_BSD_QSORT_R
-#define QSORT_R_COMPAR_ARGS(a,b,c) (c,a,b)
-#define cyr_qsort_r(base, nmemb, size, compar, thunk) qsort_r(base, nmemb, size, thunk, compar)
-#else
-#define QSORT_R_COMPAR_ARGS(a,b,c) (a,b,c)
-#  if defined(HAVE_GLIBC_QSORT_R)
-#define cyr_qsort_r(base, nmemb, size, compar, thunk) qsort_r(base, nmemb, size, compar, thunk)
-#  elif defined(__GNUC__)
-static void cyr_qsort_r(void *base, size_t nmemb, size_t size,
-                        int (*compar)(const void *, const void *, void *),
-                        void *thunk)
-{
-    int compar_func(const void *a, const void *b)
-    {
-        return compar(a, b, thunk);
-    }
-    qsort(base, nmemb, size, compar_func);
-}
-#  else
-#    error No qsort_r support
-#  endif
-#endif
-
-static int sort_procinfo QSORT_R_COMPAR_ARGS(
-                         const void *pa, const void *pb,
-                         void *k)
-{
-    int r;
-    const struct proc_info **a = (const struct proc_info**)pa;
-    const struct proc_info **b = (const struct proc_info**)pb;
-    char *key = (char*)k;
-    int rev = islower((int) *key);
-
-    switch (toupper((int) *key)) {
-    default:
-    case 'P':
-        r = (*a)->pid - (*b)->pid;
-        break;
-
-    case 'S':
-        r = strcmp((*a)->servicename, (*b)->servicename);
-        break;
-
-    case 'Q':
-        r = (*a)->state - (*b)->state;
-        break;
-
-    case 'T':
-        r = (*a)->start - (*b)->start;
-        break;
-
-    case 'V':
-        r = (*a)->vmsize - (*b)->vmsize;
-        break;
-
-    case 'H':
-        r = strcmp((*a)->host, (*b)->host);
-        break;
-
-    case 'U':
-        r = strcmp((*a)->user, (*b)->user);
-        break;
-
-    case 'R':
-        r = strcmp((*a)->mailbox, (*b)->mailbox);
-        break;
-
-    case 'C':
-        r = strcmp((*a)->cmdname, (*b)->cmdname);
-        break;
-    }
-
-    return (rev ? -r : r);
-}
-
 /* Perform a proc action */
 static int action_proc(struct transaction_t *txn)
 {
     unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
-    piarray_t piarray = { 0, 0, NULL };
-    time_t now = time(0), boot_time = 0;
+    piarray_t piarray;
+    time_t now = time(0);
     struct strlist *param;
     struct tm tnow;
     char key = 0;
-    FILE *f;
     struct proc_columns {
         char key;
         const char *name;
@@ -636,18 +463,7 @@ static int action_proc(struct transaction_t *txn)
         columns[0].key = 'p';
     }
 
-    /* Find boot time in /proc/stat (needed for calculating process start) */
-    f = fopen("/proc/stat", "r");
-    if (f) {
-        char buf[1024];
-
-        while (fgets(buf, sizeof(buf), f)) {
-            if (sscanf(buf, "btime %ld\n", &boot_time) == 1) break;
-            while (buf[strlen(buf)-1] != '\n' && fgets(buf, sizeof(buf), f)) {
-            }
-        }
-        fclose(f);
-    }
+    init_piarray(&piarray);
 
     /* Get and sort info for running processes */
     proc_foreach(add_procinfo, &piarray);
@@ -658,7 +474,7 @@ static int action_proc(struct transaction_t *txn)
     /* Send HTML header */
     buf_reset(body);
     buf_printf_markup(body, level, HTML_DOCTYPE);
-    buf_printf_markup(body, level++, "<html>");
+    buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<meta http-equiv=\"%s\" content=\"%s\">",
                       "Refresh", "1");
@@ -691,49 +507,29 @@ static int action_proc(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td>%d</td>", (int) pinfo->pid);
         buf_printf_markup(body, level, "<td>%s</td>", pinfo->servicename);
 
-        if (pinfo->vmsize) {
-            const char *proc_states[] = {
-                /* A */ "", /* B */ "", /* C */ "",
-                /* D */ " (waiting)",
-                /* E */ "", /* F */ "", /* G */ "", /* H */ "", /* I */ "",
-                /* J */ "", /* K */ "", /* L */ "", /* M */ "", /* N */ "",
-                /* O */ "", /* P */ "", /* Q */ "",
-                /* R */ " (running)",
-                /* S */ " (sleeping)",
-                /* T */ " (stopped)",
-                /* U */ "", /* V */ "",
-                /* W */ " (paging)",
-                /* X */ "", /* Y */ "",
-                /* Z */ " (zombie)"
-            };
-            const char *monthname[] = {
-                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-            };
+        buf_printf_markup(body, level, "<td>%s</td>", pinfo->state);
 
-            buf_printf_markup(body, level, "<td>%c%s</td>", pinfo->state,
-                              isupper((int) pinfo->state) ?
-                              proc_states[pinfo->state - 'A'] : "");
+        if (pinfo->start) {
+            struct tm start;
 
-            if (boot_time) {
-                struct tm start;
-
-                pinfo->start += boot_time;
-                localtime_r(&pinfo->start, &start);
-                if (start.tm_yday != tnow.tm_yday) {
-                    buf_printf_markup(body, level, "<td>%s %02d</td>",
-                                      monthname[start.tm_mon], start.tm_mday);
-                }
-                else {
-                    buf_printf_markup(body, level, "<td>%02d:%02d</td>",
-                                      start.tm_hour, start.tm_min);
-                }
+            localtime_r(&pinfo->start, &start);
+            if (start.tm_yday != tnow.tm_yday) {
+                buf_printf_markup(body, level, "<td>%s %02d</td>",
+                                  monthname[start.tm_mon], start.tm_mday);
             }
-            else buf_printf_markup(body, level, "<td></td>");
-                              
-            buf_printf_markup(body, level, "<td>%lu</td>", pinfo->vmsize/1024);
+            else {
+                buf_printf_markup(body, level, "<td>%02d:%02d</td>",
+                                  start.tm_hour, start.tm_min);
+            }
+        } else {
+            buf_printf_markup(body, level, "<td></td>");
         }
-        else buf_printf_markup(body, level, "<td></td><td></td><td></td>");
+
+        if (pinfo->vmsize) {
+            buf_printf_markup(body, level, "<td>%lu</td>", pinfo->vmsize/1024);
+        } else {
+            buf_printf_markup(body, level, "<td></td>");
+        }
 
         buf_printf_markup(body, level, "<td>%s</td>", pinfo->host);
         buf_printf_markup(body, level, "<td>%s</td>", pinfo->user);
@@ -748,7 +544,8 @@ static int action_proc(struct transaction_t *txn)
         free(pinfo->cmdname);
         free(pinfo);
     }
-    free(piarray.data);
+
+    deinit_piarray(&piarray);
 
     /* Finish table */
     buf_printf_markup(body, --level, "</table>");
@@ -837,7 +634,7 @@ static int action_df(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
@@ -873,7 +670,7 @@ static int action_df(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[2].desc);
         buf_printf_markup(&resp, --level, "</head>");
@@ -1169,7 +966,7 @@ static int action_conf(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, "%ld-%ld-%ld", (long) compile_time,
+    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
                sbuf.st_mtime, sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
@@ -1210,7 +1007,7 @@ static int action_conf(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[3].desc);
         buf_printf_markup(&resp, --level, "</head>");

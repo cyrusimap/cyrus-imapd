@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_blob_get
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("foo") || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+
+    my $blobId = $res->[1][1]{list}[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    my $wantMailboxIds = [keys %{$res->[1][1]{list}[0]{mailboxIds}}];
+    my $wantEmailIds = [$res->[1][1]{list}[0]{id}];
+    my $wantThreadIds = [$res->[1][1]{list}[0]{threadId}];
+
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/blob';
+    $jmap->DefaultUsing(\@using);
+
+    $res = $jmap->CallMethods([
+        ['Blob/lookup', { ids => [$blobId], types => ['Mailbox', 'Thread', 'Email']}, "R1"],
+    ]);
+
+    my $blob = $res->[0][1]{list}[0];
+    $self->assert_deep_equals($wantMailboxIds, $blob->{types}{Mailbox});
+    $self->assert_deep_equals($wantEmailIds, $blob->{types}{Email});
+    $self->assert_deep_equals($wantThreadIds, $blob->{types}{Thread});
+}

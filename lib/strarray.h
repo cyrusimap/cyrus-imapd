@@ -63,6 +63,10 @@ void strarray_fini(strarray_t *);
 strarray_t *strarray_new(void);
 void strarray_free(strarray_t *);
 
+#define strarray_appendv(sa, s) strarray_nth((sa), strarray_append((sa), (s)))
+#define strarray_addv(sa, s) strarray_nth((sa), strarray_add((sa), (s)))
+#define strarray_add_casev(sa, s) strarray_nth((sa), strarray_add_case((sa), (s)))
+
 int strarray_append(strarray_t *, const char *);
 int strarray_add(strarray_t *, const char *);
 int strarray_add_case(strarray_t *, const char *);
@@ -79,6 +83,10 @@ const char *strarray_safenth(const strarray_t *sa, int idx);
 void strarray_truncate(strarray_t *sa, int newlen);
 strarray_t *strarray_dup(const strarray_t *);
 void strarray_cat(strarray_t *dest, const strarray_t *src);
+void strarray_swap(strarray_t *, int, int);
+void strarray_addfirst(strarray_t *, const char *);
+void strarray_addfirst_case(strarray_t *, const char *);
+void strarray_subtract_complement(strarray_t *sa, const strarray_t *sb);
 
 #define strarray_shift(sa)          strarray_remove((sa), 0)
 #define strarray_unshift(sa, s)     strarray_insert((sa), 0, (s))
@@ -90,7 +98,8 @@ void strarray_cat(strarray_t *dest, const strarray_t *src);
 
 char *strarray_join(const strarray_t *, const char *sep);
 #define STRARRAY_TRIM (1<<0)
-strarray_t *strarray_splitm(char *buf, const char *sep, int flags);
+#define STRARRAY_LCASE (1<<1)
+strarray_t *strarray_splitm(strarray_t *sa, char *buf, const char *sep, int flags);
 strarray_t *strarray_split(const char *buf, const char *sep, int flags);
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags);
 
@@ -107,6 +116,11 @@ int strarray_find(const strarray_t *sa, const char *match,
                   int starting);
 int strarray_find_case(const strarray_t *sa, const char *match,
                        int starting);
+#define strarray_contains(sa, match) (strarray_find(sa, match, 0) >= 0)
+#define strarray_contains_case(sa, match) (strarray_find_case(sa, match, 0) >= 0)
+
+int strarray_intersect(const strarray_t *sa, const strarray_t *b);
+int strarray_intersect_case(const strarray_t *sa, const strarray_t *b);
 
 int strarray_size(const strarray_t *sa);
 

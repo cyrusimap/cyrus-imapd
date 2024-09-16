@@ -4,8 +4,34 @@
 #include "cunit/cyrunit.h"
 #include "parseaddr.h"
 #include "util.h"
+#include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "imap/mailbox.h"
 #include "imap/message.h"
+
+#define DBDIR           "test-dbdir"
+
+static int set_up(void)
+{
+    /* need basic configuration for message_parse_headers */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}
 
 static void test_parse_trivial(void)
 {
@@ -22,7 +48,7 @@ static void test_parse_trivial(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -77,7 +103,7 @@ static void test_parse_trivial(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
 
     message_free_body(&body);
 }
@@ -106,7 +132,7 @@ static void test_parse_simple(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -182,7 +208,7 @@ static void test_parse_simple(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
 
     message_free_body(&body);
 }
@@ -277,41 +303,46 @@ static void test_parse_rxdate(void)
 
     /* Neither: no received_date */
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg_neither, sizeof(msg_neither)-1, &body);
+    r = message_parse_mapped(msg_neither, sizeof(msg_neither)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(body.received_date);
+    CU_ASSERT_PTR_NULL(body.x_deliveredinternaldate);
     message_free_body(&body);
 
     /* Received only: first seen Received */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_only_received,
-                             sizeof(msg_only_received)-1, &body);
+                             sizeof(msg_only_received)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
+    CU_ASSERT_PTR_NULL(body.x_deliveredinternaldate);
     message_free_body(&body);
 
     /* X-DeliveredInternalDate only: use that */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_only_xdid,
-                             sizeof(msg_only_xdid)-1, &body);
+                             sizeof(msg_only_xdid)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
+    CU_ASSERT_PTR_NULL(body.received_date);
+    CU_ASSERT_STRING_EQUAL(body.x_deliveredinternaldate, DELIVERED);
     message_free_body(&body);
 
     /* both, Received first: use X-DeliveredInternalDate */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_received_then_xdid,
-                             sizeof(msg_received_then_xdid)-1, &body);
+                             sizeof(msg_received_then_xdid)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
+    CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
+    CU_ASSERT_STRING_EQUAL(body.x_deliveredinternaldate, DELIVERED);
     message_free_body(&body);
 
     /* both, X-DeliveredInternalDate first: use X-DeliveredInternalDate */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_xdid_then_received,
-                             sizeof(msg_xdid_then_received)-1, &body);
+                             sizeof(msg_xdid_then_received)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
+    CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
+    CU_ASSERT_STRING_EQUAL(body.x_deliveredinternaldate, DELIVERED);
     message_free_body(&body);
 }
 
@@ -338,7 +369,7 @@ static void test_mime_trivial(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -351,7 +382,7 @@ static void test_mime_trivial(void)
     CU_ASSERT_PTR_NULL(body.params->next);
 
     /*
-     * RFC2046 says that all headers and in particular the Content-Type:
+     * RFC 2046 says that all headers and in particular the Content-Type:
      * header may be missing in an entity, and if so the default
      * Content-Type is text/plain;charset="us-ascii"
      */
@@ -368,7 +399,67 @@ static void test_mime_trivial(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
+    CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
+
+    message_free_body(&body);
+}
+
+static void test_mime_boundary_extended(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"Reply-To: <bounce.me.harder@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Thu, 28 Oct 2010 18:37:26 +1100\r\n"
+"Subject: MIME testing email\r\n"
+"X-Mailer: Norman\r\n"
+"MIME-Version: 1.0\r\n"
+"Content-Type: multipart/mixed; boundary*0*=us-ascii''%32b47bc7b64285b8be25d;"
+" boundary*1=cdca86fbc;"
+" boundary*2*=501b048eab%31\r\n"
+"Content-Language: en\r\n"
+"Message-ID: <fake1001@fastmail.fm>\r\n"
+"\r\n"
+"--2b47bc7b64285b8be25dcdca86fbc501b048eab1\r\n"
+"\r\n"
+"Hello, World\n"
+"\r\n--2b47bc7b64285b8be25dcdca86fbc501b048eab1--\r\n";
+    int r;
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Content-Type: */
+    CU_ASSERT_STRING_EQUAL(body.type, "MULTIPART");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "MIXED");
+    CU_ASSERT_PTR_NOT_NULL(body.params);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "BOUNDARY*");
+    CU_ASSERT_STRING_EQUAL(body.params->value, "us-ascii''%32b47bc7b64285b8be25dcdca86fbc501b048eab%31");
+    CU_ASSERT_PTR_NULL(body.params->next);
+
+    /*
+     * RFC 2046 says that all headers and in particular the Content-Type:
+     * header may be missing in an entity, and if so the default
+     * Content-Type is text/plain;charset="us-ascii"
+     */
+
+    /* simple body */
+    CU_ASSERT_EQUAL(body.numparts, 1);
+    CU_ASSERT_PTR_NOT_NULL(body.subpart);
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].subtype, "PLAIN");
+    CU_ASSERT_PTR_NOT_NULL(body.subpart[0].params);
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].params->attribute, "CHARSET");
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].params->value, "us-ascii");
+    CU_ASSERT_PTR_NULL(body.subpart[0].params->next);
+
+    /* check cacheheaders */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
     CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
 
     message_free_body(&body);
@@ -425,12 +516,12 @@ HTML_PART "\r\n"
     int r;
     struct body body;
     struct body *part;
-    struct message_content mcontent;
+    struct message_content mcontent = MESSAGE_CONTENT_INITIALIZER;
     const char *types[2] = { NULL, NULL };
     struct bodypart **parts = NULL;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -475,8 +566,7 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
-    mcontent.base = msg;
-    mcontent.len = sizeof(msg)-1;
+    buf_init_ro(&mcontent.map, msg, sizeof(msg)-1);
     mcontent.body = &body;
 
     types[0] = "TEXT/PLAIN";
@@ -507,7 +597,7 @@ HTML_PART "\r\n"
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
     CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[1].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[2].cacheheaders.s);
@@ -518,7 +608,7 @@ HTML_PART "\r\n"
 }
 
 /*
- * RFC2231 specifies, amongst other things, a method for
+ * RFC 2231 specifies, amongst other things, a method for
  * breaking up across multiple lines, long parameter values
  * which cannot have whitespace inserted into them.
  */
@@ -528,7 +618,7 @@ static void test_rfc2231_continuations(void)
 "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
 "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
 "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
-/* This example based on one in RFC2231 */
+/* This example based on one in RFC 2231 */
 "Content-Type: message/external-body; access-type=URL;\r\n"
 "\tURL*0=\"ftp://\";\r\n"
 "\tURL*1=\"cs.utk.edu/pub/moore/\";\r\n"
@@ -542,7 +632,7 @@ static void test_rfc2231_continuations(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -566,7 +656,7 @@ static void test_rfc2231_continuations(void)
 }
 
 /*
- * RFC2231 has a second syntax for continuations, which
+ * RFC 2231 has a second syntax for continuations, which
  * indicates the language & charset info may be encoded
  * in the value and allows for %xx encoded chars.
  */
@@ -576,7 +666,7 @@ static void test_rfc2231_extended_continuations(void)
 "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
 "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
 "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
-/* This example also loosely based on one in RFC2231 */
+/* This example also loosely based on one in RFC 2231 */
 "Content-Type: application/x-stuff;\r\n"
 "\ttitle*0*=us-ascii'en'This%20is%20even%20more%20;\r\n"
 "\ttitle*1*=%2A%2A%2Afun%2A%2A%2A%20;\r\n"
@@ -591,7 +681,7 @@ static void test_rfc2231_extended_continuations(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -629,7 +719,7 @@ static void test_references(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -662,7 +752,7 @@ static void test_x_me_message_id(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -732,12 +822,12 @@ HTML_PART "\r\n"
     int r;
     struct body body;
     struct body *part;
-    struct message_content mcontent;
+    struct message_content mcontent = MESSAGE_CONTENT_INITIALIZER;
     const char *types[2] = { NULL, NULL };
     struct bodypart **parts = NULL;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -782,8 +872,7 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
-    mcontent.base = msg;
-    mcontent.len = sizeof(msg)-1;
+    buf_init_ro(&mcontent.map, msg, sizeof(msg)-1);
     mcontent.body = &body;
 
     types[0] = "TEXT/PLAIN";
@@ -814,7 +903,7 @@ HTML_PART "\r\n"
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
     CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[1].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[2].cacheheaders.s);
@@ -840,7 +929,7 @@ static void test_parameter_recovery(void)
 "Subject: MIME testing email\r\n"
 "X-Mailer: Norman\r\n"
 "MIME-Version: 1.0\r\n"
-/* The value of the "type" parameter contains an / but is
+/* The value of the "type" parameter contains a / but is
  * not quoted, which is illegal under RFC2045 rules.  We should
  * be either accepting it, or ignoring it, but in either case
  * the "boundary" that follows it should be accepted and used
@@ -876,7 +965,7 @@ HTML_PART "\r\n"
     struct body *part;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -912,6 +1001,7 @@ HTML_PART "\r\n"
     CU_ASSERT_PTR_NULL(part->params);
     CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
 
+    message_free_body(&body);
 #undef HTML_PART
 }
 
@@ -1091,7 +1181,7 @@ static void test_cache_simple(void)
     struct body *body = xzmalloc(sizeof(struct body));
 
     memset(body, 0x45, sizeof(struct body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -1100,6 +1190,7 @@ static void test_cache_simple(void)
     CU_ASSERT_EQUAL(r, 0);
 
     message_free_body(body);
+    free(body);
 
     message_read_bodystructure(&record, &body);
     CU_ASSERT_PTR_NOT_NULL_FATAL(body);
@@ -1129,7 +1220,7 @@ static void test_cache_appleheaders(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -1190,21 +1281,142 @@ static void test_cache_appleheaders(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Universally-Unique-Identifier"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-uuid"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Uniform-Type-Identifier"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-uti"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Apple-Base-Url"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-baseurl"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Apple-Mail-Remote-Attachments"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-remoteattach"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Universally-Unique-Identifier"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-uuid"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Uniform-Type-Identifier"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-uti"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Apple-Base-Url"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-baseurl"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Apple-Mail-Remote-Attachments"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-remoteattach"));
 
     /* make sure we're not caching every x- header, just the ones we like */
     CU_ASSERT_EQUAL(mailbox_cached_header("X-Dont-Cache-This"), BIT32_MAX);
-    CU_ASSERT_PTR_NULL(strstr(body.cacheheaders.s, "X-Dont-Cache-This"));
-    CU_ASSERT_PTR_NULL(strstr(body.cacheheaders.s, "dont-cache-this"));
+    CU_ASSERT_PTR_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Dont-Cache-This"));
+    CU_ASSERT_PTR_NULL(strstr(buf_cstring(&body.cacheheaders), "dont-cache-this"));
 
     message_free_body(&body);
 }
 
+static void test_cache_quotedaddr(void)
+{
+    static const char msg[] =
+"From: \"Fred (Bloggs)\" <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Smith <sjsmith@gmail.com>\r\n"
+"Cc: \"Al \\\"Scarface\\\" Capone\" <al@speakeasy.com>\r\n"
+"Bcc: =?ISO-8859-1?q?Caf=E9_del_Mar?= <cafe@delmar>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+"Subject: Trivial testing email\r\n"
+"Message-ID: <fake800@fastmail.fm>\r\n"
+"Content-Type: text/plain\r\n"
+"X-Mailer: Norman\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    struct body *body = xzmalloc(sizeof(struct body));
+
+    memset(body, 0x45, sizeof(struct body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    struct index_record record;
+    r = message_write_cache(&record, body);
+    CU_ASSERT_EQUAL(r, 0);
+
+    message_free_body(body);
+    free(body);
+
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Needs quotes */
+    struct cacheitem item = record.crec.item[CACHE_FROM];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\"Fred (Bloggs)\" <fbloggs@fastmail.fm>");
+
+    item = record.crec.item[CACHE_CC];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\"Al \\\"Scarface\\\" Capone\" <al@speakeasy.com>");
+
+    /* Needs quotes, with UTF-8 */
+    item = record.crec.item[CACHE_BCC];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\"Café del Mar\" <cafe@delmar>");
+    struct address *addr = NULL;
+    parseaddr_list(buf_cstring(&buf), &addr);
+    CU_ASSERT_STRING_EQUAL(addr->name, "Café del Mar");
+    parseaddr_free(addr);
+
+    /* Does not need quotes */
+    item = record.crec.item[CACHE_TO];
+    buf_setmap(&buf, record.crec.buf->s + item.offset, item.len);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "Sarah Smith <sjsmith@gmail.com>");
+
+    buf_free(&buf);
+}
+
+static void test_parse_bogus_charset_params(void)
+{
+#define TESTCASE(charsetparams, want) \
+    { \
+        static const char msg[] = \
+            "From: Fred Bloggs <fbloggs@fastmail.fm>\r\n" \
+            "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n" \
+            "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n" \
+            "Subject: Trivial testing email\r\n" \
+            "Message-ID: <fake800@fastmail.fm>\r\n" \
+            "Content-Type: text/plain; " charsetparams "\r\n" \
+            "X-Mailer: Norman\r\n" \
+            "\r\n" \
+            "Hello, World\n"; \
+        int r; \
+        struct body *body = xzmalloc(sizeof(struct body)); \
+        memset(body, 0x45, sizeof(struct body)); \
+        r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL); \
+        CU_ASSERT_EQUAL(r, 0); \
+        if (want) \
+            CU_ASSERT_STRING_EQUAL(body->charset_id, want); \
+        else \
+            CU_ASSERT_PTR_NULL(body->charset_id); \
+        message_free_body(body); \
+        free(body); \
+    }
+
+    TESTCASE("charset=text/plain; charset=iso-8859-1", "iso-8859-1");
+    TESTCASE("charset=us-ascii; charset=iso-8859-1", "iso-8859-1");
+    TESTCASE("charset=iso-8859-1; charset=text/plain", "iso-8859-1");
+    TESTCASE("charset=iso-8859-1; charset=us-ascii", "us-ascii");
+    TESTCASE("charset=text/plain; charset=text/html", "us-ascii");
+
+#undef TESTCASE
+}
+
+/*
+ * Verifies that message_parse_received_date() does not
+ * read any but the first Received header for invalid values.
+ */
+static void test_parse_received_semicolon(void)
+{
+   static const char msg_emptydate[] =
+       "Received: abc;\r\n"
+       "Received: from foo by bar; Fri, 29 Oct 2010 13:05:01 +1100\r\n"
+       "\r\n";
+   struct body body;
+   memset(&body, 0x45, sizeof(body));
+   CU_ASSERT_EQUAL(message_parse_mapped(msg_emptydate,
+               sizeof(msg_emptydate)-1, &body, NULL), 0);
+   CU_ASSERT_STRING_EQUAL(body.received_date, "");
+   message_free_body(&body);
+
+   static const char msg_nodate[] =
+       "Received: abc\r\n"
+       "Received: from foo by bar; Fri, 29 Oct 2010 13:05:01 +1100\r\n"
+       "\r\n";
+   memset(&body, 0x45, sizeof(body));
+   CU_ASSERT_EQUAL(message_parse_mapped(msg_nodate,
+               sizeof(msg_nodate)-1, &body, NULL), 0);
+   CU_ASSERT_STRING_EQUAL(body.received_date, "abc");
+   message_free_body(&body);
+
+}
 /* vim: set ft=c: */

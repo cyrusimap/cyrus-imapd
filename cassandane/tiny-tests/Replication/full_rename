@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test replication of mailbox only after a rename
+#
+sub test_full_rename
+    :NoAltNameSpace :needs_component_replication :AllowMoves :Replication :SyncLog :DelayedDelete
+{
+    my ($self) = @_;
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    xlog $self, "SYNC LOG FNAME $synclogfname";
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mastertalk = $master_store->get_client();
+    my $replicatalk = $replica_store->get_client();
+
+    $mastertalk->create("INBOX.sub");
+    $master_store->set_folder("INBOX.sub");
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 1;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_", store => $master_store);
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp, $master_store);
+
+    xlog $self, "run initial replication";
+    $self->run_replication();
+    #$self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+
+    xlog $self, "rename user";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->rename("user.cassandane", "user.dest");
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    $self->run_replication(user => 'dest');
+    $self->check_replication('dest');
+
+    xlog $self, "Rename again";
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->rename("user.dest", "user.cassandane");
+
+    # replication works again
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+}

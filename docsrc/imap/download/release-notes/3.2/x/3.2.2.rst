@@ -1,0 +1,49 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.2.2 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.2/cyrus-imapd-3.2.2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.2/cyrus-imapd-3.2.2.tar.gz.sig
+
+.. _relnotes-3.2.2-changes:
+
+Changes since 3.2.1
+===================
+
+Build changes
+-------------
+
+* Fixed: configure now reports when chardet dependency is unavailable
+
+Bug fixes
+---------
+
+* Fixed: cunit tests for fatal errors performed invalid reads
+* Fixed: double-free in JMAP Email/query cleanup
+* Fixed: verbatim terms were left out of Xapian query generator
+* Fixed :issue:`3060`: lmtpd would crash after Sieve vacation action
+  if :subject was set by script
+* Fixed :issue:`3029`: authenticated iCalendar and vCard streams were missing
+  Cache-Control: private header
+* Fixed :issue:`3057`: empty return path on outgoing messages was formatted
+  incorrectly
+* Fixed :issue:`2620`: warnings from cyradm with recent perl versions (thanks
+  Jeffrey Goh)
+* Fixed: messages snoozed with a :mailboxid were not awakened correctly
+
+Fixes to nonstandard JMAP extensions
+------------------------------------
+
+(These extensions are not yet formally standardised, and are only available
+with the `jmap_nonstandard_extensions` :cyrusman:`imapd.conf(5)` option
+enabled.)
+
+* Fixed: JMAP Performance Extension - guidsearch disjunctions of non-Xapian
+  criteria now rejected
+* Fixed: Email/matchMime and Blob/get methods are now properly gated behind
+  the `jmap_nonstandard_extensions` :cyrusman:`imapd.conf(5)` option
+* Fixed: JMAP Calendars Extension - tzid was not always set for UTC events

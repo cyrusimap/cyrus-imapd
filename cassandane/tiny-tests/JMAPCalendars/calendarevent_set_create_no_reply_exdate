@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_create_no_reply_exdate
+  : needs_component_jmap
+{
+  my ($self) = @_;
+
+  my $jmap = $self->{jmap};
+
+  $self->{instance}->getnotify();
+
+  # Create an event having an EXDATE and the user as ATTENDEE with
+  # PARTSTAT=NEEDS-ACTION. This must not cause an iTIP REPLY to be
+  # sent, even if the sendSchedulingMessages argument is enabled.
+
+  my $res = $jmap->CallMethods([
+    [
+      'CalendarEvent/set',
+      {
+        create => {
+          event => {
+            '@type'     => 'Event',
+            calendarIds => {
+              Default => JSON::true,
+            },
+            title           => 'test',
+            start           => '2024-06-18T14:00:00',
+            timeZone        => 'Etc/UTC',
+            recurrenceRules => [
+              {
+                '@type'   => 'RecurrenceRule',
+                count     => 3,
+                frequency => 'weekly',
+              },
+            ],
+            recurrenceOverrides => {
+              '2024-06-25T14:00:00' => {
+                excluded => JSON::true,
+              },
+            },
+            replyTo => {
+              imip => 'mailto:organizer@example.com',
+            },
+            participants => {
+              attendee1 => {
+                '@type'             => 'Participant',
+                expectReply         => JSON::true,
+                participationStatus => 'needs-action',
+                roles               => {
+                  attendee => JSON::true,
+                },
+                sendTo => {
+                  imip => 'mailto:cassandane@example.com',
+                },
+              },
+              attendee2 => {
+                '@type'             => 'Participant',
+                expectReply         => JSON::true,
+                participationStatus => 'needs-action',
+                roles               => {
+                  owner => JSON::true,
+                },
+                sendTo => {
+                  imip => 'mailto:organizer@example.com',
+                },
+              },
+            },
+          },
+        },
+        sendSchedulingMessages => JSON::true,
+      },
+      'R1',
+    ],
+  ]);
+
+  my $data = $self->{instance}->getnotify();
+  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+  $self->assert_null($imip);
+}

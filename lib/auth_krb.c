@@ -57,16 +57,7 @@
 #include <sys/types.h>
 
 #include <krb.h>
-#ifdef HAVE_BDB
-#ifdef HAVE_DB_185_H
-#include <db_185.h>
-#else
-#include <db.h>
-#endif
-#else
 #include <ndbm.h>
-#endif
-#include <krb.h>
 
 #ifndef KRB_MAPNAME
 #define KRB_MAPNAME (SYSCONF_DIR "/krb.equiv")
@@ -438,4 +429,5 @@ HIDDEN struct auth_mech auth_krb =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh*/
 };

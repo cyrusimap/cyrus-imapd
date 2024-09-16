@@ -1,0 +1,33 @@
+#include "cunit/cyrunit.h"
+#include "byteorder.h"
+
+static void test_byteorder(void)
+{
+    uint64_t src64;
+    uint32_t src32;
+    uint64_t res64;
+    uint32_t res32;
+    char buf[8];
+
+    buf[0] = 0;
+    buf[1] = 0;
+    buf[2] = 0;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = 0;
+    buf[6] = 0;
+    buf[7] = 1;
+    memcpy(&src64, buf, 8);
+    memcpy(&src32, buf+4, 4);
+
+    /* test 64 bit */
+    CU_ASSERT_EQUAL(ntohll(src64), 1);
+    res64 = htonll(1);
+    CU_ASSERT_EQUAL(memcmp(&res64, &src64, 8), 0);
+
+    /* test 32 bit */
+    CU_ASSERT_EQUAL(ntohl(src32), 1);
+    res32 = htonl(1);
+    CU_ASSERT_EQUAL(memcmp(&res32, &src32, 4), 0);
+}
+

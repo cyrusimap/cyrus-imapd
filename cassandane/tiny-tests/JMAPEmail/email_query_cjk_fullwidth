@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_cjk_fullwidth
+    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+use utf8;
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => 'foo@local' }],
+                    to => [{ email => 'bar@local' }],
+                    subject => $_->{id},
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value =>  <<'EOF'
+三菱ＵＦＪファクター株式会社
+EOF
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $email1Id = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($email1Id);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => "ＵＦＪ",
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                body => "三菱ＵＦＪファクター株式会社",
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                body => "三菱ＵＦＪ",
+            },
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                body => "三菱",
+            },
+        }, 'R4'],
+    ]);
+    $self->assert_deep_equals([$email1Id], $res->[0][1]{ids});
+    $self->assert_deep_equals([$email1Id], $res->[1][1]{ids});
+    $self->assert_deep_equals([$email1Id], $res->[2][1]{ids});
+    $self->assert_deep_equals([$email1Id], $res->[3][1]{ids});
+
+no utf8;
+}

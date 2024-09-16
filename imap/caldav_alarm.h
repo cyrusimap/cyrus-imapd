@@ -50,20 +50,34 @@
 #include "mailbox.h"
 #include <libical/ical.h>
 
+enum alarm_type {
+    ALARM_CALENDAR = 1,
+    ALARM_SNOOZE,
+    ALARM_SEND,
+    ALARM_UNSCHEDULED,
+};
+
 /* prepare for caldav alarm operations in this process */
 int caldav_alarm_init(void);
 
 /* done with all caldav operations for this process */
 int caldav_alarm_done(void);
 
+/* reconstruct support */
+int caldav_alarm_set_reconstruct(sqldb_t *db);
+int caldav_alarm_commit_reconstruct(const char *userid);
+void caldav_alarm_rollback_reconstruct();
+
 /* add a calendar alarm */
 int caldav_alarm_add_record(struct mailbox *mailbox,
                             const struct index_record *record,
-                            icalcomponent *ical);
+                            void *data);
 
-/* make sure that the alarms match the annotation */
+/* make sure that the alarms match the annotation. If forced,
+ * the event is not checked if it contains alarms */
 int caldav_alarm_touch_record(struct mailbox *mailbox,
-                              const struct index_record *record);
+                              const struct index_record *record,
+                              int force);
 
 /* set the caldav_alarm db nextcheck field for the record (from sync_support) */
 int caldav_alarm_sync_nextcheck(struct mailbox *mailbox,
@@ -79,9 +93,12 @@ int caldav_alarm_delete_mailbox(const char *mboxname);
 int caldav_alarm_delete_user(const char *userid);
 
 /* distribute alarms with triggers in the next minute */
-int caldav_alarm_process(time_t runtime);
+int caldav_alarm_process(time_t runtime, time_t *next, int dryrun);
 
 /* upgrade old databases */
 int caldav_alarm_upgrade();
+
+/* update nextcheck for floating events */
+int caldav_alarm_update_floating(struct mailbox *mailbox, const char *userid);
 
 #endif /* CALDAV_ALARM_H */

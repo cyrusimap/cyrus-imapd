@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_schedule_destroy
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo", color => "coral", sortOrder => 1, isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "send invitation as organizer";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                $calid => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "foo's description",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "timeZone" => "Australia/Melbourne",
+                            "duration" => "PT15M",
+                            "replyTo" => {
+                                imip => "mailto:cassandane\@example.com",
+                            },
+                            "participants" => {
+                                "org" => {
+                                    "name" => "Cassandane",
+                                    roles => {
+                                        'owner' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'mailto:cassandane@example.com',
+                                    },
+                                },
+                                "att" => {
+                                    "name" => "Bugs Bunny",
+                                    roles => {
+                                        'attendee' => JSON::true,
+                                    },
+                                    sendTo => {
+                                        imip => 'mailto:bugs@example.com',
+                                    },
+                                },
+                            },
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "cancel event as organizer";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { destroy => [$id]}, "R1"]]);
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:CANCEL");
+}

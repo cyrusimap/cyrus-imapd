@@ -1,0 +1,150 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_not_match
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "mboxA" => {
+                    name => "A",
+                },
+                "mboxB" => {
+                    name => "B",
+                },
+                "mboxC" => {
+                    name => "C",
+                },
+            }
+        }, "R1"]
+    ]);
+    my $mboxIdA = $res->[0][1]{created}{mboxA}{id};
+    my $mboxIdB = $res->[0][1]{created}{mboxB}{id};
+    my $mboxIdC = $res->[0][1]{created}{mboxC}{id};
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true
+                    },
+                    from => [{ email => q{foo1@bar} }],
+                    to => [{ email => q{bar1@foo} }],
+                    subject => "email1",
+                    keywords => {
+                        keyword1 => JSON::true
+                    },
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "email1 body",
+                        },
+                    },
+                },
+                email2 => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true
+                    },
+                    from => [{ email => q{foo2@bar} }],
+                    to => [{ email => q{bar2@foo} }],
+                    subject => "email2",
+                    bodyStructure => {
+                        partId => '2',
+                    },
+                    bodyValues => {
+                        "2" => {
+                            value => "email2 body",
+                        },
+                    },
+                },
+                email3 => {
+                    mailboxIds => {
+                        $mboxIdC => JSON::true
+                    },
+                    from => [{ email => q{foo3@bar} }],
+                    to => [{ email => q{bar3@foo} }],
+                    subject => "email3",
+                    bodyStructure => {
+                        partId => '3',
+                    },
+                    bodyValues => {
+                        "3" => {
+                            value => "email3 body",
+                        },
+                    },
+                }
+            },
+        }, 'R1'],
+    ]);
+    my $emailId1 = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId1);
+    my $emailId2 = $res->[0][1]{created}{email2}{id};
+    $self->assert_not_null($emailId2);
+    my $emailId3 = $res->[0][1]{created}{email3}{id};
+    $self->assert_not_null($emailId3);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    text => "email2",
+                }],
+            },
+            sort => [{ property => "subject" }],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($emailId3, $res->[0][1]{ids}[1]);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    operator => 'NOT',
+                    conditions => [{
+                        text => "email1"
+                    }],
+                }, {
+                    operator => 'NOT',
+                    conditions => [{
+                        text => "email3"
+                    }],
+                }],
+            },
+            sort => [{ property => "subject" }],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[0]);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    operator => 'NOT',
+                    conditions => [{
+                        text => "email3"
+                    }],
+                }, {
+                    hasKeyword => 'keyword1',
+                }],
+            },
+            sort => [{ property => "subject" }],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+}

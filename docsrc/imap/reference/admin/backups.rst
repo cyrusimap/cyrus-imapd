@@ -4,15 +4,18 @@
 Cyrus Backups
 =============
 
-.. contents::
+.. warning::
+    This experimental feature is no longer under active development.  It
+    is considered deprecated as of 3.10, and will be removed entirely in
+    a future version.
 
+.. contents::
 
 Introduction
 ========================
 
 Cyrus Backups are a replication-based backup service for Cyrus IMAP servers.
-This is currently an experimental feature. If you have the resources to try it
-out alongside your existing backup solutions, feedback would be appreciated.
+This is a deprecated experimental feature.
 
 This document is intended to be a guide to the configuration and
 administration of Cyrus Backups.
@@ -29,7 +32,8 @@ This document assumes a passing familiarity with
 Limitations
 ===========
 
-Cyrus Backups are experimental and incomplete.
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 The following components exist and appear to work:
 
@@ -69,6 +73,9 @@ The following types of information are not currently backed up
 Architecture
 ============
 
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
+
 Cyrus Backups are designed to run on one or more standalone, dedicated backup
 servers, with suitably-sized storage partitions. These servers generally do
 not run an IMAP daemon, nor do they have conventional mailbox storage.
@@ -86,6 +93,9 @@ locations
 
 Installation
 ============
+
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 Requirements
 ------------
@@ -141,6 +151,11 @@ Cyrus Backups server
 #. Add appropriate ``sasl_*`` settings for your authentication method to
    :cyrusman:`imapd.conf(5)`
 #. Set up a :cyrusman:`cyrus.conf(5)` file for it::
+
+    START {
+        # this is required
+        recover cmd="ctl_cyrusdb -r"
+    }
 
     SERVICES {
         # backupd is probably the only service entry your backup server needs
@@ -200,7 +215,7 @@ sync\_log\_channels: *channel*
     means livelier backups but more network I/O. Larger value reduces I/O.
 
 Update :cyrusman:`cyrus.conf(5)` to add a :cyrusman:`sync_client(8)` invocation
-to the SERVICES section specifying (at least) the ``-r`` and ``-n channel``
+to the DAEMON section specifying (at least) the ``-r`` and ``-n channel``
 options.
 
 See :cyrusman:`imapd.conf(5)` for additional *sync\_* settings that can
@@ -257,6 +272,9 @@ This replicates all users to the channel *backup*.
 
 Administration
 ==============
+
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 Storage requirements
 --------------------
@@ -400,6 +418,9 @@ of interesting configuration possibilities to shake out. Have a rummage in the
 
 Tools
 =====
+
+.. note::
+    Cyrus Backups are experimental, incomplete, and deprecated as of 3.10.
 
 ctl\_backups
 ------------

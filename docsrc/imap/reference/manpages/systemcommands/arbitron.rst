@@ -58,21 +58,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -o
-
-    Report "the old way" -- not including subscribers.
-
-.. option:: -l
-
-    Enable long reporting (comma delimited table consisting of mbox,
-    userid, r/s, start time, end time).
-
-.. option:: -d days
-
-    Count as a reader an authorization identity which has used the
-    mailbox within the past *days* days.
-
-.. option:: -D mmddyyyy[:mmddyyyy]
+.. option:: -D mmddyyyy[:mmddyyyy], --date=mmddyyyy[:mmddyyyy]
 
     Count as a reader an authorization identity which has used the
     mailbox within the given date range.
@@ -88,10 +74,30 @@ Options
         Please note that the date notation is American [\ *mmddyyyy*\ ]
         not [\ *ddmmyyyy*\ ].
 
-.. option:: -p months
+.. option:: -d days, --days=days
+
+    Count as a reader an authorization identity which has used the
+    mailbox within the past *days* days.
+
+.. option:: -l, --detailed
+
+    Enable long reporting (comma delimited table consisting of mbox,
+    userid, r/s, start time, end time).
+
+.. option:: -o, --no-subscribers
+
+    Report "the old way" -- not including subscribers.
+
+.. option:: -p months, --prune-seen=months
 
     Prune ``\Seen`` state for users who have not used the mailbox within
     the past *months* months. The default is infinity.
+
+.. option:: -u, --include-userids
+
+    Include userids of mailbox readers in the report.  If the report
+    will contain mailbox subscribers (see **--no-subscribers**), also
+    include userids of the subscribers.
 
 Examples
 ========

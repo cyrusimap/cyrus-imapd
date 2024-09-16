@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sysexits.h>
@@ -86,6 +87,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -115,8 +119,7 @@ static int set_specialuse(struct findall_data *data, void *rock)
     int r;
 
     if (!data) return 0;
-
-    if (!data->mbname) return 0; /* XXX what does this mean? */
+    if (!data->is_exactmatch) return 0;
 
     if (!mbname_userid(data->mbname)) return 0;
 
@@ -162,7 +165,18 @@ int main (int argc, char **argv)
     hash_table xlist = HASH_TABLE_INITIALIZER;
     strarray_t patterns = STRARRAY_INITIALIZER;
 
-    while ((opt = getopt(argc, argv, "C:v")) != -1) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:v";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "verbose", no_argument, NULL, 'v' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C':
             alt_config = optarg;

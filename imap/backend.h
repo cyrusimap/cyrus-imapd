@@ -113,6 +113,8 @@ void backend_disconnect(struct backend *s);
 char *intersect_mechlists(char *config, char *server);
 char *backend_get_cap_params(const struct backend *, unsigned long capa);
 
-#define CAPA(s, c) ((s)->capability & (c))
+int backend_version(struct backend *);
+
+#define CAPA(s, c) ((s) ? (s)->capability & (c) : 0)
 
 #endif /* _INCLUDED_BACKEND_H */

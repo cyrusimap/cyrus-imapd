@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_seen
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # See https://github.com/cyrusimap/cyrus-imapd/issues/2270
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add message";
+    $self->make_message('Message A');
+
+    xlog $self, "Query email";
+    my $inbox = $self->getinbox();
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => { inMailbox => $inbox->{id} }
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'}
+        }, 'R2' ]
+    ]);
+
+    my $keywords = { };
+    my $msg = $res->[1][1]->{list}[0];
+    $self->assert_deep_equals($keywords, $msg->{keywords});
+
+    $keywords->{'$seen'} = JSON::true;
+    $res = $jmap->CallMethods([
+        ['Email/set', { update => { $msg->{id} => { 'keywords/$seen' => JSON::true } } }, 'R1'],
+        ['Email/get', { ids => [ $msg->{id} ] }, 'R2'],
+    ]);
+    $msg = $res->[1][1]->{list}[0];
+    $self->assert_deep_equals($keywords, $msg->{keywords});
+}

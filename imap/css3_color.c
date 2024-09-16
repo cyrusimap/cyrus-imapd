@@ -46,6 +46,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "util.h"
+
 struct css3_color_t {
     const char *name;
     unsigned char r;
@@ -168,7 +170,7 @@ static const struct css3_color_t css3_colors[] = {
     { "palevioletred",        219, 112, 147 },
     { "papayawhip",           255, 239, 213 },
     { "peachpuff",            255, 218, 185 },
-    { "peru",                 205, 133, 63 },
+    { "peru",                 205, 133,  63 },
     { "pink",                 255, 192, 203 },
     { "plum",                 221, 160, 221 },
     { "powderblue",           176, 224, 230 },
@@ -190,7 +192,7 @@ static const struct css3_color_t css3_colors[] = {
     { "snow",                 255, 250, 250 },
     { "springgreen",            0, 255, 127 },
     { "steelblue",             70, 130, 180 },
-    { "tan",                  210, 180, 140 }, 
+    { "tan",                  210, 180, 140 },
     { "teal",                   0, 128, 128 },
     { "thistle",              216, 191, 216 },
     { "tomato",               255,  99,  71 },
@@ -206,7 +208,7 @@ static const struct css3_color_t css3_colors[] = {
 
 /* Take a hex value for a color and find best matching css3 color name using:
    https://en.wikipedia.org/wiki/Color_difference */
-const char *css3_color_hex_to_name(const char *hexstr)
+EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
 {
     if (!hexstr || hexstr[0] != '#') return NULL;
 
@@ -254,4 +256,13 @@ const char *css3_color_hex_to_name(const char *hexstr)
     }
 
     return name;
+}
+
+EXPORTED int is_css3_color(const char *s)
+{
+    const struct css3_color_t *c;
+
+    for (c = css3_colors; c->name && strcasecmp(s, c->name); c++);
+
+    return (c->name != NULL);
 }

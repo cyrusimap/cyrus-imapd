@@ -16,19 +16,39 @@ There are two ways in which Cyrus can determine the domain:
 Fully qualified userid
     The client logs in with a userid
     containing the domain in which the user belongs (for example:
-    ``test@cyrusisgreat.org`` or ``test%ilovecyrus.com``)
+    ``test@cyrusisgreat.org`` or ``test@ilovecyrus.com``)
 
 IP address
     The server looks up the domain based on the IP
     address of the receiving interface (useful for servers with multiple
     NICs or those using IP aliasing)
 
-If the ``virtdomains`` option is set to ``on`` (or ``yes``, ``1``, ``true``),
-Cyrus uses both mechanisms to work out the domain (with the fully qualified userid
-taking precedence).
+If the ``virtdomains`` option is set to ``off`` (or ``no``, ``0``, ``false``),
+Cyrus does not know or care about domains, and only ever considers the local
+part of email addresses.  This configuration is never recommended, but is
+currently the default.
 
 If the ``virtdomains`` option is set to ``userid``, then only the
-fully qualified userid is used.
+fully qualified userid is used.  This is the only recommended configuration
+for new deployments, and in the future may become the default or only option.
+Existing deployments should strongly consider migrating towards this
+configuration.
+
+If the ``virtdomains`` option is set to ``on`` (or ``yes``, ``1``, ``true``),
+Cyrus uses both mechanisms to work out the domain (with the fully qualified
+userid taking precedence).  This configuration is not recommended.
+
+.. note::
+    If you are providing calendaring services, you MUST use the
+    ``virtdomains: userid`` configuration.  Calendaring services require
+    a consistent single authoritative fully-qualified email address for
+    each user in order to function, and this is the only configuration
+    that provides it.
+
+    The ``virtdomains: off`` and ``virtdomains: on`` configurations both
+    allow users' domains to be changed from outside of Cyrus without Cyrus
+    knowing about it, which fundamentally breaks calendaring.  These
+    configurations are only suitable for IMAP-only deployments.
 
 Concepts
 ========
@@ -41,17 +61,17 @@ Names can be qualified
 
     Here are some examples:
 
-        * ``cyradm> create user.lukecage@example.net`` - create a user
-        * ``cyradm> create user.mercedesknight@example.net`` - create another user
-        * ``cyradm> setquota user.lukecage@example.net 50000`` - define a quota
-        * ``cyradm> setaclmailbox user.lukecage@example.net mercedesknight@example.net read`` - give Mercedes Knight read access to Luke Cage's mailbox
+        * ``cyradm> create user/lukecage@example.net`` - create a user
+        * ``cyradm> create user/mercedesknight@example.net`` - create another user
+        * ``cyradm> setquota user/lukecage@example.net 50000`` - define a quota
+        * ``cyradm> setaclmailbox user/lukecage@example.net mercedesknight@example.net read`` - give Mercedes Knight read access to Luke Cage's mailbox
         * ``cyradm> listmailbox *@example.net`` - list all mailboxes in the example.net domain
 
 Each mailbox exists in only one domain
 
 Domains are mutually exclusive
     Users only have access to mailboxes within their own domain (intra-domain).  The following
-    example will not work: ``setacl user.mercedesknight@herdomain.com
+    example will not work: ``setacl user/mercedesknight@herdomain.com
     lukecage@hisdomain.com read``.
 
 Global and Domain admins
@@ -71,7 +91,7 @@ MOST OF THIS SHOULD BE IN DEPLOYMENT GUIDE?
 Quick Start
 ===========
 
-* Add ``virtdomains: yes`` to :cyrusman:`imapd.conf(5)`
+* Add ``virtdomains: userid`` to :cyrusman:`imapd.conf(5)`
 * Add a ``defaultdomain`` entry to :cyrusman:`imapd.conf(5)`
 * Use cyradm (as a global or domain admin) to create mailboxes for each domain.
 
@@ -193,11 +213,11 @@ specifying mailboxes outside of the ``defaultdomain``.  Examples
 
 To create a new INBOX for user 'test' in ``defaultdomain``::
 
-    cm user.test
+    cm user/test
 
 To create a new INBOX for user 'test' in domain 'example.com'::
 
-    cm user.test@example.com
+    cm user/test@example.com
 
 To list all mailboxes in domain 'example.com'::
 

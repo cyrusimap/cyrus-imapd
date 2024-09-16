@@ -258,28 +258,22 @@ static void print_environment(void)
     fprintf(stderr, "Cyrus DB:       %s\n", DBNAME);
 
     time_t now = time(NULL);
-    fprintf(stderr, "Date:           %s", ctime(&now));;
+    fprintf(stderr, "Date:           %s", ctime(&now));
 
     FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
     if (cpuinfo != NULL) {
         char line[1000];
         int num_cpus = 0;
-        struct buf cpu_type;
-        struct buf cache_size;
-        char *ctype, *csize;
-
-        buf_init(&cpu_type);
-        buf_init(&cache_size);
+        struct buf cpu_type = BUF_INITIALIZER;
+        struct buf cache_size = BUF_INITIALIZER;
 
         while (fgets(line, sizeof(line), cpuinfo) != NULL) {
             const char *sep = strchr(line, ':');
-            struct buf key, val;
+            struct buf key = BUF_INITIALIZER;
+            struct buf val = BUF_INITIALIZER;
 
             if (sep == NULL)
                 continue;
-
-            buf_init(&key);
-            buf_init(&val);
 
             buf_setmap(&key, line, (sep - 1 - line));
             buf_trim(&key);
@@ -302,14 +296,14 @@ static void print_environment(void)
 
         fclose(cpuinfo);
 
-        ctype = buf_release(&cpu_type);
-        csize = buf_release(&cache_size);
+        const char *ctype = buf_cstring(&cpu_type);
+        const char *csize = buf_cstring(&cache_size);
         fprintf(stderr, "CPU:            %d * %s",
                 num_cpus, ctype);
         fprintf(stderr, "CPUCache:       %s", csize);
 
-        free(ctype);
-        free(csize);
+        buf_free(&cpu_type);
+        buf_free(&cache_size);
     }
 }
 

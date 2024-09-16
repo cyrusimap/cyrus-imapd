@@ -38,8 +38,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <unistd.h>
+#include <limits.h>
+#include <stdint.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #include "cunit/cyrunit.h"
 
@@ -49,19 +51,6 @@
 
 #define DBDIR "test-libconfig-dbdir"
 
-/* XXX dedup this, it's c&p'd everywhere */
-static void config_read_string(const char *s)
-{
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
-    int fd = mkstemp(fname);
-    retry_write(fd, s, strlen(s));
-    config_reset();
-    config_read(fname, 0);
-    unlink(fname);
-    free(fname);
-    close(fd);
-}
-
 static int set_up(void)
 {
     return 0;
@@ -69,27 +58,34 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    return 0;
+    int r;
+
+    /* all these tests will initialise some config, clean up after! */
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
 }
 
 static void test_int(void)
 {
-    int archive_days = -1;
-    int archive_maxsize = -1;
+    int boundary_limit = -1;
+    int conversations_max_thread = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
-        "archive_days: 9\n"
-        /* archive_maxsize: 1024 (default) */
+        "boundary_limit: 120\n"
+        /* conversations_max_thread: 100 (default) */
     );
 
     /* test a value that has been set */
-    archive_days = config_getint(IMAPOPT_ARCHIVE_DAYS);
-    CU_ASSERT_EQUAL(archive_days, 9);
+    boundary_limit = config_getint(IMAPOPT_BOUNDARY_LIMIT);
+    CU_ASSERT_EQUAL(boundary_limit, 120);
 
     /* test a value that is defaulted */
-    archive_maxsize = config_getint(IMAPOPT_ARCHIVE_MAXSIZE);
-    CU_ASSERT_EQUAL(archive_maxsize, 1024);
+    conversations_max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
+    CU_ASSERT_EQUAL(conversations_max_thread, 100);
 }
 
 static void test_string(void)
@@ -236,6 +232,29 @@ static void test_bitfield_value(void)
                     IMAP_ENUM_HTTPMODULES_JMAP);
 }
 
+static void test_bitfield_value_wide(void)
+{
+    unsigned long sieve_extensions = (unsigned long) -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "sieve_extensions: vnd.cyrus.implicit_keep_target\n"
+    );
+
+    /* vnd.cyrus.implicit_keep_target is notable for being bit 33.
+     * Let's make sure we aren't accidentally truncating bitfields to
+     * 32 bits...
+     */
+
+    /* but first let's make sure it is actually bit 33! */
+    CU_ASSERT_EQUAL_FATAL(IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET,
+                          (1LL << 33));
+
+    sieve_extensions = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+    CU_ASSERT_EQUAL(sieve_extensions,
+                    IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET);
+}
+
 static void test_bitfield_default(void)
 {
     unsigned long httpmodules = (unsigned long) -1;
@@ -257,6 +276,551 @@ static void test_bitfield_invalid(void)
         "httpmodules: caldav junk\n"
     );
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "invalid value 'junk' for httpmodules in line 2");
+}
+
+static void test_duration_value_days(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 3d\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 3 * 24 * 60 * 60);
+}
+
+static void test_duration_value_hours(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 3h\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 3 * 60 * 60);
+}
+
+static void test_duration_value_minutes(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 45m\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 45 * 60);
+}
+
+static void test_duration_value_seconds(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 25s\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 25);
+}
+
+static void test_duration_value_combined(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 1h30m\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 1.5 * 60 * 60);
+}
+
+static void test_duration_value_nounits(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: 13\n"
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 13);
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    CU_ASSERT_EQUAL(timeout, 13 * 60);
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 'h');
+    CU_ASSERT_EQUAL(timeout, 13 * 60 * 60);
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 'd');
+    CU_ASSERT_EQUAL(timeout, 13 * 60 * 60 * 24);
+}
+
+static void test_duration_value_negative(void)
+{
+    int caldav_historical_age = 0xdeadbeef;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "caldav_historical_age: -1\n"
+    );
+
+    caldav_historical_age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE, 'd');
+    CU_ASSERT_EQUAL(caldav_historical_age, -1 * 60 * 60 * 24);
+}
+
+static void test_duration_default(void)
+{
+    int timeout = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* timeout: 32m (default) */
+    );
+
+    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    CU_ASSERT_EQUAL(timeout, 32 * 60);
+}
+
+static void test_duration_nodefault(void)
+{
+    int plaintextloginpause = -1;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* plaintextloginpause: <none> (default) */
+    );
+
+    plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's');
+    CU_ASSERT_EQUAL(plaintextloginpause, 0);
+}
+
+static void test_duration_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "timeout: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG, "unparsable duration 'junk' for timeout in line 2");
+}
+
+struct duration_parse_data {
+    const char *str;
+    int expected_result;
+    int expected_duration;
+};
+
+static const struct duration_parse_data duration_parse_tests[] = {
+    { "", 0, 0 },
+    { "0", 0, 0 },
+    { "0s", 0, 0 },
+    { "0m", 0, 0 },
+    { "0h", 0, 0 },
+    { "0d", 0, 0 },
+    { "0h0m", 0, 0 },
+    { "0h0m0s", 0, 0 },
+    { "0h0m1s", 0, 1 },
+    { "1", 0, 1 },
+    { "1s", 0, 1 },
+    { "1m", 0, 60 },
+    { "1h", 0, 60 * 60 },
+    { "1d", 0, 24 * 60 * 60 },
+    { "123", 0, 123 },
+    { "123s", 0, 123 },
+    { "123m", 0, 123 * 60 },
+    { "123h", 0, 123 * 60 * 60 },
+    { "123d", 0, 123 * 24 * 60 * 60 },
+    { "1m1", 0, 60 + 1 },
+    { "1m1s", 0, 60 + 1 },
+    { "1h1m", 0, (60 * 60) + 60 },
+    { "1h1s", 0, (60 * 60) + 1 },
+    { "1d1h", 0, (24 * 60 * 60) + (60 * 60) },
+    { "1h1m1s", 0, (60 * 60) + 60 + 1 },
+    { "1m1m", 0, 60 + 60 },
+    { "123m456", 0, (123 * 60) + 456 },
+    { "123m456s", 0, (123 * 60) + 456 },
+    { "123h456m", 0, (123 * 60 * 60) + (456 * 60) },
+    { "123h456s", 0, (123 * 60 * 60) + 456 },
+    { "123d456h", 0, (123 * 24 * 60 * 60) + (456 * 60 * 60) },
+    { "123h456m789s", 0, (123 * 60 * 60) + (456 * 60) + 789 },
+    { "123m456m", 0, (123 * 60) + (456 * 60) },
+
+    { "0c", -1, 0xdeadbeef },
+    { "1c", -1, 0xdeadbeef },
+    { "123c", -1, 0xdeadbeef },
+    { "1h1c", -1, 0xdeadbeef },
+    { "1c23s", -1, 0xdeadbeef },
+
+    { "-1", 0, -1 },
+    { "-0", 0, 0 },
+    { "-", -1, 0xdeadbeef },
+    { "-s", -1, 0xdeadbeef },
+    { "--1", -1, 0xdeadbeef },
+    { "-1s", 0, -1 },
+    { "-1m", 0, -60 },
+    { "1-2m", -1, 0xdeadbeef },
+    { "1m-2s", -1, 0xdeadbeef },
+    { "1m0-2s", -1, 0xdeadbeef },
+
+    { "1h1h", 0, 2 * 60 * 60 }, /* silly, but let it work */
+    { "1hh", -1, 0xdeadbeef }, /* bogus, reject it */
+    { "1hhh", -1, 0xdeadbeef }, /* bogus, reject it */
+
+    /* XXX config_parseduration uses int type and INT_MAX, but these limit
+     * XXX tests use hardcoded strings, which means they'll fail on a platform
+     * XXX where int is something other than 32 bits and has different limits.
+     * XXX I figure we can worry about that later, if/when it ever happens.
+     */
+    /* exercise all the multipliers against overflow */
+    { "2147483647s",   0, INT_MAX },
+    { "2147483648s",  -1, 0xdeadbeef },
+    { "-2147483647s",  0, -INT_MAX },
+    { "-2147483648s", -1, 0xdeadbeef },
+    { "35791394m",     0, 60 * (INT_MAX / 60) },
+    { "35791395m",    -1, 0xdeadbeef },
+    { "-35791394m",    0, -60 * (INT_MAX / 60) },
+    { "-35791395m",   -1, 0xdeadbeef },
+    { "596523h",       0, 3600 * (INT_MAX / 3600) },
+    { "596524h",      -1, 0xdeadbeef },
+    { "-596523h",      0, -3600 * (INT_MAX / 3600) },
+    { "-596524h",     -1, 0xdeadbeef },
+    { "24855d",        0, 86400 * (INT_MAX / 86400) },
+    { "24856d",       -1, 0xdeadbeef },
+    { "-24855d",       0, -86400 * (INT_MAX / 86400) },
+    { "-24856d",      -1, 0xdeadbeef },
+
+    { "24855d3h14m7s", 0, INT_MAX },
+    { "24855d3h14m8s", -1, 0xdeadbeef },
+};
+
+static void test_duration_parse(void)
+{
+    const size_t n = sizeof(duration_parse_tests) / sizeof(duration_parse_tests[0]);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        const struct duration_parse_data *test = &duration_parse_tests[i];
+        int duration = 0xdeadbeef;
+        int r = config_parseduration(test->str, 's', &duration);
+        CU_ASSERT_EQUAL(r, test->expected_result);
+        CU_ASSERT_EQUAL(duration, test->expected_duration);
+    }
+}
+
+static void test_bytesize_value_gibibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 1G\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 1LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_value_mebibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 3M\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 3LL * 1024 * 1024);
+}
+
+static void test_bytesize_value_kibibytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 45K\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 45LL * 1024);
+}
+
+static void test_bytesize_value_bytes(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 25B\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, 25LL);
+}
+
+static void test_bytesize_value_nounits(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: 13\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
+    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_value_negative(void)
+{
+    int64_t archive_maxsize = 0xdeadbeef;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: -1\n"
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024);
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
+    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024 * 1024);
+}
+
+static void test_bytesize_default(void)
+{
+    int64_t archive_maxsize = -1LL;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        /* archive_maxsize: 1024 K (default) */
+    );
+
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    CU_ASSERT_EQUAL(archive_maxsize, 1024LL * 1024);
+}
+
+static void test_bytesize_invalid(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_maxsize: junk\n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "unparsable byte size 'junk' for archive_maxsize in line 2"
+    );
+}
+
+struct bytesize_parse_data {
+    const char *str;
+    int expected_result;
+    int64_t expected_bytesize;
+};
+
+static const struct bytesize_parse_data bytesize_parse_tests[] = {
+    /* no digits */
+    { "", -1, 0xdeadbeefLL },
+    { "B", -1, 0xdeadbeefLL },
+    { "KB", -1, 0xdeadbeefLL },
+    { "KiB", -1, 0xdeadbeefLL },
+    { "-B", -1, 0xdeadbeefLL },
+    { "-KB", -1, 0xdeadbeefLL },
+    { "-KiB", -1, 0xdeadbeefLL },
+
+    /* no suffix */
+    { "0",      0,     0LL },
+    { "1",      0,     1LL },
+    { "9876",   0,  9876LL },
+    { "-1234",  0, -1234LL },
+
+    /* bytes suffix */
+    { "0b",     0,     0LL },
+    { "0B",     0,     0LL },
+    { "1b",     0,     1LL },
+    { "1B",     0,     1LL },
+    { "9876b",  0,  9876LL },
+    { "9876B",  0,  9876LL },
+    { "-1234b", 0, -1234LL },
+    { "-1234B", 0, -1234LL },
+
+    /* no such thing as "ibibytes"! */
+    { "0ib",     -1, 0xdeadbeefLL },
+    { "0iB",     -1, 0xdeadbeefLL },
+    { "1ib",     -1, 0xdeadbeefLL },
+    { "1iB",     -1, 0xdeadbeefLL },
+    { "9876ib",  -1, 0xdeadbeefLL },
+    { "9876iB",  -1, 0xdeadbeefLL },
+    { "-1234ib", -1, 0xdeadbeefLL },
+    { "-1234iB", -1, 0xdeadbeefLL },
+
+    /* K suffix */
+    { "0k",     0,     0LL * 1024 },
+    { "0K",     0,     0LL * 1024 },
+    { "1k",     0,     1LL * 1024 },
+    { "1K",     0,     1LL * 1024 },
+    { "9876k",  0,  9876LL * 1024 },
+    { "9876K",  0,  9876LL * 1024 },
+    { "-1234k", 0, -1234LL * 1024 },
+    { "-1234K", 0, -1234LL * 1024 },
+
+    /* KB suffix */
+    { "0kb",     0,     0LL * 1024 },
+    { "0KB",     0,     0LL * 1024 },
+    { "1kb",     0,     1LL * 1024 },
+    { "1KB",     0,     1LL * 1024 },
+    { "9876kb",  0,  9876LL * 1024 },
+    { "9876KB",  0,  9876LL * 1024 },
+    { "-1234kb", 0, -1234LL * 1024 },
+    { "-1234KB", 0, -1234LL * 1024 },
+
+    /* KiB suffix */
+    { "0kib",     0,     0LL * 1024 },
+    { "0KiB",     0,     0LL * 1024 },
+    { "1kib",     0,     1LL * 1024 },
+    { "1KiB",     0,     1LL * 1024 },
+    { "9876kib",  0,  9876LL * 1024 },
+    { "9876KiB",  0,  9876LL * 1024 },
+    { "-1234kib", 0, -1234LL * 1024 },
+    { "-1234KiB", 0, -1234LL * 1024 },
+
+    /* M suffix */
+    { "0m",      0,     0LL * 1024 * 1024 },
+    { "0M",      0,     0LL * 1024 * 1024 },
+    { "1m",      0,     1LL * 1024 * 1024 },
+    { "1M",      0,     1LL * 1024 * 1024 },
+    { "9876m",   0,  9876LL * 1024 * 1024 },
+    { "9876M",   0,  9876LL * 1024 * 1024 },
+    { "-1234m",  0, -1234LL * 1024 * 1024 },
+    { "-1234M",  0, -1234LL * 1024 * 1024 },
+
+    /* MB suffix */
+    { "0mb",     0,     0LL * 1024 * 1024 },
+    { "0MB",     0,     0LL * 1024 * 1024 },
+    { "1mb",     0,     1LL * 1024 * 1024 },
+    { "1MB",     0,     1LL * 1024 * 1024 },
+    { "9876mb",  0,  9876LL * 1024 * 1024 },
+    { "9876MB",  0,  9876LL * 1024 * 1024 },
+    { "-1234mb", 0, -1234LL * 1024 * 1024 },
+    { "-1234MB", 0, -1234LL * 1024 * 1024 },
+
+    /* MiB suffix */
+    { "0mib",     0,     0LL * 1024 * 1024 },
+    { "0MiB",     0,     0LL * 1024 * 1024 },
+    { "1mib",     0,     1LL * 1024 * 1024 },
+    { "1MiB",     0,     1LL * 1024 * 1024 },
+    { "9876mib",  0,  9876LL * 1024 * 1024 },
+    { "9876MiB",  0,  9876LL * 1024 * 1024 },
+    { "-1234mib", 0, -1234LL * 1024 * 1024 },
+    { "-1234MiB", 0, -1234LL * 1024 * 1024 },
+
+    /* G suffix */
+    { "0g",     0,     0LL * 1024 * 1024 * 1024 },
+    { "0G",     0,     0LL * 1024 * 1024 * 1024 },
+    { "1g",     0,     1LL * 1024 * 1024 * 1024 },
+    { "1G",     0,     1LL * 1024 * 1024 * 1024 },
+    { "9876g",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "9876G",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "-1234g", 0, -1234LL * 1024 * 1024 * 1024 },
+    { "-1234G", 0, -1234LL * 1024 * 1024 * 1024 },
+
+    /* GB suffix */
+    { "0gb",     0,     0LL * 1024 * 1024 * 1024 },
+    { "0GB",     0,     0LL * 1024 * 1024 * 1024 },
+    { "1gb",     0,     1LL * 1024 * 1024 * 1024 },
+    { "1GB",     0,     1LL * 1024 * 1024 * 1024 },
+    { "9876gb",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "9876GB",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "-1234gb", 0, -1234LL * 1024 * 1024 * 1024 },
+    { "-1234GB", 0, -1234LL * 1024 * 1024 * 1024 },
+
+    /* GiB suffix */
+    { "0gib",     0,     0LL * 1024 * 1024 * 1024 },
+    { "0GiB",     0,     0LL * 1024 * 1024 * 1024 },
+    { "1gib",     0,     1LL * 1024 * 1024 * 1024 },
+    { "1GiB",     0,     1LL * 1024 * 1024 * 1024 },
+    { "9876gib",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "9876GiB",  0,  9876LL * 1024 * 1024 * 1024 },
+    { "-1234gib", 0, -1234LL * 1024 * 1024 * 1024 },
+    { "-1234GiB", 0, -1234LL * 1024 * 1024 * 1024 },
+
+    /* trailing junk */
+    { "23MB my friends", -1, 0xdeadbeefLL },
+
+    /* unrecognised multiplier */
+    { "6TB", -1, 0xdeadbeefLL },
+    { "6PB", -1, 0xdeadbeefLL },
+
+    /* i case insensitivity */
+    { "25KiB", 0, 25LL * 1024 },
+    { "25KIB", 0, 25LL * 1024 },
+
+    /* optional whitespace between number and multiplier */
+    { "12 K",    0, 12LL * 1024 },
+    { "12 KB",   0, 12LL * 1024 },
+    { "12 KiB",  0, 12LL * 1024 },
+    { "12  K",   0, 12LL * 1024 },
+    { "12  KB",  0, 12LL * 1024 },
+    { "12  KiB", 0, 12LL * 1024 },
+
+    /* overflow tests */
+    { "9223372036854775807 B", 0, INT64_MAX },
+    { "-9223372036854775808 B", 0, INT64_MIN },
+    { "9223372036854775808 B", -1, 0xdeadbeefLL },
+    { "-9223372036854775809 B", -1, 0xdeadbeefLL },
+    { "9007199254740991 K", 0, 1024LL * (INT64_MAX / 1024LL) },
+    { "-9007199254740992 K", 0, 1024LL * (INT64_MIN / 1024LL) },
+    { "9007199254740992 K", -1, 0xdeadbeefLL },
+    { "-9007199254740993 K", -1, 0xdeadbeefLL },
+    { "8796093022207 M", 0, 1048576LL * (INT64_MAX / 1048576LL) },
+    { "-8796093022208 M", 0, 1048576LL * (INT64_MIN / 1048576LL) },
+    { "8796093022208 M", -1, 0xdeadbeefLL },
+    { "-8796093022209 M", -1, 0xdeadbeefLL },
+    { "8589934591 G", 0, 1073741824LL * (INT64_MAX / 1073741824LL) },
+    { "-8589934592 G", 0, 1073741824LL * (INT64_MIN / 1073741824LL) },
+    { "8589934592 G", -1, 0xdeadbeefLL },
+    { "-8589934593 G", -1, 0xdeadbeefLL },
+};
+
+static void test_bytesize_parse(void)
+{
+    const size_t n = sizeof(bytesize_parse_tests) / sizeof(bytesize_parse_tests[0]);
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        const struct bytesize_parse_data *test = &bytesize_parse_tests[i];
+        int64_t bytesize = 0xdeadbeefLL;
+        int r = config_parsebytesize(test->str, 'B', &bytesize);
+        CU_ASSERT_EQUAL(r, test->expected_result);
+        CU_ASSERT_EQUAL(bytesize, test->expected_bytesize);
+    }
 }
 
 static void test_magic_configdirectory_value(void)
@@ -285,6 +849,267 @@ static void test_magic_configdirectory_default(void)
     idlesocket = config_getstring(IMAPOPT_IDLESOCKET);
     CU_ASSERT_PTR_NOT_NULL(idlesocket);
     CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/socket/idle");
+}
+
+static void test_deprecated_int(void)
+{
+    /* { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" } */
+    int val;
+
+    /* set the deprecated name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequotamsg: 12\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN
+    val = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'autocreatequotamsg' is deprecated in favor of "
+        "'autocreate_quota_messages' since version 2.5.0.");
+
+    /* should be able to read the value at the new name */
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
+    CU_ASSERT_EQUAL(val, 12);
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreate_quota_messages: 12\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
+    CU_ASSERT_EQUAL(val, 12);
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequotamsg: 12\n"
+        "autocreate_quota_messages: 15\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
+    CU_ASSERT_EQUAL(val, 15);
+}
+
+static void test_deprecated_string(void)
+{
+    /* { "tlscache_db_path", NULL, STRING, "2.5.0", "tls_sessions_db_path" } */
+    const char *val;
+
+    /* set the deprecated name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db_path: foo\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN
+    val = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'tlscache_db_path' is deprecated in favor of "
+        "'tls_sessions_db_path' since version 2.5.0.");
+
+    /* should be able to read the value at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "foo");
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tls_sessions_db_path: foo\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "foo");
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db_path: foo\n"
+        "tls_sessions_db_path: bar\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "bar");
+}
+
+static void test_deprecated_stringlist(void)
+{
+    /* { "tlscache_db", "twoskip",
+     *   STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"),
+     *   "2.5.0", "tls_sessions_db" }
+     */
+    const char *val;
+
+    /* set the deprecated name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db: sql\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN
+    val = config_getstring(IMAPOPT_TLSCACHE_DB);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'tlscache_db' is deprecated in favor of "
+        "'tls_sessions_db' since version 2.5.0.");
+
+    /* should be able to read it at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "sql");
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tls_sessions_db: sql\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "sql");
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db: sql\n"
+        "tls_sessions_db: zeroskip\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "zeroskip");
+}
+
+static void test_deprecated_duration(void)
+{
+    /* { "archive_days", "7d", DURATION, "3.1.8", "archive_after" } */
+    /* { "archive_after", "7d", DURATION } */
+    int val;
+
+    /* set the deprecated name only */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_days: 8\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN;
+    val = config_getduration(IMAPOPT_ARCHIVE_DAYS, 'd');
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'archive_days' is deprecated in favor of "
+        "'archive_after' since version 3.1.8.");
+
+    /* should be able to read it at the new name */
+    val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    CU_ASSERT_EQUAL(val, 8 * 24 * 60 * 60);
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_after: 12d\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    CU_ASSERT_EQUAL(val, 12 * 24 * 60 * 60);
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "archive_days: 7\n"
+        "archive_after: 12d\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    CU_ASSERT_EQUAL(val, 12 * 24 * 60 * 60);
+}
+
+static void test_deprecated_bytesize(void)
+{
+    /* { "autocreatequota", NULL, BYTESIZE, "UNRELEASED", "2.5.0", "autocreate_quota" } */
+    /* { "autocreate_quota", "-1", BYTESIZE, "UNRELEASED" } */
+    int64_t val;
+
+    /* set the deprecated name only */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 8\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN;
+    val = config_getbytesize(IMAPOPT_AUTOCREATEQUOTA, 'K');
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'autocreatequota' is deprecated in favor of "
+        "'autocreate_quota' since version 2.5.0.");
+
+    /* should be able to read it at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 8LL * 1024);
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreate_quota: 12M\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 7\n"
+        "autocreate_quota: 12M\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
 }
 
 /* vim: set ft=c: */

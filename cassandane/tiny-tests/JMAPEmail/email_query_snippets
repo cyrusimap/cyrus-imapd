@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_snippets
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my %exp;
+    my $jmap = $self->{jmap};
+    my $res;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog $self, "generating email A";
+    $exp{A} = $self->make_message("Email A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch email and snippet";
+    $res = $jmap->CallMethods([
+        ['Email/query', { filter => { text => "email" }}, "R1"],
+        ['SearchSnippet/get', {
+            '#emailIds' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            '#filter' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/filter',
+            },
+        }, 'R2'],
+    ]);
+
+    my $snippet = $res->[1][1]{list}[0];
+    $self->assert_not_null($snippet);
+    $self->assert_num_not_equals(-1, index($snippet->{subject}, "<mark>Email</mark> A"));
+
+    xlog $self, "fetch email and snippet with no filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['SearchSnippet/get', {
+            '#emailIds' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+        }, 'R2'],
+    ]);
+    $snippet = $res->[1][1]{list}[0];
+    $self->assert_not_null($snippet);
+    $self->assert_null($snippet->{subject});
+    $self->assert_null($snippet->{preview});
+
+    xlog $self, "fetch email and snippet with no text filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => "OR",
+                conditions => [{minSize => 1}, {maxSize => 1}]
+            },
+        }, "R1"],
+        ['SearchSnippet/get', {
+            '#emailIds' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            '#filter' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/filter',
+            },
+        }, 'R2'],
+    ]);
+
+    $snippet = $res->[1][1]{list}[0];
+    $self->assert_not_null($snippet);
+    $self->assert_null($snippet->{subject});
+    $self->assert_null($snippet->{preview});
+}

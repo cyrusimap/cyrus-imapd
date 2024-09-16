@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update
+    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $drafts = $res->[0][1]{created}{"1"}{id};
+
+    my $draft =  {
+        mailboxIds => {$drafts => JSON::true},
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ],
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" } ],
+        cc => [ { name => "Elmer Fudd", email => "elmer\@acme.local" } ],
+        subject => "created",
+        htmlBody => [ {partId => '1'} ],
+        bodyValues => { 1 => { value => "Oh!!! I <em>hate</em> that Rabbit." }},
+        keywords => {
+            '$draft' => JSON::true,
+        }
+    };
+
+    xlog $self, "Create a draft";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "Get draft $id";
+    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    xlog $self, "Update draft $id";
+    $draft->{keywords} = {
+        '$draft' => JSON::true,
+        '$flagged' => JSON::true,
+        '$seen' => JSON::true,
+        '$answered' => JSON::true,
+    };
+    $res = $jmap->CallMethods([['Email/set', { update => { $id => $draft }}, "R1"]]);
+
+    xlog $self, "Get draft $id";
+    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_deep_equals($draft->{keywords}, $msg->{keywords});
+}

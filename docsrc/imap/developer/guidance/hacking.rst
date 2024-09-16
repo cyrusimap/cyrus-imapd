@@ -12,6 +12,14 @@ utilities for people trying to approach the code in a sane way.  It's
 not well organized right now but hopefully that will improve with time
 ;)
 
+..  warning::
+
+    This document is woefully out of date.  While some parts of it are still
+    accurate, it has not been reviewed in quite a while.  If you're looking at
+    the code and it doesn't seem to match this, don't assume the code is wrong.
+    Talk to the developers!  We'll revise this document, but don't hold your
+    breath right now.  (This comment written August 5, 2021.)
+
 Memory Allocation
 -----------------
 
@@ -399,3 +407,6 @@ out on the cyrus-devel list in June 2010.
     offset and a "within this mmap" offset though, and it also applies to
     using the same variable name for native order and network order numbers,
     which is where I've seen it a few times and been super frustrated!)
+
+*   Write RFCs in comments capitalized with space after the RFC, like
+    ``RFC 1234``, not like ``rfc 1234`` or ``RFC1234``.

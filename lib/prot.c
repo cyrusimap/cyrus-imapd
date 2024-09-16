@@ -353,7 +353,7 @@ static void zfree(voidpf opaque __attribute__((unused)),
 
 /*
  * Turn on (de)compression for this connection
- * If its an output stream, initialize a compressor,
+ * If it is an output stream, initialize a compressor,
  * otherwise initialize a decompressor.
  */
 
@@ -404,8 +404,6 @@ EXPORTED int prot_setcompress(struct protstream *s)
      */
     s->zbuf_size = s->maxplain + 6;
     s->zbuf = (unsigned char *) xmalloc(sizeof(unsigned char) * s->zbuf_size);
-    syslog(LOG_DEBUG, "created %scompress buffer of %u bytes",
-           s->write ? "" : "de", s->zbuf_size);
     s->zstrm = zstrm;
 
     return 0;
@@ -456,7 +454,6 @@ static int is_incompressible(const char *p, size_t n)
 
     while (sig->type) {
         if (n >= sig->len && !memcmp(p, sig->sig, sig->len)) {
-            syslog(LOG_DEBUG, "data is %s", sig->type);
             return 1;
         }
         sig++;
@@ -653,7 +650,6 @@ EXPORTED int prot_fill(struct protstream *s)
         if (s->zstrm && s->zstrm->avail_in) {
             /* Decompress the data */
             int zr = Z_OK;
-            unsigned in = s->zstrm->avail_in;
 
             s->zstrm->next_out = s->zbuf;
             s->zstrm->avail_out = s->zbuf_size;
@@ -669,8 +665,6 @@ EXPORTED int prot_fill(struct protstream *s)
                 /* inflated some data */
                 s->ptr = s->zbuf;
                 s->cnt = s->zbuf_size - s->zstrm->avail_out;
-
-                syslog(LOG_DEBUG, "decompressed %u -> %u bytes", in, s->cnt);
 
                 /* drop straight to logging and returning the first char */
                 break;
@@ -816,7 +810,7 @@ EXPORTED int prot_fill(struct protstream *s)
         char timebuf[20];
 
         time(&newtime);
-        snprintf(timebuf, sizeof(timebuf), "<%ld<", newtime);
+        snprintf(timebuf, sizeof(timebuf), "<" TIME_T_FMT "<", newtime);
         n = write(s->logfd, timebuf, strlen(timebuf));
 
         left = s->cnt;
@@ -847,13 +841,13 @@ EXPORTED int prot_fill(struct protstream *s)
 EXPORTED int prot_flush(struct protstream *s)
 {
     if (!s->write) {
-        int c, save_dontblock = s->dontblock;
+        int save_dontblock = s->dontblock;
 
         /* Set stream to nonblocking mode */
         if (!save_dontblock) nonblock(s->fd, (s->dontblock = 1));
 
         /* Ingest any pending input */
-        while ((c = prot_fill(s)) != EOF);
+        while (prot_fill(s) != EOF);
 
         /* Reset stream to previous blocking mode */
         if (!save_dontblock) nonblock(s->fd, (s->dontblock = 0));
@@ -879,7 +873,7 @@ static void prot_flush_log(struct protstream *s)
         char timebuf[20];
 
         time(&newtime);
-        snprintf(timebuf, sizeof(timebuf), ">%ld>", newtime);
+        snprintf(timebuf, sizeof(timebuf), ">" TIME_T_FMT ">", newtime);
         n = write(s->logfd, timebuf, strlen(timebuf));
 
         do {
@@ -911,7 +905,6 @@ static int prot_flush_encode(struct protstream *s,
     if (s->zstrm) {
         /* Compress the data */
         int zr = Z_OK;
-        unsigned in = left;
 
         s->zstrm->next_in = ptr;
         s->zstrm->avail_in = left;
@@ -949,8 +942,6 @@ static int prot_flush_encode(struct protstream *s,
 
         ptr = s->zbuf;
         left = s->zbuf_size - s->zstrm->avail_out;
-
-        syslog(LOG_DEBUG, "compressed %u -> %u bytes", in, left);
     }
 #endif /* HAVE_ZLIB */
 
@@ -1275,7 +1266,7 @@ EXPORTED int prot_write(struct protstream *s, const char *buf, unsigned len)
     return 0;
 }
 
-EXPORTED int prot_putbuf(struct protstream *s, struct buf *buf)
+EXPORTED int prot_putbuf(struct protstream *s, const struct buf *buf)
 {
     return prot_write(s, buf->s, buf->len);
 }
@@ -1391,6 +1382,12 @@ EXPORTED int prot_printamap(struct protstream *out, const char *s, size_t n)
     int r;
 
     if (!s) return prot_printf(out, "NIL");
+
+    if (!n) {
+        prot_putc('"', out);
+        prot_putc('"', out);
+        return 2;
+    }
 
     if (imparse_isnatom(s, n) && (n != 3 || memcmp(s, "NIL", 3)))
         return prot_write(out, s, n);
@@ -1755,8 +1752,10 @@ EXPORTED struct protstream *protgroup_getelement(struct protgroup *group,
     return group->group[element];
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline int prot_getc(struct protstream *s)
     __attribute__((always_inline,optimize("-O3")));
+#endif
 EXPORTED inline int prot_getc(struct protstream *s)
 {
     assert(!s->write);
@@ -1797,8 +1796,10 @@ EXPORTED size_t prot_lookahead(struct protstream *s,
     return 0;
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline int prot_ungetc(int c, struct protstream *s)
     __attribute__((always_inline,optimize("-O3")));
+#endif
 EXPORTED inline int prot_ungetc(int c, struct protstream *s)
 {
     assert(!s->write);

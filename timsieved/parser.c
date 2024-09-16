@@ -586,6 +586,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
 
   prot_flush(sieved_out);
 
+  if (authenticated && ret == TRUE)
+      actions_unsetuser();
+
   return ret;
 
  error:
@@ -625,6 +628,7 @@ void cmd_logout(struct protstream *sieved_out,
 {
     prot_printf(sieved_out, "OK \"Logout Complete\"\r\n");
     prot_flush(sieved_out);
+    actions_unsetuser();
 }
 
 extern int reset_saslconn(sasl_conn_t **conn);
@@ -641,6 +645,7 @@ static void cmd_unauthenticate(struct protstream *sieved_out,
     prot_unsetsasl(sieved_out);
     prot_unsetsasl(sieved_in);
     authenticated = 0;
+    actions_unsetuser();
 }
 
 static int cmd_authenticate(struct protstream *sieved_out,
@@ -885,8 +890,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   sasl_getprop(sieved_saslconn, SASL_SSF, &val);
   sasl_ssf = *((sasl_ssf_t *) val);
 
-  if (sasl_ssf &&
-      config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
+  if (sasl_ssf) {
       capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
                    sasl_ssf);
       prot_flush(sieved_out);

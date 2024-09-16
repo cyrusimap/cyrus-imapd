@@ -1,0 +1,65 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.2.1 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.1/cyrus-imapd-3.2.1.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.2.1/cyrus-imapd-3.2.1.tar.gz.sig
+
+.. _relnotes-3.2.1-changes:
+
+Changes since 3.2.0
+===================
+
+Build changes
+-------------
+
+* Fixed: build failed on non-x86 platforms (thanks John Paul Adrian Glaubitz)
+* Fixed: configure now warns if your `time_t` type is only 32-bit
+* Fixed :issue:`3038`: ICU 55 or newer is required (thanks Дилян Палаузов)
+
+Removed experimental features
+-----------------------------
+
+The following features were incomplete and not ready for use, but snuck in
+well before the 3.2 feature freeze.  They have been removed in 3.2.1, and
+their corresponding :cyrusman:`imapd.conf(5)` options have been deprecated:
+
+* per-language Xapian indexing and searches for multilingual mailboxes
+* separate Xapian indexing and searches of MIME parts/attachments
+
+Bug fixes
+---------
+
+* Fixed :issue:`3036`: python2 detection was bad
+* Fixed :issue:`2470`: cunit tests used expired certs with tiny keys
+* Fixed :issue:`3039`: stats were miscounted on tls connection failure
+* Fixed :issue:`3035`: lmtpd aborted on connect when FORTIFY_SOURCE enabled
+* Fixed: some cunit tests assumed 64-bit `time_t` without checking
+* Fixed: imapd returned OK for slow or cancelled SEARCH requests
+* Fixed: mislabelled ISO-2022-JP email bodies now detected
+* Fixed: JMAP over-quota errors were reported as `serverFail` rather than
+  `overQuota`
+* Fixed :issue:`3049`: :cyrusman:`promstatsd(8)` had no man page
+* Fixed :issue:`3046`: httpd did not declare environ correctly (thanks
+  OBATA Akio)
+* Fixed: cunit timeout infrastructure was broken on big-endian systems
+* Fixed: crashes on non-x86 platforms due to unaligned memory accesses
+  (thanks Xavier Guimard and Stefano Rivera)
+
+Fixes to nonstandard JMAP extensions
+------------------------------------
+
+(These extensions are not yet formally standardised, and are only available
+with the `jmap_nonstandard_extensions` :cyrusman:`imapd.conf(5)` option
+enabled.)
+
+* Fixed: JMAP Performance Extension - guidsearch requires a folder number for
+  user inbox
+* Fixed: JMAP Calendars Extension - CalendarEvent/get returned wrong results
+  for date-only recurring events
+* Fixed: JMAP Contacts Extension - state was not cleaned up correctly on
+  Contact/copy failure

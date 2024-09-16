@@ -14,7 +14,7 @@ Compile JMAP support into Cyrus
 
 1. Enable JMAP (and DAV) in Cyrus:
 
-    * ``./configure --enable-http --enable-jmap`` along with your other configuration options.
+    * ``./configure --enable-http --enable-jmap --enable-xapian`` along with your other configuration options.
 
 2. Enable :ref:`conversation support <imap-concepts-deployment-db-conversations>`
 
@@ -37,7 +37,7 @@ Test JMAP support
 
 Once Cyrus is running, you can test JMAP on the command line for any existing Cyrus user. The user must at least have an INBOX provisioned but is not required to have any calendars, contacts or messages.
 
-To obtain the JMAP calendars for user ``test``, issue the following request:
+To obtain the JMAP mailbox folders for user ``test``, issue the following request:
 
 .. code-block:: bash
 
@@ -45,42 +45,75 @@ To obtain the JMAP calendars for user ``test``, issue the following request:
          -H "Content-Type: application/json" \
          -H "Accept: application/json" \
          --user test:test \
-         -d '[["getCalendars", {}, "#1"]]' \
-         http://localhost/jmap
+         -d '{
+           "using": [ "urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail" ],
+           "methodCalls": [[ "Mailbox/get", {}, "c1" ]]
+         }' \
+         http://localhost/jmap/
 
 you should get a response which looks similar to
 
 .. code-block:: none
 
-    [
-        [
-            "calendars",
-            {
-                "accountId": "test@localhost",
-                "list": [
-                    {
-                        "color": "#FD8208FF",
-                        "id": "Default",
-                        "mayAddItems": true,
-                        "mayDelete": true,
-                        "mayModifyItems": true,
-                        "mayReadFreeBusy": true,
-                        "mayReadItems": true,
-                        "mayRemoveItems": true,
-                        "mayRename": true,
-                        "name": "Default",
-                        "sortOrder": 1,
-                        "x-href": "/dav/calendars/user/test@localhost/Default"
-                    }
-                ],
-                "notFound": null,
-                "state": "184"
+    {
+      "methodResponses": [
+        ["Mailbox/get", {
+          "state": "0",
+          "list": [{
+            "id": "7c76ec2b-9bd8-4091-a665-640e232e3877",
+            "name": "Inbox",
+            "parentId": null,
+            "myRights": {
+              "mayReadItems": true,
+              "mayAddItems": true,
+              "mayRemoveItems": true,
+              "mayCreateChild": true,
+              "mayDelete": false,
+              "maySubmit": true,
+              "maySetSeen": true,
+              "maySetKeywords": true,
+              "mayAdmin": true,
+              "mayRename": false
             },
-            "#1"
-        ]
-    ]
+            "role": "inbox",
+            "totalEmails": 0,
+            "unreadEmails": 0,
+            "totalThreads": 0,
+            "unreadThreads": 0,
+            "sortOrder": 1,
+            "isSubscribed": false
+          }, {
+            "id": "5d9e4f44-7df9-4489-b8b3-32625b552aa1",
+            "name": "Trash",
+            "parentId": null,
+            "myRights": {
+              "mayReadItems": true,
+              "mayAddItems": true,
+              "mayRemoveItems": true,
+              "mayCreateChild": true,
+              "mayDelete": true,
+              "maySubmit": true,
+              "maySetSeen": true,
+              "maySetKeywords": true,
+              "mayAdmin": true,
+              "mayRename": true
+            },
+            "role": null,
+            "totalEmails": 0,
+            "unreadEmails": 0,
+            "totalThreads": 0,
+            "unreadThreads": 0,
+            "sortOrder": 10,
+            "isSubscribed": true
+          }],
+          "notFound": [],
+          "accountId": "test"
+        }, "c1"]
+      ],
+      "sessionState": "0"
+    }
 
-Similar requests exist to obtain contacts and messages. For details, see the
+Similar requests exist to obtain contacts and calendars. For details, see the
 JMAP specification.
 
 Optional: Install sample JMAP client

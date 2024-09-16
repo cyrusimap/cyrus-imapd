@@ -198,7 +198,7 @@ static void parseaddr_append(struct address ***addrpp, const char *name,
     *addrpp = &newaddr->next;
 }
 
-/* Macro to skip white space and rfc822 comments */
+/* Macro to skip white space and RFC 822 comments */
 
 #define SKIPWHITESPACE(s) \
 { \
@@ -258,7 +258,12 @@ static int parseaddr_phrase(char **inp, char **phrasep, const char *specials)
                      * field, which means we have an unbalanced " */
                     goto fail;
                 }
-                if (c == '\r' || c == '\n') goto fail;  /* invalid chars */
+                else if (iscntrl(c)) {
+                    if (c == '\r' || c == '\n')
+                        c = ' '; // replace CR and LF with space
+                    else if (c != '\t')
+                        continue; // else ignore anything but TAB
+                }
                 if (c == '"') break;        /* end of quoted string */
                 if (c == '\\') {
                     if (!(c = *src)) goto fail;
@@ -296,7 +301,7 @@ fail:
  */
 static int parseaddr_domain(char **inp, char **domainp, char **commentp, int *invalid)
 {
-    int c;
+    u_char c;
     char *src = *inp;
     char *dst;
     char *cdst;
@@ -309,7 +314,7 @@ static int parseaddr_domain(char **inp, char **domainp, char **commentp, int *in
 
     for (;;) {
         c = *src++;
-        if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':') {
+        if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':' || c > 127) {
             *dst++ = c;
             if (commentp) *commentp = 0;
         }

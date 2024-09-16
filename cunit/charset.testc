@@ -5,6 +5,9 @@
 
 extern int charset_debug;
 
+#define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
+    CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
+
 /* The Unicode Replacement character 0xfffd in UTF-8 encoding */
 #define UTF8_REPLACEMENT    "\357\277\275"
 /* The Replacement char after search normalisation */
@@ -12,22 +15,18 @@ extern int charset_debug;
 
 static void test_lookupname(void)
 {
-    charset_t cs, cs2;
+    charset_t cs;
 
     /* us-ascii must exist */
     cs = charset_lookupname("us-ascii");
     CU_ASSERT_PTR_NOT_NULL(cs);
+    charset_free(&cs);
 
     /* names are case-insensitive */
-    cs2 = charset_lookupname("US-ASCII");
-    CU_ASSERT_PTR_NOT_NULL(cs2);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), charset_name(cs2));
-    charset_free(&cs2);
-
-    cs2 = charset_lookupname("Us-AsCiI");
-    CU_ASSERT_PTR_NOT_NULL(cs2);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), charset_name(cs2));
-    charset_free(&cs2);
+    cs = charset_lookupname("US-ASCII");
+    CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL("us-ascii", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("US-ASCII", charset_alias_name(cs));
     charset_free(&cs);
 
     /* some others must also exist */
@@ -41,6 +40,8 @@ static void test_lookupname(void)
 
     cs = charset_lookupname("iso-8859-1");
     CU_ASSERT_PTR_NOT_NULL(cs);
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("iso-8859-1", charset_alias_name(cs));
     charset_free(&cs);
 
     /*
@@ -49,26 +50,31 @@ static void test_lookupname(void)
      */
     cs = charset_lookupname("windows-1252");
     CU_ASSERT_PTR_NOT_NULL(cs);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), "windows-1252");
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_alias_name(cs));
     charset_free(&cs);
 
     cs = charset_lookupname("1252");
     CU_ASSERT_PTR_NOT_NULL(cs);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), "windows-1252");
+    CU_ASSERT_STRING_EQUAL("windows-1252", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("1252", charset_alias_name(cs));
     charset_free(&cs);
 
-    /* But still use the ICU name if there's no good alias for it */
+    /* But still use the ICU name if there's no Cyrus canon name */
     cs = charset_lookupname("ebcdic-ar");
     CU_ASSERT_PTR_NOT_NULL(cs);
-    CU_ASSERT_STRING_EQUAL(charset_name(cs), "ibm-16804_X110-1999");
+    CU_ASSERT_STRING_EQUAL("ibm-16804_X110-1999", charset_canon_name(cs));
+    CU_ASSERT_STRING_EQUAL("ebcdic-ar", charset_alias_name(cs));
     charset_free(&cs);
-
 }
 
 static void test_to_utf8(void)
 {
     charset_t cs;
     char *s;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
     static const char ASCII_1[] = "Hello World";
     static const char ASCII_2[] = "Hello W\370rld";
     static const char UTF8_2[] = "Hello W" UTF8_REPLACEMENT "rld";
@@ -84,44 +90,70 @@ static void test_to_utf8(void)
     CU_ASSERT_PTR_NOT_NULL(cs);
 
     /* zero length input */
-    s = charset_to_utf8("", 0, cs, ENCODING_NONE);
+    s = charset_to_utf8cstr("", 0, cs, ENCODING_NONE);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "");
     free(s);
+    r = charset_to_utf8(&buf, "", 0, cs, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
 
     /* invalid encoding */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1), cs, 0xdeadbeef);
+    s = charset_to_utf8cstr(ASCII_1, sizeof(ASCII_1), cs, 0xdeadbeef);
     CU_ASSERT_PTR_NULL(s);
+    r = charset_to_utf8(&buf, ASCII_1, sizeof(ASCII_1), cs, 0xdeadbeef);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
 
     /* invalid charset */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
+    s = charset_to_utf8cstr(ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
     CU_ASSERT_PTR_NULL(s);
+    r = charset_to_utf8(&buf, ASCII_1, sizeof(ASCII_1), NULL, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(buf_len(&buf), 0);
 
     /* simple ASCII string */
-    s = charset_to_utf8(ASCII_1, sizeof(ASCII_1)-1, cs, ENCODING_NONE);
+    s = charset_to_utf8cstr(ASCII_1, sizeof(ASCII_1)-1, cs, ENCODING_NONE);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_1);
     free(s);
+    r = charset_to_utf8(&buf, ASCII_1, sizeof(ASCII_1)-1, cs, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(ASCII_1));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), ASCII_1);
 
     /* ASCII string with an invalid character */
-    s = charset_to_utf8(ASCII_2, sizeof(ASCII_2)-1, cs, ENCODING_NONE);
+    s = charset_to_utf8cstr(ASCII_2, sizeof(ASCII_2)-1, cs, ENCODING_NONE);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, UTF8_2);
     free(s);
+    r = charset_to_utf8(&buf, ASCII_2, sizeof(ASCII_2)-1, cs, ENCODING_NONE);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(UTF8_2));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), UTF8_2);
 
     /* base64 encoding */
-    s = charset_to_utf8(BASE64_3, sizeof(BASE64_3)-1, cs, ENCODING_BASE64);
+    s = charset_to_utf8cstr(BASE64_3, sizeof(BASE64_3)-1, cs, ENCODING_BASE64);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_1);
     free(s);
+    r = charset_to_utf8(&buf, BASE64_3, sizeof(BASE64_3)-1, cs, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(ASCII_1));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), ASCII_1);
 
     /* Quoted-printable encoding */
-    s = charset_to_utf8(QP_4, sizeof(QP_4)-1, cs, ENCODING_QP);
+    s = charset_to_utf8cstr(QP_4, sizeof(QP_4)-1, cs, ENCODING_QP);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, ASCII_4);
     free(s);
+    r = charset_to_utf8(&buf, QP_4, sizeof(QP_4)-1, cs, ENCODING_QP);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(buf_len(&buf), strlen(ASCII_4));
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), ASCII_4);
     
     charset_free(&cs);
+    buf_free(&buf);
 }
 
 static void test_to_imaputf7(void)
@@ -140,7 +172,7 @@ static void test_to_imaputf7(void)
         s = charset_to_imaputf7(_in, strlen(_in), csu8, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
-        q = charset_to_utf8(s, strlen(s), csu7, ENCODING_NONE); \
+        q = charset_to_utf8cstr(s, strlen(s), csu7, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(q); \
         CU_ASSERT_STRING_EQUAL(q, _in); \
         free(q); \
@@ -186,7 +218,7 @@ static void test_misc_charsets(void)
         static const char _want[] = (want); \
         charset_t cs = charset_lookupname(alias); \
         CU_ASSERT_PTR_NOT_NULL(cs); \
-        s = charset_to_utf8(_in, strlen(_in), cs, ENCODING_NONE); \
+        s = charset_to_utf8cstr(_in, strlen(_in), cs, ENCODING_NONE); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _want); \
         free(s); \
@@ -218,6 +250,43 @@ static void test_misc_charsets(void)
                        "\xD1\x94\xD1\x96\xD1\x97\xD2\x91"
                        "\xD0\x84\xD0\x86\xD0\x87\xD2\x90");
 
+    /* iso-8859-1 aliased to windows-1252. */
+    /* They differ in the range 0x80 to 0x9f, where iso-8859-1
+       has control chars that are mostly useless for emails.
+       windows-1252 encoding has visible characters in that range. */
+    TESTCASE("iso-8859-1", "\x80", "\xe2\x82\xac"); // Euro sign
+    TESTCASE("iso-8859-1", "\x81", "\xc2\x81"); // Unassigned
+    TESTCASE("iso-8859-1", "\x82", "\xe2\x80\x9a"); // Single Low-9 Quotation Mark
+    TESTCASE("iso-8859-1", "\x83", "\xc6\x92"); // Latin Small Letter F With Hook
+    TESTCASE("iso-8859-1", "\x84", "\xe2\x80\x9e"); // Double Low-9 Quotation Mark
+    TESTCASE("iso-8859-1", "\x85", "\xe2\x80\xa6"); // Horizontal Ellipsis
+    TESTCASE("iso-8859-1", "\x86", "\xe2\x80\xa0"); // Dagger
+    TESTCASE("iso-8859-1", "\x87", "\xe2\x80\xa1"); // Double Dagger
+    TESTCASE("iso-8859-1", "\x88", "\xcb\x86"); // Modifier Letter Circumflex Accent
+    TESTCASE("iso-8859-1", "\x89", "\xe2\x80\xb0"); // Per Mille Sign
+    TESTCASE("iso-8859-1", "\x8a", "\xc5\xa0"); // Latin Capital Letter S With Caron
+    TESTCASE("iso-8859-1", "\x8b", "\xe2\x80\xb9"); // Single Left-Pointing Angle Quotation Mark
+    TESTCASE("iso-8859-1", "\x8c", "\xc5\x92"); // Latin Capital Ligature OE
+    TESTCASE("iso-8859-1", "\x8d", "\xc2\x8d"); // Unassigned
+    TESTCASE("iso-8859-1", "\x8e", "\xc5\xbd"); // Latin Capital Letter Z With Caron
+    TESTCASE("iso-8859-1", "\x8f", "\xc2\x8f"); // Unassigned
+    TESTCASE("iso-8859-1", "\x90", "\xc2\x90"); // Unassigned
+    TESTCASE("iso-8859-1", "\x91", "\xe2\x80\x98"); // Left Single Quotation Mark
+    TESTCASE("iso-8859-1", "\x92", "\xe2\x80\x99"); // Right Single Quotation Mark
+    TESTCASE("iso-8859-1", "\x93", "\xe2\x80\x9c"); // Left Double Quotation Mark
+    TESTCASE("iso-8859-1", "\x94", "\xe2\x80\x9d"); // Right Double Quotation Mark
+    TESTCASE("iso-8859-1", "\x95", "\xe2\x80\xa2"); // Bullet
+    TESTCASE("iso-8859-1", "\x96", "\xe2\x80\x93"); // En Dash
+    TESTCASE("iso-8859-1", "\x97", "\xe2\x80\x94"); // Em Dash
+    TESTCASE("iso-8859-1", "\x98", "\xcb\x9c"); // Small Tilde
+    TESTCASE("iso-8859-1", "\x99", "\xe2\x84\xa2"); // Trade Mark Sign
+    TESTCASE("iso-8859-1", "\x9a", "\xc5\xa1"); // Latin Small Letter S With Caron
+    TESTCASE("iso-8859-1", "\x9b", "\xe2\x80\xba"); // Single Right-Pointing Angle Quotation Mark
+    TESTCASE("iso-8859-1", "\x9c", "\xc5\x93"); // Latin Small Ligature OE
+    TESTCASE("iso-8859-1", "\x9d", "\xc2\x9d"); // Unassigned
+    TESTCASE("iso-8859-1", "\x9e", "\xc5\xbe"); // Latin Small Letter Z With Caron
+    TESTCASE("iso-8859-1", "\x9f", "\xc5\xb8"); // Latin Capital Letter Y With Diaeresis
+
 #undef TESTCASE
 }
 
@@ -231,7 +300,7 @@ static void test_qp(void)
         charset_t _cs = charset_lookupname(cs); \
         CU_ASSERT_PTR_NOT_NULL(_cs); \
         int _enc = (enc); \
-        char *s = charset_to_utf8(_in, sizeof(_in)-1, _cs, _enc); \
+        char *s = charset_to_utf8cstr(_in, sizeof(_in)-1, _cs, _enc); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _exp); \
         free(s); \
@@ -267,11 +336,12 @@ static void test_qp(void)
 static void test_encode_mimeheader(void)
 {
     /* corner cases in Quoted-Printable */
-#define TESTCASE(in, exp) \
+#define TESTCASE(in, exp, len) \
     { \
         static const char _in[] = (in); \
         static const char _exp[] = (exp); \
-        char *s = charset_encode_mimeheader(_in, 0, 0); \
+        int _len = (len); \
+        char *s = charset_encode_mimeheader(_in, _len, 0); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _exp); \
         const char *p, *lf; \
@@ -285,24 +355,60 @@ static void test_encode_mimeheader(void)
         free(s); \
     }
 
-    TESTCASE("abc", "abc");
+    TESTCASE("abc", "abc", 0);
 
-    TESTCASE("abc\r\n", "=?UTF-8?Q?abc?=");
+    TESTCASE("abc\r\n", "=?UTF-8?Q?abc?=", 0);
 
     /* bogus indent */
-    TESTCASE("abc\r\nxyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
+    TESTCASE("abc\r\nxyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=", 0);
 
     /* wrap */
-    TESTCASE("abc\r\n xyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
+    TESTCASE("abc\r\n xyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=", 0);
 
     /* three-byte UTF-8 word barely fits line length limit */
     TESTCASE("0123456789012345678901234567890123456789012345678901234\xe2\x82\xac",
-             "=?UTF-8?Q?0123456789012345678901234567890123456789012345678901234=E2=82=AC?=");
+             "=?UTF-8?Q?0123456789012345678901234567890123456789012345678901234=E2=82=AC?=", 0);
 
     /* three-byte UTF-8 word must not be split */
     TESTCASE("01234567890123456789012345678901234567890123456789012345\xe2\x82\xac",
              "=?UTF-8?Q?01234567890123456789012345678901234567890123456789012345?="
-             "\r\n ""=?UTF-8?Q?=E2=82=AC?=");
+             "\r\n ""=?UTF-8?Q?=E2=82=AC?=", 0);
+
+    /* only encode display-name of address */
+    TESTCASE("\"abc\xe2\x88\x97xyz\" <foo@example.com>", "=?UTF-8?Q?=22abc=E2=88=97xyz=22?= <foo@example.com>", 0);
+
+    /* fold long lines with whitespace */
+    TESTCASE("012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678 " "0123456789",
+             "012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678" "\r\n "
+             "0123456789", 0)
+
+    /* fold long lines with whitespace (truncated) */
+    TESTCASE("012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678 " "0123456789",
+             "012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678" "\r\n "
+             "012345678", 79);
+
+    /* truncate long lines */
+    TESTCASE("012345678 " "012345678 " "012345678 " "012345678 "
+             "012345678 " "012345678 " "012345678 " "0123456789",
+             "012345678 " "012345678 " "01234", 25);
+
+    /* encode long lines with no whitespace */
+    TESTCASE("0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "0123456789",
+             "=?UTF-8?Q?" "0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "01?=\r\n "
+             "=?UTF-8?Q?" "2345678901" "23456789?=", 0);
+
+    /* encode long lines with no whitespace (truncated) */
+    TESTCASE("0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "0123456789",
+             "=?UTF-8?Q?" "0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "01?=\r\n "
+             "=?UTF-8?Q?" "2345678901" "2345678?=", 79);
 
 #undef TESTCASE
 }
@@ -396,13 +502,13 @@ static void test_decode_mimeheader(void)
     CU_ASSERT_STRING_EQUAL(s, HTML_4b);
     free(s);
 
-    flags = CHARSET_SNIPPET;
+    flags = CHARSET_KEEPCASE;
     s = charset_decode_mimeheader(HTML_4, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, HTML_4c);
     free(s);
 
-    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     s = charset_decode_mimeheader(HTML_4, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, HTML_4d);
@@ -489,7 +595,7 @@ static void test_mimeheader_badcharset(void)
 
 static void test_mimeheader_mergeqwords(void)
 {
-    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE | CHARSET_SNIPPET;
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE | CHARSET_KEEPCASE;
 
     static const char SPLIT_Q[] = "=?utf-8?q?=E2=82?= =?utf-8?q?=AC?=";
     static const char SPLIT_B[] = "=?utf-8?b?wg==?= =?utf-8?b?oUhvbGEsc2XD?= =?utf-8?b?sW9yIQ==?=";
@@ -562,15 +668,19 @@ static void test_encode_mimexvalue(void)
     s = charset_encode_mimexvalue(NULL, NULL);
     CU_ASSERT_PTR_NULL(s);
 
-    /* naively encode everything in octets, including ASCII */
     s = charset_encode_mimexvalue("foo", NULL);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_STRING_EQUAL(s, "utf-8''%66%6f%6f");
+    CU_ASSERT_STRING_EQUAL(s, "utf-8''foo");
     free(s);
 
     s = charset_encode_mimexvalue("foo", "en");
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_STRING_EQUAL(s, "utf-8'en'%66%6f%6f");
+    CU_ASSERT_STRING_EQUAL(s, "utf-8'en'foo");
+    free(s);
+
+    s = charset_encode_mimexvalue("R\xc3\xe4tsel", "de");
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "utf-8'de'R%C3%E4tsel");
     free(s);
 }
 
@@ -730,12 +840,14 @@ struct text_rock {
     struct buf out;
 };
 
-static void append_text(const struct buf *text, void *rock)
+static int append_text(const struct buf *text, void *rock)
 {
     struct text_rock *tr = (struct text_rock *)rock;
 
     tr->ncalls++;
     buf_append(&tr->out, text);
+
+    return 0;
 }
 
 #define TESTCASE(in, cs, enc, st, exp) \
@@ -754,7 +866,7 @@ static void append_text(const struct buf *text, void *rock)
         buf_init_ro(&bin, _in, sizeof(_in)-1); \
  \
         r = charset_extract(append_text, &tr, &bin, _cs, _enc, _st, flags); \
-        CU_ASSERT_EQUAL(r, 1); \
+        CU_ASSERT_EQUAL(r, 0); \
         CU_ASSERT_EQUAL(tr.ncalls, 1); \
         CU_ASSERT_STRING_EQUAL(buf_cstring(&tr.out), _exp); \
  \
@@ -840,7 +952,7 @@ static void test_extract(void)
     /* HTML: OMITTAG tags with and without end tags */
     TESTCASE("<hr>Terry<hr> <hr>Richardson</hr>",
         "us-ascii", ENCODING_NONE, "HTML",
-        " TERRY RICHARDSON ");
+        "TERRY RICHARDSON");
 
     /* HTML: non-phrasing tags are replaced with whitespace */
     TESTCASE("hella<br>mlkshk",
@@ -851,12 +963,12 @@ static void test_extract(void)
         "GODARD SYNTH");
     TESTCASE("<div>vinyl</div><div>narwhal</div>",
         "us-ascii", ENCODING_NONE, "HTML",
-        " VINYL NARWHAL ");
+        "VINYL NARWHAL");
 
     /* HTML: quoted tag parameters */
     TESTCASE("<a href=\"foo.html\">leggings</a> <img src\"beer.jpg\">gastropub",
         "us-ascii", ENCODING_NONE, "HTML",
-        "LEGGINGS GASTROPUB");
+        "LEGGINGS <FOO.HTML> GASTROPUB");
 
     /* HTML: unquoted tag parameters */
     TESTCASE("<a href=foo.html>biodiesel</a> <img srcbeer.jpg>seitan",
@@ -929,7 +1041,7 @@ static void test_extract(void)
     /* HTML: naked & is emitted */
     TESTCASE("gentrify&<b>sartorial</b>",
         "us-ascii", ENCODING_NONE, "HTML",
-        "GENTRIFY&SARTORIAL");
+        "GENTRIFY& SARTORIAL");
 
     /* HTML: non-zero length unterminated entities are emitted */
     TESTCASE("tattooed&amp locavore",
@@ -1073,20 +1185,72 @@ static void test_extract(void)
     TESTCASE("A&nonesuch;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 
     /* HTML: Strip HTML from snippet and don't canonify */
-    flags = CHARSET_SNIPPET;
+    flags = CHARSET_KEEPCASE;
     TESTCASE("<b>Photo</b> <em>booth</em>", "us-ascii", ENCODING_NONE, "HTML", "Photo booth");
 
     /* HTML: Strip HTML from snippet, there is nothing to escape */
-    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "HTML", "Photo");
 
     /* PLAIN: Generate snippet, don't escape HTML by default */
-    flags = CHARSET_SNIPPET;
+    flags = CHARSET_KEEPCASE;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "<b>Photo</b>");
 
     /* PLAIN: Generate snippet with escaped HTML */
-    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "&lt;b&gt;Photo&lt;/b&gt;");
+
+    /* HTML: strip HTML, including angle-bracketed URIs */
+    flags = CHARSET_KEEPCASE;
+    TESTCASE("<b>x<https://example.com/world>y</b>", "us-ascii", ENCODING_NONE, "HTML", "x y");
+
+    /* HTML: strip HTML, keep angle-bracketed URIs */
+    flags |= CHARSET_KEEP_ANGLEURI;
+    TESTCASE("<b>x<https://example.com/world>y</b>", "us-ascii", ENCODING_NONE, "HTML", "x<https://example.com/world>y");
+
+    /* HTML: regression tests for '/' and '>' characters '*/
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    // end of tag after attribute name
+    TESTCASE("X<div><img src/>Y</div>Z", "us-ascii", ENCODING_NONE, "HTML", "X Y Z");
+    TESTCASE("X<div><img src>Y</div>Z", "us-ascii", ENCODING_NONE, "HTML", "X Y Z");
+    // quoted attribute value ends without quote
+    TESTCASE("<a href=\"url.html>x</a>", "us-ascii", ENCODING_NONE, "HTML", "X");
+    // ">" in quoted attribute value is legit, but broken in our parser
+    TESTCASE("<div><img alt=\"x>\" src=\"y\"/></div>", "us-ascii", ENCODING_NONE, "HTML", "\" SRC=\"Y\"/>");
+
+    /* HTML: extract URLs and alt text from href and img */
+    flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    TESTCASE("<a href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<HTTPS://FOO/BAR>");
+    TESTCASE("<img src='cat.png' alt=\"A cat\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<CAT.PNG> (A CAT)");
+    TESTCASE("<area href=\"https://foo/bar\"/>", "us-ascii", ENCODING_NONE, "HTML",
+        "<HTTPS://FOO/BAR>");
+    // "/" in quoted attribute value is legit
+    TESTCASE("<div><img alt=\"letterpress/\" src=\"polaroid.png\">stumptown</div>", "us-ascii", ENCODING_NONE, "HTML", "STUMPTOWN <POLAROID.PNG> (LETTERPRESS/)");
+    // multiple hrefs in same chunk of text
+    TESTCASE("<a href=\"https://foo/bar\"/><a href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://FOO/BAR> <HTTPS://BAZ/QUM>");
+    TESTCASE("<area href=\"https://foo/bar\"/><area href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://FOO/BAR> <HTTPS://BAZ/QUM>");
+    // multiple alt tags in same chunk of text
+    TESTCASE("<img src='cat.png' alt=\"A cat\"/><img src='dog.png' alt=\"A dog\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<CAT.PNG> (A CAT) <DOG.PNG> (A DOG)");
+    // multiple hrefs in same A tag (invalid!)
+    TESTCASE("<a href=\"https://foo/bar\" href=\"https://baz/qum\"/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<HTTPS://BAZ/QUM>"); /* last value seen is kept */
+    // multiple alt in same IMG tag (invalid!)
+    TESTCASE("<img src='cat.png' alt=\"A cat\" alt='A tabby cat'/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<CAT.PNG> (A TABBY CAT)"); /* last value seen is kept */
+    // multiple src in same IMG tag (invalid!)
+    TESTCASE("<img src='cat.png' src='tabby.png' alt='A tabby cat'/>",
+             "us-ascii", ENCODING_NONE, "HTML",
+             "<TABBY.PNG> (A TABBY CAT)"); /* last value seen is kept */
 }
 #undef TESTCASE
 
@@ -1136,25 +1300,19 @@ static void test_utf8_to_searchform(void)
 static void test_charset_decode(void)
 {
 
-#define TESTCASE(in, inlen, want, wantlen, enc) \
+#define TESTCASE(encoded, encodedlen, decoded, decodedlen, encoding) \
     { \
-        struct buf _dst = BUF_INITIALIZER; \
-        static const char _in[] = (in); \
-        static const char _want[] = (want); \
-        int _enc = (enc); \
-        size_t _inlen = (inlen); \
-        size_t _wantlen = (wantlen); \
-        int _r; \
-        _r = charset_decode(&_dst, _in, _inlen, _enc); \
-        CU_ASSERT(_r == 0); \
-        CU_ASSERT(_dst.len == _wantlen); \
-        { \
-            const char *p; \
-            for(p = _dst.s; p < _dst.s + _dst.len; p++) { \
-                if (0) fprintf(stderr, "%x\n", *p); \
-            } \
-        } \
-        CU_ASSERT(memcmp(_dst.s, _want, _wantlen) == 0); \
+        struct buf buf = BUF_INITIALIZER; \
+        int r = charset_decode(&buf, encoded, encodedlen, encoding); \
+        CU_ASSERT(r == 0); \
+        CU_ASSERT(buf.len == decodedlen); \
+        CU_ASSERT(memcmp(buf.s, decoded, decodedlen) == 0); \
+        buf_reset(&buf); \
+        r = charset_encode(&buf, decoded, decodedlen, encoding); \
+        CU_ASSERT(r == 0); \
+        CU_ASSERT(buf.len == encodedlen); \
+        CU_ASSERT(memcmp(buf.s, encoded, encodedlen) == 0); \
+        buf_free(&buf); \
     }
 
     TESTCASE("", 0, "", 0, ENCODING_NONE);
@@ -1170,7 +1328,33 @@ static void test_charset_decode(void)
     TESTCASE("Zm9vYmE=", 8, "fooba", 5, ENCODING_BASE64);
     TESTCASE("Zm9vYmFy", 8, "foobar", 6, ENCODING_BASE64);
 
+    /* Base64 URL encoding */
+    TESTCASE("vu_A3g", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
+    TESTCASE("vu_A3g==", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
+
 #undef TESTCASE
+
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
+    /* Base64 with ignored whitespace */
+    r = charset_decode(&buf, "Zm 9v\rYm\nFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
+    buf_reset(&buf);
+
+    /* Base64 with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64);
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("foobar", buf_cstring(&buf));
+    buf_reset(&buf);
+
+    /* Base64url with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64URL);
+    CU_ASSERT_EQUAL(-1, r);
+    buf_reset(&buf);
+
+    buf_free(&buf);
 }
 
 static void test_broken_length_hint(void)
@@ -1182,9 +1366,10 @@ static void test_broken_length_hint(void)
     cs = charset_lookupname("iso-8859-1");
     CU_ASSERT_PTR_NOT_NULL(cs);
 
-    s = charset_to_utf8(body, strlen(body), cs, ENCODING_QP);
+    s = charset_to_utf8cstr(body, strlen(body), cs, ENCODING_QP);
     CU_ASSERT_STRING_EQUAL(body, s);
     charset_free(&cs);
+    free(s);
 }
 
 static void test_utf8_normalize(void)
@@ -1200,6 +1385,16 @@ static void test_utf8_normalize(void)
             CU_ASSERT_PTR_NULL(s); \
         } \
         free(s); \
+        charset_t utf8 = charset_lookupname("utf8"); \
+        s = charset_convert(in, utf8, CHARSET_UNORM_NFC|CHARSET_KEEPCASE); \
+        if (want) { \
+            CU_ASSERT_PTR_NOT_NULL(s); \
+            CU_ASSERT_STRING_EQUAL(s, want); \
+        } else { \
+            CU_ASSERT_PTR_NULL(s); \
+        } \
+        free(s); \
+        charset_free(&utf8); \
     }
 
     /* Empty is empty */
@@ -1230,6 +1425,33 @@ static void test_utf8_normalize(void)
      */
     TESTCASE("\x71\xcc\x87\xcc\xa3", "\x71\xcc\xa3\xcc\x87");
 
+    /*
+     * Concatination of multiple examples:
+     * ANGSTROM SIGN (U+212B)
+     * OHM SIGN (U+2126)
+     * LATIN SMALL LETTER S WITH DOT BELOW AND DOT ABOVE (U+1E69)
+     * LATIN SMALL LETTER D WITH DOT ABOVE (U+1E0B)
+     * COMBINING DOT BELOW (U+0323)
+     * to
+     * LATIN CAPITAL LETTER A WITH RING ABOVE (U+00C5)
+     * GREEK CAPITAL LETTER OMEGA (U+03A9)
+     * LATIN SMALL LETTER S WITH DOT BELOW AND DOT ABOVE (U+1E69)
+     * LATIN SMALL LETTER D WITH DOT BELOW (U+1E0D)
+     * COMBINING DOT ABOVE (U+0307)
+     */
+     TESTCASE(
+             "\xE2\x84\xAB"
+             "\xE2\x84\xA6"
+             "\xE1\xB9\xA9"
+             "\xE1\xB8\x8B"
+             "\xCC\xA3",
+             "\xC3\x85"
+             "\xCE\xA9"
+             "\xE1\xB9\xA9"
+             "\xE1\xB8\x8D"
+             "\xCC\x87"
+    );
+
 #undef TESTCASE
 }
 
@@ -1253,6 +1475,11 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(5, counts.valid);
     CU_ASSERT_EQUAL(0, counts.replacement);
     CU_ASSERT_EQUAL(0, counts.invalid);
+    CU_ASSERT_EQUAL(0, counts.bytelen[0]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[1]);
+    CU_ASSERT_EQUAL(4, counts.bytelen[2]);
+    CU_ASSERT_EQUAL(1, counts.bytelen[3]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[4]);
 
     /* Two continuation bytes */
     data = "a \x80\xbf\x80 text";
@@ -1260,6 +1487,11 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(7, counts.valid);
     CU_ASSERT_EQUAL(0, counts.replacement);
     CU_ASSERT_EQUAL(3, counts.invalid);
+    CU_ASSERT_EQUAL(3, counts.bytelen[0]);
+    CU_ASSERT_EQUAL(7, counts.bytelen[1]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[2]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[3]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[4]);
 
     /* Lonely start character, followed by 3-byte char, plus replacement char */
     data = "\xfc\xe2\x82\xac \xef\xbf\xbd";
@@ -1267,6 +1499,11 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(2, counts.valid);
     CU_ASSERT_EQUAL(1, counts.replacement);
     CU_ASSERT_EQUAL(1, counts.invalid);
+    CU_ASSERT_EQUAL(1, counts.bytelen[0]);
+    CU_ASSERT_EQUAL(1, counts.bytelen[1]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[2]);
+    CU_ASSERT_EQUAL(2, counts.bytelen[3]);
+    CU_ASSERT_EQUAL(0, counts.bytelen[4]);
 }
 
 static void test_qpencode_mimebody(void)
@@ -1299,6 +1536,111 @@ static void test_qpencode_mimebody(void)
              "0123456789" "0123456789" "0123456789" "0123456789",
              "0123456789" "0123456789" "0123456789" "0123456789"
              "0123456789" "0123456789" "0123456789" "01=\r\n23456789", 1);
+
+#undef TESTCASE
+}
+
+static void test_encode_mimebody(void)
+{
+#define TESTCASE(in, want, wrap, wantlines) \
+    { \
+        size_t inlen = strlen(in); \
+        size_t wantlen = strlen(want); \
+        size_t preflight_outlen = 0xffee; \
+        int preflight_outlines = 0x1234; \
+        char *preflight_retval = charset_b64encode_mimebody(NULL, inlen, NULL, \
+            &preflight_outlen, &preflight_outlines, wrap); \
+        CU_ASSERT_PTR_NULL(preflight_retval); \
+        CU_ASSERT_EQUAL(wantlen, preflight_outlen); \
+        CU_ASSERT_EQUAL(wantlines, preflight_outlines); \
+        char *retval = malloc(preflight_outlen); \
+        size_t encode_outlen = 0x1234; \
+        int encode_outlines = 0xffee; \
+        char *encode_retval = charset_b64encode_mimebody(in, inlen, \
+                retval, &encode_outlen, &encode_outlines, wrap); \
+        CU_ASSERT_PTR_EQUAL(retval, encode_retval); \
+        CU_ASSERT_EQUAL(wantlen, encode_outlen); \
+        CU_ASSERT_MEMEQUAL(retval, want, wantlen); \
+        CU_ASSERT_EQUAL(wantlines, encode_outlines); \
+        free(retval); \
+    }
+
+    TESTCASE("a", "YQ==", 0, 1);
+    TESTCASE("ab", "YWI=", 0, 1);
+    TESTCASE("abc", "YWJj", 0, 1);
+    TESTCASE("abcd", "YWJjZA==", 0, 1);
+    TESTCASE("abcde", "YWJjZGU=", 0, 1);
+    TESTCASE("abcdef", "YWJjZGVm", 0, 1);
+
+
+    TESTCASE("012345678901234567890123456789012345678901234567890123",
+             "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIz\r\n",
+             1, 1);
+
+    TESTCASE("0123456789012345678901234567890123456789012345678901234",
+             "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIz\r\n"
+             "NA==\r\n",
+             1, 2);
+
+#undef TESTCASE
+}
+
+static void test_decode_percent(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    int r = charset_decode_percent(&buf, "%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D");
+    CU_ASSERT_EQUAL(0, r);
+    CU_ASSERT_STRING_EQUAL("!#$%&'()*+,/:;=?@[]", buf_cstring(&buf));
+
+    // leave bogus percent encodings as-is
+    r = charset_decode_percent(&buf, "a%21b%2xc%24d");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("a!b%2xc$d", buf_cstring(&buf));
+
+    buf_free(&buf);
+}
+
+static void test_unicode_casemap(void)
+{
+#define TESTCASE(in, want) \
+    { \
+        char *s; \
+        static const char _in[] = (in); \
+        static const char _want[] = (want); \
+        s = unicode_casemap(_in, -1); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, _want); \
+        free(s); \
+    }
+
+    /* Plain US-ASCII: Out = ucase(In) */
+    TESTCASE("Hello, World!", "HELLO, WORLD!");
+
+    /* In:  "Ǆ"
+            LATIN CAPITAL LETTER DZ WITH CARON (U+01C4)
+     * Out: LATIN CAPITAL LETTER D (U+0044)
+            LATIN SMALL LETTER Z (U+007A)
+            COMBINING CARON (U+030C)
+    */
+    TESTCASE("\xC7\x84", "\x44\x7A\xCC\x8C");
+
+    /* In:  "pâté"
+            LATIN CAPITAL SMALL LETTER P (U+0070)
+            LATIN SMALL LETTER A WITH CIRCUMFLEX (U+00E2)
+            LATIN SMALL LETTER T (U+0074)
+            LATIN SMALL LETTER E WITH ACUTE (U+00E9)
+     * Out: LATIN CAPITAL LETTER P (U+0050)
+            LATIN CAPITAL LETTER A (U+0041)
+            COMBINING CIRCUMFLEX ACCENT (U+0302)
+            LATIN CAPITAL LETTER T (U+0054)
+            LATIN CAPITAL LETTER E (U+0045)
+            COMBINING ACUTE ACCENT (U+0301)
+    */
+    TESTCASE("p\xC3\xA2t\xC3\xA9", "PA\xCC\x82TE\xCC\x81");
+
+    /* Invalid UTF-8: Out = In */
+    TESTCASE("junk\xFF", "junk\xFF");
 
 #undef TESTCASE
 }

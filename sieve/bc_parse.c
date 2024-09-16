@@ -45,13 +45,415 @@
 #include <config.h>
 #endif
 
-#include <netinet/in.h>
-#include <string.h>
-
 #include "bc_parse.h"
 #include "strarray.h"
-#include "times.h"
+#include "arrayu64.h"
 
+#define MAX_ARGS  15  /* processcalendar currently uses 13 */
+
+struct args_t {
+    unsigned type;
+    const char *fmt;
+    const size_t offsets[MAX_ARGS];
+};
+
+static const struct args_t cmd_args_table[] = {
+    { B_STOP,                    "", { 0 } },                            /*  0 */
+    { B_KEEP_ORIG,               "", { 0 } },                            /*  1 */
+    { B_DISCARD,                 "", { 0 } },                            /*  2 */
+    { B_REJECT,                  "s",                                    /*  3 */
+      { offsetof(struct Commandlist, u.str)
+      } },
+    { B_FILEINTO_ORIG,           "s",                                    /*  4 */
+      { offsetof(struct Commandlist, u.f.t.folder)
+      } },
+    { B_REDIRECT_ORIG,           "s",                                    /*  5 */
+      { offsetof(struct Commandlist, u.r.address)
+      } },
+    { B_IF,                      "i",                                    /*  6 */
+      { offsetof(struct Commandlist, u.i.testend)
+        /* Tests are parsed by caller */
+      } },
+    { B_MARK,                    "", { 0 } },                            /*  7 */
+    { B_UNMARK,                  "", { 0 } },                            /*  8 */
+    { B_ADDFLAG_ORIG,            "S",                                    /*  9 */
+      { offsetof(struct Commandlist, u.fl.flags)
+      } },
+    { B_SETFLAG_ORIG,            "S",                                    /* 10 */
+      { offsetof(struct Commandlist, u.fl.flags)
+      } },
+    { B_REMOVEFLAG_ORIG,         "S",                                    /* 11 */
+      { offsetof(struct Commandlist, u.fl.flags)
+      } },
+    { B_NOTIFY,                  "ssSis",                                /* 12 */
+      { offsetof(struct Commandlist, u.n.method),
+        offsetof(struct Commandlist, u.n.id),
+        offsetof(struct Commandlist, u.n.options),
+        offsetof(struct Commandlist, u.n.priority),
+        offsetof(struct Commandlist, u.n.message)
+      } },
+    { B_DENOTIFY,                "iiis",                                 /* 13 */
+      { offsetof(struct Commandlist, u.d.priority),
+        offsetof(struct Commandlist, u.d.comp.match),
+        offsetof(struct Commandlist, u.d.comp.relation),
+        offsetof(struct Commandlist, u.d.pattern)
+      } },
+    { B_VACATION_ORIG,           "Sssii",                                /* 14 */
+      { offsetof(struct Commandlist, u.v.addresses),
+        offsetof(struct Commandlist, u.v.subject),
+        offsetof(struct Commandlist, u.v.message),
+        offsetof(struct Commandlist, u.v.seconds),
+        offsetof(struct Commandlist, u.v.mime)
+      } },
+    { B_NULL,                    "", { 0 } },                            /* 15 */
+    { B_JUMP,                    "i",                                    /* 16 */
+      { offsetof(struct Commandlist, u.jump)
+      } },
+    { B_INCLUDE,                 "B3s",                                  /* 17 */
+      { offsetof(struct Commandlist, u.inc.location), INC_LOCATION_MASK,
+        offsetof(struct Commandlist, u.inc.optional), INC_OPTIONAL_MASK,
+        offsetof(struct Commandlist, u.inc.once),     INC_ONCE_MASK,
+        offsetof(struct Commandlist, u.inc.script)
+      } },
+    { B_RETURN,                  "", { 0 } },                            /* 18 */
+    { B_FILEINTO_COPY,           "is",                                   /* 19 */
+      { offsetof(struct Commandlist, u.f.copy),
+        offsetof(struct Commandlist, u.f.t.folder)
+      } },
+    { B_REDIRECT_COPY,           "is",                                   /* 20 */
+      { offsetof(struct Commandlist, u.r.copy),
+        offsetof(struct Commandlist, u.r.address)
+      } },
+    { B_VACATION_SEC,            "Sssiiss",                              /* 21 */
+      { offsetof(struct Commandlist, u.v.addresses),
+        offsetof(struct Commandlist, u.v.subject),
+        offsetof(struct Commandlist, u.v.message),
+        offsetof(struct Commandlist, u.v.seconds),
+        offsetof(struct Commandlist, u.v.mime),
+        offsetof(struct Commandlist, u.v.from),
+        offsetof(struct Commandlist, u.v.handle)
+      } },
+    { B_KEEP_COPY,               "S_",                                   /* 22 */
+      { offsetof(struct Commandlist, u.k.flags)
+      } },
+    { B_FILEINTO_FLAGS,          "Sis",                                  /* 23 */
+      { offsetof(struct Commandlist, u.f.flags),
+        offsetof(struct Commandlist, u.f.copy),
+        offsetof(struct Commandlist, u.f.t.folder)
+      } },
+    { B_FILEINTO_CREATE,         "iSis",                                 /* 24 */
+      { offsetof(struct Commandlist, u.f.create),
+        offsetof(struct Commandlist, u.f.flags),
+        offsetof(struct Commandlist, u.f.copy),
+        offsetof(struct Commandlist, u.f.t.folder)
+      } },
+    { B_SET,                     "iss",                                  /* 25 */
+      { offsetof(struct Commandlist, u.s.modifiers),
+        offsetof(struct Commandlist, u.s.variable),
+        offsetof(struct Commandlist, u.s.value)
+      } },
+    { B_ADDFLAG,                 "sS",                                   /* 26 */
+      { offsetof(struct Commandlist, u.fl.variable),
+        offsetof(struct Commandlist, u.fl.flags)
+      } },
+    { B_SETFLAG,                 "sS",                                   /* 27 */
+      { offsetof(struct Commandlist, u.fl.variable),
+        offsetof(struct Commandlist, u.fl.flags)
+      } },
+    { B_REMOVEFLAG,              "sS",                                   /* 28 */
+      { offsetof(struct Commandlist, u.fl.variable),
+        offsetof(struct Commandlist, u.fl.flags)
+      } },
+    { B_ADDHEADER,               "iss",                                  /* 29 */
+      { offsetof(struct Commandlist, u.ah.index),
+        offsetof(struct Commandlist, u.ah.name),
+        offsetof(struct Commandlist, u.ah.value)
+      } },
+    { B_DELETEHEADER,            "iCsS",                                 /* 30 */
+      { offsetof(struct Commandlist, u.dh.comp.index),
+        offsetof(struct Commandlist, u.dh.comp),
+        offsetof(struct Commandlist, u.dh.name),
+        offsetof(struct Commandlist, u.dh.values)
+      } },
+    { B_EREJECT,                 "s",                                    /* 31 */
+      { offsetof(struct Commandlist, u.str)
+      } },
+    { B_REDIRECT_LIST,           "iis",                                  /* 32 */
+      { offsetof(struct Commandlist, u.r.list),
+        offsetof(struct Commandlist, u.r.copy),
+        offsetof(struct Commandlist, u.r.address)
+      } },
+    { B_ENOTIFY,                 "ssSis",                                /* 33 */
+      { offsetof(struct Commandlist, u.n.method),
+        offsetof(struct Commandlist, u.n.from),
+        offsetof(struct Commandlist, u.n.options),
+        offsetof(struct Commandlist, u.n.priority),
+        offsetof(struct Commandlist, u.n.message)
+      } },
+    { B_ERROR,                   "",                                     /* 34 */
+      { offsetof(struct Commandlist, u.str)
+      } },
+    { B_KEEP,                    "S",                                    /* 35 */
+      { offsetof(struct Commandlist, u.k.flags) } },
+    { B_VACATION_FCC_ORIG,       "SssiissF",                             /* 36 */
+      { offsetof(struct Commandlist, u.v.addresses),
+        offsetof(struct Commandlist, u.v.subject),
+        offsetof(struct Commandlist, u.v.message),
+        offsetof(struct Commandlist, u.v.seconds),
+        offsetof(struct Commandlist, u.v.mime),
+        offsetof(struct Commandlist, u.v.from),
+        offsetof(struct Commandlist, u.v.handle),
+        offsetof(struct Commandlist, u.v.fcc)
+      } },
+    { B_VACATION_FCC_SPLUSE,     "SssiissF$",                            /* 37 */
+      { offsetof(struct Commandlist, u.v.addresses),
+        offsetof(struct Commandlist, u.v.subject),
+        offsetof(struct Commandlist, u.v.message),
+        offsetof(struct Commandlist, u.v.seconds),
+        offsetof(struct Commandlist, u.v.mime),
+        offsetof(struct Commandlist, u.v.from),
+        offsetof(struct Commandlist, u.v.handle),
+        offsetof(struct Commandlist, u.v.fcc)
+      } },
+    { B_FILEINTO_SPECIALUSE,     "siSis",                                /* 38 */
+      { offsetof(struct Commandlist, u.f.t.specialuse),
+        offsetof(struct Commandlist, u.f.create),
+        offsetof(struct Commandlist, u.f.flags),
+        offsetof(struct Commandlist, u.f.copy),
+        offsetof(struct Commandlist, u.f.t.folder)
+      } },
+    { B_REDIRECT,                "ssissiis",                             /* 39 */
+      { offsetof(struct Commandlist, u.r.bytime),
+        offsetof(struct Commandlist, u.r.bymode),
+        offsetof(struct Commandlist, u.r.bytrace),
+        offsetof(struct Commandlist, u.r.dsn_notify),
+        offsetof(struct Commandlist, u.r.dsn_ret),
+        offsetof(struct Commandlist, u.r.list),
+        offsetof(struct Commandlist, u.r.copy),
+        offsetof(struct Commandlist, u.r.address)
+      } },
+    { B_FILEINTO,                "ssiSis",                               /* 40 */
+      { offsetof(struct Commandlist, u.f.t.mailboxid),
+        offsetof(struct Commandlist, u.f.t.specialuse),
+        offsetof(struct Commandlist, u.f.create),
+        offsetof(struct Commandlist, u.f.flags),
+        offsetof(struct Commandlist, u.f.copy),
+        offsetof(struct Commandlist, u.f.t.folder)
+      } },
+    { B_LOG,                     "s",                                    /* 41 */
+      { offsetof(struct Commandlist, u.l.text)
+      } },
+    { B_SNOOZE_ORIG,             "sSSB2U",                               /* 42 */
+      { offsetof(struct Commandlist, u.sn.f.t.folder),
+        offsetof(struct Commandlist, u.sn.addflags),
+        offsetof(struct Commandlist, u.sn.removeflags),
+        offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
+        offsetof(struct Commandlist, u.sn.is_mboxid), SNOOZE_IS_ID_MASK,
+        offsetof(struct Commandlist, u.sn.times)
+      } },
+    { B_SNOOZE_TZID,             "ssSSB2U",                              /* 43 */
+      { offsetof(struct Commandlist, u.sn.tzid),
+        offsetof(struct Commandlist, u.sn.f.t.folder),
+        offsetof(struct Commandlist, u.sn.addflags),
+        offsetof(struct Commandlist, u.sn.removeflags),
+        offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
+        offsetof(struct Commandlist, u.sn.is_mboxid), SNOOZE_IS_ID_MASK,
+        offsetof(struct Commandlist, u.sn.times)
+      } },
+    { B_SNOOZE,                  "sssiSSisU",                            /* 44 */
+      { offsetof(struct Commandlist, u.sn.f.t.folder),
+        offsetof(struct Commandlist, u.sn.f.t.mailboxid),
+        offsetof(struct Commandlist, u.sn.f.t.specialuse),
+        offsetof(struct Commandlist, u.sn.f.create),
+        offsetof(struct Commandlist, u.sn.addflags),
+        offsetof(struct Commandlist, u.sn.removeflags),
+        offsetof(struct Commandlist, u.sn.days),
+        offsetof(struct Commandlist, u.sn.tzid),
+        offsetof(struct Commandlist, u.sn.times)
+      } },
+    { B_VACATION,                "SssiissF!",                            /* 45 */
+      { offsetof(struct Commandlist, u.v.addresses),
+        offsetof(struct Commandlist, u.v.subject),
+        offsetof(struct Commandlist, u.v.message),
+        offsetof(struct Commandlist, u.v.seconds),
+        offsetof(struct Commandlist, u.v.mime),
+        offsetof(struct Commandlist, u.v.from),
+        offsetof(struct Commandlist, u.v.handle),
+        offsetof(struct Commandlist, u.v.fcc)
+      } },
+    { B_PROCESSIMIP,             "B3sss",                                /* 46 */
+      { offsetof(struct Commandlist, u.cal.updates_only),     CAL_UPDATESONLY,
+        offsetof(struct Commandlist, u.cal.invites_only),     CAL_INVITESONLY,
+        offsetof(struct Commandlist, u.cal.delete_cancelled), CAL_DELETECANCELLED,
+        offsetof(struct Commandlist, u.cal.calendarid),
+        offsetof(struct Commandlist, u.cal.outcome_var),
+        offsetof(struct Commandlist, u.cal.reason_var)
+      } },
+    { B_IKEEP_TARGET,            "sss",                                  /* 47 */
+      { offsetof(struct Commandlist, u.ikt.mailboxid),
+        offsetof(struct Commandlist, u.ikt.specialuse),
+        offsetof(struct Commandlist, u.ikt.folder)
+      } },
+    { B_PROCESSCAL,              "B4Sssss",                              /* 48 */
+      { offsetof(struct Commandlist, u.cal.allow_public),     CAL_ALLOWPUBLIC,
+        offsetof(struct Commandlist, u.cal.updates_only),     CAL_UPDATESONLY,
+        offsetof(struct Commandlist, u.cal.invites_only),     CAL_INVITESONLY,
+        offsetof(struct Commandlist, u.cal.delete_cancelled), CAL_DELETECANCELLED,
+        offsetof(struct Commandlist, u.cal.addresses),
+        offsetof(struct Commandlist, u.cal.organizers),
+        offsetof(struct Commandlist, u.cal.calendarid),
+        offsetof(struct Commandlist, u.cal.outcome_var),
+        offsetof(struct Commandlist, u.cal.reason_var)
+      } },
+};
+
+static const struct args_t test_args_table[] = {
+    { BC_FALSE,                  "", { 0 } },                            /*  0 */
+    { BC_TRUE,                   "", { 0 } },                            /*  1 */
+    { BC_NOT,                    "", { 0 } },                            /*  2 */
+    { BC_EXISTS,                 "S",                                    /*  3 */
+      { offsetof(struct Test, u.sl)
+      } },
+    { BC_SIZE,                   "ii",                                   /*  4 */
+      { offsetof(struct Test, u.sz.t),
+        offsetof(struct Test, u.sz.n)
+      } },
+    { BC_ANYOF,                  "A", { 0 } },                           /*  5 */
+    { BC_ALLOF,                  "A", { 0 } },                           /*  6 */
+    { BC_ADDRESS_PRE_INDEX,      "CiSS",                                 /*  7 */
+      { offsetof(struct Test, u.ae.comp),
+        offsetof(struct Test, u.ae.addrpart),
+        offsetof(struct Test, u.ae.sl),
+        offsetof(struct Test, u.ae.pl)
+      } },
+    { BC_ENVELOPE,               "CiSS",                                 /*  8 */
+      { offsetof(struct Test, u.ae.comp),
+        offsetof(struct Test, u.ae.addrpart),
+        offsetof(struct Test, u.ae.sl),
+        offsetof(struct Test, u.ae.pl)
+      } },
+    { BC_HEADER_PRE_INDEX,       "CSS",                                  /*  9 */
+      { offsetof(struct Test, u.hhs.comp),
+        offsetof(struct Test, u.hhs.sl),
+        offsetof(struct Test, u.hhs.pl)
+      } },
+    { BC_BODY,                   "CiiSS",                                /* 10 */
+      { offsetof(struct Test, u.b.comp),
+        offsetof(struct Test, u.b.transform),
+        offsetof(struct Test, u.b.offset),
+        offsetof(struct Test, u.b.content_types),
+        offsetof(struct Test, u.b.pl)
+      } },
+    { BC_DATE_ORIG,              "izCisS",                               /* 11 */
+      { offsetof(struct Test, u.dt.comp.index),
+        offsetof(struct Test, u.dt.zone),
+        offsetof(struct Test, u.dt.comp),
+        offsetof(struct Test, u.dt.date_part),
+        offsetof(struct Test, u.dt.header_name),
+        offsetof(struct Test, u.dt.kl)
+      } },
+    { BC_CURRENTDATE_ORIG,       "zCiS",                                 /* 12 */
+      { offsetof(struct Test, u.dt.zone),
+        offsetof(struct Test, u.dt.comp),
+        offsetof(struct Test, u.dt.date_part),
+        offsetof(struct Test, u.dt.kl)
+      } },
+    { BC_ADDRESS,                "iCiSS",                                /* 13 */
+      { offsetof(struct Test, u.ae.comp.index),
+        offsetof(struct Test, u.ae.comp),
+        offsetof(struct Test, u.ae.addrpart),
+        offsetof(struct Test, u.ae.sl),
+        offsetof(struct Test, u.ae.pl)
+      } },
+    { BC_HEADER,                 "iCSS",                                 /* 14 */
+      { offsetof(struct Test, u.hhs.comp.index),
+        offsetof(struct Test, u.hhs.comp),
+        offsetof(struct Test, u.hhs.sl),
+        offsetof(struct Test, u.hhs.pl)
+      } },
+    { BC_HASFLAG,                "CSS",                                  /* 15 */
+      { offsetof(struct Test, u.hhs.comp),
+        offsetof(struct Test, u.hhs.sl),
+        offsetof(struct Test, u.hhs.pl)
+      } },
+    { BC_MAILBOXEXISTS,          "S",                                    /* 16 */
+      { offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_METADATA,               "CssS",                                 /* 17 */
+      { offsetof(struct Test, u.mm.comp),
+        offsetof(struct Test, u.mm.extname),
+        offsetof(struct Test, u.mm.keyname),
+        offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_METADATAEXISTS,         "sS",                                   /* 18 */
+      { offsetof(struct Test, u.mm.extname),
+        offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_SERVERMETADATA,         "CsS",                                  /* 19 */
+      { offsetof(struct Test, u.mm.comp),
+        offsetof(struct Test, u.mm.keyname),
+        offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_SERVERMETADATAEXISTS,   "S",                                    /* 20 */
+      { offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_STRING,                 "CSS",                                  /* 21 */
+      { offsetof(struct Test, u.hhs.comp),
+        offsetof(struct Test, u.hhs.sl),
+        offsetof(struct Test, u.hhs.pl)
+      } },
+    { BC_VALIDEXTLIST,           "S",                                    /* 22 */
+      { offsetof(struct Test, u.sl)
+      } },
+    { BC_DUPLICATE,              "issii",                                /* 23 */
+      { offsetof(struct Test, u.dup.idtype),
+        offsetof(struct Test, u.dup.idval),
+        offsetof(struct Test, u.dup.handle),
+        offsetof(struct Test, u.dup.seconds),
+        offsetof(struct Test, u.dup.last)
+      } },
+    { BC_IHAVE,                  "S",                                    /* 24 */
+      { offsetof(struct Test, u.sl)
+      } },
+    { BC_SPECIALUSEEXISTS,       "sS",                                   /* 25 */
+      { offsetof(struct Test, u.mm.extname),
+        offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_ENVIRONMENT,            "CsS",                                  /* 26 */
+      { offsetof(struct Test, u.mm.comp),
+        offsetof(struct Test, u.mm.keyname),
+        offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_VALIDNOTIFYMETHOD,      "S",                                    /* 27 */
+      { offsetof(struct Test, u.sl)
+      } },
+    { BC_NOTIFYMETHODCAPABILITY, "CssS",                                 /* 28 */
+      { offsetof(struct Test, u.mm.comp),
+        offsetof(struct Test, u.mm.extname),
+        offsetof(struct Test, u.mm.keyname),
+        offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_MAILBOXIDEXISTS,        "S",                                    /* 29 */
+      { offsetof(struct Test, u.mm.keylist)
+      } },
+    { BC_JMAPQUERY,              "s",                                    /* 30 */
+      { offsetof(struct Test, u.jquery)
+      } },
+    { BC_DATE,                   "iZCisS",                               /* 31 */
+      { offsetof(struct Test, u.dt.comp.index),
+        offsetof(struct Test, u.dt.zone),
+        offsetof(struct Test, u.dt.comp),
+        offsetof(struct Test, u.dt.date_part),
+        offsetof(struct Test, u.dt.header_name),
+        offsetof(struct Test, u.dt.kl)
+      } },
+    { BC_CURRENTDATE,            "ZCiS",                                 /* 32 */
+      { offsetof(struct Test, u.dt.zone),
+        offsetof(struct Test, u.dt.comp),
+        offsetof(struct Test, u.dt.date_part),
+        offsetof(struct Test, u.dt.kl)
+      } },
+};
 
 /* Given a bytecode_input_t at the beginning of a file,
  * return the version, the required extensions,
@@ -100,7 +502,7 @@ static int bc_string_parse(bytecode_input_t *bc, int pos, char **str)
 /* Given a bytecode_input_t at the beginning of a stringlist (the len block),
  * return the stringlist, and the bytecode index of the NEXT item */
 static int bc_stringlist_parse(bytecode_input_t *bc, int pos,
-                                  strarray_t **strlist)
+                               strarray_t **strlist)
 {
     int len = ntohl(bc[pos++].listlen);
 
@@ -118,6 +520,24 @@ static int bc_stringlist_parse(bytecode_input_t *bc, int pos,
     return pos;
 }
 
+/* Given a bytecode_input_t at the beginning of a valuelist (the len block),
+ * return the vallist, and the bytecode index of the NEXT item */
+static int bc_vallist_parse(bytecode_input_t *bc, int pos,
+                            arrayu64_t **vallist)
+{
+    int len = ntohl(bc[pos++].listlen);
+
+    pos++; /* Skip Total Byte Length */
+
+    *vallist = arrayu64_new();
+
+    while (len--) {
+        arrayu64_append(*vallist, ntohl(bc[pos++].value));
+    }
+
+    return pos;
+}
+
 static int bc_comparator_parse(bytecode_input_t *bc, int pos, comp_t *comp)
 {
     comp->match = ntohl(bc[pos++].value);
@@ -127,239 +547,150 @@ static int bc_comparator_parse(bytecode_input_t *bc, int pos, comp_t *comp)
     return pos;
 }
 
-EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
-                              commandlist_t *cmd)
+static int bc_args_parse(bytecode_input_t *bc, int pos, const char *fmt,
+                         void *base, const size_t * offsets)
 {
-    int bits;
+    while (*fmt) {
+        switch (*fmt++) {
+            /* skip and ignore */
+        case '_':
+            pos++;
+            break;
 
-    memset(cmd, 0, sizeof(commandlist_t));
-    cmd->type = ntohl(bc[pos++].op);
+            /* integer */
+        case 'i':
+            *((int *) (base + *offsets++)) = ntohl(bc[pos++].value);
+            break;
 
-    /* When a case is switch'ed to, pos points to the first parameter
-     * of the action.  This makes it easier to add future extensions.
-     * Extensions that change an existing action should add any new
-     * parameters to the beginning of the particular action's bytecode.
-     * This will allow the new code to fall through to the  older
-     * code, which will then parse the older parameters and should
-     * require only a minimal set of changes to support any new extension. 
-     */
-    switch (cmd->type) {
-    case B_STOP:            /* 0 */
-        break;
+            /* string */
+        case 's':
+            pos = bc_string_parse(bc, pos, base + *offsets++);
+            break;
 
+            /* string list */
+        case 'S':
+            pos = bc_stringlist_parse(bc, pos, base + *offsets++);
+            break;
 
-    case B_KEEP_ORIG:       /* 1 */
-        break;
+            /* u64 value list */
+        case 'U':
+            pos = bc_vallist_parse(bc, pos, base + *offsets++);
+            break;
 
-    case B_KEEP_COPY:       /* 22 */
-    case B_KEEP:            /* 35 */
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.k.flags);
+            /* allof/anyof test */
+        case 'A':
+            ((struct Test *) base)->u.aa.ntests = ntohl(bc[pos++].listlen);
+            ((struct Test *) base)->u.aa.endtests =
+                ntohl(bc[pos++].value) / sizeof(bytecode_input_t);
+            break;
 
-        if (cmd->type == B_KEEP_COPY) pos++;  /* skip legacy :copy */
-        break;
+            /* bitmask - one set of bits split into N (2-9) values
+               represented by N {offset to field, bitmask} pairs */
+        case 'B': {
+            unsigned bits = ntohl(bc[pos++].value);
+            unsigned n = *fmt++ - '0';  /* only supports single digit */
 
-        
-    case B_DISCARD:         /* 2 */
-        break;
+            while (n--) {
+                *((int *) (base + offsets[0])) = bits & offsets[1];
+                offsets += 2;
+            }
+            break;
+        }
 
+            /* comparator */
+        case 'C':
+            pos = bc_comparator_parse(bc, pos, base + *offsets++);
+            break;
 
-    case B_REJECT:          /* 3 */
-    case B_EREJECT:         /* 31 */
-        pos = bc_string_parse(bc, pos, &cmd->u.str);
-        break;
+            /* fccfolder [create flags [special-use [mailboxid] ] ] */
+        case 'F': {
+            struct Fileinto *fcc = base + *offsets++;
+            int have_specialuse = 0, have_mailboxid = 0;
 
+            switch (*fmt) {
+            case '!':
+                have_mailboxid = 1;
 
-    case B_FILEINTO:        /* 41 */
-        pos = bc_string_parse(bc, pos, &cmd->u.f.mailboxid);
-        GCC_FALLTHROUGH
+                GCC_FALLTHROUGH
 
-    case B_FILEINTO_SPECIALUSE:        /* 38 */
-        pos = bc_string_parse(bc, pos, &cmd->u.f.specialuse);
+            case '$':
+                have_specialuse = 1;
+                fmt++;
+                break;
+            }
 
-        GCC_FALLTHROUGH
-
-    case B_FILEINTO_CREATE: /* 24 */
-        cmd->u.f.create = ntohl(bc[pos++].value);
-
-        GCC_FALLTHROUGH
-
-    case B_FILEINTO_FLAGS:  /* 23 */
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.f.flags);
-
-        GCC_FALLTHROUGH
-
-    case B_FILEINTO_COPY :  /* 19 */
-        cmd->u.f.copy = ntohl(bc[pos++].value);
-
-        GCC_FALLTHROUGH
-
-    case B_FILEINTO_ORIG:   /* 4 */
-        pos = bc_string_parse(bc, pos, &cmd->u.f.folder);
-        break;
-
-
-    case B_REDIRECT:        /* 39 */
-        pos = bc_string_parse(bc, pos, &cmd->u.r.bytime);
-        pos = bc_string_parse(bc, pos, &cmd->u.r.bymode);
-        cmd->u.r.bytrace = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &cmd->u.r.dsn_notify);
-        pos = bc_string_parse(bc, pos, &cmd->u.r.dsn_ret);
-
-        GCC_FALLTHROUGH
-
-    case B_REDIRECT_LIST:   /* 32 */
-        cmd->u.r.list = ntohl(bc[pos++].value);
-
-        GCC_FALLTHROUGH
-
-    case B_REDIRECT_COPY:   /* 20 */
-        cmd->u.r.copy = ntohl(bc[pos++].value);
-
-        GCC_FALLTHROUGH
-
-    case B_REDIRECT_ORIG:   /* 5 */
-        pos = bc_string_parse(bc, pos, &cmd->u.r.address);
-        break;
-
-
-    case B_IF:              /* 6 */
-        cmd->u.i.testend = ntohl(bc[pos++].value);
-        /* Tests are parsed by caller */
-        break;
-
-
-    case B_MARK:            /* 7 */
-    case B_UNMARK:          /* 8 */
-        break;
-
-
-    case B_ADDFLAG:         /* 26 */
-    case B_SETFLAG:         /* 27 */
-    case B_REMOVEFLAG:      /* 28 */
-        pos = bc_string_parse(bc, pos, &cmd->u.fl.variable);
-
-        GCC_FALLTHROUGH
-
-    case B_ADDFLAG_ORIG:    /* 9 */
-    case B_SETFLAG_ORIG:    /* 10 */
-    case B_REMOVEFLAG_ORIG: /* 11 */
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.fl.flags);
-        break;
-
-
-    case B_NOTIFY:          /* 12 */
-    case B_ENOTIFY:         /* 33 */
-        pos = bc_string_parse(bc, pos, &cmd->u.n.method);
-        pos = bc_string_parse(bc, pos, (cmd->type == B_ENOTIFY) ?
-                               &cmd->u.n.from : &cmd->u.n.id);
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.n.options);
-        cmd->u.n.priority = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &cmd->u.n.message);
-        break;
-
-
-    case B_DENOTIFY:        /* 13 */
-        cmd->u.d.priority = ntohl(bc[pos++].value);
-        cmd->u.d.comp.match = ntohl(bc[pos++].value);
-        cmd->u.d.comp.relation = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &cmd->u.d.pattern);
-        break;
-
-
-    case B_VACATION_ORIG:   /* 14 */
-    case B_VACATION_SEC:    /* 21 */
-    case B_VACATION_FCC:    /* 36 */
-    case B_VACATION:        /* 37 */
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.v.addresses);
-        pos = bc_string_parse(bc, pos, &cmd->u.v.subject);
-        pos = bc_string_parse(bc, pos, &cmd->u.v.message);
-        cmd->u.v.seconds = ntohl(bc[pos++].value);
-        cmd->u.v.mime = ntohl(bc[pos++].value);
-
-        if (version >= 0x05) {
-            pos = bc_string_parse(bc, pos, &cmd->u.v.from);
-            pos = bc_string_parse(bc, pos, &cmd->u.v.handle);
-
-            if (cmd->type >= B_VACATION_FCC) {
-                pos = bc_string_parse(bc, pos, &cmd->u.v.fcc.folder);
-
-                if (cmd->u.v.fcc.folder) {
-                    cmd->u.v.fcc.create = ntohl(bc[pos++].value);
-                    pos = bc_stringlist_parse(bc, pos, &cmd->u.v.fcc.flags);
-
-                    if (cmd->type == B_VACATION) {
-                        pos = bc_string_parse(bc, pos,
-                                               &cmd->u.v.fcc.specialuse);
+            pos = bc_string_parse(bc, pos, &fcc->t.folder);
+            if (fcc->t.folder) {
+                fcc->create = ntohl(bc[pos++].value);
+                pos = bc_stringlist_parse(bc, pos, &fcc->flags);
+                if (have_specialuse) {
+                    pos = bc_string_parse(bc, pos, &fcc->t.specialuse);
+                    if (have_mailboxid) {
+                        pos = bc_string_parse(bc, pos, &fcc->t.mailboxid);
                     }
                 }
             }
+            break;
         }
-        break;
+
+            /* zonetag [tzoffset (as integer)] */
+        case 'z': {
+            zone_t *z = base + *offsets++;
+
+            z->tag = ntohl(bc[pos++].value);
+
+            if (z->tag == B_TIMEZONE) {
+                int offset = ntohl(bc[pos++].value);
+                struct buf buf = BUF_INITIALIZER;
+
+                buf_printf(&buf, "%+03d%02u", offset / 60, abs(offset % 60));
+                z->offset = buf_release(&buf);
+            }
+            break;
+        }
 
 
-    case B_NULL:            /* 15 */
-        break;
+            /* zonetag [tzoffset (as string)] */
+        case 'Z': {
+            zone_t *z = base + *offsets++;
 
+            z->tag = ntohl(bc[pos++].value);
 
-    case B_JUMP:            /* 16 */
-        cmd->u.jump = ntohl(bc[pos++].value);
-        break;
+            if (z->tag == B_TIMEZONE)
+                pos = bc_string_parse(bc, pos, &z->offset);
+            break;
+        }
 
-
-    case B_INCLUDE:         /* 17 */
-        bits = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &cmd->u.inc.script);
-
-        cmd->u.inc.location = bits & INC_LOCATION_MASK;
-        cmd->u.inc.optional = bits & INC_OPTIONAL_MASK;
-        cmd->u.inc.once     = bits & INC_ONCE_MASK;
-        break;
-
-
-    case B_RETURN:          /* 18 */
-        break;
-
-
-    case B_SET:             /* 25 */
-        bits = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &cmd->u.s.variable);
-        pos = bc_string_parse(bc, pos, &cmd->u.s.value);
-
-        cmd->u.s.mod40 = bits & BFV_MOD40_MASK;
-        cmd->u.s.mod30 = bits & BFV_MOD30_MASK;
-        cmd->u.s.mod20 = bits & BFV_MOD20_MASK;
-        cmd->u.s.mod15 = bits & BFV_MOD15_MASK;
-        cmd->u.s.mod10 = bits & BFV_MOD10_MASK;
-        break;
-
-
-    case B_ADDHEADER:       /* 29 */
-        cmd->u.ah.index = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &cmd->u.ah.name);
-        pos = bc_string_parse(bc, pos, &cmd->u.ah.value);
-        break;
-
-
-    case B_DELETEHEADER:    /* 30 */
-        cmd->u.dh.comp.index = ntohl(bc[pos++].value);
-        pos = bc_comparator_parse(bc, pos, &cmd->u.dh.comp);
-        pos = bc_string_parse(bc, pos, &cmd->u.dh.name);
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.dh.values);
-        break;
-
-
-    case B_ERROR:           /* 34 */
-        pos = bc_string_parse(bc, pos, &cmd->u.str);
-        break;
-
-
-    default:
-        /* Unknown opcode? */
-        pos = -1;
-        break;
+        default:
+            pos = -1;
+            break;
+        }
     }
 
     return pos;
+}
+
+EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
+                             commandlist_t *cmd)
+{
+    memset(cmd, 0, sizeof(commandlist_t));
+    cmd->type = ntohl(bc[pos++].op);
+
+    if (cmd->type >= B_ILLEGAL_VALUE) {
+        /* Unknown opcode */
+        return -1;
+    }
+
+    const char *fmt = cmd_args_table[cmd->type].fmt;
+    const size_t *offsets = cmd_args_table[cmd->type].offsets;
+
+    if (cmd->type == B_VACATION_ORIG && version >= 0x05) {
+        /* Includes :from and :handle */
+        fmt = cmd_args_table[B_VACATION_SEC].fmt;
+        offsets = cmd_args_table[B_VACATION_SEC].offsets;
+    }
+
+    return bc_args_parse(bc, pos, fmt, cmd, offsets);
 }
 
 EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
@@ -368,112 +699,50 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
     int opcode = ntohl(bc[pos++].op);
     int has_index = 0;
 
-    if (version == 0x07 &&
-        (opcode == BC_ADDRESS_PRE_INDEX || opcode == BC_HEADER_PRE_INDEX)) {
-        /* There was a version of the bytecode that had the index extension
-         * but did not update the bytecode codepoints, nor did it increment
-         * the bytecode version number.  This tests if the index extension
-         * was in the bytecode based on the position of the match-type
-         * argument.
-         * We test for the applicable version number explicitly.
-         */
-        switch (ntohl(bc[pos+1].value)) {
-        case B_IS:
-        case B_CONTAINS:
-        case B_MATCHES:
-        case B_REGEX:
-        case B_COUNT:
-        case B_VALUE:
-            if (opcode == BC_ADDRESS_PRE_INDEX) opcode = BC_ADDRESS;
-            else opcode = BC_HEADER;
-            break;
-        }
-    }
-
     memset(test, 0, sizeof(test_t));
     test->type = opcode;
 
-    /* When a case is switch'ed to, pos points to the first parameter
-     * of the test.  This makes it easier to add future extensions.
-     * Extensions that change an existing test should add any new
-     * parameters to the beginning of the particular test's bytecode.
-     * This will allow the new code to fall through to the  older
-     * code, which will then parse the older parameters and should
-     * require only a minimal set of changes to support any new extension. 
-     */
-    switch (opcode) {
-    case BC_FALSE:                /* 0 */
-    case BC_TRUE:                 /* 1 */
-    case BC_NOT:                  /* 2 */
-        break;
+    if (opcode >= BC_ILLEGAL_VALUE) {
+        /* Unknown opcode */
+        return -1;
+    }
 
+    const char *fmt = test_args_table[opcode].fmt;
+    const size_t *offsets = test_args_table[opcode].offsets;
 
-    case BC_ANYOF:                /* 5 */
-    case BC_ALLOF:                /* 6 */
-        test->u.aa.ntests = ntohl(bc[pos++].listlen);
-        test->u.aa.endtests = ntohl(bc[pos++].value) / sizeof(bytecode_input_t);
-        /* Tests are parsed by caller */
-        break;
+    if (version == 0x07) {
+        switch (opcode) {
+        case BC_HEADER_PRE_INDEX:
+        case BC_ADDRESS_PRE_INDEX:
+            /* There was a version of the bytecode that had the index extension
+             * but did not update the bytecode codepoints, nor did it increment
+             * the bytecode version number.  This tests if the index extension
+             * was in the bytecode based on the position of the match-type
+             * argument.
+             * We test for the applicable version number explicitly.
+             */
+            switch (ntohl(bc[pos+1].value)) {
+            case B_IS:
+            case B_CONTAINS:
+            case B_MATCHES:
+            case B_REGEX:
+            case B_COUNT:
+            case B_VALUE:
+                if (opcode == BC_ADDRESS_PRE_INDEX) opcode = BC_ADDRESS;
+                else opcode = BC_HEADER;
 
+                fmt = cmd_args_table[opcode].fmt;
+                offsets = cmd_args_table[opcode].offsets;
+                break;
+            }
+            break;
 
-    case BC_EXISTS:               /* 3 */
-    case BC_VALIDEXTLIST:         /* 22 */
-    case BC_IHAVE:                /* 24 */
-    case BC_VALIDNOTIFYMETHOD:    /* 27 */
-        pos = bc_stringlist_parse(bc, pos, &test->u.sl);
-        break;
+        case BC_DATE:
+            has_index = 1;
 
+            GCC_FALLTHROUGH
 
-    case BC_SIZE:                 /* 4 */
-        test->u.sz.t = ntohl(bc[pos++].value);
-        test->u.sz.n = ntohl(bc[pos++].value);
-        break;
-
-
-    case BC_ADDRESS:              /* 13 */
-        test->u.ae.comp.index = ntohl(bc[pos++].value);
-
-        GCC_FALLTHROUGH
-
-    case BC_ADDRESS_PRE_INDEX:    /* 7 */
-    case BC_ENVELOPE:             /* 8 */
-        pos = bc_comparator_parse(bc, pos, &test->u.ae.comp);
-        test->u.ae.addrpart = ntohl(bc[pos++].value);
-        pos = bc_stringlist_parse(bc, pos, &test->u.ae.sl);
-        pos = bc_stringlist_parse(bc, pos, &test->u.ae.pl);
-        break;
-
-
-    case BC_HEADER:               /* 14 */
-        test->u.hhs.comp.index = ntohl(bc[pos++].value);
-
-        GCC_FALLTHROUGH
-
-    case BC_HEADER_PRE_INDEX:     /* 9 */
-    case BC_HASFLAG:              /* 15 */
-    case BC_STRING:               /* 21 */
-        pos = bc_comparator_parse(bc, pos, &test->u.hhs.comp);
-        pos = bc_stringlist_parse(bc, pos, &test->u.hhs.sl);
-        pos = bc_stringlist_parse(bc, pos, &test->u.hhs.pl);
-        break;
-
-
-    case BC_BODY:                 /* 10 */
-        pos = bc_comparator_parse(bc, pos, &test->u.b.comp);
-        test->u.b.transform = ntohl(bc[pos++].value);
-        test->u.b.offset = ntohl(bc[pos++].value);
-        pos = bc_stringlist_parse(bc, pos, &test->u.b.content_types);
-        pos = bc_stringlist_parse(bc, pos, &test->u.b.pl);
-        break;
-
-
-    case BC_DATE:                 /* 11 */
-        has_index = 1;
-
-        GCC_FALLTHROUGH
-
-    case BC_CURRENTDATE:          /* 12 */
-        if (version == 0x07) {
+        case BC_CURRENTDATE:
             /* There was a version of the bytecode that had the index extension
              * but did not update the bytecode codepoints, nor did it increment
              * the bytecode version number.  This tests if the index extension
@@ -494,6 +763,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
             case B_ASCIICASEMAP:
             case B_OCTET:
             case B_ASCIINUMERIC:
+            case B_UNICODECASEMAP:
                 has_index = 0;
                 break;
             default:
@@ -507,6 +777,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
                 case B_ASCIICASEMAP:
                 case B_OCTET:
                 case B_ASCIINUMERIC:
+                case B_UNICODECASEMAP:
                     /* The ambiguous case is B_TIMEZONE as 1st parameter and
                      * B_ORIGINALZONE as second parameter, which could mean
                      * either ':index 60 :originalzone' or ':zone "+0101"'
@@ -543,67 +814,23 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
                 }
                 break;
             }
+
+            if (has_index) {
+                if (opcode == BC_CURRENTDATE) {
+                    /* parse, but ignore, index as first argument */
+                    static char buf[MAX_ARGS+1] = "_";
+
+                    fmt = strcat(buf, fmt);
+                }
+            }
+            else if (opcode == BC_DATE) {
+                /* skip index (first argument) */
+                fmt++;
+                offsets++;
+            }
+            break;
         }
-
-        if (has_index) test->u.dt.comp.index = ntohl(bc[pos++].value);
-
-        test->u.dt.zonetag = ntohl(bc[pos++].value);
-        if (test->u.dt.zonetag == B_TIMEZONE)
-            test->u.dt.zone = ntohl(bc[pos++].value);
-
-        pos = bc_comparator_parse(bc, pos, &test->u.dt.comp);
-        test->u.dt.date_part = ntohl(bc[pos++].value);
-
-        if (opcode == BC_DATE)
-            pos = bc_string_parse(bc, pos, &test->u.dt.header_name);
-        pos = bc_stringlist_parse(bc, pos, &test->u.dt.kl);
-        break;
-
-
-    case BC_METADATAEXISTS:       /* 18 */
-    case BC_SPECIALUSEEXISTS:     /* 25 */
-        pos = bc_string_parse(bc, pos, &test->u.mm.extname);
-
-        GCC_FALLTHROUGH
-
-    case BC_MAILBOXEXISTS:        /* 16 */
-    case BC_SERVERMETADATAEXISTS: /* 20 */
-    case BC_MAILBOXIDEXISTS:      /* 29 */
-        pos = bc_stringlist_parse(bc, pos, &test->u.mm.keylist);
-        break;
-
-
-    case BC_METADATA:             /* 17 */
-    case BC_NOTIFYMETHODCAPABILITY:/* 28 */
-        pos = bc_comparator_parse(bc, pos, &test->u.mm.comp);
-        pos = bc_string_parse(bc, pos, &test->u.mm.extname);
-        pos = bc_string_parse(bc, pos, &test->u.mm.keyname);
-        pos = bc_stringlist_parse(bc, pos, &test->u.mm.keylist);
-        break;
-
-
-    case BC_SERVERMETADATA:       /* 19 */
-    case BC_ENVIRONMENT:          /* 26 */
-        pos = bc_comparator_parse(bc, pos, &test->u.mm.comp);
-        pos = bc_string_parse(bc, pos, &test->u.mm.keyname);
-        pos = bc_stringlist_parse(bc, pos, &test->u.mm.keylist);
-        break;
-
-
-    case BC_DUPLICATE:            /* 23 */
-        test->u.dup.idtype = ntohl(bc[pos++].value);
-        pos = bc_string_parse(bc, pos, &test->u.dup.idval);
-        pos = bc_string_parse(bc, pos, &test->u.dup.handle);
-        test->u.dup.seconds = ntohl(bc[pos++].value);
-        test->u.dup.last = ntohl(bc[pos++].value);
-        break;
-
-
-    default:
-        /* Unknown opcode? */
-        pos = -1;
-        break;
     }
 
-    return pos;
+    return bc_args_parse(bc, pos, fmt, test, offsets);
 }

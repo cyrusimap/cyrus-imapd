@@ -1,0 +1,229 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_writeown_caldav
+    :min_version_3_5 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create sharee user";
+    my $admin = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("sharee");
+    my $service = $self->{instance}->get_service("http");
+    my $shareeCaldav = Net::CalDAVTalk->new(
+        user => "sharee",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create event with cassandane owner";
+    my $cassOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:cassowner
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE:mailto:attendee@example.com
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $res = $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/cassowner.ics',
+        $cassOwnerIcal, 'Content-Type' => 'text/calendar');
+
+    xlog "Create event with sharee owner";
+    my $shareeOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20161028T160000
+DURATION:PT1H
+UID:7e55d2c1-d197-4e51-b9b6-a78c8a38fd78
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:shareeowner
+ORGANIZER:mailto:sharee@example.com
+ATTENDEE:mailto:attendee@example.com
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/sharee/cassandane.Default/shareeowner.ics',
+        $shareeOwnerIcal, 'Content-Type' => 'text/calendar');
+
+    xlog "Create event with no owner";
+    my $noOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20161128T160000
+DURATION:PT1H
+UID:80cdbc93-c602-4591-a8d2-f67a804e6acf
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:noowner
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/sharee/cassandane.Default/noowner.ics',
+        $noOwnerIcal, 'Content-Type' => 'text/calendar');
+
+    xlog "Update event with sharee owner as sharee";
+    $shareeOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20161028T160000
+DURATION:PT1H
+UID:7e55d2c1-d197-4e51-b9b6-a78c8a38fd78
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:shareeownerUpdated
+ORGANIZER:mailto:sharee@example.com
+ATTENDEE:mailto:attendee@example.com
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $shareeCaldav->Request('PUT',
+        '/dav/calendars/user/sharee/cassandane.Default/shareeowner.ics',
+        $shareeOwnerIcal, 'Content-Type' => 'text/calendar');
+
+    xlog "Update event with no owner as sharee";
+    $noOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20161128T160000
+DURATION:PT1H
+UID:80cdbc93-c602-4591-a8d2-f67a804e6acf
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:noowner
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $shareeCaldav->Request('PUT',
+        '/dav/calendars/user/sharee/cassandane.Default/noowner.ics',
+        $noOwnerIcal, 'Content-Type' => 'text/calendar');
+
+    xlog "Update per-user property as sharee";
+    $cassOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:cassowner
+COLOR:pink
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE;SCHEDULE-STATUS=1.1:mailto:attendee@example.com
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $shareeCaldav->Request('PUT',
+        '/dav/calendars/user/sharee/cassandane.Default/cassowner.ics',
+        $cassOwnerIcal, 'Content-Type' => 'text/calendar');
+
+    xlog "Update property as sharee";
+    $cassOwnerIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:cassownerUpdated
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE;SCHEDULE-STATUS=1.1:mailto:attendee@example.com
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    # annoyingly CalDAV talk aborts for HTTP status >= 400
+    my $href = '/dav/calendars/user/sharee/cassandane.Default/cassowner.ics';
+    my $rawResponse = $shareeCaldav->{ua}->request('PUT',
+        $shareeCaldav->request_url($href), {
+            content => $cassOwnerIcal,
+            headers => {
+                'Content-Type' => 'text/calendar',
+                'Authorization' => $shareeCaldav->auth_header(),
+            },
+        },
+    );
+    $self->assert_num_equals(403, $rawResponse->{status});
+
+    xlog "Delete event with sharee owner as sharee";
+    $shareeCaldav->Request('DELETE',
+        '/dav/calendars/user/sharee/cassandane.Default/shareeowner.ics');
+
+    xlog "Delete event with no owner as sharee";
+    $shareeCaldav->Request('DELETE',
+        '/dav/calendars/user/sharee/cassandane.Default/noowner.ics');
+
+    xlog "Delete event with cassandane owner as sharee";
+    $href = '/dav/calendars/user/sharee/cassandane.Default/cassowner.ics';
+    $rawResponse = $shareeCaldav->{ua}->request('DELETE',
+        $shareeCaldav->request_url($href), {
+            headers => {
+                'Authorization' => $shareeCaldav->auth_header(),
+            },
+        },
+    );
+    $self->assert_num_equals(403, $rawResponse->{status});
+
+
+}

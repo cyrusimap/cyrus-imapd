@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include "cunit/cyrunit.h"
 #include "xmalloc.h"
 #include "vparse.h"
@@ -10,6 +12,7 @@ static void test_double_end(void)
     vparser.base = card;
     int vr = vparse_parse(&vparser, 0);
     CU_ASSERT_EQUAL(vr, PE_MISMATCHED_CARD);
+    vparse_free(&vparser);
 }
 
 static void test_wrap_onechar(void)
@@ -28,297 +31,311 @@ static void test_wrap_onechar(void)
     vparser.base = card;
     int vr = vparse_parse(&vparser, 0);
     CU_ASSERT_EQUAL(vr, 0);
-    struct buf *buf = buf_new(); \
-    vparse_tobuf(vparser.card, buf); \
-    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+    struct buf *buf = buf_new();
+    vparse_tobuf(vparser.card, buf);
+    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf));
     vparse_free(&vparser);
 
     // XXX test value
+    buf_destroy(buf);
 }
 
-static void test_control_chars(void)
+static void test_repair_version(void)
 {
-#define TESTCASE(in, flag, wanterr) \
+    char card[] = "BEGIN:VCARD\n"
+                  "VERSION: 3.0 \r\n"
+                  "UID:abc\n"
+                  "END:VCARD\r\n";
+
+    char wantbuf[] = "BEGIN:VCARD\r\n"
+                  "VERSION:3.0\r\n"
+                  "UID:abc\r\n"
+                  "END:VCARD\r\n";
+    struct vparse_state vparser;
+    memset(&vparser, 0, sizeof(struct vparse_state));
+    vparser.base = card;
+    int vr = vparse_parse(&vparser, 0);
+    CU_ASSERT_EQUAL(vr, 0);
+    struct buf *buf = buf_new();
+    vparse_tobuf(vparser.card, buf);
+    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf));
+    vparse_free(&vparser);
+    buf_destroy(buf);
+}
+
+static void test_repair_control_chars(void)
+{
+#define TESTCASE(in, wanterr, wantout) \
     { \
         struct vparse_state vparser; \
         memset(&vparser, 0, sizeof(struct vparse_state)); \
         vparse_set_multival(&vparser, "adr", ';'); \
         vparser.base = (in); \
-        vparser.ctrl = flag; \
         int vr = vparse_parse(&vparser, 0); \
         CU_ASSERT_EQUAL(vr, (wanterr)); \
-        vparse_free(&vparser); \
-    }
-
-    char ctl_in_propname[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:3.0\r\n"
-        "N\bOTE:Weird control chars\r\n"
-        "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-
-    char ctl_in_propval1[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:3.0\r\n"
-        "NOTE:Weird control\b chars\r\n"
-        "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-
-    char ctl_in_propval2[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:3.0\r\n"
-        /* Newline forces parser to switch to property name state */
-        "NOTE:Weird control\n\bchars\r\n"
-        "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-
-    char ctl_in_propval3[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:3.0\r\n"
-        /* Multivalue field, separated by semicolon */
-        "ADR:;;123 Main Street;Any Town;CA;91921-1234;U.S.\x01\r\n"
-        "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-
-    char ctl_in_paraname[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:4.0\r\n"
-        "EMAIL;\x01TYPE\x03=work:foo@local\r\n"
-        "END:VCARD\r\n";
-
-    char ctl_in_paraval1[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:4.0\r\n"
-        "EMAIL;TYPE=w\x1bork:foo@local\r\n"
-        "END:VCARD\r\n";
-
-    char ctl_in_paraval2[] =
-        "BEGIN:VCARD\r\n"
-        "VERSION:4.0\r\n"
-        /* control char in quoted param value */
-        "EMAIL;TYPE=\"\x1bork\":foo@local\r\n"
-        "END:VCARD\r\n";
-
-    TESTCASE(ctl_in_propname, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-    TESTCASE(ctl_in_propval1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-    TESTCASE(ctl_in_propval2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-    TESTCASE(ctl_in_propval3, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-    TESTCASE(ctl_in_paraname, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-    TESTCASE(ctl_in_paraval1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-    TESTCASE(ctl_in_paraval2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR);
-
-    TESTCASE(ctl_in_propname, VPARSE_CTRL_SKIP, PE_OK);
-    TESTCASE(ctl_in_propval1, VPARSE_CTRL_SKIP, PE_OK);
-    TESTCASE(ctl_in_propval2, VPARSE_CTRL_SKIP, PE_NAME_EOL);
-    TESTCASE(ctl_in_propval3, VPARSE_CTRL_SKIP, PE_OK);
-    TESTCASE(ctl_in_paraname, VPARSE_CTRL_SKIP, PE_OK);
-    TESTCASE(ctl_in_paraval1, VPARSE_CTRL_SKIP, PE_OK);
-    TESTCASE(ctl_in_paraval2, VPARSE_CTRL_SKIP, PE_OK);
-
-#undef TESTCASE
-}
-
-static void test_crlf(void)
-{
-#define TESTCASE(in, wantctrl, wanterr, wantbuf) \
-    { \
-        struct vparse_state vparser; \
-        memset(&vparser, 0, sizeof(struct vparse_state)); \
-        vparse_set_multival(&vparser, "adr", ';'); \
-        vparser.base = (in); \
-        vparser.ctrl = (wantctrl); \
-        int vr = vparse_parse(&vparser, 0); \
-        CU_ASSERT_EQUAL(vr, (wanterr)); \
-        if (wantbuf != NULL) { \
+        if (wantout != NULL) { \
             struct buf *buf = buf_new(); \
             vparse_tobuf(vparser.card, buf); \
-            CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+            CU_ASSERT_STRING_EQUAL(wantout, buf_cstring(buf)); \
             buf_destroy(buf); \
         } \
         vparse_free(&vparser); \
     }
 
-    /* All lines end on CRLF */
-    char crlf[] =
+    struct testcase {
+        const char *in;
+        int wanterr;
+        const char *out;
+    } tests[] = {{
+        /* Control in property name */
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "N\bOTE:Weird control chars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Weird control chars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n",
+    }, {
+        /* Control in property value */
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Weird control\b chars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Weird control chars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n"
+    }, {
+        /* Newline forces parser to switch to property name state */
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:Weird control\n\bchars\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n",
+        PE_NAME_EOL,
+        NULL
+    }, {
+        /* Multivalue field, separated by semicolon */
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "ADR:;;123 Main Street;Any Town;CA;91921-1234;U.S.\x01\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "ADR:;;123 Main Street;Any Town;CA;91921-1234;U.S.\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n"
+    }, {
+        /* Control in parameter name */
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "EMAIL;\x01TYPE\x03=work:foo@local\r\n"
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "EMAIL;TYPE=work:foo@local\r\n"
+        "END:VCARD\r\n"
+    }, {
+        /* Control in parameter value */
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "EMAIL;TYPE=w\x1bork:foo@local\r\n"
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "EMAIL;TYPE=work:foo@local\r\n"
+        "END:VCARD\r\n"
+    }, {
+        /* Control char in quoted parameter value */
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "FOO;BAR=\"x\x1b,y\":0\r\n"
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:4.0\r\n"
+        "FOO;BAR=\"x,y\":0\r\n"
+        "END:VCARD\r\n",
+    }, {
+        /* End with CRLF */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:All lines end on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    TESTCASE(crlf, VPARSE_CTRL_IGNORE, PE_OK, crlf);
-    TESTCASE(crlf, VPARSE_CTRL_SKIP, PE_OK, crlf);
-    TESTCASE(crlf, VPARSE_CTRL_REJECT, PE_OK, crlf);
-
-    /* All lines end on LF */
-    char lf_in[] =
+        "END:VCARD\r\n",
+        PE_OK,
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "NOTE:All lines end on CRLF\r\n"
+        "REV:2008-04-24T19:52:43Z\r\n"
+        "END:VCARD\r\n"
+    }, {
+        /* End with LF */
         "BEGIN:VCARD\n"
         "VERSION:3.0\n"
         "NOTE:All lines end on LF\n"
         "REV:2008-04-24T19:52:43Z\n"
-        "END:VCARD\n";
-    char lf_out[] =
+        "END:VCARD\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:All lines end on LF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    TESTCASE(lf_in, VPARSE_CTRL_IGNORE, PE_OK, lf_out);
-    TESTCASE(lf_in, VPARSE_CTRL_SKIP, PE_OK, lf_out);
-    TESTCASE(lf_in, VPARSE_CTRL_REJECT, PE_OK, lf_out);
-
-
-    /* All lines end on CR */
-    /* This is all actually just one line */
-    char cr[] =
+        "END:VCARD\r\n"
+    }, {
+        /* End with CR */
         "BEGIN:VCARD\r"
         "VERSION:3.0\r"
         "NOTE:All lines end on CR\r"
         "REV:2008-04-24T19:52:43Z\r"
-        "END:VCARD\r";
-    TESTCASE(cr, VPARSE_CTRL_IGNORE, PE_FINISHED_EARLY, NULL);
-    TESTCASE(cr, VPARSE_CTRL_SKIP, PE_FINISHED_EARLY, NULL);
-    TESTCASE(cr, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
-
-    /* Some lines end on CRLF and some on LF */
-    char mixed_in[] =
+        "END:VCARD\r",
+        PE_FINISHED_EARLY,
+        NULL
+    }, {
+        /* End with either CR or CRLF */
         "BEGIN:VCARD\n"
         "VERSION:3.0\n"
         "NOTE:Some lines end on LF and some on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\n";
-    char mixed_out[] =
+        "END:VCARD\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:Some lines end on LF and some on CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    TESTCASE(mixed_in, VPARSE_CTRL_IGNORE, PE_OK, mixed_out);
-    TESTCASE(mixed_in, VPARSE_CTRL_SKIP, PE_OK, mixed_out);
-    TESTCASE(mixed_in, VPARSE_CTRL_REJECT, PE_OK, mixed_out);
-
-    /* An extra CR before CRLF */
-    char extra_cr_in[] =
+        "END:VCARD\r\n"
+    }, {
+        /* Extra CR before CRLF */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:An extra CR before CRLF\r\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char extra_cr_out[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:An extra CR before CRLF\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    TESTCASE(extra_cr_in, VPARSE_CTRL_IGNORE, PE_OK, extra_cr_out);
-    TESTCASE(extra_cr_in, VPARSE_CTRL_SKIP, PE_OK, extra_cr_out);
-    TESTCASE(extra_cr_in, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
-
-    /* Two LF make one empty line */
-    char lflf_in[] =
+        "END:VCARD\r\n"
+    }, {
+        /* Two LF make one empty line */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:Two LF make one empty line\n\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char lflf_out[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:Two LF make one empty line\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    TESTCASE(lflf_in, VPARSE_CTRL_IGNORE, PE_OK, lflf_out);
-    TESTCASE(lflf_in, VPARSE_CTRL_SKIP, PE_OK, lflf_out);
-    TESTCASE(lflf_in, VPARSE_CTRL_REJECT, PE_OK, lflf_out);
-
-    /* One lonely CR in the middle of text */
-    /* Single-value */
-    char cr_val1[] =
+        "END:VCARD\r\n"
+    }, {
+        /* One lonely CR in the middle of text */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:One lonely \r in the middle of text\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char cr_val1_skip[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:One lonely  in the middle of text\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    /* Multi-value */
-    char cr_val2[] =
+        "END:VCARD\r\n"
+    }, {
+        /* One lonely CR in a multi-value property */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
-        "NOTE:One lonely CR in the middle of text\r\n"
         "ADR:;;123\r\\nMain Street;Any Town;CA;91921-1234;U.S.A\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char cr_val2_skip[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
-        "NOTE:One lonely CR in the middle of text\r\n"
         "ADR:;;123\\nMain Street;Any Town;CA;91921-1234;U.S.A\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    /* CR in key */
-    char cr_key[] =
+        "END:VCARD\r\n"
+    }, {
+        /* CR in key */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE\r:CR in key\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char cr_key_skip[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "NOTE:CR in key\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    /* CR in param name */
-    char cr_para1[] =
+        "END:VCARD\r\n"
+    }, {
+        /* CR in param name */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "EMAIL;TYPE\r=work:foo@local\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char cr_para1_skip[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "EMAIL;TYPE=work:foo@local\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    /* CR in param name */
-    char cr_para2[] =
+        "END:VCARD\r\n"
+    }, {
+        /* CR in param name */
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "EMAIL;TYPE=work\r:foo@local\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
-    char cr_para2_skip[] =
+        "END:VCARD\r\n",
+        PE_OK,
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "EMAIL;TYPE=work:foo@local\r\n"
         "REV:2008-04-24T19:52:43Z\r\n"
-        "END:VCARD\r\n";
+        "END:VCARD\r\n"
+    }, {
+        /* End of tests */
+        NULL, 0, NULL
+    }};
 
-    TESTCASE(cr_val1, VPARSE_CTRL_SKIP, PE_OK, cr_val1_skip);
-    TESTCASE(cr_val2, VPARSE_CTRL_SKIP, PE_OK, cr_val2_skip);
-    TESTCASE(cr_key, VPARSE_CTRL_SKIP, PE_OK, cr_key_skip);
-    TESTCASE(cr_para1, VPARSE_CTRL_SKIP, PE_OK, cr_para1_skip);
-    TESTCASE(cr_para2, VPARSE_CTRL_SKIP, PE_OK, cr_para2_skip);
-
-    TESTCASE(cr_val1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_val2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_key, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_para1, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
-    TESTCASE(cr_para2, VPARSE_CTRL_REJECT, PE_ILLEGAL_CHAR, NULL);
+    struct testcase *t;
+    for (t = tests; t->in; t++) {
+        TESTCASE(t->in, t->wanterr, t->out);
+    }
 
 #undef TESTCASE
 }
 
+#ifdef USE_HTTPD
 #include "imap/vcard_support.h"
 
 static void test_multiparam_type(void)
 {
-    char card[] = ""
+#define TESTCASE(card, wantbuf) \
+    { \
+        struct vparse_card *vcard = vcard_parse_string(card); \
+        CU_ASSERT_PTR_NOT_NULL(vcard); \
+        struct buf *buf = vcard_as_buf(vcard); \
+        CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf)); \
+        vparse_free_card(vcard); \
+        buf_destroy(buf); \
+    }
+
+    TESTCASE(
+        // card
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "UID:0dc2973f-5f46-49b9-8ba9-12a4cee6eeac\r\n"
@@ -329,9 +346,9 @@ static void test_multiparam_type(void)
         "TEL;TYPE=HOME,VOICE:040-xx\r\n"
         "TEL;TYPE=CELL:06-xx\r\n"
         "PRODID:-//MailClient.Contact/7.0.30068.0\r\n"
-        "END:VCARD\r\n";
+        "END:VCARD\r\n",
+        // wantbuf
 
-    char wantbuf[] = ""
         "BEGIN:VCARD\r\n"
         "VERSION:3.0\r\n"
         "UID:0dc2973f-5f46-49b9-8ba9-12a4cee6eeac\r\n"
@@ -342,12 +359,32 @@ static void test_multiparam_type(void)
         "TEL;TYPE=HOME;TYPE=VOICE:040-xx\r\n"
         "TEL;TYPE=CELL:06-xx\r\n"
         "PRODID:-//MailClient.Contact/7.0.30068.0\r\n"
-        "END:VCARD\r\n";
+        "END:VCARD\r\n"
+    );
 
-    struct vparse_card *vcard = vcard_parse_string(card, 0);
-    CU_ASSERT_PTR_NOT_NULL(vcard);
-    struct buf *buf = vcard_as_buf(vcard);
-    CU_ASSERT_STRING_EQUAL(wantbuf, buf_cstring(buf));
-    vparse_free_card(vcard);
-    buf_free(buf);
+    TESTCASE(
+        // card
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "UID:0dc2973f-5f46-49b9-8ba9-12a4cee6eeac\r\n"
+        "N:Test;John;;;\r\n"
+        "FN:John Test\r\n"
+        "X-SOCIAL-PROFILE;TYPE=Github,PREF;X-USER=\"foo,bar\":\r\n"
+        "PRODID:-//MailClient.Contact/7.0.30068.0\r\n"
+        "END:VCARD\r\n",
+        // wantbuf
+        "BEGIN:VCARD\r\n"
+        "VERSION:3.0\r\n"
+        "UID:0dc2973f-5f46-49b9-8ba9-12a4cee6eeac\r\n"
+        "N:Test;John;;;\r\n"
+        "FN:John Test\r\n"
+        "X-SOCIAL-PROFILE;TYPE=Github;TYPE=PREF;X-USER=\"foo,bar\":\r\n"
+        "PRODID:-//MailClient.Contact/7.0.30068.0\r\n"
+        "END:VCARD\r\n"
+    );
+
+#undef TESTCASE
 }
+#else
+static void test_multiparam_type(void) { }
+#endif /* USE_HTTPD */

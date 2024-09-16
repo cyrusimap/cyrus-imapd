@@ -53,6 +53,8 @@ static void test_exists(void)
         r = hashset_exists(hs, unvalues[i]);
         CU_ASSERT_EQUAL(r, 0);
     }
+
+    hashset_free(&hs);
 }
 
 static void test_collisions(void)
@@ -98,4 +100,6 @@ static void test_collisions(void)
         r = hashset_exists(hs, unvalues[i]);
         CU_ASSERT_EQUAL(r, 0);
     }
+
+    hashset_free(&hs);
 }

@@ -273,7 +273,7 @@ static char *pack_other_message (char *sql_cmd, const char *msg_guid){   // used
 void sql_error (int rc, char *zErrMsg)
 {
     if( rc != SQLITE_OK ){
-        syslog(LOG_ERR, "SQL error: %s\n", zErrMsg);
+        syslog(LOG_ERR, "SQL error: %s", zErrMsg);
         sqlite3_free(zErrMsg);
     }
 }
@@ -421,7 +421,7 @@ EXPORTED int add_message_guid (struct mailbox *mailbox, const struct index_recor
         else
             sqldb_close(&db);
     }
-    return (rc == SQLITE_OK) ;
+    return rc == SQLITE_OK;
 }
 
 

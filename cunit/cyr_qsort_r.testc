@@ -1,0 +1,29 @@
+#include <config.h>
+#include "lib/cyr_qsort_r.h"
+
+#include "cunit/cyrunit.h"
+
+static int mysort QSORT_R_COMPAR_ARGS(const void *pa,
+                                      const void *pb,
+                                      void *arg)
+{
+    int *countptr = arg;
+    (*countptr)++;
+    return *((int*)pa) - *((int*)pb);
+
+}
+
+static void test_qsort_r(void)
+{
+    int data[10] = { 6, 8, 3, 7, 2, 0, 4, 9, 5, 1 };
+    int count = 0;
+
+    cyr_qsort_r(data, 10, sizeof(int), mysort, &count);
+
+    int i;
+    for (i = 0; i < 10; i++) CU_ASSERT_EQUAL(data[i], i);
+
+    CU_ASSERT_NOT_EQUAL(count, 0);
+}
+
+/* vim: set ft=c: */

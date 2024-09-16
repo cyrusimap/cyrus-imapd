@@ -1,0 +1,135 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarsharenotification_changes
+    :min_version_3_3 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create sharee
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $http = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $manjmap = Mail::JMAPTalk->new(
+        user => 'manifold',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {
+        }, 'R1']
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/changes', {
+            sinceState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/changes', {
+            sinceState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    my $notifId = $res->[0][1]{created}[0];
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]{newState};
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'someCalendar',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{created}{1});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/set', {
+            destroy => [$notifId],
+        }, "R1"]
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/changes', {
+            sinceState => $state,
+            maxChanges => 1,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $state = $res->[0][1]{newState};
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/changes', {
+            sinceState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+}

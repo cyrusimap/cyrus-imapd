@@ -1,5 +1,6 @@
 .. _imap-index:
 
+===================
 What is Cyrus IMAP?
 ===================
 
@@ -31,7 +32,7 @@ Features
 
 Read more in our full :ref:`list of features <imap-features>`.
 
-Cyrus has been under active development since the year 2000. It's used in production
+Cyrus has been under active development since the year 1993 when the project was launched at Carnegie Mellon University. It's used in production
 systems around the world, at universities and in private enterprise.
 
 Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
@@ -52,6 +53,7 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
 
 --------
 
+===================
 What is Cyrus SASL?
 ===================
 Simple Authentication and Security Layer (SASL_) is a specification that describes how authentication mechanisms can be plugged into an application protocol on the wire. Cyrus SASL is an implementation of SASL that makes it easy for application developers to integrate authentication mechanisms into their application in a generic way.

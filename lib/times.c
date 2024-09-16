@@ -41,6 +41,7 @@
  */
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <memory.h>
 #include <stdio.h>
 #include <string.h>
@@ -52,11 +53,11 @@
 #include "gmtoff.h"
 #include "mkgmtime.h"
 
-static const char * const monthname[12] = {
+EXPORTED const char monthname[][4] = {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
-static const char * const wday[7] = {
+EXPORTED const char wday[][4] = {
     "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
@@ -83,7 +84,7 @@ enum {
     UAlpha = 2,             /* Uppercase Alphabet */
     LAlpha = 4,             /* Lowercase Alphabet */
     Digit = 8,              /* Digits/Numbers */
-    TZSign = 16,            /* Timzone sign +/- */
+    TZSign = 16,            /* Timezone sign +/- */
 };
 
 static const long rfc5322_usascii_charset[257] = {
@@ -100,6 +101,8 @@ struct rfc5322dtbuf {
     int offset;
 };
 
+#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
+
 static int monthdays(int year/*since 1900*/, int month/*0-based*/)
 {
     int leapday;
@@ -108,10 +111,31 @@ static int monthdays(int year/*since 1900*/, int month/*0-based*/)
         31, 31, 30, 31, 30, 31
     };
 
-#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
     leapday = (month == 1 && isleap(year+1900));
     return mdays[month] + leapday;
+}
+
+static int dayofyear(int year/*since 1900*/, int month/*0-based*/, int day)
+{
+    static const int ydays[2][13] = {
+        {0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},
+        {0, 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}
+    };
+    return ydays[isleap(year+1900)][month+1] + day;
+}
+
 #undef isleap
+
+static int dayofweek(int year/*since 1900*/, int month/*0-based*/, int day)
+{
+    /* Uses Zeller's congruence for the Gregorian calendar
+     * https://en.wikipedia.org/wiki/Zeller%27s_congruence
+     * h is the day of the week with Saturday = 0 */
+    int q = day; // day of month
+    int m = month <= 1 ? month + 13 : month + 1; // month, (3 = March, 4 = April, ..., 14 = February)
+    int Y = month <= 1 ? 1900 + year - 1 : 1900 + year; // year
+    int h = (q + ((13 * (m + 1)) / 5) + Y + (Y / 4) - (Y / 100) + (Y / 400)) % 7;
+    return (h + 6) % 7;
 }
 
 /* 'buf' must be at least 80 characters */
@@ -140,13 +164,13 @@ EXPORTED int time_to_rfc822(time_t t, char *buf, size_t len)
 
 
 /*
- * Skip RFC822 FWS = Folding White Space.  This is the white
+ * Skip RFC 822 FWS = Folding White Space.  This is the white
  * space that can be inserted harmlessly into structured
- * RFC822 headers, including splitting them over multiple lines.
+ * RFC 822 headers, including splitting them over multiple lines.
  *
- * Note that RFC822 isn't entirely clear about whether such
+ * Note that RFC 822 isn't entirely clear about whether such
  * space may be present in date-times, but it's successor
- * RFC2822 is quite clear and explicit.  Note also that
+ * RFC 2822 is quite clear and explicit.  Note also that
  * neither RFC allows for (comments) inside a date-time,
  * so we don't attempt to handle that here.
  */
@@ -155,7 +179,7 @@ static const char *skip_fws(const char *p)
     if (!p)
         return NULL;
     while (*p && Uisspace(*p)) {
-        /* check for end of an RFC822 header line */
+        /* check for end of an RFC 822 header line */
         if (*p == '\n') {
             p++;
             if (*p != ' ' && *p != '\t')
@@ -394,9 +418,9 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
 }
 
 /*
- * Parse an RFC822 (strictly speaking, RFC2822) date-time
+ * Parse an RFC 822 (strictly speaking, RFC 2822) date-time
  * from the @s into a UNIX time_t *@tp.  The string @s is
- * terminated either by a NUL or by an RFC822 end of header
+ * terminated either by a NUL or by an RFC 822 end of header
  * line (CRLF not followed by whitespace); this allows
  * parsing dates directly out of mapped messages.
  *
@@ -408,7 +432,7 @@ EXPORTED int time_from_rfc822(const char *s, time_t *tp)
 }
 
 /*
- * Parse an RFC822 (strictly speaking, RFC2822) date-time
+ * Parse an RFC 822 (strictly speaking, RFC 2822) date-time
  * from the @s into a UNIX time_t *@tp, but parse only the
  * date portion, ignoring the time and timezone and returning
  * a time in the server's timezone.  This is a godawful hack
@@ -422,22 +446,38 @@ EXPORTED int day_from_rfc822(const char *s, time_t *tp)
     return parse_rfc822(s, tp, 1);
 }
 
+static int offsettime_normalize(struct offsettime *t)
+{
+    /* sanity check the date/time (including leap day & second) */
+    if (t->tm.tm_mon < 0 || t->tm.tm_mon > 11 ||
+        t->tm.tm_mday < 1 ||
+        t->tm.tm_mday > monthdays(t->tm.tm_year, t->tm.tm_mon) ||
+        t->tm.tm_hour > 23 || t->tm.tm_min > 59 || t->tm.tm_sec > 60) {
+        return 0;
+    }
+    /* Set day of week and year fields */
+    t->tm.tm_wday = dayofweek(t->tm.tm_year, t->tm.tm_mon, t->tm.tm_mday);
+    t->tm.tm_yday = dayofyear(t->tm.tm_year, t->tm.tm_mon, t->tm.tm_mday);
+    t->tm.tm_isdst = -1;
+    return 1;
+}
+
 /*
- * Parse an RFC 3339 = ISO 8601 format date-time string.
+ * Parse an RFC 3339 = ISO 8601 format date-time string,
+ * preserving the zone offset.
  * Returns: number of characters in @s consumed, or -1 on error.
  */
-EXPORTED int time_from_iso8601(const char *s, time_t *tp)
+EXPORTED int offsettime_from_iso8601(const char *s, struct offsettime *t)
 {
     const char *origs = s;
-    struct tm exp;
-    int n, tm_off;
+    int n;
 
     /* parse the ISO 8601 date/time */
     /* XXX should use strptime ? */
-    memset(&exp, 0, sizeof(struct tm));
+    memset(t, 0, sizeof(struct offsettime));
     n = sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2d",
-               &exp.tm_year, &exp.tm_mon, &exp.tm_mday,
-               &exp.tm_hour, &exp.tm_min, &exp.tm_sec);
+               &t->tm.tm_year, &t->tm.tm_mon, &t->tm.tm_mday,
+               &t->tm.tm_hour, &t->tm.tm_min, &t->tm.tm_sec);
     if (n != 6)
         return -1;
 
@@ -449,48 +489,58 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
 
     /* handle offset */
     switch (*s++) {
-    case 'Z': tm_off = 0; break;
-    case '-': tm_off = -1; break;
-    case '+': tm_off = 1; break;
+    case 'Z': t->tm_off = 0; break;
+    case '-': t->tm_off = -1; break;
+    case '+': t->tm_off = 1; break;
     default: return -1;
     }
-    if (tm_off) {
+    if (t->tm_off) {
         int tm_houroff, tm_minoff;
 
         n = sscanf(s, "%2d:%2d", &tm_houroff, &tm_minoff);
         if (n != 2)
             return -1;
-        tm_off *= 60 * (60 * tm_houroff + tm_minoff);
+        t->tm_off *= 60 * (60 * tm_houroff + tm_minoff);
         s += 5;
     }
 
-    exp.tm_year -= 1900; /* normalize to years since 1900 */
-    exp.tm_mon--; /* normalize to months since January */
+    t->tm.tm_year -= 1900; /* normalize to years since 1900 */
+    t->tm.tm_mon--; /* normalize to months since January */
 
-    /* sanity check the date/time (including leap day & second) */
-    if (exp.tm_mon < 0 || exp.tm_mon > 11 ||
-        exp.tm_mday < 1 ||
-        exp.tm_mday > monthdays(exp.tm_year, exp.tm_mon) ||
-        exp.tm_hour > 23 || exp.tm_min > 59 || exp.tm_sec > 60) {
+    if (!offsettime_normalize(t))
         return -1;
-    }
+
+    return s - origs;
+}
+
+
+/*
+ * Parse an RFC 3339 = ISO 8601 format date-time string.
+ * Returns: number of characters in @s consumed, or -1 on error.
+ */
+EXPORTED int time_from_iso8601(const char *s, time_t *tp)
+{
+    struct offsettime ot;
+
+    int r = offsettime_from_iso8601(s, &ot);
+    if (r < 0) return r;
 
     /* normalize to GMT */
-    *tp = mkgmtime(&exp) - tm_off;
-    return s - origs;
+    *tp = mkgmtime(&ot.tm) - ot.tm_off;
+    return r;
 }
 
 static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
                                      enum timeval_precision tv_precision,
-                                     char *buf, size_t len, int withsep)
+                                     long gmtoff, char *buf, size_t len,
+                                     int withsep)
 {
-    long gmtoff = gmtoff_of(tm, t->tv_sec);
     int gmtnegative = 0;
     size_t rlen;
     const char *datefmt = withsep ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
 
     /*assert(date > 0); - it turns out these can happen, annoyingly enough */
-    assert(tm->tm_year >= 69);
+    /*assert(tm->tm_year >= 69);*/
 
     if (gmtoff < 0) {
         gmtoff = -gmtoff;
@@ -502,17 +552,20 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     if (rlen > 0) {
         switch(tv_precision) {
         case timeval_ms:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", t->tv_usec/1000);
+            /* no portable format conversion for tv_usec, just cast to int64_t */
+            rlen += snprintf(buf+rlen, len-rlen, ".%.3" PRIi64,
+                             (int64_t) t->tv_usec/1000);
             break;
         case timeval_us:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", t->tv_usec);
+            rlen += snprintf(buf+rlen, len-rlen, ".%.6" PRIi64,
+                             (int64_t) t->tv_usec);
             break;
         case timeval_s:
             break;
         }
 
         /* UTC can be written "Z" or "+00:00" */
-        if ((gmtoff/60 == gmtoff%60) && (gmtoff/60 == 0))
+        if (gmtoff == 0)
             rlen += snprintf(buf+rlen, len-rlen, "Z");
         else
             rlen += snprintf(buf+rlen, len-rlen, "%c%.2lu:%.2lu",
@@ -531,8 +584,15 @@ EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len, int withsep)
 {
     struct tm *tm = (struct tm *) gmtime(&t);
     struct timeval tv = { t, 0 };
+    long gmtoff = gmtoff_of(tm, tv.tv_sec);
 
-    return breakdown_time_to_iso8601(&tv, tm, timeval_s, buf, len, withsep);
+    return breakdown_time_to_iso8601(&tv, tm, timeval_s, gmtoff, buf, len, withsep);
+}
+
+EXPORTED int offsettime_to_iso8601(struct offsettime *t, char *buf, size_t len, int withsep)
+{
+    struct timeval tv = { mktime(&t->tm), 0 };
+    return breakdown_time_to_iso8601(&tv, &t->tm, timeval_s, t->tm_off, buf, len, withsep);
 }
 
 /*
@@ -545,7 +605,8 @@ EXPORTED int timeval_to_iso8601(const struct timeval *tv, enum timeval_precision
                        char *buf, size_t len)
 {
     struct tm *tm = localtime(&(tv->tv_sec));
-    return breakdown_time_to_iso8601(tv, tm, tv_prec, buf, len, 1);
+    long gmtoff = gmtoff_of(tm, tv->tv_sec);
+    return breakdown_time_to_iso8601(tv, tm, tv_prec, gmtoff, buf, len, 1);
 }
 
 EXPORTED int time_to_rfc3339(time_t t, char *buf, size_t len)
@@ -591,19 +652,19 @@ EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
  * date and time parts.
  *
  * Specific formats accepted are listed below.  Note that only
- * the first two are compliant with RFC3501, the remainder
+ * the first two are compliant with RFC 3501, the remainder
  * are legacy formats.  Note that the " quotes are not part
  * of the format, they're just used in this comment to show
  * where the leading spaces are.
  *
  *  "dd-mmm-yyyy HH:MM:SS zzzzz"
  *  " d-mmm-yyyy HH:MM:SS zzzzz"
- *  "dd-mmm-yy HH:MM:SS-z"
- *  " d-mmm-yy HH:MM:SS-z"
- *  "dd-mmm-yy HH:MM:SS-zz"
- *  " d-mmm-yy HH:MM:SS-zz"
- *  "dd-mmm-yy HH:MM:SS-zzz"
- *  " d-mmm-yy HH:MM:SS-zzz"
+ *  "dd-mmm-yy HH:MM:SS z"
+ *  " d-mmm-yy HH:MM:SS z"
+ *  "dd-mmm-yy HH:MM:SS zz"
+ *  " d-mmm-yy HH:MM:SS zz"
+ *  "dd-mmm-yy HH:MM:SS zzz"
+ *  " d-mmm-yy HH:MM:SS zzz"
  *
  * where:
  *  dd  is the day-of-month between 1 and 31 inclusive.
@@ -649,7 +710,7 @@ EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
  *                      (Obsolete, now SST = Samoa S.T.)
  *          BDT -1000   Nonsensical, standard time is used
  *                      all year around in the SST territories.
- * zzzzz is an numeric time zone offset in the form +HHMM
+ * zzzzz is a numeric time zone offset in the form +HHMM
  *      or -HMMM.
  *
  * Returns: Number of characters consumed from @s on success,
@@ -786,7 +847,7 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
 
     /* Time zone */
     if (old_format) {
-        if (c != '-')
+        if (c != ' ')
             goto baddate;
         c = *s++;
 
@@ -918,17 +979,6 @@ static inline int get_current_char(struct rfc5322dtbuf *buf)
         return EOB;
 }
 
-static inline int get_previous_char(struct rfc5322dtbuf *buf)
-{
-    int offset = buf->offset;
-
-    offset--;
-    if (offset >= 0)
-        return buf->str[offset];
-    else
-        return EOB;
-}
-
 /*
   TODO: Support comments as per RFC.
 */
@@ -1007,19 +1057,6 @@ static inline int to_int(char *str, int len)
     return num;
 }
 
-static inline int to_upper_str_in_place(char **str, int len)
-{
-    int i;
-
-    for (i = 0; i < len; i++) {
-        int c = str[0][i];
-        if (rfc5322_usascii_charset[c + 1] & LAlpha)
-            str[0][i] = str[0][i] - 32;
-    }
-
-    return 1;
-}
-
 static inline int to_upper(char ch)
 {
     if (rfc5322_usascii_charset[ch + 1] & LAlpha)
@@ -1048,7 +1085,7 @@ static int compute_tzoffset(char *str, int len, int sign)
         if (ch == 'J')
             return 0;
         if (ch <= 'M')
-            return (str[0] - 'A') * 60;;
+            return (str[0] - 'A') * 60;
         if (ch < 'Z')
             return ('M' - str[0]) * 60;
 
@@ -1114,12 +1151,13 @@ static int compute_tzoffset(char *str, int len, int sign)
  */
 
 static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
-                                      int *tz_offset,
+                                      long *tz_offset,
                                       enum datetime_parse_mode mode)
 {
     long ch;
     int c, i, len;
     char *str_token = NULL;
+
 
     /* Skip leading WS, if any */
     skip_ws(buf, 0);
@@ -1133,9 +1171,18 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
 
-        /* We might have a weekday token here, which we should skip*/
+        /* We might have a weekday token here */
         if (len != 3)
             goto failed;
+
+        /* Determine week day */
+        int i ;
+        for (i = 0; i < 7; i++) {
+            if (!strncasecmp(wday[i], str_token, len)) {
+                tm->tm_wday = i;
+                break;
+            }
+        }
 
         /* The weekday is followed by a ',', consume that. */
         if (get_current_char(buf) == ',')
@@ -1263,8 +1310,10 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
 
     /* timezone */
     skip_ws(buf, 0);
-    c = get_current_char(buf); /* the '+' or '-' in the timezone */
-    get_next_char(buf);        /* consume '+' or '-' */
+    c = get_current_char(buf);
+    if (c == '+' || c == '-') {    /* the '+' or '-' in the timezone */
+        get_next_char(buf);        /* consume '+' or '-' */
+    }
 
     if (!get_next_token(buf, &str_token, &len)) {
         *tz_offset = 0;
@@ -1275,6 +1324,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
  done:
     /* dst */
     tm->tm_isdst = -1;
+    *tz_offset *= 60;
     return buf->offset;
 
  failed:
@@ -1288,7 +1338,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
  * time_from_rfc3501() functions.
  *
  * The argument `mode` is set to `DATETIME_DATE_ONLY` when we don't want to
- * parse the time and timezone parts of the RFC5322 date-time string. This is
+ * parse the time and timezone parts of the RFC 5322 date-time string. This is
  * a hack designed to support the Cyrus implementation of the IMAP SEARCH
  * command.
  * For all other cases, the mode should be set to `DATETIME_FULL`.
@@ -1302,7 +1352,7 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     struct rfc5322dtbuf buf;
     struct tm tm;
     time_t tmp_time;
-    int tzone_offset = 0;
+    long tzone_offset = 0;
 
     if (!s)
         goto baddate;
@@ -1322,10 +1372,44 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     else
         tmp_time = mkgmtime(&tm);
 
-    if (tmp_time == -1)
+    /* -1 is an error, but anything else below zero is also a negative time which we can't handle */
+    if (tmp_time < 0)
         goto baddate;
 
-    *date = tmp_time - tzone_offset * 60;
+    *date = tmp_time - tzone_offset;
+
+    return buf.offset;
+
+ baddate:
+    return -1;
+}
+
+/*
+ * Parse a RFC 5322 timestamp into an offset time.
+ * Wrong week days are ignored.
+ *
+ * Returns: Number of characters consumed from @s on success,
+ *          or -1 on error.
+ */
+EXPORTED int offsettime_from_rfc5322(const char *s, struct offsettime *t,
+                                     enum datetime_parse_mode mode)
+{
+    struct rfc5322dtbuf buf;
+
+    if (!s)
+        goto baddate;
+
+    memset(t, 0, sizeof(struct offsettime));
+
+    buf.str = s;
+    buf.len = strlen(s);
+    buf.offset = 0;
+
+    if (tokenise_str_and_create_tm(&buf, &t->tm, &t->tm_off, mode) == -1)
+        goto baddate;
+
+    if (!offsettime_normalize(t))
+        goto baddate;
 
     return buf.offset;
 
@@ -1358,5 +1442,25 @@ EXPORTED int time_to_rfc5322(time_t date, char *buf, size_t len)
              wday[tm->tm_wday],
              tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
              tm->tm_hour, tm->tm_min, tm->tm_sec,
+             gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+}
+
+EXPORTED int offsettime_to_rfc5322(struct offsettime *t, char *buf, size_t len)
+{
+    long gmtoff = t->tm_off;
+    int gmtnegative = 0;
+
+    if (gmtoff < 0) {
+        gmtoff = -gmtoff;
+        gmtnegative = 1;
+    }
+
+    gmtoff /= 60;
+
+    return snprintf(buf, len,
+             "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
+             wday[t->tm.tm_wday],
+             t->tm.tm_mday, monthname[t->tm.tm_mon], t->tm.tm_year + 1900,
+             t->tm.tm_hour, t->tm.tm_min, t->tm.tm_sec,
              gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 }
