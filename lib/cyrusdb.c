@@ -628,12 +628,6 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
     return NULL;
 }
 
-EXPORTED int cyrusdb_sync(const char *backend)
-{
-    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
-    return db->sync();
-}
-
 EXPORTED int cyrusdb_unlink(const char *backend, const char *fname, int flags)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
@@ -676,11 +670,6 @@ HIDDEN int cyrusdb_generic_init(const char *dbdir __attribute__((unused)),
 }
 
 HIDDEN int cyrusdb_generic_done(void)
-{
-    return 0;
-}
-
-HIDDEN int cyrusdb_generic_sync(void)
 {
     return 0;
 }

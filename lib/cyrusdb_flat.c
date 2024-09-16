@@ -847,7 +847,6 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 

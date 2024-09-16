@@ -2205,10 +2205,10 @@ static int set_up(void)
     isadmin = 0;
     auth_state = auth_newstate(userid);
 
-    quotadb_init(0);
+    quotadb_init();
     quotadb_open(NULL);
 
-    mboxlist_init(0);
+    mboxlist_init();
     mboxlist_open(NULL);
 
     struct mboxlock *namespacelock = mboxname_usernamespacelock(MBOXNAME1_INT);

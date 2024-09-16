@@ -394,17 +394,7 @@ int main(int argc, char *argv[])
             break;
 
         case CHECKPOINT:
-            r2 = cyrusdb_sync(*dblist[i].configptr);
-            if (r2) {
-                syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
-                       cyrusdb_strerror(r2));
-                fprintf(stderr,
-                        "ctl_cyrusdb: unable to sync environment\n");
-            }
-
             /* ARCHIVE */
-            r2 = 0;
-
             if (!rotated) {
                 /* rotate the backup directories -- ONE time only */
                 char *file;

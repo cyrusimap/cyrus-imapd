@@ -692,7 +692,7 @@ static void done_cb(void*rock __attribute__((unused)))
 
 static void init_internal() {
     if (!quota_initialized) {
-        quotadb_init(0);
+        quotadb_init();
         quota_initialized = 1;
     }
     if (!quota_dbopen) {
@@ -701,11 +701,8 @@ static void init_internal() {
 }
 
 /* must be called after cyrus_init */
-EXPORTED void quotadb_init(int myflags)
+EXPORTED void quotadb_init(void)
 {
-    if (myflags & QUOTADB_SYNC) {
-        cyrusdb_sync(QDB);
-    }
     cyrus_modules_add(done_cb, NULL);
 }
 

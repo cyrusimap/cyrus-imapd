@@ -105,9 +105,6 @@ struct cyrusdb_backend {
      * to reset state */
     int (*done)(void);
 
-    /* checkpoints this database environment */
-    int (*sync)(void);
-
     /* archives this database environment, and specified databases
      * into the specified directory */
     int (*archive)(const strarray_t *fnames, const char *dirname);
@@ -304,7 +301,6 @@ extern int cyrusdb_compar(struct db *db,
 
 /* somewhat special case, because they don't take a DB */
 
-extern int cyrusdb_sync(const char *backend);
 extern cyrusdb_archiver *cyrusdb_getarchiver(const char *backend);
 
 extern int cyrusdb_canfetchnext(const char *backend);
@@ -314,7 +310,6 @@ extern strarray_t *cyrusdb_backends(void);
 /* generic implementations */
 int cyrusdb_generic_init(const char *dbdir, int myflags);
 int cyrusdb_generic_done(void);
-int cyrusdb_generic_sync(void);
 int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_noarchive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_unlink(const char *fname, int flags);

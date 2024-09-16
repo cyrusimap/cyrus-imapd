@@ -4881,7 +4881,7 @@ static void done_cb(void*rock __attribute__((unused)))
 static void init_internal()
 {
     if (!mboxlist_initialized) {
-        mboxlist_init(0);
+        mboxlist_init();
     }
     if (!mboxlist_dbopen) {
         mboxlist_open(NULL);
@@ -4889,11 +4889,8 @@ static void init_internal()
 }
 
 /* must be called after cyrus_init */
-EXPORTED void mboxlist_init(int myflags)
+EXPORTED void mboxlist_init(void)
 {
-    if (myflags & MBOXLIST_SYNC) {
-        cyrusdb_sync(DB);
-    }
     cyrus_modules_add(done_cb, NULL);
     mboxlist_initialized = 1;
 }
@@ -4918,7 +4915,7 @@ EXPORTED void mboxlist_open(const char *fname)
         fname = tofree;
     }
 
-    mboxlist_init(0);
+    mboxlist_init();
 
     flags = CYRUSDB_CREATE;
 

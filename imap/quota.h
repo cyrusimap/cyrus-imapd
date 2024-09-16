@@ -143,8 +143,7 @@ extern int quotadb_foreach(const char *prefix, size_t prefixlen,
 void quotadb_close(void);
 
 /* initialize database structures */
-#define QUOTADB_SYNC 0x02
-void quotadb_init(int flags);
+void quotadb_init(void);
 
 /* done with database stuff */
 void quotadb_done(void);
