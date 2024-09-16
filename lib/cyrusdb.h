@@ -211,6 +211,9 @@ struct cyrusdb_backend {
                    struct txn **tid,
                    int force); /* 1 = ignore not found errors */
 
+    /* start a transaction (shared if flags & CYRUSDB_SHARED) */
+    int (*lock)(struct dbengine *db, struct txn **tid, int flags);
+
     /* Commit the transaction.  When commit() returns, the tid will no longer
      * be valid, regardless of if the commit succeeded or failed */
     int (*commit)(struct dbengine *db, struct txn *tid);
@@ -289,6 +292,7 @@ extern int cyrusdb_store(struct db *db,
 extern int cyrusdb_delete(struct db *db,
                           const char *key, size_t keylen,
                           struct txn **tid, int force);
+extern int cyrusdb_lock(struct db *db, struct txn **tid, int flags);
 extern int cyrusdb_commit(struct db *db, struct txn *tid);
 extern int cyrusdb_abort(struct db *db, struct txn *tid);
 extern int cyrusdb_dump(struct db *db, int detail);

@@ -863,6 +863,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 
