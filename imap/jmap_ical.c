@@ -3186,7 +3186,9 @@ static json_t *coordinates_from_ical(icalproperty *prop)
 }
 
 static json_t*
-locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
+locations_from_ical(icalcomponent *comp,
+                    icalcomponent *maincomp,
+                    json_t *linksbyloc,
                     jstimezones_t *jstzones)
 {
     icalproperty* prop;
@@ -3198,8 +3200,9 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
     const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
     const char *tzidend = tzid_from_ical(comp, ICAL_DTEND_PROPERTY, jstzones);
     if (tzidstart && tzidend && strcmp(tzidstart, tzidend)) {
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        char *id = xjmapid_from_ical(prop);
+        // Generate the location id from the DTEND property.
+        char *id = xjmapid_from_ical(icalcomponent_get_first_property(
+            maincomp ? maincomp : comp, ICAL_DTEND_PROPERTY));
         const char *jstzid = jstimezones_get_jstzid(jstzones, tzidend);
         if (jstzid) {
             loc = json_pack("{s:s s:s}", "timeZone", jstzid, "relativeTo", "end");
@@ -3980,7 +3983,7 @@ calendarevent_from_ical(icalcomponent *comp,
         /* locations */
         if (jmap_wantprop(props, "locations")) {
             json_object_set_new(event, "locations",
-                    locations_from_ical(comp,
+                    locations_from_ical(comp, maincomp,
                         json_object_get(linksbyprop, "locations"), jstzones));
         }
         /* participants */

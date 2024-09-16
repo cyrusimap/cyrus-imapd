@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_locations_dtend
+  : needs_component_jmap {
+    my ($self) = @_;
+
+    my $jmap   = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Vienna:20240901T160000
+RRULE:FREQ=MONTHLY
+DTEND;TZID=America/New_York:20240928T170000
+UID:8D9B581D-6F64-4F9F-89CE-8F9C09D54911
+DTSTAMP:20160901T000000Z
+SUMMARY:test
+END:VEVENT
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+RECURRENCE-ID;TZID=Europe/Vienna:20241001T170000
+DTSTART;TZID=Europe/Vienna:20240930T170000
+RRULE:FREQ=MONTHLY
+DTEND;TZID=America/New_York:20240930T180000
+UID:8D9B581D-6F64-4F9F-89CE-8F9C09D54911
+DTSTAMP:20160901T000000Z
+SUMMARY:test
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical, 'Content-Type' => 'text/calendar');
+
+    $res = $jmap->CallMethods([
+        [ 'CalendarEvent/query', {}, 'R1' ],
+        [
+            'CalendarEvent/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'CalendarEvent/query',
+                    path     => '/ids'
+                },
+                properties => [ 'locations', 'recurrenceOverrides' ],
+            },
+            'R2'
+        ],
+    ]);
+    my @locations = values %{ $res->[1][1]{list}[0]{locations} };
+    $self->assert_deep_equals(
+        \@locations,
+        [ { timeZone => 'America/New_York', relativeTo => 'end' } ]
+    );
+
+    my @recurOverrides = values %{ $res->[1][1]{list}[0]{recurrenceOverrides} };
+    $self->assert_deep_equals(
+        \@recurOverrides,
+        [ { start => '2024-09-30T17:00:00', duration => 'PT7H' } ],
+    );
+}
