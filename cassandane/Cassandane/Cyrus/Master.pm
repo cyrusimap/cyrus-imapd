@@ -532,9 +532,12 @@ sub test_service_exit_during_start
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
 
-    xlog $self, "check that the error was syslogged";
-    my @loglines = $self->{instance}->getsyslog();
-    $self->assert(grep { m/too many failures for service/ } @loglines);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "check that the error was syslogged";
+        my @lines = $self->{instance}->getsyslog(qr/too many failures for service/);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/disabling until next SIGHUP/, $lines[0]);
+    }
 }
 
 sub test_startup
