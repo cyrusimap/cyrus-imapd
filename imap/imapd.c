@@ -2387,7 +2387,7 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_SETANNOTATION_TOTAL);
             }
             else if (!strcmp(cmd.s, "Setusergroup")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
                 if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -2435,7 +2435,7 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_STATUS_TOTAL);
             }
             else if (!strcmp(cmd.s, "Syncapply")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
 
                 struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
@@ -2446,7 +2446,7 @@ static void cmdloop(void)
                 else goto badrepl;
             }
             else if (!strcmp(cmd.s, "Syncget")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
 
                 struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
@@ -2457,7 +2457,7 @@ static void cmdloop(void)
                 else goto badrepl;
             }
             else if (!strcmp(cmd.s, "Syncrestart")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
 
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
 
@@ -2465,7 +2465,7 @@ static void cmdloop(void)
                 cmd_syncrestart(tag.s, &reserve_list, 1);
             }
             else if (!strcmp(cmd.s, "Syncrestore")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
 
                 struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
@@ -2548,7 +2548,7 @@ static void cmdloop(void)
                 }
             }
             else if (!strcmp(cmd.s, "Unauthenticate")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
 
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
 
@@ -2585,7 +2585,7 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_UNSELECT_TOTAL);
             }
             else if (!strcmp(cmd.s, "Unsetusergroup")) {
-                if (!imapd_userisadmin) goto badcmd;
+                if (!imapd_userisadmin) goto adminsonly;
                 if (readonly) goto noreadonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
@@ -2890,6 +2890,16 @@ static void cmdloop(void)
         prot_printf(imapd_out,
                     "%s BAD [UIDREQUIRED] Message numbers are not allowed in %s"
                     " after UIDONLY is enabled\r\n", tag.s, cmd.s);
+        eatline(imapd_in, c);
+        continue;
+
+    adminsonly:
+        /* administrators only please */
+        syslog(LOG_ERR, "Unauthorized user %s trying to use %s command",
+               imapd_userid, cmd.s);
+        prot_printf(imapd_out,
+                    "%s NO only administrators may use %s command\r\n",
+                    tag.s, cmd.s);
         eatline(imapd_in, c);
         continue;
     }
@@ -14801,13 +14811,6 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
         sync_state.flags |= SYNC_FLAG_ARCHIVE;
     }
 
-    /* administrators only please */
-    if (!imapd_userisadmin) {
-        syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
-        return;
-    }
-
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
@@ -14843,13 +14846,6 @@ static void cmd_syncget(const char *tag, struct dlist *kin)
     }
     if (sync_archive_enabled) {
         sync_state.flags |= SYNC_FLAG_ARCHIVE;
-    }
-
-    /* administrators only please */
-    if (!imapd_userisadmin) {
-        syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
-        return;
     }
 
     const char *resp = sync_get(kin, &sync_state);
@@ -14958,13 +14954,6 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     }
     if (sync_archive_enabled) {
         sync_state.flags |= SYNC_FLAG_ARCHIVE;
-    }
-
-    /* administrators only please */
-    if (!imapd_userisadmin) {
-        syslog(LOG_ERR, "SYNCERROR: invalid user %s trying to sync", imapd_userid);
-        prot_printf(imapd_out, "%s NO only administrators may use sync commands\r\n", tag);
-        return;
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
