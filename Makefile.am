@@ -78,7 +78,6 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
     --enable-idled \
     --enable-sieve \
     --enable-autocreate \
-    --enable-backup \
     --enable-xapian \
     --enable-jmap \
     --with-ldap
@@ -266,13 +265,6 @@ if REPLICATION
 libexec_PROGRAMS += imap/sync_server
 sbin_PROGRAMS += imap/sync_client imap/sync_reset
 endif # REPLICATION
-
-if BACKUP
-noinst_LTLIBRARIES += backup/libcyrus_backup.la
-noinst_HEADERS += backup/backup.h
-libexec_PROGRAMS += backup/backupd
-sbin_PROGRAMS += backup/ctl_backups backup/cyr_backup backup/restore
-endif # BACKUP
 
 if HAVE_SSL
 sbin_PROGRAMS += imap/tls_prune
@@ -840,51 +832,6 @@ noinst_HEADERS += \
 	lib/xstrlcat.h \
 	lib/xstrlcpy.h \
 	lib/xstrnchr.h
-
-backup_libcyrus_backup_la_SOURCES = \
-    lib/gzuncat.c \
-    lib/gzuncat.h \
-    backup/lcb.c \
-    backup/lcb_append.c \
-    backup/lcb_backupdb.c \
-    backup/lcb_compact.c \
-    backup/lcb_indexr.c \
-    backup/lcb_indexw.c \
-    backup/lcb_internal.c \
-    backup/lcb_internal.h \
-    backup/lcb_partlist.c \
-    backup/lcb_read.c \
-    backup/lcb_sqlconsts.c \
-    backup/lcb_sqlconsts.h \
-    backup/lcb_verify.c
-backup_libcyrus_backup_la_LIBADD = $(LD_BASIC_ADD)
-
-backup_backupd_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    master/service.c \
-    backup/backupd.c
-backup_backupd_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
-
-backup_ctl_backups_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    backup/ctl_backups.c
-backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
-
-backup_cyr_backup_SOURCES = \
-    imap/mutex_fake.c \
-    backup/cyr_backup.c
-backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
-
-backup_restore_SOURCES = \
-    imap/mutex_fake.c \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    backup/restore.c
-backup_restore_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
@@ -1678,16 +1625,13 @@ dist_man5_MANS = \
 
 dist_man8_MANS = \
 	man/arbitron.8 \
-	man/backupd.8 \
 	man/chk_cyrus.8 \
-	man/ctl_backups.8 \
 	man/ctl_conversationsdb.8 \
 	man/ctl_cyrusdb.8 \
 	man/ctl_deliver.8 \
 	man/ctl_mboxlist.8 \
 	man/cvt_cyrusdb.8 \
 	man/cvt_xlist_specialuse.8 \
-	man/cyr_backup.8 \
 	man/cyr_buildinfo.8 \
 	man/cyr_dbtool.8 \
 	man/cyr_deny.8 \
@@ -1721,7 +1665,6 @@ dist_man8_MANS = \
 	man/quota.8 \
 	man/reconstruct.8 \
 	man/relocate_by_id.8 \
-	man/restore.8 \
 	man/smmapd.8 \
 	man/timsieved.8 \
 	man/tls_prune.8 \

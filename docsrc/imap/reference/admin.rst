@@ -23,7 +23,6 @@ Management
     admin/access-control
     admin/quotas
     admin/sieve
-    admin/backups
     admin/nntp
     admin/protlayer
     admin/sop

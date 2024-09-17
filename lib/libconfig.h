@@ -67,8 +67,6 @@ extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
 
-extern const char *config_backupstagingpath(void);
-
 /* for parsing duration/bytesize-format strings obtained elsewhere,
  * such as from an overflow string */
 extern int config_parseduration(const char *str,

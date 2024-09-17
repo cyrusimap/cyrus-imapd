@@ -71,7 +71,6 @@ metric counter cyrus_imap_thread_total                  The total number of IMAP
 metric counter cyrus_imap_unauthenticate_total          The total number of IMAP UNAUTHENTICATEs
 metric counter cyrus_imap_unsubscribe_total             The total number of IMAP UNSUBSCRIBEs
 metric counter cyrus_imap_unselect_total                The total number of IMAP UNSELECTs
-metric counter cyrus_imap_xbackup_total                 The total number of IMAP XBACKUPs
 
 metric counter cyrus_lmtp_connections_total             The total number of LMTP connections
 metric gauge   cyrus_lmtp_active_connections            The number of active LMTP connections

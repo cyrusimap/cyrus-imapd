@@ -34,7 +34,7 @@ Other changes
 * Improved spelling/gramar in documentation (thanks Josh Soref)
 * Distribution now includes a libcyrus_imap.pc (thanks Дилян Палаузов)
 * Improved CUnit unit tests
-* :cyrusman:`ctl_backups(8)` now supports `-V` argument for faster list/stat operations
+* `ctl_backups(8)` now supports `-V` argument for faster list/stat operations
 * Cyrus distributions now contain a VERSION file, containing the released
   Cyrus version, which is preserved across autoreconf calls.
 * Removed convert-sieve.pl: :cyrusman:`translatesieve(8)` does everything you need and more.

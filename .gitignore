@@ -29,10 +29,6 @@ Makefile.bak
 Makefile.old
 aclocal.m4
 autom4te.cache/
-backup/backupd
-backup/ctl_backups
-backup/cyr_backup
-backup/restore
 bench/cyrdbbench
 cmulocal/libtool.m4
 cmulocal/ltoptions.m4

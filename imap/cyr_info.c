@@ -300,9 +300,6 @@ static int known_overflowkey(const char *key)
             return 1;
     }
 
-    /* no relation to partition- */
-    if (!strncmp(key, "backuppartition-", 16)) return 1;
-
     /* XXX prefixed with a tier, which we don't currently validate here */
     match = strstr(key, "searchpartition-");
     if (match) {

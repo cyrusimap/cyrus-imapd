@@ -1900,26 +1900,6 @@ if test "x$enable_replication" = "xyes"; then
 fi
 
 dnl
-dnl see if we're compiling backup support programs
-dnl
-AC_ARG_ENABLE(backup,
-        [AS_HELP_STRING([--enable-backup], [enable backup support (experimental)])],,[enable_backup="no";])
-AM_CONDITIONAL([BACKUP], [test "$enable_backup" != no])
-
-if test "x$enable_backup" != xno; then
-    if test "x$HAVE_SQLITE" != x1; then
-        AC_MSG_ERROR([Need sqlite3 for backups])
-    else
-        use_sqlite="yes"
-    fi
-    if test "x$HAVE_ZLIB" != x1; then
-        AC_MSG_ERROR([Need zlib for backups])
-    fi
-
-    AC_DEFINE([ENABLE_BACKUP],[],[Build with backup support])
-fi
-
-dnl
 dnl Try and find a system version of com_err.
 dnl If we see something that looks a little wacky, ignore it (there are many
 dnl deficient installs of com_err, unfortunately, which leave out compile_et)
@@ -2648,7 +2628,6 @@ Cyrus Server configured components
    calalarmd:          $enable_calalarmd
    jmap:               $enable_jmap
    objectstore:        $enable_objectstore
-   backup:             $enable_backup
    com_err:            $with_com_err
 
 External dependencies:

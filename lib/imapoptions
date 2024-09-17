@@ -528,65 +528,35 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 # Commented out - there's no such thing as "backuppartition-name",
 # but we need this for the man page
-# { "backuppartition-name", NULL, STRING, "3.0.0" }
-/* The pathname of the backup partition \fIname\fR.  At least one backup
-   partition pathname MUST be specified if backups are in use.  Note that
-   there is no relationship between spool partitions and backup partitions. */
+# { "backuppartition-name", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_compact_minsize", "0", BYTESIZE, "3.8.0" }
-/* The minimum size of chunks in each backup.  The compact tool
-   will try to combine adjacent chunks that are smaller than this.
-.PP
-   Setting this value to zero or negative disables combining of chunks.
-.PP
-   For backward compatibility, if no unit is specified, kibibytes is
-   assumed. */
+{ "backup_compact_minsize", "0", BYTESIZE, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_compact_maxsize", "0", BYTESIZE, "3.8.0" }
-/* The maximum size of chunks in each backup.  The compact tool
-   will try to split chunks larger than this into smaller chunks.
-.PP
-   Setting this value to zero or negative disables splitting of chunks.
-.PP
-   For backward compatibility, if no unit is specified, kibibytes is
-   assumed. */
+{ "backup_compact_maxsize", "0", BYTESIZE, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_compact_work_threshold", 1, INT, "3.0.0" }
-/* The number of chunks that must obviously need compaction before the compact
-   tool will go ahead with the compaction.  If set to less than one, the value
-   is treated as being one. */
+{ "backup_compact_work_threshold", 1, INT, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_staging_path", NULL, STRING, "3.0.0" }
-/* The absolute path of the backup staging area.  If not specified,
-   will be temp_path/backup */
+{ "backup_staging_path", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_retention_days", NULL, DURATION, "3.1.8", "3.1.8", "backup_retention" }
-/* Deprecated in favor of \fIbackup_retention\fR. */
+{ "backup_retention_days", NULL, DURATION, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_retention", "7d", DURATION, "3.1.0" }
-/* How long to keep content in backup after it has been deleted
-   from the source.  If set to a negative value or zero, deleted content
-   will be kept indefinitely.
-.PP
-   For backward compatibility, if no unit is specified, days is
-   assumed. */
+{ "backup_retention", "7d", DURATION, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
-/* The cyrusdb backend to use for the backup locations database. */
+{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_db_path", NULL, STRING, "3.0.0" }
-/* The absolute path to the backup db file.  If not specified,
-   will be configdirectory/backups.db */
+{ "backup_db_path", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
-{ "backup_keep_previous", 0, SWITCH, "3.0.0" }
-/* Whether the \fBctl_backups compact\fR and \fBctl_backups reindex\fR
-   commands should preserve the original file.  The original file will
-   be named with a timestamped suffix.  This is mostly useful for
-   debugging.
-.PP
-   Note that with this enabled, compacting a backup will actually
-   increase the disk used by it (because there will now be an extra
-   copy: the original version, and the compacted version). */
+{ "backup_keep_previous", 0, SWITCH, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
 { "boundary_limit", 1000, INT, "2.5.0" }
 /* messages are parsed recursively and a deep enough MIME structure
@@ -3310,10 +3280,8 @@ of the incoming network interface, or if no record is found, the
    For backward compatibility, if no unit is specified, kibibytes is
    assumed. */
 
-{ "xbackup_enabled", 0, SWITCH, "3.0.0" }
-/* Enable support for the XBACKUP command in imapd.  If enabled, admin
-   users can use this command to provoke a replication of specified users
-   to the named backup channel. */
+{ "xbackup_enabled", 0, SWITCH, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
 # Commented out - there's no such thing as "xlist-flag", but we need
 # this for the man page

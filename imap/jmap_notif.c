@@ -185,7 +185,7 @@ static int append_eventnotif(const char *from,
             }
             int matches_uid = 0;
             struct dlist *dl = NULL;
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
+            if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 const char *val;
                 matches_uid = dlist_getatom(dl, "ID", &val) &&
