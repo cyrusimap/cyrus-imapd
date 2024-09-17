@@ -57,12 +57,19 @@
 
 static int jmap_legacy_quota_get(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
+static int jmap_quota_changes(jmap_req_t *req);
 
 static jmap_method_t jmap_quota_methods_standard[] = {
     {
         "Quota/get",
         JMAP_URN_QUOTA,
         &jmap_quota_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Quota/changes",
+        JMAP_URN_QUOTA,
+        &jmap_quota_changes,
         JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -344,6 +351,7 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 
     for (qres = 0; qres < QUOTA_NUMRESOURCES; qres++) {
         if (!type_masks[qres]) continue;
+        if (q->limits[qres] == QUOTA_UNLIMITED) continue;
 
         struct jquota_root_t *jroot = xzmalloc(sizeof(struct jquota_root_t));
 
@@ -496,17 +504,6 @@ static void getquota(const char *id, void *val, void *rock)
     json_t *jquota = json_pack("{s:s}", "id", id);
     struct jquota_root_t *jroot = val;
     struct jmap_get *get = rock;
-    quota_t total;
-
-    if (jroot->limit < 0) {
-        /* XXX  Do we omit unlimited quotas, OR
-           XXX  convert to max JMAP Int? */
-        total = JMAP_INT_MAX;
-//        return;;
-    }
-    else {
-        total = jroot->limit;
-    }
 
     if (jmap_wantprop(get->props, "resourceType")) {
         json_object_set_new(jquota,
@@ -519,12 +516,12 @@ static void getquota(const char *id, void *val, void *rock)
     }
 
     if (jmap_wantprop(get->props, "hardLimit")) {
-        json_object_set_new(jquota, "hardLimit", json_integer(total));
+        json_object_set_new(jquota, "hardLimit", json_integer(jroot->limit));
     }
 
     if (jmap_wantprop(get->props, "warnLimit")) {
         quota_t limit =
-            total * (config_getint(IMAPOPT_QUOTAWARNPERCENT)/ 100.0);
+            jroot->limit * (config_getint(IMAPOPT_QUOTAWARNPERCENT) / 100.0);
 
         json_object_set_new(jquota, "warnLimit", json_integer(limit));
     }
@@ -617,5 +614,51 @@ done:
     free(qrock.inboxname);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    return 0;
+}
+
+/* Quota/changes method */
+static void changes_cb(const char *id, void *val, void *rock)
+{
+    struct jquota_root_t *jroot = val;
+    struct jmap_changes *changes = rock;
+
+    /* XXX  How to differentiate between created/updated/destroyed? */
+    if (jroot->modseq > changes->since_modseq) {
+        json_array_append_new(changes->updated, json_string(id));
+    }
+}
+
+static int jmap_quota_changes(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
+
+    json_t *err = NULL;
+    jmap_changes_parse(req, &parser, 0, NULL, NULL, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
+        return 0;
+    }
+
+    qrock.inboxname = mboxname_user_mbox(req->accountid, NULL);
+    construct_hash_table(&qrock.quotas, 20, 0);
+
+    /* Fetch quotaroots for the user */
+    quota_foreach(qrock.inboxname,
+                  &fetch_quotas_cb, &qrock, NULL, QUOTA_USE_CONV);
+
+    hash_enumerate(&qrock.quotas, &changes_cb, &changes);
+
+    /* Build response */
+    changes.new_modseq = mboxname_readquotamodseq(qrock.inboxname);
+
+    jmap_ok(req, jmap_changes_reply(&changes));
+
+    free_hash_table(&qrock.quotas, &free);
+    free(qrock.inboxname);
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
     return 0;
 }
