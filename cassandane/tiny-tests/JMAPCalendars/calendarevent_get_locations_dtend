@@ -54,7 +54,7 @@ EOF
     my @locations = values %{ $res->[1][1]{list}[0]{locations} };
     $self->assert_deep_equals(
         \@locations,
-        [ { timeZone => 'America/New_York', relativeTo => 'end' } ]
+        [ { '@type' => 'Location', timeZone => 'America/New_York', relativeTo => 'end' } ]
     );
 
     my @recurOverrides = values %{ $res->[1][1]{list}[0]{recurrenceOverrides} };
