@@ -1376,11 +1376,13 @@ HIDDEN int jmapical_utcdatetime_from_string(const char *val, struct jmapical_dat
 
 HIDDEN int jmapical_datetime_from_icalprop(icalproperty *prop, struct jmapical_datetime *dt)
 {
-    icaltimetype icaldt = icalvalue_get_datetimedate(icalproperty_get_value(prop));
-    if (!icaltime_is_valid_time(icaldt)) return -1;
+    icalvalue *val = icalproperty_get_value(prop);
+    if (!(icalvalue_isa(val) == ICAL_DATETIME_VALUE) &&
+        !(icalvalue_isa(val) == ICAL_DATE_VALUE)) {
+        return -1;
+    }
 
-    jmapical_datetime_from_icaltime(icaldt, dt);
-
+    jmapical_datetime_from_icaltime(icalvalue_get_datetimedate(val), dt);
     return 0;
 }
 
@@ -1548,8 +1550,8 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess,
         } else if (tz) return icaltimezone_get_location(tz);
     } else {
         icalvalue *val = icalproperty_get_value(prop);
-        icaltimetype dt = icalvalue_get_datetime(val);
-        if (icaltime_is_valid_time(dt) && icaltime_is_utc(dt)) {
+        if (icalvalue_isa(val) == ICAL_DATETIME_VALUE &&
+            (icaltime_is_utc(icalvalue_get_datetime(val)))) {
             tzid = "Etc/UTC";
         }
     }

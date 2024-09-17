@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_alert_acknowledged_far_future
+  : needs_component_jmap {
+    my ($self) = @_;
+
+    my $jmap   = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+DTSTART;TZID=Europe/Vienna:20240901T160000
+DURATION:PT1H
+UID:DBDB02AB-4799-45DD-A83D-5B1006C27CE2
+DTSTAMP:20160901T000000Z
+SUMMARY:test
+BEGIN:VALARM
+TRIGGER:-PT30M
+ACTION:DISPLAY
+DESCRIPTION:test
+ACKNOWLEDGED:99991231T235959
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical, 'Content-Type' => 'text/calendar');
+
+    $res = $jmap->CallMethods([
+        [ 'CalendarEvent/query', {}, 'R1' ],
+        [
+            'CalendarEvent/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'CalendarEvent/query',
+                    path     => '/ids'
+                },
+                properties => ['alerts'],
+            },
+            'R2'
+        ],
+    ]);
+    my @alerts = values %{ $res->[1][1]{list}[0]{alerts} };
+    $self->assert_str_equals('9999-12-31T23:59:59Z', $alerts[0]{acknowledged});
+}
