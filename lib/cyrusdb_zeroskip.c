@@ -586,7 +586,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_zeroskip =
 
     &cyrusdb_zeroskip_init,
     &cyrusdb_zeroskip_done,
-    &cyrusdb_zeroskip_sync,
     &cyrusdb_zeroskip_archive,
     &cyrusdb_zeroskip_unlink,
 
