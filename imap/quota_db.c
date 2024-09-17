@@ -370,6 +370,7 @@ struct quota_foreach_t {
     quotaproc_t *proc;
     void *rock;
     struct txn **tid;
+    unsigned use_conv : 1;
 };
 
 static int do_onequota(void *rock,
@@ -388,6 +389,9 @@ static int do_onequota(void *rock,
 
     /* XXX - error if not parsable? */
     if (datalen && !quota_parseval(data, datalen, &quota, iswrite)) {
+        if (fd->use_conv) {
+            quota_read_withconversations(&quota);
+        }
         r = fd->proc(&quota, fd->rock);
     }
 
@@ -398,7 +402,7 @@ static int do_onequota(void *rock,
 }
 
 EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
-                  void *rock, struct txn **tid)
+                           void *rock, struct txn **tid, unsigned flags)
 {
     int r;
     char *search = prefix ? (char *)prefix : "";
@@ -409,6 +413,7 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
     foreach_d.proc = proc;
     foreach_d.rock = rock;
     foreach_d.tid = tid;
+    foreach_d.use_conv = !!(flags & QUOTA_USE_CONV);
 
     r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
                      do_onequota, &foreach_d, tid);

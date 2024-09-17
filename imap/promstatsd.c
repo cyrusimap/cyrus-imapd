@@ -602,7 +602,7 @@ static void do_collate_usage_report(struct buf *buf)
         struct quota_rock rock = { NULL, &h, NULL };
 
         starttime = now_ms();
-        r = quota_foreach(NULL, count_quota_commitments, &rock, NULL);
+        r = quota_foreach(NULL, count_quota_commitments, &rock, NULL, 0);
         syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
                           (now_ms() - starttime) / 1000.0);
 

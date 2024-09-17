@@ -407,7 +407,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-        r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
+      r = quota_foreach(buf, fixquota_addroot, NULL, NULL, 0);
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
         }
@@ -422,13 +422,13 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
             char *res = mboxname_user_mbox(roots[i], NULL);
             strlcpy(buf, res, sizeof(buf));
             free(res);
-            r = quota_foreach(buf, fixquota_addroot, roots[i], NULL);
+            r = quota_foreach(buf, fixquota_addroot, roots[i], NULL, 0);
         }
         else {
             char *intname = mboxname_from_external(roots[i], &quota_namespace, NULL);
             strlcpy(tail, intname, sizeof(buf) - domainlen);
             free(intname);
-            r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
+            r = quota_foreach(buf, fixquota_addroot, NULL, NULL, 0);
         }
 
         if (r) {
