@@ -57,9 +57,13 @@
 #include "ptrarray.h"
 #include "strarray.h"
 
+#define JMAP_INT_MAX    9007199254740991LL  /*  2^53-1 */
+#define JMAP_INT_MIN    (-JMAP_INT_MAX)     /* -2^53+1 */
+
 #define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
 #define JMAP_URN_CORE_INFO  "urn:ietf:params:jmap:core:backendInfo"
 #define JMAP_URN_BLOB       "urn:ietf:params:jmap:blob"
+#define JMAP_URN_QUOTA      "urn:ietf:params:jmap:quota"
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
