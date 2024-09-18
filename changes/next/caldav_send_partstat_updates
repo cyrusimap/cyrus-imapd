@@ -1,0 +1,15 @@
+
+Description:
+
+Allow control over whether updated invites are sent when an attendee changes
+their participation status.
+
+
+Config changes:
+
+Added 'caldav_send_partstat_updates' switch
+
+
+Upgrade instructions:
+
+None.
