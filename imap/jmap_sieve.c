@@ -1773,14 +1773,14 @@ static int deleteheader(void *mc, const char *head, int index)
     json_t *args = json_object();
 
     if (index) {
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
 
         json_object_set_new(args, "index", json_integer(abs(index)));
         if (index < 0)
             json_object_set_new(args, "last", json_true());
     }
     else {
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
 
     json_array_append_new(m->actions,

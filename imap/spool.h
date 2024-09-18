@@ -56,9 +56,9 @@ void spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache
 #define spool_cache_header(n, b, c) spool_append_header(n, b, c)
 void spool_replace_header(char *name, char *newvalue, hdrcache_t cache);
 /* remove all instances of header 'name' */
-void spool_remove_header(char *name, hdrcache_t cache);
+void spool_remove_header(const char *name, hdrcache_t cache);
 /* remove nth instance of header 'name'.  1 = first, -1 = last */
-void spool_remove_header_instance(char *name, int n, hdrcache_t cache);
+void spool_remove_header_instance(const char *name, int n, hdrcache_t cache);
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
                         const char **skipheaders);
 const char **spool_getheader(hdrcache_t cache, const char *phead);

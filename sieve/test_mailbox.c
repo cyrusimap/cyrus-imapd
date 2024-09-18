@@ -201,11 +201,11 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
     else {
         printf("removing header '%s[%d]'\n", head, index);
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
     }
 
     return SIEVE_OK;

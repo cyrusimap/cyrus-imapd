@@ -710,7 +710,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
     r = dav_store_resource(txn, buf_cstring(buf), 0,
@@ -833,7 +833,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
