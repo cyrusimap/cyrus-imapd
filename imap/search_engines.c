@@ -651,7 +651,7 @@ const char *search_op_as_string(int op)
     }
 }
 
-EXPORTED int search_can_match(enum search_op matchop, int partnum)
+EXPORTED int search_can_match(enum search_op matchop, enum search_part partnum)
 {
     const struct search_engine *se = search_engine();
     return (se->can_match ? se->can_match(matchop, partnum) : 0);
