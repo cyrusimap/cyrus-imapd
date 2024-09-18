@@ -2696,6 +2696,12 @@ product version in the capabilities
 /* Maximum number of sieve scripts any user may have, enforced at
    submission by timsieved(8). */
 
+{ "sieve_regex_timeout", NULL, STRING, "UNRELEASED" }
+/* Time in floating point seconds. Any Sieve :regex match that takes
+   longer than this time is aborted and the script will fail (message
+   will be delivered to INBOX).
+   A NULL value (default) or a value of "0" will disable the timeout */ 
+
 { "sieve_utf8fileinto", 0, SWITCH, "2.3.17" }
 /* If enabled, the sieve engine expects folder names for the
    \fIfileinto\fR action in scripts to use UTF8 encoding.  Otherwise,
