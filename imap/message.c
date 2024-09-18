@@ -3154,7 +3154,8 @@ static int message_read_envelope(struct protstream *strm, struct body *body)
  * Read cached bodystructure response.
  * Analog to message_write_body()
  */
-static int message_read_body(struct protstream *strm, struct body *body, const char *part_id)
+static int message_read_body(struct protstream *strm, struct body *body, const char *part_id,
+                             uint32_t cache_version)
 {
     int c;
     struct buf buf = BUF_INITIALIZER;
@@ -3176,7 +3177,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             buf_printf(&buf, "%d", body->numparts + 1);
             struct body *subbody = &body->subpart[body->numparts++];
             subbody->part_id = buf_release(&buf);
-            c = message_read_body(strm, subbody, subbody->part_id);
+            c = message_read_body(strm, subbody, subbody->part_id, cache_version);
         } while (((c = prot_getc(strm)) == '(') && prot_ungetc(c, strm));
 
         /* remove the part_id here, you can't address multiparts directly */
@@ -3235,7 +3236,10 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
-        else if (body_is_rfc822(body)) {
+        else if ((body_is_rfc822(body) && cache_version >= 13) ||
+                 // Cache versions < 13 only handled message/rfc822.
+                 (!strcmp(body->type, "MESSAGE") &&
+                  !strcmp(body->subtype, "RFC822"))) {
             body->subpart = (struct body *) xzmalloc(sizeof(struct body));
 
             /* envelope structure */
@@ -3243,7 +3247,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
             if (c == EOF) goto done;
 
             /* body structure */
-            c = message_read_body(strm, body->subpart, body->part_id);
+            c = message_read_body(strm, body->subpart, body->part_id, cache_version);
             if (c == EOF) goto done;
             c = prot_getc(strm); /* trailing SP */
             if (c == EOF) goto done;
@@ -3470,7 +3474,7 @@ EXPORTED void message_read_bodystructure(const struct index_record *record, stru
     strm = prot_readmap(cacheitem_base(record, CACHE_BODYSTRUCTURE),
                         cacheitem_size(record, CACHE_BODYSTRUCTURE));
 
-    message_read_body(strm, *body, NULL);
+    message_read_body(strm, *body, NULL, record->cache_version);
     prot_free(strm);
 
     /* Read binary bodystructure from cache */
