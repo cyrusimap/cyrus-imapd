@@ -98,13 +98,16 @@ sub new
     $config->set(caldav_historical_age => -1);
     $config->set(virtdomains => 'no');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
         deliver => 1,
         services => [ 'imap', 'sieve', 'http' ],
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up

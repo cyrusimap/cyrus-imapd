@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 #
 sub test_appendmulti_diskfull
     :CSyncReplication :NoStartInstances :min_version_3_5
-    :needs_component_replication
 {
     my ($self) = @_;
 

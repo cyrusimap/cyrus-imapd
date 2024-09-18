@@ -297,7 +297,7 @@ sub test_proc_services
 }
 
 sub test_proc_starts
-    :NoStartInstances
+    :NoStartInstances :needs_component_idled
 {
     my ($self) = @_;
 

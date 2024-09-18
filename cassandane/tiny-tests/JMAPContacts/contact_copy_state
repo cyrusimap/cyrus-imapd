@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_contact_copy_state
-    :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

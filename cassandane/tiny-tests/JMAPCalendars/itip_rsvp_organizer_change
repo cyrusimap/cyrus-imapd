@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_itip_rsvp_organizer_change
-    :min_version_3_7 :needs_component_jmap :needs_component_sieve
+    :min_version_3_7 :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_utf8_mboxname
-    :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
+    :min_version_3_1 :SieveUTF8Fileinto
 {
     my ($self) = @_;
 

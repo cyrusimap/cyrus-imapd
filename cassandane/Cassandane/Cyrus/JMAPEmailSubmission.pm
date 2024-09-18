@@ -70,13 +70,16 @@ sub new
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
         services => [ 'imap', 'http' ],
         smtpdaemon => 1,
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up

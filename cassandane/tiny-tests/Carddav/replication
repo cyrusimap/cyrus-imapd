@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_replication
-    :needs_component_httpd :needs_component_replication
+    :needs_component_replication
 {
     my ($self) = @_;
 

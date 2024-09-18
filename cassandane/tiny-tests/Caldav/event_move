@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_event_move
-    :needs_component_httpd
 {
     my ($self) = @_;
 

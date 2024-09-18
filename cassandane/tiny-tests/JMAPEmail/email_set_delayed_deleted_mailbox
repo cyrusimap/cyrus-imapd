@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_delayed_deleted_mailbox
-    :min_version_3_7 :needs_component_jmap :JMAPExtensions
+    :min_version_3_7 :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

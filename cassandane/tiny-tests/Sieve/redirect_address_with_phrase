@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_redirect_address_with_phrase
-    :needs_component_sieve
     :want_smtpdaemon
 {
     my ($self) = @_;

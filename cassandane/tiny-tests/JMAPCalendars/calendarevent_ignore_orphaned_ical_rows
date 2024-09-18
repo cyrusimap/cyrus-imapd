@@ -3,7 +3,7 @@ use DBI;
 use Cassandane::Tiny;
 
 sub test_calendarevent_ignore_orphaned_ical_rows
-    :min_version_3_7 :needs_component_jmap :DelayedDelete
+    :min_version_3_7 :DelayedDelete
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

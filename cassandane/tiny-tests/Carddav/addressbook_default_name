@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_addressbook_default_name
-    :needs_component_httpd
 {
     my ($self) = @_;
 

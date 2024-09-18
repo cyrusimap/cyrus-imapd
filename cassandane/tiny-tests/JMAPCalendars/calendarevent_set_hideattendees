@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_hideattendees
-    :needs_component_jmap :min_version_0_0 :max_version_0_0
+    :min_version_0_0 :max_version_0_0
 {
     my ($self) = @_;
 

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_date_local_zone
-    :needs_component_sieve :min_version_3_9
+    :min_version_3_9
 {
     my ($self) = @_;
 

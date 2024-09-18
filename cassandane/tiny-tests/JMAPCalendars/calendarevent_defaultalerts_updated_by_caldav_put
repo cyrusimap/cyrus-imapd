@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 use Data::ICal;
 
 sub test_calendarevent_defaultalerts_updated_by_caldav_put
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9
 {
     my ($self) = @_;
 

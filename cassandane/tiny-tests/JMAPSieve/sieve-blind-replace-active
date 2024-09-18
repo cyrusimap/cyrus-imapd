@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_sieve_blind_replace_active
-    :min_version_3_3 :needs_component_sieve :needs_component_jmap :JMAPExtensions
+    :min_version_3_3 :JMAPExtensions
 {
     my ($self) = @_;
 

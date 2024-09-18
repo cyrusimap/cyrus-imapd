@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_reindex_mb_uniqueid
-    :min_version_3_7 :needs_search_xapian
+    :min_version_3_7
 {
     my ($self) = @_;
 

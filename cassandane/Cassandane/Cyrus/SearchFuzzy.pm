@@ -62,11 +62,14 @@ sub new
         httpallowcompress => 'no',
         httpmodules => 'jmap',
     );
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         services => [ 'imap', 'http' ]
     }, @args);
+
+    $self->needs('search', 'xapian');
+    return $self;
 }
 
 sub set_up
@@ -195,7 +198,8 @@ sub get_snippets
     };
 }
 
-sub run_delve {
+sub run_delve
+{
     my ($self, $dir, @args) = @_;
     my $basedir = $self->{instance}->{basedir};
     my @myargs = ('xapian-delve');

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_query_seen_ignore_jmapupload_folder
-    :min_version_3_7 :needs_component_jmap :JMAPExtensions :MagicPlus :AllowDeleted
+    :min_version_3_7 :JMAPExtensions :MagicPlus :AllowDeleted
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

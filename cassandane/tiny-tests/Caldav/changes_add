@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_changes_add
-    :needs_component_httpd
 {
     my ($self) = @_;
 

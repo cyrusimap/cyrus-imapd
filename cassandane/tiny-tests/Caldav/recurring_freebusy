@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_recurring_freebusy
-    :VirtDomains :min_version_3_0 :needs_component_httpd
+    :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 

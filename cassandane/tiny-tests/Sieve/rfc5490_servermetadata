@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_rfc5490_servermetadata
     :min_version_3_0 :AnnotationAllowUndefined
-    :needs_component_sieve
 {
     my ($self) = @_;
 

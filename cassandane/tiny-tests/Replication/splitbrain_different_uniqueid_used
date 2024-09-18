@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test mailbox that's had email but is now empty again
 #
 sub test_splitbrain_different_uniqueid_used
-    :min_version_3_5 :needs_component_replication :NoReplicaonly
+    :min_version_3_5 :NoReplicaonly
 {
     my ($self) = @_;
 

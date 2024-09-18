@@ -4,7 +4,7 @@ use Encode qw(decode encode);
 use JSON qw(encode_json);
 
 sub test_email_query_utf8punct_term
-    :needs_component_jmap :needs_component_sieve :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

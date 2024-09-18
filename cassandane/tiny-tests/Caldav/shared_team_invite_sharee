@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_shared_team_invite_sharee
-    :VirtDomains :min_version_3_1 :needs_component_httpd :NoAltNameSpace
+    :VirtDomains :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 

@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_replication_with_modified_seen_flag
-    :needs_component_replication
 {
     my ($self) = @_;
 

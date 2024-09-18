@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test handling of replication when append fails due to disk error
 #
 sub test_syncall_failinguser
-    :NoStartInstances :min_version_3_6 :needs_component_replication
+    :NoStartInstances :min_version_3_6
 {
     my ($self) = @_;
 

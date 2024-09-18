@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_rfc6638_3_2_1_2_modify
-    :needs_component_httpd
 {
     my ($self) = @_;
     my $CalDAV = $self->{caldav};

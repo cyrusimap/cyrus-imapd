@@ -53,7 +53,10 @@ use Cassandane::Config;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ replica => 1, adminstore => 1 }, @_);
+    my $self = $class->SUPER::new({ replica => 1, adminstore => 1 }, @_);
+
+    $self->needs('component', 'replication');
+    return $self;
 }
 
 sub set_up

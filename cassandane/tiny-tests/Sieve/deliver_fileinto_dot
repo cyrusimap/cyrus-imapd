@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_deliver_fileinto_dot
     :UnixHierarchySep
-    :needs_component_sieve
 {
     my ($self) = @_;
 

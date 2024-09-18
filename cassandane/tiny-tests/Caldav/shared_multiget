@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_shared_multiget
-    :needs_component_httpd :NoAltNameSpace
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

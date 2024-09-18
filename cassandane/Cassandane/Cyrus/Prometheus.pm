@@ -63,11 +63,14 @@ sub new
     $config->set(prometheus_master_update_freq => 2);
     $config->set(prometheus_usage_update_freq => 2);
 
-    return $class->SUPER::new(
+    my $self = $class->SUPER::new(
         { adminstore => 1,
           config => $config,
           services => ['imap', 'http'] },
         @_);
+
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up
@@ -127,7 +130,7 @@ sub parse_report
 }
 
 sub test_aaasetup
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -136,7 +139,7 @@ sub test_aaasetup
 }
 
 sub test_service_reportfile_exists
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -157,7 +160,7 @@ sub test_service_reportfile_exists
 }
 
 sub test_httpreport
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -179,7 +182,7 @@ sub test_httpreport
 }
 
 sub test_disabled
-    :min_version_3_1 :needs_component_httpd :NoStartInstances
+    :min_version_3_1 :NoStartInstances
 {
     my ($self) = @_;
 
@@ -200,7 +203,7 @@ sub test_disabled
 
 # tests for pathological quotaroot/partition subdivisions
 sub test_quota_commitments
-    :min_version_3_1 :needs_component_httpd :Partition2
+    :min_version_3_1 :Partition2
 {
     my ($self) = @_;
 
@@ -261,7 +264,7 @@ sub test_quota_commitments
 
 # tests for pathological quotaroot/partition subdivisions
 sub test_quota_commitments_no_improved_mboxlist_sort
-    :min_version_3_1 :needs_component_httpd :Partition2 :NoStartInstances
+    :min_version_3_1 :Partition2 :NoStartInstances
 {
     my ($self) = @_;
 
@@ -324,7 +327,7 @@ sub test_quota_commitments_no_improved_mboxlist_sort
 }
 
 sub test_shared_mailbox_namespaces
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -361,7 +364,7 @@ sub test_shared_mailbox_namespaces
 }
 
 sub slowtest_50000_users
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -414,7 +417,7 @@ sub slowtest_50000_users
 }
 
 sub test_connection_setup_failure_imapd
-    :min_version_3_2 :needs_component_httpd :TLS
+    :min_version_3_2 :TLS
 {
     my ($self) = @_;
 

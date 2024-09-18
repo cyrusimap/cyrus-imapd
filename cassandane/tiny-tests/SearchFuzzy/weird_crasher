@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_weird_crasher
-    :Conversations :min_version_3_0 :needs_search_xapian
+    :Conversations :min_version_3_0
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};

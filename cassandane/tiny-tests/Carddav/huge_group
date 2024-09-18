@@ -5,7 +5,6 @@ use Cassandane::Tiny;
 # If we overrun the libical ring buffer, this test might fail,
 # but it will definitely cause valgrind errors.
 sub test_huge_group
-    :needs_component_httpd
 {
     my ($self) = @_;
 

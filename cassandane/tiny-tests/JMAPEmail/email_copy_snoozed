@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_copy_snoozed
-    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+    :min_version_3_9 :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

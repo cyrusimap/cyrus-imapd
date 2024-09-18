@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test handling of replication when append fails due to disk error
 #
 sub test_appendone_diskfull
-    :NoStartInstances :min_version_3_5 :needs_component_replication
+    :NoStartInstances :min_version_3_5
 {
     my ($self) = @_;
 

@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 sub test_utf8_subject_raw
     :min_version_3_0
-    :needs_component_sieve :NoMunge8bit
+    :NoMunge8bit
 {
     my ($self) = @_;
 

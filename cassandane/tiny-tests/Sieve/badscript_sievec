@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_badscript_sievec
-    :needs_component_sieve
 {
     my ($self) = @_;
 

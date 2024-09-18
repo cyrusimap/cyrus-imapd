@@ -97,13 +97,16 @@ sub new
     }
     $config->set(sievenotifier => 'mailto');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         deliver => 1,
         adminstore => 1,
         services => [ 'imap', 'http', 'sieve' ]
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up

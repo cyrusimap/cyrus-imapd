@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_put_toolarge
-    :min_version_3_5 :needs_component_httpd
+    :min_version_3_5
 {
     my ($self) = @_;
 

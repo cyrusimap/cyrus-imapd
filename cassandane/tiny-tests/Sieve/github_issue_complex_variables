@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_github_issue_complex_variables
     :min_version_3_1
-    :needs_component_sieve
 {
     my ($self) = @_;
 

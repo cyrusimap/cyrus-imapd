@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_netcaldavtalktests_fromje
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 

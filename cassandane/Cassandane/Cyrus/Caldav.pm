@@ -117,11 +117,15 @@ sub new
     $config->set(event_extra_params => 'vnd.cmu.davFilename vnd.cmu.davUid');
     $config->set(event_groups => 'calendar');
     $config->set(imipnotifier => 'imip');
-    return $class->SUPER::new({
+
+    my $self = $class->SUPER::new({
         config => $config,
         adminstore => 1,
         services => ['imap', 'http'],
     }, @_);
+
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_imip_update_master_and_add_override
-    :needs_component_sieve :needs_component_httpd :want_service_http
+    :needs_component_httpd :want_service_http
 {
     # this test is mainly here to test that a crasher caused by Cyrus using
     # a libical component after it was freed

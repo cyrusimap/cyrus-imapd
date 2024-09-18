@@ -65,12 +65,16 @@ sub new
     $config->set(caldav_historical_age => -1);
     $config->set(calendar_minimum_alarm_interval => '61s');
     $config->set(jmap_nonstandard_extensions => 'yes');
-    return $class->SUPER::new({
+
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
         services => ['imap', 'http'],
     }, @_);
+
+    $self->needs('component', 'calalarmd');
+    return $self;
 }
 
 sub set_up

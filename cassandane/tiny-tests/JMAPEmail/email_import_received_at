@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_email_import_received_at
-    :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
