@@ -1098,10 +1098,13 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
          vtz;
          vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
 
+        buf_reset(&idbuf);
+
         /* Ignore standard timezones */
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
         if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
+
         if (!tzid || !*tzid || get_cyrus_timezone_from_tzid(tzid, jstzones->no_guess)) {
             continue;
         }
@@ -1373,11 +1376,13 @@ HIDDEN int jmapical_utcdatetime_from_string(const char *val, struct jmapical_dat
 
 HIDDEN int jmapical_datetime_from_icalprop(icalproperty *prop, struct jmapical_datetime *dt)
 {
-    icaltimetype icaldt = icalvalue_get_datetimedate(icalproperty_get_value(prop));
-    if (!icaltime_is_valid_time(icaldt)) return -1;
+    icalvalue *val = icalproperty_get_value(prop);
+    if (!(icalvalue_isa(val) == ICAL_DATETIME_VALUE) &&
+        !(icalvalue_isa(val) == ICAL_DATE_VALUE)) {
+        return -1;
+    }
 
-    jmapical_datetime_from_icaltime(icaldt, dt);
-
+    jmapical_datetime_from_icaltime(icalvalue_get_datetimedate(val), dt);
     return 0;
 }
 
@@ -1545,8 +1550,8 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess,
         } else if (tz) return icaltimezone_get_location(tz);
     } else {
         icalvalue *val = icalproperty_get_value(prop);
-        icaltimetype dt = icalvalue_get_datetime(val);
-        if (icaltime_is_valid_time(dt) && icaltime_is_utc(dt)) {
+        if (icalvalue_isa(val) == ICAL_DATETIME_VALUE &&
+            (icaltime_is_utc(icalvalue_get_datetime(val)))) {
             tzid = "Etc/UTC";
         }
     }
@@ -3186,7 +3191,9 @@ static json_t *coordinates_from_ical(icalproperty *prop)
 }
 
 static json_t*
-locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
+locations_from_ical(icalcomponent *comp,
+                    icalcomponent *maincomp,
+                    json_t *linksbyloc,
                     jstimezones_t *jstzones)
 {
     icalproperty* prop;
@@ -3198,11 +3205,15 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
     const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
     const char *tzidend = tzid_from_ical(comp, ICAL_DTEND_PROPERTY, jstzones);
     if (tzidstart && tzidend && strcmp(tzidstart, tzidend)) {
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        char *id = xjmapid_from_ical(prop);
+        // Generate the location id from the DTEND property.
+        char *id = xjmapid_from_ical(icalcomponent_get_first_property(
+            maincomp ? maincomp : comp, ICAL_DTEND_PROPERTY));
         const char *jstzid = jstimezones_get_jstzid(jstzones, tzidend);
         if (jstzid) {
-            loc = json_pack("{s:s s:s}", "timeZone", jstzid, "relativeTo", "end");
+            loc = json_pack("{s:s s:s s:s}",
+                    "@type", "Location",
+                    "timeZone", jstzid,
+                    "relativeTo", "end");
             json_object_set_new(locations, id, loc);
         }
         free(id);
@@ -3540,16 +3551,26 @@ static void read_custom_jstzids(json_t *jsevent, strarray_t *tzids)
         }
     }
 
-    /* Find all all timeZone property values */
+    /* Find all timeZone property values */
     json_t *jpatch;
     while ((jpatch = ptrarray_pop(&work))) {
         json_object_foreach(jpatch, pname, jval) {
+            if (!strcmp(pname, "locations")) {
+                const char *loc_id;
+                json_t *jloc;
+                json_object_foreach(jval, loc_id, jloc) {
+                    const char *tzid =
+                        json_string_value(json_object_get(jloc, "timeZone"));
+                    if (tzid && *tzid == '/') {
+                        strarray_add(tzids, tzid);
+                    }
+                }
+                continue;
+            }
+
             const char *tzid = NULL;
             if (!strcmp(pname, "timeZone")) {
                 tzid = json_string_value(jval);
-            }
-            else if (!strcmp(pname, "location")) {
-                tzid = json_string_value(json_object_get(jval, "timeZone"));
             }
             else if (!strncmp(pname, "locations/", 10)) {
                 pname += 10;
@@ -3571,9 +3592,9 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
 {
     if (!jstzones || !jstzones->entries.count) return NULL;
 
-    strarray_t want_tzids = STRARRAY_INITIALIZER;
-    read_custom_jstzids(jsevent, &want_tzids);
-    if (!strarray_size(&want_tzids)) return NULL;
+    strarray_t want_jstzids = STRARRAY_INITIALIZER;
+    read_custom_jstzids(jsevent, &want_jstzids);
+    if (!strarray_size(&want_jstzids)) return NULL;
 
     json_t *jtimezones = json_object();
     struct buf buf = BUF_INITIALIZER;
@@ -3587,7 +3608,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         if (!jstz->is_custom) continue;
 
         /* Skip orphaned timezones */
-        if (!strarray_contains(&want_tzids, jstzid)) {
+        if (!strarray_contains(&want_jstzids, jstzid)) {
             continue;
         }
 
@@ -3687,7 +3708,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         jtimezones = NULL;
     }
     buf_free(&buf);
-    strarray_fini(&want_tzids);
+    strarray_fini(&want_jstzids);
 
     return jtimezones;
 }
@@ -3980,7 +4001,7 @@ calendarevent_from_ical(icalcomponent *comp,
         /* locations */
         if (jmap_wantprop(props, "locations")) {
             json_object_set_new(event, "locations",
-                    locations_from_ical(comp,
+                    locations_from_ical(comp, maincomp,
                         json_object_get(linksbyprop, "locations"), jstzones));
         }
         /* participants */
@@ -7071,7 +7092,7 @@ locations_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     /* Write any remaining locations as X-JMAP-LOCATION */
     jmap_parser_push(parser, "locations");
     json_object_foreach(locations, id, jloc) {
-        if (strcmpsafe(mainlocid, id)) {
+        if (strcmpsafe(mainlocid, id) && !location_is_endtimezone(jloc)) {
             location_to_ical(comp, parser, ICAL_X_PROPERTY,
                     "locations", id, jloc, jstzones, jmapctx);
         }
