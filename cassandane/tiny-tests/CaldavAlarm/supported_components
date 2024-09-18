@@ -1,0 +1,98 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub initialize_test {
+    my ($self, $now) = @_;
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create calendars for VEVENT and VTODO";
+    my $eventCalendarId = $caldav->NewCalendar({ name => 'Events' });
+    $self->assert_not_null($eventCalendarId);
+    my $todoCalendarId = $caldav->NewCalendar({ name => 'Todos' });
+    $self->assert_not_null($todoCalendarId);
+
+    xlog $self, "Create VEVENT with alarm triggering in a few seconds";
+    my $start = $now->clone;
+    $start->add(DateTime::Duration->new(seconds => 2));
+    $self->create_component($eventCalendarId, "VEVENT", "event", $start);
+
+    xlog $self, "Create VTODO with alarm triggering in about an hour";
+    $start = $now->clone;
+    $start->add(DateTime::Duration->new(hours => 1, seconds => 2));
+    $self->create_component($todoCalendarId, "VTODO", "todo", $start);
+}
+
+sub test_supported_components
+  : needs_component_calalarmd {
+
+    my ($self) = @_;
+    my $now = DateTime->now();
+
+    $self->initialize_test($now);
+
+    xlog $self, "Assert VEVENT alarm triggers";
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60);
+    $self->assert_alarms({ summary => 'event' });
+
+    xlog $self, "Assert VTODO alarm triggers";
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 3600 + 60);
+    $self->assert_alarms({ summary => 'todo' });
+}
+
+sub test_supported_components_only_vevent
+  : needs_component_calalarmd : CaldavAlarmOnlyVevent {
+
+    my ($self) = @_;
+    my $now = DateTime->now();
+
+    $self->initialize_test($now);
+
+    xlog $self, "Assert VEVENT alarm triggers";
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60);
+    $self->assert_alarms({ summary => 'event' });
+
+    xlog $self, "Assert VTODO alarm does not trigger";
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 3600 + 60);
+    $self->assert_alarms();
+}
+
+sub create_component {
+    my ($self, $calendarId, $compName, $summary, $start) = @_;
+    my $caldav = $self->{caldav};
+
+    my $dtStamp = DateTime->now();
+    $dtStamp->set_time_zone('Etc/UTC');
+    $dtStamp = $dtStamp->strftime('%Y%m%dT%H%M%SZ');
+
+    my $dtStart = $start->strftime('%Y%m%dT%H%M%SZ');
+    my $uid     = (Data::UUID->new)->create_str;
+    $caldav->Request(
+        'PUT', "$calendarId/$uid.ics", <<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:$compName
+UID:$uid
+DTSTART:$dtStart
+DURATION:PT1H
+SUMMARY:$summary
+DTSTAMP:$dtStamp
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+SUMMARY:alarm
+END:VALARM
+END:$compName
+END:VCALENDAR
+EOF
+        , 'Content-Type' => 'text/calendar'
+    );
+}
+

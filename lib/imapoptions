@@ -568,6 +568,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15)
   rather than rejecting them as errors. */
 
+{ "caldav_alarm_support_components", "VEVENT VTODO", BITFIELD("VEVENT", "VTODO"), "UNRELEASED" }
+/* Space-separated list of iCalendar component types for which
+   calalarmd generates alarms. */
+
 { "caldav_alarm_suppress_file", NULL, STRING, "UNRELEASED" }
 /* If this file exists, calalarmd will not process events */
 
