@@ -5836,11 +5836,11 @@ static int _snippet_tr_append_text(search_text_receiver_t *rx,
         sr->next->append_text(sr->next, text) : 0;
 }
 
-static void _snippet_tr_end_part(search_text_receiver_t *rx, int part)
+static void _snippet_tr_end_part(search_text_receiver_t *rx)
 {
     struct snippet_receiver *sr = (struct snippet_receiver*) rx;
     sr->search_part = -1;
-    if (sr->next->end_part) sr->next->end_part(sr->next, part);
+    if (sr->next->end_part) sr->next->end_part(sr->next);
 }
 
 static void _snippet_tr_end_bodypart(search_text_receiver_t *rx)
@@ -5916,7 +5916,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     json_t *val;
     size_t i;
     char *mboxname = NULL;
-    static search_snippet_markup_t markup = { "<mark>", "</mark>", "..." };
+    static struct search_snippet_markup markup = { "<mark>", "</mark>", "..." };
     strarray_t partids = STRARRAY_INITIALIZER;
 
     ptrarray_t search_attrs = PTRARRAY_INITIALIZER;

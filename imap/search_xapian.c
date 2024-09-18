@@ -91,7 +91,7 @@
 
 struct segment
 {
-    int part;
+    enum search_part part;
     struct message_guid guid;
     char doctype;
     int sequence;       /* forces stable sort order JIC */
@@ -1602,6 +1602,7 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
           * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
             switch (i) {
+                case SEARCH_PART_ANY:
                 case SEARCH_PART_LISTID:
                 case SEARCH_PART_TYPE:
                 case SEARCH_PART_LANGUAGE:
@@ -2033,7 +2034,7 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     ptrarray_pop(&bb->stack);
 }
 
-static void matchlist(search_builder_t *bx, int part, const strarray_t *vals)
+static void matchlist(search_builder_t *bx, enum search_part part, const strarray_t *vals)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     struct opnode *top = ptrarray_tail(&bb->stack);
@@ -2054,7 +2055,7 @@ static void matchlist(search_builder_t *bx, int part, const strarray_t *vals)
         bb->root = on;
 }
 
-static void match(search_builder_t *bx, int part, const char *val)
+static void match(search_builder_t *bx, enum search_part part, const char *val)
 {
     strarray_t items = STRARRAY_INITIALIZER;
     strarray_append(&items, val);
@@ -2165,7 +2166,7 @@ struct xapian_receiver
     struct message_guid guid;
     uint32_t uid;
     time_t internaldate;
-    int part;
+    enum search_part part;
     const struct message_guid *part_guid;
     const char *partid;
     unsigned int part_total;
@@ -2201,7 +2202,7 @@ struct xapian_snippet_receiver
     search_snippet_cb_t proc;
     void *rock;
     struct xapiandb_lock lock;
-    const search_snippet_markup_t *markup;
+    const struct search_snippet_markup *markup;
 };
 
 struct is_indexed_rock {
@@ -2422,7 +2423,7 @@ static int begin_bodypart(search_text_receiver_t *rx,
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part)
+static void begin_part(search_text_receiver_t *rx, enum search_part part)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
@@ -2475,8 +2476,7 @@ static int append_text(search_text_receiver_t *rx,
     return 0;
 }
 
-static void end_part(search_text_receiver_t *rx,
-                     int part __attribute__((unused)))
+static void end_part(search_text_receiver_t *rx)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
     struct segment *seg;
@@ -2564,7 +2564,7 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     int r = 0;
 
     if (!tr->dbw) {
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
         if (r) goto out;
     }
 
@@ -2768,7 +2768,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         /* open the DB now, we need it to check if messages are indexed */
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode, /*nosync*/0);
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
         if (r) goto out;
     }
 
@@ -3018,8 +3018,7 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     if (r) goto out;
     if (!tr->lock.activedirs || !tr->lock.activedirs->count) goto out;
 
-    tr->snipgen = xapian_snipgen_new(tr->lock.db, tr->markup->hi_start,
-                                     tr->markup->hi_end, tr->markup->omit);
+    tr->snipgen = xapian_snipgen_new(tr->lock.db, tr->markup);
 
 out:
     return r;
@@ -3028,7 +3027,7 @@ out:
 /* Find match terms for the given part and add them to the Xapian
  * snippet generator.  */
 static void generate_snippet_terms(xapian_snipgen_t *snipgen,
-                                   int part,
+                                   enum search_part part,
                                    struct opnode *on)
 {
     struct opnode *child;
@@ -3127,7 +3126,7 @@ static int flush_snippets(search_text_receiver_t *rx)
             last_part = -1;
         }
 
-        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
+        r = xapian_snipgen_doc_part(tr->snipgen, &seg->text);
         last_partid = seg->partid;
         last_part = seg->part;
         if (r) break;
@@ -3170,7 +3169,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 
 static search_text_receiver_t *begin_snippets(void *internalised,
                                               int verbose,
-                                              search_snippet_markup_t *m,
+                                              struct search_snippet_markup *m,
                                               search_snippet_cb_t proc,
                                               void *rock)
 {
@@ -3571,7 +3570,8 @@ static int reindex_mb(void *rock,
     for (i = 1; i < strarray_size(filter->destpaths); i++)
         strarray_append(&alldirs, strarray_nth(filter->destpaths, i));
 
-    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
+    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw,
+                        tr->mode | XAPIAN_DBW_NOSYNC);
     if (r) goto done;
 
     /* initialise here so it doesn't add firstunindexed
@@ -3658,7 +3658,9 @@ static int reindex_mb(void *rock,
                 strarray_insert(&alldirs, 1, buf_cstring(&buf));
 
                 // finally, re-open the database on the new empty directory with the extra path added
-                if (!r) r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw, tr->mode, /*nosync*/1);
+                if (!r)
+                    r = xapian_dbw_open((const char **)alldirs.data, &tr->dbw,
+                                        tr->mode | XAPIAN_DBW_NOSYNC);
                 if (r) goto done;
                 filter->numindexed = 0;
             }
@@ -4301,7 +4303,7 @@ out:
     return r;
 }
 
-static int can_match(enum search_op matchop, int partnum)
+static int can_match(enum search_op matchop, enum search_part partnum)
 {
     return (matchop == SEOP_FUZZYMATCH && partnum != SEARCH_PART_NONE) ||
            (matchop == SEOP_MATCH && (partnum == SEARCH_PART_MESSAGEID ||

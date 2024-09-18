@@ -45,6 +45,7 @@
 
 #include "mailbox.h"
 #include "message.h"
+#include "search_part.h"
 #include "util.h"
 
 struct protstream;
@@ -92,7 +93,7 @@ typedef struct search_attr search_attr_t;
 struct search_attr {
     const char *name;
     int flags;
-    int part;
+    enum search_part part;
     int cost;
     void (*internalise)(struct index_state *, const union search_value *,
                         void *data1, void **internalisedp);

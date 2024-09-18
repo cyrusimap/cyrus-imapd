@@ -5363,7 +5363,7 @@ static void stuff_converted_part(search_text_receiver_t *receiver,
 
     receiver->begin_part(receiver, part);
     receiver->append_text(receiver, buf);
-    receiver->end_part(receiver, part);
+    receiver->end_part(receiver);
 }
 
 static void stuff_part(search_text_receiver_t *receiver,
@@ -5428,7 +5428,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
             str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
             charset_extract(extract_cb, str, &buf, utf8, 0, "calendar",
                             str->charset_flags);
-            str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+            str->receiver->end_part(str->receiver);
             charset_free(&utf8);
             buf_reset(&buf);
         }
@@ -5603,7 +5603,7 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
         str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
         charset_extract(extract_cb, str, &buf, utf8, 0, "vcard",
                         str->charset_flags);
-        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        str->receiver->end_part(str->receiver);
         charset_free(&utf8);
         buf_reset(&buf);
     }
@@ -5694,7 +5694,7 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
         str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
         charset_extract(extract_cb, str, &buf, utf8, 0, "vcard",
                         str->charset_flags);
-        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        str->receiver->end_part(str->receiver);
         charset_free(&utf8);
         buf_reset(&buf);
     }
@@ -5848,7 +5848,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
             charset_extract(extract_cb, str, data, charset, encoding, mysubtype,
                            mycharset_flags);
-            str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+            str->receiver->end_part(str->receiver);
         }
     }
 #ifdef USE_HTTPD
@@ -5892,7 +5892,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 /* Append extracted text */
                 str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
                 str->receiver->append_text(str->receiver, &text);
-                str->receiver->end_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
+                str->receiver->end_part(str->receiver);
             }
             else if (r) {
                 syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
