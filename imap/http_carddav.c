@@ -1150,7 +1150,7 @@ static int list_addressbooks(struct transaction_t *txn)
     struct list_addr_rock lrock;
     const char *proto = NULL;
     const char *host = NULL;
-#include "imap/http_caldav_js.h"
+#include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -1205,8 +1205,8 @@ static int list_addressbooks(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Addressbooks");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_caldav_js,
-               CYRUS_VERSION, http_caldav_js_len);
+    buf_printf(body, (const char *) http_cal_abook_admin_js,
+               CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
@@ -1271,7 +1271,7 @@ static int list_addressbooks(struct transaction_t *txn)
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
     buf_printf_markup(body, level, "<thead>");
-    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'></th><th>Public</th></tr>"
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th>HTTPS link</th><th>Actions</th><th>Public</th></tr>"
 );
     buf_printf_markup(body, level, "</thead><tbody>");
     charset_t utf8 = charset_lookupname("utf-8");

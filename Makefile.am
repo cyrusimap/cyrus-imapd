@@ -117,7 +117,7 @@ DISTCLEANFILES = \
 MAINTAINERCLEANFILES = \
     doc/legacy/murder.png \
     doc/legacy/netnews.png \
-    imap/http_caldav_js.h \
+    imap/http_cal_abook_admin_js.h \
     man/imapd.conf.5 \
     man/sieveshell.1 \
     sieve/addr.h \
@@ -247,7 +247,7 @@ AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 AM_LDFLAGS += $(HTTP_LIBS)
 
 BUILT_SOURCES += \
-    imap/http_caldav_js.h \
+    imap/http_cal_abook_admin_js.h \
     imap/tz_err.c \
     imap/tz_err.h
 
@@ -340,7 +340,7 @@ EXTRA_DIST = \
     doc/legacy/netnews.png \
     doc \
     docsrc \
-    imap/http_caldav.js \
+    imap/http_cal_abook_admin.js \
     imap/http_err.et \
     imap/imap_err.et \
     imap/jmap_err.et \
@@ -1239,13 +1239,12 @@ imap_httpd_SOURCES = \
     imap/caldav_util.h \
     imap/http_admin.c \
     imap/http_applepush.c \
+    imap/http_cal_abook_admin_js.h \
     imap/http_caldav.c \
-    imap/http_caldav_js.h \
     imap/http_caldav_sched.c \
     imap/http_caldav_sched.h \
     imap/http_carddav.c \
     imap/http_carddav.h \
-    imap/http_carddav_js.h \
     imap/http_cgi.c \
     imap/http_dav.c \
     imap/http_dav.h \

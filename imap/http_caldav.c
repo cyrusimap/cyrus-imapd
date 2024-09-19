@@ -2133,7 +2133,7 @@ static int list_calendars(struct transaction_t *txn)
     const char *proto = NULL;
     const char *host = NULL;
     const struct cal_comp_t *comp;
-#include "imap/http_caldav_js.h"
+#include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -2188,8 +2188,8 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_caldav_js,
-               CYRUS_VERSION, http_caldav_js_len);
+    buf_printf(body, (const char *) http_cal_abook_admin_js,
+               CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
