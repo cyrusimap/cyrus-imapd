@@ -158,7 +158,9 @@ EXPORTED void get_schedule_addresses(const char *mboxname,
         for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
             const char *item = strarray_nth(&caluseraddr.uris, i);
             if (!strncasecmp(item, "mailto:", 7)) item += 7;
-            strarray_add(addresses, item);
+
+            char *addr = xmlURIUnescapeString(item, strlen(item), NULL);
+            strarray_addm(addresses, addr);
         }
     }
     else if (strchr(userid, '@')) {
