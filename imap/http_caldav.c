@@ -1962,7 +1962,8 @@ enum {
     CAL_CAN_DELETE =    (1<<1),
     CAL_CAN_ADMIN =     (1<<2),
     CAL_IS_PUBLIC =     (1<<3),
-    CAL_IS_TRANSP =     (1<<4)
+    CAL_IS_TRANSP =     (1<<4),
+    CAL_CAN_PROPCOL =   (1<<5)
 };
 
 struct list_cal_rock {
@@ -2027,6 +2028,10 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     strlcpy(cal->shortname, shortname, MAX_MAILBOX_NAME);
     strlcpy(cal->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
     cal->flags = 0;
+
+    if (rights & DACL_PROPCOL) {
+        cal->flags |= CAL_CAN_PROPCOL;
+    }
 
     /* Is this the default calendar? */
     if (len == lrock->defaultlen &&
@@ -2128,7 +2133,7 @@ static int list_calendars(struct transaction_t *txn)
     const char *proto = NULL;
     const char *host = NULL;
     const struct cal_comp_t *comp;
-#include "imap/http_caldav_js.h"
+#include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -2183,8 +2188,8 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_caldav_js,
-               CYRUS_VERSION, http_caldav_js_len);
+    buf_printf(body, (const char *) http_cal_abook_admin_js,
+               CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
@@ -2247,9 +2252,8 @@ static int list_calendars(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td></td>");
         buf_printf_markup(body, level,
                           "<td><br><input type=button value='Create'"
-                          " onclick=\"createCalendar('%s')\">"
-                          " <input type=reset></td>",
-                          base_path);
+                          " onclick='createCollection()'>"
+                          " <input type=reset></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, --level, "</table>");
@@ -2280,6 +2284,9 @@ static int list_calendars(struct transaction_t *txn)
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
     charset_t utf8 = charset_lookupname("utf-8");
+    buf_printf_markup(body, level, "<thead>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
+    buf_printf_markup(body, level, "</thead><tbody>");
 
     /* Add available calendars with action items */
     for (i = 0; i < lrock.len; i++) {
@@ -2293,19 +2300,24 @@ static int list_calendars(struct transaction_t *txn)
         }
 
         /* Calendar name */
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td id='%i'>%s%s%s", i,
-                          (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
-                          displayname,
-                          (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
+        buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, cal->shortname);
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+                              (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "", i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
         free(displayname);
 
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");
         buf_printf_markup(body, level++,
-                          "<select multiple name=comp size=3"
-                          " onChange=\"compsetCalendar('%s%s', '%i', this.options)\">",
-                          base_path, cal->shortname, i);
+                          "<select multiple size=3"
+                          " onChange='compsetCalendar(%i, this.options)'>", i);
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level, "<option%s>%s</option>",
                               (cal->types & comp->type) ? " selected" : "",
@@ -2324,29 +2336,31 @@ static int list_calendars(struct transaction_t *txn)
                           base_path, cal->shortname);
 
         /* Delete button */
-        buf_printf_markup(body, level,
-                          "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteCalendar('%s%s', '%i')\"></td>",
-                          !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
-                          base_path, cal->shortname, i);
+        if (cal->flags & CAL_IS_DEFAULT)
+            buf_printf_markup(body, level,
+                              "<td>Default Calendar</td>");
+        else if (cal->flags & CAL_CAN_DELETE)
+            buf_printf_markup(body, level,
+                              "<td><input type=button value='Delete'"
+                              " onclick='deleteCollection(%i)'></td>", i);
+        else
+            buf_printf_markup(body, level, "<td></td>");
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share"
-                          " onclick=\"shareCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='share(%i, this.checked)'>"
                           "Public</td>",
-                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
-                          base_path, cal->shortname);
+                          (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
+                          (cal->flags & CAL_IS_PUBLIC) ? " checked" : "", i);
 
         /* Transparent checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=transp"
-                          " onclick=\"transpCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='transpCalendar(%i, this.checked)'>"
                           "Transparent</td>",
-                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "",
-                          base_path, cal->shortname);
+                          (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
+                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "", i);
 
         buf_printf_markup(body, --level, "</tr>");
     }
@@ -2355,7 +2369,7 @@ static int list_calendars(struct transaction_t *txn)
     free(lrock.cal);
 
     /* Finish list */
-    buf_printf_markup(body, --level, "</table>");
+    buf_printf_markup(body, --level, "</tbody></table>");
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");

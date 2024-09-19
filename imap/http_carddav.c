@@ -1038,7 +1038,8 @@ enum {
     ADDR_IS_DEFAULT =    (1<<0),
     ADDR_CAN_DELETE =    (1<<1),
     ADDR_CAN_ADMIN =     (1<<2),
-    ADDR_IS_PUBLIC =     (1<<3)
+    ADDR_IS_PUBLIC =     (1<<3),
+    ADDR_CAN_PROPCOL =   (1<<4)
 };
 
 struct list_addr_rock {
@@ -1104,6 +1105,9 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     if (rights & DACL_ADMIN) {
         addr->flags |= ADDR_CAN_ADMIN;
     }
+    if (rights & DACL_PROPCOL) {
+        addr->flags |= ADDR_CAN_PROPCOL;
+    }
 
     /* Is this addressbook public? */
     if (mbentry->acl) {
@@ -1146,7 +1150,7 @@ static int list_addressbooks(struct transaction_t *txn)
     struct list_addr_rock lrock;
     const char *proto = NULL;
     const char *host = NULL;
-#include "imap/http_carddav_js.h"
+#include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -1201,8 +1205,8 @@ static int list_addressbooks(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Addressbooks");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_carddav_js,
-               CYRUS_VERSION, http_carddav_js_len);
+    buf_printf(body, (const char *) http_cal_abook_admin_js,
+               CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
@@ -1239,9 +1243,8 @@ static int list_addressbooks(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td></td>");
         buf_printf_markup(body, level,
                           "<td><br><input type=button value='Create'"
-                          " onclick=\"createAddressbook('%s')\">"
-                          " <input type=reset></td>",
-                          base_path);
+                          " onclick='createCollection()'>"
+                          " <input type=reset></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, --level, "</table>");
@@ -1267,6 +1270,10 @@ static int list_addressbooks(struct transaction_t *txn)
 
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
+    buf_printf_markup(body, level, "<thead>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th>HTTPS link</th><th>Actions</th><th>Public</th></tr>"
+);
+    buf_printf_markup(body, level, "</thead><tbody>");
     charset_t utf8 = charset_lookupname("utf-8");
 
     /* Add available addressbooks with action items */
@@ -1281,11 +1288,17 @@ static int list_addressbooks(struct transaction_t *txn)
         }
 
         /* Addressbook name */
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td id='%i'>%s%s%s", i,
-                          (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
-                          displayname,
-                          (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+        buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, addr->shortname);
+        if (addr->flags & ADDR_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "", i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                              displayname,
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
         free(displayname);
 
         /* Download link */
@@ -1293,20 +1306,22 @@ static int list_addressbooks(struct transaction_t *txn)
                           base_path, addr->shortname);
 
         /* Delete button */
-        buf_printf_markup(body, level,
-                          "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteAddressbook('%s%s', '%i')\"></td>",
-                          !(addr->flags & ADDR_CAN_DELETE) ? " disabled" : "",
-                          base_path, addr->shortname, i);
+        if (addr->flags & ADDR_IS_DEFAULT)
+            buf_printf_markup(body, level, "<td>Default Addressbook</td>");
+        else if (addr->flags & ADDR_CAN_DELETE)
+            buf_printf_markup(body, level,
+                              "<td><input type=button value='Delete'"
+                              " onclick='deleteCollection(%i)'></td>", i);
+        else
+            buf_printf_markup(body, level, "<td></td>");
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share"
-                          " onclick=\"shareAddressbook('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='share(%i, this.checked)'>"
                           "Public</td>",
-                          !(addr->flags & ADDR_CAN_ADMIN) ? " disabled" : "",
-                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "",
-                          base_path, addr->shortname);
+                          (addr->flags & ADDR_CAN_ADMIN) ? "" : " disabled",
+                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "", i);
 
         buf_printf_markup(body, --level, "</tr>");
     }
@@ -1315,7 +1330,7 @@ static int list_addressbooks(struct transaction_t *txn)
     free(lrock.addr);
 
     /* Finish list */
-    buf_printf_markup(body, --level, "</table>");
+    buf_printf_markup(body, --level, "</tbody></table>");
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");

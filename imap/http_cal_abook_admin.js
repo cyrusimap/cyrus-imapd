@@ -1,4 +1,4 @@
-/* http_caldav.js -- Admin functions for calendar list
+/* http_caldav.js -- Admin functions for addressbook and calendar list
  *
  * Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
  *
@@ -44,8 +44,33 @@
 
 // XML constants for requests
 var XML_DAV_NS = 'DAV:';
+const calendar = new URL(window.location.href).pathname[5] == 'c';
 var XML_CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
-var X_CLIENT = 'Cyrus/%s';  // Version filled in by printf() in http_caldav.c
+const X_CLIENT = 'Cyrus/%s';  // Version filled in by printf() in http_caldav.c/http_carddav.c
+const XML_CALCARD_NS = 'urn:ietf:params:xml:ns:ca' + (calendar ? 'ldav' : 'rddav');
+const DESCRIPTION = (calendar ? 'calendar' : 'addressbook') + '-description';
+
+function n(i) {
+    const h = window.location.href;
+    return (h[h.length - 1] == '/' ? h : h + '/') + (i !== undefined ? document.getElementById(i).dataset.url : '');
+}
+
+function propupdate(set, i) {
+    const doc = document.implementation.createDocument(XML_DAV_NS, "propertyupdate", null);
+    const props = doc.createElementNS(XML_DAV_NS, "prop");
+    const op = doc.createElementNS(XML_DAV_NS, set ? "set" : "remove");
+    doc.documentElement.appendChild(op);
+    op.appendChild(props);
+
+    // Send PROPPATCH request (minimal response)
+    const req = new XMLHttpRequest();
+    req.open('PROPPATCH', n(i));
+    req.setRequestHeader('X-Client', X_CLIENT);
+    req.setRequestHeader('Prefer', 'return=minimal');
+    req.submit = () => req.send(doc);
+
+    return [doc, props, req];
+}
 
 
 // Calculate hash of a string
@@ -61,18 +86,17 @@ function strHash(str) {
 }
 
 
-// Create a new calendar collection using data from 'create' form
-function createCalendar(baseurl) {
+// Create a new collection using data from 'create' form
+function createCollection() {
     var create = document.forms.create.elements;
 
-    if (create.name.value.length === 0) {
-        window.alert('New calendar MUST have a name');
-    }
+    if (!create.name.value)
+        return window.alert('New ' + (calendar ? 'calendar' : 'addressbook') + ' MUST have a name');
 
     // Generate calendar collection name
     var now = new Date();
     var rand = Math.random() * 1000000;
-    var url = baseurl + strHash(baseurl).toString(16) +
+    const url = n() + strHash(n()).toString(16) +
         '-' + strHash(create.name.value).toString(16) +
         '-' + now.getTime() + '-' + rand.toFixed(0);
 
@@ -88,27 +112,27 @@ function createCalendar(baseurl) {
 
     var prop = doc.createElementNS(XML_DAV_NS, "D:resourcetype");
     prop.appendChild(doc.createElementNS(XML_DAV_NS, "D:collection"));
-    prop.appendChild(doc.createElementNS(XML_CALDAV_NS, "C:calendar"));
+    prop.appendChild(doc.createElementNS(XML_CALCARD_NS, calendar ? "C:calendar" : "C:addressbook"));
     props.appendChild(prop);
 
     prop = doc.createElementNS(XML_DAV_NS, "D:displayname");
     prop.appendChild(doc.createTextNode(create.name.value));
     props.appendChild(prop);
 
-    if (create.desc.value.length !== 0) {
-        prop = doc.createElementNS(XML_CALDAV_NS, "C:calendar-description");
+    if (create.desc.value) {
+        prop = doc.createElementNS(XML_CALCARD_NS, DESCRIPTION);
         prop.appendChild(doc.createTextNode(create.desc.value));
         props.appendChild(prop);
     }
 
-    if (create.tzid && create.tzid.value.length !== 0) {
+    if (create.tzid?.value) {
         prop = doc.createElementNS(XML_CALDAV_NS, "C:calendar-timezone-id");
         prop.appendChild(doc.createTextNode(create.tzid.value));
         props.appendChild(prop);
     }
 
     var compset = null;
-    for (var i = 0; i < create.comp.length; i++) {
+    for (let i = 0; calendar && i < create.comp.length; i++) {
         if (create.comp[i].checked) {
             var comp = doc.createElementNS(XML_CALDAV_NS, "C:comp");
             comp.setAttribute("name", create.comp[i].value);
@@ -125,18 +149,16 @@ function createCalendar(baseurl) {
 
     // Send MKCOL request (minimal response)
     var req = new XMLHttpRequest();
-    req.open('MKCOL', url, false);
+    req.open('MKCOL', url);
     req.setRequestHeader('X-Client', X_CLIENT);
     req.setRequestHeader('Prefer', 'return=minimal');
+    req.addEventListener('load', () => document.location.reload());
     req.send(doc);
-
-    // Refresh calendar list
-    document.location.replace(baseurl);
 }
 
 
-// [Un]share a calendar collection ([un]readable by 'anyone')
-function shareCalendar(url, share) {
+// [Un]share a calendar/addressbook collection ([un]readable by 'anyone')
+function share(i, share) {
     // Build DAV sharing document
     var doc = document.implementation.createDocument(XML_DAV_NS,
                                                      "D:share-resource", null);
@@ -156,51 +178,46 @@ function shareCalendar(url, share) {
 
     // Send POST request
     var req = new XMLHttpRequest();
-    req.open('POST', url);
+    req.open('POST', n(i));
     req.setRequestHeader('X-Client', X_CLIENT);
     req.setRequestHeader('Content-Type', 'application/davsharing+xml');
     req.send(doc);
 }
 
+function changeDisplayname(i) {
+    const oldName = document.getElementById(i).children[0].innerText;
+    const newValue = window.prompt('Provide new name for ' + (calendar ? 'calendar': 'addressbook') + ' ' + oldName, oldName);
+    if (newValue == null || newValue == oldName) return;
+
+    const pu = propupdate(newValue != '', i);
+    const displayname = pu[0].createElementNS(XML_DAV_NS, "displayname");
+    pu[1].appendChild(displayname);
+    if (newValue != '')
+        displayname.appendChild(pu[0].createTextNode(newValue));
+    pu[2].addEventListener('load', () => document.location.reload());
+    pu[2].submit();
+}
 
 // Make a calendar collection transparent/opaque
-function transpCalendar(url, transp) {
-    // Build PROPPATCH document
-    var doc = document.implementation.createDocument(XML_DAV_NS,
-                                                     "D:propertyupdate", null);
-    var propupdate = doc.documentElement;
-    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
-    var caltransp = doc.createElementNS(XML_CALDAV_NS,
-                                        "C:schedule-calendar-transp");
-    props.appendChild(caltransp);
+function transpCalendar(i, transp) {
+    const pu = propupdate(transp, i);
+    const caltransp = pu[0].createElementNS(XML_CALDAV_NS,
+                                            "C:schedule-calendar-transp");
+    pu[1].appendChild(caltransp);
 
-    var op;
-    if (transp) {
-        op = doc.createElementNS(XML_DAV_NS, "D:set");
-        caltransp.appendChild(doc.createElementNS(XML_CALDAV_NS,
-                                                  "C:transparent"));
-    }
-    else {
-        op = doc.createElementNS(XML_DAV_NS, "D:remove");
-    }
+    if (transp)
+        caltransp.appendChild(pu[0].createElementNS(XML_CALDAV_NS,
+                                                    "C:transparent"));
 
-    op.appendChild(props);
-    propupdate.appendChild(op);
-
-    // Send PROPPATCH request (minimal response)
-    var req = new XMLHttpRequest();
-    req.open('PROPPATCH', url);
-    req.setRequestHeader('X-Client', X_CLIENT);
-    req.setRequestHeader('Prefer', 'return=minimal');
-    req.send(doc);
+    pu[2].submit();
 }
 
 
 // Adjust supported components on a calendar collection
-function compsetCalendar(url, id, comps) {
+function compsetCalendar(id, comps) {
     if (!window.confirm('Are you sure you want to change' +
                         ' component types on calendar \"' +
-                        document.getElementById(id).innerText + '\"?')) {
+                        document.getElementById(id).children[0].innerText + '\"?')) {
 
         // Reset selected options
         for (var i = 0; i < comps.length; i++) {
@@ -209,51 +226,35 @@ function compsetCalendar(url, id, comps) {
         return;
     }
 
-    // Build PROPPATCH document
-    var doc = document.implementation.createDocument(XML_DAV_NS,
-                                                     "D:propertyupdate", null);
-    var propupdate = doc.documentElement;
-    var props = doc.createElementNS(XML_DAV_NS, "D:prop");
-    var compset = doc.createElementNS(XML_CALDAV_NS,
-                                      "C:supported-calendar-component-set");
+    const pu = propupdate(true, id);
+    const compset = pu[0].createElementNS(XML_CALDAV_NS,
+                                          "C:supported-calendar-component-set");
     compset.setAttribute("force", "yes");
-    props.appendChild(compset);
+    pu[1].appendChild(compset);
 
-    var op = doc.createElementNS(XML_DAV_NS, "D:set");
+    const op = pu[0].createElementNS(XML_DAV_NS, "D:set");
     for (var i = 0; i < comps.length; i++) {
         if (comps[i].selected) {
-            var comp = doc.createElementNS(XML_CALDAV_NS, "C:comp");
+            const comp = pu[0].createElementNS(XML_CALDAV_NS, "C:comp");
             comp.setAttribute("name", comps[i].value);
             compset.appendChild(comp);
         }
         comps[i].defaultSelected = comps[i].selected;
     }
 
-    op.appendChild(props);
-    propupdate.appendChild(op);
-
-    // Send PROPPATCH request (minimal response)
-    var req = new XMLHttpRequest();
-    req.open('PROPPATCH', url);
-    req.setRequestHeader('X-Client', X_CLIENT);
-    req.setRequestHeader('Prefer', 'return=minimal');
-    req.send(doc);
+    pu[2].submit();
 }
 
 
-// Delete a calendar collection
-function deleteCalendar(url, id) {
-    if (window.confirm('Are you sure you want to delete calendar \"' +
-                       document.getElementById(id).innerText + '\"?')) {
+function deleteCollection(i) {
+    if (window.confirm('Are you sure you want to delete ' + (calendar ? 'calendar \"' : 'addressbook \"') +
+                       document.getElementById(i).children[0].innerText + '\"?')) {
         // Send DELETE request
         var req = new XMLHttpRequest();
-        req.open('DELETE', url, false);
+        req.open('DELETE', n(i));
         req.setRequestHeader('X-Client', X_CLIENT);
+        req.addEventListener('load', () => document.location.reload());
         req.send(null);
-
-        // Refresh calendar list
-        var baseurl = url.substring(0, url.lastIndexOf("/") + 1);
-        document.location.replace(baseurl);
     }
 }
 
