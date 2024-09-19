@@ -1972,9 +1972,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                   by-mode  = "N" / "R"           ; "Notify" or "Return"
                   by-trace = "T"                 ; "Trace"
                 */
-                deliverby = xmalloc(14);
-                snprintf(deliverby, 14, "%+ld;%c%s",
-                         sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
+                struct buf by_value = BUF_INITIALIZER;
+                buf_printf(&by_value, "%+ld;%c%s",
+                           sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
+                deliverby = buf_release(&by_value);
             }
 
             if (i->edited_headers) i->getheadersection(m, &headers);
