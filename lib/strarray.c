@@ -173,8 +173,14 @@ EXPORTED void strarray_cat(strarray_t *dest, const strarray_t *src)
 
 EXPORTED int strarray_add(strarray_t *sa, const char *s)
 {
+    return strarray_addm(sa, xstrdupnull(s));
+}
+
+EXPORTED int strarray_addm(strarray_t *sa, char *s)
+{
     int pos = strarray_find(sa, s, 0);
-    if (pos < 0) pos = strarray_append(sa, s);
+    if (pos < 0) pos = strarray_appendm(sa, s);
+    else free(s);
     return pos;
 }
 
