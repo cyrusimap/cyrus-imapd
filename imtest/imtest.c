@@ -630,20 +630,22 @@ static int tls_dump(const char *s, int len)
 
 /* taken from OpenSSL apps/s_cb.c */
 
-static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-                        long argl __attribute__((unused)), long ret)
+static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
+                        size_t len __attribute__((unused)), int argi,
+                        long argl __attribute__((unused)), int ret,
+                        size_t *processed __attribute__((unused)))
 {
     if (!do_dump)
         return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-        printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
+        printf("read from %08lX [%08lX] (%d bytes => %d (0x%X))\n",
                (unsigned long) bio, (unsigned long) argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
         return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-        printf("write to %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
+        printf("write to %08lX [%08lX] (%d bytes => %d (0x%X))\n",
                (unsigned long) bio, (unsigned long) argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
@@ -686,7 +688,7 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
      * created for us, so we can use it for debugging purposes.
      */
     if (verbose==1)
-        BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+        BIO_set_callback_ex(SSL_get_rbio(tls_conn), bio_dump_cb);
 
     /* Dump the negotiation for loglevels 3 and 4 */
     if (verbose==1)
