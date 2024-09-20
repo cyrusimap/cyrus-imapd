@@ -219,7 +219,7 @@ static void HTMLencode(struct buf *output, const char *input)
     htmlEncodeEntities((unsigned char *) buf_base(output), &outlen,
                        (unsigned char *) input, &inlen, 0);
     buf_truncate(output, outlen);
-    buf_replace_all(output, "\n", "\n  <br>");
+    buf_replace_all(output, "\n", "\r\n  <br>");
 }
 
 #define TEXT_INDENT     "             "
