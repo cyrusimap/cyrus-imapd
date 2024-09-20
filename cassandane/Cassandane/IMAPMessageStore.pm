@@ -139,8 +139,10 @@ sub connect
         if $self->{verbose};
 
     my $banner = $client->get_response_code('remainder');
-    $client->login($self->{username}, $self->{password})
-        or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
+    if (not $params{NoLogin}) {
+        $client->login($self->{username}, $self->{password})
+            or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
+    }
 
     # Make Mail::IMAPTalk just stfu
     $client->set_unicode_folders(1);
