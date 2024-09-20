@@ -1,4 +1,4 @@
-/* http_caldav.js -- Admin functions for addressbook and calendar list
+/* http_cal_abook_admin.js -- Admin functions for addressbook and calendar list
  *
  * Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
  *
