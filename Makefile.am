@@ -1426,7 +1426,7 @@ if HAVE_XXD
 # the /dev/null redirection on cd is to prevent shell environments with
 # CDPATH echoing the path change on stdout and consequently into the .h file
 %_js.h: %.js
-	$(AM_V_GEN)(cd $(<D) > /dev/null && $(XXD) -i $(<F)) > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)(cd $(<D) > /dev/null && $(XXD) -i $(<F)|sed 's/unsigned char/static const char/') > $@.NEW && mv $@.NEW $@
 endif
 
 if MAINTAINER_MODE

@@ -2188,7 +2188,7 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_cal_abook_admin_js,
+    buf_printf(body, http_cal_abook_admin_js,
                CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
