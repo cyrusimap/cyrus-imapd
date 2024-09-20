@@ -1031,6 +1031,7 @@ static int export_addressbook(struct transaction_t *txn,
 struct addr_info {
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
+    char* description;
     unsigned flags;
 };
 
@@ -1058,7 +1059,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    struct buf displayname = BUF_INITIALIZER;
+    struct buf temp = BUF_INITIALIZER;
 
     if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
 
@@ -1074,9 +1075,9 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
 
     /* Lookup DAV:displayname */
     r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
-                                    httpd_userid, &displayname);
+                                    httpd_userid, &temp);
     /* fall back to the last part of the mailbox name */
-    if (r || !displayname.len) buf_setcstr(&displayname, shortname);
+    if (r || !temp.len) buf_setcstr(&temp, shortname);
 
     /* Make sure we have room in our array */
     if (lrock->len == lrock->alloc) {
@@ -1088,7 +1089,11 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     /* Add our addressbook to the array */
     addr = &lrock->addr[lrock->len];
     strlcpy(addr->shortname, shortname, MAX_MAILBOX_NAME);
-    strlcpy(addr->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
+    strlcpy(addr->displayname, buf_cstring(&temp), MAX_MAILBOX_NAME);
+    buf_reset(&temp);
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_CARDDAV ">addressbook-description",
+                                httpd_userid, &temp);
+    addr->description = buf_release(&temp);
     addr->flags = 0;
 
     /* Is this the default addressbook? */
@@ -1123,7 +1128,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     lrock->len++;
 
 done:
-    buf_free(&displayname);
+    buf_free(&temp);
 
     return 0;
 }
@@ -1144,7 +1149,7 @@ static int list_addressbooks(struct transaction_t *txn)
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
-    const char *etag, *base_path = txn->req_tgt.path;
+    const char *etag;
     unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
     struct list_addr_rock lrock;
@@ -1271,7 +1276,7 @@ static int list_addressbooks(struct transaction_t *txn)
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
     buf_printf_markup(body, level, "<thead>");
-    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th>HTTPS link</th><th>Actions</th><th>Public</th></tr>"
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>HTTPS link</th><th>Actions</th><th>Public</th></tr>"
 );
     buf_printf_markup(body, level, "</thead><tbody>");
     charset_t utf8 = charset_lookupname("utf-8");
@@ -1279,7 +1284,7 @@ static int list_addressbooks(struct transaction_t *txn)
     /* Add available addressbooks with action items */
     for (i = 0; i < lrock.len; i++) {
         struct addr_info *addr = &lrock.addr[i];
-        char *displayname = charset_convert(addr->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        char *temp = charset_convert(addr->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -1292,18 +1297,28 @@ static int list_addressbooks(struct transaction_t *txn)
         if (addr->flags & ADDR_CAN_PROPCOL)
             buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
                               (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
-                              displayname,
+                              temp,
                               (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "", i);
         else
             buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
                               (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
-                              displayname,
+                              temp,
                               (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
-        free(displayname);
+        free(temp);
+
+        /* Addressbook description */
+        temp = charset_convert(addr->description, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        free(addr->description);
+        if (addr->flags & ADDR_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s</td><td><button onclick='changeDescription(%i)'>✎</button></td>",
+                              temp, i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s</td>", temp);
+        free(temp);
 
         /* Download link */
         buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
-                          base_path, addr->shortname);
+                          txn->req_tgt.path, addr->shortname);
 
         /* Delete button */
         if (addr->flags & ADDR_IS_DEFAULT)
