@@ -162,7 +162,8 @@ sub disconnect
     {
         local $SIG{__DIE__};
         $self->{client}->logout()
-            if defined $self->{client};
+            if defined $self->{client}
+               && $self->{client}->state() > 0;
     };
     $self->{client} = undef;
 }
