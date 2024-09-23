@@ -1491,6 +1491,8 @@ static void cmdloop(void)
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
     struct applepushserviceargs applepushserviceargs;
     int readonly = config_getswitch(IMAPOPT_READONLY);
+    int syntax_errors = 0;
+    const int syntax_errors_limit = 10; /* XXX make this configurable? */
 
     prot_printf(imapd_out, "* OK [CAPABILITY");
     capa_response(CAPA_PREAUTH);
@@ -1579,6 +1581,14 @@ static void cmdloop(void)
             }
         }
 
+        /* too many consecutive syntax errors? probably not speaking IMAP, see
+         * ya! reduces surface area for cross-protocol attacks such as ALPACA
+         */
+        if (syntax_errors >= syntax_errors_limit) {
+            prot_printf(imapd_out, "* BYE This is an IMAP server\r\n");
+            goto done;
+        }
+
         /* Parse tag */
         c = getword(imapd_in, &tag);
         if (c == EOF) {
@@ -1590,6 +1600,7 @@ static void cmdloop(void)
             goto done;
         }
         if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
+            syntax_errors ++;
             prot_printf(imapd_out, "* BAD Invalid tag\r\n");
             eatline(imapd_in, c);
             continue;
@@ -1598,6 +1609,7 @@ static void cmdloop(void)
         /* Parse command name */
         c = getword(imapd_in, &cmd);
         if (!cmd.s[0]) {
+            syntax_errors ++;
             prot_printf(imapd_out, "%s BAD Null command\r\n", tag.s);
             eatline(imapd_in, c);
             continue;
@@ -2771,8 +2783,10 @@ static void cmdloop(void)
 
         default:
         badcmd:
+            syntax_errors ++;
             prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag.s);
             eatline(imapd_in, c);
+            continue;
         }
 
         /* End command timer - don't log "idle" commands */
@@ -2792,6 +2806,9 @@ static void cmdloop(void)
                                     cmdtime, nettime, cmdtime + nettime);
             }
         }
+
+        /* basic syntax validated okay, reset consecutive error counter */
+        syntax_errors = 0;
         continue;
 
     nologin:
