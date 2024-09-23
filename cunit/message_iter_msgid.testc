@@ -487,4 +487,114 @@ static void test_malformed_angles(void)
 #undef C_MSGID3
 }
 
-/* vim: set ft=c: */
+static char *parse_single_msgid(const char *header_value)
+{
+    char *str = xstrdup(header_value);
+    char *s = str;
+    char *msgid = message_iter_msgid(s, &s);
+    CU_ASSERT(s >= str && s <= str + strlen(str));
+    CU_ASSERT_PTR_NULL(message_iter_msgid(s, &s));
+    free(str);
+    return msgid;
+}
+
+static void test_regression(void)
+{
+    struct test_case {
+        const char *input;
+        const char *expect; // if different from input
+        enum { ACCEPT, REJECT } outcome;
+    };
+
+    struct test_case test_cases[] = {
+        // Valid message-ids according to RFC 5322:
+        {
+            .input = "<foo.bar.baz@example.com>",
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<foo@bar>",
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<\"x>\"@example.com>",
+            .expect = "<x>@example.com>", // produces invalid message-id!
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<\"x@\"@example.com>",
+            .expect = "<x@@example.com>", // produces invalid message-id!
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<\"x\r\n\t\"@example.com>",
+            .expect = "<x\r\n\t@example.com>", // produces invalid message-id!
+            .outcome = ACCEPT,
+        },
+
+        // Valid message-ids that are rejected:
+        {
+            .input = "foo@[bar]",
+            .outcome = REJECT,
+        },
+
+        // Invalid message-ids that are leniently accepted:
+        {
+            .input = "<hello@🌏>",
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<\"🐛\"@example.com>",
+            .expect = "<🐛@example.com>",
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<foo\t@\tbar>",
+            .outcome = ACCEPT,
+        },
+
+        // Invalid message-ids that are rejected:
+        {
+            .input = "<hello-world>",
+            .outcome = REJECT,
+        },
+        {
+            .input = "foo@bar",
+            .expect = "<foo@bar>",
+            .outcome = REJECT,
+        },
+        {
+            .input = "foobar",
+            .expect = "<foobar>",
+            .outcome = REJECT,
+        },
+        {
+            .input = "<foo@bar@baz>",
+            .outcome = REJECT,
+        },
+        {
+            .input = "foo@bar@baz",
+            .outcome = REJECT,
+        },
+    };
+
+    for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
+        struct test_case *tc = &test_cases[i];
+        char *msgid = parse_single_msgid(tc->input);
+        switch (tc->outcome) {
+            case ACCEPT:
+                // Assert that message-id is parsed.
+                CU_ASSERT_PTR_NOT_NULL(msgid);
+                CU_ASSERT_STRING_EQUAL(
+                    msgid, tc->expect ? tc->expect : tc->input);
+                break;
+            case REJECT:
+                // Assert that message-id is rejected.
+                CU_ASSERT_PTR_NULL(msgid);
+                break;
+        }
+        free(msgid);
+    }
+}
+
+    /* vim: set ft=c: */
