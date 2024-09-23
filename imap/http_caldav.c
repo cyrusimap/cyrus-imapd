@@ -1953,6 +1953,7 @@ static int export_calendar(struct transaction_t *txn)
 struct cal_info {
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
+    char* description;
     unsigned flags;
     unsigned long types;
 };
@@ -1989,7 +1990,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
     static const char *calcompset_annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
-    struct buf displayname = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
+    struct buf temp = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
     struct buf calcompset = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
@@ -2012,9 +2013,9 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
 
     /* Lookup DAV:displayname */
     r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
-                                    httpd_userid, &displayname);
+                                    httpd_userid, &temp);
     /* fall back to the last part of the mailbox name */
-    if (r || !displayname.len) buf_setcstr(&displayname, shortname);
+    if (r || !temp.len) buf_setcstr(&temp, shortname);
 
     /* Make sure we have room in our array */
     if (lrock->len == lrock->alloc) {
@@ -2026,7 +2027,12 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     /* Add our calendar to the array */
     cal = &lrock->cal[lrock->len];
     strlcpy(cal->shortname, shortname, MAX_MAILBOX_NAME);
-    strlcpy(cal->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
+    strlcpy(cal->displayname, buf_cstring(&temp), MAX_MAILBOX_NAME);
+    buf_reset(&temp);
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-description",
+                                httpd_userid, &temp);
+    cal->description = buf_release(&temp);
+
     cal->flags = 0;
 
     if (rights & DACL_PROPCOL) {
@@ -2083,7 +2089,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     lrock->len++;
 
 done:
-    buf_free(&displayname);
+    buf_free(&temp);
 
     return 0;
 }
@@ -2188,7 +2194,7 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_cal_abook_admin_js,
+    buf_printf(body, http_cal_abook_admin_js,
                CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
@@ -2285,13 +2291,13 @@ static int list_calendars(struct transaction_t *txn)
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
     charset_t utf8 = charset_lookupname("utf-8");
     buf_printf_markup(body, level, "<thead>");
-    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
     buf_printf_markup(body, level, "</thead><tbody>");
 
     /* Add available calendars with action items */
     for (i = 0; i < lrock.len; i++) {
         struct cal_info *cal = &lrock.cal[i];
-        char *displayname = charset_convert(cal->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        char *temp = charset_convert(cal->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -2304,14 +2310,23 @@ static int list_calendars(struct transaction_t *txn)
         if (cal->flags & CAL_CAN_PROPCOL)
             buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
                               (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
-                              displayname,
+                              temp,
                               (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "", i);
         else
             buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
                               (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
-                              displayname,
+                              temp,
                               (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
-        free(displayname);
+        free(temp);
+
+        /* Calendar description */
+        temp = charset_convert(cal->description, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        free(cal->description);
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s</td><td><button onclick='changeDescription(%i)'>✎</button></td>", temp, i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s</td>", temp);
+        free(temp);
 
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");

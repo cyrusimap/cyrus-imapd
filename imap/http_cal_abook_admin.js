@@ -1,4 +1,4 @@
-/* http_caldav.js -- Admin functions for addressbook and calendar list
+/* http_cal_abook_admin.js -- Admin functions for addressbook and calendar list
  *
  * Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
  *
@@ -194,6 +194,20 @@ function changeDisplayname(i) {
     pu[1].appendChild(displayname);
     if (newValue != '')
         displayname.appendChild(pu[0].createTextNode(newValue));
+    pu[2].addEventListener('load', () => document.location.reload());
+    pu[2].submit();
+}
+
+function changeDescription(i) {
+    const oldValue = document.getElementById(i).children[2].innerText,
+          newValue = window.prompt('Provide new description for ' + (calendar ? 'calendar ': 'addressbook ') + document.getElementById(i).children[0].innerText, oldValue);
+    if (newValue == null || newValue == oldValue) return;
+
+    const pu = propupdate(newValue != '', i),
+          description = pu[0].createElementNS(XML_CALCARD_NS, DESCRIPTION);
+    pu[1].appendChild(description);
+    if (newValue != '')
+        description.appendChild(pu[0].createTextNode(newValue));
     pu[2].addEventListener('load', () => document.location.reload());
     pu[2].submit();
 }
