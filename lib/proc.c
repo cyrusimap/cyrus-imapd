@@ -330,7 +330,7 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
 }
 
 static int procusage_cb(pid_t pid __attribute__((unused)),
-                        const char *servicename __attribute__((unused)),
+                        const char *servicename,
                         const char *clienthost,
                         const char *userid,
                         const char *mboxname __attribute__((unused)),
@@ -341,6 +341,10 @@ static int procusage_cb(pid_t pid __attribute__((unused)),
 
     /* we only count logged in sessions */
     if (!userid) return 0;
+
+    /* only check for logins to the particular protocol */
+    if (limitsp->servicename && strcmp(servicename, limitsp->servicename))
+        return 0;
 
     if (limitsp->clienthost && !strcmp(clienthost, limitsp->clienthost))
         limitsp->host++;

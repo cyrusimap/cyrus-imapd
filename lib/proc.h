@@ -60,7 +60,7 @@ typedef int procdata_t(pid_t pid,
 extern int proc_foreach(procdata_t *func, void *rock);
 
 struct proc_limits {
-    const char *procname;
+    const char *servicename;
     const char *clienthost;
     const char *userid;
     int user;

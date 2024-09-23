@@ -88,6 +88,7 @@
 #include "mupdate.h"
 #include "notify.h"
 #include "prometheus.h"
+#include "proc.h"
 #include "prot.h"
 #include "proxy.h"
 #include "slowio.h"
@@ -151,6 +152,8 @@ static int dupelim = 1;         /* eliminate duplicate messages with
 static int singleinstance = 1;  /* attempt single instance store */
 static int isproxy = 0;
 static strarray_t *excluded_specialuse = NULL;
+static const char *lmtpd_clienthost = "[local]";
+static struct proc_handle *proc_handle = NULL;
 
 static struct stagemsg *stage = NULL;
 
@@ -256,6 +259,7 @@ int service_init(int argc __attribute__((unused)),
 int service_main(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
+    const char *localip, *remoteip;
     int opt;
 
     struct io_count *io_count_start = NULL;
@@ -275,6 +279,9 @@ int service_main(int argc, char **argv,
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 360);
+
+    lmtpd_clienthost = get_clienthost(0, &localip, &remoteip);
+    proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
 
     while ((opt = getopt(argc, argv, "Ha")) != EOF) {
         switch(opt) {
@@ -326,6 +333,9 @@ int service_main(int argc, char **argv,
     }
 
     prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
+
+    proc_cleanup(&proc_handle);
+    lmtpd_clienthost = "[local]";
 
     slowio_reset();
 
@@ -883,11 +893,25 @@ int deliver(message_data_t *msgdata, char *authuser,
             strarray_t flags = STRARRAY_INITIALIZER;
             struct imap4flags imap4flags = { &flags, authstate };
 
+            const char *userid = mbname_userid(mbname);
+            struct proc_limits limits;
+            limits.servicename = config_ident;
+            limits.clienthost = lmtpd_clienthost;
+            limits.userid = userid;
+            if (proc_checklimits(&limits)) {
+                if (limits.maxhost && limits.maxhost <= limits.host) r = IMAP_LIMIT_HOST;
+                else if (limits.maxuser && limits.maxuser <= limits.user) r = IMAP_LIMIT_USER;
+                else r = IMAP_SERVER_UNAVAILABLE;
+                goto setstatus;
+            }
+
+            proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, userid, NULL, NULL);
+
             // lock conversations for the duration of delivery, so nothing else can read
             // the state of any mailbox while the delivery is half done
             struct conversations_state *state = NULL;
-            if (mbname_userid(mbname)) {
-                r = conversations_open_user(mbname_userid(mbname), 0/*shared*/, &state);
+            if (userid) {
+                r = conversations_open_user(userid, 0/*shared*/, &state);
                 if (r) goto setstatus;
             }
 
@@ -919,6 +943,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             }
             strarray_fini(&flags);
             conversations_commit(&state);
+            proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
         }
 
         telemetry_rusage(mbname_userid(mbname));

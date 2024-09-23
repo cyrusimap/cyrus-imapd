@@ -2210,7 +2210,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         }
     }
 
-    limits.procname = "nntpd";
+    limits.servicename = config_ident;
     limits.clienthost = nntp_clienthost;
     limits.userid = nntp_userid;
     if (proc_checklimits(&limits)) {
