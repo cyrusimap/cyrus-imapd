@@ -2572,7 +2572,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
          comp; comp = nextc) {
         icalproperty *dtstart_prop = NULL, *rrule_prop = NULL;
         icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 10);
-        icaltimetype dtstart;
+        icaltimetype dtstart = icaltime_null_time();
         struct observance obs;
         unsigned n, trunc_dtstart = 0;
         int r;

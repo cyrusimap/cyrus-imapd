@@ -1330,11 +1330,11 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     if (!mboxname_isnondeliverymailbox(mailbox_name(mbox), mailbox_mbtype(mbox))) {
         r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
-            uint32_t internal_flags;
-            modseq_t createdmodseq;
+            uint32_t internal_flags = 0;
+            modseq_t createdmodseq = 0;
             r = msgrecord_get_systemflags(mr, &flags);
-            if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-            if (!r) msgrecord_get_createdmodseq(mr, &createdmodseq);
+            if (!r) r = msgrecord_get_internalflags(mr, &internal_flags);
+            if (!r) r = msgrecord_get_createdmodseq(mr, &createdmodseq);
             if (!r) {
                 /* OK, this is a legit record, let's check it out */
                 if (createdmodseq <= check->since_modseq)
@@ -8912,7 +8912,7 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
     int r;
     struct mboxevent *mboxevent = NULL;
     msgrecord_t *mrw = NULL;
-    uint32_t system_flags, internal_flags;
+    uint32_t system_flags = 0, internal_flags = 0;
 
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 

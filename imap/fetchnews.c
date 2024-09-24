@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
-    struct protstream *pin, *pout, *sin, *sout;
+    struct protstream *pin, *pout, *sin = NULL, *sout = NULL;
     char buf[BUFFERSIZE];
     char sfile[1024] = "";
     int fd = -1, i, offered, rejected, accepted, failed;

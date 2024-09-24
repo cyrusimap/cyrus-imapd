@@ -1050,10 +1050,7 @@ static int sync_sieve_validate(struct index_record *record,
     int r = SIEVE_OK;
     int fd;
     
-    if (!(item && item->fname && (fd = open(item->fname, O_RDONLY)) != -1)) {
-        r = IMAP_IOERROR;
-    }
-    else {
+    if (item && item->fname && (fd = open(item->fname, O_RDONLY)) != -1) {
         struct buf buf = BUF_INITIALIZER;
         const char *sep;
 
@@ -1072,6 +1069,9 @@ static int sync_sieve_validate(struct index_record *record,
 
         buf_free(&buf);
         close(fd);
+    }
+    else {
+        r = IMAP_IOERROR;
     }
 
     if (r != SIEVE_OK) {

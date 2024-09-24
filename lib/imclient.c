@@ -1166,8 +1166,8 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   struct sockaddr_storage saddr_r;
   char localip[60], remoteip[60];
   sasl_interact_t *client_interact=NULL;
-  const char *out;
-  unsigned int outlen;
+  const char *out = NULL;
+  unsigned int outlen = 0;
   int inlen;
   struct authresult result;
 

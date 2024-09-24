@@ -3043,7 +3043,7 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 {
     search_query_t *query = NULL;
     search_folder_t *folder;
-    unsigned *msgno_list;
+    unsigned *msgno_list = NULL;
     int nmsg = 0;
     clock_t start;
     modseq_t highestmodseq = 0;
@@ -4174,7 +4174,9 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
         if (r) goto done;
 
         r = msgrecord_get_systemflags(msgrecord, &system_flags);
-        if (!r) r = msgrecord_get_internalflags(msgrecord, &internal_flags);
+        if (r) goto done;
+
+        r = msgrecord_get_internalflags(msgrecord, &internal_flags);
         if (r) goto done;
 
         if ((system_flags & FLAG_DELETED)
