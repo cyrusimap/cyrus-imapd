@@ -480,7 +480,7 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
                     cp, recip->addr, recip->name);
             if (recip->role) buf_printf(&msgbuf, " <i>(%s)</i>", recip->role);
 
-            cp = "\n  <br>";
+            cp = "\r\n  <br>";
         }
         buf_appendcstr(&msgbuf, "</td></tr>\r\n");
 
