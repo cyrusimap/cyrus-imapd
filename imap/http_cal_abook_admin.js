@@ -49,6 +49,7 @@ var XML_CALDAV_NS = 'urn:ietf:params:xml:ns:caldav';
 const X_CLIENT = 'Cyrus/%s';  // Version filled in by printf() in http_caldav.c/http_carddav.c
 const XML_CALCARD_NS = 'urn:ietf:params:xml:ns:ca' + (calendar ? 'ldav' : 'rddav');
 const DESCRIPTION = (calendar ? 'calendar' : 'addressbook') + '-description';
+const XML_APPLE_NS = 'http://apple.com/ns/ical/';
 
 function n(i) {
     const h = window.location.href;
@@ -209,6 +210,34 @@ function changeDescription(i) {
     if (newValue != '')
         description.appendChild(pu[0].createTextNode(newValue));
     pu[2].addEventListener('load', () => document.location.reload());
+    pu[2].submit();
+}
+
+function changeOrder(i, val) {
+    const newValue = window.prompt('Provide a posive integer as new order for calendar ' + document.getElementById(i).children[0].innerText, val);
+    if (newValue == null || newValue == val) return;
+    const num = parseInt(newValue);
+    if (newValue != '' && (Number.isNaN(num) || num < 1 || newValue.length != String(num).length)) return window.alert('Not a positive integer');
+
+    const pu = propupdate(newValue != '', i),
+          order = pu[0].createElementNS(XML_APPLE_NS, 'calendar-order');
+    pu[1].appendChild(order);
+    if (newValue != '')
+        order.appendChild(pu[0].createTextNode(newValue));
+    pu[2].addEventListener('load', () => document.location.reload());
+    pu[2].submit();
+}
+
+function changeColor(i, set) {
+    const pu = propupdate(set, i),
+          calcolor = pu[0].createElementNS(XML_APPLE_NS, "calendar-color");
+    pu[1].appendChild(calcolor);
+
+    if (set) {
+        document.getElementsByName('color' + i)[0].checked = true;
+        calcolor.appendChild(pu[0].createTextNode(document.getElementById('cal_' + i).value));
+    } else
+        document.getElementById('cal_' + i).value = '#808080';
     pu[2].submit();
 }
 
