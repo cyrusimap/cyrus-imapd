@@ -1953,7 +1953,10 @@ static int export_calendar(struct transaction_t *txn)
 struct cal_info {
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
-    char* description;
+    char *description;
+    char *color;
+    char *order_string;
+    long order_number;
     unsigned flags;
     unsigned long types;
 };
@@ -2033,6 +2036,20 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
                                 httpd_userid, &temp);
     cal->description = buf_release(&temp);
 
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color",
+                                httpd_userid, &temp);
+    cal->color = buf_release(&temp);
+
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order",
+                                httpd_userid, &temp);
+    char *endptr = NULL;
+    cal->order_number = strtol(buf_cstring(&temp), &endptr, 10);
+    if (cal->order_number < 0 || *endptr || !temp.len) {
+        buf_reset(&temp);
+        cal->order_number = LONG_MAX;
+    }
+    cal->order_string = buf_release(&temp);
+
     cal->flags = 0;
 
     if (rights & DACL_PROPCOL) {
@@ -2098,6 +2115,8 @@ static int cal_compare(const void *a, const void *b)
 {
     struct cal_info *c1 = (struct cal_info *) a;
     struct cal_info *c2 = (struct cal_info *) b;
+    if (c1->order_number != c2->order_number)
+        return c1->order_number - c2->order_number;
 
     return strcmp(c1->displayname, c2->displayname);
 }
@@ -2291,7 +2310,7 @@ static int list_calendars(struct transaction_t *txn)
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
     charset_t utf8 = charset_lookupname("utf-8");
     buf_printf_markup(body, level, "<thead>");
-    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Color</th><th>Order</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
     buf_printf_markup(body, level, "</thead><tbody>");
 
     /* Add available calendars with action items */
@@ -2327,6 +2346,25 @@ static int list_calendars(struct transaction_t *txn)
         else
             buf_printf_markup(body, level, "<td colspan='2'>%s</td>", temp);
         free(temp);
+
+        /* Calendar color */
+        temp = *cal->color ? charset_convert(cal->color, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML) : NULL;
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td><label><input type='radio' name='color%i' %s onclick='document.getElementById(\"cal_%i\").click();return false'><input type='color' value='%s' id='cal_%i' onchange='changeColor(%i, true)'></label><label><input type=radio name='color%i' %s onchange='changeColor(%i, false)'>None</label></td>", i, *cal->color ? " checked" : "", i, *cal->color ? temp : "#808080", i , i, i,  *cal->color ? "": " checked", i);
+        else if (*cal->color)
+            buf_printf_markup(body, level, "<td bgcolor='%s'></td>", temp);
+        else
+            buf_printf_markup(body, level, "<td>Not set</td>");
+        free(temp);
+        free(cal->color);
+
+        /* Order */
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s <button onclick='changeOrder(%i, \"%s\")'>✎</button></td>",
+                              cal->order_string, i, cal->order_string);
+        else
+            buf_printf_markup(body, level, "<td>%s</td>", cal->order_string);
+        free(cal->order_string);
 
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");

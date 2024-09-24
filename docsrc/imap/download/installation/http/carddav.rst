@@ -57,6 +57,9 @@ It allows you to:
     * Create new collections
     * Delete existing collections
     * Download existing collections via prepared URLs
+    * Set to “Public”, which toggles the `lrw9` rights for the `anyone` user.
+
+To delete the value of a property, click on ✎ and then submit empty new value.
 
 The Cyrus web GUI for addressbook management is disabled by default,
 but can be enabled with the "carddav_allowaddressbookadmin" option.

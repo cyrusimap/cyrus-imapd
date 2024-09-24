@@ -2,6 +2,7 @@ Description:
 
 The CalDAV and CardDAV HTML administration pages allow editing
 the DAV:displayname and description properties.
+For calendars also the color and order properties.
 
 Config changes:
 
