@@ -553,7 +553,7 @@ static int list_feeds(struct transaction_t *txn)
     size_t varlen = strlen(FEEDLIST_VAR);
     int fd = -1;
     struct message_guid guid;
-    time_t lastmod;
+    time_t lastmod = 0;
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     int ret = 0, precond;

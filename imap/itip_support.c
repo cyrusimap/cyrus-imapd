@@ -426,7 +426,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
     const char *attendee = NULL, *cn = NULL;
     icaltimezone *startzone = NULL;
-    icaltimetype dtstart;
+    icaltimetype dtstart = icaltime_null_time();
     ptrarray_t rrules = PTRARRAY_INITIALIZER;
     struct hash_table rdate_table = HASH_TABLE_INITIALIZER;
 

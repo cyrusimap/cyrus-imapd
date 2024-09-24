@@ -719,7 +719,7 @@ static void cmdloop(void)
     static struct buf cmd, arg1, arg2, arg3, arg4;
     char *p, *result, buf[1024];
     const char *err;
-    uint32_t uid, last;
+    uint32_t uid = 0, last = 0;
     struct backend *be;
     char curgroup[MAX_MAILBOX_BUFFER] = "";
 

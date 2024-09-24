@@ -483,7 +483,7 @@ static int foreach(struct dbengine *db,
     int offset;
     unsigned long len;
     const char *p, *pend;
-    const char *dataend;
+    const char *dataend = NULL;
 
     /* for use inside the loop, but we need the values to be retained
      * from loop to loop */

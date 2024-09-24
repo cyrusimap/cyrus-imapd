@@ -1281,6 +1281,8 @@ static void interactive(struct protocol_t *protocol, char *filename)
     struct sockaddr_un sunsock;
     int salen;
 
+    FD_ZERO(&accept_set);
+
     /* open the file if available */
     if (filename != NULL) {
         if ((fd = open(filename, O_RDONLY)) == -1) {

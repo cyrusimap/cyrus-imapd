@@ -2054,7 +2054,7 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
     struct sub_match *m1 = (struct sub_match *) *vp1;
     struct sub_match *m2 = (struct sub_match *) *vp2;
     const struct sortcrit *sortcrit = m1->sortcrit;
-    int reverse, ret = 0, i = 0;
+    int reverse = 0, ret = 0, i = 0;
 
     for (i = 0; !ret && sortcrit[i].key != SORT_UID; i++) {
         /* determine sort order from reverse flag bit */

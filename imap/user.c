@@ -176,7 +176,7 @@ static const char *user_sieve_path_byid(const char *mboxid)
 
 EXPORTED const char *user_sieve_path(const char *inuser)
 {
-    const char *sieve_path;
+    const char *sieve_path = NULL;
     char *user = xstrdupnull(inuser);
     char *p;
 

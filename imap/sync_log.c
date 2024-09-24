@@ -180,7 +180,7 @@ static int sync_log_enabled(const char *channel)
 
 static void sync_log_base(const char *channel, const char *string)
 {
-    int fd;
+    int fd = -1;
     struct stat sbuffile, sbuffd;
     int retries = 0;
     const char *fname;
