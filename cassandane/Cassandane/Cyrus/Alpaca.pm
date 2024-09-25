@@ -136,4 +136,52 @@ sub test_consecutive_syntax_errors_drop_connection
     $self->assert_matches(qr{This is an IMAP server}, $response[-1]);
 }
 
+sub test_html_tag_dont_reflect1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # mimic a HTTP connection sending request content that contains a line
+    # that parses such that the tag is a chunk of javacript and the command
+    # is something that will provoke a tagged response, causing us to reflect
+    # the script back to the client.
+    # we'll say "BAD Invalid tag" for trivial forms of this such as
+    # <script>attack()</script> just because () are not valid characters in
+    # tags, but it's possible to invoke a javascript function without
+    # parentheses, and it's probably possible to do so without any whitespace
+    # or atom-specials at all
+    #
+    # https://portswigger.net/research/xss-without-parentheses-and-semi-colons
+    my $saw_untagged_bad = 0;
+    imap_cmd_with_tag($talk, '<script>do_attack</script>',
+                             { IdleResponse => 1 },
+                             'noop', 0,
+                             { 'bad' => sub { $saw_untagged_bad++ } });
+
+    # the only acceptable response to this is an untagged BAD or BYE!
+    # any tagged response will reflect an attacker-supplied payload to
+    # the victim
+    $self->assert_num_equals(1, $saw_untagged_bad);
+}
+
+sub test_html_tag_dont_reflect2
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # as above, but with no command!
+    my $saw_untagged_bad = 0;
+    imap_cmd_with_tag($talk, '<script>do_attack</script>',
+                             { IdleResponse => 1 },
+                             '', 0,
+                             { 'bad' => sub { $saw_untagged_bad++ } });
+
+    # the only acceptable response to this is an untagged BAD or BYE!
+    # any tagged response will reflect an attacker-supplied payload to
+    # the victim
+    $self->assert_num_equals(1, $saw_untagged_bad);
+}
+
 1;
