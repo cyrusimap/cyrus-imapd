@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_invite_change_time
+  : VirtDomains {
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service("http");
+    my $caldav  = $self->{caldav};
+    my $uuidgen = Data::UUID->new;
+
+    my $create_event = sub {
+        my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:{{UID}}
+DTSTART;TZID=Australia/Perth:20240925T010000
+DURATION:PT1H
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTAMP:20240924T234327Z
+SEQUENCE:0
+ORGANIZER:cassandane@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:invitee@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+        my $uuid = $uuidgen->create_str;
+        my $href = "Default/$uuid.ics";
+        $ical =~ s/\{\{UID\}\}/$uuid/;
+        $caldav->Request(
+            'PUT', $href, $ical,
+            'Content-Type' => 'text/calendar'
+        );
+        $self->assert_caldav_notified(
+            { recipient => 'invitee@example.com', method => 'REQUEST' },
+        );
+        return ($href, $ical);
+    };
+
+    xlog $self, "Change DTSTART value";
+    my ($href, $ical) = $create_event->();
+    $ical =~ s/20240925T010000/20240925T020000/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    $self->assert_caldav_notified(
+        { recipient => 'invitee@example.com', method => 'REQUEST' },
+    );
+
+    xlog $self, "Change DURATION";
+    my ($href, $ical) = $create_event->();
+    $ical =~ s/DURATION:PT1H/DURATION:PT2H/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    $self->assert_caldav_notified(
+        { recipient => 'invitee@example.com', method => 'REQUEST' },
+    );
+
+    xlog $self, "Change DTSTART TZID to different UTC offset";
+    my ($href, $ical) = $create_event->();
+    $ical =~ s/Perth/Melbourne/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    $self->assert_caldav_notified(
+        { recipient => 'invitee@example.com', method => 'REQUEST' },
+    );
+
+    xlog $self, "Change TZID to same UTC offset using IANA alias";
+    my ($href, $ical) = $create_event->();
+    $ical =~ s/Perth/West/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    $self->assert_caldav_notified(
+        { recipient => 'invitee@example.com', method => 'REQUEST' },
+    );
+
+    xlog $self, "Change DURATION TO DTEND";
+    my ($href, $ical) = $create_event->();
+    $ical =~ s/DURATION:PT1H/DTEND;TZID=Australia\/Perth:20240925T020000/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    # Does not trigger an iTIP message, see Caldav.invite_switch_duration_to_dtend
+    $self->assert_caldav_notified();
+
+    # Keep using event with DTEND, rather than creating a new one.
+    xlog $self, "Change DTEND TZID to same UTC offset using IANA alias";
+    $ical =~ s/DTEND;TZID=Australia\/Perth/DTEND;TZID=Australia\/West/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    $self->assert_caldav_notified(
+        { recipient => 'invitee@example.com', method => 'REQUEST' },
+    );
+
+    # Keep using event with DTEND, rather than creating a new one.
+    xlog $self, "Change DTEND TZID to different UTC offse";
+    $ical =~ s/DTEND;TZID=Australia\/West/DTEND;TZID=Asia\/Singapore/;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+    $self->assert_caldav_notified(
+        { recipient => 'invitee@example.com', method => 'REQUEST' },
+    );
+}
