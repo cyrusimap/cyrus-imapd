@@ -217,6 +217,14 @@ EXPORTED int imparse_isnumber(const char *s)
 }
 
 /*
+ * Return nonzero if we like 's' as an IMAP tag
+ */
+EXPORTED int imparse_istag(const char *s)
+{
+    return imparse_isatom(s);
+}
+
+/*
  * Parse a range from the string starting at the pointer pointed to by 's'.
  * and populate the structure in the pointer at 'range'.
  * Returns 0 on success, and non-zero on failure.
