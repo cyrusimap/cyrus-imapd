@@ -14,6 +14,8 @@ static void test_isatom(void)
 {
     const char contains_null[] = "he\0llo";
     const char hello[] = "hello";
+    char tmp[2] = {0};
+    int i;
 
     /* not an atom if there's a NULL byte in the mapped space */
     CU_ASSERT_EQUAL_FATAL(sizeof(contains_null), 7);
@@ -34,6 +36,9 @@ static void test_isatom(void)
      * quoted-specials = DQUOTE / "\"
      *
      * resp-specials   = "]"
+     *
+     * https://www.rfc-editor.org/rfc/rfc5234
+     * CTL             =  %x00-1F / %x7F
      */
 
     /* atom-specials */
@@ -41,7 +46,14 @@ static void test_isatom(void)
     CU_ASSERT_EQUAL(imparse_isatom(")"), 0);
     CU_ASSERT_EQUAL(imparse_isatom("{"), 0);
     CU_ASSERT_EQUAL(imparse_isatom(" "), 0);
-    /* XXX CTL */
+
+    /* CTL */
+    for (i = 0; i <= 0x1f; i++) {
+        tmp[0] = i;
+        CU_ASSERT_EQUAL(imparse_isatom(tmp), 0);
+    }
+    tmp[0] = 0x7f;
+    CU_ASSERT_EQUAL(imparse_isatom(tmp), 0);
 
     /* list-wildcards */
     CU_ASSERT_EQUAL(imparse_isatom("%"), 0);
@@ -121,3 +133,5 @@ static void test_parse_range(void)
     CU_ASSERT_NOT_EQUAL(imparse_range("1:18446744073709551616", &range), 0);
     CU_ASSERT_NOT_EQUAL(imparse_range("-1:-18446744073709551616", &range), 0);
 }
+
+/* vim: set ft=c */
