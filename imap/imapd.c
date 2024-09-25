@@ -891,7 +891,10 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s%s",
+                        "%s%s"
+                        "%s%s%s%s"
+                        "%s%s%s%s"
+                        "%s%s%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -925,7 +928,22 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_unselect    ? " unselect=<1>"     : "",
 
                         client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
-                        client_behavior.did_xlist       ? " xlist=<1>"        : "");
+                        client_behavior.did_xlist       ? " xlist=<1>"        : "",
+
+                        client_behavior.did_tag_num     ? " tag_num=<1>"      : "",
+                        client_behavior.did_tag_alpha   ? " tag_alpha=<1>"    : "",
+                        client_behavior.did_tag_alnum   ? " tag_alnum=<1>"    : "",
+                        client_behavior.did_tag_base64  ? " tag_base64=<1>"   : "",
+
+                        client_behavior.did_tag_dot     ? " tag_dot=<1>"      : "",
+                        client_behavior.did_tag_sep     ? " tag_sep=<1>"      : "",
+                        client_behavior.did_tag_colon   ? " tag_colon=<1>"    : "",
+                        client_behavior.did_tag_angle   ? " tag_angle=<1>"    : "",
+
+                        client_behavior.did_tag_other   ? " tag_other=<1>"    : "",
+                        client_behavior.did_tag_POST    ? " tag_POST=<1>"     : "",
+                        client_behavior.did_tag_PUT     ? " tag_PUT=<1>"      : "",
+                        client_behavior.did_tag_inv     ? " tag_inv=<1>"      : "");
 }
 
 static void imapd_reset(void)
@@ -1473,6 +1491,103 @@ static void imapd_check(struct backend *be, unsigned tell_flags)
     }
 }
 
+static void record_client_tag_behaviour(const char *tag)
+{
+    #define TAG_SAW_NUM         (1<<0)
+    #define TAG_SAW_ALPHA       (1<<1)
+    #define TAG_SAW_DOT         (1<<2)
+    #define TAG_SAW_ANGLE       (1<<3)
+    #define TAG_SAW_SEP         (1<<4)
+    #define TAG_SAW_COLON       (1<<5)
+    #define TAG_SAW_B64EXTRA    (1<<6)
+    #define TAG_SAW_OTHER       (1<<31)
+
+    #define TAG_BASE64 (TAG_SAW_NUM | TAG_SAW_ALPHA \
+                        | TAG_SAW_SEP | TAG_SAW_B64EXTRA)
+    uint32_t saw = 0;
+    const char *p;
+
+    /* whole string checks */
+    if (strcmp(tag, "POST") == 0) {
+        client_behavior.did_tag_POST = 1;
+        client_behavior.did_tag_alpha = 1;
+        return;
+    }
+    else if (strcmp(tag, "PUT") == 0) {
+        client_behavior.did_tag_PUT = 1;
+        client_behavior.did_tag_alpha = 1;
+        return;
+    }
+
+    /* collect character classes */
+    for (p = tag; p && *p; p++) {
+        if (*p >= '0' && *p <= '9') {
+            saw |= TAG_SAW_NUM;
+        }
+        else if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) {
+            saw |= TAG_SAW_ALPHA;
+        }
+        else if (*p == '.') {
+            saw |= TAG_SAW_DOT;
+        }
+        else if (*p == '<' || *p == '>') {
+            saw |= TAG_SAW_ANGLE;
+        }
+        else if (*p == '-' || *p == '_') {
+            saw |= TAG_SAW_SEP;
+        }
+        else if (*p == ':') {
+            saw |= TAG_SAW_COLON;
+        }
+        else if (*p == '+' || *p == '/' || *p == ',' || *p == '=') {
+            saw |= TAG_SAW_B64EXTRA;
+        }
+        else {
+            saw |= TAG_SAW_OTHER;
+        }
+    }
+
+    /* exclusive checks */
+    if (saw == TAG_SAW_NUM) {
+        client_behavior.did_tag_num = 1;
+        return;
+    }
+    else if (saw == TAG_SAW_ALPHA) {
+        client_behavior.did_tag_alpha = 1;
+        return;
+    }
+    else if (saw == (TAG_SAW_NUM | TAG_SAW_ALPHA)) {
+        client_behavior.did_tag_alnum = 1;
+        return;
+    }
+    else if (saw && (saw & ~TAG_BASE64) == 0) {
+        client_behavior.did_tag_base64 = 1;
+        return;
+    }
+
+    /* inclusive checks */
+    if ((saw & TAG_SAW_DOT)) {
+        client_behavior.did_tag_dot = 1;
+    }
+
+    if ((saw & TAG_SAW_SEP)) {
+        client_behavior.did_tag_sep = 1;
+    }
+
+    if ((saw & TAG_SAW_COLON)) {
+        client_behavior.did_tag_colon = 1;
+    }
+
+    if ((saw & TAG_SAW_ANGLE)) {
+        client_behavior.did_tag_angle = 1;
+    }
+
+    if ((saw & TAG_SAW_OTHER)) {
+        xsyslog(LOG_DEBUG, "saw an unusual tag", "tag=<%s>", tag);
+        client_behavior.did_tag_other = 1;
+    }
+}
+
 #define IS_EOL(c, pin) ((c = (c == '\r') ? prot_getc(pin) : c) == '\n')
 
 /*
@@ -1590,10 +1705,12 @@ static void cmdloop(void)
             goto done;
         }
         if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
+            client_behavior.did_tag_inv = 1;
             prot_printf(imapd_out, "* BAD Invalid tag\r\n");
             eatline(imapd_in, c);
             continue;
         }
+        record_client_tag_behaviour(buf_cstring(&tag));
 
         /* Parse command name */
         c = getword(imapd_in, &cmd);
