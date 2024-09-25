@@ -75,6 +75,31 @@ static void test_isatom(void)
 
 /* XXX test imparse_isnumber() */
 
+static void test_istag(void)
+{
+    const char hello[] = "hello";
+    char tmp[2] = { 0 };
+    int i;
+
+    /* if it's not an atom, it definitely can't be a tag */
+    for (i = 0; i <= 0xff; i++) {
+        tmp[0] = (char) i;
+        if (!imparse_isatom(tmp))
+            CU_ASSERT_EQUAL(imparse_istag(tmp), 0);
+    }
+
+    /* there used to be an explicit (albeit redundant) check for this case */
+    tmp[0] = '*';
+    CU_ASSERT_EQUAL(imparse_istag(tmp), 0);
+
+    /* "." tag idiomatic when telnetting to imap server, don't break that */
+    tmp[0] = '.';
+    CU_ASSERT_NOT_EQUAL(imparse_istag(tmp), 0);
+
+    /* make sure it doesn't just always return zero... */
+    CU_ASSERT_NOT_EQUAL(imparse_istag(hello), 0);
+}
+
 static void test_parse_range(void)
 {
     range_t range;

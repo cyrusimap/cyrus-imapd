@@ -1599,7 +1599,7 @@ static void cmdloop(void)
             }
             goto done;
         }
-        if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
+        if (c != ' ' || !imparse_istag(tag.s)) {
             syntax_errors ++;
             prot_printf(imapd_out, "* BAD Invalid tag\r\n");
             eatline(imapd_in, c);
