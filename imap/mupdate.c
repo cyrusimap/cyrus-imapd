@@ -216,7 +216,7 @@ static void cmd_starttls(struct conn *C, const char *tag);
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg);
 #endif
-void shut_down(int code);
+static void shut_down(int code) __attribute__((noreturn));
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
 static void sendupdates(struct conn *C, int flushnow);
@@ -2072,8 +2072,7 @@ void cmd_compress(struct conn *C __attribute__((unused)),
 }
 #endif /* HAVE_ZLIB */
 
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
+static void shut_down(int code)
 {
     in_shutdown = 1;
 
