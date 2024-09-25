@@ -1565,6 +1565,9 @@ static void record_client_tag_behaviour(const char *tag)
         return;
     }
 
+    /* if we haven't returned yet there's some odd stuff in there */
+    xsyslog(LOG_DEBUG, "saw an unusual tag", "tag=<%s>", tag);
+
     /* inclusive checks */
     if ((saw & TAG_SAW_DOT)) {
         client_behavior.did_tag_dot = 1;
@@ -1583,7 +1586,6 @@ static void record_client_tag_behaviour(const char *tag)
     }
 
     if ((saw & TAG_SAW_OTHER)) {
-        xsyslog(LOG_DEBUG, "saw an unusual tag", "tag=<%s>", tag);
         client_behavior.did_tag_other = 1;
     }
 }
