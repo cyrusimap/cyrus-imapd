@@ -124,7 +124,7 @@ static int verify_user(const mbname_t *mbname,
                        struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
-void shut_down(int code);
+static void shut_down(int code) __attribute__((noreturn));
 
 static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
@@ -1068,8 +1068,7 @@ EXPORTED void fatal(const char* s, int code)
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
+static void shut_down(int code)
 {
     int i;
 
