@@ -221,7 +221,28 @@ EXPORTED int imparse_isnumber(const char *s)
  */
 EXPORTED int imparse_istag(const char *s)
 {
-    return imparse_isatom(s);
+    static const char reject[] = {
+    /*       0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    /* 0_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    /* 1_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    /* 2_ */ 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
+    /* 3_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 4_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 5_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+    /* 6_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 7_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
+    };
+    const unsigned char *p;
+
+    if (!s || !*s)
+        return 0;
+
+    for (p = (const unsigned char *) s; p && *p; p++) {
+        if ((*p & 0x80) || reject[*p])
+            return 0;
+    }
+
+    return 1;
 }
 
 /*
