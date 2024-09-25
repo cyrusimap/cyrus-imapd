@@ -372,8 +372,8 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
 {
   sasl_interact_t *client_interact=NULL;
   int saslresult=SASL_INTERACT;
-  const char *out;
-  unsigned int outlen;
+  const char *out = NULL;
+  unsigned int outlen = 0;
   char *in;
   unsigned int inlen;
   char inbase64[2048];

@@ -134,7 +134,7 @@ static int login(struct backend *s, const char *userid,
         { 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     const char *mech_conf, *pass, *clientout = NULL;
     struct auth_scheme_t *scheme = NULL;
-    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen;
+    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen = 0;
     hdrcache_t hdrs = NULL;
     char *sid = NULL;
 

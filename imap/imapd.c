@@ -3934,7 +3934,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
                         size_t maxsize, unsigned *totalsize, const char **parseerr)
 {
     struct imapurl url;
-    struct index_state *state;
+    struct index_state *state = NULL;
     uint32_t msgno;
     int r = 0, doclose = 0;
     unsigned long size = 0;
@@ -10718,7 +10718,7 @@ static int _metadata_to_annotate(const strarray_t *entries,
  */
 static void cmd_getmetadata(const char *tag)
 {
-    int c, r = 0;
+    int c = 0, r = 0;
     strarray_t lists[3] = { STRARRAY_INITIALIZER,
                             STRARRAY_INITIALIZER,
                             STRARRAY_INITIALIZER };

@@ -1788,7 +1788,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     if (r) {
         /* Determine if we should retry (again) or cancel the submission.
            We try at 5m, 15m, 30m, 60m after original scheduled time. */
-        unsigned duration;
+        unsigned duration = 0;
         switch (data->num_retries) {
         case 0: duration =  300; break;
         case 1: duration =  600; break;

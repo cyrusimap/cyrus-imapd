@@ -3874,7 +3874,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent_kind kind;
     icalproperty *prop;
     struct icalrecurrencetype rt = ICALRECURRENCETYPE_INITIALIZER;
-    icaltimetype dtstart;
+    icaltimetype dtstart = icaltime_null_time();
     hashu64_table rdates = HASHU64_TABLE_INITIALIZER;
     hashu64_table overrides = HASHU64_TABLE_INITIALIZER;
     unsigned stripped_overrides = 0;
@@ -5222,7 +5222,7 @@ static void prune_properties(icalcomponent *parent,
             nextprop =
                 icalcomponent_get_next_property(parent, ICAL_ANY_PROPERTY);
 
-            uint64_t kind;
+            uint64_t kind = ICAL_NO_PROPERTY;
 
             for (n = 0; n < size; n++) {
                 kind = arrayu64_nth(&pcomp->props, n);
@@ -5277,7 +5277,7 @@ static int expand_cb(icalcomponent *comp,
     icalcomponent *expanded_ical = (icalcomponent *) rock;
     icalproperty *prop, *nextprop, *recurid = NULL;
     struct icaldatetimeperiodtype dtp;
-    icaltimetype dtstart;
+    icaltimetype dtstart = icaltime_null_time();
 
     start = icaltime_convert_to_zone(start, utc_zone);
     end = icaltime_convert_to_zone(end, utc_zone);

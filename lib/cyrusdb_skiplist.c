@@ -222,7 +222,7 @@ static int myinit(const char *dbdir, int myflags)
 {
     char sfile[1024];
     int fd = -1, r = 0;
-    uint32_t net32_time;
+    uint32_t net32_time = 0;
 
     snprintf(sfile, sizeof(sfile), "%s/skipstamp", dbdir);
 

@@ -804,7 +804,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
             /* Read message record */
             struct message_guid guid;
-            bit64 cid;
+            bit64 cid = 0;
             msgrecord_t *mr = NULL;
             r = msgrecord_find(mbox, getblob->uid, &mr);
             if (!r) r = msgrecord_get_guid(mr, &guid);

@@ -1246,7 +1246,7 @@ static int sieve_snooze(void *ac,
     icaltimezone *tz = NULL;
     unsigned wday, today_sec;
     int day_inc = -1;
-    unsigned t;
+    unsigned t = 0;
     char tbuf[26];
 
     if (sn->tzid) {

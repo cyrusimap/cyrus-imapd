@@ -401,7 +401,7 @@ static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
     int day_inc = -1;
-    unsigned t;
+    unsigned t = 0;
     size_t i;
 
     if (sn->days & (1 << tm->tm_wday)) {

@@ -5874,7 +5874,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct caldav_db *db,
                                      int send_scheduling_messages)
 {
-    int r;
+    int r = 0;
 
     struct caldav_data *cdata = NULL;
     struct mailbox *mbox = NULL;
