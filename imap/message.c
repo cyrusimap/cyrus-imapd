@@ -3818,9 +3818,15 @@ static int extract_convdata(struct conversations_state *state,
         hdrs[1] = NULL;
 
     for (i = 0 ; i < 4 ; i++) {
+        // Require message-ids in In-Reply-To header be enclosed in
+        // brackets, allow bare dot-atom identifiers otherwise.
+        unsigned flags = i == 1 ?
+            MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET :
+            MESSAGE_ITER_MSGID_FLAG_DEFAULT;
+
         int hcount = 0;
         char *msgid = NULL;
-        while ((msgid = message_iter_msgid(hdrs[i], &hdrs[i])) != NULL) {
+        while ((msgid = message_iter_msgid(hdrs[i], flags, &hdrs[i])) != NULL) {
             hcount++;
             if (hcount > 20) {
                 free(msgid);
@@ -5703,97 +5709,259 @@ EXPORTED int message_extract_cids(message_t *msg,
     return r;
 }
 
-#define MSGID_SPECIALS "<> @\\"
-
-EXPORTED char *message_iter_msgid(char *str, char **rem)
+static char *extract_dotatom_msgid(char *src, const char *term, char **rem)
 {
+    /* This parses ids in the form "dot-atom-text ['@' dot-atom-text]",
+     * with the non-standard restriction that each label in the
+     * dot-atom-text must start with an alphanumeric. Note that the
+     * domain part is optional, which is invalid according to RFC 5322.
+     *
+     * We parse this form because some mail agents produce invalid
+     * message id headers such as "3a53c9f21a8e41f0bb9558c8029e16f0"
+     * or "<3a53c9f2-1a8e-41f0-bb95-58c8029e16f0>" (e.g. dumping
+     * hex-encoded uuids in the header value, with or without bracket).
+     */
+
+    // 0 = no dot-atom text character
+    // 1 = alpha-numeric
+    // 2 = punctuation and misc
+    // 3 = dot char ('.')
+    static const unsigned DOTATOM[256] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 2, 0, 2, 2, 2, 2, 2, 0, 0, 2, 2, 0, 2, 3, 2,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 2, 0, 2,
+        0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 2, 2,
+        2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    };
+
+    unsigned char *cp = (unsigned char*) src;
+
+    // Parse local part and domain part in two iterations.
+    for (int i = 0; i < 2; i++) {
+        // Parse dot-atom-text.
+        unsigned char prev = '.';
+        for (unsigned char c = *cp; DOTATOM[c]; prev = c, c = *++cp) {
+            if (prev == '.') {
+                // Reject adjacent dot characters.
+                if (c == '.')
+                    goto fail;
+                // Reject domain label starting with non-alphanumeric.
+                if (DOTATOM[c] != 1)
+                    goto fail;
+            }
+        }
+        // Reject empty text or ending with dot.
+        if (prev == '.')
+            goto fail;
+
+        // Domain part is optional.
+        if (i == 0) {
+            if (*cp == '@') {
+                cp++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Reject id not ending with termination character or end of line.
+    if (*cp && !strchr(term, *cp))
+        goto fail;
+
+    // Enclose id in brackets.
+    struct buf buf = BUF_INITIALIZER;
+    buf_putc(&buf, '<');
+    buf_appendmap(&buf, src, cp - (unsigned char*) src);
+    buf_putc(&buf, '>');
+
+    if (rem)
+        *rem = (char*) cp;
+
+    return buf_release(&buf);
+
+fail:
+    // Skip any remaining dot-atom id characters.
+    while (DOTATOM[*cp] || *cp == '@') {
+        cp++;
+    }
+    if (rem) *rem = (char*) cp;
+    return NULL;
+}
+
+static char *extract_angle_bracket_msgid(char *src, char **rem)
+{
+    static const char *MSGID_SPECIALS = "<> @\\";
+    assert(*src == '<');
+
+    // Skip starting angle bracket.
+    char *cp = src + 1;
+
+    /* First, try to parse this as a dot-atom id, possibly without
+     * the mandatory '@' character. */
+    if (isalnum(*cp)) {
+        char *myrem = NULL;
+        char *msgid = extract_dotatom_msgid(cp, ">", &myrem);
+        if (msgid && myrem && *myrem == '>') {
+            if (rem) {
+                *rem = myrem + 1;
+            }
+            return msgid;
+        }
+        free(msgid);
+    }
+
     /*
      * This is a poor-man's way of finding the message-id.  We simply look for
      * any string having the format "< ... @ ... >" and assume that the mail
      * client created a properly formatted message-id.
      */
-    char *msgid, *src, *dst, *cp;
+    char *dst = NULL, *msgid = NULL;
 
+    /* see if we have (and skip) a quoted localpart */
+    if (*cp == '\"') {
+        /* find the endquote, making sure it isn't escaped */
+        do {
+            ++cp; cp = strchr(cp, '\"');
+        } while (cp && *(cp-1) == '\\');
+
+        /* no endquote, so bail */
+        if (!cp) {
+            src++;
+            goto done;
+        }
+    }
+
+    /* find the end of the msgid */
+    if ((cp = strchr(cp, '>')) == NULL) {
+        goto done;
+    }
+
+    /* alloc space for the msgid */
+    dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
+
+    *dst++ = *src++;
+
+    /* quoted string */
+    if (*src == '\"') {
+        src++;
+        while (*src != '\"') {
+            if (*src == '\\') {
+                src++;
+            }
+            *dst++ = *src++;
+        }
+        src++;
+    }
+    /* atom */
+    else {
+        while (!strchr(MSGID_SPECIALS, *src))
+            *dst++ = *src++;
+    }
+
+    if (*src != '@' || *(dst-1) == '<') {
+        xzfree(msgid);
+        goto done;
+    }
+    *dst++ = *src++;
+
+    /* domain atom */
+    while (!strchr(MSGID_SPECIALS, *src))
+        *dst++ = *src++;
+
+    if (*src != '>' || *(dst-1) == '@') {
+        xzfree(msgid);
+        goto done;
+    }
+
+    *dst++ = *src++;
+    *dst = '\0';
+
+done:
+    if (rem) *rem = src;
+    return msgid;
+}
+
+EXPORTED char *message_iter_msgid(char *str, unsigned flags, char **rem)
+{
     if (!str) return NULL;
+    char *src = str;
 
-    msgid = NULL;
-    src = str;
+    while (*src) {
+        char *myrem = NULL;
+        char *msgid = NULL;
 
-    /* find the start of a msgid (don't go past the end of the header) */
-    while ((cp = src = strpbrk(src, "<\r")) != NULL) {
-
-        /* check for fold or end of header
-         *
-         * Per RFC 2822 section 2.2.3, a long header may be folded by
-         * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
-         * Any other CRLF is the end of the header.
-         */
-        if (*cp++ == '\r') {
-            if (*cp++ == '\n' && !(*cp == ' ' || *cp == '\t')) {
-                /* end of header, we're done */
+        // Skip whitespace.
+        if (*src == ' ' || *src == '\t') {
+            src++;
+            continue;
+        }
+        // Skip line folds.
+        else if (*src == '\r') {
+            src++;
+            if (*src == '\n') {
+                src++;
+                if (*src == ' ' || *src == '\t') {
+                    src++;
+                }
+                else {
+                    break;
+                }
+            }
+            continue;
+        }
+        // Skip comments.
+        else if (*src == '(') {
+            char *end = strchr(src, ')');
+            if (end) {
+                src = end + 1;
+                continue;
+            }
+            else {
                 break;
             }
-
-            /* skip fold (or junk) */
+        }
+        // Read angle-bracketed value.
+        else if (*src == '<') {
+            msgid = extract_angle_bracket_msgid(src, &myrem);
+        }
+        // Read no-bracketed ids, if they start with an alphanumeric.
+        else if (isalnum(*src) &&
+                 !(flags & MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET)) {
+            // Id must end with CFWS or end of line.
+            msgid = extract_dotatom_msgid(src, " \t(", &myrem);
+        }
+        // Skip anything else.
+        else {
             src++;
             continue;
         }
 
-        /* see if we have (and skip) a quoted localpart */
-        if (*cp == '\"') {
-            /* find the endquote, making sure it isn't escaped */
-            do {
-                ++cp; cp = strchr(cp, '\"');
-            } while (cp && *(cp-1) == '\\');
-
-            /* no endquote, so bail */
-            if (!cp) {
-                src++;
-                continue;
+        if (msgid) {
+            // Found a message-id.
+            if (rem) {
+                *rem = myrem;
             }
+            return msgid;
         }
-
-        /* find the end of the msgid */
-        if ((cp = strchr(cp, '>')) == NULL)
+        else if (!myrem) {
             return NULL;
-
-        /* alloc space for the msgid */
-        dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
-
-        *dst++ = *src++;
-
-        /* quoted string */
-        if (*src == '\"') {
-            src++;
-            while (*src != '\"') {
-                if (*src == '\\') {
-                    src++;
-                }
-                *dst++ = *src++;
-            }
-            src++;
         }
-        /* atom */
         else {
-            while (!strchr(MSGID_SPECIALS, *src))
-                *dst++ = *src++;
+            // Keep looking.
+            src = myrem;
         }
-
-        if (*src != '@' || *(dst-1) == '<') continue;
-        *dst++ = *src++;
-
-        /* domain atom */
-        while (!strchr(MSGID_SPECIALS, *src))
-            *dst++ = *src++;
-
-        if (*src != '>' || *(dst-1) == '@') continue;
-        *dst++ = *src++;
-        *dst = '\0';
-
-        if (rem) *rem = src;
-        return msgid;
     }
 
-    if (msgid) free(msgid);
     return NULL;
 }
