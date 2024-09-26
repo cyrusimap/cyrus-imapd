@@ -18,7 +18,7 @@ static void test_simple(void)
 
     /* first call returns a newly allocated string which is the
      * only msgid in the input */
-    m = message_iter_msgid(s, &s);
+    m = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m);
     CU_ASSERT_PTR_NOT_EQUAL(m, s);
     CU_ASSERT_PTR_NOT_EQUAL(m, buf);
@@ -33,7 +33,7 @@ static void test_simple(void)
     free(m);
 
     /* second call returns NULL, there are no more msgids */
-    m = message_iter_msgid(s, &s);
+    m = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m);
 
     free(buf);
@@ -63,28 +63,28 @@ static void test_multiple(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m3);
     CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m4 = message_iter_msgid(s, &s);
+    m4 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m4);
     CU_ASSERT_STRING_EQUAL(m4, C_MSGID4);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* last call returns NULL, there are no more msgids */
-    m5 = message_iter_msgid(s, &s);
+    m5 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m5);
 
     /* check the returned msgids are all distinct */
@@ -129,28 +129,28 @@ static void test_whitespace(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m3);
     CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m4 = message_iter_msgid(s, &s);
+    m4 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m4);
     CU_ASSERT_STRING_EQUAL(m4, C_MSGID4);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* last call returns NULL, there are no more msgids */
-    m5 = message_iter_msgid(s, &s);
+    m5 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m5);
 
     /* check the returned msgids are all distinct */
@@ -194,28 +194,28 @@ static void test_dups(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m3);
     CU_ASSERT_STRING_EQUAL(m3, C_MSGID2);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m4 = message_iter_msgid(s, &s);
+    m4 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m4);
     CU_ASSERT_STRING_EQUAL(m4, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* last call returns NULL, there are no more msgids */
-    m5 = message_iter_msgid(s, &s);
+    m5 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m5);
 
     /* check the returned msgids are all distinct */
@@ -260,18 +260,18 @@ static void test_eol(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* we stop seeing msgids after the end of the first header */
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m3);
 
     /* check the returned msgids are all distinct */
@@ -286,7 +286,7 @@ static void test_eol(void)
 }
 
 
-/* ignore a malformed msgid with no @ sign */
+/* accept a malformed msgid with no @ sign */
 static void test_noatsign(void)
 {
 #define C_MSGID1    "<404.05.00006@example.com>"
@@ -298,6 +298,7 @@ static void test_noatsign(void)
     char *m1;
     char *m2;
     char *m3;
+    char *m4;
 
     /* We checked in the "simple" test that buffers are unmolested,
      * so this time just pass message_iter_msgid() a const variable */
@@ -306,25 +307,32 @@ static void test_noatsign(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
-    CU_ASSERT_STRING_EQUAL(m2, C_MSGID3);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    /* we stop seeing msgids after 2nd msgid */
-    m3 = message_iter_msgid(s, &s);
-    CU_ASSERT_PTR_NULL(m3);
+    m3 = message_iter_msgid(s, 0, &s);
+    CU_ASSERT_PTR_NOT_NULL(m3);
+    CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* we stop seeing msgids after 3rd msgid */
+    m4 = message_iter_msgid(s, 0, &s);
+    CU_ASSERT_PTR_NULL(m4);
 
     /* check the returned msgids are all distinct */
     CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m3);
 
     free(m1);
     free(m2);
+    free(m3);
 #undef C_MSGID1
 #undef C_MSGID2
 #undef C_MSGID3
@@ -353,23 +361,23 @@ static void test_quoted_localpart(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID2ret);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m3);
     CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* we stop seeing msgids after 2nd msgid */
-    m4 = message_iter_msgid(s, &s);
+    m4 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m4);
 
     /* check the returned msgids are all distinct */
@@ -409,23 +417,23 @@ static void test_escaped_quoted_localpart(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID2ret);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m3);
     CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* we stop seeing msgids after 2nd msgid */
-    m4 = message_iter_msgid(s, &s);
+    m4 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m4);
 
     /* check the returned msgids are all distinct */
@@ -463,18 +471,18 @@ static void test_malformed_angles(void)
     /* each call should returns a separate newly allocated string
      * which is the next msgid in the input */
 
-    m1 = message_iter_msgid(s, &s);
+    m1 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m1);
     CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
-    m2 = message_iter_msgid(s, &s);
+    m2 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NOT_NULL(m2);
     CU_ASSERT_STRING_EQUAL(m2, C_MSGID3);
     CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
 
     /* we stop seeing msgids after 2nd msgid */
-    m3 = message_iter_msgid(s, &s);
+    m3 = message_iter_msgid(s, 0, &s);
     CU_ASSERT_PTR_NULL(m3);
 
     /* check the returned msgids are all distinct */
@@ -491,9 +499,9 @@ static char *parse_single_msgid(const char *header_value)
 {
     char *str = xstrdup(header_value);
     char *s = str;
-    char *msgid = message_iter_msgid(s, &s);
+    char *msgid = message_iter_msgid(s, 0, &s);
     CU_ASSERT(s >= str && s <= str + strlen(str));
-    CU_ASSERT_PTR_NULL(message_iter_msgid(s, &s));
+    CU_ASSERT_PTR_NULL(message_iter_msgid(s, 0, &s));
     free(str);
     return msgid;
 }
@@ -552,28 +560,66 @@ static void test_regression(void)
             .input = "<foo\t@\tbar>",
             .outcome = ACCEPT,
         },
-
-        // Invalid message-ids that are rejected:
+        {
+            .input = "<foo>",
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "<foo.bar>",
+            .outcome = ACCEPT,
+        },
         {
             .input = "<hello-world>",
-            .outcome = REJECT,
+            .outcome = ACCEPT,
+        },
+
+        // Invalid, unbracketed message-ids that are leniently accepted:
+        {
+            .input = "foobar",
+            .expect = "<foobar>",
+            .outcome = ACCEPT,
         },
         {
             .input = "foo@bar",
             .expect = "<foo@bar>",
-            .outcome = REJECT,
+            .outcome = ACCEPT,
         },
         {
-            .input = "foobar",
-            .expect = "<foobar>",
-            .outcome = REJECT,
+            .input = "a.b.c",
+            .expect = "<a.b.c>",
+            .outcome = ACCEPT,
         },
+        {
+            .input = "a.b@c.d",
+            .expect = "<a.b@c.d>",
+            .outcome = ACCEPT,
+        },
+        {
+            .input = "a!#$%&'*+-/=?^_`{|}~@c.d",
+            .expect = "<a!#$%&'*+-/=?^_`{|}~@c.d>",
+            .outcome = ACCEPT,
+        },
+
+
+        // Invalid message-ids that are rejected:
         {
             .input = "<foo@bar@baz>",
             .outcome = REJECT,
         },
         {
             .input = "foo@bar@baz",
+            .outcome = REJECT,
+        },
+        {
+            .input = "a..b",
+            .outcome = REJECT,
+        },
+        {
+            .input = "a@@b",
+            .outcome = REJECT,
+        },
+        {
+            .input = "#",
             .outcome = REJECT,
         },
     };
