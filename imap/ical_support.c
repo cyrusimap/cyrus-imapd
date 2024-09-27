@@ -1123,65 +1123,60 @@ EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp,
 EXPORTED void icalcomponent_remove_invitee(icalcomponent *comp,
                                            icalproperty *prop)
 {
+#ifdef HAVE_VPOLL_SUPPORT
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-        icalcomponent *vvoter = icalproperty_get_parent(prop);
+        icalcomponent *participant = icalproperty_get_parent(prop);
 
-        icalcomponent_remove_component(comp, vvoter);
-        icalcomponent_free(vvoter);
+        icalcomponent_remove_component(comp, participant);
+        icalcomponent_free(participant);
+        return;
     }
-    else {
-        icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
-    }
+#endif
+
+    icalcomponent_remove_property(comp, prop);
+    icalproperty_free(prop);
 }
 
 
 EXPORTED icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
 {
-    icalproperty *prop;
-
+#ifdef HAVE_VPOLL_SUPPORT
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-        icalcomponent *vvoter =
-            icalcomponent_get_first_component(comp, ICAL_VVOTER_COMPONENT);
+        icalcomponent *participant =
+            icalcomponent_get_first_component(comp, ICAL_PARTICIPANT_COMPONENT);
 
-        prop = icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+        return icalcomponent_get_first_property(participant,
+                                                ICAL_CALENDARADDRESS_PROPERTY);
     }
-    else {
-        prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-    }
+#endif
 
-    return prop;
+    return icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 }
 
 EXPORTED icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
 {
-    icalproperty *prop;
-
+#ifdef HAVE_VPOLL_SUPPORT
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-        icalcomponent *vvoter =
-            icalcomponent_get_next_component(comp, ICAL_VVOTER_COMPONENT);
+        icalcomponent *participant =
+            icalcomponent_get_next_component(comp, ICAL_PARTICIPANT_COMPONENT);
 
-        prop = icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+        return icalcomponent_get_first_property(participant,
+                                                ICAL_CALENDARADDRESS_PROPERTY);
     }
-    else {
-        prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
-    }
+#endif
 
-    return prop;
+    return icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
 }
 
 EXPORTED const char *icalproperty_get_invitee(icalproperty *prop)
 {
-    const char *recip;
-
-    if (icalproperty_isa(prop) == ICAL_VOTER_PROPERTY) {
-        recip = icalproperty_get_voter(prop);
+#ifdef HAVE_VPOLL_SUPPORT
+    if (icalproperty_isa(prop) == ICAL_CALENDARADDRESS_PROPERTY) {
+        return icalproperty_get_calendaraddress(prop);
     }
-    else {
-        recip = icalproperty_get_attendee(prop);
-    }
+#endif
 
-    return recip;
+    return icalproperty_get_attendee(prop);
 }
 
 

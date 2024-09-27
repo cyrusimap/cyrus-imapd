@@ -808,6 +808,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Bootstrapping WebSockets with HTTP/2
 
+:rfc:`8457`
+
+    IMAP "$Important" Keyword and "\Important" Special-Use Attribute
+
 :rfc:`8474`
 
     IMAP Extension for Object Identifiers
@@ -884,48 +888,68 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP PARTIAL Extension for Paged SEARCH and FETCH
 
-IETF RFC Drafts
-===============
+:rfc:`9404`
 
-draft-ietf-extra-imap-list-metadata
+    JSON Meta Application Protocol (JMAP) Blob Management Extension
+
+:rfc:`9425`
+
+    JSON Meta Application Protocol (JMAP) for Quotas
+
+:rfc:`9585`
+
+    IMAP4 Response Code for Command Progress Notifications
+
+:rfc:`9586`
+
+    IMAP Extension for Using and Returning Unique Identifiers (UIDs) Only
+
+:rfc:`9590`
 
     IMAP4 Extension for Returning Mailbox METADATA in Extended LIST
 
-draft-ietf-extra-imap-inprogress
+:rfc:`9661`
 
-   IMAP4 Response Code for Command Progress Notifications
+    The JSON Meta Application Protocol (JMAP) for Sieve Scripts
+
+IETF RFC Drafts
+===============
 
 draft-ietf-extra-jmapaccess
 
    The JMAPACCESS Extension for IMAP
 
+draft-ietf-extra-processimip
+
+    Sieve Email Filtering: Extension for Processing Calendar Attachments
+
 draft-ietf-extra-sieve-snooze
 
     Sieve Email Filtering: Snooze Extension
-
-draft-ietf-extra-imap-uidonly
-
-    IMAP Extension for only using and returning UIDs
-
-draft-ietf-jmap-calendars
-
-    JMAP for Calendars
-
-draft-ietf-jmap-sieve
-
-    JMAP for Sieve Scripts
-
-draft-murchison-lmtp-ignorequota
-
-    LMTP Service Extension for Ignoring Recipient Quotas
 
 draft-ietf-sieve-regex
 
     Sieve Email Filtering -- Regular Expression Extension
 
-draft-york-vpoll
+draft-ietf-calext-vpoll
 
     VPOLL: Consensus Scheduling Component for iCalendar
+
+draft-ietf-jmap-calendars
+
+    JMAP for Calendars
+
+draft-ietf-jmap-contacts
+
+    JMAP for Contacts
+
+draft-ietf-jmap-sharing
+
+    JMAP Sharing
+
+draft-murchison-lmtp-ignorequota
+
+    LMTP Service Extension for Ignoring Recipient Quotas
 
 draft-desruisseaux-ischedule
 

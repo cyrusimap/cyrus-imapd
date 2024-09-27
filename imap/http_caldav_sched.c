@@ -1206,7 +1206,7 @@ static void sched_deliver_remote(const char *cal_ownerid, const char *sched_user
     }
 }
 
-
+#ifdef HAVE_VPOLL_SUPPORT
 /* sched_reply() helper function
  *
  * Add voter responses to VPOLL reply and remove candidate components
@@ -1223,7 +1223,7 @@ static void sched_vpoll_reply(icalcomponent *poll)
         next = icalcomponent_get_next_component(poll, ICAL_ANY_COMPONENT);
 
         switch (icalcomponent_isa(item)) {
-        case ICAL_VVOTER_COMPONENT:
+        case ICAL_PARTICIPANT_COMPONENT:
             /* Our ballot, leave it */
             /* XXX  Need to compare against previous votes */
             break;
@@ -1290,13 +1290,13 @@ static void sched_pollstatus(const char *cal_ownerid, const char *sched_userid,
             next = icalcomponent_get_next_component(poll, ICAL_ANY_COMPONENT);
 
             switch (icalcomponent_isa(sub)) {
-            case ICAL_VVOTER_COMPONENT: {
+            case ICAL_PARTICIPANT_COMPONENT: {
                 /* Make list of VOTERs (stripping SCHEDULE-STATUS) */
                 const char *this_voter;
 
                 prop =
-                    icalcomponent_get_first_property(sub, ICAL_VOTER_PROPERTY);
-                this_voter = icalproperty_get_voter(prop);
+                    icalcomponent_get_first_property(sub, ICAL_CALENDARADDRESS_PROPERTY);
+                this_voter = icalproperty_get_calendaraddress(prop);
 
                 /* Don't update organizer or voter that triggered POLLSTATUS */
                 if (strcmp(this_voter, organizer) && strcmp(this_voter, voter))
@@ -1333,7 +1333,7 @@ static void sched_pollstatus(const char *cal_ownerid, const char *sched_userid,
     icalcomponent_free(itip);
     auth_freestate(authstate);
 }
-
+#endif /* HAVE_VPOLL_SUPPORT */
 
 /* Deliver scheduling object to recipient's Inbox */
 void sched_deliver(const char *cal_ownerid, const char *sched_userid,
@@ -1405,11 +1405,13 @@ void sched_deliver(const char *cal_ownerid, const char *sched_userid,
         /* XXX  Should this be a config option? - it might have perf implications */
         if (r == 1 && SCHED_IS_REPLY(sched_data)) {
             /* Send updates to attendees - skipping sender of reply */
+#ifdef HAVE_VPOLL_SUPPORT
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
             if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
                 sched_pollstatus(cal_ownerid, sched_userid,
                                  recipient, &sparam, ical, attendee);
             else
+#endif
                 sched_request(cal_ownerid, sched_userid, NULL, recipient,
                               NULL, ical, sched_data->mech); // oldical?
         }
@@ -2725,7 +2727,9 @@ static void schedule_sub_declines(const char *attendee,
         /* we need to send an update for this recurrence */
         icalcomponent *copy = icalcomponent_clone(comp);
         trim_attendees(copy, attendee);
+#ifdef HAVE_VPOLL_SUPPORT
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
+#endif
         clean_component(copy);
         reply_mark_declined(copy);
 
@@ -2801,7 +2805,9 @@ static void schedule_sub_replies(const char *attendee,
         /* we need to send an update for this recurrence */
         icalcomponent *copy = icalcomponent_clone(comp);
         trim_attendees(copy, attendee);
+#ifdef HAVE_VPOLL_SUPPORT
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
+#endif
         clean_component(copy);
 
         icalcomponent_add_component(reply->itip, copy);
@@ -2838,7 +2844,10 @@ static void schedule_full_decline(const char *attendee,
 
     icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
     trim_attendees(mastercopy, attendee);
-    if (icalcomponent_isa(mastercomp) == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
+#ifdef HAVE_VPOLL_SUPPORT
+    if (icalcomponent_isa(mastercomp) == ICAL_VPOLL_COMPONENT)
+        sched_vpoll_reply(mastercopy);
+#endif
     clean_component(mastercopy);
     reply_mark_declined(mastercopy);
 
@@ -2914,7 +2923,9 @@ static void schedule_full_reply(const char *attendee,
         /* add the master */
         icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
         trim_attendees(mastercopy, attendee);
+#ifdef HAVE_VPOLL_SUPPORT
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
+#endif
         clean_component(mastercopy);
         icalcomponent_add_component(reply->itip, mastercopy);
 
