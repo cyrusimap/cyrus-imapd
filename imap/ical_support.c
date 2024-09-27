@@ -46,6 +46,7 @@
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
+#include <libxml/uri.h>
 
 #include "assert.h"
 #include "bsearch.h"
@@ -1179,6 +1180,27 @@ EXPORTED const char *icalproperty_get_invitee(icalproperty *prop)
     return icalproperty_get_attendee(prop);
 }
 
+EXPORTED const char *icalproperty_get_decoded_calendaraddress(icalproperty *prop)
+{
+    const char *uri;
+
+    if (icalproperty_isa(prop) == ICAL_ORGANIZER_PROPERTY)
+        uri = icalproperty_get_organizer(prop);
+#ifdef HAVE_VPOLL_SUPPORT
+    else if (icalproperty_isa(prop) == ICAL_CALENDARADDRESS_PROPERTY)
+        uri = icalproperty_get_calendaraddress(prop);
+#endif
+    else
+        uri = icalproperty_get_attendee(prop);
+
+    if (!uri) return NULL;
+    if (!strncasecmp(uri, "mailto:", 7)) uri += 7;
+
+    char *addr = xmlURIUnescapeString(uri, strlen(uri), NULL);
+    icalmemory_add_tmp_buffer(addr);
+
+    return addr;
+}
 
 EXPORTED icaltimetype
 icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
