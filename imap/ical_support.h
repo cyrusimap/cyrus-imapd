@@ -61,6 +61,10 @@
 #define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
+#ifdef HAVE_PARTTYPE_VOTER
+#define HAVE_VPOLL_SUPPORT
+#endif
+
 #ifndef HAVE_NEW_CLONE_API
 /* Allow us to compile without #ifdef HAVE_NEW_CLONE_API everywhere */
 #define icalcomponent_clone           icalcomponent_new_clone
