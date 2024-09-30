@@ -1640,9 +1640,9 @@ static void cmdloop(void)
             plaintextloginalert = NULL;
         }
 
-        /* Only Authenticate/Enable/Login/Logout/Noop/Capability/Id/Starttls
+        /* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
            allowed when not logged in */
-        if (!imapd_userid && !strchr("AELNCIS", cmd.s[0])) goto nologin;
+        if (!imapd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
 
         /* Set limit on the total number of bytes allowed for arguments */
         maxargssize_mark = prot_bytes_in(imapd_in) + maxargssize;
