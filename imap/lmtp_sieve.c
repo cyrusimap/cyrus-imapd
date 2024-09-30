@@ -1520,8 +1520,7 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
     comp = first;
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
-        organizer = icalproperty_get_organizer(prop);
-        if (!strncasecmpsafe(organizer, "mailto:", 7)) organizer += 7;
+        organizer = icalproperty_get_decoded_calendaraddress(prop);
     }
 
     if (strchr(ctx->userid, '@')) {
@@ -1595,8 +1594,7 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
             /* Find invitee that matches owner of script */
             for (prop = icalcomponent_get_first_invitee(comp); prop;
                  prop = icalcomponent_get_next_invitee(comp)) {
-                const char *invitee = icalproperty_get_invitee(prop);
-                if (!strncasecmp(invitee, "mailto:", 7)) invitee += 7;
+                const char *invitee = icalproperty_get_decoded_calendaraddress(prop);
                 int n = strarray_find(&sched_addresses, invitee, 0);
                 if (n >= 0) {
                     recipient = strarray_nth(&sched_addresses, n);
@@ -1644,8 +1642,7 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
                 buf_setcstr(&cal->reason, "missing ATTENDEE property");
                 goto done;
             }
-            originator = icalproperty_get_invitee(prop);
-            if (!strncasecmp(originator, "mailto:", 7)) originator += 7;
+            originator = icalproperty_get_decoded_calendaraddress(prop);
 
             sched_flags |= SCHEDFLAG_IS_REPLY;
             break;

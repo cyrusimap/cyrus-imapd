@@ -3336,7 +3336,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     }
 
     /* Organizer MUST be local to use CalDAV Scheduling */
-    organizer = icalproperty_get_organizer(prop);
+    organizer = icalproperty_get_decoded_calendaraddress(prop);
     if (!organizer) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
@@ -3977,11 +3977,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) {
-            nextorg = icalproperty_get_organizer(prop);
-            if (nextorg) {
-                if (!strncasecmp(nextorg, "mailto:", 7)) nextorg += 7;
-                if (!*nextorg) nextorg = NULL;
-            }
+            nextorg = icalproperty_get_decoded_calendaraddress(prop);
+            if (nextorg && !*nextorg) nextorg = NULL;
         }
         /* if no toplevel organizer, use the one from here */
         if (!organizer && nextorg) organizer = nextorg;
@@ -4129,8 +4126,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* Scheduling object resource */
 
             syslog(LOG_DEBUG, "caldav_put: organizer: %s", organizer);
-
-            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
             if (cdata->organizer &&
                 !spool_getheader(txn->req_hdrs, "Allow-Organizer-Change")) {

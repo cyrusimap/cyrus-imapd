@@ -92,9 +92,8 @@ HIDDEN icalproperty *find_attendee(icalcomponent *comp, const char *match)
     icalproperty *prop = icalcomponent_get_first_invitee(comp);
 
     for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
-        const char *attendee = icalproperty_get_invitee(prop);
+        const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
         if (!attendee) continue;
-        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* Skip where not the server's responsibility */
         icalparameter *param = icalproperty_get_scheduleagent_parameter(prop);
@@ -115,9 +114,8 @@ HIDDEN const char *get_organizer(icalcomponent *comp)
     if (!comp) return NULL;
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    const char *organizer = icalproperty_get_organizer(prop);
+    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
     if (!organizer) return NULL;
-    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
     icalparameter *param = icalproperty_get_scheduleagent_parameter(prop);
     /* check if we're supposed to send replies to the organizer */
     if (param &&
@@ -574,7 +572,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 
         /* Get the sending attendee */
         att = icalcomponent_get_first_invitee(itip);
-        attendee = icalproperty_get_invitee(att);
+        attendee = icalproperty_get_decoded_calendaraddress(att);
         param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
         if (param) partstat = icalparameter_get_partstat(param);
         param = icalproperty_get_first_parameter(att, ICAL_CN_PARAMETER);
@@ -582,7 +580,8 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 
         /* Find matching attendee in existing object */
         for (prop = icalcomponent_get_first_invitee(comp);
-             prop && strcmpnull(attendee, icalproperty_get_invitee(prop));
+             prop && strcmpnull(attendee,
+                                icalproperty_get_decoded_calendaraddress(prop));
              prop = icalcomponent_get_next_invitee(comp));
         if (!prop) {
             /* Attendee added themselves to this recurrence */
@@ -832,7 +831,8 @@ static int deliver_merge_request(const char *attendee,
             for (prop =
                      icalcomponent_get_first_property(new_comp,
                                                       ICAL_ATTENDEE_PROPERTY);
-                 prop && strcmp(icalproperty_get_attendee(prop), attendee);
+                 prop && strcmp(attendee,
+                                icalproperty_get_decoded_calendaraddress(prop));
                  prop =
                      icalcomponent_get_next_property(new_comp,
                                                      ICAL_ATTENDEE_PROPERTY));
@@ -1340,9 +1340,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     icalcomponent_get_first_property(comp,
                                                      ICAL_ORGANIZER_PROPERTY);
                 if (prop) {
-                    const char *organizer = icalproperty_get_organizer(prop);
+                    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
                     if (organizer) {
-                        if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
                         if (strcasecmp(cdata->organizer, organizer)) reject = 1;
                     }
                 }

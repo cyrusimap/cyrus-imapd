@@ -533,10 +533,9 @@ static int process_alarm_cb(icalcomponent *comp,
 
     for (prop = icalcomponent_get_first_invitee(comp);
          prop; prop = icalcomponent_get_next_invitee(comp)) {
-        const char *attendee = icalproperty_get_invitee(prop);
+        const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
 
         if (!attendee) continue;
-        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         if (strarray_contains_case(&sched_addrs, attendee)) {
             const char *partstat =
