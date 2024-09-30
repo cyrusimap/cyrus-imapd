@@ -102,6 +102,10 @@ static void test_istag(void)
     tmp[0] = '>';
     CU_ASSERT_EQUAL(imparse_istag(tmp), 0);
 
+    /* colon character in tag suggests confused HTTP client */
+    tmp[0] = ':';
+    CU_ASSERT_EQUAL(imparse_istag(tmp), 0);
+
     /* make sure it doesn't just always return zero... */
     CU_ASSERT_NOT_EQUAL(imparse_istag(hello), 0);
 }
