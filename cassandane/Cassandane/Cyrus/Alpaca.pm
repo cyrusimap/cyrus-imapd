@@ -184,4 +184,77 @@ sub test_html_tag_dont_reflect2
     $self->assert_num_equals(1, $saw_untagged_bad);
 }
 
+sub test_http_headers_bad
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # mimic a HTTP connection sending "key: value\r\n" headers.
+    # make sure one that looks like a valid imap command can't be used
+    # to reset any consecutive error counter, by rejecting the tag
+    my $saw_untagged_bad = 0;
+    imap_cmd_with_tag($talk, 'Accept:',
+                             { IdleResponse => 1 },
+                             'noop', 0,
+                             { 'bad' => sub { $saw_untagged_bad++ } });
+
+    $self->assert_num_equals(1, $saw_untagged_bad);
+}
+
+sub test_http_request_drop_connection
+{
+    my ($self) = @_;
+
+    $self->{store}->disconnect();
+    my $sock = create_client_socket($self->{store}->{address_family},
+                                    $self->{store}->{host},
+                                    $self->{store}->{port});
+
+    my @request = split /\n/, << 'FIN';
+POST /some/url HTTP/1.1
+Host: www.example.com
+User-Agent: Mozilla/5.0 (redacted) Gecko/20100101 Firefox/130.0
+Accept: */*
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 15
+Origin: http://www.example.com
+DNT: 1
+Connection: keep-alive
+Referer: http://www.example.com/
+Cookie: chocolate=chips
+
+foo=bar&baz=qux
+FIN
+    foreach my $line (@request) {
+        $sock->send("$line\015\012") or die "send: $!";
+        last if not $sock->connected();
+    }
+
+    # if the connection hasn't been dropped already, send a logout so the
+    # test doesn't hang
+    $sock->send(". logout\015\012") if $sock->connected();
+
+    my @response;
+    while (defined(my $line = $sock->getline())) {
+        $line =~ s/\015?\012//;
+        push @response, $line;
+    }
+
+    # double check that our request contained more lines than cyrus'
+    # syntax error limit of 10
+    $self->assert_num_gt(10, scalar @request);
+
+    # cyrus should have dropped the connection before we sent all the lines
+    $self->assert_num_lt(scalar @request, scalar @response);
+
+    # should have gotten as many untagged BAD responses as cyrus's limit
+    $self->assert_num_equals(10, scalar grep { m/^\* BAD/ } @response);
+
+    # snarky last response back from the server
+    $self->assert_matches(qr{This is an IMAP server}, $response[-1]);
+}
+
 1;
