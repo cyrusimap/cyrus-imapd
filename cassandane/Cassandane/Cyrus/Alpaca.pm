@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Alpaca;
 use strict;
 use warnings;
+use Cwd qw(abs_path);
 use Data::Dumper;
 
 use lib '.';
@@ -250,11 +251,129 @@ FIN
     # cyrus should have dropped the connection before we sent all the lines
     $self->assert_num_lt(scalar @request, scalar @response);
 
-    # should have gotten as many untagged BAD responses as cyrus's limit
-    $self->assert_num_equals(10, scalar grep { m/^\* BAD/ } @response);
+    # cyrus should have dropped the connection at the POST in first line
+    $self->assert_num_equals(0, scalar grep { m/^\* BAD/ } @response);
 
     # snarky last response back from the server
     $self->assert_matches(qr{This is an IMAP server}, $response[-1]);
+}
+
+sub test_http_post_drop_connection1
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # consume initial capabilities response
+    my ($ok, $capability) = $talk->_parse_response('', { IdleResponse => 1 });
+    $self->assert_str_equals('ok', $ok);
+    $self->assert_str_equals('capability', $capability);
+
+    # mimic a HTTP client sending "POST / HTTP/1.1\r\n" command,
+    # expect "* BYE This is an IMAP server" and disconnect
+    # throws "IMAPTalk: Connection was unexpectedly closed by host"
+    eval {
+        imap_cmd_with_tag($talk, 'POST',
+                                 '/', 0, '/',
+                                 'HTTP/1.1');
+    };
+    # XXX can't see the real exception text cause cass obscures it,
+    # XXX but there should have at least been some exception
+    $self->assert_not_null($@);
+    $self->assert_str_equals('This is an IMAP server',
+                             $talk->get_response_code('bye'));
+
+    # should be back to unconnected state
+    $self->assert_num_equals(0, $talk->state());
+}
+
+sub test_http_post_drop_connection2
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # consume initial capabilities response
+    my ($ok, $capability) = $talk->_parse_response('', { IdleResponse => 1 });
+    $self->assert_str_equals('ok', $ok);
+    $self->assert_str_equals('capability', $capability);
+
+    # as above, but mimic a HTTP connection trying sneak a POST request
+    # past by requesting a resource whose name is a valid IMAP command
+    # which accepts an argument, e.g. "POST authenticate HTTP/1.1\r\n"
+    eval {
+        imap_cmd_with_tag($talk, 'POST',
+                                 'authenticate', 0, 'authenticate',
+                                 'HTTP/1.1');
+    };
+    # XXX can't see the real exception text cause cass obscures it,
+    # XXX but there should have at least been some exception
+    $self->assert_not_null($@);
+    $self->assert_str_equals('This is an IMAP server',
+                             $talk->get_response_code('bye'));
+
+    # should be back to unconnected state
+    $self->assert_num_equals(0, $talk->state());
+}
+
+sub test_http_post_drop_connection3
+    :TLS :needs_dependency_openssl
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # first command after STARTTLS should be treated same as first command
+    $talk->_imap_cmd('starttls', 0, 'starttls');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $ca_file = abs_path("data/certs/cacert.pem");
+    IO::Socket::SSL->start_SSL($talk->{Socket},
+                               SSL_ca_file => $ca_file,
+                               SSL_verifycn_scheme => 'none',
+    );
+    $self->assert_str_equals('IO::Socket::SSL', ref $talk->{Socket});
+
+    # mimic a HTTP client sending "POST / HTTP/1.1\r\n" command,
+    # expect "* BYE This is an IMAP server" and disconnect
+    # throws "IMAPTalk: Connection was unexpectedly closed by host"
+    eval {
+        imap_cmd_with_tag($talk, 'POST',
+                                 '/', 0, '/',
+                                 'HTTP/1.1');
+    };
+    # XXX can't see the real exception text cause cass obscures it,
+    # XXX but there should have at least been some exception
+    $self->assert_not_null($@);
+    $self->assert_str_equals('This is an IMAP server',
+                             $talk->get_response_code('bye'));
+
+    # should be back to unconnected state
+    $self->assert_num_equals(0, $talk->state());
+}
+
+sub test_imap_http_methods_ok
+{
+    my ($self) = @_;
+
+    # get a normal, already logged in IMAP connection
+    my $talk = $self->{store}->get_client();
+
+    my @http_methods = qw(
+        ACL BIND LOCK MKCALENDAR MKCOL PATCH POST
+        PROPFIND PROPPATCH PUT REPORT SEARCH UNBIND
+    );
+
+    # HTTP method names are not forbidden tags during a normal IMAP session
+    foreach my $meth (@http_methods) {
+        imap_cmd_with_tag($talk, $meth, 'noop', 0, 'noop');
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
 }
 
 1;

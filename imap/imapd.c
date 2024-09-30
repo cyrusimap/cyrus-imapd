@@ -1601,10 +1601,17 @@ static void cmdloop(void)
             goto done;
         }
         if (c != ' ' || !imparse_istag(tag.s, command_count)) {
-            syntax_errors ++;
-            prot_printf(imapd_out, "* BAD Invalid tag\r\n");
-            eatline(imapd_in, c);
-            continue;
+            if (command_count) {
+                syntax_errors ++;
+                prot_printf(imapd_out, "* BAD Invalid tag\r\n");
+                eatline(imapd_in, c);
+                continue;
+            }
+            else {
+                /* bad tag on very first command? probably not speaking IMAP */
+                prot_printf(imapd_out, "* BYE This is an IMAP server\r\n");
+                goto done;
+            }
         }
 
         /* Parse command name */
