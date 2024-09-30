@@ -684,11 +684,11 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     /* Determine Originator based on method and component */
     if (method == ICAL_METHOD_REPLY) {
         prop = icalcomponent_get_first_invitee(comp);
-        originator = icalproperty_get_invitee(prop);
+        originator = icalproperty_get_decoded_calendaraddress(prop);
     }
     else {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        originator = icalproperty_get_organizer(prop);
+        originator = icalproperty_get_decoded_calendaraddress(prop);
     }
     buf_printf(&hdrs, "Originator: %s\r\n", originator);
 
@@ -706,7 +706,8 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
              prop;
              prop = icalcomponent_get_next_property(comp,
                                                     ICAL_ATTENDEE_PROPERTY)) {
-            buf_printf(&hdrs, "%c%s", sep, icalproperty_get_attendee(prop));
+            buf_printf(&hdrs, "%c%s", sep,
+                       icalproperty_get_decoded_calendaraddress(prop));
             sep = ',';
         }
         buf_printf(&hdrs, "\r\n");

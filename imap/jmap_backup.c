@@ -1003,7 +1003,7 @@ static int do_scheduling(jmap_req_t *req,
                  prop;
                  prop = icalcomponent_get_next_property(comp,
                                                         ICAL_ATTENDEE_PROPERTY)) {
-                const char *addr = icalproperty_get_attendee(prop);
+                const char *addr = icalproperty_get_decoded_calendaraddress(prop);
 
                 if (!addr || strncasecmp(addr, "mailto:", 7) ||
                     strcasecmp(strarray_nth(schedule_addresses, 0), addr+7)) {

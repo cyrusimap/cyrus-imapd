@@ -1350,9 +1350,7 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
     /* Get organizer */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
-        cdata->organizer = icalproperty_get_organizer(prop);
-        if (cdata->organizer && !strncasecmp(cdata->organizer, "mailto:", 7))
-            cdata->organizer += 7;
+        cdata->organizer = icalproperty_get_decoded_calendaraddress(prop);
     }
     /* maybe it's only on a sub event */
     icalcomponent *nextcomp;
@@ -1360,9 +1358,7 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
            (nextcomp = icalcomponent_get_next_component(ical, kind))) {
         prop = icalcomponent_get_first_property(nextcomp, ICAL_ORGANIZER_PROPERTY);
         if (prop) {
-            cdata->organizer = icalproperty_get_organizer(prop);
-            if (cdata->organizer && !strncasecmp(cdata->organizer, "mailto:", 7))
-                cdata->organizer += 7;
+            cdata->organizer = icalproperty_get_decoded_calendaraddress(prop);
         }
     }
 

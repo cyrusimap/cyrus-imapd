@@ -4165,9 +4165,8 @@ static int setcalendarevents_schedule(const char *sched_userid,
                 for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
                      prop;
                      prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-                    const char *addr = icalproperty_get_attendee(prop);
-                    if (!addr || strncasecmp(addr, "mailto:", 7) ||
-                            strcasecmp(strarray_nth(schedule_addresses, 0), addr+7))
+                    const char *addr = icalproperty_get_decoded_calendaraddress(prop);
+                    if (strcasecmpsafe(strarray_nth(schedule_addresses, 0), addr))
                         continue;
                     icalparameter *param =
                         icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
