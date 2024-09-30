@@ -1877,7 +1877,7 @@ HIDDEN void dav_get_principalname(const char *userid, struct buf *buf)
     buf_reset(buf);
 
     if (userid) {
-        const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        static const char annotname[] = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         char *mailboxname = caldav_mboxname(userid, NULL);
         int r = annotatemore_lookupmask(mailboxname, annotname, userid, buf);
 
@@ -7987,7 +7987,8 @@ static int principal_search(const char *userid, void *rock)
 
         for (prop = search_crit->props; prop; prop = prop->next) {
             if (!strcmp(prop->s, "displayname")) {
-                if (!xmlStrcasestr(BAD_CAST userid,
+                dav_get_principalname(userid, &fctx->buf);
+                if (!xmlStrcasestr(BAD_CAST buf_cstring(&fctx->buf),
                                    search_crit->match)) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-address-set")) {
