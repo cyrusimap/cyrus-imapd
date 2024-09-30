@@ -97,6 +97,7 @@ static void my_carddav_init(struct buf *serverinfo);
 static int my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
+static unsigned long carddav_allow_cb(struct request_target_t*);
 
 static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                               const char **resultstr);
@@ -257,7 +258,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_reportset, NULL, (void *) carddav_reports },
     { "supported-method-set", NS_DAV,
       PROP_COLLECTION | PROP_RESOURCE,
-      propfind_methodset, NULL, (void *) &calcarddav_allow_cb },
+      propfind_methodset, NULL, (void *) carddav_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "owner", NS_DAV,
@@ -582,6 +583,14 @@ static void my_carddav_shutdown(void)
     carddav_done();
 }
 
+/* Determine allowed methods in CardDAV namespace */
+static unsigned long carddav_allow_cb(struct request_target_t *tgt) {
+    unsigned long allow = calcarddav_allow_cb(tgt);
+    if (tgt->collection && !tgt->resource && !strcmp(tgt->collection, DEFAULT_ADDRBOOK "/"))
+        allow &= ~ALLOW_DELETE;
+
+    return allow;
+}
 
 /* Parse request-target path in CardDAV namespace */
 static int carddav_parse_path(const char *path, struct request_target_t *tgt,
