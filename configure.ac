@@ -1758,6 +1758,12 @@ dnl
             ],
             have_ical_ctrl=no)
 
+        dnl Check if libical supports PARTICIPANT-TYPE=VOTER
+        AC_CHECK_DECL([ICAL_PARTICIPANTTYPE_VOTER],
+                AC_DEFINE(HAVE_PARTTYPE_VOTER,[],
+                        [Do we have support for PARTICIPANT-TYPE=VOTER?]),
+                [], [[#include <libical/ical.h>]])
+
         dnl Check for libicalvcard
         AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
                  AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])

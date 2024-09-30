@@ -1427,7 +1427,7 @@ EXPORTED unsigned long config_types_to_caldav_types(void)
         types |= CAL_COMP_VFREEBUSY;
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VAVAILABILITY)
         types |= CAL_COMP_VAVAILABILITY;
-#ifdef VPOLL
+#if defined (WANT_VPOLL) && defined (HAVE_VPOLL_SUPPORT)
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VPOLL)
         types |= CAL_COMP_VPOLL;
 #endif
