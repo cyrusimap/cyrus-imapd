@@ -4148,9 +4148,8 @@ static int setcalendarevents_schedule(const char *sched_userid,
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (!prop) goto done;
 
-    const char *organizer = icalproperty_get_organizer(prop);
+    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
     if (!organizer) goto done;
-    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
 
@@ -8208,8 +8207,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         }
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        organizer = icalproperty_get_organizer(prop);
-        if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+        organizer = icalproperty_get_decoded_calendaraddress(prop);
 
         icalparameter *param = icalproperty_get_schedulestatus_parameter(prop);
         sched_stat = icalparameter_get_schedulestatus(param);
