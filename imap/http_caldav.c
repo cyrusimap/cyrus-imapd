@@ -955,9 +955,13 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
                                   void *rock __attribute__((unused)))
 {
     /* Only allow PROPPATCH on CALDAV:schedule-inbox-URL */
-    if ((pctx->txn->req_tgt.flags != TGT_SCHED_INBOX) || !set) {
+    if ((pctx->txn->req_tgt.flags != TGT_SCHED_INBOX) || !set || pctx->txn->req_tgt.resource) {
         xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
                 prop->name, prop->ns, NULL, DAV_PROT_PROP);
+        xmlNewTextChild(propstat[PROPSTAT_FORBID].root, NULL, BAD_CAST "responsedescription",
+                        pctx->txn->req_tgt.resource ? BAD_CAST "Must be called on a collection"
+                        : ( set ? BAD_CAST "Target is not Scheduling Inbox"
+                            : BAD_CAST "Property cannot be deleted"));
         *pctx->ret = HTTP_FORBIDDEN;
         return HTTP_FORBIDDEN;
     }
@@ -969,7 +973,7 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
 
     xmlNodePtr node = xmlFirstElementChild(prop);
     if (node) {
-        if (!xmlStrcmp(node->name, BAD_CAST "href")) {
+        if (!xmlStrcmp(node->name, BAD_CAST "href") && !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_DAV)) {
             href = (char*) xmlNodeGetContent(node);
             if (href && *href) {
                 /* Strip trailing '/' character */
@@ -981,31 +985,37 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
         }
     }
 
+    const char *explanation = NULL;
     if (href) {
         buf_reset(&pctx->buf);
-        if (strchr(httpd_userid, '@') || !httpd_extradomain) {
+        if (strchr(pctx->txn->userid, '@') || !httpd_extradomain) {
             buf_printf(&pctx->buf, "%s/%s/%s/", namespace_calendar.prefix,
-                    USER_COLLECTION_PREFIX, httpd_userid);
+                    USER_COLLECTION_PREFIX, pctx->txn->req_tgt.userid);
         }
         else {
             buf_printf(&pctx->buf, "%s/%s/%s@%s/", namespace_calendar.prefix,
-                    USER_COLLECTION_PREFIX, httpd_userid, httpd_extradomain);
+                    USER_COLLECTION_PREFIX, pctx->txn->req_tgt.userid, httpd_extradomain);
         }
         if (!strncmp(href, buf_cstring(&pctx->buf), buf_len(&pctx->buf))) {
             const char *cal = href + buf_len(&pctx->buf);
             if (cal) {
-                char *mboxname = caldav_mboxname(httpd_userid, cal);
-                if (mboxname_iscalendarmailbox(mboxname, 0) &&
-                     mboxname_policycheck(mboxname) == 0) {
-                    mbname = mbname_from_intname(mboxname);
+                if (!strcmp(cal, "Outbox") || !strcmp(cal, "Attachments") || !strcmp(cal, "Inbox"))
+                    explanation = "Cannot use Outbox, Attachments or Inbox as calendar";
+                else {
+                    char *mboxname = caldav_mboxname(pctx->txn->req_tgt.userid, cal);
+                    if (mboxname_iscalendarmailbox(mboxname, 0) &&
+                        mboxname_policycheck(mboxname) == 0) {
+                        mbname = mbname_from_intname(mboxname);
+                    }
+                    free(mboxname);
                 }
-                free(mboxname);
             }
-        }
+        } else
+            explanation = "href does not belong to Inbox’s owner or does not include calendar";
     }
 
     if (mbname) {
-        char *calhomename = caldav_mboxname(httpd_userid, NULL);
+        char *calhomename = caldav_mboxname(pctx->txn->req_tgt.userid, NULL);
         struct mailbox *calhome = NULL;
         struct mailbox *mailbox = NULL;
         int r = mailbox_open_iwl(calhomename, &calhome);
@@ -1017,9 +1027,12 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
                 const char *annotname =
                     DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
 
-                const strarray_t *boxes = mbname_boxes(mbname);
-                buf_setcstr(&pctx->buf, strarray_nth(boxes, strarray_size(boxes)-1));
-                r = annotate_state_writemask(astate, annotname, httpd_userid, &pctx->buf);
+                if (strcmp("Default", href + buf_len(&pctx->buf))) {
+                    const strarray_t *boxes = mbname_boxes(mbname);
+                    buf_setcstr(&pctx->buf, strarray_nth(boxes, strarray_size(boxes)-1));
+                } else
+                    buf_reset(&pctx->buf);
+                r = annotate_state_write(astate, annotname, "", &pctx->buf);
             }
         }
         mailbox_close(&mailbox);
@@ -1031,6 +1044,9 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
     if (precond) {
         xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
                      prop->name, prop->ns, NULL, precond);
+        if (explanation)
+            xmlNewTextChild(propstat[PROPSTAT_FORBID].root, NULL, BAD_CAST "responsedescription",
+                            BAD_CAST explanation);
     }
     else {
         xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
