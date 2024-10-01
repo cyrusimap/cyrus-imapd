@@ -135,7 +135,7 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
     if (islocal) {
         mbentry_t *mbentry = NULL;
         /* Lookup user's cal-home-set to see if it is on this server */
-        mbname_t *mbname = mbname_from_recipient(param->userid, NULL);
+        mbname_t *mbname = mbname_from_recipient(param->userid, &httpd_namespace);
         mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
         int r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
         mbname_free(&mbname);
@@ -302,11 +302,11 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
         filename = "RSVP";
 
         prop = icalcomponent_get_first_invitee(comp);
-        add_address(&originator, prop, &icalproperty_get_invitee);
+        add_address(&originator, prop, &icalproperty_get_decoded_calendaraddress);
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         add_address(&recipients, prop,
-                    (const char*(*)(icalproperty *))&icalproperty_get_organizer);
+                    (const char*(*)(icalproperty *))&icalproperty_get_decoded_calendaraddress);
     }
     else {
         if (meth == ICAL_METHOD_CANCEL) {
@@ -324,13 +324,13 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         add_address(&originator, prop,
-                    (const char*(*)(icalproperty *))&icalproperty_get_organizer);
+                    (const char*(*)(icalproperty *))&icalproperty_get_decoded_calendaraddress);
 
         for (prop = icalcomponent_get_first_invitee(comp);
              prop;
              prop = icalcomponent_get_next_invitee(comp)) {
 
-            add_address(&recipients, prop, &icalproperty_get_invitee);
+            add_address(&recipients, prop, &icalproperty_get_decoded_calendaraddress);
         }
     }
 
@@ -914,7 +914,7 @@ int sched_busytime_query(struct transaction_t *txn,
     uid = icalcomponent_get_uid(comp);
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    organizer = icalproperty_get_organizer(prop);
+    organizer = icalproperty_get_decoded_calendaraddress(prop);
 
     /* XXX  Do we need to do more checks here? */
     if (caladdress_lookup(organizer, &sparam, NULL) ||
@@ -971,7 +971,7 @@ int sched_busytime_query(struct transaction_t *txn,
         icalcomponent_remove_property(comp, prop);
 
         /* Is attendee remote or local? */
-        attendee = icalproperty_get_attendee(prop);
+        attendee = icalproperty_get_decoded_calendaraddress(prop);
         r = caladdress_lookup(attendee, &sparam, NULL);
 
         /* Don't allow scheduling of remote users via an iSchedule request */
@@ -1571,10 +1571,8 @@ static void add_attendees(icalcomponent *ical,
 
             nextprop = icalcomponent_get_next_invitee(comp);
 
-            const char *attendee = icalproperty_get_invitee(prop);
+            const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
             if (!attendee) continue;
-
-            if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
             /* Skip where attendee == organizer */
             if (!strcasecmp(attendee, organizer)) continue;
@@ -1831,9 +1829,8 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
 
         icalproperty *prop = icalcomponent_get_first_invitee(comp);
         for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
-            const char *attendee = icalproperty_get_invitee(prop);
+            const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
             if (!attendee) continue;
-            if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
             /* skip attendees other than the one we're updating */
             if (onattendee && strcasecmp(attendee, onattendee)) continue;
@@ -2599,9 +2596,8 @@ static void trim_attendees(icalcomponent *comp, const char *match)
     for (prop = icalcomponent_get_first_invitee(comp);
          prop;
          prop = icalcomponent_get_next_invitee(comp)) {
-        const char *attendee = icalproperty_get_invitee(prop);
+        const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
         if (!attendee) continue;
-        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* keep my attendee */
         if (!strcasecmp(attendee, match)) continue;

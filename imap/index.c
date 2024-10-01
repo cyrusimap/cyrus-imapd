@@ -5446,10 +5446,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
 
         /* organizer */
         if ((prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY))) {
-            if ((s = icalproperty_get_organizer(prop))) {
-                if (!strncasecmp(s, "mailto:", 7)) {
-                    s += 7;
-                }
+            if ((s = icalproperty_get_decoded_calendaraddress(prop))) {
                 param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
                 if (param) {
                     buf_printf(&buf, "\"%s\" <%s>", icalparameter_get_cn(param), s);
@@ -5465,10 +5462,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
         for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
              prop;
              prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-            if ((s = icalproperty_get_attendee(prop))) {
-                if (!strncasecmp(s, "mailto:", 7)) {
-                    s += 7;
-                }
+            if ((s = icalproperty_get_decoded_calendaraddress(prop))) {
                 param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
                 if (buf.len) {
                     buf_appendcstr(&buf, ", ");

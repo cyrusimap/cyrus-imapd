@@ -326,9 +326,8 @@ static int validate_mayinvite(icalproperty *prop,
     if (allow_propupdates == propupdate_all)
         return 0;
 
-    const char *uri = icalproperty_get_attendee(prop);
-    if (uri &&!strncasecmp(uri, "mailto:", 7) && sched_addrs &&
-            strarray_contains(sched_addrs, uri + 7)) {
+    const char *uri = icalproperty_get_decoded_calendaraddress(prop);
+    if (uri && sched_addrs && strarray_contains(sched_addrs, uri)) {
         /* User adds their own ATTENDEE */
         if (!(allow_propupdates & propupdate_inviteself))
             return HTTP_FORBIDDEN;
@@ -439,9 +438,8 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
 
             case ICAL_ATTENDEE_PROPERTY:
                 {
-                    const char *uri = icalproperty_get_attendee(prop);
-                    if (uri && !strncasecmp(uri, "mailto:", 7) && sched_addrs &&
-                            strarray_contains(sched_addrs, uri + 7)) {
+                    const char *uri = icalproperty_get_decoded_calendaraddress(prop);
+                    if (uri && sched_addrs && strarray_contains(sched_addrs, uri)) {
                         /* User updates their own ATTENDEE */
                         if (!(allow_propupdates & propupdate_rsvp))
                             return HTTP_FORBIDDEN;
@@ -692,9 +690,8 @@ static int includes_attendee(icalcomponent *ical, const strarray_t *sched_addrs)
              prop;
              prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
-            const char *uri = icalproperty_get_attendee(prop);
-            if (uri && !strncasecmp(uri, "mailto:", 7) &&
-                    strarray_contains(sched_addrs, uri + 7))
+            const char *uri = icalproperty_get_decoded_calendaraddress(prop);
+            if (uri && strarray_contains(sched_addrs, uri))
                 return 1;
         }
     }
@@ -1167,9 +1164,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     /* Create and cache RFC 5322 header fields for resource */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
-        organizer = icalproperty_get_organizer(prop);
+        organizer = icalproperty_get_decoded_calendaraddress(prop);
         if (organizer) {
-            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
             assert(!buf_len(&txn->buf));
             buf_printf(&txn->buf, "<%s>", organizer);
             mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),

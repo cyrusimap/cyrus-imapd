@@ -2428,8 +2428,8 @@ static json_t *participant_from_ical(icalproperty *prop,
     struct buf buf = BUF_INITIALIZER;
     icalproperty_kind kind = icalproperty_isa(prop);
 
-    int is_orga = !strcasecmpsafe(icalproperty_get_organizer(orga),
-                                  icalproperty_get_attendee(prop));
+    int is_orga = !strcasecmpsafe(icalproperty_get_decoded_calendaraddress(orga),
+                                  icalproperty_get_decoded_calendaraddress(prop));
 
     /* sendTo */
     json_t *sendTo = rsvpto_from_ical(prop);
