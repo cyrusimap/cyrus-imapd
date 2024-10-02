@@ -1493,6 +1493,7 @@ static void cmdloop(void)
     int readonly = config_getswitch(IMAPOPT_READONLY);
     int syntax_errors = 0;
     const int syntax_errors_limit = 10; /* XXX make this configurable? */
+    unsigned command_count = 0;
 
     prot_printf(imapd_out, "* OK [CAPABILITY");
     capa_response(CAPA_PREAUTH);
@@ -1599,7 +1600,7 @@ static void cmdloop(void)
             }
             goto done;
         }
-        if (c != ' ' || !imparse_istag(tag.s)) {
+        if (c != ' ' || !imparse_istag(tag.s, command_count)) {
             syntax_errors ++;
             prot_printf(imapd_out, "* BAD Invalid tag\r\n");
             eatline(imapd_in, c);
@@ -1617,6 +1618,10 @@ static void cmdloop(void)
         lcase(cmd.s);
         xstrncpy(cmdname, cmd.s, 99);
         cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+
+        /* that looks like a command, count it (but saturate, not overflow) */
+        if (command_count != UINT_MAX)
+            command_count ++;
 
         if (config_getswitch(IMAPOPT_CHATTY))
             syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
@@ -2311,6 +2316,9 @@ static void cmdloop(void)
                     continue;
                 }
                 cmd_starttls(tag.s, 0);
+
+                /* reset command count, the real imap session starts here */
+                command_count = 0;
 
                 prometheus_increment(CYRUS_IMAP_STARTTLS_TOTAL);
                 continue;
