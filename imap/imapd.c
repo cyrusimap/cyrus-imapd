@@ -9386,7 +9386,7 @@ static void cmd_starttls(char *tag, int imaps)
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
     if (imapd_tls_comp) imapd_compress_allowed = 0;
-#endif
+#endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 }
 #else
 void cmd_starttls(char *tag __attribute__((unused)),
@@ -9395,7 +9395,7 @@ void cmd_starttls(char *tag __attribute__((unused)),
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
           EX_SOFTWARE);
 }
-#endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#endif // HAVE_SSL
 
 static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
 {
