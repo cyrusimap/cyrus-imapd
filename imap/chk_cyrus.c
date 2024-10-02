@@ -63,6 +63,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "xmalloc.h"
+#include "imap_err.h"
 
 static void usage(void)
 {
@@ -82,10 +83,13 @@ static int chkmbox(struct findall_data *data, void *rock __attribute__((unused))
 
     r = mboxlist_lookup(name, &mbentry, NULL);
 
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+       return 0;
+
     /* xxx reserved mailboxes? */
 
     if (r) {
-        fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
+        fprintf(stderr, "bad mailbox %s in chkmbox: %s\n", name, error_message(r));
         fatal("fatal error",EX_TEMPFAIL);
     }
 
