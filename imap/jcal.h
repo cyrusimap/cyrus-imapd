@@ -2,6 +2,9 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#ifndef JCAL_H
+#define JCAL_H
+
 #include <config.h>
 
 #include <libical/ical.h>
@@ -22,3 +25,5 @@ extern const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
                               const char *prodid, const char *name,
                               const char *desc, const char *color);
 extern void end_jcal(struct buf *buf);
+
+#endif
