@@ -256,6 +256,12 @@ static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
                                    const char *desc, const char *color);
 static void end_icalendar(struct buf *buf);
 
+static const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name,
+                              const char *desc, const char *color);
+
+static void end_jcal(struct buf *buf);
+
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
 // clang-format off
@@ -8326,4 +8332,45 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
     };
 
     return meth_options(txn, oparams->parse_path);
+}
+
+static const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name,
+                              const char *desc, const char *color)
+{
+    icalcomponent *ical;
+    icalproperty *prop;
+    json_t *jprops;
+    char *jbuf;
+    size_t flags = JSON_PRESERVE_ORDER;
+
+    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+
+    /* Add toplevel properties */
+    ical = icalcomponent_new_stream(mailbox, prodid, name, desc, color);
+    jprops = json_array();
+
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
+
+        json_array_append_new(jprops, icalproperty_as_jcal_array(prop));
+    }
+    icalcomponent_free(ical);
+
+    jbuf = json_dumps(jprops, flags);
+    json_decref(jprops);
+
+    /* Begin jCal stream */
+    buf_reset(buf);
+    buf_printf(buf, "[ \"vcalendar\",\r\n%s, [\r\n", jbuf);
+    free(jbuf);
+
+    return ",";
+}
+
+static void end_jcal(struct buf *buf)
+{
+    /* End jCal stream */
+    buf_setcstr(buf, "]]\r\n");
 }
