@@ -15,6 +15,9 @@ extern icalcomponent *jcal_string_as_icalcomponent(const struct buf *);
 extern json_t *icalcomponent_as_jcal_array(icalcomponent* comp);
 extern icalcomponent *jcal_array_as_icalcomponent(json_t *);
 
+extern json_t *icalproperty_as_jcal_array(icalproperty *prop);
+extern icalproperty *jcal_array_as_icalproperty(json_t *);
+
 extern const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
                               const char *prodid, const char *name,
                               const char *desc, const char *color);
