@@ -354,7 +354,7 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
         break;
 
     case ICAL_X_COMPONENT:
-        kind_string = ""; //comp->x_name;
+        kind_string = icalcomponent_get_x_name(comp);
         break;
 
     default:
