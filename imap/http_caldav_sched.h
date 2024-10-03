@@ -104,7 +104,6 @@ enum {
     CHECK_USER_AVAIL =          (1<<1)
 };
 
-extern unsigned config_allowsched;
 extern const char *ical_prodid;
 extern icaltimezone *utc_zone;
 extern icalarray *rscale_calendars;
