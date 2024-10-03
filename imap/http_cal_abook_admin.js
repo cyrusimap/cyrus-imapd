@@ -83,7 +83,7 @@ function strHash(str) {
         hash <<= 1;
     }
 
-    return hash;
+    return Math.abs(hash);
 }
 
 
