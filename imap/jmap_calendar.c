@@ -7967,8 +7967,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
     jprop = json_object_get(req->args, "participantEmail");
     if (json_is_string(jprop)) {
-        part_email = json_string_value(jprop);
-        strarray_append(&schedule_addr, part_email);
+        const char *uri = json_string_value(jprop);
+        if (!strncasecmp(uri, "mailto:", 7)) uri += 7;
+
+        char *addr = xmlURIUnescapeString(uri, strlen(uri), NULL);
+        strarray_appendm(&schedule_addr, addr);
+        part_email = addr;
     }
     else {
         jmap_parser_invalid(&parser, "participantEmail");
