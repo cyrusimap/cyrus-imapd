@@ -63,6 +63,7 @@
 
 #define BLOCKSIZE 1024
 
+__attribute__((noreturn))
 void parseerror(const char *str)
 {
   printf("Bad protocol from MANAGESIEVE server: %s\n", str);
