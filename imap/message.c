@@ -1333,8 +1333,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
                 if (!attrlen || attr[attrlen-1] == '*') continue;
                 /* Check if the parameter value has non-ASCII characters */
                 int has_highbit = 0;
-                const char *val = param->value;
-                for (val = param->value; *val && !has_highbit; val++) {
+                for (const char *val = param->value; *val && !has_highbit; val++) {
                     has_highbit = *val & 0x80;
                 }
                 if (!has_highbit) continue;
@@ -3317,13 +3316,12 @@ static void message_read_binarybody(struct body *body, const char **sect,
                                     uint32_t cache_version)
 {
     bit32 n, i;
-    const char *p = *sect;
     struct body *subpart;
     size_t len;
     uint32_t cte;
 
     n = CACHE_ITEM_BIT32(*sect);
-    p = *sect += CACHE_ITEM_SIZE_SKIP;
+    const char *p = *sect += CACHE_ITEM_SIZE_SKIP;
     if (!n) return;
 
     if (body_is_rfc822(body) && body->encoding) {
