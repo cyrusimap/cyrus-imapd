@@ -445,7 +445,7 @@ sub _munge_annot_crc
     $fh->close();
 }
 sub test_replication_reply_200
-    :min_version_3_1 :needs_component_replication
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -514,7 +514,7 @@ sub test_replication_reply_200
 # Test APPEND of messages to IMAP
 #
 sub test_replication_reconstruct
-    :min_version_3_1 :needs_component_replication
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -676,7 +676,7 @@ sub bogus_test_double_clash
 # Test that a CID clash resolved on the master is replicated
 #
 sub bogus_test_replication_clash
-    :min_version_3_0 :needs_component_replication
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -849,7 +849,7 @@ sub bogus_test_cross_user_copy
 # Test APPEND of messages to IMAP
 #
 sub test_replication_trashseen
-    :min_version_3_1 :needs_component_replication
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
