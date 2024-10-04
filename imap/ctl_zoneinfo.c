@@ -80,7 +80,7 @@ void free_zoneinfo(void *data);
 void store_zoneinfo(const char *tzid, void *data, void *rock);
 void do_zonedir(const char *prefix, struct hash_table *tzentries,
                 struct zoneinfo *info);
-void shut_down(int code);
+void shut_down(int code) __attribute__((noreturn));
 
 
 int main(int argc, char **argv)
@@ -503,7 +503,6 @@ void store_zoneinfo(const char *tzid, void *data, void *rock)
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     in_shutdown = 1;
