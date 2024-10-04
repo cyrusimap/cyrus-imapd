@@ -133,9 +133,6 @@ enum sched_deliver_outcome {
     SCHED_DELIVER_DELETED  = 3
 };
 
-extern unsigned config_allowsched;
-extern struct strlist *cua_domains;
-
 struct proplist {
     icalproperty *prop;
     struct proplist *next;
