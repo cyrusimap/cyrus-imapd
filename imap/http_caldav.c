@@ -6395,7 +6395,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
             data = buf_cstring(&attrib);
             datalen = attrib.len;
         }
-        else if ((namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
+        else {
             /*  Check for CALDAV:calendar-timezone-id */
             prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
@@ -6428,7 +6428,6 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                 else r = HTTP_SERVER_ERROR;
             }
         }
-        else r = HTTP_NOT_FOUND;
     }
 
     if (!r) r = propfind_getdata(name, ns, fctx, prop, propstat,
@@ -6741,8 +6740,7 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
     const char *value = NULL;
     int r = 0;
 
-    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) ||
-        !fctx->req_tgt->userid || fctx->req_tgt->resource) {
+    if (!fctx->req_tgt->userid || fctx->req_tgt->resource) {
         return HTTP_NOT_FOUND;
     }
 
@@ -6792,8 +6790,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
                           struct propstat propstat[],
                           void *rock __attribute__((unused)))
 {
-    if ((namespace_calendar.allow & ALLOW_CAL_NOTZ) &&
-        pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *freeme = NULL;
         const char *tzid = NULL;
         const icaltimezone *tz = NULL;
