@@ -1,0 +1,149 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Spice;
+
+sub test_rfc7898_calendar_timezone_id {
+    my ($self) = @_;
+    my $caldav = $self->{caldav};
+
+    my $vtimezone = <<EOF;
+BEGIN:VCALENDAR
+PRODID:-//citadel.org//NONSGML Citadel calendar//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Etc/GMT+2
+LAST-MODIFIED:20240909T122233Z
+BEGIN:STANDARD
+TZNAME:Etc/GMT+2
+TZOFFSETFROM:-0200
+TZOFFSETTO:-0200
+DTSTART:16010101T000000
+END:STANDARD
+END:VTIMEZONE
+END:VCALENDAR
+EOF
+
+    xlog $self, "Verify no timezone or timezone-id is set";
+    $self->assert_timezone_id(undef);
+
+    xlog $self, "Set timezone";
+    my $res = $caldav->Request(
+        'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+        x('D:propertyupdate', $caldav->NS(),
+            x('D:set',
+                x('D:prop',
+                    x('C:calendar-timezone', $vtimezone),
+                ),
+            ),
+        ),
+    );
+
+    xlog $self, "Verify timezone and timezone-id are set";
+    $self->assert_timezone_id("Etc/GMT+2");
+
+    xlog $self, "Set timezone-id";
+    $res = $caldav->Request(
+        'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+        x('D:propertyupdate', $caldav->NS(),
+            x('D:set',
+                x('D:prop',
+                    x('C:calendar-timezone-id', 'Etc/GMT+2'),
+                ),
+            ),
+        ),
+    );
+
+    xlog $self, "Verify timezone and timezone-id are set";
+    $self->assert_timezone_id("Etc/GMT+2");
+
+    xlog $self, "Delete timezone property";
+    $res = $caldav->Request(
+        'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+        x('D:propertyupdate', $caldav->NS(),
+            x('D:remove',
+                x('D:prop',
+                    x('C:calendar-timezone'),
+                ),
+            ),
+        ),
+    );
+
+    xlog $self, "Verify no timezone or timezone-id is set";
+    $self->assert_timezone_id(undef);
+
+    xlog $self, "Set differing timezone and timezone-id, timezone as second";
+    $res = $caldav->Request(
+        'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+        x('D:propertyupdate', $caldav->NS(),
+            x('D:set',
+                x('D:prop',
+                    x('C:calendar-timezone-id', 'Etc/GMT+4'),
+                    x('C:calendar-timezone', $vtimezone),
+                ),
+            ),
+        ),
+    );
+
+    xlog $self, "Verify timezone-id matches timezone value";
+    $self->assert_timezone_id("Etc/GMT+2");
+
+    xlog $self, "Set differing timezone and timezone-id, timezone-id as second";
+    $res = $caldav->Request(
+        'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+        x('D:propertyupdate', $caldav->NS(),
+            x('D:set',
+                x('D:prop',
+                    x('C:calendar-timezone', $vtimezone),
+                    x('C:calendar-timezone-id', 'Etc/GMT+4'),
+                ),
+            ),
+        ),
+    );
+
+    xlog $self, "Verify timezone-id matches timezone value";
+    $self->assert_timezone_id("Etc/GMT+4");
+
+    xlog $self, "Delete timezone-id property";
+    $res = $caldav->Request(
+        'PROPPATCH',   "/dav/calendars/user/cassandane/Default",
+        x('D:propertyupdate', $caldav->NS(),
+            x('D:remove',
+                x('D:prop',
+                    x('C:calendar-timezone-id'),
+                ),
+            ),
+        ),
+    );
+
+    xlog $self, "Verify no timezone or timezone-id is set";
+    $self->assert_timezone_id(undef);
+}
+
+sub assert_timezone_id {
+    my ($self, $tzid) = @_;
+    my $caldav = $self->{caldav};
+
+    my $res = $caldav->Request(
+        'PROPFIND',   "/dav/calendars/user/cassandane/Default",
+        x('D:propfind', $caldav->NS(),
+            x('D:prop',
+                x('C:calendar-timezone-id'),
+                x('C:calendar-timezone'),
+            ),
+        ),
+    );
+
+    my $propstat = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    if (not $tzid) {
+        $self->assert_str_equals(
+            'HTTP/1.1 404 Not Found',
+            $propstat->{'{DAV:}status'}{content}
+        );
+        $self->assert(
+            exists $propstat->{'{DAV:}prop'}
+              {'{urn:ietf:params:xml:ns:caldav}calendar-timezone-id'});
+        $self->assert(
+            exists $propstat->{'{DAV:}prop'}
+              {'{urn:ietf:params:xml:ns:caldav}calendar-timezone'});
+    }
+}
