@@ -1473,6 +1473,16 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
+    if (icalcomponent_isa(itip) != ICAL_VCALENDAR_COMPONENT) {
+        buf_setcstr(&cal->outcome, "error");
+        buf_setcstr(&cal->reason,
+                    "MUST have exactly one VCALENDAR component");
+        syslog(LOG_NOTICE,
+               "Sieve: message %s does not have exactly one VCALENDAR component",
+               mydata->m->id ? mydata->m->id : "<no-msgid>");
+        goto done;
+    }
+
     meth = icalcomponent_get_method(itip);
     if (meth == ICAL_METHOD_NONE) {
         if (cal->allow_public) meth = ICAL_METHOD_PUBLISH;
