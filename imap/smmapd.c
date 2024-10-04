@@ -101,6 +101,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 static const char *BB;
 static int forcedowncase;
 

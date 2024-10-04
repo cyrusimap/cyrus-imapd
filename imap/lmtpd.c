@@ -108,6 +108,8 @@
 #include "imap/imap_err.h"
 #include "imap/lmtp_err.h"
 
+#include "master/service.h"
+
 #include "lmtpd.h"
 #include "lmtpengine.h"
 #ifdef USE_SIEVE
