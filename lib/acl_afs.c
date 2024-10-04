@@ -252,8 +252,7 @@ EXPORTED int is_system_user(const char *userid)
 
     if (!strcmp(userid, "anyone")) return 1;
     if (!strcmp(userid, "anonymous")) return 1;
-    if (strarray_find(admins, userid, 0) >= 0)
-        return 1;
+    if (strarray_contains(admins, userid)) return 1;
 
     return 0;
 }

@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_itip_ignore_invalid_timezone
+    :min_version_3_9 :needs_component_sieve
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :outcome "outcome";
+}
+EOF
+    );
+
+    my @testCases = ({
+        tzid => 'UTC', # can handle as 'Etc/UTC'
+        wantAdded => 1,
+    }, {
+        tzid => 'Europe/Vienna', # already is IANA name
+        wantAdded => 1,
+    }, {
+        tzid => 'Pacific Standard Time', # can map to IANA name
+        wantAdded => 1,
+    }, {
+        tzid => 'Foo', # can't map to IANA, reject
+        wantAdded => 0,
+    });
+
+    for my $tc (@testCases) {
+
+        my $uid = (Data::UUID->new)->create_str();
+
+        xlog $self, "Send iMIP message with invalid VTIMEZONE having name $tc->{tzid}";
+        my $imip = <<"EOF";
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sally Sender <sender\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VTIMEZONE
+TZID:$tc->{tzid}
+X-LIC-LOCATION:$tc->{tzid}
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uid
+TRANSP:OPAQUE
+SUMMARY:test
+DTSTART;TZID=$tc->{tzid}:20210923T153000
+DURATION:PT1H
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER:MAILTO:organizer\@example.net
+ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+        $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+        my $res = $jmap->CallMethods([
+            ['CalendarEvent/get', {
+                ids => [encode_eventid($uid)]
+            }, 'R1']
+        ]);
+
+        if ($tc->{wantAdded}) {
+            $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+        } else {
+            $self->assert_num_equals(1, scalar @{$res->[0][1]{notFound}});
+        }
+    }
+}

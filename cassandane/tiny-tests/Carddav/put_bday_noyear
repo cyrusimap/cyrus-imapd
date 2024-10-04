@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_put_bday_noyear
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+FN:Jane Doe
+N:Doe;Jane;;;
+BDAY:--0415
+END:VCARD
+EOF
+
+    my %Headers = (
+      'Content-Type' => 'text/vcard',
+      'Authorization' => $CardDAV->auth_header(),
+    );
+
+    xlog $self, "PUT vCard v3 with no-year BDAY -- should fail";
+    my $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(403, $Response->{status});
+
+    xlog $self, "PUT vCard v4 with no-year BDAY";
+    $card =~ s/3.0/4.0/;
+    $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(201, $Response->{status});
+
+    my $res = $CardDAV->Request('GET', $href, '',
+                                'Accept' => 'text/vcard; version=3.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr|BDAY;X-APPLE-OMIT-YEAR=1604:1604(-)?04(-)?15|,
+                          $card);
+
+    xlog $self, "PUT vCard v3 with omit-year BDAY";
+    $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(204, $Response->{status});
+
+    $res = $CardDAV->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr|BDAY:--0415|, $card);
+}

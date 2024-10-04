@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_stopwords
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    # This test assumes that "the" is a stopword and is configured with
+    # the search_stopword_path in cassandane.ini. If the option is not
+    # set it tests legacy behaviour.
+
+    my $talk = $self->{store}->get_client();
+
+    # Set up Xapian database
+    xlog $self, "Generate and index test messages.";
+    my %params = (
+        mime_charset => "utf-8",
+    );
+    my $subject;
+    my $body;
+
+    $subject = "1";
+    $body = "In my opinion the soup smells tasty";
+    $params{body} = $body;
+    $self->make_message($subject, %params) || die;
+
+    $subject = "2";
+    $body = "The funny thing is that this isn't funny";
+    $params{body} = $body;
+    $self->make_message($subject, %params) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # Connect via IMAP
+    xlog $self, "Select INBOX";
+    $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    my $term;
+    my $r;
+
+    # Search for stopword only
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", "text", "the",
+    ) || die;
+    $self->assert_num_equals(2, scalar @$r);
+
+    # Search for stopword plus significant term
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", "text", "the soup",
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", "text", "the", "fuzzy", "text", "soup",
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+}

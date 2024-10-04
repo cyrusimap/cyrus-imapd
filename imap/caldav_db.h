@@ -52,6 +52,7 @@ extern time_t caldav_eternity;
 #include <libical/ical.h>
 
 #include "dav_db.h"
+#include "dynarray.h"
 #include "ical_support.h"
 #include "mboxlist.h"
 
@@ -215,13 +216,64 @@ struct caldav_jscal {
     const char *cachedata;
 };
 
+enum caldav_jscal_filterop {
+    CALDAV_JSCAL_NOOP = 0,
+    CALDAV_JSCAL_AND,
+    CALDAV_JSCAL_OR,
+    CALDAV_JSCAL_NOT,
+    CALDAV_JSCAL_FALSE // never matches
+};
+
+struct caldav_jscal_id {
+    char *ical_uid;
+    char *ical_recurid;
+};
+
 struct caldav_jscal_filter {
-    const mbentry_t *mbentry;
-    const char *ical_uid;
-    const char *ical_recurid;
+    ptrarray_t mbentries; // any of
+    dynarray_t jscal_ids; // any of
     uint32_t imap_uid;
-    const time_t *after;
-    const time_t *before;
+    time_t after;
+    time_t before;
+
+    enum caldav_jscal_filterop op;
+    ptrarray_t subfilters;
+
+    int _have_after : 1;
+    int _have_before: 1;
+};
+
+#define CALDAV_JSCAL_FILTER_INITIALIZER { \
+    .mbentries = PTRARRAY_INITIALIZER, \
+    .jscal_ids = { .membsize =  sizeof(struct caldav_jscal_id)}, \
+    .subfilters = PTRARRAY_INITIALIZER \
+}
+
+extern struct caldav_jscal_filter *caldav_jscal_filter_new(void);
+
+extern void caldav_jscal_filter_by_ical_uid(struct caldav_jscal_filter*,
+	const char *ical_uid, const char *ical_recurid);
+
+extern void caldav_jscal_filter_by_mbentry(struct caldav_jscal_filter*,
+	const mbentry_t *mbentry);
+
+extern void caldav_jscal_filter_by_mbentrym(struct caldav_jscal_filter*,
+	mbentry_t *mbentry);
+
+extern void caldav_jscal_filter_by_imap_uid(struct caldav_jscal_filter*,
+	uint32_t imap_uid);
+
+extern void caldav_jscal_filter_by_before(struct caldav_jscal_filter*,
+	const time_t *before);
+
+extern void caldav_jscal_filter_by_after(struct caldav_jscal_filter*,
+	const time_t *after);
+
+extern void caldav_jscal_filter_fini(struct caldav_jscal_filter *);
+
+extern void caldav_jscal_filter_free(struct caldav_jscal_filter **);
+
+struct caldav_jscal_window {
     modseq_t aftermodseq;
     int tombstones;
     size_t maxcount;
@@ -232,11 +284,21 @@ typedef int caldav_jscal_cb_t(void *rock, struct caldav_jscal *jscal);
 int caldav_foreach_jscal(struct caldav_db *caldavdb,
                          const char *cache_userid,
                          struct caldav_jscal_filter *filter,
+                         struct caldav_jscal_window *window,
                          enum caldav_sort* sort, size_t nsort,
                          caldav_jscal_cb_t *cb, void *rock);
 
 int caldav_write_jscalcache(struct caldav_db *caldavdb, int rowid,
                             const char *recurid, const char *userid,
                             int version, const char *data);
+
+/* fetch time zone using for floating time events from calendar or principal */
+extern icaltimezone *caldav_get_calendar_tz(const char *mboxname,
+                                            const char *userid);
+
+/* fetch IMAP UIDs of all floating time events in calendar */
+int caldav_get_floating_events(struct caldav_db *caldavdb,
+                               const mbentry_t *mbentry,
+                               caldav_cb_t *cb, void *rock);
 
 #endif /* CALDAV_DB_H */

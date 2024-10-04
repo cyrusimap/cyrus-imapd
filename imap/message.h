@@ -141,6 +141,8 @@ extern int message_copy_strict(struct protstream *from, FILE *to,
                                unsigned size, int allow_null);
 
 extern int message_parse(const char *fname, struct index_record *record);
+extern int message_create_record(struct index_record *record,
+                                 const struct body *body);
 
 struct message_content {
     struct buf map;
@@ -198,6 +200,8 @@ extern void message_parse_type(const char *hdr, char **typep, char **subtypep, s
 extern void message_parse_disposition(const char *hdr, char **hdpr, struct param **paramp);
 
 extern void message_parse_charset_params(const struct param *params, charset_t *c_ptr);
+
+extern void message_parse_received_date(const char *hdr, char **hdrp);
 
 /* NOTE - scribbles on its input */
 extern void message_parse_env_address(char *str, struct address *addr);
@@ -371,6 +375,11 @@ extern conversation_id_t msg_cid(const message_t *m);
 extern modseq_t msg_modseq(const message_t *m);
 extern uint32_t msg_msgno(const message_t *m);
 extern const struct message_guid *msg_guid(const message_t *m);
+
+/* Find a message-id looking thingy in a string.  Returns a pointer to the
+ * alloc'd id and the remaining string is returned in the **loc parameter.
+ */
+extern char *message_iter_msgid(char *str, char **rem);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 

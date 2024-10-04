@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_rename_sub_inbox_both
+    :min_version_3_3
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.INBOX.Child") || die;
+    $imaptalk->create("INBOX.Example.INBOX") || die;
+    $imaptalk->create("INBOX.Example.Other") || die;
+    $imaptalk->create("INBOX.Top") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move Example.INBOX to top level and rename at same time";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{INBOX} => {
+          parentId => undef,
+          name => "INBOX1",
+        }
+      }
+    });
+    $self->assert(exists $res->{updated}{$mboxids{INBOX}});
+    $self->assert_null($res->{notUpdated});
+
+    # make sure we didn't create the deep tree!
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/INBOX\.INBOX\.INBOX/);
+}

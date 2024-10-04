@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_subscriptions_rename_children
+    :min_version_3_1 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A', parentId => undef, role => undef,
+            },
+            C => {
+                name => 'C', parentId => '#A', role => undef,
+            },
+        },
+    }, "R1"]]);
+    my $idA =$res->[0][1]{created}{A}{id};
+    $self->assert_not_null($idA);
+    $imap->subscribe("INBOX.A.C") || die;
+
+    my $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.A.C', $subdata->[0][2]);
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idA => {
+                name => 'B',
+            },
+        },
+    }, "R1"]]);
+    $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.B.C', $subdata->[0][2]);
+}

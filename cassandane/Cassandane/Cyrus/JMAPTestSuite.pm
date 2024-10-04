@@ -64,6 +64,15 @@ my %suppressed;
 # dot-separated.  See skip_before() below for implementation details.
 my %notbefore = (
     't:Email:get:header-header-field-name' => '3.5',
+    't:Email:import:good-imports' => '3.8',
+    't:Email:import:one-fails-another-succeeds' => '3.8',
+);
+
+# Tests which JMAP-TestSuite will skip anyway when it detects it's
+# talking to Cyrus.
+my %notcyrus = map { $_ => 1 } (
+    't:Mailbox:get:no-existing-entities',
+    't:Mailbox:query:no-existing-entities',
 );
 
 sub cyrus_version_supports_jmap
@@ -121,6 +130,7 @@ sub new
         return $class->SUPER::new({
             config => $config,
             adminstore => 1,
+            squatter => 1,
             services => ['imap', 'http'],
         }, @_);
     }
@@ -183,6 +193,7 @@ sub find_tests
             return unless -f "$file.t";
             $file =~ s/^$basedir\/?//;
             $file =~ s{/}{:}g;
+            return if $notcyrus{$file};
             return if $suppressed{$file};
             if (exists $notbefore{$file} and skip_before($notbefore{$file})) {
                 return;
@@ -279,12 +290,6 @@ sub run_test
     local $ENV{JMTS_TELEMETRY} = 1 if get_verbose >= 3;
     local $ENV{JMTS_USE_WEBSOCKETS} = 0;
 
-    # Needed so text based searching works in Email/query, etc...
-    my $squatter_pid = $self->{instance}->run_command(
-      { cyrus => 1, background => 1 },
-      'squatter', '-R', '-d',
-    );
-
     $self->{instance}->run_command({
             redirects => { stderr => $errfile, stdout => $outfile },
             workingdir => $basedir,
@@ -296,8 +301,6 @@ sub run_test
         "perl", '-I' => "$basedir/lib",
          "$basedir/$name.t",
     );
-
-    kill 'INT' => $squatter_pid || die "Failed to kill squatter $squatter_pid\n";
 
     if ((!$status || get_verbose)) {
         if (-f $errfile) {

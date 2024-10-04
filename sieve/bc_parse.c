@@ -49,7 +49,7 @@
 #include "strarray.h"
 #include "arrayu64.h"
 
-#define MAX_ARGS  10  /* vacation currently uses 9 */
+#define MAX_ARGS  15  /* processcalendar currently uses 13 */
 
 struct args_t {
     unsigned type;
@@ -65,7 +65,7 @@ static const struct args_t cmd_args_table[] = {
       { offsetof(struct Commandlist, u.str)
       } },
     { B_FILEINTO_ORIG,           "s",                                    /*  4 */
-      { offsetof(struct Commandlist, u.f.folder)
+      { offsetof(struct Commandlist, u.f.t.folder)
       } },
     { B_REDIRECT_ORIG,           "s",                                    /*  5 */
       { offsetof(struct Commandlist, u.r.address)
@@ -118,7 +118,7 @@ static const struct args_t cmd_args_table[] = {
     { B_RETURN,                  "", { 0 } },                            /* 18 */
     { B_FILEINTO_COPY,           "is",                                   /* 19 */
       { offsetof(struct Commandlist, u.f.copy),
-        offsetof(struct Commandlist, u.f.folder)
+        offsetof(struct Commandlist, u.f.t.folder)
       } },
     { B_REDIRECT_COPY,           "is",                                   /* 20 */
       { offsetof(struct Commandlist, u.r.copy),
@@ -139,13 +139,13 @@ static const struct args_t cmd_args_table[] = {
     { B_FILEINTO_FLAGS,          "Sis",                                  /* 23 */
       { offsetof(struct Commandlist, u.f.flags),
         offsetof(struct Commandlist, u.f.copy),
-        offsetof(struct Commandlist, u.f.folder)
+        offsetof(struct Commandlist, u.f.t.folder)
       } },
     { B_FILEINTO_CREATE,         "iSis",                                 /* 24 */
       { offsetof(struct Commandlist, u.f.create),
         offsetof(struct Commandlist, u.f.flags),
         offsetof(struct Commandlist, u.f.copy),
-        offsetof(struct Commandlist, u.f.folder)
+        offsetof(struct Commandlist, u.f.t.folder)
       } },
     { B_SET,                     "iss",                                  /* 25 */
       { offsetof(struct Commandlist, u.s.modifiers),
@@ -216,11 +216,11 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.fcc)
       } },
     { B_FILEINTO_SPECIALUSE,     "siSis",                                /* 38 */
-      { offsetof(struct Commandlist, u.f.specialuse),
+      { offsetof(struct Commandlist, u.f.t.specialuse),
         offsetof(struct Commandlist, u.f.create),
         offsetof(struct Commandlist, u.f.flags),
         offsetof(struct Commandlist, u.f.copy),
-        offsetof(struct Commandlist, u.f.folder)
+        offsetof(struct Commandlist, u.f.t.folder)
       } },
     { B_REDIRECT,                "ssissiis",                             /* 39 */
       { offsetof(struct Commandlist, u.r.bytime),
@@ -233,18 +233,18 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.r.address)
       } },
     { B_FILEINTO,                "ssiSis",                               /* 40 */
-      { offsetof(struct Commandlist, u.f.mailboxid),
-        offsetof(struct Commandlist, u.f.specialuse),
+      { offsetof(struct Commandlist, u.f.t.mailboxid),
+        offsetof(struct Commandlist, u.f.t.specialuse),
         offsetof(struct Commandlist, u.f.create),
         offsetof(struct Commandlist, u.f.flags),
         offsetof(struct Commandlist, u.f.copy),
-        offsetof(struct Commandlist, u.f.folder)
+        offsetof(struct Commandlist, u.f.t.folder)
       } },
     { B_LOG,                     "s",                                    /* 41 */
       { offsetof(struct Commandlist, u.l.text)
       } },
     { B_SNOOZE_ORIG,             "sSSB2U",                               /* 42 */
-      { offsetof(struct Commandlist, u.sn.f.folder),
+      { offsetof(struct Commandlist, u.sn.f.t.folder),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
         offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
@@ -253,7 +253,7 @@ static const struct args_t cmd_args_table[] = {
       } },
     { B_SNOOZE_TZID,             "ssSSB2U",                              /* 43 */
       { offsetof(struct Commandlist, u.sn.tzid),
-        offsetof(struct Commandlist, u.sn.f.folder),
+        offsetof(struct Commandlist, u.sn.f.t.folder),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
         offsetof(struct Commandlist, u.sn.days),      SNOOZE_WDAYS_MASK,
@@ -261,9 +261,9 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.sn.times)
       } },
     { B_SNOOZE,                  "sssiSSisU",                            /* 44 */
-      { offsetof(struct Commandlist, u.sn.f.folder),
-        offsetof(struct Commandlist, u.sn.f.mailboxid),
-        offsetof(struct Commandlist, u.sn.f.specialuse),
+      { offsetof(struct Commandlist, u.sn.f.t.folder),
+        offsetof(struct Commandlist, u.sn.f.t.mailboxid),
+        offsetof(struct Commandlist, u.sn.f.t.specialuse),
         offsetof(struct Commandlist, u.sn.f.create),
         offsetof(struct Commandlist, u.sn.addflags),
         offsetof(struct Commandlist, u.sn.removeflags),
@@ -282,12 +282,28 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.fcc)
       } },
     { B_PROCESSIMIP,             "B3sss",                                /* 46 */
-      { offsetof(struct Commandlist, u.imip.updates_only),    IMIP_UPDATESONLY,
-        offsetof(struct Commandlist, u.imip.invites_only),    IMIP_INVITESONLY,
-        offsetof(struct Commandlist, u.imip.delete_canceled), IMIP_DELETECANCELED,
-        offsetof(struct Commandlist, u.imip.calendarid),
-        offsetof(struct Commandlist, u.imip.outcome_var),
-        offsetof(struct Commandlist, u.imip.errstr_var)
+      { offsetof(struct Commandlist, u.cal.updates_only),     CAL_UPDATESONLY,
+        offsetof(struct Commandlist, u.cal.invites_only),     CAL_INVITESONLY,
+        offsetof(struct Commandlist, u.cal.delete_cancelled), CAL_DELETECANCELLED,
+        offsetof(struct Commandlist, u.cal.calendarid),
+        offsetof(struct Commandlist, u.cal.outcome_var),
+        offsetof(struct Commandlist, u.cal.reason_var)
+      } },
+    { B_IKEEP_TARGET,            "sss",                                  /* 47 */
+      { offsetof(struct Commandlist, u.ikt.mailboxid),
+        offsetof(struct Commandlist, u.ikt.specialuse),
+        offsetof(struct Commandlist, u.ikt.folder)
+      } },
+    { B_PROCESSCAL,              "B4Sssss",                              /* 48 */
+      { offsetof(struct Commandlist, u.cal.allow_public),     CAL_ALLOWPUBLIC,
+        offsetof(struct Commandlist, u.cal.updates_only),     CAL_UPDATESONLY,
+        offsetof(struct Commandlist, u.cal.invites_only),     CAL_INVITESONLY,
+        offsetof(struct Commandlist, u.cal.delete_cancelled), CAL_DELETECANCELLED,
+        offsetof(struct Commandlist, u.cal.addresses),
+        offsetof(struct Commandlist, u.cal.organizers),
+        offsetof(struct Commandlist, u.cal.calendarid),
+        offsetof(struct Commandlist, u.cal.outcome_var),
+        offsetof(struct Commandlist, u.cal.reason_var)
       } },
 };
 
@@ -603,14 +619,14 @@ static int bc_args_parse(bytecode_input_t *bc, int pos, const char *fmt,
                 break;
             }
 
-            pos = bc_string_parse(bc, pos, &fcc->folder);
-            if (fcc->folder) {
+            pos = bc_string_parse(bc, pos, &fcc->t.folder);
+            if (fcc->t.folder) {
                 fcc->create = ntohl(bc[pos++].value);
                 pos = bc_stringlist_parse(bc, pos, &fcc->flags);
                 if (have_specialuse) {
-                    pos = bc_string_parse(bc, pos, &fcc->specialuse);
+                    pos = bc_string_parse(bc, pos, &fcc->t.specialuse);
                     if (have_mailboxid) {
-                        pos = bc_string_parse(bc, pos, &fcc->mailboxid);
+                        pos = bc_string_parse(bc, pos, &fcc->t.mailboxid);
                     }
                 }
             }
@@ -683,6 +699,9 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
     int opcode = ntohl(bc[pos++].op);
     int has_index = 0;
 
+    memset(test, 0, sizeof(test_t));
+    test->type = opcode;
+
     if (opcode >= BC_ILLEGAL_VALUE) {
         /* Unknown opcode */
         return -1;
@@ -744,6 +763,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
             case B_ASCIICASEMAP:
             case B_OCTET:
             case B_ASCIINUMERIC:
+            case B_UNICODECASEMAP:
                 has_index = 0;
                 break;
             default:
@@ -757,6 +777,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
                 case B_ASCIICASEMAP:
                 case B_OCTET:
                 case B_ASCIINUMERIC:
+                case B_UNICODECASEMAP:
                     /* The ambiguous case is B_TIMEZONE as 1st parameter and
                      * B_ORIGINALZONE as second parameter, which could mean
                      * either ':index 60 :originalzone' or ':zone "+0101"'
@@ -810,9 +831,6 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
             break;
         }
     }
-
-    memset(test, 0, sizeof(test_t));
-    test->type = opcode;
 
     return bc_args_parse(bc, pos, fmt, test, offsets);
 }

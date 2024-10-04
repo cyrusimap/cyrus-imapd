@@ -66,9 +66,9 @@ Examples
     ::
 
         reading configure file /etc/imapd.conf...
-        i will configure directory /var/lib/imap.
-        i saw partition /var/spool/cyrus/mail.
-        i saw partition /var/spool/cyrus/news.
+        I will configure directory /var/lib/imap.
+        I saw partition /var/spool/cyrus/mail.
+        I saw partition /var/spool/cyrus/news.
         done
         configuring /var/lib/imap...
         creating /var/spool/cyrus/mail...

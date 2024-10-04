@@ -133,11 +133,16 @@ Cassandane needs the following software to work:
     Self-contained RDBMS in a DBI Driver
     Debian/Ubuntu package libdbd-sqlite3-perl
 
+ * Digest::CRC
+    Calculates various types of CRC sums
+    Debian/Ubuntu package libdigest-crc-perl
+
  * AnyEvent
  * Convert::Base64
  * DateTime::Format::ISO8601
  * String::CRC32
  * XML::DOM
+ * XML::Simple
     These are available from CPAN
 
 Debian/Ubuntu copypasta:
@@ -155,10 +160,11 @@ Debian/Ubuntu copypasta:
        libdatetime-format-ical-perl libuniversal-require-perl \
        libtest-nowarnings-perl libtest-longstring-perl \
        libtest-warn-perl libnet-ldap-server-perl \
-       libdbd-sqlite3-perl
+       libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
-       Net::CalDAVTalk Net::CardDAVTalk String::CRC32
+       Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
+       IO::File::Lockable
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested

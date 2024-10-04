@@ -54,6 +54,7 @@
 #include "annotate.h"
 #include "backend.h"
 #include "global.h"
+#include "hashu64.h"
 #include "imap_proxy.h"
 #include "proxy.h"
 #include "mboxname.h"
@@ -100,8 +101,10 @@ struct protocol_t imap_protocol =
           { "RIGHTS=kxte", CAPA_ACLRIGHTS },
           { "LIST-EXTENDED", CAPA_LISTEXTENDED },
           { "SASL-IR", CAPA_SASL_IR },
+          { "QUOTASET", CAPA_QUOTASET },
           { "X-REPLICATION", CAPA_REPLICATION },
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
+          { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           /* Need to bump MAX_CAPA in protocol.h if this array is extended */
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
@@ -435,8 +438,8 @@ int pipe_command(struct backend *s, int optimistic_literal)
     }
 }
 
-void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
-                        uint32_t attributes, struct buf *extraflags)
+void print_listresponse(unsigned cmd, const char *extname, const char *oldname,
+                        char hier_sep, uint32_t attributes, struct buf *extraflags)
 {
     const struct mbox_name_attribute *attr;
     const char *resp, *sep;
@@ -470,16 +473,35 @@ void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
 
     prot_printastring(imapd_out, extname);
 
-    if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED) {
-        prot_puts(imapd_out, " (CHILDINFO (");
-        /* RFC 5258:
-         *     ; Note 2: The selection options are always returned
-         *     ; quoted, unlike their specification in
-         *     ; the extended LIST command.
-         */
-        if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
-            prot_puts(imapd_out, "\"SUBSCRIBED\"");
-        prot_puts(imapd_out, "))");
+    if (oldname || (attributes & MBOX_ATTRIBUTE_CHILDINFO_MASK)) {
+        sep = "";
+        prot_puts(imapd_out, " (");
+
+        if (oldname) {
+            prot_printf(imapd_out, "OLDNAME (");
+            prot_printastring(imapd_out, oldname);
+            prot_puts(imapd_out, ")");
+            sep = " ";
+        }
+        if (attributes & MBOX_ATTRIBUTE_CHILDINFO_MASK) {
+            prot_printf(imapd_out, "%sCHILDINFO (", sep);
+
+            for (sep = "", attr = mbox_name_childinfo; attr->id; attr++) {
+                if (attributes & attr->flag) {
+                    /* RFC 5258:
+                     *     ; Note 2: The selection options are always returned
+                     *     ; quoted, unlike their specification in
+                     *     ; the extended LIST command.
+                     */
+                    prot_printf(imapd_out, "%s\"%s\"", sep, attr->id);
+                    sep = " ";
+                }
+            }
+
+            prot_puts(imapd_out, ")");
+        }
+
+        prot_puts(imapd_out, ")");
     }
 
     prot_puts(imapd_out, "\r\n");
@@ -760,8 +782,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             if (!suppress_resp) {
                 /* send response to the client */
-                print_listresponse(listargs->cmd, name.s, sep.s[0],
-                                   attributes, &extraflags);
+                print_listresponse(listargs->cmd, name.s, NULL,
+                                   sep.s[0], attributes, &extraflags);
 
                 /* send any PROXY_ONLY metadata items */
                 for (c = 0; c < listargs->metaitems.count; c++) {
@@ -863,164 +885,121 @@ static char *editflags(char *flags)
     return flags;
 }
 
+struct msg_t {
+    const struct buf *data;
+    char *flags;
+    char *idate;
+    uint32_t uid;
+};
+
+struct copy_rock {
+    hashu64_table msg_byuid;
+    struct msg_t cur_msg;
+    struct backend *s;
+    seqset_t *uidset;
+};
+
+static void copy_cb(uint32_t seqno, unsigned item, void *datap, void *rock)
+{
+    struct copy_rock *crock = (struct copy_rock *) rock;
+    struct msg_t *cur_msg = &crock->cur_msg;
+
+    switch (item) {
+    case 0: /* done parsing items */
+        if (cur_msg->data && cur_msg->uid) {
+            /* remove this msg from hash table and append to s->out */
+            struct msg_t *mdata = hashu64_del(cur_msg->uid, &crock->msg_byuid);
+
+            prot_printf(crock->s->out, " (%s) \"%s\" {%lu+}\r\n",
+                        mdata->flags, mdata->idate, buf_len(cur_msg->data));
+            prot_putbuf(crock->s->out, cur_msg->data);
+                
+            free(mdata->flags);
+            free(mdata->idate);
+            free(mdata);
+        }
+        else if (cur_msg->flags && cur_msg->idate &&
+                 (!crock->uidset || cur_msg->uid)) {
+            /* add this msg to hash table */
+            struct msg_t *mdata = xmalloc(sizeof(struct msg_t));
+
+            memcpy(mdata, cur_msg, sizeof(struct msg_t));
+            hashu64_insert(mdata->uid, mdata, &crock->msg_byuid);
+
+            if (crock->uidset) {
+                /* add this UID to seqset */
+                seqset_add(crock->uidset, mdata->uid, 1);
+            }
+        }
+        else {
+            /* we're missing something, we should just echo */
+            char sep = '(';
+
+            prot_printf(imapd_out, "* %d FETCH ", seqno);
+            if (cur_msg->data) {
+                prot_printf(imapd_out, "%cBODY[] {%lu+}\r\n",
+                            sep, buf_len(cur_msg->data));
+                prot_putbuf(imapd_out, cur_msg->data);
+                sep = ' ';
+            }
+            if (cur_msg->uid) {
+                prot_printf(imapd_out, "%cUID %d", sep, cur_msg->uid);
+                sep = ' ';
+            }
+            if (cur_msg->flags) {
+                prot_printf(imapd_out, "%cFLAGS %s", sep, cur_msg->flags);
+                free(cur_msg->flags);
+                sep = ' ';
+            }
+            if (cur_msg->idate) {
+                prot_printf(imapd_out, "%cINTERNALDATE %s", sep, cur_msg->idate);
+                free(cur_msg->idate);
+                sep = ' ';
+            }
+            if (sep == '(') prot_putc('(', imapd_out);
+            prot_printf(imapd_out, ")\r\n");
+        }
+
+        memset(cur_msg, 0, sizeof(struct msg_t));
+        break;
+
+    case FETCH_BODY:
+        cur_msg->data = (const struct buf *) datap;
+        break;
+
+    case FETCH_FLAGS:
+        cur_msg->flags = (char *) datap; // steal value (must free)
+        break;
+
+    case FETCH_INTERNALDATE:
+        cur_msg->idate = (char *) datap; // steal value (must free)
+        break;
+
+    case FETCH_UID:
+        cur_msg->uid = *((uint32_t *) datap);
+        break;
+    }
+}
+
 void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 int usinguid, struct backend *s)
 {
-    char mytag[128];
-    struct d {
-        char *idate;
-        char *flags;
-        unsigned int seqno, uid;
-        struct d *next;
-    } *head, *p, *q;
-    int c;
+    struct copy_rock crock = { HASHU64_TABLE_INITIALIZER, { 0 }, s, NULL };
+    unsigned items = FETCH_FLAGS | FETCH_INTERNALDATE;
+    char *freeme = NULL;
+    int res;
 
-    /* find out what the flags & internaldate for this message are */
-    proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(backend_current->out,
-                "%s %s %s (Flags Internaldate)\r\n",
-                tag, usinguid ? "Uid Fetch" : "Fetch", sequence);
-    head = (struct d *) xmalloc(sizeof(struct d));
-    head->flags = NULL; head->idate = NULL;
-    head->seqno = head->uid = 0;
-    head->next = NULL;
-    p = head;
-    /* read all the responses into the linked list */
-    for (/* each FETCH response */;;) {
-        unsigned int seqno = 0, uidno = 0;
-        char *flags = NULL, *idate = NULL;
+    construct_hashu64_table(&crock.msg_byuid, 1024, 0);
 
-        /* read a line */
-        c = prot_getc(backend_current->in);
-        if (c != '*') break;
-        c = prot_getc(backend_current->in);
-        if (c != ' ') { /* protocol error */ c = EOF; break; }
-
-        /* check for OK/NO/BAD/BYE response */
-        if (!isdigit(c = prot_getc(backend_current->in))) {
-            prot_printf(imapd_out, "* %c", c);
-            pipe_to_end_of_response(backend_current, 0);
-            continue;
-        }
-
-        /* read seqno */
-        prot_ungetc(c, backend_current->in);
-        c = getuint32(backend_current->in, &seqno);
-        if (seqno == 0 || c != ' ') {
-            /* we suck and won't handle this case */
-            c = EOF; break;
-        }
-        c = chomp(backend_current->in, "fetch (");
-        if (c == EOF) {
-            c = chomp(backend_current->in, "exists\r");
-            if (c == '\n') { /* got EXISTS response */
-                prot_printf(imapd_out, "* %d EXISTS\r\n", seqno);
-                continue;
-            }
-        }
-        if (c == EOF) {
-            /* XXX  the "exists" check above will eat "ex" */
-            c = chomp(backend_current->in, "punge\r");
-            if (c == '\n') { /* got EXPUNGE response */
-                prot_printf(imapd_out, "* %d EXPUNGE\r\n", seqno);
-                continue;
-            }
-        }
-        if (c == EOF) {
-            c = chomp(backend_current->in, "recent\r");
-            if (c == '\n') { /* got RECENT response */
-                prot_printf(imapd_out, "* %d RECENT\r\n", seqno);
-                continue;
-            }
-        }
-        /* huh, don't get this response */
-        if (c == EOF) break;
-        for (/* each fetch item */;;) {
-            /* looking at the first character in an item */
-            switch (c) {
-            case 'f': case 'F': /* flags? */
-                c = chomp(backend_current->in, "lags");
-                if (c != ' ') { c = EOF; }
-                else c = prot_getc(backend_current->in);
-                if (c != '(') { c = EOF; }
-                else {
-                    flags = grab(backend_current->in, ')');
-                    c = prot_getc(backend_current->in);
-                }
-                break;
-            case 'i': case 'I': /* internaldate? */
-                c = chomp(backend_current->in, "nternaldate");
-                if (c != ' ') { c = EOF; }
-                else c = prot_getc(backend_current->in);
-                if (c != '"') { c = EOF; }
-                else {
-                    idate = grab(backend_current->in, '"');
-                    c = prot_getc(backend_current->in);
-                }
-                break;
-            case 'u': case 'U': /* uid */
-                c = chomp(backend_current->in, "id");
-                if (c != ' ') { c = EOF; }
-                else c = getuint32(backend_current->in, &uidno);
-                break;
-            default: /* hmm, don't like the smell of it */
-                c = EOF;
-                break;
-            }
-            /* looking at either SP separating items or a RPAREN */
-            if (c == ' ') { c = prot_getc(backend_current->in); }
-            else if (c == ')') break;
-            else { c = EOF; break; }
-        }
-        /* if c == EOF we have either a protocol error or a situation
-           we can't handle, and we should die. */
-        if (c == ')') c = prot_getc(backend_current->in);
-        if (c == '\r') c = prot_getc(backend_current->in);
-        if (c != '\n') {
-            c = EOF;
-            free(flags);
-            free(idate);
-            break;
-        }
-
-        /* if we're missing something, we should echo */
-        if (!flags || !idate) {
-            char sep = '(';
-            prot_printf(imapd_out, "* %d FETCH ", seqno);
-            if (uidno) {
-                prot_printf(imapd_out, "%cUID %d", sep, uidno);
-                sep = ' ';
-            }
-            if (flags) {
-                prot_printf(imapd_out, "%cFLAGS %s", sep, flags);
-                sep = ' ';
-            }
-            if (idate) {
-                prot_printf(imapd_out, "%cINTERNALDATE %s", sep, idate);
-                sep = ' ';
-            }
-            prot_printf(imapd_out, ")\r\n");
-            if (flags) free(flags);
-            if (idate) free(idate);
-            continue;
-        }
-
-        /* add to p->next */
-        p->next = xmalloc(sizeof(struct d));
-        p = p->next;
-        p->idate = idate;
-        p->flags = editflags(flags);
-        p->uid = uidno;
-        p->seqno = seqno;
-        p->next = NULL;
+    if (!usinguid) {
+        /* need to create a seqset of UIDs to avoid a race between FETCHes */
+        crock.uidset = seqset_init(0, SEQ_SPARSE);
+        items |= FETCH_UID;
     }
-    if (c != EOF) {
-        prot_ungetc(c, backend_current->in);
 
-        /* we should be looking at the tag now */
-        pipe_until_tag(backend_current, tag, 0);
-    }
-    if (c == EOF) {
+    /* find out what the flags, internaldate, and uid for this message are */
+    res = proxy_fetch(sequence, usinguid, items, &copy_cb, &crock);
+    if (res != PROXY_OK) {
         /* uh oh, we're not happy */
         fatal("Lost connection to selected backend", EX_UNAVAILABLE);
     }
@@ -1028,143 +1007,21 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     /* start the append */
     prot_printf(s->out, "%s Append {" SIZE_T_FMT "+}\r\n%s",
                 tag, strlen(name), name);
-    prot_printf(backend_current->out, "%s %s %s (Rfc822.peek)\r\n",
-                mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
-    for (/* each FETCH response */;;) {
-        unsigned int seqno = 0, uidno = 0;
 
-        /* read a line */
-        c = prot_getc(backend_current->in);
-        if (c != '*') break;
-        c = prot_getc(backend_current->in);
-        if (c != ' ') { /* protocol error */ c = EOF; break; }
+    if (crock.uidset) sequence = freeme = seqset_cstring(crock.uidset);
+    res = proxy_fetch(sequence, 1/*usinguid*/, FETCH_BODY, &copy_cb, &crock);
 
-        /* check for OK/NO/BAD/BYE response */
-        if (!isdigit(c = prot_getc(backend_current->in))) {
-            prot_printf(imapd_out, "* %c", c);
-            pipe_to_end_of_response(backend_current, 0);
-            continue;
-        }
-
-        /* read seqno */
-        prot_ungetc(c, backend_current->in);
-        c = getuint32(backend_current->in, &seqno);
-        if (seqno == 0 || c != ' ') {
-            /* we suck and won't handle this case */
-            c = EOF; break;
-        }
-        c = chomp(backend_current->in, "fetch (");
-        if (c == EOF) { /* not a fetch response */
-            c = chomp(backend_current->in, "exists\r");
-            if (c == '\n') { /* got EXISTS response */
-                prot_printf(imapd_out, "* %d EXISTS\r\n", seqno);
-                continue;
-            }
-        }
-        if (c == EOF) { /* not an exists response */
-            /* XXX  the "exists" check above will eat "ex" */
-            c = chomp(backend_current->in, "punge\r");
-            if (c == '\n') { /* got EXPUNGE response */
-                prot_printf(imapd_out, "* %d EXPUNGE\r\n", seqno);
-                continue;
-            }
-        }
-        if (c == EOF) { /* not an exists response */
-            c = chomp(backend_current->in, "recent\r");
-            if (c == '\n') { /* got RECENT response */
-                prot_printf(imapd_out, "* %d RECENT\r\n", seqno);
-                continue;
-            }
-        }
-        if (c == EOF) {
-            /* huh, don't get this response */
-            break;
-        }
-        /* find seqno in the list */
-        p = head;
-        while (p->next && seqno != p->next->seqno) p = p->next;
-        if (!p->next) break;
-        q = p->next;
-        p->next = q->next;
-        for (/* each fetch item */;;) {
-            int sz = 0;
-
-            switch (c) {
-            case 'u': case 'U':
-                c = chomp(backend_current->in, "id");
-                if (c != ' ') { c = EOF; }
-                else c = getuint32(backend_current->in, &uidno);
-                break;
-
-            case 'r': case 'R':
-                c = chomp(backend_current->in, "fc822");
-                if (c == ' ') c = prot_getc(backend_current->in);
-                if (c != '{') {
-                    /* NIL? */
-                    eatline(backend_current->in, c);
-                    c = EOF;
-                }
-                else c = getint32(backend_current->in, &sz);
-                if (c == '}') c = prot_getc(backend_current->in);
-                if (c == '\r') c = prot_getc(backend_current->in);
-                if (c != '\n') c = EOF;
-
-                if (c != EOF) {
-                    /* append p to s->out */
-                    prot_printf(s->out, " (%s) \"%s\" {%d+}\r\n",
-                                q->flags, q->idate, sz);
-                    while (sz) {
-                        char buf[2048];
-                        int j = (sz > (int) sizeof(buf) ?
-                                 (int) sizeof(buf) : sz);
-
-                        j = prot_read(backend_current->in, buf, j);
-                        if(!j) break;
-                        prot_write(s->out, buf, j);
-                        sz -= j;
-                    }
-                    c = prot_getc(backend_current->in);
-                }
-
-                break; /* end of case */
-            default:
-                c = EOF;
-                break;
-            }
-            /* looking at either SP separating items or a RPAREN */
-            if (c == ' ') { c = prot_getc(backend_current->in); }
-            else if (c == ')') break;
-            else { c = EOF; break; }
-        }
-
-        /* if c == EOF we have either a protocol error or a situation
-           we can't handle, and we should die. */
-        if (c == ')') c = prot_getc(backend_current->in);
-        if (c == '\r') c = prot_getc(backend_current->in);
-        if (c != '\n') { c = EOF; break; }
-
-        /* free q */
-        free(q->idate);
-        free(q->flags);
-        free(q);
-    }
-    if (c != EOF) {
+    if (res == PROXY_OK) {
         char *appenduid, *b;
-        int res;
 
-        /* pushback the first character of the tag we're looking at */
-        prot_ungetc(c, backend_current->in);
-
-        /* nothing should be left in the linked list */
-        assert(head->next == NULL);
+        /* nothing should be left in the hash table */
+        assert(hashu64_count(&crock.msg_byuid) == 0);
 
         /* ok, finish the append; we need the UIDVALIDITY and UIDs
            to return as part of our COPYUID response code */
         prot_printf(s->out, "\r\n");
 
-        /* should be looking at 'mytag' on 'backend_current',
-           'tag' on 's' */
-        pipe_until_tag(backend_current, mytag, 0);
+        /* should be looking at 'tag' on 's' */
         res = pipe_until_tag(s, tag, 0);
 
         if (res == PROXY_OK) {
@@ -1191,7 +1048,6 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     } else {
         /* abort the append */
         prot_printf(s->out, " {0+}\r\n\r\n");
-        pipe_until_tag(backend_current, mytag, 0);
         pipe_until_tag(s, tag, 0);
 
         /* report failure */
@@ -1199,13 +1055,184 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     }
 
     /* free dynamic memory */
-    while (head) {
-        p = head;
-        head = head->next;
-        if (p->idate) free(p->idate);
-        if (p->flags) free(p->flags);
-        free(p);
+    free_hashu64_table(&crock.msg_byuid, NULL);
+    seqset_free(&crock.uidset);
+    free(freeme);
+}
+
+int proxy_fetch(char *sequence, int usinguid, unsigned items,
+                void (*item_cb)(uint32_t seqno, unsigned item,
+                                void *datap, void *rock),
+                void *rock)
+{
+    seqset_t *seqset = !usinguid ? seqset_parse(sequence, NULL, 0) : NULL;
+    struct buf data = BUF_INITIALIZER;
+    char mytag[128];
+    char sep = '(';
+    int c;
+
+    if (!items) return PROXY_BAD;
+
+    proxy_gentag(mytag, sizeof(mytag));
+    prot_printf(backend_current->out, "%s %s %s ",
+                mytag, usinguid ? "Uid Fetch" : "Fetch", sequence);
+    if (items & FETCH_BODY) {
+        prot_printf(backend_current->out, "%c%s", sep, "Body.peek[]");
+        sep = ' ';
     }
+    if (items & FETCH_FLAGS) {
+        prot_printf(backend_current->out, "%c%s", sep, "Flags");
+        sep = ' ';
+    }
+    if (items & FETCH_INTERNALDATE) {
+        prot_printf(backend_current->out, "%c%s", sep, "Internaldate");
+        sep = ' ';
+    }
+    if (items & FETCH_UID) {
+        prot_printf(backend_current->out, "%c%s", sep, "Uid");
+        sep = ' ';
+    }
+    prot_puts(backend_current->out, ")\r\n");
+
+    for (/* each FETCH response */;;) {
+        uint32_t seqno = 0, uidno = 0;
+        char *flags = NULL, *idate = NULL;
+        uint32_t size = 0;
+
+        /* read a line */
+        c = prot_getc(backend_current->in);
+        if (c != '*') break;
+        c = prot_getc(backend_current->in);
+        if (c != ' ') { /* protocol error */ c = EOF; break; }
+
+        /* check for OK/NO/BAD/BYE response */
+        if (!isdigit(c = prot_getc(backend_current->in))) {
+            prot_printf(imapd_out, "* %c", c);
+            pipe_to_end_of_response(backend_current, 0);
+            continue;
+        }
+
+        /* read seqno */
+        prot_ungetc(c, backend_current->in);
+        c = getuint32(backend_current->in, &seqno);
+        if (seqno == 0 || c != ' ') {
+            /* we suck and won't handle this case */
+            c = EOF; break;
+        }
+
+        /* check for non-FETCH response or seqno not in our set */
+        c = prot_getc(backend_current->in);
+        if (!(c == 'f' || c == 'F') ||
+            (seqset && !seqset_ismember(seqset, seqno))) {
+            prot_printf(imapd_out, "* %u %c", seqno, c);
+            pipe_to_end_of_response(backend_current, 0);
+            continue;
+        }
+
+        c = chomp(backend_current->in, "etch (");
+        if (c == EOF) {
+            /* we suck and won't handle this case */
+            break;
+        }
+
+        for (/* each fetch item */;;) {
+            /* looking at the first character in an item */
+            switch (c) {
+            case 'b': case 'B': /* body[]? */
+                c = chomp(backend_current->in, "ody[]");
+                if (c == ' ') c = prot_getc(backend_current->in);
+                if (c != '{') {
+                    /* NIL? */
+                    eatline(backend_current->in, c);
+                    c = EOF;
+                }
+                else c = getuint32(backend_current->in, &size);
+                if (c == '}') c = prot_getc(backend_current->in);
+                if (c == '\r') c = prot_getc(backend_current->in);
+                if (c != '\n') c = EOF;
+
+                if (c != EOF) {
+                    /* read literal data */
+                    while (size) {
+                        int n = prot_readbuf(backend_current->in, &data, size);
+                        if (!n) break;
+
+                        size -= n;
+                    }
+                    item_cb(seqno, FETCH_BODY, &data, rock);
+                    c = prot_getc(backend_current->in);
+                }
+                break;
+
+            case 'f': case 'F': /* flags? */
+                c = chomp(backend_current->in, "lags");
+                if (c != ' ') { c = EOF; }
+                else c = prot_getc(backend_current->in);
+                if (c != '(') { c = EOF; }
+                else {
+                    flags = grab(backend_current->in, ')');
+                    item_cb(seqno, FETCH_FLAGS, editflags(flags), rock);
+                    c = prot_getc(backend_current->in);
+                }
+                break;
+
+            case 'i': case 'I': /* internaldate? */
+                c = chomp(backend_current->in, "nternaldate");
+                if (c != ' ') { c = EOF; }
+                else c = prot_getc(backend_current->in);
+                if (c != '"') { c = EOF; }
+                else {
+                    idate = grab(backend_current->in, '"');
+                    item_cb(seqno, FETCH_INTERNALDATE, idate, rock);
+                    c = prot_getc(backend_current->in);
+                }
+                break;
+
+            case 'u': case 'U': /* uid */
+                c = chomp(backend_current->in, "id");
+                if (c != ' ') { c = EOF; }
+                else {
+                    c = getuint32(backend_current->in, &uidno);
+                    item_cb(seqno, FETCH_UID, &uidno, rock);
+                }
+                break;
+
+            default: /* hmm, don't like the smell of it */
+                c = EOF;
+                break;
+            }
+            /* looking at either SP separating items or a RPAREN */
+            if (c == ' ') { c = prot_getc(backend_current->in); }
+            else if (c == ')') break;
+            else { c = EOF; break; }
+        }
+        /* if c == EOF we have either a protocol error or a situation
+           we can't handle, and we should die. */
+        if (c == ')') c = prot_getc(backend_current->in);
+        if (c == '\r') c = prot_getc(backend_current->in);
+        if (c != '\n') {
+            c = EOF;
+            break;
+        }
+
+        /* end of fetch items */
+        item_cb(seqno, 0, NULL, rock);
+        buf_reset(&data);
+    }
+
+    seqset_free(&seqset);
+    buf_free(&data);
+
+    if (c == EOF) {
+        return PROXY_BAD;
+    }
+
+    prot_ungetc(c, backend_current->in);
+
+    /* we should be looking at the tag now */
+    pipe_until_tag(backend_current, mytag, 0);
+
+    return PROXY_OK;
 }
 /* xxx  end of separate proxy-only code */
 
@@ -1421,7 +1448,7 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, mbox_pat);
+    prot_printf(be->out, "%s GETMETADATA \"%s\" (", mytag, mbox_pat);
     for (i = 0; i < entry_pat->count; i++) {
         const char *entry = strarray_nth(entry_pat, i);
 

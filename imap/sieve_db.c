@@ -60,6 +60,7 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #include "sieve/bytecode.h"
 #include "sieve/bc_parse.h"
@@ -612,7 +613,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
     fprintf(f, "Message-ID: <%s@%s>\r\n", sdata->contentid, config_servername);
 
     fprintf(f, "Content-Type: application/sieve; charset=utf-8\r\n");
-    fprintf(f, "Content-Length: %lu\r\n", datalen);
+    fprintf(f, "Content-Length: " SIZE_T_FMT "\r\n", datalen);
     fprintf(f, "Content-Disposition: attachment;\r\n\tfilename=\"%s%s\"\r\n",
             sdata->id ? sdata->id : makeuuid(), SIEVE_EXTENSION);
     fputs("MIME-Version: 1.0\r\n", f);
@@ -846,7 +847,7 @@ static int migrate_cb(const char *sievedir,
 
             /* delete script */
             snprintf(path, sizeof(path), "%s/%s", sievedir, fname);
-            unlink(path);
+            xunlink(path);
 
             if (deletebc) {
                 sievedir_delete_script(sievedir, myname);
@@ -860,7 +861,7 @@ static int migrate_cb(const char *sievedir,
     return SIEVEDIR_OK;
 }
 
-EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr)
+EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr, int silent)
 {
     const char *sievedir = user_sieve_path(userid);
     struct stat sbuf;
@@ -897,25 +898,18 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         r = mboxlist_lookup(mboxname, NULL, NULL);
     }
 
-    if (!r && mailboxptr) {
-        r = mailbox_open_iwl(mboxname, mailboxptr);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   mboxname, error_message(r));
-            goto done;
-        }
-    }
-
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Create locally */
         struct mailbox *mailbox = NULL;
         mbentry_t mbentry = MBENTRY_INITIALIZER;
         mbentry.name = (char *) mboxname;
         mbentry.mbtype = MBTYPE_SIEVE;
 
+        int flags = silent ? MBOXLIST_CREATE_SYNC : 0;
+
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
                                    1/*isadmin*/, userid, NULL/*auth_state*/,
-                                   0/*flags*/, &mailbox);
+                                   flags, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mboxname, error_message(r));
@@ -930,8 +924,20 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
 
         free(mrock.active);
 
-        if (mailboxptr) *mailboxptr = mailbox;
-        else mailbox_close(&mailbox);
+        // close the mailbox here, we'll re-open once we've released the namespace lock
+        mailbox_close(&mailbox);
+    }
+
+    mboxname_release(&namespacelock);
+
+    if (!r && mailboxptr) {
+        r = mailbox_open_iwl(mboxname, mailboxptr);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                   mboxname, error_message(r));
+            goto done;
+        }
+        (*mailboxptr)->silentchanges = silent;
     }
 
   done:

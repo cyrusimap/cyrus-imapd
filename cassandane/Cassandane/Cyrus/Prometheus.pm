@@ -59,13 +59,18 @@ sub new
     $config->set(prometheus_enabled => "yes");
     $config->set(httpmodules => "prometheus");
     $config->set(prometheus_need_auth => "none");
-    $config->set(prometheus_update_freq => 2);
+    $config->set(prometheus_service_update_freq => 2);
+    $config->set(prometheus_master_update_freq => 2);
+    $config->set(prometheus_usage_update_freq => 2);
 
-    return $class->SUPER::new(
+    my $self = $class->SUPER::new(
         { adminstore => 1,
           config => $config,
           services => ['imap', 'http'] },
         @_);
+
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up
@@ -125,7 +130,7 @@ sub parse_report
 }
 
 sub test_aaasetup
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -133,8 +138,8 @@ sub test_aaasetup
     $self->assert(1);
 }
 
-sub test_reportfile_exists
-    :min_version_3_1 :needs_component_httpd
+sub test_service_reportfile_exists
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -144,18 +149,18 @@ sub test_reportfile_exists
     # and wait for a fresh report
     sleep 3;
 
-    my $reportfile_name = "$self->{instance}->{basedir}/conf/stats/report.txt";
+    my $fname = "$self->{instance}->{basedir}/conf/stats/service.txt";
 
-    $self->assert(-f $reportfile_name);
+    $self->assert_file_test($fname, '-f');
 
-    my $report = parse_report(scalar read_file $reportfile_name);
+    my $report = parse_report(scalar read_file $fname);
 
     $self->assert(scalar keys %{$report});
     $self->assert(exists $report->{cyrus_imap_connections_total});
 }
 
 sub test_httpreport
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -177,7 +182,7 @@ sub test_httpreport
 }
 
 sub test_disabled
-    :min_version_3_1 :needs_component_httpd :NoStartInstances
+    :min_version_3_1 :NoStartInstances
 {
     my ($self) = @_;
 
@@ -189,7 +194,7 @@ sub test_disabled
 
     # no stats directory
     my $stats_dir = "$self->{instance}->{basedir}/conf/stats";
-    $self->assert(! -d $stats_dir);
+    $self->assert_not_file_test($stats_dir, '-d');
 
     # no http report
     my $response = $self->http_report();
@@ -198,7 +203,7 @@ sub test_disabled
 
 # tests for pathological quotaroot/partition subdivisions
 sub test_quota_commitments
-    :min_version_3_1 :needs_component_httpd :Partition2
+    :min_version_3_1 :Partition2
 {
     my ($self) = @_;
 
@@ -259,7 +264,7 @@ sub test_quota_commitments
 
 # tests for pathological quotaroot/partition subdivisions
 sub test_quota_commitments_no_improved_mboxlist_sort
-    :min_version_3_1 :needs_component_httpd :Partition2 :NoStartInstances
+    :min_version_3_1 :Partition2 :NoStartInstances
 {
     my ($self) = @_;
 
@@ -322,7 +327,7 @@ sub test_quota_commitments_no_improved_mboxlist_sort
 }
 
 sub test_shared_mailbox_namespaces
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -359,7 +364,7 @@ sub test_shared_mailbox_namespaces
 }
 
 sub slowtest_50000_users
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -412,7 +417,7 @@ sub slowtest_50000_users
 }
 
 sub test_connection_setup_failure_imapd
-    :min_version_3_2 :needs_component_httpd :TLS
+    :min_version_3_2 :TLS
 {
     my ($self) = @_;
 

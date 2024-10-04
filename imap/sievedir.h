@@ -85,4 +85,6 @@ int sievedir_delete_script(const char *sievedir, const char *name);
 int sievedir_rename_script(const char *sievedir,
                            const char *oldname, const char *newname);
 
+int sievedir_valid_path(const char *sievedir);
+
 #endif /* INCLUDED_SIEVEDIR_H */

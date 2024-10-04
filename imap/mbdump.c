@@ -78,6 +78,7 @@
 #include "user.h"
 #include "util.h"
 #include "index.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -252,7 +253,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 
     close(oldindex_fd);
     r = dump_file(first, sync, pin, pout, oldname, "cyrus.index", NULL, 0);
-    unlink(oldname);
+    xunlink(oldname);
     if (r) return r;
 
     /* create cyrus.expunge */
@@ -278,12 +279,16 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
                 continue;
             downgrade_record(record, rbuf, oldversion);
             n = retry_write(oldindex_fd, rbuf, record_size);
-            if (n == -1) goto fail;
+            if (n == -1) {
+                mailbox_iter_done(&iter);
+                goto fail;
+	    }
         }
+        mailbox_iter_done(&iter);
 
         close(oldindex_fd);
         r = dump_file(first, sync, pin, pout, oldname, "cyrus.expunge", NULL, 0);
-        unlink(oldname);
+        xunlink(oldname);
         if (r) return r;
     }
 
@@ -292,7 +297,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 fail:
     if (oldindex_fd != -1)
         close(oldindex_fd);
-    unlink(oldname);
+    xunlink(oldname);
 
     return IMAP_IOERROR;
 }
@@ -876,7 +881,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     c = getword(pin, &data);
     if (!strcmp(data.s, "NIL")) {
         /* Remove any existing quotaroot */
-        mboxlist_unsetquota(mbname);
+        mboxlist_unsetquota(mbname, /*silent*/0);
     } else if (sscanf(data.s, QUOTA_T_FMT, &quotalimit) == 1) {
         /* quota will actually be applied later */
         newquotas[QUOTA_STORAGE] = quotalimit;
@@ -1216,7 +1221,7 @@ EXPORTED int undump_mailbox(const char *mbname,
 
             free(seen_file);
             seen_file = NULL;
-            unlink(fnamebuf);
+            xunlink(fnamebuf);
 
             if (r) goto done;
         }
@@ -1226,7 +1231,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             free(mboxkey_file);
             mboxkey_file = NULL;
 
-            unlink(fnamebuf);
+            xunlink(fnamebuf);
         }
 
         c = prot_getc(pin);
@@ -1309,6 +1314,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             settime.actime = settime.modtime = record->internaldate;
             if (utime(fname, &settime) == -1) {
                 r = IMAP_IOERROR;
+                mailbox_iter_done(&iter);
                 goto done2;
             }
         }

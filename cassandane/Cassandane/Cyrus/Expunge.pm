@@ -142,15 +142,15 @@ sub test_auditlog_size
     $talk->store('1,3,5', '+flags', '(\\Deleted \\Seen)');
     $talk->expunge();
 
-    my @auditlogs = grep {
-        m/auditlog: expunge/
-    } $self->{instance}->getsyslog();
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @auditlogs = $self->{instance}->getsyslog(qr/auditlog: expunge/);
 
-    my %actual_sizes = map {
-        m/ uid=<([0-9]+)>.* size=<([0-9]+)>/
-    } @auditlogs;
+        my %actual_sizes = map {
+            m/ uid=<([0-9]+)>.* size=<([0-9]+)>/
+        } @auditlogs;
 
-    $self->assert_deep_equals(\%expected_sizes, \%actual_sizes);
+        $self->assert_deep_equals(\%expected_sizes, \%actual_sizes);
+    }
 }
 
 sub test_allowdeleted
@@ -260,6 +260,9 @@ sub test_ipurge_mboxevent
         qw( ipurge -v -i -d 2 ), $shared_folder
     );
     my $events = $self->{instance}->getnotify();
+
+    # if it stays selected you see the intermittent state
+    $talk->unselect();
 
     # the messages we just created should've been expunged
     $stat = $talk->status($shared_folder, '(highestmodseq unseen messages)');

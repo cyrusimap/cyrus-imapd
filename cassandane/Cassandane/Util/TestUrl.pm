@@ -81,6 +81,8 @@ sub update
       }
     }
 
+    my $host = "127.0.0.1";
+
     my $app = sub {
         # No matter how we we leave this block, the $guard will go out
         # of scope while in the run phase, which means it can exit Perl
@@ -96,7 +98,7 @@ sub update
 
         my $sock_or_port = shift;
         my $server = Plack::Loader->auto(
-            host => '0.0.0.0',
+            host => $host,
             port => $sock_or_port,
         );
 
@@ -111,12 +113,10 @@ sub update
             croak("Cannot call ->update after ->unregister has been called!");
         }
 
-        my $host = "127.0.0.1";
-
         my $guard = Test::TCP->new(
             host => $host,
             code => $app,
-            port => Cassandane::PortManager::alloc(),
+            port => Cassandane::PortManager::alloc($host),
         );
 
         my $port = $guard->port;

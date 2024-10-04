@@ -216,7 +216,7 @@ static void cmd_starttls(struct conn *C, const char *tag);
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg);
 #endif
-void shut_down(int code);
+static void shut_down(int code) __attribute__((noreturn));
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
 static void sendupdates(struct conn *C, int flushnow);
@@ -248,6 +248,9 @@ static struct conn *conn_new(int fd)
 
     C->pin = prot_new(C->fd, 0);
     C->pout = prot_new(C->fd, 1);
+
+    /* Allow LITERAL+ */
+    prot_setisclient(C->pin, 1);
 
     prot_setflushonread(C->pin, C->pout);
     prot_settimeout(C->pin, 180*60);
@@ -614,10 +617,10 @@ EXPORTED void fatal(const char *s, int code)
     else recurse_code = code;
 
     syslog(LOG_ERR, "%s", s);
-    shut_down(code);
 
-    /* NOTREACHED */
-    exit(code); /* shut up GCC */
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    shut_down(code);
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
@@ -1811,7 +1814,7 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
         /* Either there is not a prefix to test, or we matched it */
 
         if (!C->streaming_hosts ||
-            strarray_find(C->streaming_hosts, mbentry->server, 0) >= 0) {
+            strarray_contains(C->streaming_hosts, mbentry->server)) {
             switch (m->t) {
             case SET_ACTIVE:
                 prot_printf(C->pout,
@@ -2069,8 +2072,7 @@ void cmd_compress(struct conn *C __attribute__((unused)),
 }
 #endif /* HAVE_ZLIB */
 
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
+static void shut_down(int code)
 {
     in_shutdown = 1;
 

@@ -86,6 +86,7 @@ struct smtpclient {
     char *notify;
     char *ret;
     char *by;
+    char *jmapid;
     unsigned long msgsize;
     smtp_resp_t resp;
 };
@@ -97,13 +98,17 @@ enum {
     SMTPCLIENT_CAPA_STATUS    = (1 << 6),
     SMTPCLIENT_CAPA_FUTURE    = (1 << 7),
     SMTPCLIENT_CAPA_PRIORITY  = (1 << 8),
-    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9)
+    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9),
+    SMTPCLIENT_CAPA_JMAPID    = (1 << 10),
 };
+
+static const char *smtpclient_ehlo_hostname = NULL;
 
 static struct protocol_t smtp_protocol =
 { "smtp", "smtp", TYPE_STD,
   { { { 0, "220 " },
-      { "EHLO", "localhost", "250 ", NULL,
+        // EHLO hostname will be set in smtpclient_open().
+      { "EHLO", NULL, "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
         { { "AUTH", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
@@ -114,6 +119,7 @@ static struct protocol_t smtp_protocol =
           { "FUTURERELEASE", SMTPCLIENT_CAPA_FUTURE },
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
           { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECK },
+          { "JMAPIDENTITY", SMTPCLIENT_CAPA_JMAPID },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -140,6 +146,31 @@ static void smtpclient_logerror(smtpclient_t *sm, const char *cmd, int r);
 
 EXPORTED int smtpclient_open(smtpclient_t **smp)
 {
+    if (!smtpclient_ehlo_hostname) {
+        if (config_getswitch(IMAPOPT_CLIENT_BIND)) {
+            smtpclient_ehlo_hostname =
+                config_getstring(IMAPOPT_CLIENT_BIND_NAME);
+        }
+        if (!smtpclient_ehlo_hostname) {
+            smtpclient_ehlo_hostname = config_servername;
+        }
+        if (!smtpclient_ehlo_hostname) {
+            xsyslog(LOG_ERR,
+                    "can not determine EHLO hostname, "
+                    "either client_bind/client_bind_name or servername option must be set",
+                    NULL);
+            return IMAP_INTERNAL;
+        }
+        if (smtp_protocol.type == TYPE_STD &&
+            !strcasecmpsafe(smtp_protocol.u.std.capa_cmd.cmd, "EHLO")) {
+            smtp_protocol.u.std.capa_cmd.arg = smtpclient_ehlo_hostname;
+        }
+        else {
+            xsyslog(LOG_ERR, "unexpected smtp_protocol value", NULL);
+            return IMAP_INTERNAL;
+        }
+    }
+
     int r = 0;
     const char *backend = config_getstring(IMAPOPT_SMTP_BACKEND);
 
@@ -190,6 +221,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     free(sm->ret);
     free(sm->notify);
     free(sm->authid);
+    free(sm->jmapid);
     buf_free(&sm->resp.text);
 
     free(sm);
@@ -362,7 +394,7 @@ static int smtpclient_ehlo(smtpclient_t *sm)
     int r = 0;
 
     /* Say EHLO */
-    buf_setcstr(&sm->buf, "EHLO localhost\r\n");
+    buf_printf(&sm->buf, "EHLO %s\r\n", smtpclient_ehlo_hostname);
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
@@ -531,6 +563,10 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
     }
     if (sm->by && CAPA(sm->backend, SMTPCLIENT_CAPA_DELIVERBY)) {
         smtp_params_set_extra(&addr->params, &extra_params, "BY", sm->by);
+    }
+    if (sm->jmapid && CAPA(sm->backend, SMTPCLIENT_CAPA_JMAPID)) {
+        smtp_params_set_extra(&addr->params,
+                              &extra_params, "IDENTITY", sm->jmapid);
     }
     if (sm->msgsize && CAPA(sm->backend, SMTPCLIENT_CAPA_SIZE)) {
         char szbuf[21];
@@ -770,6 +806,18 @@ EXPORTED void smtpclient_set_by(smtpclient_t *sm, const char *value)
     sm->by = xstrdupnull(value);
 }
 
+EXPORTED void smtpclient_set_jmapid(smtpclient_t *sm, const char *value)
+{
+    xzfree(sm->jmapid);
+
+    if (value) {
+        struct buf xtext = BUF_INITIALIZER;
+
+        smtp_encode_esmtp_value(value, &xtext);
+        sm->jmapid = buf_release(&xtext);
+    }
+}
+
 EXPORTED void smtpclient_set_size(smtpclient_t *sm, unsigned long value)
 {
     sm->msgsize = value;
@@ -794,7 +842,7 @@ EXPORTED unsigned smtpclient_get_resp_code(smtpclient_t *sm)
 
 EXPORTED const char *smtpclient_get_resp_text(smtpclient_t *sm)
 {
-    return buf_cstring(&sm->resp.text);
+    return buf_cstringnull_ifempty(&sm->resp.text);
 }
 
 /* SMTP backend implementations */

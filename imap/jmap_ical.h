@@ -69,6 +69,9 @@ extern "C" {
 #define JMAPICAL_XPROP_MAYINVITEOTHERS "X-JMAP-MAY-INVITE-OTHERS"
 #define JMAPICAL_XPROP_HIDEATTENDEES   "X-JMAP-HIDE-ATTENDEES"
 #define JMAPICAL_XPROP_SENTBY          "X-JMAP-SENT-BY"
+#define JMAPICAL_XPROP_PRIVACY         "X-JMAP-PRIVACY"
+#define JMAPICAL_XPROP_USEDEFAULTALERTS "X-JMAP-USEDEFAULTALERTS"
+#define JMAPICAL_XPROP_JSPROP          "X-JMAP-JSPROP"
 
 /* Custom iCalendar parameters */
 #define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
@@ -78,6 +81,7 @@ extern "C" {
 #define JMAPICAL_XPARAM_GEO           "X-JMAP-GEO"
 #define JMAPICAL_XPARAM_ID            "X-JMAP-ID"
 #define JMAPICAL_XPARAM_INVITEDBY     "X-JMAP-INVITEDBY"
+#define JMAPICAL_XPARAM_JSPTR         "X-JMAP-JSPTR"
 #define JMAPICAL_XPARAM_LINKID        "X-JMAP-LINKID"
 #define JMAPICAL_XPARAM_LOCATIONID    "X-JMAP-LOCATIONID"
 #define JMAPICAL_XPARAM_LOCATIONTYPE  "X-JMAP-LOCATIONTYPE"
@@ -94,16 +98,15 @@ extern "C" {
 #define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
 
+/* Custom JSCalendar properties */
+#define JMAPICAL_JSPROP_TIMEZONES     "cyrusimap.org:timeZones"
+#define JMAPICAL_JSPROP_ICALPROPS     "cyrusimap.org:iCalProps"
+
 typedef struct jstimezones jstimezones_t;
 
 struct jmapical_ctx {
     jmap_req_t *req;
     struct buf buf;
-    struct {
-        const char *mboxid;
-        uint32_t uid;
-        const char *partid;
-    } icalsrc;
     struct {
         struct buf url;
         const char *baseurl;
@@ -113,18 +116,23 @@ struct jmapical_ctx {
         int err;
     } attachments;
     struct {
-        char *emailrecipient;
-    } alert;
-    struct {
         json_t *serverset;
-        int no_sanitize_timestamps;
-        int allow_method;
         json_t *replyto;
+        char *emailalert_recipient;
+        int ignore_orphan_timezones : 1;
+        int no_sanitize_timestamps : 1;
+        int allow_method : 1;
     } to_ical;
     struct {
-        int no_guess;
-        int ignore_orphans;
-    } timezones;
+        struct {
+            const char *mboxid;
+            uint32_t uid;
+            const char *partid;
+        } cyrus_msg;
+        int want_icalprops : 1;
+        int dont_guess_timezones : 1;
+        int repair_broken_ical : 1;
+    } from_ical;
     const strarray_t *schedule_addresses;
 };
 
@@ -168,7 +176,7 @@ json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *id);
 
 /* Convert alert to iCalendar VALARM. Returns NULL on error */
 extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
-                                             const char *alert_uid,
+                                             const char *alert_jmap_id,
                                              const char *description,
                                              const char *email_summary,
                                              const char *email_recipient);
@@ -183,7 +191,9 @@ typedef struct jstimezones jstimezones_t;
 
 /* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical.
  * If no_guess is true, then the resolver does not attempt to
- * guess IANA timezone identifiers for non-IANA timezones. */
+ * guess IANA timezone identifiers for non-IANA timezones
+ * and preserves them in the custom "cyrusimap.org:timeZones"
+ * property in the CalendarEvent */
 extern jstimezones_t *jstimezones_new(icalcomponent *ical, int no_guess);
 
 /* Resolve tzid to a timezone.
@@ -286,6 +296,8 @@ extern int jmapical_duration_from_string(const char *val, struct jmapical_durati
 extern void jmapical_remove_peruserprops(json_t *jevent);
 
 extern int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addresses);
+
+extern const char *jmap_partid_from_ical(icalproperty *prop);
 
 #ifdef __cplusplus
 }

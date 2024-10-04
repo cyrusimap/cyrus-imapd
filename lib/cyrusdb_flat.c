@@ -65,6 +65,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 
 /* we have the file locked iff we have an outstanding transaction */
 
@@ -173,7 +174,7 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
-        unlink(tid->fnamenew);
+        xunlink(tid->fnamenew);
         free(tid->fnamenew);
         rw = 1;
     }
@@ -240,7 +241,6 @@ static struct txn *new_txn(void)
 
 static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 {
-    int r = 0;
     struct stat sbuf;
 
     assert(db);
@@ -249,9 +249,7 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
         const char *lockfailaction;
 
         /* start txn; grab lock */
-
-        r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
-        if (r < 0) {
+        if (lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction) < 0) {
             xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
                              "action=<%s> fname=<%s>",
                              lockfailaction, db->fname);
@@ -440,22 +438,6 @@ static int myfetch(struct dbengine *db,
     return r;
 }
 
-static int fetch(struct dbengine *mydb,
-                 const char *key, size_t keylen,
-                 const char **data, size_t *datalen,
-                 struct txn **mytid)
-{
-    return myfetch(mydb, key, keylen, data, datalen, mytid);
-}
-
-static int fetchlock(struct dbengine *db,
-                     const char *key, size_t keylen,
-                     const char **data, size_t *datalen,
-                     struct txn **mytid)
-{
-    return myfetch(db, key, keylen, data, datalen, mytid);
-}
-
 static int getentry(struct dbengine *db, const char *p,
                     struct buf *keybuf, const char **dataendp)
 {
@@ -501,7 +483,7 @@ static int foreach(struct dbengine *db,
     int offset;
     unsigned long len;
     const char *p, *pend;
-    const char *dataend;
+    const char *dataend = NULL;
 
     /* for use inside the loop, but we need the values to be retained
      * from loop to loop */
@@ -681,7 +663,7 @@ static int mystore(struct dbengine *db,
         strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     }
 
-    unlink(fnamebuf);
+    xunlink(fnamebuf);
     r = writefd = open(fnamebuf, O_RDWR | O_CREAT, 0666);
     if (r < 0) {
         syslog(LOG_ERR, "opening %s for writing failed: %m", fnamebuf);
@@ -865,15 +847,14 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
     &myopen,
     &myclose,
 
-    &fetch,
-    &fetchlock,
+    &myfetch,
+    &myfetch,
     NULL,
 
     &foreach,
@@ -881,6 +862,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 

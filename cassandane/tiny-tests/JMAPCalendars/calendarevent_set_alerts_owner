@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_alerts_owner
+    :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $ownerJmap = $self->{jmap};
+
+    xlog $self, "create sharee and share calendar";
+    my ($shareeJmap) = $self->create_user('sharee');
+    my $res = $ownerJmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog $self, "sharee creates event";
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $start = $startdt->strftime('%Y-%m-%dT%H:%M:%S');
+
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            create => {
+                event => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    start => $start,
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+
+    xlog $self, "owner sets alert on event";
+    $res = $ownerJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    alerts => {
+                        ownerAlert => {
+                            '@type' => 'Alert',
+                            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
+                            trigger => {
+                                '@type' => 'OffsetTrigger',
+                                relativeTo => 'start',
+                                offset => 'PT0S',
+                            },
+                            action => 'display',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog $self, "clear notifications";
+    $self->{instance}->getnotify();
+
+    xlog $self, "simulate previous calalarmd run";
+    $self->{instance}->run_command({ cyrus => 1 },
+        'calalarmd', '-t' => $now->epoch() - 60);
+
+    xlog $self, "assert no alarm is fired";
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            $self->assert_str_not_equals("CalendarAlarm", $e->{event});
+        }
+    }
+
+    xlog $self, "clear notifications";
+    $self->{instance}->getnotify();
+
+    xlog $self, "run calalarmd";
+    $self->{instance}->run_command({ cyrus => 1 },
+        'calalarmd', '-t' => $now->epoch() + 60);
+
+    xlog $self, "assert alarm is fired";
+    my $data = $self->{instance}->getnotify();
+    my @events;
+    foreach (@$data) {
+        if ($_->{CLASS} eq 'EVENT') {
+            my $e = decode_json($_->{MESSAGE});
+            if ($e->{event} eq "CalendarAlarm") {
+                push @events, $e;
+            }
+        }
+    }
+    $self->assert_str_equals('CalendarAlarm', $events[0]{event});
+    $self->assert_str_equals('ownerAlert', $events[0]{alertId});
+}

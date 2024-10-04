@@ -43,7 +43,7 @@ use warnings;
 
 use lib '.';
 use base qw(Cassandane::MasterEntry);
-use Cassandane::GenericDaemon;
+use Cassandane::GenericListener;
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Util::Socket;
@@ -57,12 +57,19 @@ sub new
         if (exists $params{host});
     my $port = delete $params{port};
     my $type = delete $params{type} || 'unknown';
+    my $instance = delete $params{instance};
 
     my $self = $class->SUPER::new(%params);
 
-    $self->{_daemon} = Cassandane::GenericDaemon->new(name => $params{name},
-                                                      host => $host,
-                                                      port => $port);
+    # GenericListener is a bit different from MasterEntry et al, and must
+    # always have a config specified, so pass through the default explicitly
+    my $listener_config = $params{config} || $instance->{config};
+
+    $self->{_listener} = Cassandane::GenericListener->new(
+                            name => $params{name},
+                            host => $host,
+                            port => $port,
+                            config => $listener_config);
     $self->{type} = $type;
 
     return $self;
@@ -78,27 +85,27 @@ sub set_config
 {
     my ($self, $config) = @_;
     $self->SUPER::set_config($config);
-    $self->{_daemon}->set_config($config);
+    $self->{_listener}->set_config($config);
 }
 
 # Return the host
 sub host
 {
     my ($self) = @_;
-    return $self->{_daemon}->host();
+    return $self->{_listener}->host();
 }
 
 # Return the port
 sub port
 {
     my ($self) = @_;
-    return $self->{_daemon}->port();
+    return $self->{_listener}->port();
 }
 
 sub set_port
 {
     my ($self, $port) = @_;
-    return $self->{_daemon}->set_port($port);
+    return $self->{_listener}->set_port($port);
 }
 
 # Return a hash of parameters suitable for passing
@@ -107,7 +114,7 @@ sub store_params
 {
     my ($self, %params) = @_;
 
-    my $pp = $self->{_daemon}->connection_params(%params);
+    my $pp = $self->{_listener}->connection_params(%params);
     $pp->{type} ||= $self->{type};
     $pp->{username} ||= 'cassandane';
     $pp->{password} ||= 'testpw';
@@ -143,25 +150,25 @@ sub master_params
 sub address
 {
     my ($self) = @_;
-    return $self->{_daemon}->address();
+    return $self->{_listener}->address();
 }
 
 sub address_family
 {
     my ($self) = @_;
-    return $self->{_daemon}->address_family();
+    return $self->{_listener}->address_family();
 }
 
 sub is_listening
 {
     my ($self) = @_;
-    return $self->{_daemon}->is_listening();
+    return $self->{_listener}->is_listening();
 }
 
 sub describe
 {
     my ($self) = @_;
-    $self->{_daemon}->describe();
+    $self->{_listener}->describe();
 }
 
 

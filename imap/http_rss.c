@@ -132,6 +132,7 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          &rss_parse_path },      /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -552,7 +553,7 @@ static int list_feeds(struct transaction_t *txn)
     size_t varlen = strlen(FEEDLIST_VAR);
     int fd = -1;
     struct message_guid guid;
-    time_t lastmod;
+    time_t lastmod = 0;
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     int ret = 0, precond;
@@ -1234,7 +1235,7 @@ static void display_part(struct transaction_t *txn,
                 charset = charset_lookupname("us-ascii");
             }
             body->decoded_body =
-                charset_to_utf8(buf_base(msg_buf) + body->content_offset,
+                charset_to_utf8cstr(buf_base(msg_buf) + body->content_offset,
                                 body->content_size, charset, encoding);
             charset_free(&charset);
             if (!ishtml) buf_printf_markup(buf, level, "<pre>");

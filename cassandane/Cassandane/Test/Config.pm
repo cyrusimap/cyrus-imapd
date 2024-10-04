@@ -262,21 +262,14 @@ sub test_bitfields
     $c->set_bits('httpmodules', 'ischedule rss');
     $self->assert_str_equals('caldav carddav ischedule jmap prometheus rss',
                              scalar $c->get('httpmodules'));
-    $c->set_bits('httpmodules', 'cgi_webdav');
-    $self->assert_str_equals('caldav carddav cgi ischedule jmap prometheus rss webdav',
-                             scalar $c->get('httpmodules'));
 
     # can clear a few bits
     $c->clear_bits('httpmodules', 'caldav', 'carddav');
-    $self->assert_str_equals('cgi ischedule jmap prometheus rss webdav',
+    $self->assert_str_equals('ischedule jmap prometheus rss',
                              scalar $c->get('httpmodules'));
     $c->clear_bits('httpmodules', 'ischedule rss');
-    $self->assert_str_equals('cgi jmap prometheus webdav',
-                             scalar $c->get('httpmodules'));
-    $c->clear_bits('httpmodules', 'cgi_webdav');
     $self->assert_str_equals('jmap prometheus',
                              scalar $c->get('httpmodules'));
-
 
     # setting with set() should replace previous bit set
     $c->set('httpmodules' => [qw(admin tzdist)]);
@@ -319,6 +312,13 @@ sub test_bitfields
     $self->assert_deep_equals([qw(caldav jmap)], [$c2->get('httpmodules')]);
     $self->assert_str_equals('message quota', scalar $c2->get('event_groups'));
     $self->assert_deep_equals([qw(message quota)], [$c2->get('event_groups')]);
+
+    # should be able to set bitfield values containing underscores
+    $c->set_bits('sieve_extensions', 'vnd.cyrus.implicit_keep_target');
+    $self->assert_str_equals('vnd.cyrus.implicit_keep_target',
+                             scalar $c->get('sieve_extensions'));
+    $self->assert_deep_equals([qw(vnd.cyrus.implicit_keep_target)],
+                              [$c->get('sieve_extensions')]);
 }
 
 sub test_clone_bitfields

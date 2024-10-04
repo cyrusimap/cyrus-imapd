@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_specialuse_create
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing the \":specialuse\" + \":create\" arguments";
+
+    my $hitfolder = "INBOX.newfolder";
+
+    xlog $self, "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "special-use", "mailbox"];
+fileinto :specialuse "\\\\Junk" :create "$hitfolder";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "msg1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it";
+    my $talk = $self->{store}->get_client();
+    $talk->select($hitfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}

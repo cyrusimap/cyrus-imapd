@@ -134,7 +134,7 @@ static int login(struct backend *s, const char *userid,
         { 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     const char *mech_conf, *pass, *clientout = NULL;
     struct auth_scheme_t *scheme = NULL;
-    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen;
+    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen = 0;
     hdrcache_t hdrs = NULL;
     char *sid = NULL;
 
@@ -458,7 +458,7 @@ static int login(struct backend *s, const char *userid,
                         serverin = base64;
                     }
 
-                    /* SASL mech (SCRAM-*, Digest, Negotiate, NTLM) */
+                    /* SASL mech (SCRAM-*, Negotiate) */
                     r = sasl_client_step(s->saslconn, serverin, serverinlen,
                                          NULL,          /* no prompts */
                                          &clientout, &clientoutlen);
@@ -652,7 +652,7 @@ static void send_response(struct transaction_t *txn, long code,
     spool_enum_hdrcache(hdrs, &write_cachehdr, txn);
 
     if (!body || !(len = buf_len(body))) {
-        /* Empty body -- use  payload headers from response, if any */
+        /* Empty body -- use payload headers from response, if any */
         const char **hdr;
 
         if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
@@ -757,7 +757,7 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
                 /* XXX  Do we need to parse chunk-ext? */
             }
             else if (chunk > resp_body->max - resp_body->len)
-                return HTTP_PAYLOAD_TOO_LARGE;
+                return HTTP_CONTENT_TOO_LARGE;
 
             if (chunk) {
                 /* Read 'chunk' octets */

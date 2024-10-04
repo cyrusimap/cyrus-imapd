@@ -93,6 +93,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xunlink.h"
 #include "strarray.h"
 
 #define FNAME_QUOTADIR "/quota/"
@@ -205,7 +206,7 @@ static int abort_subtxn(const char *fname, struct subtxn *tid)
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
-        unlink(tid->fnamenew);
+        xunlink(tid->fnamenew);
         free(tid->fnamenew);
     }
 
@@ -262,7 +263,7 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
         free(tid->fnamenew);
     } else if (tid->delete) {
         /* delete file */
-        r = unlink(fname);
+        r = xunlink(fname);
         if (r == -1) {
             xsyslog(LOG_ERR, "IOERROR: unlink failed",
                              "fname=<%s>",
@@ -760,7 +761,7 @@ static int mystore(struct dbengine *db,
             strlcpy(new_quota_path, quota_path, sizeof(new_quota_path));
             strlcat(new_quota_path, ".NEW", sizeof(new_quota_path));
 
-            unlink(new_quota_path);
+            xunlink(new_quota_path);
             newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
             if (newfd == -1 && errno == ENOENT) {
                 if (cyrus_mkdir(new_quota_path, 0755) != -1)
@@ -906,7 +907,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_noarchive,
     &cyrusdb_generic_unlink,
 
@@ -922,6 +922,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 

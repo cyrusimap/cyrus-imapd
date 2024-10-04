@@ -81,6 +81,7 @@
 #include "strarray.h"
 #include "ptrarray.h"
 #include "sievedir.h"
+#include "xunlink.h"
 
 #ifdef USE_CALALARMD
 #include "caldav_alarm.h"
@@ -100,7 +101,7 @@
 
 static int opt_force = 0; // FIXME
 
-struct sync_client_state rightnow_sync_cs;
+static struct sync_client_state rightnow_sync_cs;
 
 /* protocol definitions */
 static char *imap_sasl_parsesuccess(char *str, const char **status);
@@ -124,6 +125,7 @@ struct protocol_t imap_csync_protocol =
           { "SASL-IR", CAPA_SASL_IR },
           { "X-REPLICATION", CAPA_REPLICATION },
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
+          { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
@@ -142,6 +144,7 @@ struct protocol_t csync_protocol =
           { "STARTTLS", CAPA_STARTTLS },
           { "COMPRESS=DEFLATE", CAPA_COMPRESS },
           { "SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
+          { "REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           { NULL, 0 } } },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -254,10 +257,30 @@ static const char *_synclock_name(const char *hostname, const char *userid)
     return buf_cstring(&buf);
 }
 
+static int sync_skipuser(struct sync_client_state *sync_cs,
+                          const char *userid)
+{
+    static char buf[MAX_MAILBOX_PATH];
+    struct stat sbuf;
+
+    if (sync_cs->channel) {
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync/%s/skipuser-%s",
+                 config_dir, sync_cs->channel, userid);
+    }
+    else {
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync/skipuser-%s",
+                 config_dir, userid);
+    }
+
+    return !stat(buf, &sbuf); // if zero, file exists, so skip user
+}
 
 static struct mboxlock *sync_lock(struct sync_client_state *sync_cs,
                                   const char *userid)
 {
+    if (sync_skipuser(sync_cs, userid))
+        return NULL;
+
     const char *name = _synclock_name(sync_cs->servername, userid);
     struct mboxlock *lock = NULL;
     int flags = LOCK_EXCLUSIVE;
@@ -602,6 +625,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          modseq_t xconvmodseq,
                                          modseq_t raclmodseq,
                                          modseq_t foldermodseq,
+                                         const char *groups,
                                          int ispartial)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
@@ -634,6 +658,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->xconvmodseq = xconvmodseq;
     result->raclmodseq = raclmodseq;
     result->foldermodseq = foldermodseq;
+    result->groups = xstrdupnull(groups);
     result->ispartial = ispartial;
 
     result->mark     = 0;
@@ -649,6 +674,18 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
 
     for (p = l->head; p; p = p->next) {
         if (!strcmp(p->uniqueid, uniqueid))
+            return p;
+    }
+    return NULL;
+}
+
+const struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
+                                                    const char *name)
+{
+    struct sync_folder *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name))
             return p;
     }
     return NULL;
@@ -818,8 +855,13 @@ void sync_encode_quota_limits(struct dlist *kl, const quota_t limits[QUOTA_NUMRE
     dlist_setnum32(kl, "LIMIT", limits[QUOTA_STORAGE]);
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-        if (limits[res] >= 0)
+        if (limits[res] >= 0) {
             dlist_setnum32(kl, quota_names[res], limits[res]);
+
+            /* For backwards compatibility, we also encode the
+             * legacy X-ANNOTATION-STORAGE and X-NUM-FOLDERS limits. */
+            dlist_updatenum32(kl, legacy_quota_names[res], limits[res]);
+        }
     }
 }
 
@@ -841,6 +883,10 @@ void sync_decode_quota_limits(/*const*/ struct dlist *kl, quota_t limits[QUOTA_N
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
         if (dlist_getnum32(kl, quota_names[res], &limit))
+            limits[res] = limit;
+
+        /* For backwards compatibility */
+        else if (dlist_getnum32(kl, legacy_quota_names[res], &limit))
             limits[res] = limit;
     }
 }
@@ -921,7 +967,7 @@ int sync_sieve_activate(const char *userid, const char *bcname)
         return IMAP_INTERNAL;
     }
 
-    r = sieve_ensure_folder(userid, &mailbox);
+    r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
         syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
         goto done;
@@ -968,7 +1014,7 @@ int sync_sieve_delete(const char *userid, const char *fname)
         return IMAP_INTERNAL;
     }
 
-    r = sieve_ensure_folder(userid, &mailbox);
+    r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
         syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
         goto done;
@@ -992,6 +1038,49 @@ int sync_sieve_delete(const char *userid, const char *fname)
   done:
     mailbox_close(&mailbox);
     sievedb_close(db);
+
+    return r;
+}
+
+static int sync_sieve_validate(struct index_record *record,
+                               struct sync_msgid_list *part_list)
+{
+    struct sync_msgid *item = sync_msgid_lookup(part_list, &record->guid);
+    char *parse_err = NULL;
+    int r = SIEVE_OK;
+    int fd;
+    
+    if (item && item->fname && (fd = open(item->fname, O_RDONLY)) != -1) {
+        struct buf buf = BUF_INITIALIZER;
+        const char *sep;
+
+        buf_refresh_mmap(&buf, 1, fd, item->fname, MAP_UNKNOWN_LEN, NULL);
+        sep = strstr(buf_cstring(&buf), "\r\n\r\n");  // find header/body separator
+        if (!sep) {
+            r = IMAP_MESSAGE_NOBLANKLINE;
+        }
+        else {
+            const char *script = sep + 4;  // skip to body
+            sieve_script_t *s = NULL;
+
+            r = sieve_script_parse_string(NULL, script, &parse_err, &s);
+            sieve_script_free(&s);
+        }
+
+        buf_free(&buf);
+        close(fd);
+    }
+    else {
+        r = IMAP_IOERROR;
+    }
+
+    if (r != SIEVE_OK) {
+        const char *err = parse_err ? parse_err : error_message(r);
+
+        syslog(LOG_ERR, "sieve script parse error uid=%u: %s", record->uid, err);
+    }
+
+    free(parse_err);
 
     return r;
 }
@@ -1830,12 +1919,12 @@ void sync_eatline(struct protstream *pin, int c)
     }
 }
 
-struct dlist *sync_parseline(struct protstream *in)
+struct dlist *sync_parseline(struct protstream *in, int isarchive)
 {
     struct dlist *dl = NULL;
     int c;
 
-    c = dlist_parse(&dl, 1, 0, in);
+    c = dlist_parse(&dl, 1, isarchive, in);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);
@@ -1889,9 +1978,11 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 {
     struct sync_annot_list *annots = NULL;
     struct mailbox_iter *iter = NULL;
+    struct dlist *ufl = NULL;
     modseq_t xconvmodseq = 0;
     int r = 0;
     int ispartial = local ? local->ispartial : 0;
+    int userflag;
 
     if (!topart) topart = mailbox_partition(mailbox);
 
@@ -1911,10 +2002,6 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setdate(kl, "LAST_APPENDDATE", 0);
         dlist_setdate(kl, "POP3_LAST_LOGIN", remote ? remote->pop3_last_login : 0);
         dlist_setdate(kl, "POP3_SHOW_AFTER", remote ? remote->pop3_show_after : 0);
-        if (remote && remote->xconvmodseq)
-            dlist_setnum64(kl, "XCONVMODSEQ", remote->xconvmodseq);
-        if (remote && remote->raclmodseq)
-            dlist_setnum64(kl, "RACLMODSEQ", remote->raclmodseq);
     }
     else {
         struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
@@ -1935,6 +2022,16 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
         if (raclmodseq)
             dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        strarray_t groups = STRARRAY_INITIALIZER;
+        int r = mboxlist_lookup_usergroups(userid, &groups);
+        if (!r && strarray_size(&groups)) {
+            char *groupstxt = strarray_join(&groups, "\t");
+            dlist_setatom(kl, "USERGROUPS", groupstxt);
+            free(groupstxt);
+        }
+        strarray_fini(&groups);
+        free(userid);
     }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
@@ -1956,6 +2053,13 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     encode_annotations(kl, mailbox, NULL, annots);
     sync_annot_list_free(&annots);
 
+    /* always send mailbox userflags */
+    ufl = dlist_newlist(kl, "USERFLAGS");
+    for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+        if (mailbox->h.flagname[userflag])
+            dlist_setflag(ufl, "USERFLAG", mailbox->h.flagname[userflag]);
+    }
+
     if (sendsince && remote && remote->highestmodseq) {
         dlist_setnum64(kl, "SINCE_MODSEQ", remote->highestmodseq);
         dlist_setnum32(kl, "SINCE_CRC", remote->synccrcs.basic);
@@ -1966,6 +2070,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         const message_t *msg;
         struct dlist *rl = dlist_newlist(kl, "RECORD");
         modseq_t modseq = remote ? remote->highestmodseq : 0;
+
+        // this will hold the annotations db open for all the prints
+        mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, /*astate*/NULL);
 
         iter = mailbox_iter_init(mailbox, modseq, 0);
         while ((msg = mailbox_iter_step(iter))) {
@@ -2051,7 +2158,7 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 
     kl = dlist_newlist(NULL, cmd);
     while (!strcmp(response.s, "*")) {
-        struct dlist *item = sync_parseline(in);
+        struct dlist *item = sync_parseline(in, /*isarchive*/ 0);
         if (!item) goto parse_err;
         dlist_stitch(kl, item);
         if ((c = getword(in, &response)) == EOF)
@@ -2290,7 +2397,7 @@ redo:
         /* Attempt to reserve this message */
         mailbox_msg_path = mailbox_record_fname(mailbox, record);
         stage_msg_path = dlist_reserve_path(part, record->internal_flags & FLAG_INTERNAL_ARCHIVED,
-                                            0, &record->guid);
+                                            &record->guid);
 
         /* check that the sha1 of the file on disk is correct */
         struct index_record record2;
@@ -2425,7 +2532,7 @@ int sync_apply_reserve(struct dlist *kl,
 int sync_apply_unquota(struct dlist *kin,
                        struct sync_state *sstate __attribute__((unused)))
 {
-    return mboxlist_unsetquota(kin->sval);
+    return mboxlist_unsetquota(kin->sval, /*silent*/1);
 }
 
 int sync_apply_quota(struct dlist *kin,
@@ -2502,8 +2609,10 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* higher modseq on the replica is an error */
             if (rrecord->modseq > mrecord.modseq) {
                 if (opt_force) {
-                    syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s %u (" MODSEQ_FMT " > " MODSEQ_FMT ")",
-                           mailbox_name(mailbox), mrecord.uid, rrecord->modseq, mrecord.modseq);
+                    if (doupdate)
+                        syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s %u "
+                               "(" MODSEQ_FMT " > " MODSEQ_FMT ")",
+                               mailbox_name(mailbox), mrecord.uid, rrecord->modseq, mrecord.modseq);
                 }
                 else {
                     xsyslog(LOG_ERR, "SYNCNOTICE: higher modseq on replica",
@@ -2590,7 +2699,17 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
         /* after LAST_UID, it's an append, that's OK */
         else {
             /* skip out on the first pass */
-            if (!doupdate) continue;
+            if (!doupdate) {
+#ifdef USE_SIEVE
+                /* do we have valid Sieve (e.g. no deprecated extensions)? */
+                if ((mbtype_isa(mailbox->h.mbtype) == MBTYPE_SIEVE) &&
+                    sync_sieve_validate(&mrecord, part_list) != SIEVE_OK) {
+                    r = IMAP_SYNC_BADSIEVE;
+                    goto out;
+                }
+#endif
+                continue;
+            }
 
             mrecord.silentupdate = 1;
             r = sync_append_copyfile(mailbox, &mrecord, mannots, part_list);
@@ -2647,6 +2766,7 @@ int sync_apply_mailbox(struct dlist *kin,
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
+    const char *groups = NULL;
 
     /* previous state markers */
     modseq_t since_modseq = 0;
@@ -2655,6 +2775,7 @@ int sync_apply_mailbox(struct dlist *kin,
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
     struct dlist *ka = NULL;
+    struct dlist *userflags = NULL;
     int r;
 
     struct sync_annot_list *mannots = NULL;
@@ -2692,7 +2813,10 @@ int sync_apply_mailbox(struct dlist *kin,
         newmbentry->foldermodseq = highestmodseq;
         newmbentry->createdmodseq = createdmodseq;
 
-        r = mboxlist_updatelock(newmbentry, /*localonly*/1);
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+        r = mboxlist_update_full(newmbentry, /*localonly*/1, /*silent*/1);
+        mboxname_release(&namespacelock);
+
         mboxlist_entry_free(&newmbentry);
 
         return r;
@@ -2725,6 +2849,8 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
     dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
     dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
+    dlist_getlist(kin, "USERFLAGS", &userflags);
+    dlist_getatom(kin, "USERGROUPS", &groups);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -2770,7 +2896,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mbentry.createdmodseq = createdmodseq;
             mbentry.foldermodseq = foldermodseq;
 
-            unsigned flags = MBOXLIST_CREATE_SYNC;
+            unsigned flags = MBOXLIST_CREATE_SYNC | MBOXLIST_CREATE_KEEP_INTERMEDIARIES;
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
@@ -2832,7 +2958,7 @@ int sync_apply_mailbox(struct dlist *kin,
             mbentry.createdmodseq = createdmodseq;
             mbentry.foldermodseq = foldermodseq;
 
-            unsigned flags = MBOXLIST_CREATE_SYNC;
+            unsigned flags = MBOXLIST_CREATE_SYNC | MBOXLIST_CREATE_KEEP_INTERMEDIARIES;
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
@@ -2974,6 +3100,32 @@ int sync_apply_mailbox(struct dlist *kin,
         }
     }
 
+    if (groups) {
+        strarray_t mygroups = STRARRAY_INITIALIZER;
+        char *userid = mboxname_to_userid(mboxname);
+        r = mboxlist_lookup_usergroups(userid, &mygroups);
+        if (r) goto done;
+        strarray_t *usergroups = strarray_split(groups, "\t", 0);
+        int i;
+        // add any new
+        for (i = 0; i < strarray_size(usergroups); i++) {
+            const char *group = strarray_nth(usergroups, i);
+            if (strarray_contains(&mygroups, group)) continue;
+            r = mboxlist_set_usergroup(userid, group, /*add*/1, /*silent*/1);
+            if (r) goto done;
+        }
+        // remove any old
+        for (i = 0; i < strarray_size(&mygroups); i++) {
+            const char *group = strarray_nth(&mygroups, i);
+            if (strarray_contains(usergroups, group)) continue;
+            r = mboxlist_set_usergroup(userid, group, /*add*/0, /*silent*/1);
+            if (r) goto done;
+        }
+        strarray_free(usergroups);
+        free(userid);
+        strarray_fini(&mygroups);
+    }
+
     r = sync_mailbox_compare_update(mailbox, kr, 0, part_list);
     if (r) goto done;
 
@@ -2984,7 +3136,7 @@ int sync_apply_mailbox(struct dlist *kin,
     mailbox->silentchanges = 1;
 
     /* always take the ACL from the master, it's not versioned */
-    r = mboxlist_sync_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq);
+    r = mboxlist_setacls(mboxname, acl, foldermodseq ? foldermodseq : highestmodseq, /*silent*/1);
     if (r) goto done;
     mailbox_set_acl(mailbox, acl);
 
@@ -3002,8 +3154,31 @@ int sync_apply_mailbox(struct dlist *kin,
         goto done;
     }
 
+    /* take all userflags from the master */
+    if (dlist_isatomlist(userflags)) {
+        struct dlist *di;
+
+        for (di = userflags->head; di; di = di->next) {
+            const char *userflag = NULL;
+
+            if (!dlist_toatom(di, &userflag)) continue;
+
+            r = mailbox_user_flag(mailbox, userflag, NULL, /*allow all*/2);
+            if (r) {
+                xsyslog(LOG_ERR, "syncerror: unable to add userflag",
+                                 "mailbox=<%s> userflag=<%s> error=<%s>",
+                                 mailbox_name(mailbox),
+                                 userflag,
+                                 error_message(r));
+            }
+        }
+    }
+
     r = sync_mailbox_compare_update(mailbox, kr, 1, part_list);
     if (r) {
+        /* SHOULD never happen */
+        syslog(LOG_ERR, "syncerror: mailbox compare update failed for %s: %s",
+               mailbox_name(mailbox), error_message(r));
         abort();
         return r;
     }
@@ -3034,7 +3209,7 @@ int sync_apply_mailbox(struct dlist *kin,
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox_name(mailbox), uidvalidity);
     }
 
-    if (mailbox_has_conversations(mailbox)) {
+    if (mailbox_has_conversations(mailbox) && xconvmodseq) {
         r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
@@ -3049,8 +3224,13 @@ done:
     /* check the CRC too */
     if (!r && !mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
         /* try forcing a recalculation */
-        if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1)))
+        if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1))) {
+            xsyslog(LOG_NOTICE, "SYNCNOTICE: CRC error after apply",
+                            "mailbox=<%s> crcs_master=<%u/%u> crcs_replica=<%u/%u>",
+                            mailbox_name(mailbox), synccrcs.basic, synccrcs.annot,
+                            mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
             r = IMAP_SYNC_CHECKSUM;
+        }
     }
 
     mailbox_close(&mailbox);
@@ -3085,7 +3265,7 @@ static int getannotation_cb(const char *mboxname,
 int sync_get_annotation(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
-    return annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0,
+    return annotatemore_findall_mboxname(mboxname, 0, "*", /*modseq*/0,
                                 &getannotation_cb, (void *) sstate->pout,
                                 /*flags*/0);
 }
@@ -3298,7 +3478,7 @@ static int remove_cb(const char *sievedir, const char *fname,
             if (ext && !strcmp(ext, BYTECODE_SUFFIX)) {
                 namelen = ext - fname;
                 snprintf(path, sizeof(path), "%.*s", (int) namelen, fname);
-                if (strarray_find(list, path, 0) >= 0) {
+                if (strarray_contains(list, path)) {
                     /* Bytecode for an existing script - keep it */
                     return SIEVEDIR_OK;
                 }
@@ -3315,7 +3495,7 @@ static int remove_cb(const char *sievedir, const char *fname,
     }
 
     snprintf(path, sizeof(path), "%s/%s", sievedir, fname);
-    unlink(path);
+    xunlink(path);
 
     return SIEVEDIR_OK;
 }
@@ -3429,7 +3609,7 @@ int sync_sieve_upload(const char *userid, const char *fname,
         goto done;
     }
 
-    r = sieve_ensure_folder(userid, &mailbox);
+    r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
         syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
         goto done;
@@ -3438,7 +3618,6 @@ int sync_sieve_upload(const char *userid, const char *fname,
     snprintf(name, sizeof(name), "%.*s", (int) (ext - fname), fname);
     r = sievedb_lookup_name(db, name, &sdata, 0);
     if (r == CYRUSDB_NOTFOUND) {
-        buf_init_ro(&buf, content, len);
         sdata->name = name;
     }
     else if (r) {
@@ -3446,6 +3625,7 @@ int sync_sieve_upload(const char *userid, const char *fname,
         goto done;
     }
 
+    buf_init_ro(&buf, content, len);
     r = sieve_script_store(mailbox, sdata, &buf);
 
   done:
@@ -3590,7 +3770,8 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.exists = 0;
     mrock.flags = sstate->flags;
 
-    r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES);
+    int mflags = MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES|MBOXTREE_TOMBSTONES;
+    r = mboxlist_usermboxtree(userid, NULL, sync_mailbox_byentry, &mrock, mflags);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
@@ -3712,7 +3893,7 @@ int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)
     if (!dlist_getatom(kin, "USERID", &userid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    return mboxlist_changesub(mboxname, userid, sstate->authstate, add, add, 0);
+    return mboxlist_changesub(mboxname, userid, sstate->authstate, add, add, 0, /*silent*/1);
 }
 
 /* ====================================================================== */
@@ -3751,6 +3932,7 @@ int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
+	mailbox->silentchanges = 1;
         r = sync_mailbox_version_check(&mailbox);
         if (r) goto done;
         r = annotate_state_set_mailbox(astate, mailbox);
@@ -3809,6 +3991,7 @@ int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
+	mailbox->silentchanges = 1;
         r = sync_mailbox_version_check(&mailbox);
         if (r) goto done;
         r = annotate_state_set_mailbox(astate, mailbox);
@@ -3917,10 +4100,10 @@ int sync_apply_seen(struct dlist *kin,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "SEENUIDS", &seenuids))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    sd.seenuids = xstrdup(seenuids);
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
+    sd.seenuids = xstrdup(seenuids);
 
     r = seen_write(seendb, uniqueid, &sd);
     seen_close(&seendb);
@@ -3957,7 +4140,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     strarray_t *list = mboxlist_sublist(userid);
     for (i = 0; i < list->count; i++) {
         const char *name = strarray_nth(list, i);
-        mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0);
+        mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0, /*silent*/1);
     }
 
     mbentry_t *mbentry = NULL;
@@ -3969,7 +4152,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
 
     /* delete in reverse so INBOX is last */
-    int delflags = MBOXLIST_DELETE_FORCE;
+    int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
     if (sstate->flags & SYNC_FLAG_LOCALONLY)
         delflags |= MBOXLIST_DELETE_LOCALONLY;
     for (i = list->count; i; i--) {
@@ -4106,6 +4289,8 @@ int sync_apply_expunge(struct dlist *kin,
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto done;
 
+    mailbox->silentchanges = 1;
+
     /* don't want to expunge the wrong mailbox! */
     if (strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
         r = IMAP_MAILBOX_MOVED;
@@ -4173,6 +4358,13 @@ int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
         if (!strcasecmp(capa, "SIEVE-MAILBOX")) {
             sstate->flags |= SYNC_FLAG_SIEVE_MAILBOX;
             dlist_setatom(kout, NULL, capa);
+        }
+
+        if (!strcasecmp(capa, "REPLICATION-ARCHIVE")) {
+            if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+                sstate->flags |= SYNC_FLAG_ARCHIVE;
+                dlist_setatom(kout, NULL, capa);
+            }
         }
     }
 
@@ -4311,6 +4503,8 @@ int sync_restore_mailbox(struct dlist *kin,
                mboxname, error_message(r));
         return r;
     }
+
+    mailbox->silentchanges = 1;
 
     /* XXX what if we've opened a deleted mailbox? */
 
@@ -4558,7 +4752,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                                  0, 0,
                                  0, 0,
                                  NULL, 0,
-                                 0, mbentry->foldermodseq, 0);
+                                 0, mbentry->foldermodseq, NULL, 0);
             mboxlist_entry_free(&mbentry);
             continue;
         }
@@ -4602,6 +4796,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         modseq_t tomodseq = mailbox->i.highestmodseq;
         int ispartial = 0;
 
+        char *groups = NULL;
+
         if (batchsize && touid - fromuid > batchsize) {
             /* see if we actually need to calculate an intermediate state */
             modseq_t frommodseq = rfolder ? rfolder->highestmodseq : 0;
@@ -4623,7 +4819,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq,
-                             raclmodseq, mailbox_foldermodseq(mailbox), ispartial);
+                             raclmodseq, mailbox_foldermodseq(mailbox), groups, ispartial);
 
 
         part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox_partition(mailbox));
@@ -4788,7 +4984,7 @@ static int sync_readcache(struct sync_client_state *sync_cs, const char *mboxnam
     if (r) return r;
 
 
-    dlist_parsemap(klp, 0, 0, base, len);
+    dlist_parsemap(klp, 0, base, len);
 
     // we need the name so the parser can parse it
     if (*klp) (*klp)->name = xstrdup("MAILBOX");
@@ -4908,6 +5104,7 @@ static int sync_kl_parse(struct dlist *kin,
             modseq_t xconvmodseq = 0;
             modseq_t raclmodseq = 0;
             modseq_t foldermodseq = 0;
+            const char *groups = NULL;
 
             if (!folder_list) return IMAP_PROTOCOL_BAD_PARAMETERS;
             if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -4929,6 +5126,7 @@ static int sync_kl_parse(struct dlist *kin,
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
             dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
             dlist_getnum64(kl, "FOLDERMODSEQ", &foldermodseq);
+            dlist_getatom(kl, "USERGROUPS", &groups);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL, NULL);
@@ -4943,7 +5141,7 @@ static int sync_kl_parse(struct dlist *kin,
                                  pop3_last_login,
                                  pop3_show_after, annots,
                                  xconvmodseq, raclmodseq,
-                                 foldermodseq, /*ispartial*/0);
+                                 foldermodseq, groups, /*ispartial*/0);
         }
 
         else {
@@ -5401,12 +5599,17 @@ done:
 static int copy_remote(struct mailbox *mailbox, uint32_t uid,
                        struct dlist *kr, struct sync_msgid_list *part_list)
 {
-    struct index_record record;
     struct dlist *ki;
     int r;
-    struct sync_annot_list *annots = NULL;
 
     for (ki = kr->head; ki; ki = ki->next) {
+        struct sync_annot_list *annots = NULL;
+        struct index_record record;
+        uint32_t itemuid = 0;
+
+        dlist_getnum32(ki, "UID", &itemuid);
+        if (itemuid != uid) continue;
+
         r = parse_upload(ki, mailbox, &record, &annots);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: parse_upload failed",
@@ -5414,19 +5617,16 @@ static int copy_remote(struct mailbox *mailbox, uint32_t uid,
                              uid);
             return r;
         }
-        if (record.uid == uid) {
-            /* choose the destination UID */
-            record.uid = mailbox->i.last_uid + 1;
+        /* choose the destination UID */
+        record.uid = mailbox->i.last_uid + 1;
 
-            /* append the file */
-            r = sync_append_copyfile(mailbox, &record, annots, part_list);
+        /* append the file */
+        r = sync_append_copyfile(mailbox, &record, annots, part_list);
 
-            sync_annot_list_free(&annots);
-
-            return r;
-        }
         sync_annot_list_free(&annots);
+        return r;
     }
+
     /* not finding the record is an error! (should never happen) */
     xsyslog(LOG_ERR, "IOERROR: couldn't find index record",
                      "uid=<%u>",
@@ -5498,32 +5698,34 @@ static int renumber_one_record(const struct index_record *mp,
 
 static const char *make_flags(struct mailbox *mailbox, struct index_record *record)
 {
-    static char buf[4096];
+    static struct buf buf = BUF_INITIALIZER;
     const char *sep = "";
     int flag;
 
+    buf_reset(&buf);
+
     if (record->system_flags & FLAG_DELETED) {
-        snprintf(buf, 4096, "%s\\Deleted", sep);
+        buf_printf(&buf, "%s\\Deleted", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_ANSWERED) {
-        snprintf(buf, 4096, "%s\\Answered", sep);
+        buf_printf(&buf, "%s\\Answered", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_FLAGGED) {
-        snprintf(buf, 4096, "%s\\Flagged", sep);
+        buf_printf(&buf, "%s\\Flagged", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_DRAFT) {
-        snprintf(buf, 4096, "%s\\Draft", sep);
+        buf_printf(&buf, "%s\\Draft", sep);
         sep = " ";
     }
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        snprintf(buf, 4096, "%s\\Expunged", sep);
+        buf_printf(&buf, "%s\\Expunged", sep);
         sep = " ";
     }
     if (record->system_flags & FLAG_SEEN) {
-        snprintf(buf, 4096, "%s\\Seen", sep);
+        buf_printf(&buf, "%s\\Seen", sep);
         sep = " ";
     }
 
@@ -5533,11 +5735,11 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
             continue;
         if (!(record->user_flags[flag/32] & (1<<(flag&31))))
             continue;
-        snprintf(buf, 4096, "%s%s", sep, mailbox->h.flagname[flag]);
+        buf_printf(&buf, "%s%s", sep, mailbox->h.flagname[flag]);
         sep = " ";
     }
 
-    return buf;
+    return buf_cstring(&buf);
 }
 
 static void log_record(const char *name, struct mailbox *mailbox,
@@ -5850,10 +6052,6 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     r = sync_parse_response(cmd, sync_cs->backend->in, &kin);
     if (r) return r;
 
-    // we know the remote state, so cache it
-    r = sync_cache(sync_cs, local->name, kin);
-    if (r) return r;
-
     kl = kin->head;
 
     if (!kl) {
@@ -5902,6 +6100,8 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
         if (!r) r = sync_mailbox_version_check(&mailbox);
     }
     if (r) goto done;
+
+    /* this runs on the master, so not silent changes */
 
     part_list = sync_reserve_partlist(reserve_list, mailbox_partition(mailbox));
 
@@ -5955,7 +6155,7 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     if (foldermodseq) {
         // by writing the same ACL with the updated foldermodseq, this will bounce it
         // if needed
-        r = mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), foldermodseq);
+        r = mboxlist_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), foldermodseq, /*silent*/1);
         if (r) goto done;
     }
 
@@ -6113,8 +6313,9 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
     annotate_state_t *astate = NULL;
     struct sync_folder_list *myremotes = NULL;
+    int is_repeat = !!(flags & SYNC_FLAG_ISREPEAT);
 
-    if (flags & SYNC_FLAG_ISREPEAT) {
+    if (is_repeat) {
         // we have to fetch the sync_folder again!
         myremotes = sync_folder_list_create();
         struct dlist *mbkl = dlist_newlist(NULL, "MAILBOXES");
@@ -6132,9 +6333,12 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     if (local->mailbox) {
         mailbox = local->mailbox;
     }
-    else {
+    else if (is_repeat) {
         r = mailbox_open_iwl(local->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
+    }
+    else {
+        r = mailbox_open_irl(local->name, &mailbox);
     }
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -6145,6 +6349,8 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     }
     else if (r)
         goto done;
+
+    mailbox->silentchanges = 1;
 
     if (!topart) topart = mailbox_partition(mailbox);
 
@@ -6163,7 +6369,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     }
 
     /* check that replication stands a chance of succeeding */
-    if (remote && !(flags & SYNC_FLAG_ISREPEAT)) {
+    if (remote && !is_repeat) {
         if (mailbox->i.deletedmodseq > remote->highestmodseq) {
             syslog(LOG_NOTICE, "inefficient replication ("
                    MODSEQ_FMT " > " MODSEQ_FMT ") %s",
@@ -6180,24 +6386,32 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
         xsyslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica, updating",
                             "mailbox=<%s> olduidvalidity=<%u> newuidvalidity=<%u>",
                             mailbox_name(mailbox), mailbox->i.uidvalidity, remote->uidvalidity);
+        if (!is_repeat) {
+            r = IMAP_AGAIN;
+            goto done;
+        }
         mailbox_index_dirty(mailbox);
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox_name(mailbox), remote->uidvalidity);
     }
 
     /* make sure CRC is updated if we're retrying */
-    if (flags & SYNC_FLAG_ISREPEAT) {
+    if (is_repeat) {
         r = mailbox_index_recalc(mailbox);
         if (r) goto done;
     }
 
     /* bump the raclmodseq if it's higher on the replica */
-    if (remote && remote->raclmodseq) {
+    if (remote && is_repeat && remote->raclmodseq) {
         mboxname_setraclmodseq(mailbox_name(mailbox), remote->raclmodseq);
     }
 
     /* bump the foldermodseq if it's higher on the replica */
     if (remote && remote->foldermodseq > mailbox_foldermodseq(mailbox)) {
-        mboxlist_sync_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq);
+        if (!is_repeat) {
+            r = IMAP_AGAIN;
+            goto done;
+        }
+        mboxlist_setacls(mailbox_name(mailbox), mailbox_acl(mailbox), remote->foldermodseq, /*silent*/1);
         mailbox->mbentry->foldermodseq = remote->foldermodseq;
     }
 
@@ -6491,7 +6705,7 @@ int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname)
     r = do_getannotation(sync_cs, mboxname, replica_annot);
     if (r) goto bail;
 
-    r = annotatemore_findall_pattern(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
+    r = annotatemore_findall_mboxname(mboxname, 0, "*", /*modseq*/0, &do_annotation_cb,
                              master_annot, /*flags*/0);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: fetching annotations failed",
@@ -6555,7 +6769,6 @@ static int do_folders(struct sync_client_state *sync_cs,
     struct sync_rename_list *rename_folders;
     struct sync_reserve_list *reserve_list;
     struct sync_folder *mfolder, *rfolder;
-    const char *part;
     uint32_t batchsize = 0;
 
     if (flags & SYNC_FLAG_BATCH) {
@@ -6583,7 +6796,7 @@ static int do_folders(struct sync_client_state *sync_cs,
         rfolder->mark = 1;
 
         /* does it need a rename? partition change is a rename too */
-        part = topart ? topart : mfolder->part;
+        const char *part = topart ? topart : mfolder->part;
         if (strcmp(mfolder->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
             sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
                                  mfolder->name, part, mfolder->uidvalidity);
@@ -6594,29 +6807,34 @@ static int do_folders(struct sync_client_state *sync_cs,
      * and remove all entries related to that user from both lists */
 
     /* Delete folders on server which no longer exist on client */
-    if (flags & SYNC_FLAG_DELETE_REMOTE) {
-        for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
-            if (rfolder->mark) continue;
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+        if (rfolder->mark) continue;
 
-            mbentry_t *tombstone = NULL;
-            r = mboxlist_lookup_allow_all(rfolder->name, &tombstone, NULL);
-
-            if (r == 0 && (tombstone->mbtype & MBTYPE_DELETED) == MBTYPE_DELETED) {
+        mbentry_t *tombstone = NULL;
+        r = mboxlist_lookup_by_uniqueid(rfolder->uniqueid, &tombstone, NULL);
+        if (r == 0) {
+            if (tombstone->mbtype & MBTYPE_DELETED) {
                 mboxlist_entry_free(&tombstone);
                 r = sync_do_folder_delete(sync_cs, rfolder->name);
                 if (r) {
-                    syslog(LOG_ERR, "sync_do_folder_delete(): failed: %s '%s'",
+                    syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
                                     rfolder->name, error_message(r));
                     goto bail;
                 }
             }
             else {
+                /* we've found a rename! */
+                const char *part = topart ? topart : tombstone->partition;
+                sync_rename_list_add(rename_folders, tombstone->uniqueid, rfolder->name,
+                                     tombstone->name, part, tombstone->uidvalidity);
                 mboxlist_entry_free(&tombstone);
-                syslog(LOG_ERR, "%s: no tombstone for deleted mailbox %s (%s)",
-                                __func__, rfolder->name, error_message(r));
-
-                /* XXX copy the missing local mailbox back from the replica? */
             }
+        }
+        else {
+            mboxlist_entry_free(&tombstone);
+            syslog(LOG_NOTICE, "SYNCNOTICE: no tombstone for deleted mailbox %s (%s)",
+                               rfolder->name, error_message(r));
+            /* XXX copy the missing local mailbox back from the replica? */
         }
     }
 
@@ -6624,6 +6842,32 @@ static int do_folders(struct sync_client_state *sync_cs,
      * following isn't wildly efficient, but rename_folders will typically be
      * short and contain few dependancies.  Algorithm is to simply pick a
      * rename operation which has no dependancy and repeat until done */
+
+    struct sync_rename *item;
+    for (item = rename_folders->head; item; item = item->next) {
+        if (!strcmp(item->oldname, item->newname)) continue;
+        if (!sync_folder_lookup_byname(replica_folders, item->oldname)) continue;
+        if (!sync_folder_lookup_byname(replica_folders, item->newname)) continue;
+
+        // ok, it's a rename and both source and destination names exist already,
+        // is there an intermediate we can rename to?
+
+        mbentry_t *mbentry_byid = NULL;
+        if (mboxlist_lookup_by_uniqueid(item->uniqueid, &mbentry_byid, NULL)) continue;
+        int i;
+        for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+            const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+            if (sync_folder_lookup_byname(replica_folders, histitem->name)) continue;
+            // add a rename from old name to the temporary name
+            sync_rename_list_add(rename_folders, item->uniqueid, item->oldname,
+                                 histitem->name, item->part, histitem->uidvalidity);
+            // and then reuse this item for the rename from temporary to final
+            free(item->oldname);
+            item->oldname = xstrdup(histitem->name);
+            break;
+        }
+        mboxlist_entry_free(&mbentry_byid);
+    }
 
     while (rename_folders->done < rename_folders->count) {
         int rename_success = 0;
@@ -6635,14 +6879,14 @@ static int do_folders(struct sync_client_state *sync_cs,
             /* don't skip rename to different partition */
             if (strcmp(item->oldname, item->newname)) {
                 item2 = sync_rename_lookup(rename_folders, item->newname);
-                if (item2 && !item2->done) continue;
+                if (item2 && !item2->done && sync_folder_lookup_byname(replica_folders, item->newname)) continue;
             }
 
             /* Found unprocessed item which should rename cleanly */
             r = folder_rename(sync_cs, item->oldname, item->newname, item->part,
                               item->uidvalidity);
             if (r) {
-                syslog(LOG_ERR, "do_folders(): failed to rename: %s -> %s ",
+                syslog(LOG_ERR, "SYNCERROR: do_folders(): failed to rename: %s -> %s ",
                        item->oldname, item->newname);
                 goto bail;
             }
@@ -6657,7 +6901,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             const char *name = "unknown";
             if (item2) name = item2->oldname;
             syslog(LOG_ERR,
-                   "do_folders(): failed to order folders correctly at %s", name);
+                   "SYNCERROR: do_folders(): failed to order folders correctly at %s", name);
             r = IMAP_AGAIN;
             goto bail;
         }
@@ -6674,13 +6918,11 @@ static int do_folders(struct sync_client_state *sync_cs,
 
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
         if (mfolder->mark) continue;
-        /* NOTE: rfolder->name may now be wrong, but we're guaranteed that
-         * it was successfully renamed above, so just use mfolder->name for
-         * all commands */
         rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
+	/* rfolder may not exist, so we use mfolder->name here */
         r = sync_do_update_mailbox(sync_cs, mfolder, rfolder, topart, reserve_list);
         if (r) {
-            syslog(LOG_ERR, "do_folders(): update failed: %s '%s'",
+            syslog(LOG_ERR, "SYNCERROR: do_folders(): update failed: %s '%s'",
                    mfolder->name, error_message(r));
             goto bail;
         }
@@ -6800,11 +7042,6 @@ redo:
         if (r) goto done;
     }
 
-    /* we don't want to delete remote folders which weren't found locally,
-     * because we may be racing with a rename, and we don't want to lose
-     * the remote files.  A real delete will always have inserted a
-     * UNMAILBOX anyway */
-    flags &= ~SYNC_FLAG_DELETE_REMOTE;
     r = do_folders(sync_cs, mboxname_list, topart, replica_folders, flags);
 
     if (r == IMAP_AGAIN) {
@@ -6866,18 +7103,23 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     struct mboxinfo *info = (struct mboxinfo *)rock;
     int r = 0;
 
-    /* XXX - check for deleted? */
-
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
         !(info->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
         /* Ignore #sieve mailbox - replicated via *SIEVE* commands */
         return 0;
     }
 
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        sync_name_list_add(info->mboxlist, mbentry->name);
-        return 0;
+    mbentry_t *mbentry_byid = NULL;
+    if (!mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &mbentry_byid, NULL)) {
+        int i;
+        for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+            const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+            sync_name_list_add(info->mboxlist, histitem->name);
+        }
+        mboxlist_entry_free(&mbentry_byid);
     }
+
+    sync_name_list_add(info->mboxlist, mbentry->name);
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -6894,8 +7136,6 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
 
     if (info->quotalist && mailbox_quotaroot(mailbox))
         sync_name_list_add(info->quotalist, mailbox_quotaroot(mailbox));
-
-    sync_name_list_add(info->mboxlist, mbentry->name);
 
 done:
     mailbox_close(&mailbox);
@@ -6942,21 +7182,25 @@ static int do_user_main(struct sync_client_state *sync_cs,
 
 #ifdef USE_SIEVE
     /* Force migration of sieve scripts into #sieve mailbox */
-    r = sieve_ensure_folder(userid, NULL);
+    r = sieve_ensure_folder(userid, NULL, /*silent*/1);
 #endif
 
     info.mboxlist = sync_name_list_create();
     info.quotalist = sync_name_list_create();
     info.flags = sync_cs->flags;
 
-    r = mboxlist_usermboxtree(userid, NULL, do_mailbox_info, &info, MBOXTREE_DELETED);
+    int mflags = MBOXTREE_DELETED|MBOXTREE_INTERMEDIATES|MBOXTREE_TOMBSTONES;
+    r = mboxlist_usermboxtree(userid, NULL, do_mailbox_info, &info, mflags);
 
-    /* we know all the folders present on the master, so it's safe to delete
-     * anything not mentioned here on the replica - at least until we get
-     * real tombstones */
+    /* We are also looking for renames, so add not only all the folders on the master,
+     * but also any folder names from the replica */
+    struct sync_folder *rfolder;
+    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+        sync_name_list_add(info.mboxlist, rfolder->name);
+    }
+
     int flags = sync_cs->flags;
-    flags |= SYNC_FLAG_DELETE_REMOTE;
-    if (!r) r = do_folders(sync_cs, info.mboxlist, topart, replica_folders, flags);
+    if (!r) r = sync_do_mailboxes(sync_cs, info.mboxlist, topart, flags);
     if (!r) r = sync_do_user_quota(sync_cs, info.quotalist, replica_quota);
 
     sync_name_list_free(&info.mboxlist);
@@ -8013,7 +8257,7 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
                               &csync_protocol, "", cb, NULL,
                               (verbose > 1 ? fileno(stderr) : -1));
 
-    // auth_status means there was an error
+    // no backend means there was an error
     if (!backend) {
         free_callbacks(cb);
         return IMAP_AGAIN;
@@ -8048,19 +8292,39 @@ connected:
     }
 #endif
 
+    unsigned capabilities = 0;
+
     if (CAPA(backend, CAPA_SIEVE_MAILBOX)) {
         syslog(LOG_INFO, "Destination supports #sieve mailbox");
-        sync_do_enable(sync_cs, CAPA_SIEVE_MAILBOX);
+        capabilities |= CAPA_SIEVE_MAILBOX;
+    }
+
+    if (sync_cs->flags & SYNC_FLAG_ARCHIVE) {
+        if (CAPA(backend, CAPA_REPLICATION_ARCHIVE)) {
+            syslog(LOG_INFO, "Destination supports replication to archive");
+            capabilities |= CAPA_REPLICATION_ARCHIVE;
+            sync_cs->flags &= ~SYNC_FLAG_ARCHIVE;
+        }
+        else {
+            syslog(LOG_NOTICE, "Destination doesn't support replication to archive");
+        }
+    }
+
+    if (capabilities) {
+        sync_do_enable(sync_cs, capabilities);
+
+        if ((capabilities & CAPA_REPLICATION_ARCHIVE)
+            && !(sync_cs->flags & SYNC_FLAG_ARCHIVE))
+        {
+            syslog(LOG_NOTICE, "Replication to archive requested but destination didn't enable it");
+            return IMAP_REMOTE_DENIED;
+        }
     }
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
     prot_settimeout(backend->in, timeout);
-
-    /* Force use of LITERAL+ so we don't need two way communications */
-    prot_setisclient(backend->in, 1);
-    prot_setisclient(backend->out, 1);
 
     return 0;
 }
@@ -8167,6 +8431,9 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
     if (capabilities & CAPA_SIEVE_MAILBOX) {
         dlist_setatom(kl, NULL, "SIEVE-MAILBOX");
     }
+    if (capabilities & CAPA_REPLICATION_ARCHIVE) {
+        dlist_setatom(kl, NULL, "REPLICATION-ARCHIVE");
+    }
 
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
@@ -8188,6 +8455,8 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
 
                 if (!strcasecmp(capa, "SIEVE-MAILBOX"))
                     sync_cs->flags |= SYNC_FLAG_SIEVE_MAILBOX;
+                if (!strcasecmp(capa, "REPLICATION-ARCHIVE"))
+                    sync_cs->flags |= SYNC_FLAG_ARCHIVE;
             }
         }
     }

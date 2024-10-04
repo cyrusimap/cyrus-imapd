@@ -71,6 +71,7 @@
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "icu_wrap.h"
+#include "jcal.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -288,7 +289,7 @@ static void blobid_from_data(struct jmapical_ctx *jmapctx,
                              const char *href)
 {
     // need a real Cyrus message for ATTACH smart blob ids
-    if (!jmapctx->icalsrc.mboxid) return;
+    if (!jmapctx->from_ical.cyrus_msg.mboxid) return;
 
     const char *semcol = strchr(href + 5, ';');
     if (!semcol || strncasecmp(semcol, ";base64,", 8))
@@ -302,8 +303,10 @@ static void blobid_from_data(struct jmapical_ctx *jmapctx,
 
     struct message_guid guid = MESSAGE_GUID_INITIALIZER;
     message_guid_generate(&guid, buf_base(buf), buf_len(buf));
-    jmap_encode_rawdata_blobid('I', jmapctx->icalsrc.mboxid,
-            jmapctx->icalsrc.uid, jmapctx->icalsrc.partid,
+    jmap_encode_rawdata_blobid('I',
+            jmapctx->from_ical.cyrus_msg.mboxid,
+            jmapctx->from_ical.cyrus_msg.uid,
+            jmapctx->from_ical.cyrus_msg.partid,
             NULL, "ATTACH", &guid, blobid);
 }
 
@@ -380,6 +383,12 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     buf_printf(&preamble, "Date: %s\r\n", now);
     buf_appendcstr(&preamble, "Content-Type: application/octet-stream\r\n");
     buf_printf(&preamble, "Content-Length: %zu\r\n", buf_len(&getblobctx.blob));
+    buf_printf(&preamble, "Content-Disposition: attachment");
+    charset_append_mime_param(&preamble,
+                              CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
+                              "filename",
+                              blobid[0] == 'G' ? blobid + 1 : blobid);
+    buf_appendcstr(&preamble, "\r\n");
     buf_appendcstr(&preamble, "MIME-Version: 1.0\r\n");
 
     fwrite(buf_base(&preamble), buf_len(&preamble), 1, fp);
@@ -422,7 +431,7 @@ done:
         message_free_body(body);
         free(body);
     }
-    jmap_closembox(req, &srcmbox);
+    mailbox_close(&srcmbox);
     msgrecord_unref(&mr);
     buf_free(&preamble);
     return r;
@@ -437,8 +446,9 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
 
     if (!jmapctx->attachments.mbox) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int r = jmap_openmbox(req, mboxname, &jmapctx->attachments.mbox,
-                jmapctx->attachments.lock);
+	int rw = jmapctx->attachments.lock;
+        int r = rw ? mailbox_open_iwl(mboxname, &jmapctx->attachments.mbox)
+                   : mailbox_open_irl(mboxname, &jmapctx->attachments.mbox);
         if (r) {
             xsyslog(LOG_ERR, "can't open attachments",
                     "mboxname=<%s> err<%s>", mboxname, error_message(r));
@@ -454,7 +464,7 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
         if (!jmapctx->attachments.db) {
             xsyslog(LOG_ERR, "mailbox_open_webdav failed",
                     "attachments=<%s>", mailbox_name(jmapctx->attachments.mbox));
-            jmap_closembox(req, &jmapctx->attachments.mbox);
+            mailbox_close(&jmapctx->attachments.mbox);
             jmapctx->attachments.db = NULL;
             jmapctx->attachments.err = IMAP_INTERNAL;
             return jmapctx->attachments.err;
@@ -530,7 +540,7 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
         caldav_attachment_url(&jmapctx->attachments.url, req->accountid, baseurl, "");
     }
 
-    jmapctx->alert.emailrecipient = _emailalert_recipient(req->userid);
+    jmapctx->to_ical.emailalert_recipient = _emailalert_recipient(req->userid);
 
     if (strarray_size(schedule_addresses)) {
         const char *imipaddr = strarray_nth(schedule_addresses, 0);
@@ -555,8 +565,7 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
     if (!jmapctx) return;
 
 #ifndef BUILD_LMTPD
-    if (jmapctx->attachments.mbox)
-        jmap_closembox(jmapctx->req, &jmapctx->attachments.mbox);
+    mailbox_close(&jmapctx->attachments.mbox);
     if (jmapctx->attachments.db)
         webdav_close(jmapctx->attachments.db);
 #endif // BUILD_LMTPD
@@ -564,7 +573,7 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
 
     json_decref(jmapctx->to_ical.replyto);
 
-    free(jmapctx->alert.emailrecipient);
+    free(jmapctx->to_ical.emailalert_recipient);
     buf_free(&jmapctx->buf);
     free(jmapctx);
 
@@ -608,7 +617,6 @@ static char *normalized_uri(const char *uri)
     return buf_release(&buf);
 }
 
-
 static const char*
 get_icalxparam_value(icalproperty *prop, const char *name)
 {
@@ -648,6 +656,86 @@ static void unescape_ical_text(struct buf *buf, const char *s)
         }
         else buf_putc(buf, *s);
     }
+}
+
+struct geouri {
+    char *coords[3];
+    int has_p;
+};
+
+static void geouri_reset(struct geouri *geouri)
+{
+    int i;
+    for (i = 0; i < 3; i++)
+        xzfree(geouri->coords[i]);
+    geouri->has_p = 0;
+}
+
+static int geouri_parse(const char *uri, struct geouri *geouri)
+{
+    const char *str = uri;
+
+    // geo:
+    if (strncmpsafe("geo:", str, 4)) return -1;
+    str += 4;
+
+    // coord-a "," coord-b [ "," coord-c ]
+    int i;
+    for (i = 0; i < 3; i++) {
+        if ((geouri->coords[0] || geouri->coords[1])) {
+            if (*str != ',')
+                break;
+            str++;
+        }
+
+        const char *num = str;
+
+        if (*str == '-')
+            num++;
+
+        for ( ; isdigit(*num); num++) { }
+        if (num == str)
+            break;
+
+        if (*num == '.') {
+            const char *frac = ++num;
+
+            for ( ; isdigit(*frac); frac++) { }
+            if (frac == num)
+                break;
+
+            num = frac;
+        }
+
+        geouri->coords[i] = xstrndup(str, num - str);
+        str = num;
+    }
+
+    if (!geouri->coords[0] || !geouri->coords[1])
+        return -1;
+
+    // p
+    geouri->has_p = !!str[0];
+
+    return 0;
+}
+
+static int geouri_sanitize(const char *uri, struct buf *buf)
+{
+    struct geouri geouri = {0};
+    buf_reset(buf);
+
+    if (geouri_parse(uri, &geouri)) {
+        // Seen in the wild: TEXT-escaped geo: URI values
+        unescape_ical_text(buf, uri);
+        geouri_reset(&geouri);
+        if (geouri_parse(buf_cstring(buf), &geouri))
+            buf_reset(buf);
+    }
+    else buf_setcstr(buf, uri);
+
+    geouri_reset(&geouri);
+    return buf_len(buf) ? 0 : -1;
 }
 
 /* Compare the value of the first occurences of property kind in components
@@ -709,10 +797,27 @@ static void remove_icalxprop(icalcomponent *comp, const char *name)
     }
 }
 
+
+static void remove_xjmapid(icalcomponent *comp)
+{
+    if (!comp) return;
+
+    icalproperty *prop, *nextprop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+            prop; prop = nextprop) {
+        nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
+}
+
 static void xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
 {
     buf_reset(dst);
-    const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
+    const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
     if (!id) {
         char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         id = sha1hexstr(icalproperty_as_ical_string(prop), keybuf);
@@ -726,6 +831,24 @@ static char *xjmapid_from_ical(icalproperty *prop)
     struct buf buf = BUF_INITIALIZER;
     xjmapid_from_icalm(&buf, prop);
     return buf_len(&buf) ? buf_release(&buf) : NULL;
+}
+
+/* Same process used by participants_from_ical() */
+EXPORTED const char *jmap_partid_from_ical(icalproperty *prop)
+{
+    static char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
+    const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+
+    if (!id) {
+        char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
+
+        if (!uri) return NULL;
+
+        id = sha1hexstr(uri, keybuf);
+        free(uri);
+    }
+
+    return id;
 }
 
 static void xjmapid_to_ical(icalproperty *prop, const char *id)
@@ -751,11 +874,11 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
          prop;
          prop = icalcomponent_get_next_property(comp, kind)) {
 
-        const char *oldid = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
+        const char *oldid = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
         char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         if (!oldid)
             oldid = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
-        if (!strcmp(id, oldid)) break;
+        if (!strcmpsafe(id, oldid)) break;
     }
 
     return prop;
@@ -934,13 +1057,11 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
     }
     if (!count) return;
 
-#ifdef HAVE_GUESSTZ
-    guesstz_t *gtz = NULL;
-    struct icalperiodtype guess_span;
+    /* Determine the timespan of the event to guess its IANA timezone */
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icalperiodtype guess_span = { 0 };
 
     if (!jstzones->no_guess) {
-        /* Determine the timespan of the event */
-        const icaltimezone *utc = icaltimezone_get_utc_timezone();
         unsigned is_recurring = 0;
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         if (!comp) return;
@@ -949,7 +1070,12 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
         if (icaltime_as_timet_with_zone(guess_span.end, utc) == caldav_epoch) {
             guess_span.end = icaltime_null_time();
         }
+    }
 
+#ifdef HAVE_GUESSTZ
+    guesstz_t *gtz = NULL;
+
+    if (!jstzones->no_guess) {
         /* Open database to guess IANA timezones */
         if (config_getstring(IMAPOPT_ZONEINFO_DIR)) {
             char *fname = strconcat(config_getstring(IMAPOPT_ZONEINFO_DIR),
@@ -966,32 +1092,36 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
 #endif
 
     /* Process custom timezones */
-
     struct buf idbuf = BUF_INITIALIZER;
 
     for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
          vtz;
          vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
 
+        buf_reset(&idbuf);
+
         /* Ignore standard timezones */
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
         if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
+
         if (!tzid || !*tzid || get_cyrus_timezone_from_tzid(tzid, jstzones->no_guess)) {
             continue;
         }
 
-        /* Need to keep track of this timezone */
+        /* Handle custom timezone */
 
-        /* Make sure it returns tzid for timezone_get_location */
+        /* Make sure it returns its tzid for timezone_get_location */
         icalcomponent *myvtz = icalcomponent_clone(vtz);
         prop = icalproperty_new_x(tzid);
         icalproperty_set_x_name(prop, "X-LIC-LOCATION");
         icalcomponent_add_property(myvtz, prop);
 
-        /* Determine timezone name */
-        const char *jstzid = get_icalxprop_value(myvtz, JMAPICAL_XPROP_ID);
-        if (!jstzid) {
+        /* Remove any JMAP timezone identifier -- we set these for RFC8984 */
+        remove_xjmapid(myvtz);
+
+        /* Guess IANA timezone name */
+        if (!jstzones->no_guess) {
 #ifdef HAVE_GUESSTZ
             if (gtz) {
                 char *ianaid = guesstz_guess(gtz, myvtz, guess_span.start, guess_span.end);
@@ -1000,14 +1130,52 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
             }
 #endif
             if (!buf_len(&idbuf)) {
-                buf_putc(&idbuf, '/');
-                buf_appendcstr(&idbuf, tzid);
+                /* Could not guess IANA timezone name by comparing timezone
+                 * rules. Let's determine the closest "Etc/GMT+X" timezone. */
+                icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+                if (comp) {
+                    icalcomponent *tmpvtz = icalcomponent_clone(myvtz);
+                    icaltimezone *tmptz = icaltimezone_new();
+                    icaltimezone_set_component(tmptz, tmpvtz);
+
+                    icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+                    int is_daylight = 0;
+                    int offset = icaltimezone_get_utc_offset(tmptz, &dtstart, &is_daylight);
+
+                    if (offset) {
+                        // round to previous hour
+                        int h = offset / 3600;
+                        if ((offset % 3600) && h < 0)
+                            h--;
+
+                        // Lookup "Etc/GMT+X" timezone
+                        buf_printf(&idbuf, "Etc/GMT%+d", -h);
+                        if (!get_cyrus_timezone_from_tzid(buf_cstring(&idbuf), 0))
+                            buf_reset(&idbuf);
+                    }
+                    else {
+                        buf_setcstr(&idbuf, "Etc/UTC");
+                    }
+
+                    icaltimezone_free(tmptz, 1);
+                }
             }
-            jstzid = buf_cstring(&idbuf);
-            prop = icalproperty_new_x(jstzid);
-            icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-            icalcomponent_add_property(myvtz, prop);
         }
+
+        if (!buf_len(&idbuf)) {
+            buf_putc(&idbuf, '/');
+            buf_appendcstr(&idbuf, tzid);
+        }
+
+        /* Set the JSCalendar timezone id in the in-memory VTIMEZONE.
+         * This timezone id is what we'll be using within JSCalendar
+         * events as IANA timezone id. The iCalendar time properties
+         * keep referring to the non-IANA iCalendar TZID */
+        const char *jstzid = buf_cstring(&idbuf);
+        prop = icalproperty_new_x(jstzid);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+        icalcomponent_add_property(myvtz, prop);
+
         icaltimezone *tz = icaltimezone_new();
         icaltimezone_set_component(tz, myvtz);
 
@@ -1208,11 +1376,13 @@ HIDDEN int jmapical_utcdatetime_from_string(const char *val, struct jmapical_dat
 
 HIDDEN int jmapical_datetime_from_icalprop(icalproperty *prop, struct jmapical_datetime *dt)
 {
-    icaltimetype icaldt = icalvalue_get_datetimedate(icalproperty_get_value(prop));
-    if (!icaltime_is_valid_time(icaldt)) return -1;
+    icalvalue *val = icalproperty_get_value(prop);
+    if (!(icalvalue_isa(val) == ICAL_DATETIME_VALUE) &&
+        !(icalvalue_isa(val) == ICAL_DATE_VALUE)) {
+        return -1;
+    }
 
-    jmapical_datetime_from_icaltime(icaldt, dt);
-
+    jmapical_datetime_from_icaltime(icalvalue_get_datetimedate(val), dt);
     return 0;
 }
 
@@ -1380,8 +1550,8 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess,
         } else if (tz) return icaltimezone_get_location(tz);
     } else {
         icalvalue *val = icalproperty_get_value(prop);
-        icaltimetype dt = icalvalue_get_datetime(val);
-        if (icaltime_is_valid_time(dt) && icaltime_is_utc(dt)) {
+        if (icalvalue_isa(val) == ICAL_DATETIME_VALUE &&
+            (icaltime_is_utc(icalvalue_get_datetime(val)))) {
             tzid = "Etc/UTC";
         }
     }
@@ -1486,6 +1656,74 @@ static int identity_int(int i) {
  */
 
 static json_t* relatedto_from_ical(icalcomponent*);
+
+static int is_reserved_xpropname(icalcomponent_kind kind, const char *name)
+{
+    // all IANA property names are reserved
+    if (strncasecmpsafe(name, "X-", 2))
+        return 1;
+
+    // all JMAP extension property names are reserved
+    if (!strncasecmpsafe(name, "X-JMAP", 6))
+        return 1;
+
+    // we used this for useDefaultAlerts on VEVENTs
+    if (kind == ICAL_VEVENT_COMPONENT &&
+            !strcasecmpsafe(name, "X-APPLE-DEFAULT-ALARM"))
+        return 1;
+
+    // this is converted as a Location object
+    if (kind == ICAL_VEVENT_COMPONENT &&
+            !strcasecmpsafe(name, "X-APPLE-STRUCTURED-LOCATION"))
+        return 1;
+
+    // this is libical-internal
+    if (!strcasecmpsafe(name, "X-LIC-LOCATION"))
+        return 1;
+
+    return 0;
+}
+
+static json_t *jicalprops_from_ical(icalcomponent *comp,
+                                    icalproperty_kind *iana_kinds,
+                                    size_t iana_kinds_count)
+{
+    icalcomponent_kind comp_kind = icalcomponent_isa(comp);
+    json_t *jiprops = json_array();
+    struct buf buf = BUF_INITIALIZER;
+
+    json_t *jcal = icalcomponent_as_jcal_array(comp);
+    size_t i;
+    json_t *jprop;
+    json_array_foreach(json_array_get(jcal, 1), i, jprop) {
+        const char *name = json_string_value(json_array_get(jprop, 0));
+        buf_setcstr(&buf, name);
+        buf_ucase(&buf);
+        icalproperty_kind prop_kind =
+            icalproperty_string_to_kind(buf_cstring(&buf));
+
+        if (prop_kind != ICAL_X_PROPERTY) {
+            for (size_t j = 0; j < iana_kinds_count; j++) {
+                if (iana_kinds[j] == prop_kind) {
+                    json_array_append(jiprops, jprop);
+                    break;
+                }
+            }
+        }
+        else if (!is_reserved_xpropname(comp_kind, name)) {
+            json_array_append(jiprops, jprop);
+        }
+    }
+    json_decref(jcal);
+
+    if (!json_array_size(jiprops)) {
+        json_decref(jiprops);
+        jiprops = NULL;
+    }
+
+    buf_free(&buf);
+    return jiprops;
+}
 
 /* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
  * named byX using conv. Return a new JSON array, sorted in ascending order. */
@@ -1885,7 +2123,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
         }
 
         /* Create override patch */
-        json_t *diff = jmap_patchobject_create(event, ex);
+        json_t *diff = jmap_patchobject_create(event, ex, 0/*no_remove*/);
         json_object_del(diff, "@type");
         json_object_del(diff, "uid");
         json_object_del(diff, "relatedTo");
@@ -2052,7 +2290,7 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
     }
 
     /* cid */
-    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_CID))) {
+    if ((s = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_CID))) {
         json_object_set_new(link, "cid", json_string(s));
     }
 
@@ -2068,7 +2306,7 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
         json_object_set_new(link, "title",
                 json_string(icalparameter_get_filename(param)));
     }
-    else if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
+    else if ((s = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
         /* - support legacy x-param */
         struct buf buf = BUF_INITIALIZER;
         unescape_ical_text(&buf, s);
@@ -2089,14 +2327,14 @@ link_from_ical(icalproperty *prop, struct jmapical_ctx *jmapctx)
     }
 
     /* rel */
-    const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
+    const char *rel = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_REL);
     if (!rel && icalproperty_isa(prop) == ICAL_URL_PROPERTY) {
         rel = "describedby";
     }
     json_object_set_new(link, "rel", json_string(rel));
 
     /* display */
-    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_DISPLAY))) {
+    if ((s = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_DISPLAY))) {
         json_object_set_new(link, "display", json_string(s));
     }
 
@@ -2131,7 +2369,7 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
              prop;
              prop = icalcomponent_get_next_property(comp, kind)) {
 
-            const char *propname = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTPROP);
+            const char *propname = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_PARENTPROP);
             if (!propname) propname = "links";
 
             json_t *jlinks_propname = json_object_get(jlinks, propname);
@@ -2140,7 +2378,7 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
                 json_object_set_new(jlinks, propname, jlinks_propname);
             }
 
-            const char *propid = get_icalxparam_value(prop, JMAPICAL_XPARAM_PARENTID);
+            const char *propid = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_PARENTID);
             json_t *jlinks_propid = NULL;
             if (propid) {
                 jlinks_propid = json_object_get(jlinks_propname, propid);
@@ -2150,13 +2388,16 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
                 }
             }
 
-            const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
+            const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
             char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
-            if (!id) id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
-            json_t *link = link_from_ical(prop, jmapctx);
-            if (json_object_size(link)) {
-                json_object_set_new(jlinks_propid ?
-                        jlinks_propid : jlinks_propname, id, link);
+            if (!id)
+                id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
+            if (id) {
+                json_t *link = link_from_ical(prop, jmapctx);
+                if (json_object_size(link)) {
+                    json_object_set_new(jlinks_propid ?
+                            jlinks_propid : jlinks_propname, id, link);
+                }
             }
 
             // do not leave empty link objects lingering around
@@ -2187,8 +2428,8 @@ static json_t *participant_from_ical(icalproperty *prop,
     struct buf buf = BUF_INITIALIZER;
     icalproperty_kind kind = icalproperty_isa(prop);
 
-    int is_orga = !strcasecmpsafe(icalproperty_get_organizer(orga),
-                                  icalproperty_get_attendee(prop));
+    int is_orga = !strcasecmpsafe(icalproperty_get_decoded_calendaraddress(orga),
+                                  icalproperty_get_decoded_calendaraddress(prop));
 
     /* sendTo */
     json_t *sendTo = rsvpto_from_ical(prop);
@@ -2289,7 +2530,7 @@ static json_t *participant_from_ical(icalproperty *prop,
 
     /* locationId */
     const char *locid;
-    if ((locid = get_icalxparam_value(prop, JMAPICAL_XPARAM_LOCATIONID))) {
+    if ((locid = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_LOCATIONID))) {
         json_object_set_new(p, "locationId", json_string(locid));
     }
 
@@ -2327,7 +2568,7 @@ static json_t *participant_from_ical(icalproperty *prop,
     json_object_set_new(p, "participationStatus", json_string(partstat));
 
     /* description */
-    const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
+    const char *desc = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
     if (desc) {
         unescape_ical_text(&buf, desc);
         json_object_set_new(p, "description", json_string(buf_cstring(&buf)));
@@ -2413,7 +2654,7 @@ static json_t *participant_from_ical(icalproperty *prop,
         if (param) {
             const char *dir = icalparameter_get_dir(param);
             if (dir) {
-                const char *linkid = get_icalxparam_value(prop, JMAPICAL_XPARAM_LINKID);
+                const char *linkid = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_LINKID);
                 char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
                 if (!linkid) {
                     /* Generate a link id from the dir value. Note that the
@@ -2429,7 +2670,7 @@ static json_t *participant_from_ical(icalproperty *prop,
         if (links) json_object_set_new(p, "links", links);
 
         /* participationComment */
-        const char *comment = get_icalxparam_value(prop, JMAPICAL_XPARAM_COMMENT);
+        const char *comment = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_COMMENT);
         if (comment) {
             unescape_ical_text(&buf, comment);
             json_object_set_new(p, "participationComment", json_string(buf_cstring(&buf)));
@@ -2439,7 +2680,7 @@ static json_t *participant_from_ical(icalproperty *prop,
 
     /* scheduleSequence */
     long schedule_sequence = 0;
-    const char *xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_SEQUENCE);
+    const char *xval = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_SEQUENCE);
     if (xval) {
         bit64 res;
         if (parsenum(xval, &xval, strlen(xval), &res) == 0) {
@@ -2449,7 +2690,7 @@ static json_t *participant_from_ical(icalproperty *prop,
     }
 
     /* scheduleUpdated */
-    if ((xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_DTSTAMP))) {
+    if ((xval = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_DTSTAMP))) {
         icaltimetype icaltstamp = icaltime_from_string(xval);
         if (!icaltime_is_null_time(icaltstamp) && !icaltstamp.is_date &&
                 icaltstamp.zone == icaltimezone_get_utc_timezone()) {
@@ -2503,7 +2744,7 @@ static json_t *participant_from_ical(icalproperty *prop,
 
     /* invitedBy */
     const char *invitedby;
-    if ((invitedby = get_icalxparam_value(prop, JMAPICAL_XPARAM_INVITEDBY))) {
+    if ((invitedby = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_INVITEDBY))) {
         const char *invitedbyid = NULL;
         if (id_by_uri) {
             invitedbyid = hash_lookup(invitedby, id_by_uri);
@@ -2543,7 +2784,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
         hash_insert(uri, prop, &attendee_by_uri);
 
         /* Map mailto:URI to ID */
-        const char *id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
+        const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
         char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         if (!id) id = sha1hexstr(uri, keybuf);
         hash_insert(uri, xstrdup(id), &id_by_uri);
@@ -2591,7 +2832,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
             const char *comment = schedule_comment;
             if (!comment) {
                 /* Look for Google Calendar comment */
-                comment = get_icalxparam_value(prop, "X-RESPONSE-COMMENT");
+                comment = icalproperty_get_xparam_value(prop, "X-RESPONSE-COMMENT");
                 if (comment) {
                     unescape_ical_text(&buf, comment);
                     comment = buf_cstring(&buf);
@@ -2613,7 +2854,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
         if (uri) {
             if (!hash_lookup(uri, &attendee_by_uri)) {
                 /* Add a default participant for the organizer. */
-                const char *id = get_icalxparam_value(orga, JMAPICAL_XPARAM_ID);
+                const char *id = icalproperty_get_xparam_value(orga, JMAPICAL_XPARAM_ID);
                 char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
                 if (!id) id = sha1hexstr(uri, keybuf);
                 json_t *p = participant_from_ical(orga, &id_by_uri, orga,
@@ -2726,7 +2967,7 @@ HIDDEN json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *idbuf
  * Adds any ATTACH properties found in VALARM components to the
  * event 'links' property. */
 static json_t*
-alerts_from_ical(icalcomponent *comp)
+alerts_from_ical(icalcomponent *comp, struct jmapical_ctx *jmapctx)
 {
     json_t* alerts = json_object();
     icalcomponent* alarm;
@@ -2737,7 +2978,19 @@ alerts_from_ical(icalcomponent *comp)
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
 
         json_t *alert = jmapical_alert_from_ical(alarm, &idbuf);
-        if (alert) json_object_set_new(alerts, buf_cstring(&idbuf), alert);
+        if (alert) {
+            /* internal only: iCalProps -- convert x-properties */
+            if (jmapctx && jmapctx->from_ical.want_icalprops) {
+                json_t *jiprops = jicalprops_from_ical(alarm,
+                        // preserve UID in iCalProps
+                        (icalproperty_kind[]){ ICAL_UID_PROPERTY }, 1);
+
+                if (JNOTNULL(jiprops)) {
+                    json_object_set_new(alert, JMAPICAL_JSPROP_ICALPROPS, jiprops);
+                }
+            }
+            json_object_set_new(alerts, buf_cstring(&idbuf), alert);
+        }
     }
 
     if (!json_object_size(alerts)) {
@@ -2761,7 +3014,9 @@ keywords_from_ical(icalcomponent *comp)
     for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_CATEGORIES_PROPERTY)) {
-        json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
+        if (!ical_categories_is_color(prop)) {
+            json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
+        }
     }
     if (!json_object_size(ret)) {
         json_decref(ret);
@@ -2844,11 +3099,11 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
     if (name) json_object_set_new(loc, "name", json_string(name));
 
     /* rel */
-    const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
+    const char *rel = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_REL);
     if (rel) json_object_set_new(loc, "relativeTo", json_string(rel));
 
     /* description */
-    const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
+    const char *desc = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
     if (desc && *desc) {
         struct buf buf = BUF_INITIALIZER;
         unescape_ical_text(&buf, desc);
@@ -2857,14 +3112,23 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
     }
 
     /* timeZone */
-    const char *timezone = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
+    const char *timezone = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_TZID);
     if (jstimezones_lookup_jstzid(jstzones, timezone)) {
         json_object_set_new(loc, "timeZone", json_string(timezone));
     }
 
     /* coordinates */
     const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
-    if (coord) json_object_set_new(loc, "coordinates", json_string(coord));
+    if (coord) {
+        // Sanitize our own X-param value, just in case
+        struct buf sanitized_geouri = BUF_INITIALIZER;
+
+        if (geouri_sanitize(coord, &sanitized_geouri) == 0) {
+            json_object_set_new(loc, "coordinates",
+                    json_string(buf_cstring(&sanitized_geouri)));
+        }
+        buf_free(&sanitized_geouri);
+    }
 
     /* locationTypes */
     json_t *loctypes = NULL;
@@ -2902,20 +3166,24 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links,
 static json_t *coordinates_from_ical(icalproperty *prop)
 {
     /* Use verbatim coordinate string, rather than the parsed ical value */
-    const char *p, *val = icalproperty_get_value_as_string(prop);
+    const char *val = icalproperty_get_value_as_string(prop);
     struct buf buf = BUF_INITIALIZER;
     json_t *c;
 
     if (!val) return NULL;
 
-    p = strchr(val, ';');
-    if (!p) return NULL;
+    const char *semcol = strchr(val, ';');
+    if (!semcol) return NULL;
 
     buf_setcstr(&buf, "geo:");
+
+    const char *p = semcol;
     buf_appendmap(&buf, val, p-val);
     buf_appendcstr(&buf, ",");
-    val = p + 1;
-    buf_appendcstr(&buf, val);
+
+    val = semcol + 1;
+    p = val + strlen(val);
+    buf_appendmap(&buf, val, p-val);
 
     c = json_string(buf_cstring(&buf));
     buf_free(&buf);
@@ -2923,7 +3191,9 @@ static json_t *coordinates_from_ical(icalproperty *prop)
 }
 
 static json_t*
-locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
+locations_from_ical(icalcomponent *comp,
+                    icalcomponent *maincomp,
+                    json_t *linksbyloc,
                     jstimezones_t *jstzones)
 {
     icalproperty* prop;
@@ -2935,11 +3205,15 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
     const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
     const char *tzidend = tzid_from_ical(comp, ICAL_DTEND_PROPERTY, jstzones);
     if (tzidstart && tzidend && strcmp(tzidstart, tzidend)) {
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        char *id = xjmapid_from_ical(prop);
+        // Generate the location id from the DTEND property.
+        char *id = xjmapid_from_ical(icalcomponent_get_first_property(
+            maincomp ? maincomp : comp, ICAL_DTEND_PROPERTY));
         const char *jstzid = jstimezones_get_jstzid(jstzones, tzidend);
         if (jstzid) {
-            loc = json_pack("{s:s s:s}", "timeZone", jstzid, "relativeTo", "end");
+            loc = json_pack("{s:s s:s s:s}",
+                    "@type", "Location",
+                    "timeZone", jstzid,
+                    "relativeTo", "end");
             json_object_set_new(locations, id, loc);
         }
         free(id);
@@ -2976,23 +3250,28 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
         /* X-APPLE-STRUCTURED-LOCATION */
         if (!strcmp(name, "X-APPLE-STRUCTURED-LOCATION")) {
             const char *uri = icalvalue_as_ical_string(icalproperty_get_value(prop));
-            if (strncmp(uri, "geo:", 4)) continue;
+            struct buf sanitized_geouri = BUF_INITIALIZER;
 
-            struct buf title = BUF_INITIALIZER;
-            const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
-            if (s) unescape_ical_text(&title, s);
+            if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+                uri = buf_cstring(&sanitized_geouri);
+                struct buf title = BUF_INITIALIZER;
+                const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
+                if (s) unescape_ical_text(&title, s);
 
-            if (mainlocid) {
-                // Do what Apple is doing: if the X-TITLE and LOCATION value
-                // match, it's the same location. Otherwise ignore it.
-                json_t *mainloc = json_object_get(locations, mainlocid);
-                const char *maintitle = json_string_value(json_object_get(mainloc, "name"));
-                if (maintitle && !strcmpsafe(maintitle, buf_cstring(&title))) {
-                    json_object_set_new(mainloc, "coordinates", json_string(uri));
+                if (mainlocid) {
+                    // Do what Apple is doing: if the X-TITLE and LOCATION value
+                    // match, it's the same location. Otherwise ignore it.
+                    json_t *mainloc = json_object_get(locations, mainlocid);
+                    const char *maintitle = json_string_value(json_object_get(mainloc, "name"));
+                    if (maintitle && !strcmpsafe(maintitle, buf_cstring(&title))) {
+                        json_object_set_new(mainloc, "coordinates",json_string(uri));
+                    }
                 }
+
+                buf_free(&title);
             }
 
-            buf_free(&title);
+            buf_free(&sanitized_geouri);
             continue;
         }
 
@@ -3044,7 +3323,7 @@ virtuallocations_from_ical(icalcomponent *comp)
             if (name && *name) json_object_set_new(loc, "name", json_string(name));
         }
 
-        const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
+        const char *desc = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
         if (desc && *desc) {
             struct buf buf = BUF_INITIALIZER;
             unescape_ical_text(&buf, desc);
@@ -3052,7 +3331,45 @@ virtuallocations_from_ical(icalcomponent *comp)
             buf_free(&buf);
         }
 
-        if (uri) json_object_set_new(locations, id, loc);
+        json_t *features = json_object();
+        for (param = icalproperty_get_first_parameter(prop, ICAL_FEATURE_PARAMETER);
+             param;
+             param = icalproperty_get_next_parameter(prop, ICAL_FEATURE_PARAMETER)) {
+
+            switch (icalparameter_get_feature(param)) {
+            case ICAL_FEATURE_AUDIO:
+                json_object_set_new(features, "audio", json_true());
+                break;
+            case ICAL_FEATURE_CHAT:
+                json_object_set_new(features, "chat", json_true());
+                break;
+            case ICAL_FEATURE_FEED:
+                json_object_set_new(features, "feed", json_true());
+                break;
+            case ICAL_FEATURE_MODERATOR:
+                json_object_set_new(features, "moderator", json_true());
+                break;
+            case ICAL_FEATURE_PHONE:
+                json_object_set_new(features, "phone", json_true());
+                break;
+            case ICAL_FEATURE_SCREEN:
+                json_object_set_new(features, "screen", json_true());
+                break;
+            case ICAL_FEATURE_VIDEO:
+                json_object_set_new(features, "video", json_true());
+                break;
+            case ICAL_FEATURE_X:
+            case ICAL_FEATURE_NONE:;
+            }
+        }
+        if (json_object_size(features)) {
+            json_object_set(loc, "features", features);
+        }
+        json_decref(features);
+
+        if (uri) json_object_set(locations, id, loc);
+
+        json_decref(loc);
         free(id);
     }
 
@@ -3234,16 +3551,26 @@ static void read_custom_jstzids(json_t *jsevent, strarray_t *tzids)
         }
     }
 
-    /* Find all all timeZone property values */
+    /* Find all timeZone property values */
     json_t *jpatch;
     while ((jpatch = ptrarray_pop(&work))) {
         json_object_foreach(jpatch, pname, jval) {
+            if (!strcmp(pname, "locations")) {
+                const char *loc_id;
+                json_t *jloc;
+                json_object_foreach(jval, loc_id, jloc) {
+                    const char *tzid =
+                        json_string_value(json_object_get(jloc, "timeZone"));
+                    if (tzid && *tzid == '/') {
+                        strarray_add(tzids, tzid);
+                    }
+                }
+                continue;
+            }
+
             const char *tzid = NULL;
             if (!strcmp(pname, "timeZone")) {
                 tzid = json_string_value(jval);
-            }
-            else if (!strcmp(pname, "location")) {
-                tzid = json_string_value(json_object_get(jval, "timeZone"));
             }
             else if (!strncmp(pname, "locations/", 10)) {
                 pname += 10;
@@ -3265,9 +3592,9 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
 {
     if (!jstzones || !jstzones->entries.count) return NULL;
 
-    strarray_t want_tzids = STRARRAY_INITIALIZER;
-    read_custom_jstzids(jsevent, &want_tzids);
-    if (!strarray_size(&want_tzids)) return NULL;
+    strarray_t want_jstzids = STRARRAY_INITIALIZER;
+    read_custom_jstzids(jsevent, &want_jstzids);
+    if (!strarray_size(&want_jstzids)) return NULL;
 
     json_t *jtimezones = json_object();
     struct buf buf = BUF_INITIALIZER;
@@ -3281,7 +3608,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         if (!jstz->is_custom) continue;
 
         /* Skip orphaned timezones */
-        if (strarray_find(&want_tzids, jstzid, 0) < 0) {
+        if (!strarray_contains(&want_jstzids, jstzid)) {
             continue;
         }
 
@@ -3381,9 +3708,60 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         jtimezones = NULL;
     }
     buf_free(&buf);
-    strarray_fini(&want_tzids);
+    strarray_fini(&want_jstzids);
 
     return jtimezones;
+}
+
+static void jsprops_from_ical(icalcomponent *comp, json_t **jscompp)
+{
+    json_t *jpatch = json_object();
+
+    // This implements JSPROP as defined in RFC 9555, Section 3.2.1:
+    // It aggregates all JSPROP properties in the component into a
+    // single patch object, then applies the changes only if none
+    // of the patches in the patch object failed.
+    // This might turn out to be too harsh, depending on how well
+    // iCalendar implementations preserve these JSPROP properties.
+    //
+    // In contrast to RFC 9555, this implementation only considers
+    // patches where the patched property has a a vendor-extension
+    // property name, e.g. "example.com:foo", or "bar/example.com:foo".
+
+    icalproperty *prop;
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+
+        if (strcmpsafe(icalproperty_get_x_name(prop), JMAPICAL_XPROP_JSPROP))
+            continue;
+
+        const char *pname =
+            icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_JSPTR);
+
+        if (!pname)
+            continue;
+
+        // At least one patch segment must have a vendor-extension prefix.
+        const char *col = strchr(pname, ':');
+        if (!col || col == pname || col[1] == '\0')
+            continue;
+
+        json_t *jval = json_loads(icalproperty_get_value_as_string(prop),
+                                  JSON_DECODE_ANY, NULL);
+        if (jval) {
+            json_object_set_new(jpatch, pname, jval);
+        }
+    }
+
+    if (json_object_size(jpatch)) {
+        json_t *jscomp = jmap_patchobject_apply(*jscompp, jpatch, NULL, 0);
+        if (jscomp) {
+            json_decref(*jscompp);
+            *jscompp = jscomp;
+        }
+    }
+
+    json_decref(jpatch);
 }
 
 /* Convert the libical VEVENT comp to a CalendarEvent 
@@ -3408,7 +3786,8 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* Read custom timezones */
     if (!jstzones) {
-        myjstzones.no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        myjstzones.no_guess =
+            jmapctx ? jmapctx->from_ical.dont_guess_timezones : 0;
         icalcomponent *ical = icalcomponent_get_parent(comp);
         jstimezones_add_vtimezones(&myjstzones, ical);
         jstzones = &myjstzones;
@@ -3579,6 +3958,19 @@ calendarevent_from_ical(icalcomponent *comp,
             json_object_set_new(event, "color",
                     json_string(icalproperty_get_color(prop)));
         }
+        else {
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_CATEGORIES_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_CATEGORIES_PROPERTY)) {
+                if (ical_categories_is_color(prop)) {
+                    json_object_set_new(event, "color",
+                                        json_string(icalproperty_get_categories(prop)));
+                    break;
+                }
+            }
+        }
     }
 
     /* keywords */
@@ -3609,7 +4001,7 @@ calendarevent_from_ical(icalcomponent *comp,
         /* locations */
         if (jmap_wantprop(props, "locations")) {
             json_object_set_new(event, "locations",
-                    locations_from_ical(comp,
+                    locations_from_ical(comp, maincomp,
                         json_object_get(linksbyprop, "locations"), jstzones));
         }
         /* participants */
@@ -3684,20 +4076,19 @@ calendarevent_from_ical(icalcomponent *comp,
         // JSCalendar forbids to override privacy in overrides,
         // so read the property value from the main component.
         icalcomponent *fromcomp = maincomp ? maincomp : comp;
-        const char *prv = "public";
-        if ((prop = icalcomponent_get_first_property(fromcomp, ICAL_CLASS_PROPERTY))) {
-            switch (icalproperty_get_class(prop)) {
-                case ICAL_CLASS_CONFIDENTIAL:
-                    prv = "secret";
-                    break;
-                case ICAL_CLASS_PRIVATE:
-                    prv = "private";
-                    break;
-                default:
-                    prv = "public";
-            }
+        const char *v = get_icalxprop_value(fromcomp, JMAPICAL_XPROP_PRIVACY);
+        if (v) {
+            buf_setcstr(&buf, v);
+            buf_lcase(&buf);
+            v = buf_cstring(&buf);
         }
-        json_object_set_new(event, "privacy", json_string(prv));
+
+        if (!v && props) {
+            // client explicitly asked for property, return default value
+            v = "public";
+        }
+
+        if (v) json_object_set_new(event, "privacy", json_string(v));
     }
 
     /* replyTo */
@@ -3712,12 +4103,12 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* useDefaultAlerts */
     if (jmap_wantprop(props, "useDefaultAlerts")) {
-        const char *v = get_icalxprop_value(comp, "X-APPLE-DEFAULT-ALARM");
+        const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_USEDEFAULTALERTS);
         if (!v) {
-            /* Our previous jscalendar draft implementation used a custom
-             * extension property to denote useDefaultAlerts. We won't
-             * write this property anymore but fall back reading it. */
-            v = get_icalxprop_value(comp, "X-JMAP-USEDEFAULTALERTS");
+            /* Our previous jscalendar draft implementation erroneously
+             * used the X-APPLE-DEFAULT-ALARM annotation in the VEVENT,
+             * not the VALARM. Read it for backwards compatibility. */
+            v = get_icalxprop_value(comp, "X-APPLE-DEFAULT-ALARM");
         }
         json_object_set_new(event, "useDefaultAlerts",
                 json_boolean(!strcasecmpsafe(v, "true")));
@@ -3725,7 +4116,7 @@ calendarevent_from_ical(icalcomponent *comp,
 
     /* alerts */
     if (jmap_wantprop(props, "alerts")) {
-        json_object_set_new(event, "alerts", alerts_from_ical(comp));
+        json_object_set_new(event, "alerts", alerts_from_ical(comp, jmapctx));
     }
 
     /* mayInviteSelf */
@@ -3754,6 +4145,14 @@ calendarevent_from_ical(icalcomponent *comp,
         const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_SENTBY);
         if (v && *v)
             json_object_set_new(event, "sentBy", json_string(v));
+    }
+
+    /* internal only: iCalProps -- convert x-properties */
+    if (jmapctx && jmapctx->from_ical.want_icalprops) {
+        json_t *jiprops = jicalprops_from_ical(comp, NULL, 0);
+        if (JNOTNULL(jiprops)) {
+            json_object_set_new(event, JMAPICAL_JSPROP_ICALPROPS, jiprops);
+        }
     }
 
     if (!is_override) {
@@ -3798,13 +4197,17 @@ calendarevent_from_ical(icalcomponent *comp,
         }
 
         /* timeZones - requires overrides set in the event already */
-        if (jmap_wantprop(props, "timeZones")) {
+        if ((jstzones && jstzones->no_guess) ||
+                (props && jmap_wantprop(props, JMAPICAL_JSPROP_TIMEZONES))) {
             json_t *jtimezones = timezones_from_ical(event, jstzones);
             if (JNOTNULL(jtimezones)) {
-                json_object_set_new(event, "timeZones", jtimezones);
+                json_object_set_new(event, JMAPICAL_JSPROP_TIMEZONES, jtimezones);
             }
         }
     }
+
+    /* Apply JSPROP patches */
+    jsprops_from_ical(comp, &event);
 
     if (wantprops) {
         jmap_filterprops(event, wantprops);
@@ -3816,29 +4219,146 @@ calendarevent_from_ical(icalcomponent *comp,
     return event;
 }
 
+static void repair_broken_ical(icalcomponent **icalp)
+{
+    icalcomponent *original_ical = *icalp;
+    icalcomponent *myical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    if (icalcomponent_isa(original_ical) == ICAL_VEVENT_COMPONENT) {
+        // Wrap a single VEVENT in a VCALENDAR.
+        myical =
+            icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+                                icalproperty_new_version("2.0"), (void *)0);
+        icalcomponent_add_component(myical, icalcomponent_clone(original_ical));
+    }
+    else if (icalcomponent_isa(original_ical) == ICAL_XROOT_COMPONENT) {
+        // Ignore all but the first iCalendar object.
+        icalcomponent *comp = icalcomponent_get_first_component(
+            original_ical, ICAL_VCALENDAR_COMPONENT);
+        if (comp) {
+            myical = icalcomponent_clone(comp);
+        }
+    }
+    else myical = original_ical;
+
+    if (icalcomponent_isa(myical) != ICAL_VCALENDAR_COMPONENT ||
+        !icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT)) {
+        // that's just unrepairably broken
+        return;
+    }
+
+    // Assuming that almost all iCalendar data is valid, let's
+    // inspect the iCalendar data in a first pass. If it turns
+    // out to be valid then return early. Only in a second pass
+    // duplicate the in-memory iCalendar tree and rewrite it.
+
+    for (int pass = 1; pass <= 2; pass++) {
+        int needs_rewrite = 0;
+        icalproperty_method method = icalcomponent_get_method(myical);
+
+        if (pass == 2 && myical == original_ical) {
+            // We need to rewrite the iCalendar data but haven't
+            // made a copy of it, yet. Clone it now.
+            myical = icalcomponent_clone(original_ical);
+        }
+
+        icalcomponent *vevent;
+        for (vevent = icalcomponent_get_first_component(myical,
+                    ICAL_VEVENT_COMPONENT);
+             vevent;
+             vevent = icalcomponent_get_next_component(myical,
+                    ICAL_VEVENT_COMPONENT)) {
+
+            // Remove VALARM without TRIGGER. Set missing ACTION to DISPLAY.
+            icalcomponent *valarm, *nextvalarm;
+            for (valarm = icalcomponent_get_first_component(vevent, ICAL_VALARM_COMPONENT);
+                 valarm; valarm = nextvalarm) {
+                nextvalarm = icalcomponent_get_next_component(
+                    vevent, ICAL_VALARM_COMPONENT);
+
+                if (!icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY)) {
+                    if (pass == 2) {
+                        icalcomponent_remove_component(vevent, valarm);
+                        icalcomponent_free(valarm);
+                    }
+                    else needs_rewrite = 1;
+                }
+                else if (!icalcomponent_get_first_property(valarm, ICAL_ACTION_PROPERTY)) {
+                    if (pass == 2) {
+                        icalcomponent_add_property(valarm,
+                            icalproperty_new_action(ICAL_ACTION_DISPLAY));
+                    }
+                    else needs_rewrite = 1;
+                }
+            }
+
+            // Make sure that the mandatory UID property is set.
+            if (!icalcomponent_get_uid(vevent)) {
+                if (pass == 2) {
+                    // Generate UID property by hashing normalized component
+                    icalcomponent *norm_comp = icalcomponent_clone(vevent);
+                    icalcomponent_normalize_x(norm_comp);
+                    char hexbuf[JMAPICAL_SHA1HEXSTR_LEN];
+                    sha1hexstr(icalcomponent_as_ical_string(norm_comp), hexbuf);
+                    buf_setcstr(&buf, "nouid");
+                    buf_appendcstr(&buf, hexbuf);
+                    icalcomponent_add_property(
+                        vevent, icalproperty_new_uid(buf_cstring(&buf)));
+                    icalcomponent_free(norm_comp);
+                }
+                else needs_rewrite = 1;
+            }
+
+            // Remove METHOD:PUBLISH if no ORGANIZER is set
+            if (method == ICAL_METHOD_PUBLISH &&
+                !icalcomponent_get_first_property(vevent,
+                                                  ICAL_ORGANIZER_PROPERTY)) {
+                if (pass == 2) {
+                    // XXX this resets the property iterator of ical
+                    icalproperty *prop = icalcomponent_get_first_property(myical,
+                            ICAL_METHOD_PROPERTY);
+                    if (prop) {
+                        icalcomponent_remove_property(myical, prop);
+                        icalproperty_free(prop);
+                    }
+                }
+                else needs_rewrite = 1;
+            }
+        }
+
+        if (!needs_rewrite)
+            break;
+    }
+
+    buf_free(&buf);
+    *icalp = myical;
+}
+
 EXPORTED json_t*
 jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
                     struct jmapical_ctx *jmapctx)
 {
+    json_t *jsevents = json_array();
+    icalcomponent *myical = ical;
     icalcomponent *comp;
-    size_t ncomps = 0;
+    struct buf buf = BUF_INITIALIZER;
 
-    // Count the total number of components
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
-         comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-             ncomps++;
+    if (jmapctx && jmapctx->from_ical.repair_broken_ical) {
+        repair_broken_ical(&myical);
     }
+
+    size_t ncomps =
+        icalcomponent_count_components(myical, ICAL_VEVENT_COMPONENT);
 
     if (ncomps < 2) {
         // Fast-path: There's at most one component in the VCALENDAR
-        json_t *jsevents = json_array();
         if (ncomps) {
-            comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+            comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
             json_array_append_new(jsevents, calendarevent_from_ical(comp, NULL,
                         props, NULL, NULL, jmapctx));
         }
-        return jsevents;
+        goto done;
     }
 
     /* Group VEVENTs by UID. At most one VEVENT may be the main component,
@@ -3851,11 +4371,9 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
 
     strarray_t uids = STRARRAY_INITIALIZER;
 
-    struct buf buf = BUF_INITIALIZER;
-
-    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
+    for (comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
          comp;
-         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
+         comp = icalcomponent_get_next_component(myical, ICAL_VEVENT_COMPONENT)) {
 
         const char *uid = icalcomponent_get_uid(comp);
         if (!uid) continue;
@@ -3896,8 +4414,6 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
 
     // Convert events by order of appearance in the VCALENDAR.
 
-    json_t *jsevents = json_array();
-
     int i;
     for (i = 0; i < strarray_size(&uids); i++) {
         ptrarray_t *comps = hash_del(strarray_nth(&uids, i), &comps_by_uid);
@@ -3927,8 +4443,12 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
     free_hash_table(&comps_by_uid, NULL);
     free_hash_table(&seen_uidrecurid, NULL);
     strarray_fini(&uids);
-    buf_free(&buf);
 
+done:
+    if (myical && myical != ical) {
+        icalcomponent_free(myical);
+    }
+    buf_free(&buf);
     return jsevents;
 }
 
@@ -3962,6 +4482,57 @@ static int validate_type(struct jmap_parser *parser, json_t *jobj, const char *w
 }
 
 static void relatedto_to_ical(icalcomponent *, struct jmap_parser *, json_t *);
+
+static void jicalprops_to_ical(icalcomponent *comp,
+                               struct jmap_parser *parser,
+                               json_t *jicalprops,
+                               icalproperty_kind iana_kinds[],
+                               size_t iana_kinds_count)
+{
+    if (JNULL(jicalprops))
+        return;
+
+    jmap_parser_push(parser, JMAPICAL_JSPROP_ICALPROPS);
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    json_t *jcal = json_pack("[s,O,[]]", "xroot", jicalprops);
+    icalcomponent *mycomp = jcal_array_as_icalcomponent(jcal);
+
+    if (mycomp) {
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_property(mycomp, ICAL_ANY_PROPERTY);
+                prop; prop = nextprop) {
+
+            nextprop = icalcomponent_get_next_property(mycomp, ICAL_ANY_PROPERTY);
+            icalproperty_kind prop_kind = icalproperty_isa(prop);
+            int want_prop = 0;
+            if (prop_kind != ICAL_X_PROPERTY) {
+                for (size_t i = 0; i < iana_kinds_count; i++) {
+                    if (iana_kinds[i] == prop_kind) {
+                        want_prop = 1;
+                        break;
+                    }
+                }
+            }
+            else {
+                want_prop = !is_reserved_xpropname(kind,
+                        icalproperty_get_property_name(prop));
+            }
+
+            if (want_prop) {
+                icalcomponent_remove_property(mycomp, prop);
+                icalcomponent_add_property(comp, prop);
+            }
+        }
+        icalcomponent_free(mycomp);
+    }
+    else {
+        jmap_parser_invalid(parser, NULL);
+    }
+
+    json_decref(jcal);
+    jmap_parser_pop(parser);
+}
 
 /* Remove and deallocate any properties of kind in comp. */
 static void remove_icalprop(icalcomponent *comp, icalproperty_kind kind)
@@ -4024,6 +4595,70 @@ static icalproperty *insert_icaltimeprop(icalcomponent *comp,
     }
     icalcomponent_add_property(comp, prop);
     return prop;
+}
+
+static void jsprops_to_ical(icalcomponent *comp,
+                            struct jmap_parser *parser,
+                            json_t *jsobj)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *pname;
+    json_t *jval;
+
+    json_object_foreach(jsobj, pname, jval) {
+        // ignore anything but vendor-extension properties
+        if (!strchr(pname, ':')) continue;
+
+        jmap_parser_push(parser, pname);
+
+        icalproperty *xprop = icalproperty_new(ICAL_X_PROPERTY);
+        icalproperty_set_x_name(xprop, JMAPICAL_XPROP_JSPROP);
+        icalproperty_set_xparam(xprop, JMAPICAL_XPARAM_JSPTR,
+                jmap_parser_path(parser, &buf), 1);
+
+        char *textval = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
+        icalproperty_set_value_from_string(xprop, textval, "TEXT");
+        free(textval);
+
+        icalcomponent_add_property(comp, xprop);
+        jmap_parser_pop(parser);
+    }
+
+    buf_free(&buf);
+}
+
+static void remove_jsprops(icalcomponent *comp, const char *path)
+{
+    icalproperty *prop, *next;
+    size_t path_len = path ? strlen(path) : 0;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY); prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        if (strcasecmpsafe(icalproperty_get_x_name(prop),
+                           JMAPICAL_XPROP_JSPROP))
+            continue;
+
+        if (path) {
+            int points_to_path = 0;
+
+            const char *jsptr =
+                icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_JSPTR);
+
+            if (!strncasecmpsafe(path, jsptr, path_len) &&
+                (jsptr[path_len] == '/' || jsptr[path_len] == '\0')) {
+                points_to_path = 1;
+            }
+
+            if (!points_to_path)
+                continue;
+        }
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
 }
 
 static int location_is_endtimezone(json_t *loc)
@@ -4221,7 +4856,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
         icalcomponent_add_property(comp, prop);
     }
 
-    if (json_object_get(event, "recurrenceId")) {
+    if (!jmapical_datetime_has_zero_time(&recurid)) {
         /* Add RECURRENCE-ID */
         struct icaltimetype icalrecurid = is_date ?
             jmapical_datetime_to_icaldate(&recurid) :
@@ -4980,7 +5615,7 @@ participant_to_ical(icalcomponent *comp,
         /* Link objects generated from DIR parameter stick to DIR */
         param = icalproperty_get_first_parameter(oldattendee, ICAL_DIR_PARAMETER);
         if (param) {
-            const char *linkid = get_icalxparam_value(prop, JMAPICAL_XPARAM_LINKID);
+            const char *linkid = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_LINKID);
             char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
             if (!linkid) {
                 linkid = sha1hexstr(icalparameter_get_dir(param), keybuf);
@@ -4997,9 +5632,7 @@ participant_to_ical(icalcomponent *comp,
         }
     }
     if (json_object_size((links))) {
-        jmap_parser_push(parser, "links");
         links_to_ical(comp, NULL, parser, links, "participants", partid, jmapctx);
-        jmap_parser_pop(parser);
     }
 
     /* scheduleSequence */
@@ -5157,6 +5790,8 @@ static void participants_to_ical(icalcomponent *comp,
     hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
     hash_table oldattendees_by_jmapid = HASH_TABLE_INITIALIZER;
 
+    size_t invalid_count = json_array_size(parser->invalid);
+
     /* Validate replyTo */
     json_t *replyTo = json_object_get(event, "replyTo");
     if (JNOTNULL(replyTo)) {
@@ -5182,6 +5817,10 @@ static void participants_to_ical(icalcomponent *comp,
         // Detailed validation of participants comes later
         jmap_parser_invalid(parser, "participants");
     }
+
+    // Fail early if replyTo and participants are invalid
+    if (invalid_count < json_array_size(parser->invalid))
+        goto done;
 
     if (!(JNOTNULL(replyTo) || JNOTNULL(participants))) {
         goto done;
@@ -5400,9 +6039,49 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
     if (desc && *desc) icalcomponent_set_description(comp, desc);
 }
 
+static const char *ical_uid_from_jmap_id(const char *id, struct buf *tmp)
+{
+    const char *uid = NULL;
+
+    size_t len = strlen(id);
+
+    // Reuse UUID
+    size_t i;
+    for (i = 0; i < len && i < 36; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (id[i] != '-')
+                break;
+        }
+        else if (!isdigit(id[i]) && (id[i] < 'a' || id[i] > 'f'))
+            break;
+    }
+    if (i == 36 && !id[36]) {
+        uid = id;
+        goto done;
+    }
+
+    // Reuse SHA1
+    for (i = 0; i < len && i < 40; i++) {
+        if (!isdigit(id[i]) && (id[i] < 'a' || id[i] > 'f'))
+            break;
+    }
+    if (i == 40 && !id[40]) {
+        uid = id;
+        goto done;
+    }
+
+done:
+    if (!uid) {
+        buf_setcstr(tmp, makeuuid());
+        uid = buf_cstring(tmp);
+    }
+
+    return uid;
+}
+
 HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
                                              struct jmap_parser *parser,
-                                             const char *alert_uid,
+                                             const char *alert_jmap_id,
                                              const char *summary,
                                              const char *description,
                                              const char *email_recipient)
@@ -5414,7 +6093,38 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
     size_t invalid_prop_count = json_array_size(parser->invalid);
 
     validate_type(parser, alert, "Alert");
-    if (alert_uid) icalcomponent_set_uid(alarm, alert_uid);
+
+    /* JMAP id */
+    prop = icalproperty_new_x(alert_jmap_id);
+    icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
+    icalcomponent_add_property(alarm, prop);
+
+    /* uid */
+    {
+        struct buf myuid = BUF_INITIALIZER;
+        const char *uid = NULL;
+
+        json_t *jicalprops = json_object_get(alert, JMAPICAL_JSPROP_ICALPROPS);
+        if (JNOTNULL(jicalprops)) {
+            // Preserve iCalProps UID
+            size_t i;
+            json_t *jcal;
+            json_array_foreach(jicalprops, i, jcal) {
+                const char *name = json_string_value(json_array_get(jcal, 0));
+                if (!strcmpsafe("uid", name)) {
+                    uid = json_string_value(json_array_get(jcal, 3));
+                }
+            }
+        }
+
+        if (!uid) {
+            // Generate UID
+            uid = ical_uid_from_jmap_id(alert_jmap_id, &myuid);
+        }
+
+        icalcomponent_set_uid(alarm, uid);
+        buf_free(&myuid);
+    }
 
     /* trigger */
     struct icaltriggertype trigger = {
@@ -5559,6 +6269,12 @@ HIDDEN icalcomponent *jmapical_alert_to_ical(json_t *alert,
         alarm = NULL;
     }
 
+    /* internal only: iCalProps -- convert x-properties */
+    json_t *jprop = json_object_get(alert, JMAPICAL_JSPROP_ICALPROPS);
+    if (json_array_size(jprop)) {
+        jicalprops_to_ical(alarm, parser, jprop, NULL, 0);
+    }
+
     return alarm;
 }
 
@@ -5596,7 +6312,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts,
         alarm = jmapical_alert_to_ical(alert, parser, id,
                 icalcomponent_get_summary(comp),
                 icalcomponent_get_description(comp),
-                jmapctx->alert.emailrecipient);
+                jmapctx->to_ical.emailalert_recipient);
 
         if (alarm) icalcomponent_add_component(comp, alarm);
         jmap_parser_pop(parser);
@@ -6028,69 +6744,6 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
     jmap_parser_pop(parser);
 }
 
-struct geouri_parts {
-    char *coords[3];
-    int has_p;
-};
-
-static void geouri_parts_reset(struct geouri_parts *parts)
-{
-    int i;
-    for (i = 0; i < 3; i++)
-        xzfree(parts->coords[i]);
-    parts->has_p = 0;
-}
-
-static int geouri_parts_parse(const char *uri, struct geouri_parts *parts)
-{
-    const char *str = uri;
-
-    // geo:
-    if (strncmp("geo:", str, 4)) return -1;
-    str += 4;
-
-    // coord-a "," coord-b [ "," coord-c ]
-    int i;
-    for (i = 0; i < 3; i++) {
-        if ((parts->coords[0] || parts->coords[1])) {
-            if (*str != ',')
-                break;
-            str++;
-        }
-
-        const char *num = str;
-
-        if (*str == '-')
-            num++;
-
-        for ( ; isdigit(*num); num++) { }
-        if (num == str)
-            break;
-
-        if (*num == '.') {
-            const char *frac = ++num;
-
-            for ( ; isdigit(*frac); frac++) { }
-            if (frac == num)
-                break;
-
-            num = frac;
-        }
-
-        parts->coords[i] = xstrndup(str, num - str);
-        str = num;
-    }
-
-    if (!parts->coords[0] || !parts->coords[1])
-        return -1;
-
-    // p
-    parts->has_p = !!str[0];
-
-    return 0;
-}
-
-
 static int
 validate_location(json_t *loc, struct jmap_parser *parser,
                   jstimezones_t *jstzones)
@@ -6125,11 +6778,11 @@ validate_location(json_t *loc, struct jmap_parser *parser,
 
     jprop = json_object_get(loc, "coordinates");
     if (json_is_string(jprop)) {
-        struct geouri_parts geo = { 0 };
-        if (geouri_parts_parse(json_string_value(jprop), &geo) < 0) {
+        struct geouri geouri = { 0 };
+        if (geouri_parse(json_string_value(jprop), &geouri) < 0) {
             jmap_parser_invalid(parser, "coordinates");
         }
-        geouri_parts_reset(&geo);
+        geouri_reset(&geouri);
     }
     if (JNOTNULL(jprop) && !json_is_string(jprop))
         jmap_parser_invalid(parser, "coordinates");
@@ -6259,9 +6912,7 @@ location_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     /* links */
     json_t *links = json_object_get(loc, "links");
     if (JNOTNULL(links)) {
-        jmap_parser_push(parser, "links");
         links_to_ical(comp, NULL, parser, links, parentprop, id, jmapctx);
-        jmap_parser_pop(parser);
     }
 
     icalcomponent_add_property(comp, prop);
@@ -6316,17 +6967,20 @@ const char *locations_to_ical_keep_old_main(json_t *locations,
     if (!prop) goto done;
 
     struct buf title = BUF_INITIALIZER;
-    const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
+    const char *s = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_TITLE);
     if (s) unescape_ical_text(&title, s);
 
-    const char *geouri = icalproperty_get_value_as_string(prop);
-
-    if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
-        !strcmpsafe(mainloc_coords, geouri)) {
-        // Previous X-APPLE-STRUCTURED-LOCATION still matches
-        icalcomponent_add_property(comp, icalproperty_clone(prop));
+    const char *uri = icalproperty_get_value_as_string(prop);
+    struct buf sanitized_geouri = BUF_INITIALIZER;
+    if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+        if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
+                !strcmpsafe(mainloc_coords, buf_cstring(&sanitized_geouri))) {
+            // Previous X-APPLE-STRUCTURED-LOCATION still matches
+            icalcomponent_add_property(comp, icalproperty_clone(prop));
+        }
     }
 
+    buf_free(&sanitized_geouri);
     buf_free(&title);
 
 done:
@@ -6438,7 +7092,7 @@ locations_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     /* Write any remaining locations as X-JMAP-LOCATION */
     jmap_parser_push(parser, "locations");
     json_object_foreach(locations, id, jloc) {
-        if (strcmpsafe(mainlocid, id)) {
+        if (strcmpsafe(mainlocid, id) && !location_is_endtimezone(jloc)) {
             location_to_ical(comp, parser, ICAL_X_PROPERTY,
                     "locations", id, jloc, jstzones, jmapctx);
         }
@@ -6454,6 +7108,7 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
     const char *id;
 
     remove_icalprop(comp, ICAL_CONFERENCE_PROPERTY);
+    remove_jsprops(comp, "virtualLocations");
     if (!JNOTNULL(locations)) {
         return;
     }
@@ -6507,6 +7162,56 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
         else if (JNOTNULL(jdescription)) {
             jmap_parser_invalid(parser, "description");
         }
+
+        /* features */
+        json_t *jfeatures = json_object_get(loc, "features");
+        if (json_object_size(jfeatures)) {
+            jmap_parser_push(parser, "features");
+            const char *featurename;
+            json_t *jval;
+            json_object_foreach(jfeatures, featurename, jval) {
+                if (!json_is_true(jval)) {
+                    jmap_parser_invalid(parser, featurename);
+                }
+                else if (!strcasecmp(featurename, "audio")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_AUDIO));
+                }
+                else if (!strcasecmp(featurename, "chat")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_CHAT));
+                }
+                else if (!strcasecmp(featurename, "feed")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_FEED));
+                }
+                else if (!strcasecmp(featurename, "moderator")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_MODERATOR));
+                }
+                else if (!strcasecmp(featurename, "phone")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_PHONE));
+                }
+                else if (!strcasecmp(featurename, "screen")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_SCREEN));
+                }
+                else if (!strcasecmp(featurename, "video")) {
+                    icalproperty_add_parameter(
+                        prop, icalparameter_new_feature(ICAL_FEATURE_VIDEO));
+                }
+                else {
+                    jmap_parser_invalid(parser, featurename);
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+        else if (JNOTNULL(jfeatures)) {
+            jmap_parser_invalid(parser, "features");
+        }
+
+        jsprops_to_ical(comp, parser, loc);
 
         icalcomponent_add_property(comp, prop);
         jmap_parser_pop(parser);
@@ -6697,7 +7402,7 @@ static void timezones_to_ical(icalcomponent *ical,
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-    jmap_parser_push(parser, "timeZones");
+    jmap_parser_push(parser, JMAPICAL_JSPROP_TIMEZONES);
 
     /* Check for orphaned timezones */
     strarray_t custom_jstzids = STRARRAY_INITIALIZER;
@@ -6713,15 +7418,16 @@ static void timezones_to_ical(icalcomponent *ical,
 
         validate_type(parser, jtimezone, "TimeZone");
 
+        // Note: an earlier implementation stored the jstzid in
+        // the VTIMEZONE by use of the X-JMAP-ID property. We do not
+        // do that anymore, at least until jscalendarbis is final
+        // and a iCalendar standard property to store jstzid got defined.
+
         const char *tzid = json_string_value(json_object_get(jtimezone, "tzId"));
         if (tzid) {
             icalcomponent_add_property(tzcomp, icalproperty_new_tzid(tzid));
         }
         else jmap_parser_invalid(parser, "tzId");
-
-        icalproperty *prop = icalproperty_new_x(jstzid);
-        icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
-        icalcomponent_add_property(tzcomp, prop);
 
         json_t *jprop = json_object_get(jtimezone, "updated");
         if (json_is_string(jprop)) {
@@ -6813,9 +7519,9 @@ static void timezones_to_ical(icalcomponent *ical,
 
         jmap_parser_pop(parser);
 
-        if (strarray_find(&custom_jstzids, jstzid, 0) < 0) {
+        if (!strarray_contains(&custom_jstzids, jstzid)) {
             // this timezone is not referenced by any known property
-            if (jmapctx && !jmapctx->timezones.ignore_orphans) {
+            if (jmapctx && !jmapctx->to_ical.ignore_orphan_timezones) {
                 jmap_parser_invalid(parser, jstzid);
             }
             icalcomponent_free(tzcomp);
@@ -6924,7 +7630,7 @@ static void overrides_to_ical(icalcomponent *comp,
                     !strcmp(key, "relatedTo") ||
                     !strcmp(key, "replyTo") ||
                     !strcmp(key, "sentBy") ||
-                    !strcmp(key, "timeZones") ||
+                    !strcmp(key, JMAPICAL_JSPROP_TIMEZONES) ||
                     !strcmp(key, "uid")) {
 
                     json_object_del(myoverride, key);
@@ -6943,7 +7649,7 @@ static void overrides_to_ical(icalcomponent *comp,
 
             /* Create overridden event from patch and master event */
             json_t *ex;
-            if (!(ex = jmap_patchobject_apply(master, myoverride, NULL))) {
+            if (!(ex = jmap_patchobject_apply(master, myoverride, NULL, 0))) {
                 jmap_parser_invalid(parser, recuridval);
                 json_decref(myoverride);
                 continue;
@@ -6997,7 +7703,7 @@ HIDDEN int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addres
                 if (!strncasecmp(orga, "mailto:", 7)) {
                     orga += 7;
                 }
-                if (strarray_find_case(schedule_addresses, orga, 0) < 0) {
+                if (!strarray_contains_case(schedule_addresses, orga)) {
                     return 0;
                 }
             }
@@ -7118,6 +7824,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
 {
     jstimezones_t myjstzones = JSTIMEZONES_INITIALIZER;
     jstimezones_t *jstzones = NULL;
+    icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
 
     /* Caller must set UID */
     const char *uid = icalcomponent_get_uid(comp);
@@ -7147,11 +7854,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
     /* timeZones */
     icalcomponent *ical = icalcomponent_get_parent(comp);
-    jprop = json_object_get(event, "timeZones");
+    jprop = json_object_get(event, JMAPICAL_JSPROP_TIMEZONES);
     if (json_is_object(jprop)) {
         timezones_to_ical(ical, parser, event, jprop, jmapctx);
     } else if (JNOTNULL(jprop)) {
-        jmap_parser_invalid(parser, "timeZones");
+        jmap_parser_invalid(parser, JMAPICAL_JSPROP_TIMEZONES);
     }
     if (!jstzonesp || !*jstzonesp) {
         if (!jstzonesp) {
@@ -7160,7 +7867,8 @@ static void calendarevent_to_ical(icalcomponent *comp,
             *jstzonesp = jstzones = xzmalloc(sizeof(struct jstimezones));
         }
 
-        jstzones->no_guess = jmapctx ? jmapctx->timezones.no_guess : 0;
+        jstzones->no_guess =
+            jmapctx ? jmapctx->from_ical.dont_guess_timezones : 0;
         jstimezones_add_vtimezones(jstzones, ical);
     } else {
         jstzones = *jstzonesp;
@@ -7257,7 +7965,6 @@ static void calendarevent_to_ical(icalcomponent *comp,
              * - the method values are left unchanged
              */
             int reject = 1;
-            icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
             if (old_comp) {
                 icalcomponent *old_ical = icalcomponent_get_parent(old_comp);
                 if (old_ical &&
@@ -7290,6 +7997,22 @@ static void calendarevent_to_ical(icalcomponent *comp,
         if (strlen(val)) {
             icalproperty *prop = icalproperty_new_color(val);
             icalcomponent_add_property(comp, prop);
+
+            /* Also set the color in CATEGORIES if previously set */
+            icalcomponent *old_comp = oldcomp_of(comp, oldcomps);
+            if (old_comp) {
+                for (prop = icalcomponent_get_first_property(old_comp,
+                                                             ICAL_CATEGORIES_PROPERTY);
+                     prop;
+                     prop = icalcomponent_get_next_property(old_comp,
+                                                            ICAL_CATEGORIES_PROPERTY)) {
+                    if (ical_categories_is_color(prop)) {
+                        icalcomponent_add_property(comp,
+                                                   icalproperty_new_categories(val));
+                        break;
+                    }
+                }
+            }
         }
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "color");
@@ -7411,26 +8134,33 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "privacy");
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
-        enum icalproperty_class v = ICAL_CLASS_NONE;
-        if (!strcmp(val, "public")) {
-            v = ICAL_CLASS_PUBLIC;
-        } else if (!strcmp(val, "private")) {
-            v = ICAL_CLASS_PRIVATE;
-        } else if (!strcmp(val, "secret")) {
-            v = ICAL_CLASS_CONFIDENTIAL;
+        if (!strcmp(val, "private") ||
+            !strcmp(val, "secret")) {
+
+            struct buf buf = BUF_INITIALIZER;
+            buf_setcstr(&buf, val);
+            buf_ucase(&buf);
+            icalproperty *prop = icalproperty_new_x(buf_cstring(&buf));
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_PRIVACY);
+            icalcomponent_add_property(comp, prop);
+            buf_free(&buf);
+        }
+        else if (!strcmp(val, "public")) {
+            // no need to write default value
         } else {
             jmap_parser_invalid(parser, "privacy");
         }
-        if (v != ICAL_CLASS_NONE) {
-            icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-            if (prop) {
-                icalproperty_set_class(prop, v);
-            } else {
-                icalcomponent_add_property(comp, icalproperty_new_class(v));
-            }
-        }
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "privacy");
+    }
+
+    /* Preserve CLASS property */
+    if (old_comp) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(old_comp, ICAL_CLASS_PROPERTY);
+        if (prop) {
+            icalcomponent_add_property(comp, icalproperty_clone(prop));
+        }
     }
 
     /* replyTo and participants */
@@ -7439,13 +8169,12 @@ static void calendarevent_to_ical(icalcomponent *comp,
     /* useDefaultAlerts */
     jprop = json_object_get(event, "useDefaultAlerts");
     if (json_is_boolean(jprop)) {
-        remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM");
-        if (json_boolean_value(jprop)) {
-            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-APPLE-DEFAULT-ALARM");
-            icalproperty_set_value(prop, icalvalue_new_boolean(1));
-            icalcomponent_add_property(comp, prop);
-        }
+        remove_icalxprop(comp, "X-APPLE-DEFAULT-ALARM"); // remove legacy property
+        icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+        icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFAULTALERTS);
+        icalproperty_set_value(prop,
+                icalvalue_new_boolean(json_boolean_value(jprop)));
+        icalcomponent_add_property(comp, prop);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "useDefaultAlerts");
     }
@@ -7547,6 +8276,12 @@ static void calendarevent_to_ical(icalcomponent *comp,
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "sentBy");
+    }
+
+    /* internal only: iCalProps -- convert x-properties */
+    jprop = json_object_get(event, JMAPICAL_JSPROP_ICALPROPS);
+    if (json_array_size(jprop)) {
+        jicalprops_to_ical(comp, parser, jprop, NULL, 0);
     }
 
     /* recurrenceOverrides - must be last to apply patches */

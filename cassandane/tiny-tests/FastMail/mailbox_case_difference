@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_case_difference
+    :min_version_3_3
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.Foo.Hi") || die;
+    $imaptalk->create("INBOX.A") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    xlog $self, "move INBOX.A to INBOX.Foo.B";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{A} => {
+          name => "Hi",
+          parentId => $mboxids{Foo},
+        },
+        $mboxids{Hi} => {
+          name => "HI",
+        }
+      }
+    });
+
+    $self->assert_null($res->{notUpdated});
+    $self->assert(exists $res->{updated}{$mboxids{A}});
+    $self->assert(exists $res->{updated}{$mboxids{Hi}});
+}

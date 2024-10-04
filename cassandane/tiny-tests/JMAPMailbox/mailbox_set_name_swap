@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_name_swap
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A', parentId => undef, role => undef,
+            },
+            B => {
+                name => 'B', parentId => undef, role => undef,
+            },
+        },
+    }, "R1"]]);
+    my $idA =$res->[0][1]{created}{A}{id};
+    my $idB =$res->[0][1]{created}{B}{id};
+    $self->assert_not_null($idA);
+    $self->assert_not_null($idB);
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idA => { name => 'B' },
+            $idB => { name => 'A' },
+        },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$idA});
+    $self->assert(exists $res->[0][1]{updated}{$idB});
+}

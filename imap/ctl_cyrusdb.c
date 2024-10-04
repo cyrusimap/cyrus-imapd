@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -83,10 +84,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-
-#ifdef ENABLE_BACKUP
-#include "backup/backup.h"
-#endif
+#include "xunlink.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
@@ -99,9 +97,6 @@ static struct cyrusdb {
     { FNAME_MBOXLIST,           &config_mboxlist_db,    NULL,   1 },
     { FNAME_QUOTADB,            &config_quota_db,       NULL,   1 },
     { FNAME_GLOBALANNOTATIONS,  &config_annotation_db,  NULL,   1 },
-#ifdef ENABLE_BACKUP
-    { FNAME_BACKUPDB,           &config_backup_db,      NULL,   1 },
-#endif
     { FNAME_DELIVERDB,          &config_duplicate_db,   NULL,   0 },
     { FNAME_TLSSESSIONS,        &config_tls_sessions_db,NULL,   0 },
     { FNAME_PTSDB,              &config_ptscache_db,    NULL,   0 },
@@ -129,7 +124,7 @@ static void usage(void)
 static int fixmbox(const mbentry_t *mbentry,
                    void *rock __attribute__((unused)))
 {
-    int r;
+    int r, r2;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
@@ -164,6 +159,60 @@ static int fixmbox(const mbentry_t *mbentry,
         mboxlist_entry_free(&copy);
     }
 
+    /* make sure every local mbentry has a uniqueid!  */
+    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
+        struct mailbox *mailbox = NULL;
+        mbentry_t *copy = NULL;
+
+        r = mailbox_open_from_mbe(mbentry, &mailbox);
+        if (r) {
+            /* XXX what does it mean if there's an mbentry, but the mailbox
+             * XXX was not openable?
+             */
+            syslog(LOG_DEBUG, "%s: mailbox_open_from_mbe %s returned %s",
+                              __func__, mbentry->name, error_message(r));
+            goto skip_uniqueid;
+        }
+
+        if (!mailbox->h.uniqueid) {
+            /* yikes, no uniqueid in header either! */
+            mailbox_make_uniqueid(mailbox);
+            xsyslog(LOG_INFO, "mailbox header had no uniqueid, creating one",
+                              "mboxname=<%s> newuniqueid=<%s>",
+                              mbentry->name, mailbox->h.uniqueid);
+        }
+
+        copy = mboxlist_entry_copy(mbentry);
+        copy->uniqueid = xstrdup(mailbox->h.uniqueid);
+        xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
+                          "mboxname=<%s> newuniqueid=<%s>",
+                          copy->name, copy->uniqueid);
+
+        r = mboxlist_updatelock(copy, /*localonly*/1);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to update mboxlist",
+                             "mboxname=<%s> error=<%s>",
+                             mbentry->name, error_message(r));
+            r2 = mailbox_abort(mailbox);
+            if (r2) {
+                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            }
+        }
+        else {
+            r2 = mailbox_commit(mailbox);
+            if (r2) {
+                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            }
+        }
+        mailbox_close(&mailbox);
+        mboxlist_entry_free(&copy);
+
+skip_uniqueid:
+        ;   /* hush "label at end of compound statement" warning */
+    }
+
     return 0;
 }
 
@@ -172,7 +221,7 @@ static void process_mboxlist(int *upgraded)
     /* upgrade database to new mailboxes-by-id records */
     mboxlist_upgrade(upgraded);
 
-    /* build a list of mailboxes - we're using internal names here */
+    /* run fixmbox across all mboxlist entries */
     mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
 
     /* enable or disable RACLs per config */
@@ -191,10 +240,6 @@ static const char *dbfname(struct cyrusdb *db)
         fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
     else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS))
         fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
-#ifdef ENABLE_BACKUP
-    else if (!strcmp(db->name, FNAME_BACKUPDB))
-        fname = config_getstring(IMAPOPT_BACKUP_DB_PATH);
-#endif
     else if (!strcmp(db->name, FNAME_DELIVERDB))
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
     else if (!strcmp(db->name, FNAME_TLSSESSIONS))
@@ -242,8 +287,7 @@ static void check_convert(struct cyrusdb *db, const char *fname)
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
-    int opt, r, r2;
+    int opt, r = 0, r2 = 0;
     char *alt_config = NULL;
     int reserve_flag = 1;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
@@ -252,9 +296,21 @@ int main(int argc, char *argv[])
     char *msg = "";
     int i, rotated = 0;
 
-    r = r2 = 0;
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:crx";
 
-    while ((opt = getopt(argc, argv, "C:rxc")) != EOF) {
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "checkpoint", no_argument, NULL, 'c' },
+        { "recover", no_argument, NULL, 'r' },
+        { "no-cleanup", no_argument, NULL, 'x' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -327,17 +383,7 @@ int main(int argc, char *argv[])
             break;
 
         case CHECKPOINT:
-            r2 = cyrusdb_sync(*dblist[i].configptr);
-            if (r2) {
-                syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
-                       cyrusdb_strerror(r2));
-                fprintf(stderr,
-                        "ctl_cyrusdb: unable to sync environment\n");
-            }
-
             /* ARCHIVE */
-            r2 = 0;
-
             if (!rotated) {
                 /* rotate the backup directories -- ONE time only */
                 char *file;
@@ -351,7 +397,7 @@ int main(int argc, char *argv[])
                     while ((dirent = readdir(dirp)) != NULL) {
                         if (dirent->d_name[0] == '.') continue;
                         file = strconcat(backup2, "/", dirent->d_name, (char *)NULL);
-                        unlink(file);
+                        xunlink(file);
                         free(file);
                     }
 

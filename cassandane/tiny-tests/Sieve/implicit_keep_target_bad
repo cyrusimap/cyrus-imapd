@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_implicit_keep_target_bad
+    :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my ($res, $errs) = $self->compile_sievec('norequire', <<EOF
+implicit_keep_target :mailboxid "xxx" :specialuse "\\\\Important" "INBOX";
+EOF
+    );
+
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/vnd.cyrus.implicit_keep_target extension MUST be enabled/, $errs);
+    $self->assert_matches(qr/mailboxid extension MUST be enabled/, $errs);
+    $self->assert_matches(qr/special-use extension MUST be enabled/, $errs);
+
+    ($res, $errs) = $self->compile_sievec('conflict', <<EOF
+require [ "vnd.cyrus.implicit_keep_target", "special-use", "mailboxid"];
+implicit_keep_target :mailboxid "xxx" :specialuse "\\\\Important" "INBOX";
+EOF
+    );
+
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/tag :specialuse MUST NOT be used with tag :mailboxid/, $errs);
+
+    ($res, $errs) = $self->compile_sievec('badsyntax', <<EOF
+require [ "vnd.cyrus.implicit_keep_target", "special-use", "mailboxid"];
+implicit_keep_target :mailboxid "xxx" :specialuse "\\\\Important";
+EOF
+    );
+
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+}
+

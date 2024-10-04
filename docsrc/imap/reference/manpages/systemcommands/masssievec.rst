@@ -30,7 +30,7 @@ Options
 
 .. option:: imapd.conf
 
-    Provide an alternate impad.conf. If not specified, uses ``/etc/imapd.conf``.
+    Provide an alternate imapd.conf. If not specified, uses ``/etc/imapd.conf``.
 
 See Also
 ========

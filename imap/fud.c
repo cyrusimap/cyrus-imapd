@@ -157,7 +157,7 @@ int service_init(int argc, char **argv, char **envp)
 {
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
 
@@ -177,7 +177,7 @@ int service_main(int argc __attribute__((unused)),
     int r = 0;
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&fud_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&fud_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -388,6 +388,7 @@ static int handle_request(const char *who, const char *name,
     r = mailbox_open_irl(intname, &mailbox);
     if (r) {
         send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
+        free(intname);
         return r;
     }
 
@@ -480,6 +481,7 @@ EXPORTED void fatal(const char* s, int code)
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
-

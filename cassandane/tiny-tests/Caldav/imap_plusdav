@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_plusdav
+    :MagicPlus :VirtDomains :min_version_3_0 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'magicplus'});
+    $self->assert_not_null($CalendarId);
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $talk = $plusstore->get_client();
+
+    my $list = $talk->list('', '*');
+    my ($this) = grep { $_->[2] eq "INBOX.#calendars.$CalendarId" } @$list;
+    $self->assert_not_null($this);
+}

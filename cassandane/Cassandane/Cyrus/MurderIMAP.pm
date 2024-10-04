@@ -53,9 +53,17 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({
+
+    my $config = Cassandane::Config->default()->clone();
+
+    $config->set(conversations => 'yes');
+
+    my $self = $class->SUPER::new({
         imapmurder => 1, adminstore => 1, deliver => 1,
     }, @_);
+
+    $self->needs('component', 'murder');
+    return $self;
 }
 
 sub set_up
@@ -70,139 +78,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-# create a bunch of mailboxes and messages with various flags and annots,
-# returning a hash of what to expect to find there later
-sub populate_user
-{
-    my ($self, $instance, $store, $folders) = @_;
-
-    my $created = {};
-
-    my @specialuse = qw(Drafts Junk Sent Trash);
-
-    foreach my $folder (@{$folders}) {
-        $store->set_folder($folder);
-
-        # create some messages
-        foreach my $n (1 .. 20) {
-            my $msg = $self->make_message("Message $n", store => $store);
-            $created->{mailboxes}->{$folder}->{messages}->{$msg->uid()} = $msg;
-        }
-
-        # fizzbuzz some flags
-        my $talk = $store->get_client();
-        $talk->select($folder);
-        my $n = 1;
-        while (my ($uid, $msg)
-                = each %{$created->{mailboxes}->{$folder}->{messages}})
-        {
-            my @flags;
-
-            if ($n % 3 == 0) {
-                # fizz
-                $talk->store("$uid", '+flags', '(\\Flagged)');
-                $self->assert_str_equals(
-                    'ok', $talk->get_last_completion_response()
-                );
-                push @flags, '\\Flagged';
-            }
-            if ($n % 5 == 0) {
-                # buzz
-                $talk->store("$uid", '+flags', '(\\Deleted)');
-                $self->assert_str_equals(
-                    'ok', $talk->get_last_completion_response()
-                );
-                push @flags, '\\Deleted';
-            }
-
-            $msg->set_attribute('flags', \@flags) if scalar @flags;
-            $n++;
-        }
-
-        # make sure the messages are as expected
-        $store->set_fetch_attributes('uid', 'flags');
-        $self->check_messages($created->{mailboxes}->{$folder}->{messages},
-                              store => $store,
-                              check_guid => 0,
-                              keyed_on => 'uid');
-
-        # maybe set a special use annotation if the folder name is such
-        my ($suflag, @extra) = grep {
-            lc $folder =~ m{^(?:INBOX[./])?$_$}
-        } @specialuse;
-        if ($suflag and not scalar @extra) {
-            $talk->setmetadata($folder, '/private/specialuse', "\\$suflag");
-            $self->assert_str_equals('ok',
-                                     $talk->get_last_completion_response());
-            $created->{mailboxes}->{$folder}->{specialuse} = "\\$suflag";
-        }
-    }
-
-    # XXX ought to be conditional on whether $instance was built with sieve
-    # XXX support, but Cassandane::BuildInfo doesn't currently support
-    # XXX choosing an instance to ask about...
-    my $scriptname = random_word();
-    my $scriptcontent = 'keep;';
-
-    $instance->install_sieve_script($scriptcontent,
-                                    name => $scriptname,
-                                    username => $store->{username});
-    $self->assert_sieve_exists($instance, $store->{username}, $scriptname);
-    $self->assert_sieve_active($instance, $store->{username}, $scriptname);
-
-    $created->{sieve}->{scripts}->{$scriptname} = $scriptcontent;
-    $created->{sieve}->{active} = $scriptname;
-
-    return $created;
-}
-
-# check that the contents of the store match the data returned by
-# populate_user()
-sub check_user
-{
-    my ($self, $instance, $store, $expected) = @_;
-
-    die "bad expected hash" if ref $expected ne 'HASH';
-
-    foreach my $folder (keys %{$expected->{mailboxes}}) {
-        $store->set_folder($folder);
-        $store->set_fetch_attributes('uid', 'flags');
-        $self->check_messages($expected->{mailboxes}->{$folder}->{messages},
-                              store => $store,
-                              check_guid => 0,
-                              keyed_on => 'uid');
-
-        my $specialuse = $expected->{mailboxes}->{$folder}->{specialuse};
-        if ($specialuse) {
-            my $talk = $store->get_client();
-            my $res = $talk->getmetadata($folder, '/private/specialuse');
-            $self->assert_str_equals('ok',
-                                     $talk->get_last_completion_response());
-            $self->assert_not_null($res);
-
-            $self->assert_str_equals($specialuse,
-                                     $res->{$folder}->{'/private/specialuse'});
-        }
-    }
-
-    if (exists $expected->{sieve}) {
-        while (my ($scriptname, $scriptcontent)
-               = each %{$expected->{sieve}->{scripts}})
-        {
-            $self->assert_sieve_exists($instance, $store->{username},
-                                       $scriptname, 1);
-            $self->assert_sieve_matches($instance, $store->{username},
-                                        $scriptname, $scriptcontent);
-        }
-        if ($expected->{sieve}->{active}) {
-            $self->assert_sieve_active($instance, $store->{username},
-                                       $expected->{sieve}->{active});
-        }
-    }
-}
-
 sub test_aaasetup
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -211,7 +87,6 @@ sub test_aaasetup
 }
 
 sub test_frontend_commands
-    :needs_component_murder
 {
     my ($self) = @_;
     my $result;
@@ -242,9 +117,25 @@ sub test_frontend_commands
     $result = $frontend->getmetadata('INBOX',
                                      '/shared/vendor/cmu/cyrus-imapd/size');
     $self->assert_not_null($result);
+    $self->assert(exists $result->{'INBOX'}{'/shared/vendor/cmu/cyrus-imapd/size'});
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     $result = $frontend->getmetadata('(INBOX INBOX.newfolder)',
                                      '/shared/vendor/cmu/cyrus-imapd/size');
+    $self->assert_not_null($result);
+    $self->assert(exists $result->{'INBOX'}{'/shared/vendor/cmu/cyrus-imapd/size'});
+    $self->assert(exists $result->{'INBOX.newfolder'}{'/shared/vendor/cmu/cyrus-imapd/size'});
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # check frontend version for which resource type to use
+    my $res_mailbox = 'MAILBOX';
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        $res_mailbox = 'X-NUM-FOLDERS';
+    }
+
+    my $frontend_admin = $self->{frontend_adminstore}->get_client();
+    $result = $frontend_admin->setquota('user.cassandane',
+                                        "(STORAGE 1024 MESSAGE 5000 $res_mailbox 100)");
     $self->assert_not_null($result);
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
@@ -252,7 +143,6 @@ sub test_frontend_commands
 }
 
 sub test_list_specialuse
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -320,7 +210,6 @@ sub test_list_specialuse
 }
 
 sub test_xlist
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -390,7 +279,6 @@ sub test_xlist
 }
 
 sub test_move_to_backend_nonexistent
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -440,7 +328,6 @@ sub test_move_to_backend_nonexistent
 }
 
 sub test_move_to_nonexistent
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -482,7 +369,7 @@ sub test_move_to_nonexistent
 }
 
 sub test_rename_with_location
-    :needs_component_murder :AllowMoves
+    :AllowMoves
 {
     my ($self) = @_;
 
@@ -512,7 +399,7 @@ sub test_rename_with_location
 }
 
 sub test_xfer_nonexistent_unixhs
-    :needs_component_murder :UnixHierarchySep
+    :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -550,7 +437,7 @@ sub test_xfer_nonexistent_unixhs
 
 sub test_xfer_user_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -653,7 +540,7 @@ sub test_xfer_user_altns_unixhs
 
 sub test_xfer_user_noaltns_nounixhs
     :AllowMoves :NoAltNamespace
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -754,9 +641,68 @@ sub test_xfer_user_noaltns_nounixhs
     });
 }
 
+sub test_xfer_user_verify_cleanup
+    :AllowMoves :NoAltNamespace :Conversations
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    # set up some data for cassandane on backend1
+    my $expected = $self->populate_user($self->{instance},
+                                        $self->{backend1_store},
+                                        [qw(INBOX INBOX.Drafts)]);
+
+    my $imaptalk = $self->{backend1_store}->get_client();
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    xlog $self, "Subscribe to INBOX";
+    $imaptalk->subscribe("INBOX");
+
+    xlog $self, "Install a sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+keep;
+EOF
+    );
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Verify user mailbox directories exist";
+    my $inbox_dir = $self->{instance}->folder_to_directory('INBOX');
+    my $drafts_dir = $self->{instance}->folder_to_directory('INBOX.Drafts');
+    $self->assert_file_test($inbox_dir, '-d');
+    $self->assert_file_test($drafts_dir, '-d');
+
+    xlog $self, "Verify user data files/directories exist";
+    my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
+    $self->assert_file_test($data->{user}{'sub'}, '-f');
+    $self->assert_file_test($data->{user}{counters}, '-f');
+    $self->assert_file_test($data->{user}{conversations}, '-f');
+    $self->assert_file_test($data->{user}{xapianactive}, '-f');
+    $self->assert_file_test("$data->{user}{sieve}/defaultbc", '-f');
+    $self->assert_file_test($data->{xapian}{t1}, '-d');
+
+    # now xfer the cassandane user to backend2
+    my $ret = $admintalk->_imap_cmd('xfer', 0, {},
+                                    'user.cassandane', $backend2_servername);
+
+    xlog $self, "Verify user mailbox directories have been deleted";
+    $self->assert_not_file_test($inbox_dir, '-e');
+    $self->assert_not_file_test($drafts_dir, '-e');
+
+    xlog $self, "Verify user data files/directories have been deleted";
+    $self->assert_not_file_test($data->{user}{'sub'}, '-e');
+    $self->assert_not_file_test($data->{user}{counters}, '-e');
+    $self->assert_not_file_test($data->{user}{conversations}, '-e');
+    $self->assert_not_file_test($data->{user}{xapianactive}, '-e');
+    $self->assert_not_file_test($data->{user}{sieve}, '-e');
+    $self->assert_not_file_test($data->{xapian}{t1}, '-e');
+}
+
 sub test_xfer_user_altns_unixhs_virtdom
     :AllowMoves :AltNamespace :UnixHierarchySep :VirtDomains
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -872,7 +818,7 @@ sub test_xfer_user_altns_unixhs_virtdom
 
 sub test_xfer_user_noaltns_nounixhs_virtdom
     :AllowMoves :NoAltNamespace :VirtDomains
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -988,7 +934,7 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
 
 sub test_xfer_mailbox_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :needs_component_murder :min_version_3_2 :max_version_3_4
+    :min_version_3_2 :max_version_3_4
 {
     my ($self) = @_;
 
@@ -1121,7 +1067,7 @@ sub test_xfer_mailbox_altns_unixhs
 
 sub test_xfer_no_user_intermediates
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :needs_component_murder :min_version_3_5
+    :min_version_3_5
 {
     my ($self) = @_;
 
@@ -1160,5 +1106,119 @@ sub test_xfer_no_user_intermediates
 # XXX test_xfer_partition
 # XXX test_xfer_mboxpattern
 # XXX shared mailboxes!
+
+sub test_copy_across_backends
+    :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $shared = 'shared';
+
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+
+    # create a shared folder (on backend2)
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared, 'anyone', 'lrswi');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # put some messages into the INBOX
+    my %exp;
+    $self->make_message("Message A", store => $self->{frontend_store});
+    $exp{B} = $self->make_message("Message B", store => $self->{frontend_store});
+    $self->make_message("Message C", store => $self->{frontend_store});
+    $exp{D} = $self->make_message("Message D", store => $self->{frontend_store});
+
+    my $frontend = $self->{frontend_store}->get_client();
+
+    my $res = $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # expunge the some messages so that seqno != uid
+    $frontend->store('1,3', '+flags', '(\\Deleted)');
+    $frontend->expunge();
+
+    $res = $frontend->copy('1:*', $shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $exp{B}->set_attribute('uid', 1);
+    $exp{D}->set_attribute('uid', 2);
+    $self->{frontend_store}->set_folder($shared);
+    $self->check_messages(\%exp, store => $self->{frontend_store});
+}
+
+sub test_replace_same_backend
+    :NoAltNamespace :min_version_3_9
+{
+    # :min_version_3_9 checks backend1 version.  The test below checks frontend
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        return;
+    }
+
+    my ($self) = @_;
+
+    my $talk = $self->{frontend_store}->get_client();
+
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $self->{store});
+    $self->check_messages(\%exp);
+
+    $talk->select('INBOX');
+
+    %exp = ();
+    $exp{B} = $self->{gen}->generate(subject => "Message B");
+
+    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX",
+                     { Literal => $exp{B}->as_string() });
+    $self->check_messages(\%exp);
+}
+
+sub test_replace_across_backends
+    :NoAltNamespace :min_version_3_9
+{
+    # :min_version_3_9 checks backend1 version.  The test below checks frontend
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        return;
+    }
+
+    my ($self) = @_;
+
+    my $shared = 'shared';
+
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+
+    # create a shared folder (on backend2)
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared, 'anyone', 'lrswi');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # put some messages into the INBOX
+    $self->make_message("Message A", store => $self->{frontend_store});
+    $self->make_message("Message B", store => $self->{frontend_store});
+
+    my $frontend = $self->{frontend_store}->get_client();
+
+    my $res = $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # expunge the first message so that seqno != uid
+    $frontend->store('1', '+flags', '(\\Deleted)');
+    $frontend->expunge();
+
+    my %exp;
+    $exp{C} = $self->{gen}->generate(subject => "Message C", uid => 1);
+
+    $res = $frontend->_imap_cmd('REPLACE', 0, '', "1", "shared",
+                                { Literal => $exp{C}->as_string() });
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $self->check_messages({});
+
+    $self->{frontend_store}->set_folder($shared);
+    $self->check_messages(\%exp, store => $self->{frontend_store});
+}
 
 1;

@@ -35,20 +35,20 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -l
+.. option:: -l, --long
 
     Use a long listing format.
 
-.. option:: -m
+.. option:: -m, --metadata
 
     Output the path to the metadata files (if different from the
     message files).
 
-.. option:: -R
+.. option:: -R, --recursive
 
     List submailboxes recursively.
 
-.. option:: -1
+.. option:: -1, --one-per-line
 
     List one file per line.
 

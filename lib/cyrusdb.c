@@ -61,6 +61,7 @@
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 //#define DEBUGDB 1
 
@@ -95,22 +96,16 @@ struct db {
 
 static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
 {
-    int i;
-    struct cyrusdb_backend *db = NULL;
-
-    for (i = 0; _backends[i]; i++) {
+    for (int i = 0; _backends[i]; i++) {
         if (!strcmp(_backends[i]->name, name)) {
-            db = _backends[i]; break;
+            return _backends[i];
         }
     }
-    if (!db) {
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "cyrusdb backend %s not supported", name);
-        fatal(errbuf, EX_CONFIG);
-    }
 
-    return db;
+    char errbuf[1024];
+    snprintf(errbuf, sizeof(errbuf),
+             "cyrusdb backend %s not supported", name);
+    fatal(errbuf, EX_CONFIG);
 }
 
 static int _myopen(const char *backend, const char *fname,
@@ -340,6 +335,17 @@ EXPORTED int cyrusdb_delete(struct db *db,
     return db->backend->delete_(db->engine, key, keylen, tid, force);
 }
 
+EXPORTED int cyrusdb_lock(struct db *db, struct txn **tid, int flags)
+{
+    if (!db->backend->lock)
+        return CYRUSDB_NOTIMPLEMENTED;
+#ifdef DEBUGDB
+    syslog(LOG_NOTICE, "DEBUGDB lock(%llx, %d)\n", (long long unsigned)db->engine, flags);
+#endif
+    return db->backend->lock(db->engine, tid, flags);
+
+}
+
 EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)
 {
     if (!db->backend->commit)
@@ -395,9 +401,16 @@ EXPORTED void cyrusdb_init(void)
     char dbdir[1024];
     const char *confdir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
     int initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
+    struct stat statbuf;
 
     strcpy(dbdir, confdir);
     strcat(dbdir, FNAME_DBDIR);
+
+    if (stat(dbdir, &statbuf)) {
+        char *path = strconcat(dbdir, "/dummy", NULL);
+        cyrus_mkdir(path, 0755 /* n.b. mode is unused */);
+        free(path);
+    }
 
     for (i=0; _backends[i]; i++) {
         r = (_backends[i])->init(dbdir, initflags);
@@ -543,7 +556,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
         tofname = newfname = strconcat(fromfname, ".NEW", NULL);
 
     /* remove any rubbish lying around */
-    unlink(tofname);
+    xunlink(tofname);
 
     r = cyrusdb_open(tobackend, tofname, CYRUSDB_CREATE, &todb);
     if (r) goto err;
@@ -583,7 +596,7 @@ err:
     if (fromtid) cyrusdb_abort(fromdb, fromtid);
     if (fromdb) cyrusdb_close(fromdb);
 
-    unlink(tofname);
+    xunlink(tofname);
     free(newfname);
 
     return r;
@@ -613,12 +626,6 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 
     /* unable to detect SQLite databases or flat files explicitly here */
     return NULL;
-}
-
-EXPORTED int cyrusdb_sync(const char *backend)
-{
-    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
-    return db->sync();
 }
 
 EXPORTED int cyrusdb_unlink(const char *backend, const char *fname, int flags)
@@ -667,11 +674,6 @@ HIDDEN int cyrusdb_generic_done(void)
     return 0;
 }
 
-HIDDEN int cyrusdb_generic_sync(void)
-{
-    return 0;
-}
-
 HIDDEN int cyrusdb_generic_archive(const strarray_t *fnames,
                             const char *dirname)
 {
@@ -715,7 +717,7 @@ HIDDEN int cyrusdb_generic_noarchive(const strarray_t *fnames __attribute__((unu
 HIDDEN int cyrusdb_generic_unlink(const char *fname, int flags __attribute__((unused)))
 {
     if (fname)
-        unlink(fname);
+        xunlink(fname);
     /* XXX - check that it exists unless FORCE flag? */
     return 0;
 }

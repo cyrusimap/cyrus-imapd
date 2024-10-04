@@ -159,13 +159,17 @@ struct Testlist {
     testlist_t *next;
 };
 
-struct Fileinto {
-    strarray_t *flags;
+struct TargetMailbox {
     char *folder;
     char *specialuse;
+    char *mailboxid;
+};
+
+struct Fileinto {
+    struct TargetMailbox t;
+    strarray_t *flags;
     int copy;
     int create;
-    char *mailboxid;
 };
 
 struct Commandlist {
@@ -254,14 +258,18 @@ struct Commandlist {
             arrayu64_t *times;
             char *tzid;
         } sn;
-        struct {
+        struct { /* it's a processcalendar action */
+            int allow_public;
             int invites_only;
             int updates_only;
-            int delete_canceled;
+            int delete_cancelled;
+            strarray_t *addresses;
+            char *organizers;
             char *calendarid;
             char *outcome_var;
-            char *errstr_var;
-        } imip;
+            char *reason_var;
+        } cal;
+        struct TargetMailbox ikt; /* it's an implicit keep target */
     } u;
     struct Commandlist *next;
 

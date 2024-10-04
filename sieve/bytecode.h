@@ -144,8 +144,11 @@ typedef union
  *                      and Fcc per draft-ietf-extra-sieve-mailboxid-01
  * version 0x1E scripts store [current]date :zone argument as a string
  * version 0x1F scripts implemented vnd.cyrus.imip
- */
-#define BYTECODE_VERSION 0x1F
+ * version 0x20 scripts implemented vnd.cyrus.implicit_keep_target
+ * version 0x21 scripts implemented comparator-i;unicode-casemap (RFC 5051)
+ * version 0x22 scripts implemented processcalendar per draft-ietf-extra-processimip
+*/
+#define BYTECODE_VERSION 0x22
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -187,8 +190,11 @@ enum bytecode {
                                    <then-block: command-list>
                                    <else-block: command-list> (optional)       */
 
-    B_MARK,                     /* require "imapflags"                         */
-    B_UNMARK,                   /* require "imapflags"                         */
+    B_MARK,                     /* deprecated -
+                                   translated to addflag "\\Flagged";          */
+
+    B_UNMARK,                   /* deprecated -
+                                   translated to removeflag "\\Flagged";       */
 
     B_ADDFLAG_ORIG,	        /* legacy addflag w/o support for variables
 
@@ -208,13 +214,13 @@ enum bytecode {
 
                                    <flag-list: string-list>                    */
 
-    B_NOTIFY,                   /* require "notify"
+    B_NOTIFY,                   /* require "notify" (deprecated - eval only)
 
                                    <method: string> <id: string>
                                    <options: string-list> <priority: int>
                                    <message: string>                           */
 
-    B_DENOTIFY,                 /* require "notify"
+    B_DENOTIFY,                 /* require "notify" (deprecated - eval only)
                                    <priority: int>
                                    <match-type: int> <relational-match: int>
                                    <pattern: string>                           */
@@ -431,6 +437,22 @@ enum bytecode {
                                    <outcome-var: string>
                                    <errstr-var: string>                        */
 
+    B_IKEEP_TARGET,             /* require ["vnd.cyrus.implicit_keep_target",
+                                            "special-use", "mailboxid"]
+
+                                   <mailbox-id: string> <special-use: string>
+                                   <mailbox: string>                           */
+
+    B_PROCESSCAL,               /* require ["procescalendar",
+                                            "variables", "extlists"]
+
+                                   <flags-bitmask: int>
+                                   <addresses: string-list>
+                                   <organizers: string>
+                                   <calendar-id: string>
+                                   <outcome-var: string>
+                                   <reason-var: string>                        */
+
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */
 };
@@ -621,11 +643,11 @@ enum bytecode_tags {
     B_ASCIICASEMAP,
     B_OCTET,
     B_ASCIINUMERIC,     /* require comparator-i;ascii-numeric */
+    B_UNICODECASEMAP,   /* require comparator-i;unicode-casemap */
 
     B_COMPARATOR_PLACEHOLDER_1,
     B_COMPARATOR_PLACEHOLDER_2,
     B_COMPARATOR_PLACEHOLDER_3,
-    B_COMPARATOR_PLACEHOLDER_4,
 
     /* Match Types (36-45) */
     B_IS,
@@ -702,10 +724,11 @@ enum bytecode_tags {
 #define SNOOZE_WDAYS_MASK 0x7F
 #define SNOOZE_IS_ID_MASK 0x80
 
-enum bytecode_imip_bitflags {
-    IMIP_UPDATESONLY    = 1<<0,
-    IMIP_DELETECANCELED = 1<<1,
-    IMIP_INVITESONLY    = 1<<2
+enum bytecode_cal_bitflags {
+    CAL_UPDATESONLY     = 1<<0,
+    CAL_DELETECANCELLED = 1<<1,
+    CAL_INVITESONLY     = 1<<2,
+    CAL_ALLOWPUBLIC     = 1<<3,
 };
 
 enum bytecode_variables_bitflags {

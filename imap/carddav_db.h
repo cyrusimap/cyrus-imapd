@@ -55,8 +55,12 @@
 
 struct carddav_db;
 
+#define CARDDAV_UPDATE_OVERAGE 2048
+
 #define CARDDAV_KIND_CONTACT 0
 #define CARDDAV_KIND_GROUP 1
+#define CARDDAV_KIND_ANY 255
+
 struct carddav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned version;
@@ -136,8 +140,8 @@ strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
 
 /* process each entry of type 'kind' for 'mailbox' in 'carddavdb' with cb() */
-int carddav_get_cards(struct carddav_db *carddavdb,
-                      const mbentry_t *mbentry, const char *vcard_uid, int kind,
+int carddav_get_cards(struct carddav_db *carddavdb, const mbentry_t *mbentry,
+                      const char *userid, const char *vcard_uid, int kind,
                       carddav_cb_t *cb, void *rock);
 
 /* Process each entry for 'carddavdb' with a modseq higher than oldmodseq,
@@ -160,8 +164,9 @@ int carddav_foreach_sort(struct carddav_db *carddavdb, const mbentry_t *mbentry,
                          enum carddav_sort* sort, size_t nsort,
                          carddav_cb_t *cb, void *rock);
 
-int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid,
-                            int version, const char *data);
+int carddav_write_jscardcache(struct carddav_db *carddavdb,
+                              int rowid, const char *userid,
+                              int version, const char *data);
 
 /* update an entry in 'carddavdb' */
 int carddav_update(struct carddav_db *carddavdb,
@@ -194,7 +199,7 @@ int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
                   const char *resource, modseq_t createdmodseq,
                   strarray_t *flags, struct entryattlist **annots,
                   const char *userid, struct auth_state *authstate,
-                  int ignorequota);
+                  int ignorequota, uint32_t oldsize);
 
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,
@@ -203,5 +208,20 @@ int carddav_remove(struct mailbox *mailbox,
 
 /* calculate a mailbox name */
 char *carddav_mboxname(const char *userid, const char *name);
+
+#ifdef HAVE_LIBICALVCARD
+
+#include "vcard_support.h"
+
+int carddav_writecard_x(struct carddav_db *carddavdb, struct carddav_data *cdata,
+                        vcardcomponent *vcard, int ispinned);
+
+int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
+                    const char *resource, modseq_t createdmodseq,
+                    struct entryattlist **annots,
+                    const char *userid, struct auth_state *authstate,
+                    int ignorequota, uint32_t oldsize);
+
+#endif /* HAVE_LIBICALVCARD */
 
 #endif /* CARDDAV_DB_H */

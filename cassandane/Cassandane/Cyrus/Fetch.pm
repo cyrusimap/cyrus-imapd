@@ -754,6 +754,19 @@ sub test_fetch_urlfetch
     $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
     $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
     $self->assert_str_equals($res->{$uid}->{body}, "body3");
+
+    # Extract part of an embedded RFC822 message into a new standalone message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3.HEADER",
+            "URL", "/INBOX/;uid=1/;section=3.TEXT;partial=1.3",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "ody");
 }
 
 sub test_fetch_flags_before_exists
@@ -992,6 +1005,133 @@ sub test_preview_args
     # expect lazy + bad modifier to be rejected
     $res = $imaptalk->fetch('1', '(PREVIEW (LAZY FOO))');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+}
+
+sub test_unknown_cte
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $ct = "multipart/mixed";
+    my $boundary = "mitomycin";
+
+    # Subpart 1
+    my $body = ""
+    . "--$boundary\r\n"
+    . "Content-Type: text/plain; charset=\"utf8\"\r\n"
+    . "\r\n"
+    . "The attachment to this email is meaningless gibberish\r\n";
+
+    # Subpart 2
+    $body .= ""
+    . "--$boundary\r\n"
+    . "Content-Disposition: attachment; filename=\"gibberish.dat\"\r\n"
+    . "Content-Type: application/octet-stream; name=\"gibberish.dat\"\r\n"
+    . "Content-Transfer-Encoding: x-no-such-encoding\r\n"
+    . "\r\n"
+    . "There'll never be a decoder for this encoding, so this\r\n"
+    . "text can't possibly ever decode to something coherent.\r\n"
+    . "--$boundary--\r\n";
+
+    my $msg = $self->make_message("foo",
+        mime_type => $ct,
+        mime_boundary => $boundary,
+        body => $body
+    );
+    my $uid = $msg->{attrs}->{uid};
+    my $res;
+
+    # fetch BINARY.PEEK should fail
+    $res = $imaptalk->fetch('1', '(BINARY.PEEK[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+
+    # fetch BINARY.SIZE should fail
+    $res = $imaptalk->fetch('1', '(BINARY.SIZE[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+
+    # enable UID mode...
+    $imaptalk->uid(1);
+
+    # UID fetch BINARY.PEEK should fail
+    $res = $imaptalk->fetch($uid, '(BINARY.PEEK[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+
+    # UID fetch BINARY.SIZE should fail
+    $res = $imaptalk->fetch($uid, '(BINARY.SIZE[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+}
+
+sub test_partial
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    # expunge the 1st and 6th
+    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $imaptalk->expunge();
+
+    # fetch all
+    my $res = $imaptalk->fetch('1:*', '(UID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'1'}->{uid}, "2");
+    $self->assert_str_equals($res->{'2'}->{uid}, "3");
+    $self->assert_str_equals($res->{'3'}->{uid}, "4");
+    $self->assert_str_equals($res->{'4'}->{uid}, "5");
+    $self->assert_str_equals($res->{'5'}->{uid}, "7");
+    $self->assert_str_equals($res->{'6'}->{uid}, "8");
+    $self->assert_str_equals($res->{'7'}->{uid}, "9");
+    $self->assert_str_equals($res->{'8'}->{uid}, "10");
+
+    # fetch first 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL 1:2)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'1'}->{uid}, "2");
+    $self->assert_str_equals($res->{'2'}->{uid}, "3");
+
+    # fetch next 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL 3:4)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'3'}->{uid}, "4");
+    $self->assert_str_equals($res->{'4'}->{uid}, "5");
+
+    # fetch last 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL -1:-2)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'8'}->{uid}, "10");
+    $self->assert_str_equals($res->{'7'}->{uid}, "9");
+
+    # fetch the previous 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL -3:-4)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'6'}->{uid}, "8");
+    $self->assert_str_equals($res->{'5'}->{uid}, "7");
+
+    # enable UID mode...
+    $imaptalk->uid(1);
+
+    # fetch the middle 2 by UID
+    $res = $imaptalk->fetch('4:8', '(UID) (PARTIAL 2:3)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'5'}->{uid}, "5");
+    $self->assert_str_equals($res->{'7'}->{uid}, "7");
 }
 
 1;

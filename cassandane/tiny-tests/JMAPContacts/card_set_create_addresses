@@ -1,0 +1,133 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_addresses
+    :min_version_3_9 :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $id,
+                    name => { full => 'John Doe' },
+                    addresses => {
+                        k23 => {
+                            '@type' => 'Address',
+                            contexts => {
+                                work => JSON::true
+                            },
+                            full => "54321 Oak St\nReston\nVA\n20190\nUSA",
+                            isOrdered => JSON::true,
+                            defaultSeparator => "\n",
+                            components => [
+                                {
+                                    kind => 'number',
+                                    value => '54321'
+                                },
+                                {
+                                    kind => 'separator',
+                                    value => " "
+                                },
+                                {
+                                    kind => 'name',
+                                    value => 'Oak St'
+                                },
+                                {
+                                    kind => 'locality',
+                                    value => 'Reston'
+                                },
+                                {
+                                    kind => 'separator',
+                                    value => ', '
+                                },
+                                {
+                                    kind => 'region',
+                                    value => 'VA'
+                                },
+                                {
+                                    kind => 'postcode',
+                                    value => '20190'
+                                },
+                                {
+                                    kind => 'country',
+                                    value => 'USA'
+                                }
+                            ],
+                            countryCode => 'US'
+                        },
+                        k24 => {
+                            contexts => {
+                                private => JSON::true
+                            },
+                            full => "12345 Elm St\nReston\nVA\n20190\nUSA",
+                            isOrdered => JSON::false,
+                            components => [
+                                {
+                                    kind => 'number',
+                                    value => '12345'
+                                },
+                                {
+                                    '@type' => 'Address',
+                                    kind => 'name',
+                                    value => 'Elm St'
+                                },
+                                {
+                                    kind => 'locality',
+                                    value => 'Reston'
+                                },
+                                {
+                                    kind => 'region',
+                                    value => 'VA'
+                                },
+                                {
+                                    kind => 'postcode',
+                                    value => '20190'
+                                },
+                                {
+                                    kind => 'country',
+                                    value => 'USA'
+                                }
+                            ],
+                            countryCode => 'US',
+                            timeZone => 'America/New_York'    
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_not_null($res->[0][1]{created}{1}{created});
+
+    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/ADR;JSCOMPS="s,\^n;10;s, ;11;3;s,\\, ;4;5;6";PROP-ID=k23;TYPE=WORK;CC=US;LABEL=54321 Oak St\^nReston\^nVA\^n20190\^nUSA:;;54321,Oak St;Reston;VA;20190;USA;;;;54321;Oak St;;;;;;/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL=12345 Elm St\^nReston\^nVA\^n20190\^nUSA:;;12345,Elm St;Reston;VA;20190;USA;;;;12345;Elm St;;;;;;/, $card);
+    $self->assert_matches(qr/CREATED:/, $card);
+    $self->assert_does_not_match(qr|JSPROP|, $card);
+}

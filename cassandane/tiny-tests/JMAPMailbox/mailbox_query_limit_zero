@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_query_limit_zero
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "list mailboxes with limit 0";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/query', { limit => 0 }, "R1"]
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]->{ids});
+}

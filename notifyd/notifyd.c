@@ -214,12 +214,14 @@ EXPORTED void fatal(const char *s, int code)
 
     syslog(LOG_ERR, "Fatal error: %s", s);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
 static void usage(void)
 {
-    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>]");
+    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] [-D] [-X] [-m method].  method defaults to null");
     exit(EX_USAGE);
 }
 

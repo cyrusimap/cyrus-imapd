@@ -96,8 +96,9 @@ static void ensure_alloc(strarray_t *sa, int newalloc)
     if (newalloc < sa->alloc)
         return;
     newalloc = grow(sa->alloc, newalloc + 1);
-    sa->data = xrealloc(sa->data, sizeof(char *) * newalloc);
-    memset(sa->data + sa->alloc, 0, sizeof(char *) * (newalloc - sa->alloc));
+    sa->data = xzrealloc(sa->data,
+                         sizeof(char *) * sa->alloc,
+                         sizeof(char *) * newalloc);
     sa->alloc = newalloc;
 }
 
@@ -172,8 +173,14 @@ EXPORTED void strarray_cat(strarray_t *dest, const strarray_t *src)
 
 EXPORTED int strarray_add(strarray_t *sa, const char *s)
 {
+    return strarray_addm(sa, xstrdupnull(s));
+}
+
+EXPORTED int strarray_addm(strarray_t *sa, char *s)
+{
     int pos = strarray_find(sa, s, 0);
-    if (pos < 0) pos = strarray_append(sa, s);
+    if (pos < 0) pos = strarray_appendm(sa, s);
+    else free(s);
     return pos;
 }
 
@@ -438,6 +445,8 @@ EXPORTED void strarray_uniq(strarray_t *sa)
 static int strarray_findg(const strarray_t *sa, const char *match, int starting,
                           int (*compare)(const char *, const char *))
 {
+    if (!sa) return -1;
+
     int i;
 
     for (i = starting ; i < sa->count ; i++)
@@ -461,7 +470,7 @@ EXPORTED int strarray_intersect(const strarray_t *sa, const strarray_t *sb)
     /* XXX O(n^2)... but we don't have a proper set type */
     int i;
     for (i = 0; i < sa->count; i++)
-        if (strarray_find(sb, strarray_nth(sa, i), 0) >= 0)
+        if (strarray_contains(sb, strarray_nth(sa, i)))
             return 1;
     return 0;
 }
@@ -471,7 +480,7 @@ EXPORTED int strarray_intersect_case(const strarray_t *sa, const strarray_t *sb)
     /* XXX O(n^2)... but we don't have a proper set type */
     int i;
     for (i = 0; i < sa->count; i++)
-        if (strarray_find_case(sb, strarray_nth(sa, i), 0) >= 0)
+        if (strarray_contains_case(sb, strarray_nth(sa, i)))
             return 1;
     return 0;
 }

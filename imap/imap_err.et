@@ -56,6 +56,12 @@ ec IMAP_SYS_ERROR,
 ec IMAP_NOSPACE,
    "mail system storage has been exceeded"
 
+ec IMAP_LIMIT_USER,
+   "Too many connections from this user"
+
+ec IMAP_LIMIT_HOST,
+   "Too many connections from this host"
+
 ec IMAP_PERMISSION_DENIED,
    "Permission denied"
 
@@ -64,6 +70,19 @@ ec IMAP_QUOTA_EXCEEDED,
 
 ec IMAP_MESSAGE_TOO_LARGE,
    "Message size exceeds fixed limit"
+
+# Same as IMAP_MESSAGE_TOO_LARGE, but with TOOBIG response code
+ec IMAP_MESSAGE_TOOBIG,
+   "[TOOBIG] Message size exceeds fixed limit"
+
+ec IMAP_ARGS_TOO_LARGE,
+   "[TOOBIG] Command arguments total size exceeds fixed limit"
+
+ec IMAP_LITERAL_TOO_LARGE,
+   "[TOOBIG] Literal size exceeds fixed limit"
+
+ec IMAP_LITERAL_MINUS_TOO_LARGE,
+   "[TOOBIG] Non-synchronizing literal size exceeds 4K"
 
 ec IMAP_USERFLAG_EXHAUSTED,
    "Too many user flags in mailbox"

@@ -66,6 +66,7 @@
 #include "charset.h"
 #include "cyr_lock.h"
 #include "gmtoff.h"
+#include "haproxy.h"
 #include "iptostring.h"
 #include "global.h"
 #include "ical_support.h"
@@ -112,10 +113,13 @@ EXPORTED const char *config_statuscache_db;
 HIDDEN const char *config_userdeny_db;
 EXPORTED const char *config_zoneinfo_db;
 EXPORTED const char *config_conversations_db;
-EXPORTED const char *config_backup_db;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
 EXPORTED size_t config_search_maxsize;
+EXPORTED int config_httpprettytelemetry;
+EXPORTED int config_take_globallock;
+EXPORTED char *config_skip_userlock;
+EXPORTED int haproxy_protocol = 0;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -182,6 +186,21 @@ static void cyrus_modules_done()
     }
 }
 
+static void debug_toggled(void)
+{
+    int logmask = setlogmask(0); /* gets the current log mask */
+
+    if (config_debug)
+        logmask |= LOG_MASK(LOG_DEBUG);
+    else
+        logmask &= ~LOG_MASK(LOG_DEBUG);
+
+    syslog(LOG_INFO, "debug logging turned %s",
+                     config_debug ? "on" : "off");
+
+    setlogmask(logmask);
+}
+
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
 EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
@@ -237,6 +256,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
     }
 
+    /* allow toggleable debug logging */
+    config_toggle_debug_cb = &debug_toggled;
+
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
 
@@ -264,10 +286,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         openlog(ident_buf, syslog_opts, facnum);
     }
     /* Do not free ident_buf, syslog needs it for the life of this process! */
-
-    /* allow debug logging */
-    if (!config_debug)
-        setlogmask(~LOG_MASK(LOG_DEBUG));
 
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
@@ -325,7 +343,10 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
 
-    config_search_maxsize = 1024 * config_getint(IMAPOPT_SEARCH_MAXSIZE);
+    /* Configure HTTP */
+    config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
+
+    config_search_maxsize = config_getbytesize(IMAPOPT_SEARCH_MAXSIZE, 'K');
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */
@@ -342,7 +363,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         config_userdeny_db = config_getstring(IMAPOPT_USERDENY_DB);
         config_zoneinfo_db = config_getstring(IMAPOPT_ZONEINFO_DB);
         config_conversations_db = config_getstring(IMAPOPT_CONVERSATIONS_DB);
-        config_backup_db = config_getstring(IMAPOPT_BACKUP_DB);
 
         /* configure libcyrus as needed */
         libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
@@ -397,10 +417,23 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         debug_locks_longer_than = atof(locktime);
     }
 
+    const char *locked_user = getenv("CYRUS_HAVELOCK_USER");
+    if (locked_user) {
+        config_skip_userlock = xstrdup(locked_user);
+    }
+
+    const char *locked_global = getenv("CYRUS_HAVELOCK_GLOBAL");
+    config_take_globallock = config_getswitch(IMAPOPT_GLOBAL_LOCK);
+    if (locked_global && config_parse_switch(locked_global)) {
+        config_take_globallock = 0;
+    }
+
 #ifdef HAVE_ICAL
     /* Initialize libical */
     ical_support_init();
 #endif
+
+    register_mboxgroups_cb(mboxlist_lookup_usergroups);
 
     return 0;
 }
@@ -788,6 +821,8 @@ EXPORTED void cyrus_done(void)
 
     if (!cyrus_init_nodb)
         libcyrus_done();
+
+    xzfree(config_skip_userlock);
 }
 
 /*
@@ -829,7 +864,7 @@ EXPORTED int shutdown_file(char *buf, int size)
         }
     }
 
-    free(shutdownfilename);
+    xzfree(shutdownfilename);
 
     if (!buf) {
         buf = tmpbuf;
@@ -910,107 +945,7 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
 
 EXPORTED int capa_is_disabled(const char *str)
 {
-    if (!suppressed_capabilities) return 0;
-
-    return (strarray_find_case(suppressed_capabilities, str, 0) >= 0);
-}
-
-
-/* Find a message-id looking thingy in a string.  Returns a pointer to the
- * alloc'd id and the remaining string is returned in the **loc parameter.
- *
- * This is a poor-man's way of finding the message-id.  We simply look for
- * any string having the format "< ... @ ... >" and assume that the mail
- * client created a properly formatted message-id.
- */
-#define MSGID_SPECIALS "<> @\\"
-
-EXPORTED char *find_msgid(char *str, char **rem)
-{
-    char *msgid, *src, *dst, *cp;
-
-    if (!str) return NULL;
-
-    msgid = NULL;
-    src = str;
-
-    /* find the start of a msgid (don't go past the end of the header) */
-    while ((cp = src = strpbrk(src, "<\r")) != NULL) {
-
-        /* check for fold or end of header
-         *
-         * Per RFC 2822 section 2.2.3, a long header may be folded by
-         * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
-         * Any other CRLF is the end of the header.
-         */
-        if (*cp++ == '\r') {
-            if (*cp++ == '\n' && !(*cp == ' ' || *cp == '\t')) {
-                /* end of header, we're done */
-                break;
-            }
-
-            /* skip fold (or junk) */
-            src++;
-            continue;
-        }
-
-        /* see if we have (and skip) a quoted localpart */
-        if (*cp == '\"') {
-            /* find the endquote, making sure it isn't escaped */
-            do {
-                ++cp; cp = strchr(cp, '\"');
-            } while (cp && *(cp-1) == '\\');
-
-            /* no endquote, so bail */
-            if (!cp) {
-                src++;
-                continue;
-            }
-        }
-
-        /* find the end of the msgid */
-        if ((cp = strchr(cp, '>')) == NULL)
-            return NULL;
-
-        /* alloc space for the msgid */
-        dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
-
-        *dst++ = *src++;
-
-        /* quoted string */
-        if (*src == '\"') {
-            src++;
-            while (*src != '\"') {
-                if (*src == '\\') {
-                    src++;
-                }
-                *dst++ = *src++;
-            }
-            src++;
-        }
-        /* atom */
-        else {
-            while (!strchr(MSGID_SPECIALS, *src))
-                *dst++ = *src++;
-        }
-
-        if (*src != '@' || *(dst-1) == '<') continue;
-        *dst++ = *src++;
-
-        /* domain atom */
-        while (!strchr(MSGID_SPECIALS, *src))
-            *dst++ = *src++;
-
-        if (*src != '>' || *(dst-1) == '@') continue;
-        *dst++ = *src++;
-        *dst = '\0';
-
-        if (rem) *rem = src;
-        return msgid;
-    }
-
-    if (msgid) free(msgid);
-    return NULL;
+    return strarray_contains_case(suppressed_capabilities, str);
 }
 
 /*
@@ -1021,13 +956,14 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
 {
 #define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
     socklen_t salen;
-    struct sockaddr_storage localaddr, remoteaddr;
+    struct sockaddr_storage localaddr = { 0 }, remoteaddr = { 0 };
     struct sockaddr *localsock = (struct sockaddr *)&localaddr;
     struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
     static struct buf clientbuf = BUF_INITIALIZER;
     static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
     char hbuf[NI_MAXHOST];
     int niflags;
+    int r = 0;
 
     buf_reset(&clientbuf);
     *localip = *remoteip = NULL;
@@ -1035,7 +971,16 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
     /* determine who we're talking to */
 
     salen = sizeof(struct sockaddr_storage);
-    if (getpeername(s, remotesock, &salen) == 0 &&
+
+    if (haproxy_protocol && haproxy_read_hdr(s, localsock, remotesock) != 0) {
+        fatal("unable to read HAProxy protocol header", EX_IOERR);
+    }
+
+    if (remotesock->sa_family == PF_UNSPEC) {
+        r = getpeername(s, remotesock, &salen);
+    }
+
+    if (r == 0 &&
         (remotesock->sa_family == AF_INET ||
          remotesock->sa_family == AF_INET6)) {
         /* connected to an internet socket */
@@ -1056,7 +1001,12 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
         buf_printf(&clientbuf, "[%s]", hbuf);
 
         salen = sizeof(struct sockaddr_storage);
-        if (getsockname(s, localsock, &salen) == 0) {
+
+        if (localsock->sa_family == PF_UNSPEC) {
+            r = getsockname(s, localsock, &salen);
+        }
+
+        if (r == 0) {
             /* set the ip addresses here */
             if (iptostring(localsock, salen,
                           lipbuf, sizeof(lipbuf)) == 0) {
@@ -1070,7 +1020,7 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
             fatal("can't get local addr", EX_SOFTWARE);
         }
     } else {
-        /* we're not connected to a internet socket! */
+        /* we're not connected to an internet socket! */
         buf_setcstr(&clientbuf, UNIX_SOCKET);
     }
 

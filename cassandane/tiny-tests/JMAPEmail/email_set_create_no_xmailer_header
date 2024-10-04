@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_no_xmailer_header
+  : needs_component_jmap {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    email1 => {
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        to            => [ { email => 'test@example.com' } ],
+                        subject       => 'test',
+                        bodyStructure => {
+                            type   => 'text/plain',
+                            partId => 'part1',
+                        },
+                        bodyValues => {
+                            part1 => {
+                                value => 'test',
+                            },
+                        },
+                    },
+                },
+            },
+            'R1'
+        ],
+        [ 'Email/get', { ids => ['#email1'], properties => ['header:x-mailer'] }, 'R2' ],
+    ]);
+
+    $self->assert_not_null($res->[1][1]{list}[0]{id});
+    $self->assert_null($res->[1][1]{list}[0]{'header:x-mailer'});
+}

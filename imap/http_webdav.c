@@ -284,6 +284,7 @@ struct namespace_t namespace_drive = {
         { &meth_proppatch,      &webdav_params },      /* PROPPATCH    */
         { &meth_put,            &webdav_params },      /* PUT          */
         { &meth_report,         &webdav_params },      /* REPORT       */
+        { NULL,                 NULL },                /* SEARCH       */
         { &meth_trace,          &webdav_parse_path },  /* TRACE        */
         { NULL,                 NULL },                /* UNBIND       */
         { &meth_unlock,         &webdav_params }       /* UNLOCK       */
@@ -321,11 +322,12 @@ static int my_webdav_auth(const char *userid)
     }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
+    struct mboxlock *namespacelock = NULL;
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
     int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        struct mboxlock *namespacelock = user_namespacelock(userid);
+        namespacelock = user_namespacelock(userid);
         // did we lose the race?  Nothing to do!
         r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
         if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
@@ -341,7 +343,6 @@ static int my_webdav_auth(const char *userid)
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             mboxlist_entry_free(&mbentry);
-            mboxname_release(&namespacelock);
             goto done;
         }
         mboxlist_entry_free(&mbentry);
@@ -360,14 +361,23 @@ static int my_webdav_auth(const char *userid)
         else {
             syslog(LOG_ERR, "could not autoprovision DAV drive for userid %s: %s",
                    userid, error_message(r));
+            if (r == IMAP_INVALID_USER) {
+                /* We successfully authenticated, but don't have a user INBOX.
+                   Assume that the user has yet to be fully provisioned,
+                   or the user is being renamed.
+                */
+                r = HTTP_UNAVAILABLE;
+            }
+            else {
+                r = HTTP_SERVER_ERROR;
+            }
         }
-
-        mboxname_release(&namespacelock);
     }
 
  done:
+    mboxname_release(&namespacelock);
     mbname_free(&mbname);
-    return 0;
+    return r;
 }
 
 
@@ -504,8 +514,10 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     if (httpd_extradomain) {
         /* not allowed to be cross domain */
         if (mbname_localpart(mbname) &&
-            strcmpsafe(mbname_domain(mbname), httpd_extradomain))
+            strcmpsafe(mbname_domain(mbname), httpd_extradomain)) {
+            mbname_free(&mbname);
             return HTTP_NOT_FOUND;
+        }
         mbname_set_domain(mbname, NULL);
     }
 
@@ -584,7 +596,7 @@ static int webdav_get(struct transaction_t *txn,
         /* Send HTML with davmount link */
         buf_reset(body);
         buf_printf_markup(body, level, HTML_DOCTYPE);
-        buf_printf_markup(body, level++, "<html>");
+        buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(body, level++, "<head>");
         buf_printf_markup(body, level, "<title>%s</title>", txn->req_tgt.path);
         buf_printf_markup(body, --level, "</head>");

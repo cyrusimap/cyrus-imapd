@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_specialuse
+    :min_version_3_1
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing the \":specialuse\" argument";
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog $self, "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "special-use"];
+fileinto :specialuse "\\\\Junk" "$missfolder";
+EOF
+    );
+
+    xlog $self, "Create the hit folder";
+    my $talk = $self->{store}->get_client();
+    $talk->create($hitfolder, "(USE (\\Junk))");
+
+    xlog $self, "Deliver a message now that the folder exists";
+    my $msg = $self->{gen}->generate(subject => "msg1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it";
+    $talk->select($hitfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}

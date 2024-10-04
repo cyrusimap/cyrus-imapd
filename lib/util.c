@@ -78,6 +78,7 @@
 #include "util.h"
 #include "assert.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif
@@ -350,6 +351,13 @@ EXPORTED int strcasecmpsafe(const char *a, const char *b)
                       (b == NULL ? "" : b));
 }
 
+EXPORTED int strncasecmpsafe(const char *a, const char *b, size_t n)
+{
+    return strncasecmp((a == NULL ? "" : a),
+                       (b == NULL ? "" : b),
+                       n);
+}
+
 /* in which NULL is NOT equal to "" */
 EXPORTED int strcmpnull(const char *a, const char *b)
 {
@@ -472,7 +480,7 @@ EXPORTED int create_tempfile(const char *path)
     pattern = strconcat(path, "/cyrus_tmpfile_XXXXXX", (char *)NULL);
 
     fd = mkstemp(pattern);
-    if (fd >= 0 && unlink(pattern) == -1) {
+    if (fd >= 0 && xunlink(pattern) == -1) {
         close(fd);
         fd = -1;
     }
@@ -563,7 +571,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     if (!nolink) {
         if (link(from, to) == 0) return 0;
         if (errno == EEXIST) {
-            if (unlink(to) == -1) {
+            if (xunlink(to) == -1) {
                 xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
                                  "filename=<%s>", to);
                 return -1;
@@ -611,7 +619,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         xsyslog(LOG_ERR, "IOERROR: retry_write failed",
                          "filename=<%s>", to);
         r = -1;
-        unlink(to);  /* remove any rubbish we created */
+        xunlink(to);  /* remove any rubbish we created */
         goto done;
     }
 
@@ -670,7 +678,7 @@ EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
 
     if (!r && (flags & COPYFILE_RENAME)) {
         /* remove the original file if the copy succeeded */
-        unlink(from);
+        xunlink(from);
     }
 
     return r;
@@ -1112,6 +1120,24 @@ EXPORTED const char *buf_cstring(const struct buf *buf)
     return buf->s;
 }
 
+EXPORTED const char *buf_cstringnull(const struct buf *buf)
+{
+    if (!buf->s) return NULL;
+    return buf_cstring(buf);
+}
+
+EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
+{
+    if (!buf->len) return NULL;
+    return buf_cstring(buf);
+}
+
+EXPORTED const char *buf_cstring_or_empty(const struct buf *buf)
+{
+    if (!buf->s) return "";
+    return buf_cstring(buf);
+}
+
 EXPORTED char *buf_newcstring(struct buf *buf)
 {
     char *ret = xstrdup(buf_cstring(buf));
@@ -1126,18 +1152,6 @@ EXPORTED char *buf_release(struct buf *buf)
     buf->s = NULL;
     buf_free(buf);
     return ret;
-}
-
-EXPORTED const char *buf_cstringnull(const struct buf *buf)
-{
-    if (!buf->s) return NULL;
-    return buf_cstring(buf);
-}
-
-EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
-{
-    if (!buf->len) return NULL;
-    return buf_cstring(buf);
 }
 
 EXPORTED char *buf_releasenull(struct buf *buf)
@@ -1354,10 +1368,10 @@ EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
     va_end(args);
 }
 
-static void buf_replace_buf(struct buf *buf,
-                            size_t offset,
-                            size_t length,
-                            const struct buf *replace)
+EXPORTED void buf_replace_buf(struct buf *buf,
+                              size_t offset,
+                              size_t length,
+                              const struct buf *replace)
 {
     if (offset > buf->len) return;
     if (offset + length > buf->len)
@@ -1772,6 +1786,17 @@ EXPORTED int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
     return p-hex;
 }
 
+EXPORTED int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags)
+{
+    size_t seplen = _BH_GETSEP(flags) && binlen ? binlen - 1 : 0;
+    size_t newlen = hex->len + binlen * 2 + seplen;
+    buf_ensure(hex, newlen - hex->len + 1);
+    int r = bin_to_hex(bin, binlen, hex->s + hex->len, flags);
+    buf_truncate(hex, newlen);
+    buf_cstring(hex);
+    return r;
+}
+
 EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
 {
     uint16_t *p = (void *)hex;
@@ -1781,6 +1806,16 @@ EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
         *p++ = lchexchars[*v++];
     hex[binlen*2] = '\0';
     return 2 * binlen;
+}
+
+EXPORTED int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen)
+{
+    size_t newlen = hex->len + 2 * binlen;
+    buf_ensure(hex, newlen - hex->len + 1);
+    int r = bin_to_lchex(bin, binlen, hex->s + hex->len);
+    buf_truncate(hex, newlen);
+    buf_cstring(hex);
+    return r;
 }
 
 EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
@@ -1808,6 +1843,25 @@ EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
     }
 
     return (unsigned char *)v - (unsigned char *)bin;
+}
+
+EXPORTED int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen)
+{
+    if (hex == NULL)
+        return -1;
+    if (hexlen == 0)
+        hexlen = strlen(hex);
+    if (hexlen % 2)
+        return -1;
+
+    size_t newlen = bin->len + hexlen / 2;
+    buf_ensure(bin, newlen - bin->len + 1);
+    int r = hex_to_bin(hex, hexlen, bin->s + bin->len);
+    if (r >= 0) {
+        buf_truncate(bin, newlen);
+        buf_cstring(bin);
+    }
+    return r;
 }
 
 #ifdef HAVE_ZLIB
@@ -2131,4 +2185,11 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
     syslog(priority, "%s", buf_cstring(&buf));
     buf_free(&buf);
     errno = saved_errno;
+}
+
+EXPORTED char *modseqtoa(modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    return buf_release(&buf);
 }

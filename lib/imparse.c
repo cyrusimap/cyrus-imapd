@@ -41,6 +41,7 @@
  */
 
 #include <config.h>
+#include <errno.h>
 #include <stdio.h>
 
 #include "imparse.h"
@@ -213,4 +214,46 @@ EXPORTED int imparse_isnumber(const char *s)
         if (!Uisdigit(*s)) return 0;
     }
     return 1;
+}
+
+/*
+ * Parse a range from the string starting at the pointer pointed to by 's'.
+ * and populate the structure in the pointer at 'range'.
+ * Returns 0 on success, and non-zero on failure.
+ */
+EXPORTED int imparse_range(char *s, range_t *range)
+{
+    if (*s == '-') {
+        range->is_last = 1;
+        s++;
+    }
+    if (!Uisdigit(*s)) return -1;
+
+    errno = 0;
+    range->low = strtoul(s, &s, 10);
+    if (!range->low || range->low > UINT32_MAX || errno || *s != ':') {
+        errno = 0;
+        return -1;
+    }
+
+    if (*++s == '-') {
+        if (!range->is_last) return -1;
+        s++;
+    }
+    if (!Uisdigit(*s)) return -1;
+
+    range->high = strtoul(s, &s, 10);
+    if (!range->high || range->high > UINT32_MAX  || errno || *s) {
+        errno = 0;
+        return -1;
+    }
+
+    if (range->low > range->high) {
+        unsigned long n = range->high;
+
+        range->high = range->low;
+        range->low = n;
+    }
+
+    return 0;
 }

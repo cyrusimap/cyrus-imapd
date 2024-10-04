@@ -62,6 +62,7 @@
 # endif
 #endif
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,9 +84,6 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-
-extern int optind;
-extern char *optarg;
 
 /* current namespace */
 static struct namespace cyr_ls_namespace;
@@ -129,7 +127,7 @@ static int print_name(const char *name, int utf8)
 
     if (utf8) {
         charset_t imaputf7 = charset_lookupname("imap-mailbox-name");
-        utf8name = charset_to_utf8(name, strlen(name), imaputf7, ENCODING_NONE);
+        utf8name = charset_to_utf8cstr(name, strlen(name), imaputf7, ENCODING_NONE);
         name = utf8name;
     }
 
@@ -183,7 +181,10 @@ static void long_list(struct stat *statp)
 
     strftime(datestr, 13, datefmt, localtime(&(statp->st_ctime)));
 
-    printf("%c%c%c%c%c%c%c%c%c%c %" PRIuMAX " %-8s %-8s % 10ld %s ",
+    /* XXX statp->st_size should use OFF_T_FMT not PRIi64, but our FMT
+     * XXX macros don't allow setting flags
+     */
+    printf("%c%c%c%c%c%c%c%c%c%c %" PRIuMAX " %-8s %-8s % 10" PRIi64 " %s ",
            S_ISDIR(statp->st_mode) ? 'd' : '-',
            (statp->st_mode & S_IRUSR) ? 'r' : '-',
            (statp->st_mode & S_IWUSR) ? 'w' : '-',
@@ -196,7 +197,7 @@ static void long_list(struct stat *statp)
            (statp->st_mode & S_IXOTH) ? 'x' : '-',
            (uintmax_t) statp->st_nlink, // int size differs by platform
            pwd->pw_name, grp->gr_name,
-           statp->st_size, datestr);
+           (int64_t) statp->st_size, datestr);
 }
 
 struct list_opts {
@@ -350,12 +351,28 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
     int is_path = 0;
 
+    /* keep this in alphabetical order */
+    static const char short_options[] = "17C:Rilmp";
+
+    static const struct option long_options[] = {
+        { "one-per-line", no_argument, NULL, '1' },
+        { "no-utf8", no_argument, NULL, '7' }, /* XXX undocumented */
+        /* n.b. no long option for -C */
+        { "recursive", no_argument, NULL, 'R' },
+        { "long", no_argument, NULL, 'l' },
+        { "metadata", no_argument, NULL, 'm' },
+        { "path", no_argument, NULL, 'p' }, /* XXX undocumented */
+        { 0, 0, 0, 0 },
+    };
+
     // capture options
     struct list_opts opts =
         { 1 /* default to UTF8 */, 0, 0, 0, 0,
           isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
 
-    while ((opt = getopt(argc, argv, "C:7milR1p")) != EOF) {
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -401,7 +418,8 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "cyr_ls", 0, 0);
 
 
-    r = mboxname_init_namespace(&cyr_ls_namespace, 1);
+    r = mboxname_init_namespace(&cyr_ls_namespace,
+                                NAMESPACE_OPTION_ADMIN | NAMESPACE_OPTION_UTF8);
     if (r) {
         fatal(error_message(r), -1);
     }
@@ -411,12 +429,7 @@ int main(int argc, char **argv)
     r = IMAP_MAILBOX_NONEXISTENT;
     if (!is_path && (optind != argc)) {
         /* Is this an actual mailbox name */
-        if (opts.utf8) {
-            mbname = mbname_from_extnameUTF8(argv[optind], &cyr_ls_namespace, "cyrus");
-        }
-        else {
-            mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
-        }
+        mbname = mbname_from_extname(argv[optind], &cyr_ls_namespace, "cyrus");
 
         r = mboxlist_lookup_allow_all(mbname_intname(mbname), NULL, NULL);
     }

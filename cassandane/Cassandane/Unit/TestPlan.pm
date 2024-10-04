@@ -72,24 +72,44 @@ sub _is_allowed
     # Rules are:
     # deny if method has been explicitly denied
     return 0 if $self->{denied}->{$name};
+
+    # deny if test name matches any denied pattern
+    $name =~ $_ && return 0 for @{ $self->{denied_patterns} // [] };
+
     # allow if method has been explicitly allowed
     return 1 if $self->{allowed}->{$name};
+
+    # allow if test name matches any allowed patterns
+    my @allow_patterns = @{ $self->{allowed_patterns} // []};
+    $name =~ $_ && return 1 for @allow_patterns;
+
     # deny if anything is explicitly allowed
-    return 0 if scalar keys %{$self->{allowed}};
+    return 0 if %{$self->{allowed}} || @allow_patterns;
+
     # finally, allow
     return 1;
 }
 
 sub _deny
 {
-    my ($self, $name) = @_;
-    $self->{denied}->{$name} = 1;
+    my ($self, $test) = @_;
+    if (ref $test) {
+        push @{ $self->{denied_patterns} }, $test;
+    } else {
+        $self->{denied}->{$test} = 1;
+    }
+    return;
 }
 
 sub _allow
 {
-    my ($self, $name) = @_;
-    $self->{allowed}->{$name} = 1;
+    my ($self, $test) = @_;
+    if (ref $test) {
+        push @{ $self->{allowed_patterns} }, $test;
+    } else {
+        $self->{allowed}->{$test} = 1;
+    }
+    return;
 }
 
 package Cassandane::Unit::Worker;
@@ -461,6 +481,7 @@ sub add_pass
 }
 
 package Cassandane::Unit::TestPlan;
+use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
@@ -480,6 +501,7 @@ sub new
         log_directory => delete $opts{log_directory},
         maxworkers => delete $opts{maxworkers} || 1,
         skip_slow => delete $opts{skip_slow} // 1,
+        slow_only => delete $opts{slow_only} // 0,
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
@@ -569,8 +591,16 @@ sub _parse_test_spec
             my $test;
             ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
             next unless defined $test;
-            return ($neg, 'f', "$fpath.pm", $test)
-                if ( -f "$fpath.pm" );
+
+            if ( -f "$fpath.pm" ) {
+                if ($test =~ /\*/) {
+                    my @hunks = split /\*+/, $test, -1;
+                    my $regex = join q{.*}, map {; quotemeta } @hunks;
+                    return ($neg, 'f', "$fpath.pm", qr{\A$regex\z});
+                } else {
+                    return ($neg, 'f', "$fpath.pm", $test)
+                }
+            }
         }
     }
 
@@ -622,9 +652,25 @@ sub schedule
         my ($neg, $type, $path, $test) = _parse_test_spec($name);
 
         # slow test explicitly requested by name, so turn off the filter
-        if (defined $test and $test =~ m/_slow$/ and not $neg) {
+        if (defined $test
+            and ! ref $test
+            and $test =~ m/_slow$/
+            and ! $neg
+            and $self->{skip_slow})
+        {
             xlog "$name was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
+        }
+
+        # non-slow test explicitly requested by name, so turn off slow-only
+        if (defined $test
+            and ! ref $test
+            and $test !~ m/_slow$/
+            and ! $neg
+            and $self->{slow_only})
+        {
+            xlog "$name was explicitly requested. Enabling regular tests!";
+            $self->{slow_only} = 0;
         }
 
         if ($type eq 'd')
@@ -645,6 +691,87 @@ sub schedule
     }
 }
 
+sub check_sanity
+{
+    my ($self) = @_;
+
+    # collect tiny-tests directories that are used by test modules
+    my %used_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            return if not -f $fname;
+            return if $fname !~ m/\.pm$/;
+
+            open my $fh, '<', $fname or die "open $fname: $!";
+            while (<$fh>) {
+                if (m{^\s*use\s+Cassandane::Tiny::Loader\s*
+                      (['"])
+                      (.*?)
+                      \1
+                      \s*;\s*$
+                    }x)
+                {
+                    push @{$used_tt_dirs{$2}}, $fname;
+                }
+            }
+            close $fh;
+        },
+    }, @test_roots);
+
+    # collect tiny-tests directories that exist on disk
+    my %real_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            my ($tt, $suite, $test) = split q{/}, $fname, 3;
+            return if not $suite;
+
+            if (not $test) {
+                # explicit initialisation to detect directories with no files
+                $real_tt_dirs{"$tt/$suite"} //= 0;
+                return;
+            }
+
+            $real_tt_dirs{"$tt/$suite"} ++;
+        },
+    }, 'tiny-tests') if -d 'tiny-tests';
+
+    # whinge about bad test modules
+    while (my ($tt, $modules) = each %used_tt_dirs) {
+        # XXX this one might not be an error if we start doing this
+        # XXX intentionally, perhaps to run the same group of tests under
+        # XXX different setups or configurations
+        die "@{$modules} share tiny-tests directory $tt"
+            if scalar @{$modules} > 1;
+
+        die "$modules->[0] uses nonexistent tiny-tests directory $tt"
+            if not exists $real_tt_dirs{$tt};
+    }
+
+    # whinge about orphaned directories
+    while (my ($tt, $ntests) = each %real_tt_dirs) {
+        die "$tt directory is not used by any tests"
+            if not $used_tt_dirs{$tt};
+
+        die "$tt directory contains no tests"
+            if not $ntests;
+    }
+
+    # whinge about 'tiny-tests' directories in unexpected places
+    # start searching in the parent directory so that we're checking the
+    # whole cyrus-imapd repository
+    my @unexpected_tt_dirs = grep {
+        chomp;
+        $_ ne '../cassandane/tiny-tests';
+    } qx{find .. -type d -name tiny-tests};
+    die "unexpected extra tiny-tests directories: @unexpected_tt_dirs"
+        if @unexpected_tt_dirs;
+}
 
 #
 # Get the entire expanded schedule as specific {suite,testname} tuples,
@@ -826,10 +953,20 @@ sub _finish_workitem
     my ($self, $witem, $result, $runner) = @_;
     my ($suite, $test) = $self->_get_suite_and_test($witem);
 
+    # The test was actually started earlier by _run_workitem, but its
+    # start_test event wasn't sent.  It might have got swallowed due to
+    # the output format listeners being removed in the workitem handling.
+    # Send the event again now, to make sure the formatters actually get
+    # it...
     $result->start_test($test);
-    if ($runner->can('fake_start_time'))
+    # But! If they're computing their own start time based on this event
+    # they'll get it wrong.  We know the real start time, so tell the
+    # formatter to use that instead.
+    if ($runner->can('tell_formatters'))
     {
-        $runner->fake_start_time($test, $witem->{start_time});
+        $runner->tell_formatters('fake_start_time',
+                                 $test,
+                                 $witem->{start_time});
     }
 
     $test->annotate_from_file($witem->{logfile});

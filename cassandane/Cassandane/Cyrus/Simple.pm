@@ -40,11 +40,14 @@
 package Cassandane::Cyrus::Simple;
 use strict;
 use warnings;
+use Data::Dumper;
 use DateTime;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+
+$Data::Dumper::Sortkeys = 1;
 
 sub new
 {
@@ -88,6 +91,52 @@ sub test_append
     xlog $self, "generating message D";
     $exp{D} = $self->make_message("Message D");
     $self->check_messages(\%exp);
+}
+
+sub test_appendlimit_default
+    :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $capa = $imaptalk->capability();
+    my @appendlimits = grep { m/^appendlimit/ } keys %{$capa};
+
+    # should be only one appendlimit
+    $self->assert_num_equals(1, scalar @appendlimits);
+
+    # we do not support per-mailbox limits, so it must have a value too
+    $self->assert_matches(qr{^appendlimit=\d+$}, $appendlimits[0]);
+
+    # and since we haven't configured it, it ought to be the default
+    # value, which is BYTESIZE_UNLIMITED (2147483647).
+    $self->assert_str_equals("appendlimit=2147483647", $appendlimits[0]);
+}
+
+sub test_appendlimit_configured
+    :min_version_3_6 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $desired_limit = "52428800"; # based on known failure
+
+    $self->{instance}->{config}->set('maxmessagesize' => $desired_limit);
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $capa = $imaptalk->capability();
+    my @appendlimits = grep { m/^appendlimit/ } keys %{$capa};
+
+    # should be only one appendlimit
+    $self->assert_num_equals(1, scalar @appendlimits);
+
+    # we do not support per-mailbox limits, so it must have a value too
+    $self->assert_matches(qr{^appendlimit=\d+$}, $appendlimits[0]);
+
+    # and since we've configured it, it'd better be what we asked for!
+    $self->assert_str_equals("appendlimit=$desired_limit", $appendlimits[0]);
 }
 
 sub test_select
@@ -146,12 +195,170 @@ sub test_cmdtimer_sessionid
 
     # should have logged some timer output, which should include the sess id
     if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = grep { m/\bcmdtimer:/ } $self->{instance}->getsyslog();
-        $self->assert_num_gte(1, scalar @lines);
-        foreach my $line (@lines) {
+        # make sure that the connection is ended so that imapd reset happens
+        $imaptalk->logout();
+        undef $imaptalk;
+
+        my @lines = $self->{instance}->getsyslog();
+
+        my @timer_lines = grep { m/\bcmdtimer:/ } @lines;
+        $self->assert_num_gte(1, scalar @timer_lines);
+        foreach my $line (@timer_lines) {
             $self->assert_matches(qr/sessionid=<[^ >]+>/, $line);
         }
+
+        my (@behavior_lines) = grep { /session ended/ } @lines;
+
+        $self->assert_num_gte(1, scalar @behavior_lines);
     }
+}
+
+sub test_toggleable_debug_logging
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $config_debug = $self->{instance}->{config}->get_bool('debug', 'no');
+    my $imaptalk = $self->{store}->get_client();
+
+    # can't do anything without captured syslog
+    if (!$self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "can't examine syslog, test is useless";
+        return;
+    }
+
+    # find our imapd pid from syslog
+    my $loginpat = qr{
+        \bimap\[(\d+)\]:\slogin:
+        \s\S+\s\[[\d\.]+\]\scassandane\splaintext
+        \sUser\slogged\sin
+    }x;
+    my @logins = $self->{instance}->getsyslog($loginpat);
+    $self->assert_num_equals(1, scalar @logins);
+    $logins[0] =~ m/$loginpat/;
+    my $imapd_pid = $1;
+
+    for (1..5) {
+        $imaptalk->unselect();
+        my $res = $imaptalk->select('INBOX');
+        $self->assert_str_equals('ok',
+                                 $imaptalk->get_last_completion_response());
+
+        # this is really looking at cassandane's own injected syslog
+        # output, so it depends on the injected syslog doing the right
+        # thing with masking
+        my $selectpat = qr/open: user cassandane opened INBOX/;
+        my @lines = $self->{instance}->getsyslog($selectpat);
+        if ($config_debug) {
+            $self->assert_num_equals(1, scalar @lines);
+            $self->assert_matches(qr/imap\[$imapd_pid\]:/, $lines[0]);
+        }
+        else {
+            $self->assert_num_equals(0, scalar @lines);
+        }
+
+        $config_debug = !$config_debug;
+
+        # toggle debug logging by sending SIGUSR1
+        my $count = kill 'SIGUSR1', $imapd_pid;
+        $self->assert_num_equals(1, $count);
+
+        # we can also look for the message logged by cyrus at the
+        # time it toggles the value
+        my $statuspat = qr/debug logging turned (on|off)/;
+        @lines = $self->{instance}->getsyslog($statuspat);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/imap\[$imapd_pid\]:/, $lines[0]);
+        $lines[0] =~ $statuspat;
+        my $status = $1;
+        if ($config_debug) {
+            $self->assert_str_equals('on', $status);
+        }
+        else {
+            $self->assert_str_equals('off', $status);
+        }
+    }
+}
+
+sub test_append_binary
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mime = <<'EOF' =~ s/\n/\r\n/gr;
+To: to@local
+From: from@local
+Subject: test
+Content-Transfer-Encoding:binary
+
+test
+EOF
+
+    $imap->append("INBOX", { Binary => $mime });
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    $imap->select('INBOX');
+    my $res = $imap->fetch('1', '(BINARY[1])');
+    $self->assert_str_equals("test\r\n", $res->{1}{binary});
+}
+
+sub test_fatals_abort_enabled
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set(
+        'fatals_abort' => 'yes',
+        'prometheus_enabled' => 'no',
+    );
+    $self->_start_instances();
+
+    my $basedir = $self->{instance}->get_basedir();
+
+    # run `promstatsd -1` without having set up for prometheus, which should
+    # produce a "Prometheus metrics are not being tracked..." fatal error
+    eval {
+        $self->{instance}->run_command({ cyrus => 1 }, 'promstatsd', '-1');
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{promstatsd pid \d+\) terminated by signal 6},
+                          $e->{'-text'});
+
+    my @cores = $self->{instance}->find_cores();
+    if (@cores) {
+        # if we dumped core, there'd better only be one core file
+        $self->assert_num_equals(1, scalar @cores);
+
+        # don't barf on it existing during shutdown
+        unlink $cores[0];
+    }
+}
+
+sub test_fatals_abort_disabled
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set(
+        'fatals_abort' => 'no',
+        'prometheus_enabled' => 'no',
+    );
+    $self->_start_instances();
+
+    my $basedir = $self->{instance}->get_basedir();
+
+    # run `promstatsd -1` without having set up for prometheus, which should
+    # produce a "Prometheus metrics are not being tracked..." fatal error
+    eval {
+        $self->{instance}->run_command({ cyrus => 1 }, 'promstatsd', '-1');
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{promstatsd pid \d+\) exited with code 78},
+                          $e->{'-text'});
+
+    # post-test sanity checks will complain for us if a core was left behind
 }
 
 1;

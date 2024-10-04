@@ -1,0 +1,12 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_caldavcreate
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+}

@@ -73,6 +73,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -88,6 +89,30 @@ static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
 
 static jmap_method_t jmap_sieve_methods_standard[] = {
+    {
+        "SieveScript/get",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_get,
+        /*flags*/0
+    },
+    {
+        "SieveScript/set",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "SieveScript/query",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_query,
+        /*flags*/0
+    },
+    {
+        "SieveScript/validate",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_validate,
+        JMAP_NEED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
@@ -127,22 +152,36 @@ static jmap_method_t jmap_sieve_methods_nonstandard[] = {
 
 HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_sieve_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
+    if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+        xsyslog(LOG_WARNING,
+                "can't use home directories -- disabling module", NULL);
+        return;
     }
 
+    if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
+        xsyslog(LOG_WARNING,
+                "sievedir option is not defined or invalid -- disabling module",
+                NULL);
+        return;
+    }
+
+    jmap_add_methods(jmap_sieve_methods_standard, settings);
+
     json_object_set_new(settings->server_capabilities,
-            JMAP_SIEVE_EXTENSION, json_object());
+                        JMAP_URN_SIEVE,
+                        json_pack("{s:s+}",
+                                  "implementation",
+                                  "Cyrus JMAP ", CYRUS_VERSION));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_sieve_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        json_object_set_new(settings->server_capabilities,
+                            JMAP_SIEVE_EXTENSION, json_object());
+
+        jmap_add_methods(jmap_sieve_methods_nonstandard, settings);
     }
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
-    maxscriptsize = config_getint(IMAPOPT_SIEVE_MAXSCRIPTSIZE) * 1024;
+    maxscriptsize = config_getbytesize(IMAPOPT_SIEVE_MAXSCRIPTSIZE, 'K');
 }
 
 HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
@@ -153,10 +192,10 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
         sieve_interp_t *interp = sieve_build_nonexec_interp();
         const strarray_t *ext = NULL;
 
-        sieve_capabilities = json_pack("{s:b s:n s:i s:I}",
-                                       "supportsTest", 1,
+        sieve_capabilities = json_pack("{s:n s:i s:i s:I}",
                                        "maxRedirects",
                                        "maxNumberScripts", maxscripts,
+                                       "maxSizeScriptName", SIEVEDIR_MAX_NAME_LEN,
                                        "maxSizeScript", maxscriptsize);
 
         if (interp && (ext = sieve_listextensions(interp))) {
@@ -186,7 +225,12 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
         if (interp) sieve_interp_free(&interp);
     }
 
-    json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
+    json_object_set(account_capabilities, JMAP_URN_SIEVE, sieve_capabilities);
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set(account_capabilities,
+                        JMAP_SIEVE_EXTENSION, sieve_capabilities);
+    }
 }
 
 static const jmap_property_t sieve_props[] = {
@@ -257,7 +301,7 @@ static int jmap_sieve_get(jmap_req_t *req)
         goto done;
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     mailbox_unlock_index(mailbox, NULL);
@@ -358,7 +402,7 @@ static const char *script_findblob(struct jmap_req *req, const char *id,
     const char *content = NULL;
     int r = IMAP_NOTFOUND;
 
-    if (id[0] == '#') {
+    if (id && id[0] == '#') {
         id = jmap_lookup_id(req, id + 1);
     }
 
@@ -383,7 +427,7 @@ static const char *script_findblob(struct jmap_req *req, const char *id,
             content += record.header_size;
 
             msgrecord_unref(&mr);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
         }
     }
 
@@ -709,7 +753,8 @@ static void set_activate(const char *id,
 }
 
 struct sieve_set_args {
-    json_t *onSuccessActivate;
+    const char *onSuccessActivate;
+    int onSuccessDeactivate;
 };
 
 static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
@@ -722,9 +767,17 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
     int r = 1;
 
     if (!strcmp(key, "onSuccessActivateScript")) {
-        if (json_is_string(arg) || json_is_null(arg))
-            set->onSuccessActivate = arg;
+        if (json_is_string(arg))
+            set->onSuccessActivate = json_string_value(arg);
+        else if (json_is_null(arg) &&
+                 jmap_is_using(req, JMAP_SIEVE_EXTENSION))
+            set->onSuccessDeactivate = 1;
         else r = 0;
+    }
+
+    else if (json_is_boolean(arg) &&
+             !strcmp(key, "onSuccessDeactivatescript")) {
+        set->onSuccessDeactivate = json_boolean_value(arg);
     }
 
     else r = 0;
@@ -736,7 +789,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
-    struct sieve_set_args sub_args = { NULL };
+    struct sieve_set_args sub_args = { NULL, 0 };
     json_t *jerr = NULL;
     struct mailbox *mailbox = NULL;
     struct sieve_db *db = NULL;
@@ -755,8 +808,8 @@ static int jmap_sieve_set(struct jmap_req *req)
     }
 
     /* Validate scriptId in onSuccessActivateScript */
-    if (JNOTNULL(sub_args.onSuccessActivate)) {
-        const char *id = json_string_value(sub_args.onSuccessActivate);
+    if (sub_args.onSuccessActivate) {
+        const char *id = sub_args.onSuccessActivate;
         int found;
 
         jmap_parser_push(&parser, "onSuccessActivateScript");
@@ -782,7 +835,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 
     if (jerr) goto done;
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
@@ -845,13 +898,14 @@ static int jmap_sieve_set(struct jmap_req *req)
         set_destroy(script_id, mailbox, db, &set);
     }
 
-    if (sub_args.onSuccessActivate &&
-        !json_object_size(set.not_created) &&
+    if (!json_object_size(set.not_created) &&
         !json_object_size(set.not_updated) &&
         !json_array_size(set.not_destroyed)) {
 
-        id = json_string_value(sub_args.onSuccessActivate);
-        set_activate(id, mailbox, db, &set);
+        if (sub_args.onSuccessActivate)
+            set_activate(sub_args.onSuccessActivate, mailbox, db, &set);
+        else if (sub_args.onSuccessDeactivate)
+            set_activate(NULL, mailbox, db, &set);
     }
 
     /* Build response */
@@ -1096,7 +1150,7 @@ static int jmap_sieve_query(jmap_req_t *req)
         }
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox);
+    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
     if (r) goto done;
 
     mailbox_unlock_index(mailbox, NULL);
@@ -1276,8 +1330,6 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
 
-    *body = NULL;
-
     if (!m->cache_full) fill_cache(m);
 
     *body = spool_getheader(m->cache, phead);
@@ -1359,7 +1411,7 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *) sc;
-    char *intname = mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
+    char *intname = mboxname_from_external(extname, sd->ns, sd->userid);
     int r = mboxlist_lookup(intname, NULL, NULL);
 
     free(intname);
@@ -1387,7 +1439,7 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
     int i, r = 1;
 
     if (extname) {
-        char *intname = mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
+        char *intname = mboxname_from_external(extname, sd->ns, sd->userid);
         struct buf attrib = BUF_INITIALIZER;
 
         annotatemore_lookup(intname, "/specialuse", sd->userid, &attrib);
@@ -1403,7 +1455,7 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
             strarray_t *haystack = strarray_split(buf_cstring(&attrib), " ", 0);
 
             for (i = 0; i < strarray_size(uses); i++) {
-                if (strarray_find_case(haystack, strarray_nth(uses, i), 0) < 0) {
+                if (!strarray_contains_case(haystack, strarray_nth(uses, i))) {
                     r = 0;
                     break;
                 }
@@ -1434,7 +1486,7 @@ static int getmetadata(void *sc, const char *extname,
     script_data_t *sd = (script_data_t *) sc;
     struct buf attrib = BUF_INITIALIZER;
     char *intname = !extname ? xstrdup("") :
-        mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
+        mboxname_from_external(extname, sd->ns, sd->userid);
     int r;
 
     if (!strncmp(keyname, "/private/", 9)) {
@@ -1719,14 +1771,14 @@ static int deleteheader(void *mc, const char *head, int index)
     json_t *args = json_object();
 
     if (index) {
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
 
         json_object_set_new(args, "index", json_integer(abs(index)));
         if (index < 0)
             json_object_set_new(args, "last", json_true());
     }
     else {
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
 
     json_array_append_new(m->actions,
@@ -1813,7 +1865,7 @@ static int snooze(void *ac,
         uint64_t t = arrayu64_nth(sn->times, i);
 
         buf_reset(sd->buf);
-        buf_printf(sd->buf, "%02lu:%02lu:%02lu",
+        buf_printf(sd->buf, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64,
                    t / 3600, (t % 3600) / 60, t % 60);
         json_array_append_new(jtimes, json_string(buf_cstring(sd->buf)));
     }
@@ -2009,7 +2061,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
         r = sieve_script_parse_string(NULL, content, &errors, &s);
         msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
 
         if (r != SIEVE_OK) {
             err = json_pack("{s:s, s:s}", "type", "invalidScript",
@@ -2111,9 +2163,11 @@ static int jmap_sieve_test(struct jmap_req *req)
             script_data_t sd =
                 { req->accountid, req->authstate, &jmap_namespace, &buf };
 
+            jmap_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
             err = NULL;
             m.actions = json_array();
             sieve_execute_bytecode(exe, interp, &sd, &m);
+            jmap_namespace.isutf8 = 0;
 
             if (err) {
                 json_object_set_new(not_completed, emailid, err);
@@ -2125,7 +2179,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
             free_msg(&m);
             msgrecord_unref(&mr);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
             if (!envelope) {
                 strarray_fini(&env_from);
                 strarray_fini(&env_to);
@@ -2161,7 +2215,7 @@ done:
     buf_free(&buf);
     if (tmpname) {
         /* Remove temp bytecode file */
-        unlink(tmpname);
+        xunlink(tmpname);
     }
     return 0;
 }

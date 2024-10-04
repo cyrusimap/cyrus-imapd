@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_get_intermediate
+    :min_version_3_1 :max_version_3_4 :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # isSeenShared property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "Create intermediate mailbox via IMAP";
+    $imap->create("INBOX.A.Z") or die;
+
+    xlog $self, "Get mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{list}});
+
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxA = $mboxByName{"A"};
+
+    $self->assert_str_equals('A', $mboxA->{name});
+    $self->assert_null($mboxA->{parentId});
+    $self->assert_null($mboxA->{role});
+    $self->assert_num_equals(0, $mboxA->{sortOrder}, 0);
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayAddItems});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayRemoveItems});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayCreateChild});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayRename});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayDelete});
+    $self->assert_num_equals(0, $mboxA->{totalEmails});
+    $self->assert_num_equals(0, $mboxA->{unreadEmails});
+    $self->assert_num_equals(0, $mboxA->{totalThreads});
+    $self->assert_num_equals(0, $mboxA->{unreadThreads});
+    $self->assert_num_equals(JSON::false, $mboxA->{isSeenShared});
+}

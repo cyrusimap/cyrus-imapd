@@ -80,8 +80,9 @@ print HFILE "#include <stdint.h>\n";
 print HFILE "\n";
 
 # prototypes
-my @opttype = ("OPT_NOTOPT","OPT_STRING","OPT_INT","OPT_SWITCH",
-               "OPT_ENUM","OPT_STRINGLIST","OPT_BITFIELD", "OPT_DURATION");
+my @opttype = ("OPT_NOTOPT", "OPT_STRING", "OPT_INT", "OPT_SWITCH",
+               "OPT_ENUM", "OPT_STRINGLIST", "OPT_BITFIELD", "OPT_DURATION",
+               "OPT_BYTESIZE");
 print HFILE "enum opttype {\n";
 while (my $opt = pop (@opttype)) {
     if ($#opttype == -1) {
@@ -309,6 +310,10 @@ while (<STDIN>) {
             $def = $use_gcc_extension
                         ? "U_CFG_V((const char *) $2)"
                         : "{(void *)($2)}";
+        } elsif ($3 eq "BYTESIZE") {
+            $def = $use_gcc_extension
+                        ? "U_CFG_V((const char *) $2)"
+                        : "{(void *)($2)}";
         } else {
             $def = $use_gcc_extension
                         ? "U_CFG_V((long) $2)"
@@ -371,7 +376,7 @@ print HFILE <<EOF
 
 union config_value {
     $dummy_field
-    const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION */
+    const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION, OPT_BYTESIZE */
     long i;             /* OPT_INT */
     long b;             /* OPT_SWITCH */
     enum enum_value e;  /* OPT_ENUM */

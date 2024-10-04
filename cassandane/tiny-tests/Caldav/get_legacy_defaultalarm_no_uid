@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_get_legacy_defaultalarm_no_uid
+    :min_version_3_9 :needs_component_jmap :MagicPlus
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $plusstore = $self->{instance}->get_service('imap'
+        )->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
+
+    xlog $self, "Pretend as if JMAP default alarm migration never happened";
+    $imap->setmetadata("#calendars.Default",
+        '/private/vendor/cmu/cyrus-jmap/defaultalerts', '');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog $self, "Create event with a VALARM having no UID and default alerts enabled";
+    my $eventUid = '4c9aff9c-91df-4859-8026-772a82f52094';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20230909T160000Z
+DURATION:PT1H
+UID:$eventUid
+SUMMARY:test
+X-JMAP-USEDEFAULTALERTS:TRUE
+BEGIN:VALARM
+DESCRIPTION:useralert
+ACTION:DISPLAY
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+    my $res = $caldav->Request('PUT',
+        "/dav/calendars/user/cassandane/Default/test.ics",
+        $ical,
+        'Content-Type' => 'text/calendar',
+        'X-Cyrus-rewrite-usedefaultalerts' => 'false',
+    );
+
+    xlog $self, "Set CalDAV default alarms with VALARM having no UID";
+    $imap->setmetadata("#calendars.Default",
+        '/shared/vendor/cmu/cyrus-httpd/' .
+        '<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime',
+        <<EOF
+BEGIN:VALARM\r
+TRIGGER:-PT1H\r
+ACTION:DISPLAY\r
+DESCRIPTION:defaultalert\r
+END:VALARM\r
+EOF
+);
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    xlog $self, "Assert VALARM in event has UID";
+    $res = $caldav->Request('GET',
+        "/dav/calendars/user/cassandane/Default/test.ics");
+
+    my $vcal = Text::VCardFast::vcard2hash($res->{content});
+    my @valarms = grep { $_->{type} eq 'valarm' }
+        @{$vcal->{objects}[0]->{objects}[0]->{objects}};
+    $self->assert_num_equals(1, scalar @valarms);
+    $self->assert_not_null($valarms[0]{properties}{uid});
+}

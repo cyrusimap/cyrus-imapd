@@ -566,10 +566,12 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
                                  "command=<%s>",
                                  cmd);
                 dbengine->sql_close(conn);
+                free(table);
                 return CYRUSDB_INTERNAL;
             }
         }
         else {
+            free(table);
             return CYRUSDB_NOTFOUND;
         }
     }
@@ -923,7 +925,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
 
     &init,
     &done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_noarchive,
     NULL,
 
@@ -939,6 +940,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 

@@ -46,8 +46,13 @@ cleanup = no
 # We skip some tests that are either long-time known failures, or
 # are brittle and fail sporadically, to keep the CI integration
 # useful.
+#
 # This list last reviewed on 2020-08-07
-suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_event
+#
+# The final three (Sieve imip and Caldav implicit allday) fail on our current
+# Docker image, and we'll remove them from here when we upgrade the Docker
+# image.
+suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_event Sieve.imip_reply_override Sieve.imip_reply_override_google Caldav.invite_switch_implicit_allday_to_dtend
 
 [valgrind]
 
@@ -56,14 +61,12 @@ suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_
 [gdb]
 
 [config]
-# need to revert the defaults for now because tests were built do old defaults.
-# remove this when they're fixed!
-unixhierarchysep = no
 zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [imaptest]
 basedir = /srv/imaptest.git
-suppress = urlauth urlauth2
+# suppress list last reviewed 2023-05-03
+suppress = urlauth2
 
 
 [caldavtester]

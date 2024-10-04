@@ -45,6 +45,7 @@ use Cwd qw(abs_path);
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::Wait;
 
 sub new
@@ -58,6 +59,7 @@ sub new
         config => $config,
         deliver => 1,
         start_instances => 0,
+        adminstore => 1,
     }, @_);
 }
 
@@ -77,14 +79,14 @@ sub start_my_instances
 {
     my ($self) = @_;
 
-    $self->{instance}->add_generic_daemon(
+    $self->{instance}->add_generic_listener(
         name => 'annotator',
         port => $self->{instance}->{config}->get('annotation_callout'),
         argv => sub {
-            my ($daemon) = @_;
+            my ($listener) = @_;
             return (
                 abs_path('utils/annotator.pl'),
-                '--port', $daemon->port(),
+                '--port', $listener->port(),
                 '--pidfile', '@basedir@/run/annotator.pid',
                 );
         });
@@ -224,14 +226,8 @@ sub test_reconstruct_after_delivery
         }, 'reconstruct', '-u', 'cassandane');
 
     # check the output
-    {
-        local $/;
-        open my $fh, '<', $out
-            or die "Cannot open $out for reading: $!";
-        $out = <$fh>;
-        close $fh;
-        xlog $self, $out;
-    }
+    $out = slurp_file($out);
+    xlog $self, $out;
 
     $self->assert_does_not_match(qr/ updating /, $out);
 }
@@ -466,6 +462,40 @@ sub test_add_annot_splitconv_rerun
     $exp{C}->set_annotation($entry, $attrib, $value1);
 
     $self->check_messages(\%exp, keyed_on => 'uid', check_guid => 0);
+}
+
+sub test_log_missing_acl
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+
+    my @testCases = ({
+        flag => '$Artisanal',
+        acl => 'lrsitne',
+        need_rights => 'w'
+    }, {
+        flag => '\Seen',
+        acl => 'lritne',
+        need_rights => 's'
+    });
+
+    foreach (@testCases) {
+        $admin->setacl("user.other", "cassandane", $_->{acl}) or die;
+
+        $self->{instance}->getsyslog();
+        $self->{store}->set_folder('Other Users.other');
+        $self->make_message("Email", body => "set_flag $_->{flag}\r\n",
+            store => $self->{store}) or die;
+        my $wantLog = "could not write flag due missing ACL: "
+                    . "flag=<\\$_->{flag}> need_rights=<$_->{need_rights}>";
+        $self->assert_syslog_matches($self->{instance}, qr{$wantLog});
+    }
 }
 
 1;

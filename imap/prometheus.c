@@ -58,6 +58,7 @@
 #include "lib/map.h"
 #include "lib/ptrarray.h"
 #include "lib/util.h"
+#include "lib/xunlink.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
@@ -126,7 +127,7 @@ static void prometheus_init(void)
         fatal("unable to register stats for prometheus", EX_CONFIG);
 
     r = cyrus_mkdir(fname, 0755);
-    if (r) return;
+    if (r) goto error;;
 
     handle = xzmalloc(sizeof(*handle));
     r = mappedfile_open(&handle->mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
@@ -162,6 +163,7 @@ error:
         free(handle);
     }
     promhandle = NULL;
+    prometheus_enabled = 0;
 }
 
 static void prometheus_done(void *rock __attribute__((unused)))
@@ -223,7 +225,7 @@ static void prometheus_done(void *rock __attribute__((unused)))
     mappedfile_unlock(promhandle->mf);
 
     /* unlink per-process stats file, we don't need it anymore */
-    r = unlink(mappedfile_fname(promhandle->mf));
+    r = xunlink(mappedfile_fname(promhandle->mf));
     if (r && errno != ENOENT) goto done;
     unlinked = 1;
 
@@ -261,7 +263,7 @@ done:
 
     /* release .doneprocs.lock */
     if (doneprocs_lock_fd != -1) {
-        unlink(doneprocs_lock_fname);
+        xunlink(doneprocs_lock_fname);
         lock_unlock(doneprocs_lock_fd, doneprocs_lock_fname);
         close(doneprocs_lock_fd);
     }
@@ -317,51 +319,50 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
 
 EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
 {
-    char *report_fname = NULL;
-    struct mappedfile *mf = NULL;
-    int r;
+    const struct {
+        int required;
+        char *fname;
+    } reports[] = {
+        { 1, FNAME_PROM_SERVICE_REPORT },
+        { 0, FNAME_PROM_USAGE_REPORT   },
+        { 0, FNAME_PROM_MASTER_REPORT  },
+    };
+    const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
+    unsigned i;
+    int r = 0;
 
     if (!prometheus_enabled) return IMAP_INTERNAL;
 
-    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
+    buf_reset(buf);
 
-    r = mappedfile_open(&mf, report_fname, 0);
-    if (r) {
+    for (i = 0; i < n_reports; i++) {
+        char *report_fname = NULL;
+        struct mappedfile *mf = NULL;
+
+        report_fname = strconcat(prometheus_stats_dir(),
+                                 reports[i].fname,
+                                 NULL);
+
+        r = mappedfile_open(&mf, report_fname, 0);
+        if (r && reports[i].required) {
+            free(report_fname);
+            return r;
+        }
+
+        r = mappedfile_readlock(mf);
+        if (!r) {
+            buf_appendmap(buf, mappedfile_base(mf), mappedfile_size(mf));
+        }
+
+        mappedfile_unlock(mf);
+        mappedfile_close(&mf);
         free(report_fname);
-        return r;
     }
 
-    r = mappedfile_readlock(mf);
-    if (!r) {
-        buf_setmap(buf, mappedfile_base(mf), mappedfile_size(mf));
-        if (mimetype)
-            *mimetype = "text/plain; version=0.0.4";
-    }
+    if (!r && mimetype)
+        *mimetype = "text/plain; version=0.0.4";
 
-    mappedfile_unlock(mf);
-    mappedfile_close(&mf);
-    free(report_fname);
-
-    if (r) return r;
-
-    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_MASTER_REPORT, NULL);
-
-    r = mappedfile_open(&mf, report_fname, 0);
-    if (r) {
-        free(report_fname);
-        return 0; /* no master.txt yet? no worries */
-    }
-
-    r = mappedfile_readlock(mf);
-    if (!r) {
-        buf_appendmap(buf, mappedfile_base(mf), mappedfile_size(mf));
-    }
-
-    mappedfile_unlock(mf);
-    mappedfile_close(&mf);
-    free(report_fname);
-
-    return 0;
+    return r;
 }
 
 EXPORTED enum prom_metric_id prometheus_lookup_label(enum prom_labelled_metric metric,

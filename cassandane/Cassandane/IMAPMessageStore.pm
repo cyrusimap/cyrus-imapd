@@ -83,7 +83,7 @@ sub new
 
 sub connect
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
     # if already successfully connected, do nothing
     return
@@ -97,17 +97,27 @@ sub connect
 
     if ($self->{ssl}) {
         my $ca_file = abs_path("data/certs/cacert.pem");
+        # XXX https://github.com/noxxi/p5-io-socket-ssl/issues/121
+        # XXX With newer IO::Socket::SSL, hostname verification fails
+        # XXX because our hostname is an IP address and the certificate
+        # XXX CN does not contain the IP address.
+        # XXX Turning hostname verification back off again for now with
+        # XXX `SSL_verifycn_scheme => 'none'`. The better fix would be
+        # XXX to generate new certificates for 127.0.0.1 and ::1, but
+        # XXX I don't remember how...
         $client = Mail::IMAPTalk->new(
                       Server => $self->{host},
                       Port => $self->{port},
                       UseSSL => $self->{ssl},
                       SSL_ca_file => $ca_file,
+                      SSL_verifycn_scheme => 'none',
                       UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
                       Uid => 0,
+                      NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                   )
-            or die "Cannot connect to server: $@";
+            or die "Cannot connect to '$self->{host}:$self->{port}': $@";
     }
     else {
         my $sock = create_client_socket(
@@ -120,6 +130,7 @@ sub connect
                       Pedantic => 1,
                       PreserveINBOX => 1,
                       Uid => 0,
+                      NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                   )
             or die "Cannot connect to server: $@";
     }
@@ -188,9 +199,20 @@ sub write_message
     my ($self, $msg, %opts) = @_;
 
     my @extra;
+    my @flags;
+
     if ($opts{flags}) {
-        push @extra, '(' . join(' ', @{$opts{flags}}) . ')';
+        push @flags, @{$opts{flags}};
     }
+
+    if ($msg->has_attribute('flags')) {
+        push @flags, @{$msg->get_attribute('flags')};
+    }
+
+    if (@flags) {
+        push @extra, '(' . join(' ', @flags) . ')';
+    }
+
     if ($msg->has_attribute('internaldate')) {
         push @extra, $msg->get_attribute('internaldate');
     }
@@ -314,9 +336,9 @@ sub remove
 
 sub get_client
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
-    $self->connect();
+    $self->connect(%params);
     return $self->{client};
 }
 
@@ -515,6 +537,45 @@ sub idle_end
 
     # Prepare for the next command
     $talk->{CmdId}++;
+}
+
+sub get_counters
+{
+    my ($self) = @_;
+    my $KEY = "/private/vendor/cmu/cyrus-imapd/usercounters";
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    my $talk = $self->get_client();
+
+    my $counters1 = $talk->getmetadata("", $KEY);
+    my $counters = $counters1->{''}{$KEY};
+    #"3 22 20 16 22 0 20 14 22 0 1571356860")
+
+
+    my ($v1, $all1, $mail1, $cal1, $card1, $notes1, $mailfolders1, $calfolders1, $cardfolders1, $notesfolders1, $quota1, $racl1, $valid1, $nothing1) = split / /, $counters;
+
+    if ($maj < 3 || $maj == 3 && $min == 0) {
+        # 3.0 and earlier did not have quotamodseq or raclmodseq, but
+        # uidvalidity was still the last field
+        $valid1 = $quota1;
+        $quota1 = undef;
+    }
+
+    return {
+	version => $v1,
+	highestmodseq => $all1,
+	mailmodseq => $mail1,
+	calendarmodseq => $cal1,
+	contactsmodseq => $card1,
+	notesmodseq => $notes1,
+	mailfoldersmodseq => $mailfolders1,
+	calendarfoldersmodseq => $calfolders1,
+	contactsfoldersmodseq => $cardfolders1,
+	notesfoldersmodseq => $notesfolders1,
+	quotamodseq => $quota1,
+	raclmodseq => $racl1,
+	uidvalidity => $valid1,
+    };
 }
 
 1;

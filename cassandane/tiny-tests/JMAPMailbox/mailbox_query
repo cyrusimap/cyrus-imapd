@@ -1,0 +1,143 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_query
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "list mailboxes without filter";
+    my $res = $jmap->CallMethods([['Mailbox/query', {}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals('Mailbox/query', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.B") || die;
+
+    xlog $self, "fetch mailboxes";
+    $res = $jmap->CallMethods([['Mailbox/get', { }, 'R1' ]]);
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    xlog $self, "list mailboxes without filter and sort by name ascending";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        sort => [{ property => "name" }]},
+    "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
+
+    xlog $self, "list mailboxes without filter and sort by name descending";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        sort => [{ property => "name", isAscending => JSON::false}],
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[2]);
+
+    xlog $self, "filter mailboxes by hasAnyRole == true";
+    $res = $jmap->CallMethods([['Mailbox/query', {filter => {hasAnyRole => JSON::true}}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter mailboxes by hasAnyRole == false";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {hasAnyRole => JSON::false},
+        sort => [{ property => "name"}],
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+
+    xlog $self, "create mailbox underneath A";
+    $imaptalk->create("INBOX.A.AA") || die;
+
+    xlog $self, "(re)fetch mailboxes";
+    $res = $jmap->CallMethods([['Mailbox/get', { }, 'R1' ]]);
+    %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    xlog $self, "filter mailboxes by parentId";
+    $res = $jmap->CallMethods([['Mailbox/query', {filter => {parentId => $mboxids{'A'}}}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'AA'}, $res->[0][1]{ids}[0]);
+
+    # Without windowing the name-sorted results are: A, AA, B, Inbox
+
+    xlog $self, "list mailboxes (with limit)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            limit => 1,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
+    $self->assert_num_equals(0, $res->[0][1]->{position});
+
+    xlog $self, "list mailboxes (with anchor and limit)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            anchor => $mboxids{'B'},
+            limit => 2,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(2, $res->[0][1]->{position});
+
+    xlog $self, "list mailboxes (with positive anchor offset)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            anchor => $mboxids{'AA'},
+            anchorOffset => 1,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(2, $res->[0][1]->{position});
+
+    xlog $self, "list mailboxes (with negative anchor offset)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            anchor => $mboxids{'B'},
+            anchorOffset => -1,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'AA'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
+    $self->assert_num_equals(1, $res->[0][1]->{position});
+
+    xlog $self, "list mailboxes (with position)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            position => 3,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
+
+    xlog $self, "list mailboxes (with negative position)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            position => -2,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+}

@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_with_envelope
+    :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\nwithCRLF\r\n") or die;
+
+    xlog $self, "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($msgsubid);
+
+    xlog $self, "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+}

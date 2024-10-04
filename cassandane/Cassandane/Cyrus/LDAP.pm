@@ -51,12 +51,6 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
-Cassandane::Cyrus::TestCase::magic(AltPTSDBPath => sub {
-    shift->config_set(
-        'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
-    );
-});
-
 sub new
 {
     my ($class, @args) = @_;
@@ -68,6 +62,7 @@ sub new
         ldap_domain_base_dn => "ou=domains,o=cyrus",
         ldap_user_attribute => "uid",
         ldap_member_attribute => "memberof",
+        ldap_group_hasmember_attribute => "hasmember",
         ldap_sasl => "no",
         auth_mech => 'pts',
         pts_module => 'ldap',
@@ -81,6 +76,7 @@ sub new
         start_instances => 0,
     }, @args);
 
+    $self->needs('dependency', 'ldap');
     return $self;
 }
 
@@ -90,24 +86,37 @@ sub set_up
 
     $self->SUPER::set_up();
 
-    $self->{ldapport} = Cassandane::PortManager::alloc();
+    $self->{ldapport} = Cassandane::PortManager::alloc("localhost");
 
     $self->{instance}->{config}->set(
         ldap_uri => "ldap://localhost:$self->{ldapport}/",
     );
 
     # arrange for the fakeldapd to be started
-    # XXX make this run as a DAEMON rather than a START
-    $self->{instance}->add_start(
-        name => 'fakeldapd',
-        argv => [
-            realpath('utils/fakeldapd'),
-            '-p', $self->{ldapport},
-            '-l', realpath('data/directory.ldif'),
-        ],
-    );
-    $self->_start_instances();
+    my ($maj, $min) = Cassandane::Instance->get_version($self->{installation});
+    if ($maj < 3 || ($maj == 3 && $min < 4)) {
+        $self->{instance}->add_start(
+            name => 'fakeldapd',
+            argv => [
+                realpath('utils/fakeldapd'),
+                '-p', $self->{ldapport},
+                '-l', realpath('data/directory.ldif'),
+            ],
+        );
+    }
+    elsif (not exists $self->{daemons}->{fakeldapd}) {
+        $self->{instance}->add_daemon(
+            name => 'fakeldapd',
+            argv => [
+                realpath('utils/fakeldapd'),
+                '-p', $self->{ldapport},
+                '-l', realpath('data/directory.ldif'),
+            ],
+            wait => 'y',
+        );
+    }
 
+    $self->_start_instances();
     $self->{instance}->create_user("otheruser");
 }
 
@@ -119,7 +128,7 @@ sub tear_down
 }
 
 sub test_alternate_ptscache_db_path
-    :needs_dependency_ldap :min_version_3_0_8 :AltPTSDBPath
+    :min_version_3_0_8 :AltPTSDBPath
 {
     my ($self) = @_;
 
@@ -131,12 +140,12 @@ sub test_alternate_ptscache_db_path
         $admintalk->get_last_completion_response());
 
     my $confdir = $self->{instance}->{basedir} . "/conf";
-    $self->assert(-e $confdir . "/non-default-ptscache.db");
-    $self->assert(not -e $confdir . "/ptclient/ptscache.db");
+    $self->assert_file_test($confdir . "/non-default-ptscache.db");
+    $self->assert_not_file_test($confdir . "/ptclient/ptscache.db");
 }
 
 sub test_setacl_groupid
-    :needs_dependency_ldap :min_version_3_0_8
+    :min_version_3_0_8
 {
     my ($self) = @_;
 
@@ -154,7 +163,7 @@ sub test_setacl_groupid
 }
 
 sub test_setacl_groupid_spaces
-    :needs_dependency_ldap :min_version_3_0_8
+    :min_version_3_0_8
 {
     my ($self) = @_;
 
@@ -185,7 +194,7 @@ sub test_setacl_groupid_spaces
 }
 
 sub test_list_groupaccess_noracl
-    :needs_dependency_ldap :min_version_3_0_8 :NoAltNamespace
+    :min_version_3_0_8 :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -209,7 +218,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
+    :ReverseACLs :min_version_3_1 :NoAltNamespace :Conversations
 {
     my ($self) = @_;
 
@@ -220,10 +229,15 @@ sub test_list_groupaccess_racl
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
 
+    my $precounters = $self->{store}->get_counters();
+
     $admintalk->setacl("user.otheruser.groupaccess",
                        "group:group co", "lrswipkxtecdn");
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
+
+    my $postcounters = $self->{store}->get_counters();
+    $self->assert_num_not_equals($precounters->{raclmodseq}, $postcounters->{raclmodseq}, "RACL modseq changed");
 
     if (get_verbose()) {
         $self->{instance}->run_command(
@@ -325,14 +339,14 @@ sub do_test_list_order
 }
 
 sub test_list_order_noracl
-    :needs_dependency_ldap :min_version_3_0_8 :NoAltNamespace
+    :min_version_3_0_8 :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
 }
 
 sub test_list_order_racl
-    :needs_dependency_ldap :ReverseACLs :min_version_3_1 :NoAltNamespace
+    :ReverseACLs :min_version_3_1 :NoAltNamespace
 {
     my $self = shift;
     return $self->do_test_list_order(@_);

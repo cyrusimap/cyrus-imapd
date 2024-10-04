@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_deliver_multiple_users
+    :NoAltNameSpace
+    :want_smtpdaemon
+{
+    my ($self) = @_;
+
+    # create 2 other users
+    $self->{instance}->create_user('other1');
+    $self->{instance}->create_user('other2');
+
+    # install redirect script for cassandane
+    $self->{instance}->install_sieve_script(<<EOF
+redirect "cass\@example.com";
+EOF
+    , username => 'cassandane');
+
+    # install fileinto script for other2
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailbox", "imap4flags"];
+fileinto :flags "\\\\Flagged" :create "INBOX.sub";
+EOF
+    , username => 'other2');
+
+    # deliver a message to all 3 users
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1,
+                               users => [ 'cassandane', 'other1', 'other2' ]);
+
+    # message should NOT appear in cassandane INBOX
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->examine('user.cassandane');
+    $admintalk->fetch('1', '(flags)');
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+
+    # message should appear in other1 INBOX
+    $admintalk->examine('user.other1');
+    my $res = $admintalk->fetch('1', '(flags)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals($res, { '1' => { 'flags' => [ '\\Recent'] }});
+
+    # message should NOT appear in other2 INBOX
+    $admintalk->examine('user.other2');
+    $admintalk->fetch('1', '(flags)');
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+
+    # message should appear in other2 INBOX.sub
+    $admintalk->examine('user.other2.sub');
+    $res = $admintalk->fetch('1', '(flags)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals($res,
+                              { '1' => { 'flags' => [ '\\Recent', '\\Flagged'] }});
+}

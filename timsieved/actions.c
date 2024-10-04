@@ -91,9 +91,14 @@ int actions_init(void)
 
     if (!sieve_usehomedir) {
         sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
+        if (!sievedir_valid_path(sieve_dir_config)) {
+            xsyslog(LOG_ERR, "sievedir option is not defined or invalid", NULL);
+
+            return TIMSIEVE_FAIL;
+        }
     } else {
         /* can't use home directories with timsieved */
-        syslog(LOG_ERR, "can't use home directories");
+        xsyslog(LOG_ERR, "can't use home directories", NULL);
 
         return TIMSIEVE_FAIL;
     }
@@ -142,7 +147,7 @@ int actions_setuser(const char *userid)
     sievedb = sievedb_open_userid(sieved_userid);
     if (!sievedb) return TIMSIEVE_FAIL;
 
-    result = sieve_ensure_folder(sieved_userid, &sieve_mailbox);
+    result = sieve_ensure_folder(sieved_userid, &sieve_mailbox, /*silent*/0);
     if (result) return TIMSIEVE_FAIL;
 
     mailbox_unlock_index(sieve_mailbox, NULL);

@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
@@ -136,8 +137,6 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
-
-    *body = NULL;
 
     if (!m->cache_full) {
         fill_cache(m);
@@ -200,11 +199,11 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
     else {
         printf("removing header '%s[%d]'\n", head, index);
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
     }
 
     return SIEVE_OK;
@@ -569,6 +568,7 @@ int main(int argc, char *argv[])
     script_data_t sd = { NULL, "", NULL, 0 };
     FILE *f;
     unsigned uid = 0;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
@@ -626,7 +626,7 @@ int main(int argc, char *argv[])
     global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&test_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&test_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -641,7 +641,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
@@ -733,7 +732,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (extname) {
@@ -785,5 +784,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

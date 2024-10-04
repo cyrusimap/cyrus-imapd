@@ -49,6 +49,7 @@
 #include <syslog.h>
 
 #include "map.h"
+#include "slowio.h"
 #include "xmalloc.h"
 
 #define SLOP (8*1024)
@@ -78,13 +79,23 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
     /* Already mapped in */
     if (*len >= newlen) return;
 
-    if (*len) munmap((char *)*base, *len);
-
-    if (!onceonly) {
-        newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
+    if (*len) {
+        int r = munmap((char *)*base, *len);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: unmapping %s file%s%s: %m", name,
+                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            snprintf(buf, sizeof(buf), "failed to munmap %s file", name);
+            fatal(buf, EX_IOERR);
+        }
     }
 
-    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
+    /* always map one extra byte so there's a trailing NULL to protect
+     * us from overruns.  This does NOT mean that we should treat this
+     * memory as a cstring */
+    if (!onceonly)
+        newlen = (newlen + 2*SLOP) & ~(SLOP-1);
+
+    *base = (char *)mmap((caddr_t)0, onceonly ? newlen + 1 : newlen, PROT_READ, MAP_SHARED
 #ifdef MAP_FILE
 | MAP_FILE
 #endif
@@ -99,6 +110,8 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
         fatal(buf, EX_IOERR);
     }
     *len = newlen;
+
+    slowio_maybe_delay_read(newlen);
 }
 
 /*
@@ -106,7 +119,13 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
  */
 EXPORTED void map_free(const char **base, size_t *len)
 {
-    if (*len) munmap((char *)*base, *len);
+    if (*len) {
+        int r = munmap((char *)*base, *len);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: map_free");
+            fatal("Failed to map_free", EX_IOERR);
+        }
+    }
     *base = 0;
     *len = 0;
 }

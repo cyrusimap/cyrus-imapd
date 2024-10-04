@@ -96,6 +96,7 @@
 #include "proxy.h"
 #include "retry.h"
 #include "times.h"
+#include "slowio.h"
 #include "smtpclient.h"
 #include "spool.h"
 #include "sync_support.h"
@@ -122,10 +123,10 @@ extern int opterr;
    currently piping */
 
 /* the current server most commands go to */
-struct backend *backend_current = NULL;
+static struct backend *backend_current = NULL;
 
 /* our cached connections */
-ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
+static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;
@@ -151,6 +152,7 @@ static int allowanonymous = 0;
 static int singleinstance = 1;  /* attempt single instance store */
 
 static struct stagemsg *stage = NULL;
+static struct proc_handle *proc_handle = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
@@ -316,7 +318,7 @@ static void nntp_reset(void)
 {
     int i;
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (group_state)
@@ -383,6 +385,8 @@ static void nntp_reset(void)
     nntp_exists = 0;
     nntp_current = 0;
     did_capabilities = 0;
+
+    slowio_reset();
 }
 
 /*
@@ -399,7 +403,7 @@ int service_init(int argc __attribute__((unused)),
     initialize_nntp_error_table();
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -424,8 +428,12 @@ int service_init(int argc __attribute__((unused)),
     /* setup for sending IMAP IDLE notifications */
     idle_init();
 
-    while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hsrfp:")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* nntps (do starttls right away) */
             nntps = 1;
             if (!tls_enabled()) {
@@ -574,7 +582,7 @@ void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    proc_cleanup();
+    proc_cleanup(&proc_handle);
 
     /* close local mailbox */
     if (group_state)
@@ -628,7 +636,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&proc_handle);
         exit(recurse_code);
     }
     recurse_code = code;
@@ -638,6 +646,9 @@ EXPORTED void fatal(const char* s, int code)
     }
     if (stage) append_removestage(stage);
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
@@ -708,7 +719,7 @@ static void cmdloop(void)
     static struct buf cmd, arg1, arg2, arg3, arg4;
     char *p, *result, buf[1024];
     const char *err;
-    uint32_t uid, last;
+    uint32_t uid = 0, last = 0;
     struct backend *be;
     char curgroup[MAX_MAILBOX_BUFFER] = "";
 
@@ -729,13 +740,18 @@ static void cmdloop(void)
 
         signals_poll();
 
-        proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), NULL);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), NULL);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
+                      index_mboxname(group_state), NULL);
 
         libcyrus_run_delayed();
 
         if (!proxy_check_input(protin, nntp_in, nntp_out,
                                backend_current ? backend_current->in : NULL,
-                               NULL, 0)) {
+                               NULL, PROT_NO_FD, NULL, 0)) {
             /* No input from client */
             continue;
         }
@@ -774,7 +790,12 @@ static void cmdloop(void)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
         }
 
-        proc_register(config_ident, nntp_clienthost, nntp_userid, index_mboxname(group_state), cmd.s);
+        r = proc_register(&proc_handle, 0,
+                          config_ident, nntp_clienthost, nntp_userid,
+                          index_mboxname(group_state), cmd.s);
+        if (r) fatal("unable to register process", EX_IOERR);
+        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
+                      index_mboxname(group_state), cmd.s);
 
         /* Ihave/Takethis only allowed for feeders */
         if (!(nntp_capa & MODE_FEED) &&
@@ -1015,11 +1036,8 @@ static void cmdloop(void)
                     if (LISTGROUP) {
                         int msgno, last_msgno;
 
-                        msgno = index_finduid(group_state, uid);
-                        if (!msgno || index_getuid(group_state, msgno) != uid) {
-                            msgno++;
-                        }
-                        last_msgno = index_finduid(group_state, last);
+                        msgno = index_finduid(group_state, uid, FIND_GE);
+                        last_msgno = index_finduid(group_state, last, FIND_LE);
 
                         for (; msgno <= last_msgno; msgno++) {
                             prot_printf(nntp_out, "%u\r\n",
@@ -1710,7 +1728,7 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
         mboxlist_entry_free(&mbentry);
         if (!backend_next) return IMAP_SERVER_UNAVAILABLE;
 
-        *ret = backend_next;
+        if (ret) *ret = backend_next;
     }
     else {
         /* local group */
@@ -1836,8 +1854,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
     FILE *msgfile;
     struct index_record record;
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) {
+    if (!(msgno = index_finduid(group_state, uid, FIND_EQ))) {
         prot_printf(nntp_out, "423 No such article in this newsgroup\r\n");
         return;
     }
@@ -2193,7 +2210,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         }
     }
 
-    limits.procname = "nntpd";
+    limits.servicename = config_ident;
     limits.clienthost = nntp_clienthost;
     limits.userid = nntp_userid;
     if (proc_checklimits(&limits)) {
@@ -2260,9 +2277,8 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 
     lcase(hdr);
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) msgno++;
-    last_msgno = index_finduid(group_state, last);
+    msgno = index_finduid(group_state, uid, FIND_GE);
+    last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
         char *body;
@@ -2786,9 +2802,8 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
     struct nntp_overview *over;
     int found = 0;
 
-    msgno = index_finduid(group_state, uid);
-    if (!msgno || index_getuid(group_state, msgno) != uid) msgno++;
-    last_msgno = index_finduid(group_state, last);
+    msgno = index_finduid(group_state, uid, FIND_GE);
+    last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
         if (!found++)
@@ -3449,7 +3464,7 @@ static int cancel_cb(const duplicate_t *dkey,
 {
     struct mailbox *mailbox = NULL;
 
-    /* make sure its a message in a mailbox that we're serving via NNTP */
+    /* make sure it is a message in a mailbox that we're serving via NNTP */
     if (is_newsgroup(dkey->to)) {
         int r;
 

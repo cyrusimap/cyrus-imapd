@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test replication of mailbox only after a rename
+#
+sub test_splitbrain_mailbox
+    :min_version_3_1 :max_version_3_4 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mastertalk = $master_store->get_client();
+    my $replicatalk = $replica_store->get_client();
+
+    $mastertalk->create("INBOX.src-name");
+
+    xlog $self, "run initial replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $mastertalk = $master_store->get_client();
+    $mastertalk->rename("INBOX.src-name", "INBOX.dest-name");
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    xlog $self, "try replicating just the mailbox by name fails due to duplicate uniqueid";
+    eval { $self->run_replication(mailbox => 'user.cassandane.dest-name') };
+    $self->assert_matches(qr/exited with code 1/, "$@");
+
+    my $master_pattern = qr{
+        \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_MAILBOX_MOVED\b
+    }x;
+    $self->assert_syslog_matches($self->{instance}, $master_pattern);
+
+    my $replica_pattern = qr{
+        (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
+            \suser\.cassandane\.dest-name\b
+            | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
+            \smailbox=<user\.cassandane\.dest-name>
+        )
+    }x;
+    $self->assert_syslog_matches($self->{replica}, $replica_pattern);
+
+    xlog $self, "Run a full user replication to repair";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "Rename again";
+    $mastertalk = $master_store->get_client();
+    $mastertalk->rename("INBOX.dest-name", "INBOX.foo");
+    my $file = $self->{instance}->{basedir} . "/sync.log";
+    open(FH, ">", $file);
+    print FH "MAILBOX user.cassandane.foo\n";
+    close(FH);
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+    xlog $self, "Run replication from a file with just the mailbox name in it";
+    $self->run_replication(inputfile => $file, rolling => 1);
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @mastersyslog = $self->{instance}->getsyslog();
+        my @replicasyslog = $self->{replica}->getsyslog();
+
+        my $master_pattern = qr{
+            \bdo_folders\(\):\supdate\sfailed:\suser\.cassandane\.foo\b
+        }x;
+
+        my $replica_pattern1 = qr{
+            (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
+                \suser\.cassandane\.foo\b
+              | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
+                \smailbox=<user\.cassandane\.foo>
+            )
+        }x;
+
+        my $replica_pattern2 = qr{
+            \bRename:\suser.cassandane\.dest-name\s->\suser\.cassandane\.foo\b
+        }x;
+
+        # initial failures
+        $self->assert_matches($master_pattern, "@mastersyslog");
+        $self->assert_matches($replica_pattern1, "@replicasyslog");
+        # later success
+        $self->assert_matches($replica_pattern2, "@replicasyslog");
+    }
+
+    # replication fixes itself
+    $self->check_replication('cassandane');
+}

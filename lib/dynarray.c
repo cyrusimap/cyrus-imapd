@@ -98,8 +98,9 @@ static void ensure_alloc(struct dynarray *da, int newalloc)
     if (newalloc < da->alloc)
         return;
     newalloc = grow(da->alloc, newalloc + 1);
-    da->data = xrealloc(da->data, da->membsize * newalloc);
-    memset(da->data + da->alloc * da->membsize, 0, da->membsize * (newalloc-da->alloc));
+    da->data = xzrealloc(da->data,
+                         da->membsize * da->alloc,
+                         da->membsize * newalloc);
     da->alloc = newalloc;
 }
 
@@ -189,4 +190,13 @@ EXPORTED void dynarray_truncate(struct dynarray *da, int newlen)
         }
     }
     da->count = newlen;
+}
+
+EXPORTED void dynarray_sort(struct dynarray *da,
+                            int (*compare)(const void *, const void *))
+{
+    if (!da || !da->count) return;
+
+    qsort(da->data, da->count, da->membsize,
+            (int (*)(const void *, const void *))compare);
 }

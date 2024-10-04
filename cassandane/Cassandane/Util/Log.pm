@@ -40,6 +40,7 @@
 package Cassandane::Util::Log;
 use strict;
 use warnings;
+use File::Basename;
 use Scalar::Util qw(blessed);
 use Sys::Syslog qw(:standard :macros);
 
@@ -57,6 +58,8 @@ openlog('cassandane', '', LOG_LOCAL6)
 sub xlog
 {
     my $id;
+    my $highlight = 0;
+
     # if the first argument is an object with an id() method,
     # include the id it returns in the log message
     if (ref $_[0] && blessed $_[0] && $_[0]->can('id')) {
@@ -64,16 +67,28 @@ sub xlog
         $id = $obj->id();
     }
 
+    # if the first output argument starts with XXX, highlight the
+    # whole line when printing to stderr
+    if ($_[0] =~ m/^XXX/) {
+        $highlight = 1;
+    }
+
     # the current line number is in this frame
     my (undef, undef, $line) = caller();
     # but the current subroutine name is in the parent frame,
     # as the function-the-caller-called
     my (undef, undef, undef, $sub) = caller(1);
+    $sub //= basename($0);
     $sub =~ s/^Cassandane:://;
     my $msg = "[$$] =====> $sub\[$line] ";
     $msg .= "($id) " if $id;
     $msg .= join(' ', @_);
-    print STDERR "$msg\n";
+    if ($highlight) {
+        print STDERR "\033[33m" . $msg . "\033[0m\n";
+    }
+    else {
+        print STDERR "$msg\n";
+    }
     syslog(LOG_ERR, "$msg");
 }
 

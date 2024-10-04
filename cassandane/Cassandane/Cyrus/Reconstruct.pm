@@ -40,15 +40,19 @@
 package Cassandane::Cyrus::Reconstruct;
 use strict;
 use warnings;
+use Data::Dumper;
+use File::Copy;
+use IO::File;
+use JSON;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
-use IO::File;
-use JSON;
 
 use lib '../perl/imap';
+use Cyrus::DList;
+use Cyrus::HeaderFile;
 use Cyrus::IndexFile;
 
 sub new
@@ -169,11 +173,9 @@ sub test_reconstruct_truncated
     $self->assert(grep { $_ == 6 } @records);
     $self->assert(not grep { $_ == 11 } @records);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated a SYNCERROR or two
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: refreshing index/, "@lines");
-    }
+    # We should have generated a SYNCERROR or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: refreshing index/);
 }
 #
 # Test removed file
@@ -267,8 +269,7 @@ sub test_reconstruct_snoozed
     # the reconstruct shouldn't change anything
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_does_not_match(qr/mismatch/, "@lines");
+    $self->assert_syslog_does_not_match($self->{instance}, qr/mismatch/);
 
     xlog $self, "update some \\Snoozed flags";
     $fh = IO::File->new($file, "+<");
@@ -297,9 +298,11 @@ sub test_reconstruct_snoozed
     # this reconstruct should change things back!
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
-    @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
-    $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog();
+        $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
+        $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
+    }
 
     xlog $self, "check that the values are changed back";
     $fh = IO::File->new($file, "+<");
@@ -315,6 +318,315 @@ sub test_reconstruct_snoozed
         }
     }
     close($fh);
+}
+
+sub test_reconstruct_uniqueid_from_header_path_legacymb
+    :min_version_3_7 :MailboxLegacyDirs :NoStartInstances
+{
+    my ($self) = @_;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    # first start will set up cassandane user
+    $self->_start_instances();
+    my $basedir = $self->{instance}->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+
+    # find out the uniqueid of the inbox
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $uniqueid = $res->{INBOX}{$entry};
+    $self->assert_not_null($uniqueid);
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # stop service while tinkering
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+
+    # get header path
+    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                       . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+
+    # lose uniqueid from cyrus.header
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    copy($cyrus_header, "$cyrus_header.OLD");
+    my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
+    my $dlist = Cyrus::DList->parse_string($hf->{dlistheader});
+    my $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+    $hash->{I} = undef;
+    $dlist = Cyrus::DList->new_perl('', $hash);
+    my $out = IO::File->new($cyrus_header, 'w');
+    $hf->write_newheader($out, $dlist->as_string());
+
+    # reconstruct -P should find and fix the missing uniqueid
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-P', $cyrus_header);
+
+    # should not have existed in cyrus.header, get from mbentry
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr{mailbox header had no uniqueid, setting from mbentry}
+    );
+
+    # bring service back up
+    $self->{instance}->start();
+
+    # header should have the same uniqueid as before
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+}
+
+sub test_reconstruct_uniqueid_from_header_path_uuidmb
+    :min_version_3_7 :NoStartInstances
+{
+    my ($self) = @_;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    # first start will set up cassandane user
+    $self->_start_instances();
+    my $basedir = $self->{instance}->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+
+    # find out the uniqueid of the inbox
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $uniqueid = $res->{INBOX}{$entry};
+    $self->assert_not_null($uniqueid);
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # stop service while tinkering
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+
+    # get header path
+    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                       . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+
+    # lose that uniqueid from mailboxes.db
+    my $I = "I$uniqueid";
+    my $N = "Nuser\x1fcassandane";
+    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+                                     [ 'DELETE', $I ]);
+    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $N]);
+    my $dlist = Cyrus::DList->parse_string($mbentry);
+    my $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+    $hash->{I} = undef;
+    $dlist = Cyrus::DList->new_perl('', $hash);
+    $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        [ 'SET', $N, $dlist->as_string() ]);
+
+    my %updated = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip", ['SHOW']);
+    xlog "updated mailboxes.db: " . Dumper \%updated;
+
+    # lose it from cyrus.header too
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    copy($cyrus_header, "$cyrus_header.OLD");
+    my $hf = Cyrus::HeaderFile->new_file("$cyrus_header.OLD");
+    $dlist = Cyrus::DList->parse_string($hf->{dlistheader});
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+    $hash->{I} = undef;
+    $dlist = Cyrus::DList->new_perl('', $hash);
+    my $out = IO::File->new($cyrus_header, 'w');
+    $hf->write_newheader($out, $dlist->as_string());
+
+    # reconstruct -P should find and fix the missing uniqueid
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-P', $cyrus_header);
+
+    # should not have existed in cyrus.header, get from path
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr{mailbox header had no uniqueid, setting from path}
+    );
+
+    # bring service back up
+    $self->{instance}->start();
+
+    # header should have the same uniqueid as before
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+
+    # mbentry should have the same uniqueid as before
+    (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $N]);
+    $dlist = Cyrus::DList->parse_string($mbentry);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+
+    # $I entry should be back
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $I]);
+    $self->assert_str_equals($I, $key);
+    $dlist = Cyrus::DList->parse_string($value);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals("user\x1fcassandane", $hash->{N});
+}
+
+sub test_reconstruct_uniqueid_from_header_uuidmb
+    :min_version_3_7 :NoStartInstances
+{
+    my ($self) = @_;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    # first start will set up cassandane user
+    $self->_start_instances();
+    my $basedir = $self->{instance}->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+
+    # find out the uniqueid of the inbox
+    my $imaptalk = $self->{store}->get_client();
+    my $res = $imaptalk->getmetadata("INBOX", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $uniqueid = $res->{INBOX}{$entry};
+    $self->assert_not_null($uniqueid);
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    # stop service while tinkering
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+
+    # get header path
+    my $cyrus_header = $self->{instance}->folder_to_directory('INBOX')
+                       . '/cyrus.header';
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+
+    # lose that uniqueid from mailboxes.db
+    my $I = "I$uniqueid";
+    my $N = "Nuser\x1fcassandane";
+    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+                                     [ 'DELETE', $I ]);
+    my (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $N]);
+    my $dlist = Cyrus::DList->parse_string($mbentry);
+    my $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+    $hash->{I} = undef;
+    $dlist = Cyrus::DList->new_perl('', $hash);
+    $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        [ 'SET', $N, $dlist->as_string() ]);
+
+    my %updated = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip", ['SHOW']);
+    xlog "updated mailboxes.db: " . Dumper \%updated;
+
+    # reconstruct -P should find and fix the missing uniqueid
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-P', $cyrus_header);
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join(q{}, $self->{instance}->getsyslog());
+
+        # should have still existed in cyrus.header
+        $self->assert_does_not_match(qr{mailbox header had no uniqueid},
+                                     $syslog);
+
+        # expect to find the log line
+        $self->assert_matches(qr{setting mbentry uniqueid from header},
+                              $syslog);
+    }
+
+    # bring service back up
+    $self->{instance}->start();
+
+    # header should have the same uniqueid as before
+    $self->assert(-f $cyrus_header, "couldn't find cyrus.header file");
+    my $hf = Cyrus::HeaderFile->new_file($cyrus_header);
+    $self->assert_str_equals($uniqueid, $hf->{header}->{UniqueId});
+
+    # mbentry should have the same uniqueid as before
+    (undef, $mbentry) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $N]);
+    $dlist = Cyrus::DList->parse_string($mbentry);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals($uniqueid, $hash->{I});
+
+    # $I entry should be back
+    my ($key, $value) = $self->{instance}->run_dbcommand(
+        $mailboxes_db, "twoskip",
+        ['SHOW', $I]);
+    $self->assert_str_equals($I, $key);
+    $dlist = Cyrus::DList->parse_string($value);
+    $hash = $dlist->as_perl();
+    $self->assert_str_equals("user\x1fcassandane", $hash->{N});
+}
+
+sub test_downgrade_upgrade
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Seen on message A";
+    my $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Clear \\Seen on message A";
+        $res = $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $msg{A}->set_attribute(flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Seen on message A again";
+    $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    for my $version (12, 14, 16, 'max') {
+        xlog $self, "Set to version $version";
+        $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
+
+        xlog $self, "Reconnect, \\Seen should still be on message A";
+        $self->{store}->disconnect();
+        $self->{store}->connect();
+        $self->{store}->_select();
+        $self->check_messages(\%msg);
+    }
 }
 
 1;

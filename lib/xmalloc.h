@@ -48,19 +48,27 @@
 /* for free() */
 #include <stdlib.h>
 
-extern void *xmalloc (size_t size);
-extern void *xzmalloc (size_t size);
-extern void *xcalloc (size_t nmemb, size_t size);
-extern void *xrealloc (void *ptr, size_t size);
-extern char *xstrdup (const char *str);
-extern char *xstrdupnull (const char *str);
-extern char *xstrdupsafe (const char *str);
-extern char *xstrndup (const char *str, size_t len);
-extern void *xmemdup (const void *ptr, size_t size);
+#include "assert.h"
 
-// free a pointer and also zero it
-#define xzfree(ptr) do { \
-  if (ptr) { free(ptr); ptr = NULL; } \
+extern void *xmalloc(size_t size);
+extern void *xzmalloc(size_t size);
+extern void *xcalloc(size_t nmemb, size_t size);
+extern void *xrealloc(void *ptr, size_t size);
+extern void *xzrealloc(void *ptr, size_t orig_size, size_t new_size);
+extern char *xstrdup(const char *str);
+extern char *xstrdupnull(const char *str);
+extern char *xstrdupsafe(const char *str);
+extern char *xstrndup(const char *str, size_t len);
+extern void *xmemdup(const void *ptr, size_t size);
+
+/* free a pointer and also zero it
+ *
+ * CAUTION: ptr argument is evaluated multiple times, beware side effects!
+ */
+#define xzfree(ptr) do {    \
+    assert((ptr) == (ptr)); \
+    free(ptr);              \
+    (ptr) = NULL;           \
 } while (0)
 
 /* Functions using xmalloc.h must provide a function called fatal() conforming

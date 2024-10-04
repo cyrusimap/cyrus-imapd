@@ -1,0 +1,129 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_quota_changes
+    :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Right - let's set ourselves some basic usage quota
+    xlog "Set a quota limit";
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(
+        storage => 100000,
+        message => 50000,
+        mailbox => 100,
+    );
+
+    xlog "Get all quotas";
+    my $res = $jmap->CallMethods([
+        ['Quota/get', {
+         }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{list}});
+
+    my $state = $res->[0][1]{'state'};
+
+    xlog "Get quota changes";
+    $res = $jmap->CallMethods([
+        ['Quota/changes', {
+            "sinceState" => $state,
+         }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/changes', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    $state = $res->[0][1]{'newState'};
+
+    xlog "Update limit";
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(
+        storage => 200000,
+        message => 50000,
+        mailbox => 100,
+    );
+
+    xlog "Get quota changes";
+    $res = $jmap->CallMethods([
+        ['Quota/changes', {
+            "sinceState" => $state,
+         }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/changes', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    $state = $res->[0][1]{'newState'};
+
+    xlog "Get all calendars (to create #calendars mailbox) ";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+         }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    $self->_set_quotaroot('user.cassandane.#calendars');
+    $self->_set_limits(
+        storage => 10000,
+        message => 5000,
+        mailbox => 10,
+    );
+
+    xlog "Get quota changes";
+    $res = $jmap->CallMethods([
+        ['Quota/changes', {
+            "sinceState" => $state,
+         }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/changes', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(6, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    $state = $res->[0][1]{'newState'};
+
+    $self->_set_quotaroot('user.cassandane.#calendars');
+    $self->_set_limits(
+        storage => 20000,
+        message => 5000,
+        mailbox => 10,
+    );
+
+    xlog "Get quota changes";
+    $res = $jmap->CallMethods([
+        ['Quota/changes', {
+            "sinceState" => $state,
+         }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/changes', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+
+    $state = $res->[0][1]{'newState'};
+
+    xlog "Get quota changes";
+    $res = $jmap->CallMethods([
+        ['Quota/changes', {
+            "sinceState" => $state,
+         }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/changes', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+}

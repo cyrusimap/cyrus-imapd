@@ -45,8 +45,10 @@ use File::Slurp;
 
 use lib '.';
 use Cassandane::Util::Setup;
+use Cassandane::Unit::FormatPretty;
+use Cassandane::Unit::FormatTAP;
+use Cassandane::Unit::FormatXML;
 use Cassandane::Unit::Runner;
-use Cassandane::Unit::RunnerPretty;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
@@ -58,14 +60,38 @@ $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Trailingcomma = 1;
 
-my $format = 'prettier';
+my %want_formats = ();
 my $output_dir = 'reports';
 my $do_list = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
 my $skip_slow = 1;
+my $slow_only = 0;
 my $log_directory;
 my @names;
+
+# Make sure our binary components have been built already
+# -- get their names from the Makefile
+open my $mf, '<', 'utils/Makefile'
+    or die "Can't read utils/Makefile: $!";
+my $pat = qr{^(?:PROGRAMS|LIBS)=};
+my $missing_binaries = 0;
+foreach my $match (grep { m/$pat/ } <$mf>) {
+    chomp $match;
+    $match =~ s/$pat//;
+    foreach my $binary (split /\s+/, $match) {
+        my $filename = "utils/$binary";
+        if (! -e $filename || ! -x $filename) {
+            print STDERR "$filename is not executable or is missing\n";
+            $missing_binaries ++;
+        }
+    }
+}
+close $mf;
+if ($missing_binaries) {
+    print STDERR "Did you run 'make' yet?\n";
+    exit 1;
+}
 
 # This disgusting hack makes Test::Unit report a useful stack trace for
 # it's assert failures instead of just a file name and line number.
@@ -113,76 +139,56 @@ my @names;
     };
 };
 
-my %runners =
-(
-    tap => sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_tap";
-        my $runner = Cassandane::Unit::Runner->new($fh);
-        my @filters = qw(x skip_version skip_missing_features);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        $runner->filter(@filters);
-        return $runner->do_run($plan, 0);
+my %formatters = (
+    tap => {
+        writes_to_stdout => 1,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatTAP->new($fh);
+        },
     },
-    pretty => sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_pretty";
-        my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
-        my @filters = qw(x skip_version skip_missing_features);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        $runner->filter(@filters);
-        return $runner->do_run($plan, 0);
+    pretty => {
+        writes_to_stdout => 1,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatPretty->new({}, $fh);
+        },
     },
-    prettier => sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_prettier";
-        my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
-        my @filters = qw(x skip_version skip_missing_features);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        $runner->filter(@filters);
-        return $runner->do_run($plan, 0);
+    prettier => {
+        writes_to_stdout => 1,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatPretty->new({quiet=>1}, $fh);
+        },
+    },
+    xml => {
+        writes_to_stdout => 0,
+        formatter => sub {
+            my ($fh) = @_;
+            return Cassandane::Unit::FormatXML->new({
+                directory => $output_dir
+            });
+        },
     },
 );
 
 become_cyrus();
 
-eval
-{
-    require Cassandane::Unit::RunnerXML;
-
-    if ( ! -d $output_dir )
-    {
+eval {
+    if ( ! -d $output_dir ) {
         mkdir($output_dir)
             or die "Cannot make output directory \"$output_dir\": $!\n";
     }
 
-    if (! -w $output_dir )
-    {
+    if (! -w $output_dir ) {
         die "Cannot write to output directory \"$output_dir\"\n";
     }
-
-    $runners{xml} = sub
-    {
-        my ($plan, $fh) = @_;
-        local *__ANON__ = "runner_xml";
-
-        my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
-        my @filters = qw(x skip_version skip_missing_features);
-        push @filters, 'skip_slow' if $plan->{skip_slow};
-        $runner->filter(@filters);
-        $runner->start($plan);
-        return $runner->all_tests_passed();
-    };
 };
 if ($@) {
     my $eval_err = $@;
-    $runners{xml} = sub
-    {
-        print STDERR "Sorry, XML output format not available due to:\n=> $eval_err";
-        return 0;
+    $formatters{xml}->{formatter} = sub {
+        die "Sorry, XML output format not available due to:\n",
+            "=> $eval_err";
     };
 }
 
@@ -212,13 +218,15 @@ while (my $a = shift)
     }
     elsif ($a eq '-f')
     {
-        $format = shift;
-        usage unless defined $runners{$format};
+        my $format = shift;
+        usage unless defined $formatters{$format};
+        $want_formats{$format} = 1;
     }
     elsif ($a =~ m/^-f(\w+)$/)
     {
-        $format = $1;
-        usage unless defined $runners{$format};
+        my $format = $1;
+        usage unless defined $formatters{$format};
+        $want_formats{$format} = 1;
     }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
@@ -277,6 +285,11 @@ while (my $a = shift)
     {
         $skip_slow = 0;
     }
+    elsif ($a eq '--slow-only')
+    {
+        $skip_slow = 0;
+        $slow_only = 1;
+    }
     elsif ($a eq '--rerun')
     {
         $want_rerun = 1;
@@ -323,6 +336,7 @@ my $plan = Cassandane::Unit::TestPlan->new(
         maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
         log_directory => $log_directory,
         skip_slow => $skip_slow,
+        slow_only => $slow_only,
     );
 
 if ($do_list)
@@ -341,10 +355,31 @@ else
 {
     # Build the schedule per commandline
     $plan->schedule(@names);
+    $plan->check_sanity();
+
     # Run the schedule
-    open my $fh, '>&', \*STDOUT
-        or die "Cannot save STDOUT as a runner print stream: $!";
-    exit(! $runners{$format}->($plan, $fh));
+    $want_formats{prettier} = 1 if not scalar keys %want_formats;
+    my @writes_to_stdout = grep {
+        $formatters{$_}->{writes_to_stdout}
+    } keys %want_formats;
+    if (scalar @writes_to_stdout > 1) {
+        my $joined = join ', ', map { "'$_'" } @writes_to_stdout;
+        die "$joined formatters all want to write to stdout\n";
+    }
+
+    my @filters = qw(x skip_version skip_missing_features
+                     skip_runtime_check
+                     enable_wanted_properties);
+    push @filters, 'skip_slow' if $plan->{skip_slow};
+    push @filters, 'slow_only' if $plan->{slow_only};
+
+    my $runner = Cassandane::Unit::Runner->new();
+    foreach my $f (keys %want_formats) {
+        $runner->add_formatter($formatters{$f}->{formatter}->());
+    }
+    $runner->filter(@filters);
+
+    exit !$runner->do_run($plan);
 }
 
 sub _listitem {

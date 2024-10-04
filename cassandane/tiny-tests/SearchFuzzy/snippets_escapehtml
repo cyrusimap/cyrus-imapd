@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_snippets_escapehtml
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    xlog $self, "Generate and index test messages.";
+    $self->make_message("Test1 subject with an unescaped & in it",
+        mime_charset => "utf-8",
+        mime_type => "text/html",
+        body => "Test1 body with the same <b>tag</b> as snippets"
+    ) || die;
+
+    $self->make_message("Test2 subject with a <tag> in it",
+        mime_charset => "utf-8",
+        mime_type => "text/plain",
+        body => "Test2 body with a <tag/>, although it's plain text",
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # Connect to IMAP
+    xlog $self, "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+    my %m;
+
+    $r = $self->get_snippets('INBOX', $uids, { 'text' => 'test1' });
+    %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
+    $self->assert_str_equals("<mark>Test1</mark> body with the same tag as snippets", $m{body});
+    $self->assert_str_equals("<mark>Test1</mark> subject with an unescaped &amp; in it", $m{subject});
+
+    $r = $self->get_snippets('INBOX', $uids, { 'text' => 'test2' });
+    %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
+    $self->assert_str_equals("<mark>Test2</mark> body with a &lt;tag/&gt;, although it's plain text", $m{body});
+    $self->assert_str_equals("<mark>Test2</mark> subject with a &lt;tag&gt; in it", $m{subject});
+}

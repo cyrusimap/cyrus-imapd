@@ -1,0 +1,98 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_copy_state
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create user and share mailbox";
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+
+    my $srcInboxId = $self->getinbox()->{id};
+    $self->assert_not_null($srcInboxId);
+
+    my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
+    $self->assert_not_null($dstInboxId);
+
+    xlog $self, "create email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                1 => {
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'foo' => JSON::true,
+                    },
+                    subject => 'hello',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'world',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            accountId => 'other',
+            ids => ['foo'],  # Just fetching current state for 'other'
+        }, 'R2']
+    ]);
+    my $emailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId);
+    my $fromState = $res->[0][1]->{newState};
+    $self->assert_not_null($fromState);
+    my $state = $res->[1][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "move email";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            ifFromInState => $fromState,
+            ifInState => $state,
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                },
+            },
+            onSuccessDestroyOriginal => JSON::true,
+            destroyFromIfInState => $fromState,
+        }, 'R1'],
+        ['Email/get', {
+            accountId => 'other',
+            ids => ['#1'],
+            properties => ['mailboxIds'],
+        }, 'R2']
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $oldState = $res->[0][1]->{oldState};
+    $self->assert_str_equals($oldState, $state);
+    my $newState = $res->[0][1]->{newState};
+    $self->assert_not_null($newState);
+    $self->assert_str_equals('Email/set', $res->[1][0]);
+    $self->assert_str_equals($emailId, $res->[1][1]{destroyed}[0]);
+    $self->assert_not_null($res->[2][1]{list}[0]{mailboxIds}{$dstInboxId});
+
+    # Is the blobId downloadable?
+    my $blob = $jmap->Download({ accept => 'text/plain' },
+                               'other',
+                               $res->[0][1]{created}{"1"}{blobId});
+    $self->assert_str_equals('text/plain',
+                             $blob->{headers}->{'content-type'});
+    $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
+    $self->assert_matches(qr/\r\nSubject: hello\r\n/, $blob->{content});
+}

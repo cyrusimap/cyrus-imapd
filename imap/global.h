@@ -151,7 +151,6 @@ struct saslprops_t {
 
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
-extern char *find_msgid(char *, char **);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,
                                   const char **localip, const char **remoteip);
@@ -178,10 +177,13 @@ extern const char *config_statuscache_db;
 extern const char *config_userdeny_db;
 extern const char *config_zoneinfo_db;
 extern const char *config_conversations_db;
-extern const char *config_backup_db;
+extern int config_take_globallock;
+extern char *config_skip_userlock;
+extern int config_httpprettytelemetry;
 extern int charset_flags;
 extern int charset_snippet_flags;
 extern size_t config_search_maxsize;
+extern int haproxy_protocol;
 
 /* Session ID */
 extern void session_new_id(void);

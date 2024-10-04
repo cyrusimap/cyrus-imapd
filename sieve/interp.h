@@ -49,7 +49,7 @@
 struct sieve_interp {
     /* standard callbacks for actions */
     sieve_callback *redirect, *discard, *reject, *fileinto, *snooze, *keep;
-    sieve_callback *notify, *imip;
+    sieve_callback *notify, *processcal;
     sieve_vacation_t *vacation;
 
     sieve_get_size *getsize;
@@ -90,8 +90,14 @@ struct sieve_interp {
     /* time when allocated */
     time_t time;
 
-    /* have we addedd/deleted any headers? */
+    /* have we added/deleted any headers? */
     unsigned edited_headers : 1;
+
+    struct {
+        const char *folder;
+        const char *mailboxid;
+        const char *specialuse;
+    } ikeep;
 };
 
 
@@ -154,7 +160,7 @@ enum sieve_capa_flag {
 
     /* Notifications - RFC 5435 */
     SIEVE_CAPA_ENOTIFY      = 1LL<<23,
-    SIEVE_CAPA_NOTIFY       = 1LL<<24, /* draft-martin-sieve-notify-01 */
+    SIEVE_CAPA_NOTIFY       = 0LL<<24, /* deprecated draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
     SIEVE_CAPA_IHAVE        = 1LL<<25,
@@ -217,8 +223,14 @@ enum sieve_capa_flag {
     /* Snooze - draft-ietf-extra-sieve-snooze */
     SIEVE_CAPA_SNOOZE       = 1LL<<49,
 
-    /* iMIP - vnd.cyrus.imip */
-    SIEVE_CAPA_IMIP         = 1LL<<50,
+    /* ProcessCalendar - draft-ietf-extra-processimip */
+    SIEVE_CAPA_PROCESSCAL   = 1LL<<50,
+
+    /* vnd.cyrus.implicit_keep_target */
+    SIEVE_CAPA_IKEEP_TARGET = 1LL<<51,
+
+    /* i;unicode-casemap - RFC 5051 */
+    SIEVE_CAPA_COMP_UCASEMAP= 1LL<<52,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -234,7 +246,6 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_VACATION     \
                         | SIEVE_CAPA_RELATIONAL   \
                         | SIEVE_CAPA_IMAP4FLAGS   \
-                        | SIEVE_CAPA_IMAPFLAGS    \
                         | SIEVE_CAPA_SUBADDRESS   \
                         | SIEVE_CAPA_SPAM         \
                         | SIEVE_CAPA_SPAMPLUS     \
@@ -271,7 +282,9 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_LOG          \
                         | SIEVE_CAPA_JMAPQUERY    \
                         | SIEVE_CAPA_SNOOZE       \
-                        | SIEVE_CAPA_IMIP         \
+                        | SIEVE_CAPA_PROCESSCAL   \
+                        | SIEVE_CAPA_IKEEP_TARGET \
+                        | SIEVE_CAPA_COMP_UCASEMAP \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)

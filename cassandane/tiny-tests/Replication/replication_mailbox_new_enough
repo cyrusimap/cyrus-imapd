@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+# this test is too tricky to get working on uuid mailboxes
+sub test_replication_mailbox_new_enough
+    :max_version_3_4
+{
+    my ($self) = @_;
+
+    my $user = 'cassandane';
+    my $exit_code = 0;
+
+    # successfully replicate a mailbox new enough to contain guids
+    my $mailbox10 = $self->{instance}->install_old_mailbox($user, 10);
+    $self->run_replication(mailbox => $mailbox10);
+
+    # successfully replicate a mailbox new enough to contain guids
+    my $mailbox12 = $self->{instance}->install_old_mailbox($user, 12);
+    $self->run_replication(mailbox => $mailbox12);
+}

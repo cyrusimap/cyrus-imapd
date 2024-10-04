@@ -87,6 +87,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -175,7 +176,7 @@ static const char *user_sieve_path_byid(const char *mboxid)
 
 EXPORTED const char *user_sieve_path(const char *inuser)
 {
-    const char *sieve_path;
+    const char *sieve_path = NULL;
     char *user = xstrdupnull(inuser);
     char *p;
 
@@ -200,8 +201,7 @@ EXPORTED const char *user_sieve_path(const char *inuser)
         int r = mboxlist_lookup(inboxname, &mbentry, NULL);
         free(inboxname);
 
-        if (r) sieve_path = "";
-        else if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        if (r || (mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             legacy = 1;
         }
         else {
@@ -233,7 +233,7 @@ static int delete_cb(const char *sievedir, const char *name,
 
     snprintf(path, sizeof(path), "%s/%s", sievedir, name);
 
-    unlink(path);
+    xunlink(path);
 
     return SIEVEDIR_OK;
 }
@@ -379,7 +379,7 @@ static int user_renamesub(const char *name, void* rock)
         name = newname;
     }
 
-    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1);
+    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1, /*silent*/1);
 }
 
 static int user_renamesieve(const char *olduser, const char *newuser)
@@ -593,7 +593,7 @@ static int find_cb(void *rockp __attribute__((unused)),
     int r;
 
     root = xstrndup(key, keylen);
-    r = quota_deleteroot(root, 0);
+    r = quota_deleteroot(root, 1);
     free(root);
 
     return r;
@@ -693,22 +693,20 @@ EXPORTED char *user_hash_xapian_byid(const char *mboxid, const char *root)
 
 static const char *_namelock_name_from_userid(const char *userid)
 {
-    const char *p;
     static struct buf buf = BUF_INITIALIZER;
-    if (!userid) userid = ""; // no userid == global lock
 
     buf_setcstr(&buf, "*U*");
-
-    for (p = userid; *p; p++) {
-        switch(*p) {
-            case '.':
-                buf_putc(&buf, '^');
-                break;
-            default:
-                buf_putc(&buf, *p);
-                break;
-        }
+    if (userid) {
+	char *inbox = mboxname_user_mbox(userid, NULL);
+	buf_appendcstr(&buf, inbox);
+	free(inbox);
     }
+
+    if (config_skip_userlock && !strcmp(config_skip_userlock, userid)) {
+        // add a trailing character to avoid clashing with wrapping lock
+        buf_putc(&buf, '~');
+    }
+
 
     return buf_cstring(&buf);
 }
@@ -722,8 +720,26 @@ EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int lockty
     return namelock;
 }
 
+EXPORTED int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock)
+{
+    struct mboxlock *userlock = user_namespacelock(userid);
+    int r = cb(rock);
+    mboxname_release(&userlock);
+    return r;
+}
+
 EXPORTED int user_isnamespacelocked(const char *userid)
 {
     const char *name = _namelock_name_from_userid(userid);
     return mboxname_islocked(name);
+}
+
+EXPORTED int user_isreplicaonly(const char *userid)
+{
+    int file_exists = 0;
+    char *path = strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
+    struct stat sbuf;
+    file_exists = !stat(path, &sbuf);
+    free(path);
+    return file_exists;
 }

@@ -57,6 +57,8 @@
 #include "bsearch.h"
 #include "cyr_qsort_r.h"
 #include "http_jmap.h"
+#include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "jmap_mail.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -139,15 +141,10 @@ static jmap_method_t jmap_mailbox_methods_nonstandard[] = {
 
 HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_mailbox_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_mailbox_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_mailbox_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_mailbox_methods_nonstandard, settings);
     }
 }
 
@@ -321,8 +318,8 @@ static char *_mbox_get_name(const char *account_id __attribute__((unused)),
         extname = xstrdup(strarray_nth(boxes, strarray_size(boxes)-1));
         /* Decode extname from IMAP UTF-7 to UTF-8. Or fall back to extname. */
         charset_t cs = charset_lookupname("imap-utf-7");
-        char *decoded = charset_to_utf8(extname, strlen(extname),
-                                        cs, ENCODING_NONE);
+        char *decoded = charset_to_utf8cstr(extname, strlen(extname),
+                                            cs, ENCODING_NONE);
         if (decoded) {
             free(extname);
             extname = decoded;
@@ -667,8 +664,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "isSubscribed")) {
-        int is_subscribed =
-            sublist && strarray_find(sublist, mbentry->name, 0) >= 0;
+        int is_subscribed = strarray_contains(sublist, mbentry->name);
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
@@ -691,29 +687,30 @@ struct jmap_mailbox_get_cb_rock {
     strarray_t *sublist;
 };
 
-static int is_jmap_mailbox(const mbentry_t *mbentry, int tombstones)
+static int is_jmap_mailbox(jmap_req_t *req,
+                           const mbentry_t *mbentry, int tombstones)
 {
     /* Don't list special-purpose mailboxes. */
     if (mbtypes_unavailable(mbentry->mbtype) ||
         mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL ||
-        ((mbentry->mbtype & MBTYPE_DELETED) && !tombstones))
+        ((mbentry->mbtype & MBTYPE_DELETED) && !tombstones) ||
+        mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype))
         return 0;
 
     // No more returns from here
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     const char *topbox = strarray_nth(mbname_boxes(mbname), 0);
+    char *role = NULL;
     int ret = 0;
 
     /* skip INBOX.INBOX magic intermediate */
     if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(topbox, "INBOX"))
         goto done;
 
-    /* skip any of our magic mailboxes */
-    if (!strcmpsafe(topbox, config_getstring(IMAPOPT_CALENDARPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX))
-     || !strcmpsafe(topbox, config_getstring(IMAPOPT_JMAPUPLOADFOLDER)))
+    /* skip any non-JMAP mailboxes */
+    role = _mbox_get_role(req, mbname);
+    if (!strcmpsafe(role, "xnotes"))
         goto done;
 
     // Use this mailbox
@@ -721,6 +718,7 @@ static int is_jmap_mailbox(const mbentry_t *mbentry, int tombstones)
 
 done:
     mbname_free(&mbname);
+    free(role);
     return ret;
 }
 
@@ -730,7 +728,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     jmap_req_t *req = rock->req;
     json_t *list = (json_t *) rock->get->list, *obj;
 
-    if (!is_jmap_mailbox(mbentry, 0)) return 0;
+    if (!is_jmap_mailbox(rock->req, mbentry, 0)) return 0;
 
     /* Do we need to process this mailbox? */
     if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
@@ -957,9 +955,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    get.state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     jmap_ok(req, jmap_get_reply(&get));
 
     _shared_mboxes_free(shared_mboxes);
@@ -1139,8 +1135,9 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
         }
         if (JNOTNULL(filter->is_subscribed)) {
             int want_subscribed = json_boolean_value(filter->is_subscribed);
-            int is_subscribed = strarray_find(query->sublist, rec->mboxname, 0);
-            if (want_subscribed && is_subscribed < 0) return 0;
+            int is_subscribed = strarray_contains(query->sublist, rec->mboxname);
+            if (want_subscribed && !is_subscribed) return 0;
+            if (!want_subscribed && is_subscribed) return 0;
         }
         return 1;
     }
@@ -1240,7 +1237,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     mboxquery_t *q = rock;
 
-    if (!is_jmap_mailbox(mbentry, q->include_tombstones))
+    if (!is_jmap_mailbox(q->req, mbentry, q->include_tombstones))
         return 0;
 
     enum shared_mbox_type shared_mbtype = _shared_mbox_type(q->shared_mboxes, mbentry->name);
@@ -1257,9 +1254,10 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         mbentry_t *mbparent = NULL;
         r = _findparent(mbentry->name, &mbparent);
         if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+            free(rec);
             goto done;
         }
-        else if (!r) {
+        if (!r) {
             rec->parent_id = xstrdup(mbparent->uniqueid);
         }
         mboxlist_entry_free(&mbparent);
@@ -2226,7 +2224,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
     /* Check parent exists and has the proper ACL. */
     const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
-    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD)) {
+    if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD) ||
+                mboxname_isnondeliverymailbox(mbparent->name, mbparent->mbtype)) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
@@ -2332,7 +2331,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
     if (!r && args->is_subscribed > 0) {
-        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0);
+        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0, 0);
     }
     if (r) goto done;
 
@@ -2425,7 +2424,7 @@ static int _mbox_update_validate_serverset(jmap_req_t *req,
     json_t *jcurRights = _mbox_get_myrights(req, mbentry);
     json_t *jold = json_pack("{s:o}", "myRights", json_copy(jcurRights));
     json_t *invalid = json_array();
-    json_t *jnew = jmap_patchobject_apply(jold, jpatch, invalid);
+    json_t *jnew = jmap_patchobject_apply(jold, jpatch, invalid, 0);
     if (json_array_size(invalid) == 0) {
         json_t *jnewRights = json_object_get(jnew, "myRights");
         if (!json_equal(jcurRights, jnewRights)) {
@@ -2473,7 +2472,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     /* Lookup current mailbox entry */
     mbentry = jmap_mbentry_by_uniqueid_copy(req, args->mbox_id);
-    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP) ||
+            mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         mboxlist_entry_free(&mbentry);
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
@@ -2735,13 +2735,13 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     if (!r && args->is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
-                               args->is_subscribed, 0, 0);
+                               args->is_subscribed, 0, 0, 0);
     }
     if (!r && (args->shareWith || args->is_seenshared >= 0)) {
         struct mailbox *mbox = NULL;
         uint32_t newopts;
 
-        r = jmap_openmbox(req, mboxname, &mbox, 1);
+        r = mailbox_open_iwl(mboxname, &mbox);
         if (r) goto done;
 
         if (args->shareWith) {
@@ -2762,7 +2762,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 mboxlist_update_foldermodseq(mailbox_name(mbox), mbox->i.highestmodseq);
             }
         }
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
     }
     if (r) goto done;
 
@@ -2820,12 +2820,12 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
         r = IMAP_NOTFOUND;
         goto done;
     }
-    r = jmap_openmbox(req, src_mbentry->name, &src_mbox, 0);
+    r = mailbox_open_irl(src_mbentry->name, &src_mbox);
     if (r) {
         syslog(LOG_ERR, "%s: can't open %s", __func__, src_mbentry->name);
         goto done;
     }
-    r = jmap_openmbox(req, dst_mbentry->name, &dst_mbox, 1);
+    r = mailbox_open_iwl(dst_mbentry->name, &dst_mbox);
     if (r) {
         syslog(LOG_ERR, "%s: can't open %s", __func__, dst_mbentry->name);
         goto done;
@@ -2874,7 +2874,9 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
                               EVENT_MESSAGE_COPY);
         if (!r) {
             r = append_copy(src_mbox, &as, &move_msgrecs, nolink,
-                    mboxname_same_userid(mailbox_name(src_mbox), mailbox_name(dst_mbox)));
+                            mboxname_same_userid(mailbox_name(src_mbox),
+                                                 mailbox_name(dst_mbox)),
+                            NULL);
             if (!r) {
                 r = append_commit(&as);
                 if (!r) sync_log_append(mailbox_name(dst_mbox));
@@ -2892,8 +2894,8 @@ done:
     if (r && !result->err) {
         result->err = jmap_server_error(r);
     }
-    jmap_closembox(req, &dst_mbox);
-    jmap_closembox(req, &src_mbox);
+    mailbox_close(&dst_mbox);
+    mailbox_close(&src_mbox);
     ptrarray_fini(&move_msgrecs);
     return r;
 }
@@ -2920,7 +2922,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
 
     /* Lookup mailbox by id. */
     mbentry = jmap_mbentry_by_uniqueid_copy(req, mboxid);
-    if (!mbentry) {
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
@@ -2965,14 +2967,14 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             struct mailbox *mbox = NULL;
             struct mailbox_iter *iter = NULL;
 
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            r = mailbox_open_irl(mbentry->name, &mbox);
             if (r) goto done;
             iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
             if (mailbox_iter_step(iter) != NULL) {
                 result->err = json_pack("{s:s}", "type", "mailboxHasEmail");
             }
             mailbox_iter_done(&iter);
-            jmap_closembox(req, &mbox);
+            mailbox_close(&mbox);
             if (result->err) goto done;
         }
     }
@@ -3027,7 +3029,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             mbentry->uniqueid, msgcount);
 
     /* Remove subscription */
-    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 0, 0);
+    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
     if (r2) {
         syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
                 mbentry->name, error_message(r2));
@@ -3352,7 +3354,7 @@ struct mboxset_state {
     int has_conflict;
     hash_table *id_by_imapname;
     hash_table *entry_by_id;
-    hash_table *siblings_by_parent_id;
+    hash_table *siblingnames_by_parent_id;
     hash_table *specialuses_by_id;
 };
 
@@ -3429,10 +3431,10 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
     if (entry->parent_id) parent_id = entry->parent_id;
 
     /* A mailbox must not have siblings with the same name. */
-    strarray_t *siblings = hash_lookup(parent_id, state->siblings_by_parent_id);
+    strarray_t *siblings = hash_lookup(parent_id, state->siblingnames_by_parent_id);
     if (!siblings) {
         siblings = strarray_new();
-        hash_insert(parent_id, siblings, state->siblings_by_parent_id);
+        hash_insert(parent_id, siblings, state->siblingnames_by_parent_id);
     }
     int i;
     for (i = 0; i < strarray_size(siblings); i++) {
@@ -3576,7 +3578,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             int j;
             for (j = 0; j < strarray_size(specialuses); j++) {
                 const char *specialuse = strarray_nth(specialuses, j);
-                if (strarray_find(protected_uses, specialuse, 0) < 0) {
+                if (!strarray_contains(protected_uses, specialuse)) {
                     continue;
                 }
                 struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
@@ -3597,7 +3599,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             int j;
             for (j = 0; j < strarray_size(specialuses); j++) {
                 const char *specialuse = strarray_nth(specialuses, j);
-                if (strarray_find(protected_uses, specialuse, 0) >= 0) {
+                if (strarray_contains(protected_uses, specialuse)) {
                     strarray_add(&want_protected, specialuse);
                 }
             }
@@ -3661,7 +3663,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             continue;
         }
         const char *specialuse = strarray_nth(specialuses, 0);
-        if (strarray_find(&have_specialuses, specialuse, 0) >= 0) {
+        if (strarray_contains(&have_specialuses, specialuse)) {
             state->has_conflict = 1;
             buf_printf(&conflict_desc, "\nMailbox %s has specialuse %s, but at "
                     "least one other mailbox also has this specialuse.",
@@ -3674,7 +3676,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
     /* Validate: all protected preserved */
     for (i = 0; i < strarray_size(&want_protected); i++) {
         const char *protected = strarray_nth(&want_protected, i);
-        if (strarray_find(&have_specialuses, protected, 0) < 0) {
+        if (!strarray_contains(&have_specialuses, protected)) {
             if (buf_len(&conflict_desc))
                 buf_putc(&conflict_desc, ' ');
             buf_printf(&conflict_desc, "\nA mailbox had protected specialuse %s "
@@ -3682,6 +3684,32 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
                     protected);
             state->has_conflict = 1;
         }
+    }
+
+    /* Validate: no children for specialuse_nochildren roles */
+    if (!state->has_conflict && config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN)) {
+        strarray_t *nochildren =
+            strarray_split(config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN),
+                NULL, STRARRAY_TRIM);
+
+        hash_iter *iter = hash_table_iter(state->specialuses_by_id);
+        while (hash_iter_next(iter)) {
+            const char* mbox_id = hash_iter_key(iter);
+            strarray_t *specialuses = hash_iter_val(iter);
+            if (strarray_size(specialuses) &&
+                    strarray_intersect(specialuses, nochildren)) {
+                if (hash_lookup(mbox_id, state->siblingnames_by_parent_id)) {
+                    buf_printf(&conflict_desc, "\nMailbox %s has specialuse %s "
+                            "which forbids it to have children", mbox_id,
+                            strarray_nth(specialuses, 0));
+                    state->has_conflict = 1;
+                    break;
+                }
+            }
+        }
+
+        strarray_free(nochildren);
+        hash_iter_free(&iter);
     }
 
     /* Handle conflicts */
@@ -3773,9 +3801,9 @@ static int _mboxset_state_validate(jmap_req_t *req,
     construct_hash_table(&entry_by_id, 1024, 0);
     state->entry_by_id = &entry_by_id;
 
-    hash_table siblings_by_parent_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&siblings_by_parent_id, 1024, 0);
-    state->siblings_by_parent_id = &siblings_by_parent_id;
+    hash_table siblingnames_by_parent_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&siblingnames_by_parent_id, 1024, 0);
+    state->siblingnames_by_parent_id = &siblingnames_by_parent_id;
 
     mboxlist_usermboxtree(req->accountid, NULL, _mboxset_state_mboxlist_cb, state,
                           MBOXTREE_INTERMEDIATES);
@@ -3805,7 +3833,7 @@ static int _mboxset_state_validate(jmap_req_t *req,
     /* Clean up state */
     free_hash_table(&entry_by_id, _mboxset_entry_free);
     free_hash_table(&id_by_imapname, free);
-    free_hash_table(&siblings_by_parent_id, (void(*)(void*))strarray_free);
+    free_hash_table(&siblingnames_by_parent_id, (void(*)(void*))strarray_free);
     free_hash_table(&specialuses_by_id, (void(*)(void*))strarray_free);
     free(state);
 
@@ -3881,9 +3909,7 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     }
 
     /* Fetch mailbox state */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
-    set->super.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    set->super.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
 
     /* Prune intermediary mailbox trees without any children. Do this
      * after we fetched the mailbox state, so clients are forced to
@@ -4080,18 +4106,14 @@ static int jmap_mailbox_set(jmap_req_t *req)
         goto done;
     }
     if (set.super.if_in_state) {
-        json_t *jstate = json_string(set.super.if_in_state);
-        if (jmap_cmpstate(req, jstate, MBTYPE_EMAIL)) {
+        if (atomodseq_t(set.super.if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        json_decref(jstate);
         set.super.old_state = xstrdup(set.super.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-        set.super.old_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
+        set.super.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     }
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
@@ -4120,7 +4142,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
-    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
+    if (mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         return 0;
     }
 
@@ -4130,7 +4152,13 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         int r = status_lookup_mbentry(mbentry, data->req->userid,
                                       STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;
+        r = conversation_getstatus(req->cstate,
+                                   CONV_FOLDER_KEY_MBE(req->cstate, mbentry),
+                                   &sdata.xconv);
+        if (r) return r;
         mbmodseq = sdata.highestmodseq;
+        if (sdata.xconv.threadmodseq > mbmodseq)
+            mbmodseq = sdata.xconv.threadmodseq;
     } else {
         mbmodseq = mbentry->foldermodseq;
     }
@@ -4284,7 +4312,7 @@ static int _mbox_changes(jmap_req_t *req,
     }
 
     changes->new_modseq = changes->has_more_changes ?
-        windowmodseq : jmap_highestmodseq(req, 0);
+        windowmodseq : jmap_modseq(req, MBTYPE_EMAIL, 0);
 
 done:
     if (data.created) json_decref(data.created);
@@ -4297,7 +4325,7 @@ done:
 static int jmap_mailbox_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */

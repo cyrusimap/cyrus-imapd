@@ -40,7 +40,9 @@
 package Cassandane::Cyrus::Autocreate;
 use strict;
 use warnings;
+use Cwd qw(getcwd);
 use Data::Dumper;
+use File::Temp qw(tempdir);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -63,11 +65,14 @@ sub new
         'xlist-sent' => 'Sent',
         'xlist-trash' => 'Trash',
     );
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         adminstore => 1,
         deliver => 1,
     }, @_);
+
+    $self->needs('component', 'autocreate');
+    return $self;
 }
 
 sub set_up
@@ -83,7 +88,7 @@ sub tear_down
 }
 
 sub test_autocreate_specialuse
-     :min_version_3_0 :needs_component_autocreate :NoAltNameSpace
+     :min_version_3_0 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -113,7 +118,7 @@ sub test_autocreate_specialuse
 }
 
 sub test_autocreate_sieve_script_generation
-    :min_version_3_0 :needs_component_autocreate :needs_component_sieve
+    :min_version_3_0 :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -136,13 +141,13 @@ sub test_autocreate_sieve_script_generation
     my $talk = $store->get_client();
 
     my $sievedir = $self->{instance}->get_sieve_script_dir('foo');
-    $self->assert(-f "$sievedir/foo_sieve.script.script");
-    $self->assert(-f "$sievedir/defaultbc");
-    $self->assert(-f "$sievedir/foo_sieve.script.bc");
+    $self->assert_file_test("$sievedir/foo_sieve.script.script", '-f');
+    $self->assert_file_test("$sievedir/defaultbc", '-f');
+    $self->assert_file_test("$sievedir/foo_sieve.script.bc", '-f');
 }
 
 sub test_autocreate_acl
-    :min_version_3_1 :needs_component_autocreate :needs_component_sieve :NoAltNameSpace
+    :min_version_3_1 :needs_component_sieve :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -163,6 +168,57 @@ sub test_autocreate_acl
         my $res = $talk->getacl($folder);
         $self->assert_deep_equals($folder_acls{$folder}, $res);
     }
+}
+
+sub test_legacymb_already_exists
+    :NoStartInstances :NoAltNamespace
+{
+    my ($self) = @_;
+
+    # want a separate IMAP service with separate config containing
+    # the defaults (no autocreate!) plus mailbox_legacy_dirs: yes
+    my $leg_conf = Cassandane::Config->default()->clone();
+    $leg_conf->set(mailbox_legacy_dirs => 'yes');
+
+    my $leg_svc = $self->{instance}->add_service(
+        name => 'imaplegacymb',
+        config => $leg_conf,
+    );
+
+    # now actually start everything
+    $self->_start_instances();
+
+    # create some mailboxes for user foo under legacy storage
+    my $leg_store = $leg_svc->create_store(username => 'admin',
+                                           type => 'imap');
+    my $leg_talk = $leg_store->get_client();
+
+    $leg_talk->create('user.foo') or die;
+    $leg_talk->setacl('user.foo', foo => 'lrswipkxtecdn') or die;
+    $leg_talk->create('user.foo.bar') or die;
+    $leg_talk->setacl('user.foo.bar', foo => 'lrswipkxtecdn') or die;
+
+    $leg_talk->logout();
+
+    # those mailboxes had better be under legacy storage
+    foreach my $mailbox (qw(user.foo user.foo.bar)) {
+        my $mbpath = $self->{instance}->run_mbpath($mailbox);
+        $self->assert_does_not_match(qr{/uuid/}, $mbpath->{data});
+    }
+
+    # now log in as user foo -- better not get the default
+    # autocreate set!
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+
+    my $data = $talk->list("", "*");
+
+    $self->assert_mailbox_structure($data, '.', {
+        'INBOX' => '\\HasChildren',
+        'INBOX.bar' => '\\HasNoChildren',
+    });
 }
 
 1;

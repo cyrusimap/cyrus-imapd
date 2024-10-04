@@ -65,6 +65,7 @@
 #include "seen.h"
 #include "sync_log.h"
 #include "imparse.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -399,7 +400,7 @@ HIDDEN int seen_delete_user(const char *user)
                user);
     }
 
-    if (unlink(fname) && errno != ENOENT) {
+    if (xunlink(fname) && errno != ENOENT) {
         syslog(LOG_ERR, "error unlinking %s: %m", fname);
         r = IMAP_IOERROR;
     }
@@ -497,6 +498,7 @@ static int seen_merge_cb(void *rockp,
         dirty = 1; /* no record */
     }
     else {
+        seen_freedata(&oldsd);
         if (newsd.lastuid > oldsd.lastuid) dirty = 1;
         if (newsd.lastread > oldsd.lastread) dirty = 1;
     }
@@ -505,6 +507,7 @@ static int seen_merge_cb(void *rockp,
         /* write back data from new entry */
         r = seen_write(seendb, uniqueid, &newsd);
     }
+    seen_freedata(&newsd);
 
     free(uniqueid);
 

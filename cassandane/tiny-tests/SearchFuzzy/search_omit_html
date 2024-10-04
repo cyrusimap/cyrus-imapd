@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_search_omit_html
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    xlog $self, "Generate and index test messages.";
+    $self->make_message("toplevel",
+        mime_type => "text/html",
+        body => "<html><body><div>hello</div></body></html>"
+    ) || die;
+
+    $self->make_message("embedded",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "txt"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/html\r\n"
+          . "\r\n"
+          . "<html><body><div>world</div></body></html>"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_num_equals(0, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'hello') || die;
+    $self->assert_num_equals(1, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'world') || die;
+    $self->assert_num_equals(1, scalar @$uids);
+}

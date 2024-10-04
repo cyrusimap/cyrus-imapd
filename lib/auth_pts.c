@@ -534,7 +534,6 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
         return NULL;
 
     sa = strarray_new();
-    strarray_truncate(sa, auth_state->ngroups);
     for (i = 0; i < auth_state->ngroups; i++) {
         strarray_append(sa, auth_state->groups[i].id);
     }
@@ -551,4 +550,5 @@ HIDDEN struct auth_mech auth_pts =
     &mynewstate,
     &myfreestate,
     &mygroups,
+    NULL, /* refresh */
 };

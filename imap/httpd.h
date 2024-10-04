@@ -50,6 +50,7 @@
 #include <libical/ical.h>
 
 #include "annotate.h" /* for strlist */
+#include "dynarray.h"
 #include "hash.h"
 #include "http_client.h"
 #include "mailbox.h"
@@ -67,16 +68,11 @@
 #define DFLAG_UNBIND    "DAV:unbind"
 #define DFLAG_UNCHANGED "DAV:unchanged"
 
-/* XML namespace URIs */
-#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
-
 /* Supported TLS version for Upgrade */
 #define TLS_VERSION      "TLS/1.2"
 
 /* Supported HTML DOCTYPE */
-#define HTML_DOCTYPE \
-    "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
-    "\"http://www.w3.org/TR/html4/loose.dtd\">"
+#define HTML_DOCTYPE "<!DOCTYPE html>"
 
 #define XML_DECLARATION \
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -95,10 +91,8 @@
 
 /* SASL usage based on availability */
 #if defined(SASL_NEED_HTTP) && defined(SASL_HTTP_REQUEST)
-  #define HTTP_DIGEST_MECH "DIGEST-MD5"
   #define SASL_USAGE_FLAGS (SASL_NEED_HTTP | SASL_SUCCESS_DATA)
 #else
-  #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
   #define SASL_USAGE_FLAGS SASL_SUCCESS_DATA
 #endif /* SASL_NEED_HTTP */
 
@@ -187,12 +181,10 @@ struct auth_scheme_t {
 /* Auth scheme identifiers */
 enum {
     AUTH_BASIC        = (1<<0),
-    AUTH_DIGEST       = (1<<1),
-    AUTH_SPNEGO       = (1<<2),
-    AUTH_NTLM         = (1<<3),
-    AUTH_BEARER       = (1<<4),
-    AUTH_SCRAM_SHA1   = (1<<5),
-    AUTH_SCRAM_SHA256 = (1<<6)
+    AUTH_SPNEGO       = (1<<1),
+    AUTH_BEARER       = (1<<2),
+    AUTH_SCRAM_SHA1   = (1<<3),
+    AUTH_SCRAM_SHA256 = (1<<4)
 };
 
 /* Auth scheme flags */
@@ -279,7 +271,7 @@ struct range {
 
 struct patch_doc_t {
     const char *format;                 /* MIME format of patch document */
-    int (*proc)();                      /* Function to parse and apply doc */
+    int (*proc)(txn_t *, void *);       /* Function to parse and apply doc */
 };
 
 typedef int (*encode_proc_t)(struct transaction_t *txn,
@@ -331,6 +323,7 @@ struct txn_flags_t {
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
     unsigned long redirect : 1;         /* CGI local redirect */
+    unsigned long retry    : 1;         /* Retry-After */
 };
 
 /* HTTP connection context */
@@ -536,7 +529,6 @@ struct accept {
     char *version;
     char *charset;
     float qual;
-    struct accept *next;
 };
 
 extern struct namespace_t namespace_principal;
@@ -577,7 +569,6 @@ extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern const char *httpd_localip, *httpd_remoteip;
 extern unsigned long config_httpmodules;
-extern int config_httpprettytelemetry;
 extern strarray_t *httpd_log_headers;
 extern char *httpd_altsvc;
 
@@ -585,14 +576,16 @@ extern int ignorequota;
 extern int apns_enabled;
 extern int ws_enabled;
 
+extern struct proc_handle *httpd_proc_handle;
+
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);
-extern struct accept *parse_accept(const char **hdr);
+extern dynarray_t *parse_accept(const char **hdr);
 extern void free_accept(struct accept *a);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(unsigned ver, long code);
-extern char *httpdate_gen(char *buf, size_t len, time_t t);
+void httpdate_gen(char *buf, size_t len, time_t t) __attribute__((nonnull));
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...)
                       __attribute__((format(printf, 3, 4)));

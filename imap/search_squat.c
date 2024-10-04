@@ -92,6 +92,7 @@ typedef struct {
 
 static const char *squat_strerror(int err);
 
+/* c.f. part_char_by_part below */
 static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
     "msh", // SEARCH_PART_ANY
     "f",   // SEARCH_PART_FROM
@@ -110,6 +111,29 @@ static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
     NULL,  // SEARCH_PART_LANGUAGE
     NULL   // SEARCH_PART_PRIORITY
 };
+
+/* c.f. doctypes_by_part above */
+static const char part_char_by_part[SEARCH_NUM_PARTS] = {
+    0,     // SEARCH_PART_ANY
+    'f',   // SEARCH_PART_FROM
+    't',   // SEARCH_PART_TO
+    'c',   // SEARCH_PART_CC
+    'b',   // SEARCH_PART_BCC
+    's',   // SEARCH_PART_SUBJECT
+    0,     // SEARCH_PART_LISTID
+    0,     // SEARCH_PART_TYPE
+    'h',   // SEARCH_PART_HEADERS
+    'm',   // SEARCH_PART_BODY
+    0,     // SEARCH_PART_LOCATION       -- XXX not indexed for some reason
+    0,     // SEARCH_PART_ATTACHMENTNAME -- XXX not indexed for some reason
+    0,     // SEARCH_PART_ATTACHMENTBODY
+    0,     // SEARCH_PART_DELIVEREDTO
+    0,     // SEARCH_PART_LANGUAGE
+    0,     // SEARCH_PART_PRIORITY
+};
+
+/* c.f. part_char_by_part above */
+static const char *const valid_part_chars = "ftcbshm";
 
 /* The document name is of the form
 
@@ -296,7 +320,7 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     opstack_pop(bb);
 }
 
-static void match(search_builder_t *bx, int part, const char *str)
+static void match(search_builder_t *bx, enum search_part part, const char *str)
 {
     SquatBuilderData *bb = (SquatBuilderData *)bx;
     struct opstack *parent = opstack_top(bb);
@@ -355,6 +379,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     SquatSearchIndex* index;
     const char *fname;
     int fd;
+
+    if (!mailbox) return NULL;
 
     if ((opts & SEARCH_MULTIPLE)) {
         syslog(LOG_ERR, "Squat does not support multiple-folder searches, sorry");
@@ -593,25 +619,15 @@ static int begin_bodypart(search_text_receiver_t *rx __attribute__((unused)),
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part)
+static void begin_part(search_text_receiver_t *rx, enum search_part part)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     char part_char = 0;
 
     /* Figure out what the name of the source document is going to be. */
-    switch (part) {
-    case SEARCH_PART_FROM: part_char = 'f'; break;
-    case SEARCH_PART_TO: part_char = 't'; break;
-    case SEARCH_PART_CC: part_char = 'c'; break;
-    case SEARCH_PART_BCC: part_char = 'b'; break;
-    case SEARCH_PART_SUBJECT: part_char = 's'; break;
-    case SEARCH_PART_HEADERS: part_char = 'h'; break;
-    case SEARCH_PART_BODY:
-        part_char = 'm';
-        break;
-    default:
-        return;
-    }
+    assert(part >= 0 && part < SEARCH_NUM_PARTS);
+    part_char = part_char_by_part[part];
+    if (!part_char) return;
 
     snprintf(d->doc_name, sizeof(d->doc_name), "%c%d", part_char, d->uid);
     d->doc_is_open = 0;
@@ -649,6 +665,9 @@ static int append_text(search_text_receiver_t *rx,
     int r = 0;      /* IMAP error */
     int s = 0;      /* SQUAT error */
 
+    /* nothing to do here if begin_part() exited early or wasn't called */
+    if (!d->doc_name[0]) return 0;
+
     if (!d->doc_is_open) {
         if (text->len + d->pending_text.len < SQUAT_WORD_SIZE) {
             /* not enough text yet */
@@ -683,8 +702,7 @@ static int append_text(search_text_receiver_t *rx,
     return r;
 }
 
-static void end_part(search_text_receiver_t *rx,
-                     int part __attribute__((unused)))
+static void end_part(search_text_receiver_t *rx)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     int s = 0;      /* SQUAT error */
@@ -700,6 +718,7 @@ static void end_part(search_text_receiver_t *rx,
         }
     }
     d->doc_is_open = 0;
+    memset(d->doc_name, 0, sizeof(d->doc_name));
     buf_reset(&d->pending_text);
 }
 
@@ -754,7 +773,7 @@ static int doc_check(void *closure, const SquatListDoc *doc)
         return (1);
     }
 
-    if (!strchr("tfcbsmh", doc->doc_name[0])) {
+    if (!strchr(valid_part_chars, doc->doc_name[0])) {
         syslog(LOG_ERR, "squat: invalid document name: %s", doc->doc_name);
         d->valid = 0;
         /* TODO: is this right?? */
@@ -773,7 +792,7 @@ static int doc_check(void *closure, const SquatListDoc *doc)
 
 static int begin_mailbox(search_text_receiver_t *rx,
                          struct mailbox *mailbox,
-                         int incremental)
+                         int flags)
 {
     SquatReceiverData *d = (SquatReceiverData *)rx;
     SquatOptions options;
@@ -785,6 +804,7 @@ static int begin_mailbox(search_text_receiver_t *rx,
     SquatSearchIndex *old_index = NULL;
     int r = 0;      /* IMAP error code */
     int s = 0;      /* SQUAT error code */
+    int incremental = (flags & SEARCH_UPDATE_INCREMENTAL);
 
     bv_clearall(&d->indexed);
 
@@ -1028,7 +1048,7 @@ static int end_update(search_text_receiver_t *rx)
     return 0;
 }
 
-static int can_match(enum search_op matchop, int partnum)
+static int can_match(enum search_op matchop, enum search_part partnum)
 {
     return (matchop == SEOP_MATCH || matchop == SEOP_FUZZYMATCH) &&
         doctypes_by_part[partnum];

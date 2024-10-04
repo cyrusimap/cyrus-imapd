@@ -57,7 +57,7 @@
 #define XAPIAN_DIRNAME       "/xapian"
 
 extern int xapian_basedir(const char *tier, const char *mboxname,
-                          const char *part, const char *root, char **basedir);
+                          const char *partition, const char *root, char **basedir);
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
                                uint32_t uid, const char *partid, void *rock);
@@ -66,7 +66,7 @@ typedef int (*search_hitguid_cb_t)(const conv_guidrec_t *rec, size_t nguids,
                                    void *rock);
 
 typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
-                                   /* SEARCH_PART_* constants */int part,
+                                   enum search_part part,
                                    const char *bodypartid,
                                    const char *snippet, void *rock);
 
@@ -82,21 +82,22 @@ struct search_builder {
 #define SEARCH_OP_FALSE     105
     void (*begin_boolean)(search_builder_t *, int op);
     void (*end_boolean)(search_builder_t *, int op);
-    void (*match)(search_builder_t *, int part, const char *str);
-    void (*matchlist)(search_builder_t *, int part, const strarray_t *items);
+    void (*match)(search_builder_t *, enum search_part, const char *str);
+    void (*matchlist)(search_builder_t *, enum search_part, const strarray_t *items);
     void *(*get_internalised)(search_builder_t *);
     int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
     /* XXX - guidsearch is a hack for speeding up JMAP email queries */
     int (*run_guidsearch)(search_builder_t *, search_hitguid_cb_t proc, void *rock);
+    unsigned (*min_index_version)(search_builder_t*);
 };
 
-typedef struct search_snippet_markup {
+struct search_snippet_markup {
     const char *hi_start;
     const char *hi_end;
     const char *omit;
-} search_snippet_markup_t;
+};
 
-extern search_snippet_markup_t default_snippet_markup;
+extern struct search_snippet_markup default_snippet_markup;
 
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
@@ -111,7 +112,7 @@ extern search_snippet_markup_t default_snippet_markup;
        ...
        receiver->begin_part(<partN>)
        receiver->append_text(<text>)     (1 or more times)
-       receiver->end_part(<partN>)
+       receiver->end_part()
        receiver->begin_bodypart(<bodypart1>)
 
        receiver->end_message()
@@ -124,7 +125,7 @@ extern search_snippet_markup_t default_snippet_markup;
 typedef struct search_text_receiver search_text_receiver_t;
 struct search_text_receiver {
     int (*begin_mailbox)(search_text_receiver_t *,
-                         struct mailbox *, int incremental);
+                         struct mailbox *, int flags);
     uint32_t (*first_unindexed_uid)(search_text_receiver_t *);
     /* returns the highest index level of msg. ties between equal index levels
      * are broken by choosing the index level without the partial bit set */
@@ -133,10 +134,10 @@ struct search_text_receiver {
     int (*begin_bodypart)(search_text_receiver_t *, const char *partid,
                           const struct message_guid *content_guid,
                           const char *type, const char *subtype);
-    void (*begin_part)(search_text_receiver_t *, int part);
+    void (*begin_part)(search_text_receiver_t *, enum search_part);
     /* Returns IMAP_MESSAGE_TOO_LARGE if no more bytes are accepted */
     int  (*append_text)(search_text_receiver_t *, const struct buf *);
-    void (*end_part)(search_text_receiver_t *, int part);
+    void (*end_part)(search_text_receiver_t *);
     void (*end_bodypart)(search_text_receiver_t *);
 #define SEARCH_INDEXLEVEL_BASIC 1
 #define SEARCH_INDEXLEVEL_ATTACH 3
@@ -183,7 +184,7 @@ struct search_engine {
     int (*end_update)(search_text_receiver_t *);
     search_text_receiver_t *(*begin_snippets)(void *internalised,
                                               int verbose,
-                                              search_snippet_markup_t *markup,
+                                              struct search_snippet_markup *markup,
                                               search_snippet_cb_t,
                                               void *rock);
     int (*end_snippets)(search_text_receiver_t *);
@@ -196,7 +197,7 @@ struct search_engine {
     int (*deluser)(const struct mboxlist_entry *mbentry);
     int (*check_config)(char **errstr);
     int (*langstats)(const char *userid, ptrarray_t *lstats, size_t *total_docs);
-    int (*can_match)(enum search_op matchop, int partnum);
+    int (*can_match)(enum search_op matchop, enum search_part);
     int (*upgrade)(const char *userid);
 };
 
@@ -221,9 +222,10 @@ extern void search_end_search(search_builder_t *);
 #define SEARCH_UPDATE_ALLOW_PARTIALS (1<<5)
 #define SEARCH_UPDATE_REINDEX_PARTIALS (1<<6)
 #define SEARCH_UPDATE_ALLOW_DUPPARTS (1<<7)
+#define SEARCH_UPDATE_VERBOSE (1<<8)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
-                          struct mailbox *mailbox,
+                          struct mailbox **mailboxptr,
                           int min_indexlevel, int flags);
 int search_end_update(search_text_receiver_t *rx);
 
@@ -238,7 +240,7 @@ int search_end_update(search_text_receiver_t *rx);
  * to receive more snippets for this message. */
 search_text_receiver_t *search_begin_snippets(void *internalised,
                                               int verbose,
-                                              search_snippet_markup_t *markup,
+                                              struct search_snippet_markup *markup,
                                               search_snippet_cb_t proc,
                                               void *rock);
 int search_end_snippets(search_text_receiver_t *rx);
@@ -254,13 +256,13 @@ int search_check_config(char **errstr);
 
 int search_upgrade(const char *userid);
 
-int search_can_match(enum search_op matchop, int partnum);
+int search_can_match(enum search_op matchop, enum search_part);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);
 
 /* for mbpath */
-extern int xapian_basedir(const char *tier, const char *mboxname, const char *part,
+extern int xapian_basedir(const char *tier, const char *mboxname, const char *partition,
                           const char *root, char **basedir);
 
 

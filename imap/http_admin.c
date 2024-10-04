@@ -118,6 +118,7 @@ struct namespace_t namespace_admin = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -134,7 +135,7 @@ static void admin_init(struct buf *serverinfo __attribute__((unused)))
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
-const struct action_t {
+static const struct action_t {
     const char *name;
     const char *desc;
     int (*func)(struct transaction_t *txn);
@@ -230,7 +231,7 @@ static int action_murder(struct transaction_t *txn)
         /* Add HTML header */
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>",
                           "Available Backend Servers");
@@ -295,7 +296,7 @@ static int action_murder(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>",
                           "Available Backend Servers");
@@ -376,7 +377,7 @@ static int action_menu(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[0].desc);
         buf_printf_markup(&resp, --level, "</head>");
@@ -473,7 +474,7 @@ static int action_proc(struct transaction_t *txn)
     /* Send HTML header */
     buf_reset(body);
     buf_printf_markup(body, level, HTML_DOCTYPE);
-    buf_printf_markup(body, level++, "<html>");
+    buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
     buf_printf_markup(body, level++, "<head>");
     buf_printf_markup(body, level, "<meta http-equiv=\"%s\" content=\"%s\">",
                       "Refresh", "1");
@@ -669,7 +670,7 @@ static int action_df(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[2].desc);
         buf_printf_markup(&resp, --level, "</head>");
@@ -1006,7 +1007,7 @@ static int action_conf(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html>");
+        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[3].desc);
         buf_printf_markup(&resp, --level, "</head>");

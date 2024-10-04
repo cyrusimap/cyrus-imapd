@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_uid_text
+    :min_version_3_9 :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => { "1" => { name => "foo" }}
+        }, "R1"]
+    ]);
+    my $abookid = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($abookid);
+
+    my $id = 'e2640cc234ad93b9@example.com';
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookId => $abookid,
+                    uid => $id,
+                    kind => 'individual',
+                    name => { full => 'foo' }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_not_null($res->[0][1]{created}{1}{id});
+
+    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/VERSION:4.0/, $card);
+    $self->assert_matches(qr/UID;VALUE=TEXT:$id/, $card);
+}

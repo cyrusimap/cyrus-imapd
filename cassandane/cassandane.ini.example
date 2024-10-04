@@ -83,7 +83,7 @@
 ##maxworkers = 1
 # Base port number to use.  All Cyrus instances run by Cassandane
 # will listen at ports starting from this number.
-##base_port = 9100
+##base_port = 29100
 # A list of tests or suites which will be suppressed.  These tests
 # will still run if requested on the command line, but will not be
 # run by default.
@@ -95,6 +95,13 @@
 # to run Cassandane using only configuration from environment
 # variables (or defaults)
 ##allow_noinifile = no
+# Perl regular expression to match core file names on your system.
+# The default should match typical default setups, but if you have
+# configured something unusual in sysctl kernel.core_pattern, you
+# should configure this to a regex that will match it.  The first
+# capture group (if present) will be used to identify the pid the
+# core file came from.
+##core_pattern = ^core.*?(?:\.(\d+))?$
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
@@ -152,7 +159,6 @@
 ##sync_server = yes
 ##lmtpd = yes
 ##timsieved = yes
-##backupd = yes
 
 # This section describes the common configuration parameters to set
 # for each test. This overrides the bare hardcoded configuration, and is

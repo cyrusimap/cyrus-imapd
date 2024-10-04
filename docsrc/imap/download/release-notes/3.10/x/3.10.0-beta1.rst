@@ -1,0 +1,113 @@
+:tocdepth: 3
+
+=====================================
+Cyrus IMAP 3.10.0-beta1 Release Notes
+=====================================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0-beta1/cyrus-imapd-3.10.0-beta1.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.0-beta1/cyrus-imapd-3.10.0-beta1.tar.gz.sig
+
+.. _relnotes-3.10.0-beta1_changes:
+
+Major changes since the 3.8 series
+==================================
+
+* URLs found in HTML ``<a>``, ``<area>`` and ``<img>`` tags, as well as "alt"
+  text in ``<img>`` tags, are now indexed for search and snippets
+* :cyrusman:`cyr_expire(8)` now supports non-day durations in the
+  archive/delete/expire annotations
+* :cyrusman:`cyr_expire(8)` no longer supports fractional durations in command
+  line arguments.  Installations that passed fractional durations such as
+  "1.5d" to any of the ``-E``, ``-X``, ``-D``, or ``-A`` arguments must adapt
+  these to only use integer durations such as "1d12h"
+* :cyrusman:`cyr_expire(8)` now supports the 'noexpire_until' annotation to
+  disable cyr_expire per user
+* JMAP calendar default alarms are now stored in a non-DAV mailbox annotation.
+  See :ref:`upgrade_jmap_default_alarms` for upgrading instructions if you are
+  already using the experimental JMAP Calendars API
+* Removes support for parsing and generating bytecode for the deprecated
+  denotify action and notify actions using the legacy (pre-:rfc:`5435`) syntax.
+  Existing bytecode containing these actions will still be executed.  Scripts
+  that contain the deprecated denotify action should be rewritten to remove
+  them.  Scripts that contain notify actions using the legacy syntax should be
+  rewritten to use the syntax in :rfc:`5435`
+* Adds support for the "exp" and "nbf" JSON Web Token claims. Thanks Bruno
+  Thomas
+* Adds support for IMAP Version 4rev2 (:rfc:`9051`)
+* Adds support for IMAP NOTIFY (:rfc:`5465`). Only available if ``idled`` is
+  running
+* Refresh interval for APNS subscriptions to DAV resources is now configurable.
+  See the ``aps_expiry`` :cyrusman:`imapd.conf(5)` option
+* Upgrade IMAP Quota support to :rfc:`9208`.  Sites running a Murder should
+  upgrade frontend machines first, then backends
+* Adds support for IMAP REPLACE (:rfc:`8508`)
+* Adds support for IMAP UIDONLY extension (:draft:`draft-ietf-extra-imap-uidonly`)
+* Adds experimental support for JMAP Contacts per upcoming IETF standards.
+  Requires the not-yet-released
+  `libicalvcard <https://github.com/libical/libical/pull/584>`_
+* :cyrusman:`squatter(8)` now supports the "wait=y" :cyrusman:`cyrus.conf(5)`
+  option when started in rolling mode from the ``DAEMON`` section
+* :cyrusman:`master(8)` now touches a ready file to indicate it is "ready for
+  work".  See :ref:`upgrade_master_pid_ready_files`
+* :cyrusman:`master(8)` now gets its pidfile name from the ``master_pid_file``
+  :cyrusman:`imapd.conf(5)` option.  See :ref:`upgrade_master_pid_ready_files`
+* Adds pcre2 support.  Prefers pcre2 over pcre if both are available. See
+  :ref:`upgrade_pcre2_support`
+* The ``proc`` :cyrusman:`cyr_info(8)` subcommand now also reports DAEMON and
+  EVENTS processes
+* JMAP CalendarEventNotification objects are now automatically pruned.
+  The ``jmap_max_calendareventnotifs`` :cyrusman:`imapd.conf(5)` option can be
+  used to tune this behaviour
+* Cyrus now requires libical >= 3.0.10 for HTTP support
+* Sieve [current]date ``:zone`` parameter now accepts either a UTC offset or an
+  IANA time zone ID
+* Adds an ``implicit_keep_target`` Sieve action to change the target mailbox
+  for an implicit keep
+* :cyrusman:`squatter(8)` no longer holds a mailbox lock while extracting text
+  from attachments
+* IMAP ``RENAME`` command no longer emits non-standard per-folder updates.  Use
+  the new ``XRENAME`` command if you need this behaviour
+
+.. _relnotes_3.10.0-beta1_storage_changes:
+
+Storage changes
+===============
+
+* None in 3.10.  But if your upgrade is skipping over 3.6 and 3.8, please do
+  not miss :ref:`3.6.0 Storage changes <relnotes_3.6.0_storage_changes>`
+  and :ref:`3.8.0 Storage changes <relnotes_3.8.0_storage_changes>`
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+* The master pidfile name is now read from imapd.conf, and defaults
+  to ``{configdirectory}/master.pid``.  If you have something that
+  looks for this file, you should either update it to look in the new
+  default location, or set ``master_pid_file`` in :cyrusman:`imapd.conf(5)`
+  to override the default.  The ``-p`` option to :cyrusman:`master(8)`
+  can still be used to override it
+
+Security fixes
+==============
+
+* None so far
+
+Significant bugfixes
+====================
+
+* Fixed: squat db reindexes are no longer always incremental
+* Fixed: squat db corruption from unintentional indexing of fields
+  intended to be skipped
+* Fixed: squat db out of bounds access in incremental reindex docID map
+* Restored functionality of the sync_client ``-o``/``--connect-once`` option
+* Fixed :issue:`4654`: copying/moving messages from split conversations is now
+  correct

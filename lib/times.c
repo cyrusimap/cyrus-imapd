@@ -41,6 +41,7 @@
  */
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <memory.h>
 #include <stdio.h>
 #include <string.h>
@@ -551,10 +552,13 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     if (rlen > 0) {
         switch(tv_precision) {
         case timeval_ms:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", t->tv_usec/1000);
+            /* no portable format conversion for tv_usec, just cast to int64_t */
+            rlen += snprintf(buf+rlen, len-rlen, ".%.3" PRIi64,
+                             (int64_t) t->tv_usec/1000);
             break;
         case timeval_us:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", t->tv_usec);
+            rlen += snprintf(buf+rlen, len-rlen, ".%.6" PRIi64,
+                             (int64_t) t->tv_usec);
             break;
         case timeval_s:
             break;

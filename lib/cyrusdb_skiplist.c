@@ -68,6 +68,7 @@
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 #define PROB (0.5)
 
@@ -221,7 +222,7 @@ static int myinit(const char *dbdir, int myflags)
 {
     char sfile[1024];
     int fd = -1, r = 0;
-    uint32_t net32_time;
+    uint32_t net32_time = 0;
 
     snprintf(sfile, sizeof(sfile), "%s/skipstamp", dbdir);
 
@@ -229,14 +230,21 @@ static int myinit(const char *dbdir, int myflags)
         struct stat sbuf;
         char cleanfile[1024];
 
+        /* n.b. nothing in cyrus creates this file, but presumably some
+         * init.d or systemd script does
+         */
         snprintf(cleanfile, sizeof(cleanfile), "%s/skipcleanshutdown", dbdir);
 
         /* if we had a clean shutdown, we don't need to run recovery on
-         * everything */
+         * everything, unless we've never previously run it */
         if (stat(cleanfile, &sbuf) == 0) {
-            syslog(LOG_NOTICE, "skiplist: clean shutdown detected, starting normally");
-            unlink(cleanfile);
-            goto normal;
+            xunlink(cleanfile);
+
+            if (stat(sfile, &sbuf) == 0) {
+                syslog(LOG_NOTICE, "skiplist: clean shutdown detected,"
+                                   " starting normally");
+                goto normal;
+            }
         }
 
         syslog(LOG_NOTICE, "skiplist: clean shutdown file missing, updating recovery stamp");
@@ -249,7 +257,7 @@ static int myinit(const char *dbdir, int myflags)
 
         if (r != -1) r = ftruncate(fd, 0);
         net32_time = htonl(global_recovery);
-        if (r != -1) r = write(fd, &net32_time, 4);
+        if (r != -1) r = retry_write(fd, &net32_time, 4);
         xclose(fd);
 
         if (r == -1) {
@@ -261,19 +269,31 @@ static int myinit(const char *dbdir, int myflags)
     } else {
 normal:
         /* read the global recovery timestamp */
+        errno = 0;
 
-        fd = open(sfile, O_RDONLY, 0644);
-        if (fd == -1) r = -1;
-        if (r != -1) r = read(fd, &net32_time, 4);
-        xclose(fd);
+        r = fd = open(sfile, O_RDONLY, 0644);
+        if (r == -1 && errno == ENOENT) {
+            /* tell the admin what they need to do! */
+            xsyslog(LOG_INFO, "skipstamp is missing, have you run `ctl_cyrusdb -r`?",
+                              "filename=<%s>", sfile);
+        }
+
+        if (r != -1) r = retry_read(fd, &net32_time, 4);
 
         if (r == -1) {
-            xsyslog(LOG_ERR, "DBERROR: read failed, assuming the worst",
+            xsyslog(LOG_ERR, "DBERROR: skipstamp unreadable, assuming the worst",
                              "filename=<%s>", sfile);
+            /* "assuming the worst" means recovery will run for every skiplist
+             * database every time it's opened, because we can't determine that
+             * it doesn't need it.
+             */
             global_recovery = 0;
         } else {
             global_recovery = ntohl(net32_time);
         }
+
+        xclose(fd);
+        errno = 0;
     }
 
     srand(time(NULL) * getpid());
@@ -828,6 +848,11 @@ static int compare_signed(const char *s1, int l1, const char *s2, int l2)
     return 0;
 }
 
+static int mylock(struct dbengine *db, struct txn **mytid, int flags __attribute__((unused)))
+{
+    return lock_or_refresh(db, mytid);
+}
+
 static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db;
@@ -981,7 +1006,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     list_ent->refcount = 1;
     open_db = list_ent;
 
-    return mytid ? lock_or_refresh(db, mytid) : 0;
+    if (mytid)
+        return mylock(db, mytid, /*flags*/0);
+
+    return 0;
 }
 
 static int myclose(struct dbengine *db)
@@ -1853,7 +1881,7 @@ static int mycheckpoint(struct dbengine *db)
         /* clean up */
         close(db->fd);
         db->fd = oldfd;
-        unlink(fname);
+        xunlink(fname);
     }
     else {
         struct stat sbuf;
@@ -2450,7 +2478,6 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
 
     &myinit,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
@@ -2466,6 +2493,7 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &store,
     &mydelete,
 
+    &mylock,
     &mycommit,
     &myabort,
 

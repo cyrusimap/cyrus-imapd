@@ -91,15 +91,19 @@ sub _test_core_files_with_size
     $self->assert_equals(1, $signaled);
     $self->assert_not_null($pid);
 
-    my $err;
-    eval { $err = $instance->_check_cores() };
-    $self->assert_matches(qr/Core files found/, $err);
+    my @cores = $instance->find_cores();
 
-    my $core = "$instance->{basedir}/conf/cores/core.$pid";
-    if (not -f $core) {
-        $core = "$instance->{basedir}/conf/cores/core";
+    # expect there's exactly one core
+    $self->assert_num_equals(1, scalar @cores);
+
+    my $cassini = Cassandane::Cassini->instance();
+    my $core_pattern = $cassini->get_core_pattern();
+
+    my $core = shift @cores;
+    if ($core =~ m/$core_pattern/ && $1) {
+        # if there's a pid in the filename, check it
+        $self->assert_num_equals($pid, $1);
     }
-    $self->assert(-f $core);
     my $size = -s $core;
 
     # clean up the core we expected, so we don't barf on it existing!

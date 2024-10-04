@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_role_dups_createrole
+    :min_version_3_3 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Can't create two mailboxes with the same role";
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxNope1 => {
+                    name => 'nope1',
+                    role => 'drafts',
+                },
+                mboxNope2=> {
+                    name => 'nope2',
+                    role => 'drafts',
+                },
+            },
+        }, "R2"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    $self->assert_deep_equals(['role'], $res->[1][1]{notCreated}{'mboxNope1'}{properties});
+    $self->assert_deep_equals(['role'], $res->[1][1]{notCreated}{'mboxNope2'}{properties});
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+    }, \%roleByMbox);
+}

@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_querychanges_intermediary_added
+    :min_version_3_1 :max_version_3_4
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Fetch initial mailbox state";
+    my $res = $jmap->CallMethods([['Mailbox/query', {
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{canCalculateChanges});
+    my $state = $res->[0][1]->{queryState};
+    $self->assert_not_null($state);
+
+    xlog $self, "Create intermediate mailboxes via IMAP";
+    $imap->create("INBOX.A.B.Z") or die;
+
+    xlog $self, "Fetch updated mailbox state";
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]->{newQueryState});
+    my @ids = map { $_->{id} } @{$res->[0][1]->{added}};
+    $self->assert_num_equals(3, scalar @ids);
+
+    xlog $self, "Make sure intermediate mailboxes got reported";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => \@ids, properties => ['name'],
+        }, "R1"]
+    ]);
+    $self->assert_not_null('A', $res->[0][1]{list}[0]{name});
+    $self->assert_not_null('B', $res->[0][1]{list}[1]{name});
+    $self->assert_not_null('Z', $res->[0][1]{list}[2]{name});
+}

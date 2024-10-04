@@ -66,7 +66,7 @@ extern char *optarg;
 
 static int debugmode = 0;
 
-struct namespace calalarmd_namespace;
+static struct namespace calalarmd_namespace;
 
 EXPORTED void fatal(const char *msg, int err)
 {
@@ -75,6 +75,8 @@ EXPORTED void fatal(const char *msg, int err)
     syslog(LOG_NOTICE, "exiting");
 
     cyrus_done();
+
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
 
     exit(err);
 }
@@ -117,7 +119,7 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
 
-    mboxname_init_namespace(&calalarmd_namespace, /*isadmin*/1);
+    mboxname_init_namespace(&calalarmd_namespace, NAMESPACE_OPTION_ADMIN);
     mboxevent_setnamespace(&calalarmd_namespace);
 
     if (upgrade) {
@@ -153,7 +155,7 @@ int main(int argc, char **argv)
         struct timeval start, end;
         double totaltime;
         int tosleep;
-        time_t interval = 1;
+        time_t interval = 10;
 
         signals_poll();
 

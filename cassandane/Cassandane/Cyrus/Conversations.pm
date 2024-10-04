@@ -83,7 +83,10 @@ sub new
                      conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                      ctl_conversationsdb_conversations_max_thread => 5);
 
-        return $class->SUPER::new({ config => $config }, @args);
+        return $class->SUPER::new({
+            config => $config,
+            adminstore => 1,
+        }, @args);
     }
 }
 
@@ -344,8 +347,10 @@ sub test_reconstruct_splitconv
     my ($self) = @_;
     my %exp;
 
+    my $talk = $self->{store}->get_client();
+
     # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+    $self->assert($talk->capability()->{xconversations});
 
     xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
@@ -358,12 +363,18 @@ sub test_reconstruct_splitconv
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
     }
 
+    $talk->create('foo');
+    $talk->copy('1:*', 'foo');
+
     $self->check_messages(\%exp, keyed_on => 'uid');
 
     # first run WITHOUT splitting
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
 
     $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
 
     # then run WITH splitting, and see the changed CIDs
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r', '-S');
@@ -380,6 +391,38 @@ sub test_reconstruct_splitconv
     $exp{"A20"}->set_attributes(cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
 
     $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+
+    # zero everything out
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-z', 'cassandane');
+
+    # rebuild
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-b', 'cassandane');
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+
+    # support for -Z was added after 3.8
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    return if ($maj < 3 or ($maj == 3 and $min < 8));
+
+    # zero out ONLY two CIDs
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb',
+                                    '-Z' => $exp{"A15"}->make_cid(),
+                                    '-Z' => $exp{"A10"}->make_cid(),
+                                    'cassandane');
+    for (10..19) {
+      $exp{"A$_"}->set_attributes(cid => undef, basecid => undef);
+    }
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
 }
 
 #
@@ -402,7 +445,7 @@ sub _munge_annot_crc
     $fh->close();
 }
 sub test_replication_reply_200
-    :min_version_3_1
+    :min_version_3_1 :needs_component_replication
 {
     my ($self) = @_;
     my %exp;
@@ -471,7 +514,7 @@ sub test_replication_reply_200
 # Test APPEND of messages to IMAP
 #
 sub test_replication_reconstruct
-    :min_version_3_1
+    :min_version_3_1 :needs_component_replication
 {
     my ($self) = @_;
     my %exp;
@@ -633,7 +676,7 @@ sub bogus_test_double_clash
 # Test that a CID clash resolved on the master is replicated
 #
 sub bogus_test_replication_clash
-    :min_version_3_0
+    :min_version_3_0 :needs_component_replication
 {
     my ($self) = @_;
     my %exp;
@@ -706,77 +749,6 @@ sub bogus_test_replication_clash
     $self->check_replication('cassandane');
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
-}
-
-sub test_xconvfetch
-    :min_version_3_0
-{
-    my ($self) = @_;
-    my $store = $self->{store};
-
-    # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($store->get_client()->capability()->{xconversations});
-
-    xlog $self, "generating messages";
-    my $generator = Cassandane::ThreadedGenerator->new();
-    $store->write_begin();
-    while (my $msg = $generator->generate())
-    {
-        $store->write_message($msg);
-    }
-    $store->write_end();
-
-    xlog $self, "reading the whole folder again to discover CIDs etc";
-    my %cids;
-    my %uids;
-    $store->read_begin();
-    while (my $msg = $store->read_message())
-    {
-        my $uid = $msg->get_attribute('uid');
-        my $cid = $msg->get_attribute('cid');
-        my $threadid = $msg->get_header('X-Cassandane-Thread');
-        if (defined $cids{$cid})
-        {
-            $self->assert_num_equals($threadid, $cids{$cid});
-        }
-        else
-        {
-            $cids{$cid} = $threadid;
-            xlog $self, "Found CID $cid";
-        }
-        $self->assert_null($uids{$uid});
-        $uids{$uid} = 1;
-    }
-    $store->read_end();
-
-    xlog $self, "Using XCONVFETCH on each conversation";
-    foreach my $cid (keys %cids)
-    {
-        xlog $self, "XCONVFETCHing CID $cid";
-
-        my $result = $store->xconvfetch_begin($cid);
-        $self->assert_not_null($result->{xconvmeta});
-        $self->assert_num_equals(1, scalar keys %{$result->{xconvmeta}});
-        $self->assert_not_null($result->{xconvmeta}->{$cid});
-        $self->assert_not_null($result->{xconvmeta}->{$cid}->{modseq});
-        while (my $msg = $store->xconvfetch_message())
-        {
-            my $muid = $msg->get_attribute('uid');
-            my $mcid = $msg->get_attribute('cid');
-            my $threadid = $msg->get_header('X-Cassandane-Thread');
-            $self->assert_str_equals($cid, $mcid);
-            $self->assert_num_equals($cids{$cid}, $threadid);
-            $self->assert_num_equals(1, $uids{$muid});
-            $uids{$muid} |= 2;
-        }
-        $store->xconvfetch_end();
-    }
-
-    xlog $self, "checking that all the UIDs in the folder were XCONVFETCHed";
-    foreach my $uid (keys %uids)
-    {
-        $self->assert_num_equals(3, $uids{$uid});
-    }
 }
 
 #
@@ -877,7 +849,7 @@ sub bogus_test_cross_user_copy
 # Test APPEND of messages to IMAP
 #
 sub test_replication_trashseen
-    :min_version_3_1
+    :min_version_3_1 :needs_component_replication
 {
     my ($self) = @_;
     my %exp;
@@ -937,10 +909,8 @@ sub test_guid_duplicate_same_folder
     $self->assert_null($r3);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 
     $talk->select("INBOX.dest");
     my $data = $talk->fetch("1:*", "(emailid threadid uid)");
@@ -982,11 +952,8 @@ sub test_guid_duplicate_total_count
     $self->assert_not_null($r4);
     $self->assert_null($r5);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
-
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 }
 
 #
@@ -1021,10 +988,8 @@ sub test_guid_duplicate_expunges
     $self->assert_null($r);
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert(grep { m/IOERROR: conversations GUID limit/ } @lines);
-    }
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
 }
 
 # Test APPEND of two messages, the second of which has a different subject,
@@ -1060,6 +1025,154 @@ sub test_x_me_message_id_nomatch_threading
     $self->{store}->write_message($exp{B});
     $self->{store}->write_end();
     $self->check_messages(\%exp);
+}
+
+sub test_rename_between_users
+	:NoAltNameSpace
+{
+    my ($self) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create shared account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", cassandane => 'lrswipkxtecdn');
+
+    my $talk = $self->{store}->get_client();
+
+    $self->{store}->set_folder("INBOX");
+    $self->make_message("Inbox Msg");
+
+    $talk->create("INBOX.foo");
+    $self->{store}->set_folder("INBOX.foo");
+    $self->make_message("Foo Msg");
+
+    $talk->create("INBOX.bar");
+    $self->{store}->set_folder("INBOX.bar");
+    $self->make_message("Bar Msg");
+
+    $self->{store}->set_folder("user.manifold");
+    $self->make_message("Man Msg");
+
+    my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
+    my $mdirs = $self->{instance}->run_mbpath(-u => 'manifold');
+
+    # folder IDs should be "INBOX", "foo", "bar"
+
+    my $res = $talk->status('INBOX.foo', ['mailboxid']);
+    my $fooid = $res->{'mailboxid'}->[0];
+
+    my %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    my %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+
+    my $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
+    my $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
+
+    $self->assert_num_equals(3, scalar @$folders);
+    $self->assert_num_equals(1, scalar @$mfolders);
+    $self->assert_str_equals($fooid, $folders->[1]);
+
+    xlog $self, "Rename folder to other user";
+    $talk->rename("INBOX.foo", "user.manifold.foo");
+
+    $admintalk->create('user.manifold.extra');
+    $self->{store}->set_folder("user.manifold.extra");
+    $self->make_message("Extra Msg");
+
+    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+
+    $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
+    $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
+    $self->assert_num_equals(3, scalar @$folders);
+    $self->assert_num_equals(3, scalar @$mfolders);
+    $self->assert_str_equals('-', $folders->[1]);
+    $self->assert_str_equals($fooid, $mfolders->[1]);
+
+    $talk->create("INBOX.again");
+    $self->{store}->set_folder("INBOX.again");
+    $self->make_message("Again Msg");
+
+    $res = $talk->status('INBOX.again', ['mailboxid']);
+    my $againid = $res->{'mailboxid'}->[0];
+
+    $talk->rename("user.manifold.foo", "INBOX.foo");
+
+    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
+    $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
+    $self->assert_num_equals(4, scalar @$folders);
+    $self->assert_num_equals(3, scalar @$mfolders);
+    $self->assert_str_equals($againid, $folders->[1]);
+    $self->assert_str_equals($fooid, $folders->[3]);
+    $self->assert_str_equals('-', $mfolders->[1]);
+}
+
+#
+# Test user rename without splitting conversations
+#
+sub test_rename_user_nosplitconv
+    :AllowMoves :Replication :needs_component_replication
+{
+    my ($self) = @_;
+
+    xlog $self, "Test user rename without splitting conversations";
+
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    my $master_store = $self->{master_store};
+    $self->assert($master_store->get_client()->capability()->{xconversations});
+
+    $master_store->set_fetch_attributes('uid', 'cid', 'basecid');
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..20) {
+        $exp{"A$_"} = $self->make_message("Re: Message A",
+                                          references => [ $exp{A} ],
+                                          store => $master_store);
+        $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+
+    my $talk = $master_store->get_client();
+    $talk->create('foo');
+    $talk->copy('1:*', 'foo');
+
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
+    $self->check_conversations();
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    # Reduce the conversation thread size
+    my $config = $self->{instance}->{config};
+    $config->set(conversations_max_thread => 5);
+    $config->generate($self->{instance}->_imapd_conf());
+
+    $config = $self->{replica}->{config};
+    $config->set(conversations_max_thread => 5);
+    $config->generate($self->{replica}->_imapd_conf());
+
+    # Rename the user
+    my $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    $self->{adminstore}->set_folder("user.newuser");
+    $self->{adminstore}->set_fetch_attributes('uid', 'cid', 'basecid');
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $self->{adminstore});
+    $self->check_conversations();
+
+    $self->run_replication(user => 'newuser');
+    $self->check_replication('newuser');
 }
 
 1;

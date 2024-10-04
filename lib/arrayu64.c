@@ -91,8 +91,9 @@ static void ensure_alloc(arrayu64_t *au, size_t newalloc)
     if (newalloc <= au->alloc)
         return;
     newalloc = grow(au->alloc, newalloc);
-    au->data = xrealloc(au->data, sizeof(uint64_t) * newalloc);
-    memset(au->data + au->alloc, 0, sizeof(uint64_t) * (newalloc - au->alloc));
+    au->data = xzrealloc(au->data,
+                         sizeof(uint64_t) * au->alloc,
+                         sizeof(uint64_t) * newalloc);
     au->alloc = newalloc;
 }
 

@@ -43,6 +43,8 @@ use warnings;
 
 use lib '.';
 use Cassandane::Cassini;
+use IO::Socket::IP;
+use POSIX qw(EADDRINUSE);
 
 my $base_port;
 my $max_ports = 20;
@@ -51,20 +53,21 @@ my %allocated;
 
 sub alloc
 {
+    my $host = shift;
+
     if (!defined $base_port)
     {
         my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
         die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
             if (defined($workerid) && $workerid eq 'invalid');
         my $cassini = Cassandane::Cassini->instance();
-        my $cassini_base_port = $cassini->val('cassandane', 'base_port') // 0;
-        $base_port = 0 + $cassini_base_port || 9100;
-        $base_port += $max_ports * ($workerid-1);
+        my $cassandane_base_port = 0 + $cassini->val('cassandane', 'base_port', '29100');
+        $base_port = $cassandane_base_port + $max_ports * ($workerid-1);
     }
     for (my $i = 0 ; $i < $max_ports ; $i++)
     {
         my $port = $base_port + (($next_port + $i) % $max_ports);
-        if (!$allocated{$port})
+        if (!$allocated{$port} && port_is_free($host, $port))
         {
             $allocated{$port} = 1;
             $next_port++;
@@ -72,6 +75,31 @@ sub alloc
         }
     }
     die "No ports remaining";
+}
+
+sub port_is_free
+{
+    my $host = shift;
+    my $port = shift;
+
+    # If we can bind to the port no one else is currently using it
+    my $socket = IO::Socket::IP->new(
+        LocalAddr => $host,
+        LocalPort => $port,
+        Proto     => 'tcp',
+        ReuseAddr => 1,
+    );
+
+    unless ($socket) {
+        if ($! == EADDRINUSE) {
+            return 0;
+        }
+
+        warn "Unknown error binding $host:$port: $!\n";
+        return 0;
+    }
+
+    return 1;
 }
 
 sub free

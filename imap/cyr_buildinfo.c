@@ -45,17 +45,29 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
 #include <jansson.h>
 
-#include "global.h"
-#include "proc.h"
-#include "util.h"
-#include "../master/masterconf.h"
-#include "xmalloc.h"
+#include "lib/proc.h"
+#include "lib/util.h"
+#include "lib/xmalloc.h"
+
+#include "imap/conversations.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/statuscache.h"
+#include "imap/zoneinfo_db.h"
+
+#include "master/masterconf.h"
+
+#ifdef USE_SIEVE
+#include "sieve/bytecode.h"
+#include "sieve/sieve_interface.h"
+#endif
 
 /* Make ld happy */
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
@@ -83,12 +95,16 @@ static json_t *buildinfo()
     json_t *search = json_object();
     json_t *hardware = json_object();
     json_t *buildconf = json_object();
+    json_t *version = json_object();
+    json_t *ical = json_object();
 
     json_object_set_new(buildconf, "component", component);
     json_object_set_new(buildconf, "dependency", dependency);
     json_object_set_new(buildconf, "database", database);
     json_object_set_new(buildconf, "search", search);
+    json_object_set_new(buildconf, "ical", ical);
     json_object_set_new(buildconf, "hardware", hardware);
+    json_object_set_new(buildconf, "version", version);
 
     /* Yikes... */
 
@@ -154,10 +170,10 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "objectstore", json_false());
 #endif
-#ifdef ENABLE_BACKUP
-    json_object_set_new(component, "backup", json_true());
+#ifdef ENABLE_DEBUG_SLOWIO
+    json_object_set_new(component, "slowio", json_true());
 #else
-    json_object_set_new(component, "backup", json_false());
+    json_object_set_new(component, "slowio", json_false());
 #endif
 
     /* Build dependencies */
@@ -185,6 +201,11 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "pcre", json_true());
 #else
     json_object_set_new(dependency, "pcre", json_false());
+#endif
+#if defined(ENABLE_REGEX) && defined(HAVE_PCRE2POSIX_H)
+    json_object_set_new(dependency, "pcre2", json_true());
+#else
+    json_object_set_new(dependency, "pcre2", json_false());
 #endif
 #ifdef HAVE_CLAMAV
     json_object_set_new(dependency, "clamav", json_true());
@@ -220,6 +241,11 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "ical", json_true());
 #else
     json_object_set_new(dependency, "ical", json_false());
+#endif
+#ifdef HAVE_LIBICALVCARD
+    json_object_set_new(dependency, "icalvcard", json_true());
+#else
+    json_object_set_new(dependency, "icalvcard", json_false());
 #endif
 #ifdef HAVE_ICU
     json_object_set_new(dependency, "icu4c", json_true());
@@ -277,6 +303,54 @@ static json_t *buildinfo()
 #endif
     json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
 
+    /* iCalendar features */
+#ifdef HAVE_ICALPARSER_CTRL
+    json_object_set_new(ical, "ctrl", json_true());
+#else
+    json_object_set_new(ical, "ctrl", json_false());
+#endif
+
+    /* Internal version numbers */
+#ifdef USE_SIEVE
+    json_object_set_new(version, "BYTECODE_MIN_VERSION",
+                                 json_integer(BYTECODE_MIN_VERSION));
+    json_object_set_new(version, "BYTECODE_VERSION",
+                                 json_integer(BYTECODE_VERSION));
+#endif
+    json_object_set_new(version, "CONVERSATIONS_KEY_VERSION",
+                                 json_integer(CONVERSATIONS_KEY_VERSION));
+    json_object_set_new(version, "CONVERSATIONS_RECORD_VERSION",
+                                 json_integer(CONVERSATIONS_RECORD_VERSION));
+    json_object_set_new(version, "CONVERSATIONS_STATUS_VERSION",
+                                 json_integer(CONVERSATIONS_STATUS_VERSION));
+    json_object_set_new(version, "CONV_GUIDREC_BYNAME_VERSION",
+                                 json_integer(CONV_GUIDREC_BYNAME_VERSION));
+    json_object_set_new(version, "CONV_GUIDREC_VERSION",
+                                 json_integer(CONV_GUIDREC_VERSION));
+    json_object_set_new(version, "CYRUS_VERSION",
+                                 json_string(CYRUS_VERSION));
+    json_object_set_new(version, "MAILBOX_CACHE_MINOR_VERSION",
+                                 json_integer(MAILBOX_CACHE_MINOR_VERSION));
+    json_object_set_new(version, "MAILBOX_MINOR_VERSION",
+                                 json_integer(MAILBOX_MINOR_VERSION));
+#ifdef USE_SIEVE
+    json_object_set_new(version, "SIEVE_VERSION",
+                                 json_string(SIEVE_VERSION));
+#endif
+    json_object_set_new(version, "STATUSCACHE_VERSION",
+                                 json_integer(STATUSCACHE_VERSION));
+    json_object_set_new(version, "ZONEINFO_VERSION",
+                                 json_integer(ZONEINFO_VERSION));
+
+#if defined __USE_FORTIFY_LEVEL && __USE_FORTIFY_LEVEL > 0
+    json_object_set_new(version, "FORTIFY_LEVEL",
+                                 json_integer(__USE_FORTIFY_LEVEL));
+#else
+    json_object_set_new(version, "FORTIFY_LEVEL",
+                                 json_integer(0));
+#endif
+
+    /* Whew ... */
     return buildconf;
 }
 
@@ -331,8 +405,18 @@ int main(int argc, char *argv[])
     struct buf buf = BUF_INITIALIZER;
     json_t *bi;
 
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { 0, 0, 0, 0 },
+    };
+
     /* Parse arguments */
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file. We don't care but don't bark for -C. */
             break;

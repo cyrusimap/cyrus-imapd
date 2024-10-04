@@ -1,0 +1,223 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_parse_repair_broken_ical
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my @testCases = ({
+        desc => 'Top-level component is VEVENT',
+        wantParsed => {
+            '@type' => 'Event',
+            title => 'test',
+            uid => '2a358cee-6489-4f14-a57f-c104db4dc357',
+        },
+        ical => <<EOF
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:2a358cee-6489-4f14-a57f-c104db4dc357
+SUMMARY:test
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+EOF
+    }, {
+        desc => 'iCalendar stream with two iCalendar objects',
+        wantParsed => {
+            '@type' => 'Event',
+            title => 'test1',
+            uid => '1a968fa5-3afd-4736-8fac-21958ef3db90',
+        },
+        ical => <<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:1a968fa5-3afd-4736-8fac-21958ef3db90
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test1
+END:VEVENT
+END:VCALENDAR
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:b876f7a3-3e71-46e1-a350-84be804aa486
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test2
+END:VEVENT
+END:VCALENDAR
+EOF
+    }, {
+        desc => 'VEVENT without mandatory UID property',
+        wantParsed => {
+            '@type' => 'Event',
+            title => 'test',
+            # this need not be exactly this uid value
+            uid => 'nouid218e89b7b9041f4b3c1999a93e6dec410b17b903',
+        },
+        ical => <<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    }, {
+        desc => 'METHOD=PUBLISH without ORGANIZER in VEVENT',
+        wantParsed => {
+            '@type' => 'Event',
+            uid => '01b1ee27-32c9-4c45-909b-c4c222666ebe',
+        },
+        # We want to make sure that 'method' is NOT returned.
+        wantAlsoProperties => ['method'],
+        ical => <<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+METHOD:PUBLISH
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test
+UID:01b1ee27-32c9-4c45-909b-c4c222666ebe
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    }, {
+        desc => 'Multiple repairs required',
+        wantParsed => {
+            '@type' => 'Event',
+            title => 'summary1',
+            # this need not be exactly this uid value
+            uid => 'nouidacf3612eeeeb579f42176697745fdc984d24aafc',
+        },
+        # We want to make sure that 'method' is NOT returned.
+        wantAlsoProperties => ['method'],
+        ical => <<EOF
+BEGIN:VCALENDAR
+PRODID:-//Microsoft Corporation//Outlook 11.0 MIMEDIR//EN
+VERSION:2.0
+METHOD:PUBLISH
+BEGIN:VEVENT
+DTSTAMP:20231027T170000Z
+DTSTART:20240618T150000
+DTEND:20240618T161800
+SUMMARY;ENCODING=QUOTED-PRINTABLE:summary1
+LOCATION:location1
+PRIORITY:1
+URL:
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:-P1D
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
+BEGIN:VCALENDAR
+PRODID:-//Microsoft Corporation//Outlook 11.0 MIMEDIR//EN
+VERSION:2.0
+METHOD:PUBLISH
+BEGIN:VEVENT
+DTSTAMP:20231027T170000Z
+DTSTART:20240622T161300
+DTEND:20240622T173400
+SUMMARY;ENCODING=QUOTED-PRINTABLE:summary2
+LOCATION:location2
+PRIORITY:1
+URL:
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER:-P1D
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR
+EOF
+    }, {
+        desc => 'Broken VALARMs: bad TRIGGER, no ACTION',
+        wantParsed => {
+            '@type' => 'Event',
+            alerts => {
+                valarmNoAction => {
+                    '@type' => "Alert",
+                    trigger => {
+                        '@type' => "OffsetTrigger",
+                        relativeTo => "start",
+                        offset => "PT0S"
+                    },
+                    action => "display"
+                }
+            },
+	},
+        ical => <<EOF
+BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:0C93810E-C3FE-4ABE-9CB3-2B34B0124BEA
+DTSTART:20220410T150000
+DTEND:20220411T120000
+SUMMARY:test
+BEGIN:VALARM
+X-JMAP-ID:valarmNoAction
+TRIGGER:-PT0M
+END:VALARM
+BEGIN:VALARM
+X-JMAP-ID:valarmBadTrigger
+TRIGGER:-PD
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+    });
+
+    for my $tc (@testCases) {
+        $tc->{ical} =~ s/\r?\n/\r\n/gs;
+
+        my @properties = keys %{$tc->{wantParsed}};
+        push(@properties, @{$tc->{wantAlsoProperties}});
+
+        xlog $self, "Running test case: $tc->{desc}";
+
+        my $res = $jmap->CallMethods([
+            ['Blob/upload', {
+                create => {
+                    ical => {
+                        data => [{
+                            'data:asText' => $tc->{ical},
+                        }],
+                    },
+                },
+            }, 'R0'],
+            ['CalendarEvent/parse', {
+                blobIds => [ "#ical" ],
+                repairBrokenIcal => JSON::true,
+                properties => \@properties,
+            }, 'R1']
+        ], [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/blob',
+        ]);
+        $self->assert_not_null($res->[0][1]{created}{ical});
+        if (not grep(/^uid$/, @properties)) {
+            delete $res->[1][1]{parsed}{'#ical'}{uid};
+        }
+        $self->assert_deep_equals($tc->{wantParsed},
+            $res->[1][1]{parsed}{'#ical'});
+    }
+}

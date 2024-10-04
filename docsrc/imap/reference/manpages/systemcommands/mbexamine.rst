@@ -40,21 +40,21 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -u  uid
+.. option:: -u  uid, --uid=uid
 
     Dump information for the given uid only.
 
-.. option:: -s  seqnum
+.. option:: -s  seqnum, --seq=seqnum
 
     Dump information for the given sequence number only.
 
-.. option:: -q
+.. option:: -q, --check-quota
 
     Compare the quota usage in cyrus.index to the actual message file
     sizes and report any differences.  If there are differences, the
     mailbox SHOULD be reconstructed.
 
-.. option:: -c
+.. option:: -c, --check-message-files
 
     Compare the records in cyrus.index to the actual message files
     report any differences.  This can help detect issues if messages

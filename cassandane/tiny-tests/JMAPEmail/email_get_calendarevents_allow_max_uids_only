@@ -1,0 +1,115 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::UUID;
+
+sub do
+{
+    my ($self, $nevents, $exceedsThreshold) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    # Generate calendar attachment
+
+    my $vevents;
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+    for (my $i = 1; $i <= $nevents; $i++) {
+        my $uuid = Data::UUID->new;
+        my $uid = $uuid->create_str;
+        my $start = $now->strftime('%Y-%m-%dT%H:%M:%SZ');
+        $vevents .= <<"EOF";
+BEGIN:VEVENT
+DTSTART:$start
+DURATION:PT1H
+UID:$uid
+SUMMARY:test$i
+END:VEVENT
+EOF
+        $now->add(DateTime::Duration->new(seconds => 300));
+    }
+    $vevents =~ s/\s+$//;
+
+    # Generate MIME message
+
+    my $subject = "nevents$nevents";
+    my $mimeMessage = <<"EOF";
+From: from\@local
+To: to\@local
+Subject: $subject
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/related;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain
+
+test
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/calendar;charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+$vevents
+END:VCALENDAR
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+
+    xlog $self, "Generate MIME message";
+    $imap->append('INBOX', $mimeMessage) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Query email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                subject => $subject,
+            },
+        }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => ['calendarEvents'],
+        }, 'R2'],
+    ], $using);
+
+    if ($exceedsThreshold) {
+        $self->assert_null($res->[1][1]{list}[0]{calendarEvents});
+    } else {
+        $self->assert_num_equals($nevents,
+            scalar @{$res->[1][1]{list}[0]{calendarEvents}{2}});
+    }
+}
+
+sub test_email_get_calendarevents_allow_max_uids_only
+    :min_version_3_7 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    xlog $self, "Assert that 8 unique UIDs are allowed";
+    $self->do(8, 0);
+
+    xlog $self, "Assert that 9 unique UIDs are rejected";
+    $self->do(9, 1);
+}

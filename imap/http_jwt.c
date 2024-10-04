@@ -50,7 +50,6 @@
 #include <string.h>
 #include <syslog.h>
 
-#include <openssl/err.h>
 #include <sasl/saslutil.h>
 
 #include "assert.h"
@@ -61,6 +60,10 @@
 #include "imap/http_err.h"
 
 #include "http_jwt.h"
+
+#ifdef HAVE_SSL
+
+#include <openssl/err.h>
 
 static int is_enabled = 0;
 
@@ -486,10 +489,11 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         return 0;
     }
 
+    time_t now = time(NULL);
     int ret = 0;
 
     json_t *jws = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
-    if (!json_object_size(jws) || json_object_size(jws) > 2) {
+    if (!json_object_size(jws)) {
         xsyslog(LOG_ERR, "Unexpected JWS payload structure", NULL);
         goto done;
     }
@@ -500,32 +504,60 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         goto done;
     }
 
-    if (json_object_size(jws) == 2) {
-        json_t *jiat = json_object_get(jws, "iat");
-        if (!json_is_integer(jiat)) {
-            if (jiat) {
-                char *val = json_dumps(jiat, JSON_COMPACT|JSON_ENCODE_ANY);
-                xsyslog(LOG_ERR, "Invalid \"iat\" claim", "iat=<%s>", val);
-                free(val);
-            }
-            else xsyslog(LOG_ERR, "JWT contains unsupported claims", NULL);
+    // Parse claims
+    int has_err = 0;
+
+    json_t *jnbf = json_object_get(jws, "nbf");
+    if (jnbf && !json_is_integer(jnbf)) {
+        xsyslog(LOG_ERR, "Invalid \"nbf\" claim", NULL);
+        has_err = 1;
+    }
+
+    json_t *jexp = json_object_get(jws, "exp");
+    if (jexp && !json_is_integer(jexp)) {
+        xsyslog(LOG_ERR, "Invalid \"exp\" claim", NULL);
+        has_err = 1;
+    }
+
+    json_t *jiat = json_object_get(jws, "iat");
+    if (jiat && !json_is_integer(jiat)) {
+        xsyslog(LOG_ERR, "Invalid \"iat\" claim", NULL);
+        has_err = 1;
+    }
+
+    if (has_err)
+        goto done;
+
+    // Validate claims
+
+    if (jnbf) {
+        time_t nbf = json_integer_value(jnbf);
+        if (!(now >= nbf)) {
+            xsyslog(LOG_ERR, "Out-of-range \"nbf\" claim", NULL);
             goto done;
         }
+    }
 
-        if (max_age) {
+    if (jexp) {
+        time_t exp = json_integer_value(jexp);
+        if (!(now < exp)) {
+            xsyslog(LOG_ERR, "Out-of-range \"exp\" claim", NULL);
+            goto done;
+        }
+    }
+
+    if (max_age && !jexp) { // exp has precedence over iat claim
+        if (jiat) {
             time_t iat = json_integer_value(jiat);
-            time_t now = time(NULL);
             if (iat + max_age <= now || iat > now) {
-                char *val = json_dumps(jiat, JSON_COMPACT|JSON_ENCODE_ANY);
-                xsyslog(LOG_ERR, "Out-of-range \"iat\" claim", "iat=<%s>", val);
-                free(val);
+                xsyslog(LOG_ERR, "Out-of-range \"iat\" claim", NULL);
                 goto done;
             }
         }
-    }
-    else if (max_age) {
-        xsyslog(LOG_ERR, "Missing \"iat\" claim", NULL);
-        goto done;
+        else {
+            xsyslog(LOG_ERR, "Max token age set, missing \"iat\" claim", NULL);
+            goto done;
+        }
     }
 
     size_t sublen = strlen(sub);
@@ -534,8 +566,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
                 "length=<%zu> maxlength=<%zu>", sublen, outlen-1);
         goto done;
     }
-    strncpy(out, sub, outlen);
 
+    // All fine!
+    strncpy(out, sub, outlen);
     ret = 1;
 
 done:
@@ -576,3 +609,26 @@ done:
     buf_free(&jwt.buf);
     return status;
 }
+
+#else /* !HAVE_SSL */
+
+int http_jwt_init(const char *keydir __attribute__((unused)),
+                  int max_age __attribute__((unused)))
+{
+    return 0;
+}
+
+int http_jwt_reset(void) { return 0; }
+
+int http_jwt_is_enabled(void) { return 0; }
+
+int http_jwt_auth(const char *in __attribute__((unused)),
+                  size_t inlen __attribute__((unused)),
+                  char *out __attribute__((unused)),
+                  size_t outlen __attribute__((unused)))
+{
+    xsyslog(LOG_INFO, "JSON Web Token authentication is disabled", NULL);
+    return SASL_BADAUTH;
+}
+
+#endif /* HAVE_SSL */

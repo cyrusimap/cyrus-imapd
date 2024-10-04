@@ -59,12 +59,18 @@
 
 #include "gmtoff.h"
 #include "charset.h"
+#include "dynarray.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "util.h"
 #include "times.h"
 
 #include <string.h>
+#include <syslog.h>
+
+#ifdef HAVE_ICAL
+#include <libical/ical.h>
+#endif
 
 /**************************************************************************/
 /**************************************************************************/
@@ -312,16 +318,18 @@ out:
     return l;
 }
 
-static int regcomp_flags(int comparator, int requires)
+static int regcomp_flags(int collation, int requires)
 {
     int cflags = REG_EXTENDED;
 
-#ifdef HAVE_PCREPOSIX_H
     /* support UTF8 comparisons */
+#if defined HAVE_PCREPOSIX_H
     cflags |= REG_UTF8;
+#elif defined HAVE_PCRE2POSIX_H
+    cflags |= REG_UTF;
 #endif
 
-    if (comparator == B_ASCIICASEMAP) {
+    if (collation == B_ASCIICASEMAP) {
         /* case-insensitive matches */
         cflags |= REG_ICASE;
     }
@@ -333,56 +341,140 @@ static int regcomp_flags(int comparator, int requires)
     return cflags;
 }
 
-static int do_comparison(const char *needle, const char *hay,
-                         comparator_t *comp, void *comprock, int ctag,
-                         variable_list_t *variables, strarray_t *match_vars)
+struct needle_t {
+    const char *pat; // original pattern (with variable substitutions)
+    char *uni;       // unicode-casemap(pat)
+    regex_t *reg;    // compiled regex
+};
+
+static dynarray_t *prepare_needles(strarray_t *pl, int match, int collation,
+                                   int requires, variable_list_t *variables)
+{
+    int n, numpat = strarray_size(pl);
+    dynarray_t *needles = dynarray_new(sizeof(struct needle_t));
+
+    for (n = 0; n < numpat; n++) {
+        const char *pat = strarray_nth(pl, n);
+        char *uni = NULL;
+
+        if (variables && (requires & BFE_VARIABLES)) {
+            pat = parse_string(pat, variables);
+        }
+
+        if (collation == B_UNICODECASEMAP) {
+            pat = uni = unicode_casemap(pat, strlen(pat));
+        }
+
+        struct needle_t needle =  { pat, uni, NULL };
+
+        if (match == B_REGEX) {
+            char errbuf[100]; // Basically unused as regex is tested at compile
+            int ctag = regcomp_flags(collation, requires);
+
+            needle.reg = bc_compile_regex(pat, ctag, errbuf, sizeof(errbuf));
+
+            if (!needle.reg) {
+                /* Oops */
+                needle.pat = NULL;  // This will signal a SIEVE_NOMEM error
+            }
+        }
+
+        dynarray_append(needles, &needle);
+    }
+
+    return needles;
+}
+
+static void free_needles(dynarray_t *needles)
+{
+    if (!needles) return;
+
+    int n, numneedles = dynarray_size(needles);
+
+    for (n = 0; n < numneedles; n++) {
+        struct needle_t *needle = dynarray_nth(needles, n);
+
+        if (needle->reg) {
+            regfree(needle->reg);
+            free(needle->reg);
+        }
+
+        free(needle->uni);
+    }
+
+    dynarray_free(&needles);
+}
+
+static int do_comparison(struct needle_t *needle, const char *hay,
+                         comparator_t *comp, void *comprock,
+                         strarray_t *match_vars)
 {
     int res;
 
-    if (variables) {
-        needle = parse_string(needle, variables);
+    if (!needle->pat) {
+        /* Oops */
+        res = SIEVE_NOMEM;
+    }
+    else if (needle->reg) {
+        struct timeval start, end;
+        double total;
+
+        gettimeofday(&start, 0);
+
+        res = comp(hay, strlen(hay),
+                   (const char *) needle->reg, match_vars, comprock);
+
+        gettimeofday(&end, 0);
+        total = timesub(&start, &end);
+        if (total > 5.0) {
+            syslog(LOG_NOTICE, "long-running Sieve :regex '%s': %fs",
+                   needle->pat, total);
+        }
+    }
+    else {
+        res = comp(hay, strlen(hay), needle->pat, match_vars, comprock);
     }
 
-    if (ctag) {
-        char errbuf[100]; /* Basically unused, as regex is tested at compile */
-        regex_t *reg = bc_compile_regex(needle, ctag, errbuf, sizeof(errbuf));
-
-        if (!reg) {
-            /* Oops */
-            res = SIEVE_NOMEM;
-        }
-        else {
-            res = comp(hay, strlen(hay),
-                       (const char *) reg, match_vars, comprock);
-            regfree(reg);
-            free(reg);
-        }
-    } else {
 #if VERBOSE
-        printf("%s compared to %s (from script)\n", hay, needle);
+    printf("%s compared to %s (from script)\n", hay, needle->pat);
 #endif
-        res = comp(hay, strlen(hay), needle, match_vars, comprock);
-    }
 
     return res;
 }
 
-static int do_comparisons(strarray_t *needles, const char *hay,
-                          comparator_t *comp, void *comprock, int ctag,
-                          variable_list_t *variables, strarray_t *match_vars)
+static int do_comparisons(dynarray_t *needles, const char *hay,
+                          comparator_t *comp, void *comprock,
+                          strarray_t *match_vars)
 {
-    int n, res = 0, numneedles = strarray_size(needles);
+    int n, res = 0, numneedles = dynarray_size(needles);
 
     for (n = 0; n < numneedles && !res; n++) {
-        const char *needle = strarray_nth(needles, n);
+        struct needle_t *needle = dynarray_nth(needles, n);
 
-        int tmp = do_comparison(needle, hay,
-                                comp, comprock, ctag, variables, match_vars);
+        int tmp = do_comparison(needle, hay, comp, comprock, match_vars);
+
         if (tmp < 0) res = tmp;
         else res |= tmp;
     }
 
     return res;
+}
+
+static int parse_tzoffset(const char *s, int *offset)
+{
+    int hh, mm;
+    char sign;
+
+    /* Parse +/-hhmm and convert to seconds */
+    if ((5 == strlen(s)) &&
+        (3 == sscanf(s, "%c%02d%02d", &sign, &hh, &mm)) &&
+        (sign == '+' || sign == '-') &&
+        (hh >= 0) && (mm >= 0) && (mm < 60)) {
+        *offset = (sign == '-' ? -1 : 1) * 60 * (hh * 60 + mm);
+        return 1;
+    }
+
+    return 0;
 }
 
 /* Evaluate a bytecode test */
@@ -514,8 +606,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         const struct address *a;
         char *addr;
 
+        dynarray_t *needles = NULL;
         int numheaders = strarray_size(test.u.ae.sl);
-
         int header_count;
         int index = test.u.ae.comp.index; // used for address only
         int match = test.u.ae.comp.match;
@@ -523,12 +615,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         int comparator = test.u.ae.comp.collation;
         int apart = test.u.ae.addrpart;
         int count = 0;
-        int ctag = 0;
-
-        /* set up variables needed for compiling regex */
-        if (match == B_REGEX) {
-            ctag = regcomp_flags(comparator, requires);
-        }
 
         /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -538,6 +624,9 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             goto envelope_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
+
+        needles = prepare_needles(test.u.ae.pl,
+                                  match, comparator, requires, variables);
 
         /* loop through all the headers */
 #if VERBOSE
@@ -636,10 +725,8 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         count++;
                     } else {
                         /* search through all the data */
-                        res = do_comparisons(test.u.ae.pl, addr,
-                                             comp, comprock, ctag,
-                                             (requires & BFE_VARIABLES) ?
-                                             variables : NULL, match_vars);
+                        res = do_comparisons(needles, addr,
+                                             comp, comprock, match_vars);
                         if (res < 0) {
                             free(addr);
                             goto envelope_err;
@@ -659,15 +746,13 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            res = do_comparisons(test.u.ae.pl, scount,
-                                 comp, comprock, 0 /* regex */,
-                                 (requires & BFE_VARIABLES) ? variables : NULL,
-                                 match_vars);
+            res = do_comparisons(needles, scount, comp, comprock, match_vars);
         }
 
 envelope_err:
         free(strarray_takevf(test.u.ae.sl));
         free(strarray_takevf(test.u.ae.pl));
+        free_needles(needles);
         break;
     }
 
@@ -676,21 +761,15 @@ envelope_err:
     {
         const char **val;
 
+        dynarray_t *needles = NULL;
         int numheaders = strarray_size(test.u.hhs.sl);
-
         int header_count;
         int index = test.u.hhs.comp.index;
         int match = test.u.hhs.comp.match;
         int relation = test.u.hhs.comp.relation;
         int comparator = test.u.hhs.comp.collation;
         int count = 0;
-        int ctag = 0;
         char *decoded_header;
-
-        /* set up variables needed for compiling regex */
-        if (match == B_REGEX) {
-            ctag = regcomp_flags(comparator, requires);
-        }
 
         /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -700,6 +779,9 @@ envelope_err:
             goto header_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
+
+        needles = prepare_needles(test.u.hhs.pl,
+                                  match, comparator, requires, variables);
 
         /* search through all the flags for the header */
         for (x = 0; x < numheaders && !res; x++) {
@@ -754,10 +836,8 @@ envelope_err:
                         charset_parse_mimeheader(val[y],
                                                  CHARSET_MIME_UTF8 | CHARSET_TRIMWS);
 
-                    res = do_comparisons(test.u.hhs.pl, decoded_header,
-                                         comp, comprock, ctag,
-                                         (requires & BFE_VARIABLES) ?
-                                         variables : NULL, match_vars);
+                    res = do_comparisons(needles, decoded_header,
+                                         comp, comprock, match_vars);
                     free(decoded_header);
 
                     if (res < 0) goto header_err;
@@ -768,21 +848,20 @@ envelope_err:
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            res = do_comparisons(test.u.hhs.pl, scount,
-                                 comp, comprock, 0 /* regex */,
-                                 (requires & BFE_VARIABLES) ? variables : NULL,
-                                 match_vars);
+            res = do_comparisons(needles, scount, comp, comprock, match_vars);
         }
 
       header_err:
         free(strarray_takevf(test.u.hhs.sl));
         free(strarray_takevf(test.u.hhs.pl));
+        free_needles(needles);
         break;
     }
 
     case BC_STRING:
     case BC_HASFLAG:
     {
+        dynarray_t *needles = NULL;
         int numhaystacks = strarray_size(test.u.hhs.sl); // number of vars to search
         int numneedles = strarray_size(test.u.hhs.pl); // number of search flags
 
@@ -790,12 +869,6 @@ envelope_err:
         int relation = test.u.hhs.comp.relation;
         int comparator = test.u.hhs.comp.collation;
         int count = 0;
-        int ctag = 0;
-
-        /* set up variables needed for compiling regex */
-        if (match == B_REGEX) {
-            ctag = regcomp_flags(comparator, requires);
-        }
 
         /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -805,6 +878,9 @@ envelope_err:
             goto string_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
+
+        needles = prepare_needles(test.u.hhs.pl,
+                                  match, comparator, requires, variables);
 
         /* loop on each haystack */
         for (z = 0; z < (op == BC_STRING ? numhaystacks :
@@ -855,24 +931,16 @@ envelope_err:
 
 		snprintf(scount, SCOUNT_SIZE, "%u", count);
 		/* search through all the data */
-                res = do_comparisons(test.u.hhs.pl, scount,
-                                     comp, comprock, 0 /* regex */,
-                                     (requires & BFE_VARIABLES) ?
-                                     variables : NULL,
-                                     match_vars);
+                res = do_comparisons(needles, scount, comp, comprock, match_vars);
                 break;
             }
 
             /* search through the haystack for the needles */
             for (x = 0; x < numneedles && !res; x++) {
-                const char *this_needle;
+                struct needle_t *this_needle;
                 int tmp;
 
-                this_needle = strarray_nth(test.u.hhs.pl, x);
-
-                if (requires & BFE_VARIABLES) {
-                    this_needle = parse_string(this_needle, variables);
-                }
+                this_needle = dynarray_nth(needles, x);
 
 #if VERBOSE
                 printf ("val %s %s %s\n", val[0], val[1], val[2]);
@@ -880,8 +948,7 @@ envelope_err:
 
                 if (op == BC_STRING) {
                     tmp = do_comparison(this_needle, this_haystack,
-                                        comp, comprock, ctag,
-                                        NULL /* variables */, match_vars);
+                                        comp, comprock, match_vars);
                     if (tmp < 0) {
                         res = -1;
                         goto string_err;
@@ -897,8 +964,7 @@ envelope_err:
                         active_flag = this_var->data[y];
 
                         tmp = do_comparison(this_needle, active_flag,
-                                            comp, comprock, ctag,
-                                            NULL /* variables */, match_vars);
+                                            comp, comprock, match_vars);
                         if (tmp < 0) {
                             res = -1;
                             goto string_err;
@@ -925,6 +991,7 @@ envelope_err:
       string_err:
         free(strarray_takevf(test.u.hhs.sl));
         free(strarray_takevf(test.u.hhs.pl));
+        free_needles(needles);
         break;
     }
 
@@ -933,18 +1000,13 @@ envelope_err:
         sieve_bodypart_t **val;
         const char **content_types = NULL;
 
+        dynarray_t *needles = NULL;
         int match = test.u.b.comp.match;
         int relation = test.u.b.comp.relation;
         int comparator = test.u.b.comp.collation;
         int transform = test.u.b.transform;
         /* test.u.b.offset is now unused */
         int count = 0;
-        int ctag = 0;
-
-        /* set up variables needed for compiling regex */
-        if (match == B_REGEX) {
-            ctag = regcomp_flags(comparator, requires);
-        }
 
         /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -953,6 +1015,9 @@ envelope_err:
             res = SIEVE_RUN_ERROR;
             goto body_err;
         }
+
+        needles = prepare_needles(test.u.b.pl,
+                                  match, comparator, requires, variables);
         /*
           RFC 5173         Sieve Email Filtering: Body Extension        April 2008
 
@@ -997,10 +1062,8 @@ envelope_err:
                     const char *content = val[y]->decoded_body;
 
                     /* search through all the data */
-                    res = do_comparisons(test.u.b.pl, content,
-                                        comp, comprock, ctag,
-                                        (requires & BFE_VARIABLES) ?
-                                        variables : NULL, match_vars);
+                    res = do_comparisons(needles, content,
+                                         comp, comprock, match_vars);
                 }
             }
 
@@ -1017,20 +1080,19 @@ envelope_err:
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
             /* search through all the data */
-            res = do_comparisons(test.u.b.pl, scount,
-                                 comp, comprock, 0 /* regex */,
-                                 (requires & BFE_VARIABLES) ? variables : NULL,
-                                 match_vars);
+            res = do_comparisons(needles, scount, comp, comprock, match_vars);
         }
 
       body_err:
         free(strarray_takevf(test.u.b.pl));
+        free_needles(needles);
         break;
     }
 
     case BC_DATE:
     case BC_CURRENTDATE:
     {
+        dynarray_t *needles = NULL;
         char buffer[64];
         const char **headers = NULL;
         const char *header = NULL;
@@ -1042,11 +1104,11 @@ envelope_err:
         int index;
         int match;
         int relation;
-        int timezone_offset = 0;
+        time_t now = interp->time;
+        int tzoffset = 0; /* in seconds */
         int zone;
         struct tm tm;
         time_t t;
-        int ctag = 0;
 
         /* index */
         index = test.u.dt.comp.index;
@@ -1054,46 +1116,10 @@ envelope_err:
         /* zone tag */
         zone = test.u.dt.zone.tag;
 
-        /* timezone offset */
-        if (zone == B_TIMEZONE) {
-            const char *offset = test.u.dt.zone.offset;
-
-            if (offset) {
-                char sign;
-                int hours;
-                int minutes;
-
-                if (requires & BFE_VARIABLES) {
-                    offset = parse_string(offset, variables);
-                }
-
-                if (3 != sscanf(offset, "%c%02d%02d",
-                                &sign, &hours, &minutes)) {
-                    res = 0;
-                    goto date_err;
-                }
-
-                timezone_offset =
-                    (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
-            }
-            else {
-                struct tm tm;
-                time_t now = time(NULL);
-
-                localtime_r(&now, &tm);
-                timezone_offset = gmtoff_of(&tm, now) / 60;
-            }
-        }
-
         /* comparator */
         match = test.u.dt.comp.match;
         relation = test.u.dt.comp.relation;
         comparator = test.u.dt.comp.collation;
-
-        /* set up variables needed for compiling regex */
-        if (match == B_REGEX) {
-            ctag = regcomp_flags(comparator, requires);
-        }
 
         /* find comparator function */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -1102,6 +1128,9 @@ envelope_err:
             goto date_err;
         }
         match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
+
+        needles = prepare_needles(test.u.dt.kl,
+                                  match, comparator, requires, variables);
 
         /* date-part */
         date_part = test.u.dt.date_part;
@@ -1172,30 +1201,60 @@ envelope_err:
 
             /* timezone offset */
             if (zone == B_ORIGINALZONE) {
-                char *zone;
-                char sign;
-                int hours;
-                int minutes;
-
-                zone = strrchr(header, ' ');
-                if (!zone ||
-                    3 != sscanf(zone + 1, "%c%02d%02d", &sign, &hours, &minutes)) {
+                char *origzone = strrchr(header, ' ');
+                if (!origzone || !parse_tzoffset(origzone + 1, &tzoffset)) {
                     res = 0;
                     goto date_err;
                 }
-
-                timezone_offset = (sign == '-' ? -1 : 1) * ((hours * 60) + (minutes));
             }
         }
         else { /* CURRENTDATE */
-            t = interp->time;
+            t = now;
         }
 
-        /* apply timezone_offset (if any) */
-        t += timezone_offset * 60;
+        /* timezone offset */
+        switch (zone) {
+        case B_TIMEZONE: {
+            const char *str = test.u.dt.zone.offset;
 
-        /* get tm struct */
-        gmtime_r(&t, &tm);
+            if (str) {
+                if (requires & BFE_VARIABLES) {
+                    str = parse_string(str, variables);
+                }
+
+                if (!parse_tzoffset(str, &tzoffset)) {
+#ifdef HAVE_ICAL
+                    /* Is this an IANA TZID? rather than an offset? */
+                    icaltimezone *tz = icaltimezone_get_builtin_timezone(str);
+
+                    if (tz) {
+                        icaltimetype tt = icaltime_from_timet_with_zone(t, 0, tz);
+
+                        tzoffset = icaltimezone_get_utc_offset(tz, &tt, NULL);
+                    } else
+#endif
+                    {
+                        res = 0;
+                        goto date_err;
+                    }
+                }
+            }
+            else {
+                /* adjust time to local offset */
+                localtime_r(&t, &tm);
+                tzoffset = gmtoff_of(&tm, t);
+                break;
+            }
+
+            GCC_FALLTHROUGH
+        }
+
+        default:
+            /* adjust time to specified offset */
+            t += tzoffset;
+            gmtime_r(&t, &tm);  // this accounts for the local offset
+            break;
+        }
 
 
         /*
@@ -1262,22 +1321,21 @@ envelope_err:
             time_to_rfc5322(t, buffer, sizeof(buffer));
             break;
         case B_ZONE:
+            tzoffset /= 60;  /* seconds -> minutes */
             snprintf(buffer, sizeof(buffer), "%c%02d%02d",
-                     timezone_offset >= 0 ? '+' : '-',
-                     abs(timezone_offset) / 60,
-                     abs(timezone_offset) % 60);
+                     tzoffset >= 0 ? '+' : '-',
+                     abs(tzoffset) / 60, abs(tzoffset) % 60);
             break;
         case B_WEEKDAY:
             snprintf(buffer, sizeof(buffer), "%1d", tm.tm_wday);
             break;
         }
 
-        res = do_comparisons(test.u.dt.kl, buffer, comp, comprock, ctag,
-                             (requires & BFE_VARIABLES) ? variables : NULL,
-                             match_vars);
+        res = do_comparisons(needles, buffer, comp, comprock, match_vars);
 
     date_err:
         free(strarray_takevf(test.u.dt.kl));
+        free_needles(needles);
         break;
     }
 
@@ -1351,6 +1409,7 @@ envelope_err:
     case BC_NOTIFYMETHODCAPABILITY:
     {
         res = 0;
+        dynarray_t *needles = NULL;
         const char *extname = NULL;
         const char *keyname = NULL;
         char *val = NULL;
@@ -1358,12 +1417,6 @@ envelope_err:
         int match = test.u.mm.comp.match;
         int relation = test.u.mm.comp.relation;
         int comparator = test.u.mm.comp.collation;
-        int ctag = 0;
-
-        /* set up variables needed for compiling regex */
-        if (match == B_REGEX) {
-            ctag = regcomp_flags(comparator, requires);
-        }
 
         /* find the correct comparator fcn */
         comp = lookup_comp(interp, comparator, match, relation, &comprock);
@@ -1372,6 +1425,9 @@ envelope_err:
             res = SIEVE_RUN_ERROR;
             goto meta_err;
         }
+
+        needles = prepare_needles(test.u.mm.keylist,
+                                  match, comparator, requires, variables);
 
         if (op == BC_METADATA || op == BC_NOTIFYMETHODCAPABILITY) {
             extname = test.u.mm.extname;
@@ -1396,15 +1452,13 @@ envelope_err:
             interp->getmetadata(sc, extname, keyname, &val);
 
         if (val) {
-            res = do_comparisons(test.u.mm.keylist, val,
-                                 comp, comprock, ctag,
-                                 (requires & BFE_VARIABLES) ? variables : NULL,
-                                 match_vars);
+            res = do_comparisons(needles, val, comp, comprock, match_vars);
             free(val);
         }
 
       meta_err:
         free(strarray_takevf(test.u.mm.keylist));
+        free_needles(needles);
         break;
     }
 
@@ -1482,7 +1536,7 @@ envelope_err:
                 if (p) p[1] = '\0';
             }
 
-            if (strarray_find_case(interp->notifymethods, str, 0) == -1)
+            if (!strarray_contains_case(interp->notifymethods, str))
                 res = 0;
         }
 
@@ -1705,7 +1759,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
         switch (op) {
         case B_STOP:
-            res = 1;
+            /* Exit the loop directly,
+               as an error will skip filing into a custom implicit keep target */
+            goto done;
             break;
 
 
@@ -1725,7 +1781,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
             if (i->edited_headers) i->getheadersection(m, &headers);
 
-            res = do_keep(i, sc, actions, actionflags, headers);
+            res = do_keep(i, sc, 0 /*implicit*/, actions, actionflags, headers);
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Keep can not be used with Reject";
             else
@@ -1773,10 +1829,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         case B_FILEINTO_COPY:
         case B_FILEINTO_ORIG:
         {
-            const char *folder = cmd.u.f.folder;
-            const char *mailboxid = cmd.u.f.mailboxid;
-            const char *specialuse = cmd.u.f.specialuse;
+            const char *folder = cmd.u.f.t.folder;
+            const char *mailboxid = cmd.u.f.t.mailboxid;
+            const char *specialuse = cmd.u.f.t.specialuse;
             struct buf *headers = NULL;
+            unsigned flags = 0;
+
+            if (!cmd.u.f.copy) flags |= CANCEL_KEEP;
+            if (cmd.u.f.create) flags |= CREATE_MAILBOX;
 
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
@@ -1795,8 +1855,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             if (i->edited_headers) i->getheadersection(m, &headers);
 
             res = do_fileinto(i, sc, actions, folder, specialuse,
-                              !cmd.u.f.copy, cmd.u.f.create, mailboxid,
-                              actionflags, headers);
+                              flags, mailboxid, actionflags, headers);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -1812,16 +1871,16 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         case B_SNOOZE_TZID:
         case B_SNOOZE_ORIG:
         {
-            const char *awaken_mbox = cmd.u.sn.f.folder;
-            const char *awaken_mboxid = cmd.u.sn.f.mailboxid;
-            const char *awaken_spluse = cmd.u.sn.f.specialuse;
+            const char *awaken_mbox = cmd.u.sn.f.t.folder;
+            const char *awaken_mboxid = cmd.u.sn.f.t.mailboxid;
+            const char *awaken_spluse = cmd.u.sn.f.t.specialuse;
             const char *tzid = cmd.u.sn.tzid;
             strarray_t *addflags = NULL;
             strarray_t *removeflags = NULL;
             struct buf *headers = NULL;
 
             if (!awaken_mboxid && cmd.u.sn.is_mboxid) {
-                awaken_mboxid = cmd.u.sn.f.folder;
+                awaken_mboxid = cmd.u.sn.f.t.folder;
                 awaken_mbox = NULL;
             }
 
@@ -1869,7 +1928,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             const char *bymode = cmd.u.r.bymode;
             const char *dsn_notify = cmd.u.r.dsn_notify;
             const char *dsn_ret = cmd.u.r.dsn_ret;
-            const char *deliverby = NULL;
+            char *deliverby = NULL;
             struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
@@ -1913,10 +1972,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                   by-mode  = "N" / "R"           ; "Notify" or "Return"
                   by-trace = "T"                 ; "Trace"
                 */
-                static char by_value[14];
-                snprintf(by_value, sizeof(by_value), "%+ld;%c%s",
-                         sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
-                deliverby = by_value;
+                struct buf by_value = BUF_INITIALIZER;
+                buf_printf(&by_value, "%+ld;%c%s",
+                           sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
+                deliverby = buf_release(&by_value);
             }
 
             if (i->edited_headers) i->getheadersection(m, &headers);
@@ -2036,6 +2095,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         case B_ENOTIFY:
         case B_NOTIFY:
         {
+            char *method = cmd.u.n.method;
             const char *message = cmd.u.n.message;
             const char *priority = priority_to_string(cmd.u.n.priority);
 
@@ -2055,7 +2115,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 message = parse_string(message, variables);
             }
 
-            res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, cmd.u.n.method,
+            if (op == B_ENOTIFY) {
+                /* Parse/split the method URI */
+                if (!strncasecmp(method, "mailto:", 7)) {
+                    strarray_insertm(cmd.u.n.options, 0, method+7);
+                    method = "mailto";
+                }
+                else if (!strncasecmp(method,
+                                      "https://cyrusimap.org/notifiers/", 32)) {
+                    method = method+32;
+                }
+            }
+
+            res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, method,
                             cmd.u.n.options, priority, message);
 
             break;
@@ -2128,11 +2200,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         {
             int respond;
             sieve_fileinto_context_t fcc = {
-                cmd.u.v.fcc.folder,
-                cmd.u.v.fcc.specialuse,
-                NULL,
+                cmd.u.v.fcc.t.folder,
+                cmd.u.v.fcc.t.specialuse,
+                /*imapflags*/NULL,
                 cmd.u.v.fcc.create,
-                cmd.u.v.fcc.mailboxid,
+                /*implicit keep target*/0,
+                cmd.u.v.fcc.t.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL
             };
@@ -2371,11 +2444,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 }
             }
             else {
-                const char **vals, *pat;
+                dynarray_t *needles = NULL;
+                const char **vals;
                 strarray_t decoded_vals = STRARRAY_INITIALIZER;
-                int p, v, nval = 0, first_val = 0, ctag = 0;
+                int p, v, nval = 0, first_val = 0;
                 unsigned long delete_mask = 0;
                 char scount[20];
+
+                needles = prepare_needles(cmd.u.dh.values, match,
+                                          comparator, requires, variables);
 
                 /* get the header values */
                 if (name && i->getheader(m, name, &vals) == SIEVE_OK) {
@@ -2393,10 +2470,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                            Note: use of :index restricts count to at most 1 */
                         snprintf(scount, sizeof(scount), "%u",
                                  index ? 1 : nval);
-                    }
-                    else if (match == B_REGEX) {
-                        /* set up options needed for compiling regex */
-                        ctag = regcomp_flags(comparator, requires);
                     }
 
                     if (nval && index) {
@@ -2416,7 +2489,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
                 /* get (and optionally compare) each value pattern */
                 for (p = 0; p < npat; p++) {
-                    pat = strarray_nth(cmd.u.dh.values, p);
+                    struct needle_t *needle = dynarray_nth(needles, p);
 
                     for (v = first_val; v < nval; v++) {
                         if (!(delete_mask & (1 << v))) {
@@ -2428,8 +2501,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                             else {
                                 val = strarray_nth(&decoded_vals, v);
                             }
-                            if (do_comparison(pat, val, comp, comprock,
-                                              ctag, variables, NULL)) {
+                            if (do_comparison(needle, val, comp, comprock, NULL)) {
                                 /* flag the header for deletion */
                                 delete_mask |= (1 << v);
                             }
@@ -2446,6 +2518,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                         i->edited_headers = 1;
                     }
                 }
+
+                free_needles(needles);
             }
             free(strarray_takevf(cmd.u.dh.values));
             break;
@@ -2463,48 +2537,59 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             }
             break;
 
+        case B_PROCESSCAL:
         case B_PROCESSIMIP:
-            if (i->imip) {
-                sieve_imip_context_t imip_ctx = {
-                    !!cmd.u.imip.invites_only,
-                    !!cmd.u.imip.updates_only,
-                    !!cmd.u.imip.delete_canceled,
-                    cmd.u.imip.calendarid,
+            if (i->processcal) {
+                sieve_cal_context_t cal_ctx = {
+                    !!cmd.u.cal.allow_public,
+                    !!cmd.u.cal.invites_only,
+                    !!cmd.u.cal.updates_only,
+                    !!cmd.u.cal.delete_cancelled,
+                    cmd.u.cal.addresses,
+                    cmd.u.cal.organizers,
+                    cmd.u.cal.calendarid,
                     BUF_INITIALIZER,  // outcome
-                    BUF_INITIALIZER   // errstr
+                    BUF_INITIALIZER,  // reason
                 };
                 variable_list_t *vl;
 
-                res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
+                res = i->processcal(&cal_ctx, i->interp_context, sc, m, errmsg);
 
-                if (cmd.u.imip.outcome_var) {
-                    vl = varlist_select(variables, cmd.u.imip.outcome_var);
-
-                    if (!vl) {
-                        vl = varlist_extend(variables);
-                        vl->name = xstrdup(cmd.u.imip.outcome_var);
-                    }
-                    strarray_fini(vl->var);
-                    strarray_appendm(vl->var, buf_release(&imip_ctx.outcome));
-                }
-
-                if (cmd.u.imip.errstr_var) {
-                    vl = varlist_select(variables, cmd.u.imip.errstr_var);
+                if (cmd.u.cal.outcome_var) {
+                    vl = varlist_select(variables, cmd.u.cal.outcome_var);
 
                     if (!vl) {
                         vl = varlist_extend(variables);
-                        vl->name = xstrdup(cmd.u.imip.errstr_var);
+                        vl->name = xstrdup(cmd.u.cal.outcome_var);
                     }
                     strarray_fini(vl->var);
-                    strarray_appendm(vl->var, buf_release(&imip_ctx.errstr));
+                    strarray_appendm(vl->var, buf_release(&cal_ctx.outcome));
                 }
 
-                buf_free(&imip_ctx.outcome);
-                buf_free(&imip_ctx.errstr);
+                if (cmd.u.cal.reason_var) {
+                    vl = varlist_select(variables, cmd.u.cal.reason_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.cal.reason_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&cal_ctx.reason));
+                }
+
+                strarray_free(cmd.u.cal.addresses);
+                buf_free(&cal_ctx.outcome);
+                buf_free(&cal_ctx.reason);
             }
             else {
                 return SIEVE_RUN_ERROR;
             }
+            break;
+
+        case B_IKEEP_TARGET:
+            i->ikeep.folder = cmd.u.ikt.folder;
+            i->ikeep.mailboxid = cmd.u.ikt.mailboxid;
+            i->ikeep.specialuse = cmd.u.ikt.specialuse;
             break;
 
         case B_ERROR:
@@ -2518,7 +2603,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             return SIEVE_FAIL;
         }
 
-        if (res) break;  /* we've either encountered an error or a stop */
+        if (res) break;  /* we've encountered an error */
     }
 
   done:
@@ -2533,7 +2618,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
         if (i->edited_headers) i->getheadersection(m, &headers);
 
-        res = do_keep(i, sc, actions, actionflags, headers);
+        if (i->ikeep.folder) {
+            res = do_fileinto(i, sc, actions, i->ikeep.folder,
+                              i->ikeep.specialuse, IMPLICIT_KEEP | CANCEL_KEEP,
+                              i->ikeep.mailboxid, actionflags, headers);
+        }
+        else {
+            res = do_keep(i, sc, IMPLICIT_KEEP, actions, actionflags, headers);
+        }
 
         implicit_keep = 0;
     }

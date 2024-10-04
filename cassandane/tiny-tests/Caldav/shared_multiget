@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_shared_multiget
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create second user";
+    $admintalk->create("user.test");
+    $admintalk->setacl("user.test", "test" => "lrswipkxtean");
+
+    xlog $self, "Provision calendars user";
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "Share default calendar to cassandane";
+    $admintalk->setacl("user.test.#calendars.Default", "cassandane" => 'lrswin');
+
+    xlog $self, "Subscribe to shared calendar";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->subscribe("user.test.#calendars.Default");
+
+    xlog $self, "Get calendars as cassandane";
+    my $CalDAV = $self->{caldav};
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedId = $CasCal->[1]{href};
+
+    my $href = $CalDAV->NewEvent('Default', {
+        timeZone => 'Etc/UTC',
+        start => '2015-01-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall',
+    });
+
+    my $sharedHref = $CalDAV->NewEvent($sharedId, {
+        timeZone => 'America/New_York',
+        start => '2015-02-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall2',
+    });
+
+    my $xmlMultiget = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-multiget xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <C:calendar-data/>
+  </D:prop>
+  <D:href>/dav/calendars/user/cassandane/$href</D:href>
+  <D:href>$sharedHref</D:href>
+</C:calendar-multiget>
+EOF
+
+    xlog "Run calendar-multiget report";
+    $mgRes = $CalDAV->Request('REPORT', 'Default', $xmlMultiget,
+        'Content-Type' => 'application/xml',
+    );
+
+    my $icaldata = $mgRes->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    $self->assert_matches(qr|DTSTART:20150101T120000Z|, $icaldata);
+
+    $icaldata = $mgRes->{'{DAV:}response'}[1]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    $self->assert_matches(qr|DTSTART;TZID=America/New_York:20150201T120000|, $icaldata);
+}

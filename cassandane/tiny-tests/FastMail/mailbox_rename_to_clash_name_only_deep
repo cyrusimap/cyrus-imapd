@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_rename_to_clash_name_only_deep
+    :min_version_3_3
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need the mail extensions for isSeenShared
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "create mailboxes";
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.B") || die;
+    $imaptalk->create("INBOX.C") || die;
+
+    xlog $self, "fetch mailboxes";
+    my $res = $jmap->Call('Mailbox/get', {});
+    my %mboxids = map { $_->{name} => $_->{id} } @{$res->{list}};
+
+    $imaptalk->create("INBOX.C.B") || die;
+
+    xlog $self, "move INBOX.A.B to INBOX.C.B";
+    $res = $jmap->Call('Mailbox/set', {
+      update => {
+        $mboxids{B} => {
+          parentId => $mboxids{C},
+        }
+      }
+    });
+
+    # rejected due to name existing
+    $self->assert_null($res->{updated});
+    $self->assert_not_null($res->{notUpdated}{$mboxids{B}});
+
+    # there were no renames
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/auditlog: rename/);
+}

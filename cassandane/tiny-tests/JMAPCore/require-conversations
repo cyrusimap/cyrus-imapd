@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_require_conversations
+    :min_version_3_1 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+    $instance->{config}->set(conversations => 'no');
+
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $jmap = $self->{jmap};
+    my $JMAPRequest = {
+        using => ['urn:ietf:params:jmap:core'],
+        methodCalls => [['Core/echo', { }, 'R1']],
+    };
+
+    # request should fail
+    my ($response, undef) = $jmap->Request($JMAPRequest);
+    $self->assert(not $response->{success});
+
+    # httpd should syslog an error
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr/ERROR: cannot enable \w+ module with conversations disabled/,
+    );
+}

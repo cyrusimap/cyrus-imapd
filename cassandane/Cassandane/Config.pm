@@ -52,19 +52,17 @@ my $default;
 # XXX this synchronised...
 my %bitfields = (
     'calendar_component_set' => 'VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL',
-    'event_extra_params' => 'bodyStructure clientAddress diskUsed flagNames messageContent messageSize messages modseq service timestamp uidnext vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId vnd.fastmail.sessionId vnd.fastmail.convExists vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid vnd.cmu.threadid',
+    'event_extra_params' => 'bodyStructure clientAddress diskUsed flagNames messageContent messageSize messages modseq service timestamp uidnext vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId vnd.fastmail.sessionId vnd.fastmail.convExists vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid vnd.cmu.threadid vnd.cmu.visibleUsers',
     'event_groups' => 'message quota flags access mailbox subscription calendar applepushservice jmap',
     'httpmodules' => 'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
     'metapartition_files' => 'header index cache expunge squat annotations lock dav archivecache',
     'newsaddheaders' => 'to replyto',
-    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.imip',
+    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery vnd.cyrus.imip snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.implicit_keep_target',
 );
 my $bitfields_fixed = 0;
 
-sub new
+sub init_bitfields
 {
-    my $class = shift;
-
     if (!$bitfields_fixed) {
         while (my ($key, $allvalues) = each %bitfields) {
             $bitfields{$key} = {};
@@ -74,6 +72,13 @@ sub new
         }
         $bitfields_fixed = 1;
     }
+}
+
+sub new
+{
+    my $class = shift;
+
+    init_bitfields();
 
     my $self = {
         parent => undef,
@@ -103,9 +108,6 @@ sub default
             'partition-default' => '@basedir@/data',
             sasl_mech_list => 'PLAIN LOGIN',
             allowplaintext => 'yes',
-            # config options used at FastMail - may as well be testing our stuff
-            expunge_mode => 'delayed',
-            delete_mode => 'delayed',
             # for debugging - see cassandane.ini.example
             debug_command => '@prefix@/utils/gdbtramp %s %d',
             # everyone should be running this
@@ -117,6 +119,17 @@ sub default
             chatty => 'yes',
             debug => 'yes',
             httpprettytelemetry => 'yes',
+
+            # smtpclient_open should fail by default!
+            #
+            # If your test fails and writes something like
+            #     smptclient_open: can't connect to host: bogus:0/noauth
+            # in syslog, then Cyrus is calling smtpclient_open(), and you
+            # will need to arrange for fakesmtpd to be listening.  To do
+            # this add :want_smtpdaemon to the test attributes, or enable
+            # smtpdaemon in the suite constructor.
+            smtp_backend => 'host',
+            smtp_host => 'bogus:0',
         );
         my $defs = Cassandane::Cassini->instance()->get_section('config');
         $default->set(%$defs);
@@ -137,7 +150,7 @@ sub clone
 sub _explode_bit_string
 {
     my ($s) = @_;
-    return split /[_ ]/, $s;
+    return split / /, $s;
 }
 
 sub set
@@ -171,8 +184,8 @@ sub set_bits
 
     die "$name is not a bitfield option" if not exists $bitfields{$name};
 
-    # explode space- or underscore-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/[_ ]/) {
+    # explode space-delimited list as only bit
+    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
         @bits = _explode_bit_string($bits[0]);
     }
 
@@ -190,8 +203,8 @@ sub clear_bits
 
     die "$name is not a bitfield option" if not exists $bitfields{$name};
 
-    # explode space- or underscore-delimited list as only bit
-    if (scalar @bits == 1 && $bits[0] =~ m/[_ ]/) {
+    # explode space-delimited list as only bit
+    if (scalar @bits == 1 && $bits[0] =~ m/ /) {
         @bits = _explode_bit_string($bits[0]);
     }
 
@@ -364,6 +377,37 @@ sub generate
         }
     }
     close CONF;
+}
+
+sub is_bitfield
+{
+    my ($name) = @_;
+
+    init_bitfields();
+
+    return defined $bitfields{$name};
+}
+
+sub is_bitfield_bit
+{
+    my ($name, $value) = @_;
+
+    init_bitfields();
+
+    die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+    return defined $bitfields{$name}->{$value};
+}
+
+sub get_bitfield_bits
+{
+    my ($name) = @_;
+
+    init_bitfields();
+
+    die "$name is not a bitfield option" if not exists $bitfields{$name};
+
+    return sort keys %{$bitfields{$name}};
 }
 
 1;

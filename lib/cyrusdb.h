@@ -105,9 +105,6 @@ struct cyrusdb_backend {
      * to reset state */
     int (*done)(void);
 
-    /* checkpoints this database environment */
-    int (*sync)(void);
-
     /* archives this database environment, and specified databases
      * into the specified directory */
     int (*archive)(const strarray_t *fnames, const char *dirname);
@@ -211,6 +208,9 @@ struct cyrusdb_backend {
                    struct txn **tid,
                    int force); /* 1 = ignore not found errors */
 
+    /* start a transaction (shared if flags & CYRUSDB_SHARED) */
+    int (*lock)(struct dbengine *db, struct txn **tid, int flags);
+
     /* Commit the transaction.  When commit() returns, the tid will no longer
      * be valid, regardless of if the commit succeeded or failed */
     int (*commit)(struct dbengine *db, struct txn *tid);
@@ -289,6 +289,7 @@ extern int cyrusdb_store(struct db *db,
 extern int cyrusdb_delete(struct db *db,
                           const char *key, size_t keylen,
                           struct txn **tid, int force);
+extern int cyrusdb_lock(struct db *db, struct txn **tid, int flags);
 extern int cyrusdb_commit(struct db *db, struct txn *tid);
 extern int cyrusdb_abort(struct db *db, struct txn *tid);
 extern int cyrusdb_dump(struct db *db, int detail);
@@ -300,7 +301,6 @@ extern int cyrusdb_compar(struct db *db,
 
 /* somewhat special case, because they don't take a DB */
 
-extern int cyrusdb_sync(const char *backend);
 extern cyrusdb_archiver *cyrusdb_getarchiver(const char *backend);
 
 extern int cyrusdb_canfetchnext(const char *backend);
@@ -310,7 +310,6 @@ extern strarray_t *cyrusdb_backends(void);
 /* generic implementations */
 int cyrusdb_generic_init(const char *dbdir, int myflags);
 int cyrusdb_generic_done(void);
-int cyrusdb_generic_sync(void);
 int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_noarchive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_unlink(const char *fname, int flags);

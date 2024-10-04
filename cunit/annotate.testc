@@ -6,6 +6,7 @@
 #include "xmalloc.h"
 #include "retry.h"
 #include "util.h"
+#include "xunlink.h"
 #include "imap/global.h"
 #include "libcyr_cfg.h"
 #include "imap/annotate.h"
@@ -49,7 +50,7 @@ static void set_annotation_definitions(const char *s)
         close(fd);
     }
     else {
-        unlink(fname);
+        xunlink(fname);
     }
 
     imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s = fname;
@@ -665,8 +666,6 @@ static void test_delete(void)
     int r;
     annotate_state_t *astate = NULL;
     struct mboxlist_entry mbentry;
-    strarray_t entries = STRARRAY_INITIALIZER;
-    strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
@@ -686,8 +685,6 @@ static void test_delete(void)
     mbentry.mbtype = 0;
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
-    strarray_append(&entries, COMMENT);
-    strarray_append(&attribs, VALUE_SHARED);
 
     /* set some values */
 
@@ -755,6 +752,7 @@ static void test_delete(void)
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), 0);
     mailbox_close(&mailbox);
     buf_free(&val);
+    buf_free(&path);
 }
 
 static void test_rename(void)
@@ -2011,7 +2009,7 @@ static int create_messages(struct mailbox *mailbox, int count)
         /* Write the message to the filesystem */
         if (!(fp = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
             fprintf(stderr, "append_newstage(%s) failed", mailbox_name(mailbox));
-            return r;
+            return IMAP_IOERROR;
         }
         buf_printf(&buf, msgtmpl, i, mailbox_name(mailbox), i, i, mailbox_name(mailbox));
         fwrite(buf_base(&buf), 1, buf_len(&buf), fp);
@@ -2050,6 +2048,114 @@ static int create_messages(struct mailbox *mailbox, int count)
     }
 
     return 0;
+}
+
+static void test_canon_value(void)
+{
+    struct {
+        const char *annot;
+        const char *attrb;
+        const char *value;
+        int is_invalid;
+    } tests[] = {{
+        .annot = "/check",
+        .attrb = "value.shared",
+        .value = "true",
+    }, {
+        .annot = "/check",
+        .attrb = "value.shared",
+        .value = "false",
+    }, {
+        .annot = "/check",
+        .attrb = "value.shared",
+        .value = "yes",
+        .is_invalid = 1,
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/sortorder",
+        .attrb = "value.priv",
+        .value = "123",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/sortorder",
+        .attrb = "value.priv",
+        .value = "12298189749871298739829873",
+        .is_invalid = 1
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/sortorder",
+        .attrb = "value.priv",
+        .value = "-1",
+        .is_invalid = 1
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/expire",
+        .attrb = "value.shared",
+        .value = "1",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/expire",
+        .attrb = "value.shared",
+        .value = "1s",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/expire",
+        .attrb = "value.shared",
+        .value = "1x",
+        .is_invalid = 1,
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/archive",
+        .attrb = "value.shared",
+        .value = "1",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/archive",
+        .attrb = "value.shared",
+        .value = "1s",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/archive",
+        .attrb = "value.shared",
+        .value = "1x",
+        .is_invalid = 1,
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/delete",
+        .attrb = "value.shared",
+        .value = "1",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/delete",
+        .attrb = "value.shared",
+        .value = "1s",
+    }, {
+        .annot = "/vendor/cmu/cyrus-imapd/delete",
+        .attrb = "value.shared",
+        .value = "1x",
+        .is_invalid = 1,
+    }};
+
+    struct mailbox *mailbox = NULL;
+    annotate_state_t *astate = NULL;
+    struct entryattlist *ealist = NULL;
+    struct buf val = BUF_INITIALIZER;
+
+    annotate_init(NULL, NULL);
+    annotatemore_open();
+
+    int r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    astate = annotate_state_new();
+    r = annotate_state_set_mailbox(astate, mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
+    /* validate value */
+    for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
+        buf_setcstr(&val, tests[i].value);
+        setentryatt(&ealist, tests[i].annot, tests[i].attrb, &val);
+        r = annotate_state_store(astate, ealist);
+        CU_ASSERT_EQUAL(r, tests[i].is_invalid ? IMAP_ANNOTATION_BADVALUE : 0);
+        freeentryatts(ealist);
+        ealist = NULL;
+    }
+
+    buf_free(&val);
+
+    annotate_state_abort(&astate);
+    mailbox_close(&mailbox);
+    annotatemore_close();
 }
 
 
@@ -2099,16 +2205,18 @@ static int set_up(void)
     isadmin = 0;
     auth_state = auth_newstate(userid);
 
-    quotadb_init(0);
+    quotadb_init();
     quotadb_open(NULL);
 
-    mboxlist_init(0);
+    mboxlist_init();
     mboxlist_open(NULL);
 
     struct mboxlock *namespacelock = mboxname_usernamespacelock(MBOXNAME1_INT);
 
+    /* XXX API abuse? perhaps this should just call mboxlist_create,
+     * XXX rather than the low level APIs. */
     r = mailbox_create(MBOXNAME1_INT, /*mbtype*/0, PARTITION, ACL,
-                       /*uniqueid*/NULL,
+                       makeuuid(),
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
@@ -2135,7 +2243,7 @@ static int set_up(void)
     namespacelock = mboxname_usernamespacelock(MBOXNAME2_INT);
 
     r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, PARTITION, ACL,
-                       /*uniqueid*/NULL,
+                       makeuuid(),
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
@@ -2162,7 +2270,7 @@ static int set_up(void)
     namespacelock = mboxname_usernamespacelock(MBOXNAME3_INT);
 
     r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, PARTITION, ACL,
-                       /*uniqueid*/NULL,
+                       makeuuid(),
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);

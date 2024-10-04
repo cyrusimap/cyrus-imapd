@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Master;
 use strict;
 use warnings;
+use File::stat;
 use POSIX qw(getcwd);
 use DateTime;
 
@@ -530,6 +531,13 @@ sub test_service_exit_during_start
     $self->assert_null($lemm);
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "check that the error was syslogged";
+        my @lines = $self->{instance}->getsyslog(qr/too many failures for service/);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/disabling until next SIGHUP/, $lines[0]);
+    }
 }
 
 sub test_startup
@@ -673,8 +681,8 @@ sub test_service_dup_port
 
     if ($self->{instance}->{have_syslog_replacement}) {
         # check syslog for the expected error
-        my @lines = grep { m/unable to create (?:A|B) listener socket:/ }
-                        $self->{instance}->getsyslog();
+        my $pat = qr/unable to create (?:A|B) listener socket:/;
+        my @lines = $self->{instance}->getsyslog($pat);
         $self->assert_num_equals(1, scalar @lines);
         $self->assert_matches(qr/Address already in use/, $lines[0]);
     }
@@ -845,7 +853,7 @@ sub test_maxforkrate
                               }, $self->lemming_census());
 }
 
-sub XXXtest_periodic_event
+sub test_periodic_event_slow
 {
     my ($self) = @_;
 
@@ -860,8 +868,8 @@ sub XXXtest_periodic_event
 
     xlog $self, "periodic events run immediately";
 
-    xlog $self, "waiting 5 mins for events to fire";
-    sleep(5*60);
+    xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    sleep(5*60 + 5);
 
     $self->assert_deep_equals({
                                 B => { live => 0, dead => 6 },
@@ -1318,6 +1326,87 @@ sub test_sighup_reloading_proto
     xlog $self, "always at least one live lemming";
     $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
         $self->lemming_census());
+}
+
+sub test_ready_file_new
+{
+    my ($self) = @_;
+
+    my $ready_file = $self->{instance}->get_basedir() . '/conf/master.ready';
+    my $pid_file = $self->{instance}->_pid_file();
+
+    # pid file should not already exist
+    my $pid_sb = stat($pid_file);
+    $self->assert_null($pid_sb);
+
+    # ready file should not already exist
+    my $ready_sb = stat($ready_file);
+    $self->assert_null($ready_sb);
+
+    # start cyrus
+    $self->start();
+
+    # pid file should exist now
+    $pid_sb = stat($pid_file);
+    $self->assert_not_null($pid_sb);
+
+    # ready file should exist soon...
+    timed_wait(sub { $ready_sb = stat($ready_file) },
+               description => "$ready_file to exist");
+    $self->assert_not_null($ready_sb);
+
+    # ready file should be newer than pid file
+    $self->assert_num_gte($pid_sb->mtime, $ready_sb->mtime);
+}
+
+sub test_ready_file_exists
+{
+    my ($self) = @_;
+
+    # force basedir to be computed
+    $self->{instance}->get_basedir();
+
+    # cannot be under basedir because it'll be blown away at startup
+    my $ready_file = "/tmp/cassandane-$$-master.ready";
+    $self->{instance}->{config}->set('master_ready_file', $ready_file);
+
+    # must be after the get_basedir() call above
+    my $pid_file = $self->{instance}->_pid_file();
+
+    system("touch", $ready_file) == 0 or die "touch $ready_file: $?";
+    sleep 3;
+
+    # pid file should not already exist
+    my $pid_sb = stat($pid_file);
+    $self->assert_null($pid_sb);
+
+    # ready file should already exist
+    my $ready_sb = stat($ready_file);
+    $self->assert_not_null($ready_sb);
+    my $orig_mtime = $ready_sb->mtime;
+
+    # start cyrus
+    $self->start();
+
+    # pid file should exist now
+    $pid_sb = stat($pid_file);
+    $self->assert_not_null($pid_sb);
+
+    # ready file should be touched soon
+    timed_wait(sub {
+                    $ready_sb = stat($ready_file);
+                    return 1 if $ready_sb->mtime >= $pid_sb->mtime;
+                    return undef;
+               },
+               description => "$ready_file to be newer than $pid_file");
+    $self->assert_not_null($ready_sb);
+
+    # ready file should be newer than pid file
+    $self->assert_num_gte($pid_sb->mtime, $ready_sb->mtime);
+    $self->assert_num_gt($orig_mtime, $ready_sb->mtime);
+
+    # don't pollute /tmp
+    unlink $ready_file;
 }
 
 1;

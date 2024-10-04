@@ -40,6 +40,7 @@
 package Cassandane::Generator;
 use strict;
 use warnings;
+use feature qw(state);
 use Digest::MD5 qw(md5_hex);
 
 use lib '.';
@@ -187,8 +188,14 @@ sub _generate_to
 sub _generate_messageid
 {
     my ($self, $params) = @_;
+    state $counter = 0;
     my $idsalt = int(rand(65536));
-    return "fake." . $params->{date}->epoch() . ".$idsalt\@" .  $params->{from}->domain();
+
+    return sprintf 'fake.%d.%d.%d@%s',
+                   $params->{date}->epoch(),
+                   ++ $counter,
+                   $idsalt,
+                   $params->{from}->domain();
 }
 
 sub _params_defaults
@@ -344,6 +351,10 @@ sub generate
     $msg->set_body($params->{body} . $extra);
     $msg->set_attributes(uid => $params->{uid});
     $msg->set_internaldate($params->{date});
+
+    if ($params->{flags}) {
+        $msg->set_attribute(flags => $params->{flags});
+    }
 
     return $msg;
 }

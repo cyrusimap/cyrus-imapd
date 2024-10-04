@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -88,9 +89,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-extern int optind;
-extern char *optarg;
-
 /* current namespace */
 static struct namespace mbtool_namespace;
 
@@ -111,7 +109,20 @@ int main(int argc, char **argv)
     int cmd = 0;
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:rt")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:rt";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "new-uniqueid", no_argument, NULL, 'r' },
+        { "normalize-internaldate", no_argument, NULL, 't' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -140,7 +151,7 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbtool", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&mbtool_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&mbtool_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -194,7 +205,7 @@ static int do_timestamp(const mbname_t *mbname)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
-        if (labs(record->internaldate - record->gmtime) < 86400)
+        if (llabs(record->internaldate - record->gmtime) < 86400)
             continue;
 
         struct index_record copyrecord = *record;

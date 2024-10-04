@@ -48,6 +48,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -78,9 +79,6 @@
 #include "imap/imap_err.h"
 
 /* Static global variables and support routines for sync_reset */
-
-extern char *optarg;
-extern int optind;
 
 static struct namespace sync_namespace;
 static struct namespace *sync_namespacep = &sync_namespace;
@@ -118,6 +116,9 @@ static int usage(const char *name)
 EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "sync_reset: %s\n", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 
@@ -142,7 +143,7 @@ static int reset_single(const char *userid)
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (i = sublist->count; i; i--) {
         const char *name = strarray_nth(sublist, i-1);
-        (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
+        (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0, /*silent*/1);
     }
 
     mbentry_t *mbentry = NULL;
@@ -156,16 +157,14 @@ static int reset_single(const char *userid)
 
     for (i = mblist->count; i; i--) {
         const char *name = strarray_nth(mblist, i-1);
-        r = mboxlist_deletemailbox(name, 1, sync_userid, sync_authstate, NULL,
-                MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
+	int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT |
+		       MBOXLIST_DELETE_LOCALONLY | MBOXLIST_DELETE_ENTIRELY;
+        r = mboxlist_deletemailbox(name, 1, sync_userid, sync_authstate,
+                                   NULL, delflags);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             printf("skipping already removed mailbox %s\n", name);
         }
         else if (r) goto fail;
-        /* XXX - cheap and nasty hack around actually cleaning up the entry */
-        r = mboxlist_deleteremote(name, NULL);
-        if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
-        if (r) goto fail;
     }
 
     if (mbentry) r = user_deletedata(mbentry, 1);
@@ -192,7 +191,21 @@ main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:vfL")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:Lfv";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "local-only", no_argument, NULL, 'L' },
+        { "force", no_argument, NULL, 'f' },
+        { "verbose", no_argument, NULL, 'v' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -220,7 +233,7 @@ main(int argc, char **argv)
     cyrus_init(alt_config, "sync_reset", 0, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
+    if ((r = mboxname_init_namespace(sync_namespacep, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 

@@ -65,6 +65,7 @@
 
 #include "auth.h"
 #include "libconfig.h"
+#include "slowio.h"
 #include "xmalloc.h"
 #include "imap/backend.h"
 #include "imap/global.h"
@@ -92,8 +93,8 @@ sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static struct auth_state *sieved_authstate = 0;
 
 int sieved_timeout;
-struct protstream *sieved_out;
-struct protstream *sieved_in;
+static struct protstream *sieved_out;
+static struct protstream *sieved_in;
 
 int sieved_logfd = -1;
 
@@ -128,6 +129,14 @@ void shut_down(int code)
         free(backend);
     }
 
+#ifdef HAVE_SSL
+    tls_shutdown_serverengine();
+#endif
+
+    saslprops_free(&saslprops);
+
+    cyrus_done();
+
     /* cleanup */
     if (sieved_out) {
         prot_flush(sieved_out);
@@ -136,14 +145,6 @@ void shut_down(int code)
     if (sieved_in) prot_free(sieved_in);
 
     if (sieved_logfd != -1) close(sieved_logfd);
-
-#ifdef HAVE_SSL
-    tls_shutdown_serverengine();
-#endif
-
-    saslprops_free(&saslprops);
-
-    cyrus_done();
 
     cyrus_reset_stdio();
 
@@ -197,6 +198,8 @@ EXPORTED void fatal(const char *s, int code)
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(EX_TEMPFAIL);
 }
 
@@ -207,15 +210,27 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-EXPORTED int service_init(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
+EXPORTED int service_init(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
+    int opt;
+
     global_sasl_init(1, 1, mysasl_cb);
 
     /* build interpreter for compiling */
     interp = sieve_build_nonexec_interp();
     if (interp == NULL) shut_down(EX_SOFTWARE);
+
+    while ((opt = getopt(argc, argv, "H")) != EOF) {
+        switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
 
     return 0;
 }
@@ -274,6 +289,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
     cmdloop();
 
+    slowio_reset();
+
     /* never reaches */
     exit(EX_SOFTWARE);
 }
@@ -330,7 +347,7 @@ static void bitpipe(void)
             goto done;
         }
     } while (!proxy_check_input(protin, sieved_in, sieved_out,
-                                backend->in, backend->out, 0));
+                                backend->in, backend->out, PROT_NO_FD, NULL, 0));
 
  done:
     /* ok, we're done. */

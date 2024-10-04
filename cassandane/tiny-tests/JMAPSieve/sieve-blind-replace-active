@@ -1,0 +1,120 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_blind_replace_active
+    :min_version_3_3 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create initial script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => "keep;"}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => JSON::null,
+                    blobId => "#A"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+        ['SieveScript/query', {
+            filter => {
+                isActive => JSON::false,
+            }
+         }, "R2"],
+        ['SieveScript/set', {
+            '#destroy' => {
+                resultOf => 'R2',
+                name => 'SieveScript/query',
+                path => '/ids'
+            }
+         }, "R3"],
+        ['SieveScript/get', {
+         }, "R4"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+    $self->assert_null($res->[1][1]{updated});
+    $self->assert_null($res->[1][1]{destroyed});
+
+    my $id1 = $res->[1][1]{created}{"1"}{id};
+
+    $self->assert_deep_equals([], $res->[2][1]{ids});
+
+    $self->assert_null($res->[3][1]{created});
+    $self->assert_null($res->[3][1]{updated});
+    $self->assert_null($res->[3][1]{destroyed});
+
+    $self->assert_num_equals(1, scalar @{$res->[4][1]{list}});
+    $self->assert_str_equals($id1, $res->[4][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[4][1]{list}[0]{isActive});
+
+    my $blobId = $res->[4][1]{list}[0]{blobId};
+
+    xlog $self, "download script blob";
+    $res = $self->download('cassandane', $blobId);
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('keep;', $res->{content});
+
+    xlog "replace active script";
+    $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "B" => { data => [{'data:asText' => "discard;"}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "2" => {
+                    name => JSON::null,
+                    blobId => "#B"
+                }
+            },
+            onSuccessActivateScript => "#2"
+         }, "R1"],
+        ['SieveScript/query', {
+            filter => {
+                isActive => JSON::false,
+            }
+         }, "R2"],
+        ['SieveScript/set', {
+            '#destroy' => {
+                resultOf => 'R2',
+                name => 'SieveScript/query',
+                path => '/ids'
+            }
+         }, "R3"],
+        ['SieveScript/get', {
+         }, "R4"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{2}{isActive});
+    $self->assert_equals(JSON::false, $res->[1][1]{updated}{$id1}{isActive});
+    $self->assert_null($res->[1][1]{destroyed});
+
+    my $id2 = $res->[1][1]{created}{"2"}{id};
+
+    $self->assert_deep_equals([$id1], $res->[2][1]{ids});
+
+    $self->assert_null($res->[3][1]{created});
+    $self->assert_null($res->[3][1]{updated});
+    $self->assert_deep_equals([$id1], $res->[3][1]{destroyed});
+
+    $self->assert_num_equals(1, scalar @{$res->[4][1]{list}});
+    $self->assert_str_equals($id2, $res->[4][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[4][1]{list}[0]{isActive});
+
+    $blobId = $res->[4][1]{list}[0]{blobId};
+
+    xlog $self, "download script blob";
+    $res = $self->download('cassandane', $blobId);
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('discard;', $res->{content});
+}

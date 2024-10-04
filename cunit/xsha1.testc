@@ -26,13 +26,13 @@ static void _checksha(const char *text, size_t len, const char *expect)
 
     // test charset version - encoded
     size_t len64 = 0;
-    charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 1 /* wrap */);
+    charset_b64encode_mimebody(NULL, len, NULL, &len64, NULL, 1 /* wrap */);
     if (len64) {
         char *encbuf = xmalloc(len64);
         size_t outlen = 0;
         memset(dest, 0, sizeof(dest));
         memset(hexstr, 0, sizeof(hexstr));
-        charset_encode_mimebody(text, len, encbuf, &len64, NULL, 1 /* wrap */);
+        charset_b64encode_mimebody(text, len, encbuf, &len64, NULL, 1 /* wrap */);
         charset_decode_sha1(dest, &outlen, encbuf, len64, ENCODING_BASE64);
         bin_to_hex(dest, SHA1_DIGEST_LENGTH, hexstr, BH_LOWER);
         CU_ASSERT_STRING_EQUAL(expect, hexstr);

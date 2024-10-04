@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
@@ -76,33 +77,26 @@ static int newsrc_dbopen = 0;
 /* must be called after cyrus_init */
 static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 {
-    char buf[1024];
-    int r = 0;
+    int r;
+    char *tofree = NULL;
 
-    if (r != 0)
-        syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
-               cyrusdb_strerror(r));
-    else {
-        char *tofree = NULL;
+    if (!fname)
+        fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
 
-        if (!fname)
-            fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
-
-        /* create db file name */
-        if (!fname) {
-            tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
-            fname = tofree;
-        }
-
-        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
-        if (r != 0)
-            syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-                   cyrusdb_strerror(r));
-        else
-            newsrc_dbopen = 1;
-
-        free(tofree);
+    /* create db file name */
+    if (!fname) {
+        tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
+        fname = tofree;
     }
+
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
+    if (r != 0)
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+               cyrusdb_strerror(r));
+    else
+        newsrc_dbopen = 1;
+
+    free(tofree);
 
     return r;
 }
@@ -251,13 +245,12 @@ static int fetch(char *msgid, int bymsgid,
 
 int main(int argc, char *argv[])
 {
-    extern char *optarg;
     int opt;
     char *alt_config = NULL, *port = "119";
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
-    struct protstream *pin, *pout, *sin, *sout;
+    struct protstream *pin, *pout, *sin = NULL, *sout = NULL;
     char buf[BUFFERSIZE];
     char sfile[1024] = "";
     int fd = -1, i, offered, rejected, accepted, failed;
@@ -266,7 +259,24 @@ int main(int argc, char *argv[])
     int newnews = 1;
     int y2k_compliant_date_format = 0;
 
-    while ((opt = getopt(argc, argv, "C:s:w:f:a:p:ny")) != EOF) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:a:f:np:s:w:y";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "auth-id", required_argument, NULL, 'a' },
+        { "newsstamp-file", required_argument, NULL, 'f' },
+        { "no-newnews", no_argument, NULL, 'n' },
+        { "password", required_argument, NULL, 'p' },
+        { "server", required_argument, NULL, 's' },
+        { "groups", required_argument, NULL, 'w' },
+        { "yyyy", no_argument, NULL, 'y' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

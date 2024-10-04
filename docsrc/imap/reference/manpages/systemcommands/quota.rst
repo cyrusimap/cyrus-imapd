@@ -55,30 +55,30 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -d domain
+.. option:: -d domain, --domain domain
 
     List and/or fix quota only in *domain*.
 
-.. option:: -f
+.. option:: -f, --fix
 
-    Fix any inconsistencies in the quota subsystem before generating a
-    report.
+    Detect and fix any inconsistencies in the quota subsystem before generating
+    a report.
 
-.. option:: -n
+.. option:: -n, --report-only
 
     Check for any inconsistencies in the quota subsystem but don't actually
     fix them.  Use with **-f** and **-q** to only see what's incorrect.
 
-.. option:: -q
+.. option:: -q, --quiet
 
     Operate quietly. If **-f** is specified, then don't print the quota
     values, only print messages when things are changed.
 
-.. option:: -J
+.. option:: -J, --json
 
     Output the quota values as JSON for automated tooling support
 
-.. option:: -u
+.. option:: -u, --userids
 
     Interpret *mailbox-spec* arguments as userids.  The default is to
     interpret them as mailbox prefixes

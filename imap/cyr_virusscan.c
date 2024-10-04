@@ -45,6 +45,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -100,17 +101,13 @@ struct scan_rock {
     int mailboxes_scanned;
 };
 
-/* globals for getopt routines */
-extern char *optarg;
-extern int  optind;
-extern int  opterr;
-extern int  optopt;
-
 /* globals for callback functions */
-int disinfect = 0;
-int email_notification = 0;
-struct infected_mbox *public = NULL;
-struct infected_mbox *user = NULL;
+static int disinfect = 0;
+static int email_notification = 0;
+#if 0
+static struct infected_mbox *public = NULL;
+#endif
+static struct infected_mbox *user = NULL;
 
 static int verbose = 0;
 
@@ -239,7 +236,7 @@ void clamav_destroy(void *state)
     free(st);
 }
 
-struct scan_engine engine =
+static struct scan_engine engine =
 { "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy };
 
 #elif defined(HAVE_SOME_UNKNOWN_VIRUS_SCANNER)
@@ -247,7 +244,7 @@ struct scan_engine engine =
 
 #else
 /* NO configured virus scanner */
-struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
+static struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
 #endif
 
 
@@ -275,7 +272,7 @@ static const char *default_notification_template =
 
 int main (int argc, char *argv[])
 {
-    int option;         /* getopt() returns an int */
+    int opt;
     char *alt_config = NULL;
     char *search_str = NULL;
     struct scan_rock srock;
@@ -283,8 +280,22 @@ int main (int argc, char *argv[])
     struct namespace scan_namespace;
     int r;
 
-    while ((option = getopt(argc, argv, "C:s:rnv")) != EOF) {
-        switch (option) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:nrs:v";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "notify", no_argument, NULL, 'n' },
+        { "remove-infected", no_argument, NULL, 'r' },
+        { "search", required_argument, NULL, 's' },
+        { "verbose", no_argument, NULL, 'v' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -324,7 +335,7 @@ int main (int argc, char *argv[])
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&scan_namespace, NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -478,7 +489,7 @@ int scan_me(struct findall_data *data, void *rock)
     srock->i_mbox = i_mbox;
 
     if (verbose) printf("Scanning %s...\n", name);
-    mailbox_expunge(mailbox, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, NULL, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
     if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
     else mailbox_close(&mailbox);
 
@@ -629,7 +640,15 @@ static int check_notification_template(const struct buf *template)
 
     /* stub a message, and do minimal checking for RFC 822 compliance */
     fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
+    if (fd < 0) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
     f = fdopen(fd, "w+");
+    if (!f) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
     mbname = mbname_from_intname("user.nobody");
     put_notification_headers(f, 0, time(NULL), mbname);
     mbname_free(&mbname);
@@ -654,6 +673,8 @@ static int check_notification_template(const struct buf *template)
     prot_free(pout);
 
     fclose(f);
+
+done:
     return r;
 }
 
@@ -688,14 +709,13 @@ static void append_notifications(const struct buf *template)
 {
     struct infected_mbox *i_mbox;
     int outgoing_count = 0;
-    int fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
     struct namespace notification_namespace;
 
-    mboxname_init_namespace(&notification_namespace, 0);
+    mboxname_init_namespace(&notification_namespace, /*options*/0);
 
     while ((i_mbox = user)) {
         if (i_mbox->msgs) {
-            FILE *f = fdopen(fd, "w+");
+            FILE *f = NULL;
             struct infected_msg *msg;
             time_t t;
             struct protstream *pout;
@@ -705,7 +725,19 @@ static void append_notifications(const struct buf *template)
             mbname_t *owner = mbname_from_userid(i_mbox->owner);
             struct buf message = BUF_INITIALIZER;
             int first;
-            int r;
+            int fd, r = 0;
+
+            fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
+            if (fd < 0) {
+                r = IMAP_IOERROR;
+                goto user_done;
+            }
+
+            f = fdopen(fd, "w+");
+            if (!f) {
+                r = IMAP_IOERROR;
+                goto user_done;
+            }
 
             t = time(NULL);
             put_notification_headers(f, outgoing_count++, t, owner);
@@ -783,6 +815,8 @@ static void append_notifications(const struct buf *template)
                 prot_free(pout);
             }
 
+            fclose(f);
+user_done:
             if (r) {
                 syslog(LOG_ERR, "couldn't send notification to user %s: %s",
                                 mbname_userid(owner),
@@ -790,11 +824,6 @@ static void append_notifications(const struct buf *template)
             }
 
             mbname_free(&owner);
-            /* XXX funny smell here, fdopen() promises to close the underlying
-             *     file descriptor at fclose(), but we're about to loop around
-             *     and re-fdopen() it?
-             */
-            fclose(f);
         }
 
         user = i_mbox->next;

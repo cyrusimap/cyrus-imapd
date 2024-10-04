@@ -78,6 +78,7 @@
 #include "util.h"
 #include "iptostring.h"
 #include "global.h"
+#include "slowio.h"
 #include "tls.h"
 #include "map.h"
 
@@ -99,6 +100,7 @@
 #include "tok.h"
 #include "wildmat.h"
 #include "md5.h"
+#include "attachextract.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -113,6 +115,8 @@
 #include <libxml/uri.h>
 
 static unsigned accept_encodings = 0;
+
+struct proc_handle *httpd_proc_handle = NULL;
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
@@ -392,7 +396,7 @@ static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
 
 static const char tls_message[] =
     HTML_DOCTYPE
-    "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
+    "<html style='color-scheme:dark light'>\n<head>\n<title>TLS Required</title>\n</head>\n" \
     "<body>\n<h2>TLS is required prior to authentication</h2>\n" \
     "Use <a href=\"%s\">%s</a> instead.\n" \
     "</body>\n</html>\n";
@@ -427,7 +431,6 @@ static int httpd_tls_required = 0;
 static int httpd_tls_enabled = 0;
 static unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
-int config_httpprettytelemetry;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
@@ -449,10 +452,6 @@ struct auth_scheme_t auth_schemes[] = {
     { AUTH_SCRAM_SHA1, "SCRAM-SHA-1", "SCRAM-SHA-1",
       AUTH_NEED_PERSIST | AUTH_SERVER_FIRST | AUTH_BASE64 |
       AUTH_REALM_PARAM | AUTH_DATA_PARAM },
-    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH,
-      AUTH_NEED_REQUEST | AUTH_SERVER_FIRST },
-    { AUTH_NTLM, "NTLM", "NTLM",
-      AUTH_NEED_PERSIST | AUTH_BASE64 },
     { AUTH_BEARER, "Bearer", NULL,
       AUTH_SERVER_FIRST | AUTH_REALM_PARAM },
       AUTH_SCHEME_BASIC,
@@ -569,6 +568,7 @@ static struct namespace_t namespace_default = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL },                 /* UNLOCK       */
@@ -679,8 +679,8 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
 static void httpd_reset(struct http_connection *conn)
 {
     int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     /* run any delayed actions */
     libcyrus_run_delayed();
@@ -694,7 +694,7 @@ static void httpd_reset(struct http_connection *conn)
     /* Reset available authentication schemes */
     avail_auth_schemes = 0;
 
-    proc_cleanup();
+    proc_cleanup(&httpd_proc_handle);
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -705,7 +705,7 @@ static void httpd_reset(struct http_connection *conn)
     }
     ptrarray_fini(&backend_cached);
 
-    index_text_extractor_destroy();
+    attachextract_destroy();
 
     if (httpd_in) {
         prot_NONBLOCK(httpd_in);
@@ -722,7 +722,8 @@ static void httpd_reset(struct http_connection *conn)
 
     if (config_auditlog) {
         syslog(LOG_NOTICE,
-               "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
+               "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(), bytes_in, bytes_out);
     }
 
@@ -779,6 +780,8 @@ static void httpd_reset(struct http_connection *conn)
     saslprops_reset(&saslprops);
 
     session_new_id();
+
+    slowio_reset();
 }
 
 /*
@@ -795,7 +798,7 @@ int service_init(int argc __attribute__((unused)),
     LIBXML_TEST_VERSION
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
-    setproctitle_init(argc, argv, envp);
+    proc_settitle_init(argc, argv, envp);
 
     /* Initialize HTTP connection */
     memset(&http_conn, 0, sizeof(struct http_connection));
@@ -812,7 +815,7 @@ int service_init(int argc __attribute__((unused)),
     idle_enabled();
 
     /* Set namespace */
-    if ((r = mboxname_init_namespace(&httpd_namespace, 1)) != 0) {
+    if ((r = mboxname_init_namespace(&httpd_namespace, NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -822,8 +825,12 @@ int service_init(int argc __attribute__((unused)),
 
     mboxevent_setnamespace(&httpd_namespace);
 
-    while ((opt = getopt(argc, argv, "sp:q")) != EOF) {
+    while ((opt = getopt(argc, argv, "Hsp:q")) != EOF) {
         switch(opt) {
+        case 'H': /* expect HAProxy protocol header */
+            haproxy_protocol = 1;
+            break;
+
         case 's': /* https (do TLS right away) */
             https = 1;
             break;
@@ -840,8 +847,6 @@ int service_init(int argc __attribute__((unused)),
             usage();
         }
     }
-
-    config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
     httpd_log_headers = strarray_split(config_getstring(IMAPOPT_HTTPLOGHEADERS),
                                        " ", STRARRAY_TRIM | STRARRAY_LCASE);
@@ -935,6 +940,7 @@ int service_main(int argc __attribute__((unused)),
     int mechcount = 0;
     size_t mechlen;
     struct auth_scheme_t *scheme;
+    int r;
 
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
@@ -1019,7 +1025,10 @@ int service_main(int argc __attribute__((unused)),
     httpd_tls_required =
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
 
-    proc_register(config_ident, http_conn.clienthost, NULL, NULL, NULL);
+    r = proc_register(&httpd_proc_handle, 0,
+                      config_ident, http_conn.clienthost, NULL, NULL, NULL);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
     struct buf buf = BUF_INITIALIZER;
@@ -1061,7 +1070,7 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
-    index_text_extractor_init(httpd_in);
+    attachextract_init(httpd_in);
 
     /* count the connection, now that it's established */
     prometheus_increment(CYRUS_HTTP_CONNECTIONS_TOTAL);
@@ -1104,8 +1113,8 @@ void usage(void)
 void shut_down(int code)
 {
     int i;
-    int bytes_in = 0;
-    int bytes_out = 0;
+    uint64_t bytes_in = 0;
+    uint64_t bytes_out = 0;
 
     in_shutdown = 1;
 
@@ -1134,7 +1143,7 @@ void shut_down(int code)
 
     xmlCleanupParser();
 
-    proc_cleanup();
+    proc_cleanup(&httpd_proc_handle);
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -1145,7 +1154,7 @@ void shut_down(int code)
     }
     ptrarray_fini(&backend_cached);
 
-    index_text_extractor_destroy();
+    attachextract_destroy();
 
     annotatemore_close();
 
@@ -1174,7 +1183,8 @@ void shut_down(int code)
 
     if (config_auditlog)
         syslog(LOG_NOTICE,
-               "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>",
+               "auditlog: traffic sessionid=<%s>"
+               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(), bytes_in, bytes_out);
 
     saslprops_free(&saslprops);
@@ -1192,7 +1202,7 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
-        proc_cleanup();
+        proc_cleanup(&httpd_proc_handle);
         if (httpd_out) {
             /* one less active connection */
             prometheus_decrement(CYRUS_HTTP_ACTIVE_CONNECTIONS);
@@ -1225,6 +1235,9 @@ EXPORTED void fatal(const char* s, int code)
     }
 
     syslog(LOG_ERR, "%s%s", fatal, s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
@@ -1841,9 +1854,12 @@ static void postauth_check_hdrs(struct transaction_t *txn)
     if (txn->zstrm &&
         txn->flags.ver == VER_1_1 &&
         (hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-        struct accept *e, *enc = parse_accept(hdr);
+        dynarray_t *enc = parse_accept(hdr);
+        int i;
 
-        for (e = enc; e && e->token; e++) {
+        for (i = 0; i < dynarray_size(enc); i++) {
+            struct accept *e = dynarray_nth(enc, i);
+
             if (e->qual > 0.0 &&
                 (!strcasecmp(e->token, "gzip") ||
                  !strcasecmp(e->token, "x-gzip"))) {
@@ -1852,14 +1868,17 @@ static void postauth_check_hdrs(struct transaction_t *txn)
             }
             free_accept(e);
         }
-        if (enc) free(enc);
+        dynarray_free(&enc);
     }
     else if ((txn->zstrm || txn->brotli || txn->zstd) &&
              (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
-        struct accept *e, *enc = parse_accept(hdr);
+        dynarray_t *enc = parse_accept(hdr);
         float qual = 0.0;
+        int i;
 
-        for (e = enc; e && e->token; e++) {
+        for (i = 0; i < dynarray_size(enc); i++) {
+            struct accept *e = dynarray_nth(enc, i);
+
             if (e->qual > 0.0 && e->qual >= qual) {
                 unsigned ce = CE_IDENTITY;
                 encode_proc_t proc = NULL;
@@ -1891,14 +1910,14 @@ static void postauth_check_hdrs(struct transaction_t *txn)
             }
             free_accept(e);
         }
-        if (enc) free(enc);
+        dynarray_free(&enc);
     }
 }
 
 
 EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
 {
-    int ret = 0, sasl_result = 0;
+    int r, ret = 0, sasl_result = 0;
     const char *query;
     const struct namespace_t *namespace;
     struct request_line_t *req_line = &txn->req_line;
@@ -1929,7 +1948,11 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     buf_printf(&txn->buf, "%s%s", config_ident,
                namespace->well_known ? strrchr(namespace->well_known, '/') :
                namespace->prefix);
-    proc_register(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
+    r = proc_register(&httpd_proc_handle, 0,
+                      buf_cstring(&txn->buf), txn->conn->clienthost,
+                      httpd_userid, txn->req_tgt.path, txn->req_line.meth);
+    if (r) fatal("unable to register process", EX_IOERR);
+    proc_settitle(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, txn->req_line.meth);
     buf_reset(&txn->buf);
 
@@ -2186,7 +2209,9 @@ static void cmdloop(struct http_connection *conn)
         } while (!http_proxy_check_input(conn, &httpd_pipes,
                                          0 /* timeout */));
 
-        
+        /* ensure group information is up to date */
+        auth_refresh(httpd_authstate);
+
         /* Start command timer */
         cmdtime_starttimer();
 
@@ -2458,11 +2483,10 @@ static int compare_accept(const struct accept *a1, const struct accept *a2)
     return 0;
 }
 
-struct accept *parse_accept(const char **hdr)
+dynarray_t *parse_accept(const char **hdr)
 {
-    int i, n = 0, alloc = 0;
-    struct accept *ret = NULL;
-#define GROW_ACCEPT 10;
+    dynarray_t *ret = dynarray_new(sizeof(struct accept));
+    int i;
 
     for (i = 0; hdr && hdr[i]; i++) {
         tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
@@ -2471,45 +2495,38 @@ struct accept *parse_accept(const char **hdr)
         while ((token = tok_next(&tok))) {
             struct param *params = NULL, *param;
             char *type = NULL, *subtype = NULL;
-
-            if (n + 1 >= alloc)  {
-                alloc += GROW_ACCEPT;
-                ret = xrealloc(ret, alloc * sizeof(struct accept));
-            }
+            struct accept accept = { .qual = 1.0 };
 
             message_parse_type(token, &type, &subtype, &params);
 
             if (type)
-                ret[n].token = lcase(strconcat(type, "/", subtype, NULL));
+                accept.token = lcase(strconcat(type, "/", subtype, NULL));
             else
-                ret[n].token = lcase(xstrdup(token));
-            ret[n].version = NULL;
-            ret[n].charset = NULL;
-            ret[n].qual = 1.0;
+                accept.token = lcase(xstrdup(token));
 
             for (param = params; param; param = param->next) {
                 if (!strcasecmp(param->attribute, "q")) {
-                    ret[n].qual = strtof(param->value, NULL);
+                    accept.qual = strtof(param->value, NULL);
                 }
                 else if (!strcasecmp(param->attribute, "version")) {
-                    ret[n].version = xstrdup(param->value);
+                    accept.version = xstrdup(param->value);
                 }
                 else if (!strcasecmp(param->attribute, "charset")) {
-                    ret[n].charset = xstrdup(param->value);
+                    accept.charset = xstrdup(param->value);
                 }
             }
+
+            dynarray_append(ret, &accept);
 
             param_free(&params);
             free(subtype);
             free(type);
-
-            ret[++n].token = NULL;
         }
         tok_fini(&tok);
     }
 
-    qsort(ret, n, sizeof(struct accept),
-          (int (*)(const void *, const void *)) &compare_accept);
+    dynarray_sort(ret,
+                  (int (*)(const void *, const void *)) &compare_accept);
 
     return ret;
 }
@@ -2559,7 +2576,7 @@ void parse_query_params(struct transaction_t *txn, const char *query)
 
 
 /* Create HTTP-date ('buf' must be at least 30 characters) */
-EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
+EXPORTED void httpdate_gen(char *buf, size_t len, time_t t)
 {
     struct tm *tm = gmtime(&t);
 
@@ -2567,8 +2584,6 @@ EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
              wday[tm->tm_wday],
              tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
              tm->tm_hour, tm->tm_min, tm->tm_sec);
-
-    return buf;
 }
 
 
@@ -3021,7 +3036,7 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     int i, size;
-    time_t now;
+    time_t now = 0;
     char datestr[30];
     const char **hdr;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
@@ -3036,10 +3051,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     txn->conn->begin_resp_headers(txn, code);
 
 
+    now = time(0);
     switch (code) {
     default:
         /* Final response */
-        now = time(0);
         httpdate_gen(datestr, sizeof(datestr), now);
         simple_hdr(txn, "Date", "%s", datestr);
 
@@ -3253,6 +3268,13 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             comma_list_hdr(txn, "Accept-Encoding", ce_strings, accept_encodings);
         }
         else simple_hdr(txn, "Accept-Encoding", "identity");
+        break;
+
+    case HTTP_UNAVAILABLE:
+        if (txn->flags.retry) {
+            /* Construct Retry-After header for 503 response */
+            simple_hdr(txn, "Retry-After", "%u", 30 /* arbitrary value */);
+        }
         break;
     }
 
@@ -3674,6 +3696,11 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
         default:
             if (txn->meth == METH_HEAD) return;
+
+            if (!outlen && last_chunk) {
+                /* Zero-length body */
+                return;
+            }
         }
     }
 
@@ -3886,7 +3913,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         }
 
         buf_printf_markup(html, level, HTML_DOCTYPE);
-        buf_printf_markup(html, level++, "<html>");
+        buf_printf_markup(html, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(html, level++, "<head>");
         buf_printf_markup(html, level, "<title>%s</title>",
                           error_message(code));
@@ -4060,7 +4087,12 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     for (i = 0; http_namespaces[i]; i++) {
         if (http_namespaces[i]->enabled && http_namespaces[i]->auth) {
             int ret = http_namespaces[i]->auth(httpd_userid);
-            if (ret) return ret;
+            if (ret) {
+                if (ret == HTTP_UNAVAILABLE) {
+                    txn->flags.retry = 1;
+                }
+                return ret;
+            }
         }
     }
 
@@ -4279,7 +4311,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_authstate = auth_newstate(user);
     }
     else {
-        /* SASL-based authentication (SCRAM_*, Digest, Negotiate, NTLM) */
+        /* SASL-based authentication (SCRAM_*, Negotiate) */
         const char *serverout = NULL;
         unsigned int serveroutlen = 0;
         unsigned int auth_params_len = 0;
@@ -4684,7 +4716,7 @@ static int list_well_known(struct transaction_t *txn)
         /* Start HTML */
         buf_reset(&body);
         buf_printf_markup(&body, level, HTML_DOCTYPE);
-        buf_printf_markup(&body, level++, "<html>");
+        buf_printf_markup(&body, level++, "<html style='color-scheme:dark light'>");
         buf_printf_markup(&body, level++, "<head>");
         buf_printf_markup(&body, level,
                           "<title>%s</title>", "Well-Known Locations");
@@ -5020,7 +5052,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
 }
 
 
-/* Perform an PROPFIND request on "/" iff we support CalDAV */
+/* Perform a PROPFIND request on "/" iff we support CalDAV */
 static int meth_propfind_root(struct transaction_t *txn,
                               void *params __attribute__((unused)))
 {
@@ -5081,7 +5113,7 @@ static void trace_cachehdr(const char *name, const char *contents, const char *r
     }
 }
 
-/* Perform an TRACE request */
+/* Perform a TRACE request */
 EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 {
     parse_path_t parse_path = (parse_path_t) params;

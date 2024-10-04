@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sessionstate
+    :min_version_3_1 :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+
+    # Fetch sessionState
+    my $JMAPRequest = {
+        using => ['urn:ietf:params:jmap:core'],
+        methodCalls => [['Core/echo', { }, 'R1']],
+    };
+    my $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_not_null($JMAPResponse->{sessionState});
+    my $sessionState = $JMAPResponse->{sessionState};
+
+    # Update ACL
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+
+    # Fetch sessionState
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
+    $sessionState = $JMAPResponse->{sessionState};
+
+    # Update ACL
+    $admintalk->setacl("user.other", "cassandane", "") or die;
+
+    # Fetch sessionState
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
+    $sessionState = $JMAPResponse->{sessionState};
+}

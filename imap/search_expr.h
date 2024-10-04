@@ -45,11 +45,13 @@
 
 #include "mailbox.h"
 #include "message.h"
+#include "search_part.h"
 #include "util.h"
 
 struct protstream;
 struct index_state;
 
+/* keep this in sync with search_op_name in search_expr.c */
 enum search_op {
     SEOP_UNKNOWN,
     SEOP_TRUE,
@@ -69,6 +71,7 @@ enum search_op {
     SEOP_OR,
     SEOP_NOT,
 };
+extern const char *search_op_name[];
 
 union search_value {
     time_t t;
@@ -90,7 +93,7 @@ typedef struct search_attr search_attr_t;
 struct search_attr {
     const char *name;
     int flags;
-    int part;
+    enum search_part part;
     int cost;
     void (*internalise)(struct index_state *, const union search_value *,
                         void *data1, void **internalisedp);

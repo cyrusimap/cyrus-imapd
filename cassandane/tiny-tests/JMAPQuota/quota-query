@@ -1,0 +1,227 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_quota_query
+    :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Install a sieve script";
+    my $script = <<EOF;
+keep;\r
+EOF
+    $self->{instance}->install_sieve_script($script);
+
+    xlog "Get all Sieve scripts (to create #sieve mailbox) ";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/get', {
+         }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('SieveScript/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    xlog "Get all calendars (to create #calendars mailbox) ";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+         }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    # Right - let's set ourselves some basic usage quota
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(
+        storage => 100000,
+        message => 50000,
+        mailbox => 100,
+    );
+
+    $self->_set_quotaroot('user.cassandane.#calendars');
+    $self->_set_limits(
+        storage => 10000,
+        message => 5000,
+        mailbox => 10,
+    );
+
+    xlog $self, "create event in calendar";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => {
+                calendarIds => {
+                    Default => JSON::true,
+                },
+                "title" => "foo",
+                "description" => "",
+                "freeBusyStatus" => "busy",
+                "showWithoutTime" => JSON::true,
+                "start" => "2015-10-06T00:00:00",
+                "duration" => "P1D",
+                "timeZone" => undef,
+            }
+        }}, "R1"]]);
+
+    xlog "Get all quotas";
+    my $res = $jmap->CallMethods([
+        ['Quota/get', {
+         }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Quota/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(7, scalar @{$res->[0][1]{list}});
+
+    # Get the ids of our quotas
+    my $root_storage;
+    my $root_folders;
+    my $root_messages;
+    my $cal_storage;
+    my $cal_folders;
+    my $cal_messages;
+    my $sieve_messages;
+
+    for my $q (@{$res->[0][1]{list}}) {
+        if ($q->{name} eq 'root') {
+            if ($q->{resourceType} eq 'octets') {
+                $root_storage = $q->{id};
+            }
+            else {
+                if ($q->{types}[0] eq 'Email') {
+                    $root_messages = $q->{id};
+                }
+                else {
+                    $root_folders = $q->{id};
+                }
+            }
+        }
+        elsif ($q->{name} eq 'calendars') {
+            if ($q->{resourceType} eq 'octets') {
+                $cal_storage = $q->{id};
+            }
+            else {
+                if ($q->{types}[0] eq 'CalendarEvent') {
+                    $cal_messages = $q->{id};
+                }
+                else {
+                    $cal_folders = $q->{id};
+                }
+            }
+        }
+        else {
+            $sieve_messages = $q->{id};
+        }
+    }
+
+    my @testCases = ({
+        filter => undef,
+        wantIds => [$cal_storage, $root_storage, $root_folders, $cal_folders,
+                    $cal_messages, $root_messages, $sieve_messages]
+    }, {
+        filter => {
+            name => 'root',
+        },
+        wantIds => [$root_storage, $root_folders, $root_messages],
+    }, {
+        filter => {
+            scope => 'account',
+        },
+        wantIds => [$cal_storage, $root_storage, $root_folders, $cal_folders,
+                    $cal_messages, $root_messages, $sieve_messages]
+    }, {
+        filter => {
+            scope => 'global',
+        },
+        wantIds => [],
+    }, {
+        filter => {
+            resourceType => 'octets',
+        },
+        wantIds => [$cal_storage, $root_storage],
+    }, {
+        filter => {
+            type => 'SieveScript',
+        },
+        wantIds => [$root_storage, $sieve_messages],
+    }, {
+        filter => {
+            operator => 'AND',
+            conditions => [{
+                resourceType => 'octets'
+            }, {
+                type => 'SieveScript'
+            }],
+        },
+        wantIds => [$root_storage],
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                name => 'root'
+            }],
+        },
+        wantIds => [$cal_storage, $cal_folders, $cal_messages, $sieve_messages]
+    }, {
+        filter => {
+            operator => 'OR',
+            conditions => [{
+                type => 'SieveScript'
+            }, {
+                type => 'CalendarEvent'
+            }],
+        },
+        wantIds => [$cal_storage, $root_storage, $cal_messages, $sieve_messages]
+    }, {
+        filter => undef,
+        position => 1,
+        limit => 1,
+        wantTotal => 7,
+        wantIds => [$root_storage],
+    }, {
+        filter => undef,
+        position => -1,
+        wantTotal => 7,
+        wantIds => [$sieve_messages],
+    }, {
+        filter => undef,
+        anchor => $cal_folders,
+        anchorOffset => 1,
+        wantTotal => 7,
+        wantIds => [$cal_messages, $root_messages, $sieve_messages],
+    });
+
+    for my $tc (@testCases) {
+        my $q = {
+            filter => $tc->{filter},
+            sort => [
+                { property => 'used', isAscending => JSON::false },
+                { property => 'name' },
+            ],
+        };
+
+        if (defined $tc->{position}) {
+            $q->{position} = $tc->{position};
+        }
+
+        if (defined $tc->{limit}) {
+            $q->{limit} = $tc->{limit};
+        }
+
+        if (defined $tc->{anchor}) {
+            $q->{anchor} = $tc->{anchor};
+        }
+
+        if (defined $tc->{anchorOffset}) {
+            $q->{anchorOffset} = $tc->{anchorOffset};
+        }
+
+        $res = $jmap->CallMethods([
+            ['Quota/query', $q, 'R1'],
+        ]);
+        my $wantTotal = defined $tc->{wantTotal} ?
+            $tc->{wantTotal} : scalar @{$tc->{wantIds}};
+        $self->assert_num_equals($wantTotal, $res->[0][1]{total});
+        $self->assert_deep_equals($tc->{wantIds}, $res->[0][1]{ids});
+    }
+}

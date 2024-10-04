@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_parse_disable_uri_as_blobid
+    :min_version_3_9 :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    my $vcard = <<'EOF';
+BEGIN:VCARD
+VERSION:4.0
+UID:85b5d651-1cde-43d9-901d-7059d67807f9
+FN:Jane
+PHOTO;PROP-ID=photo1:data:image/x-bla;base64,YmxhYmxhCg=
+CREATED:20230823T133154Z
+END:VCARD
+EOF
+    $vcard =~ s/\r?\n/\r\n/gs;
+
+    my $data = $jmap->Upload($vcard, "text/vcard");
+    my $blobId = $data->{blobId};
+    $self->assert_not_null($blobId);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/parse', {
+            blobIds => [$blobId],
+        }, 'R1'],
+        ['ContactCard/parse', {
+            blobIds => [$blobId],
+            disableUriAsBlobId => JSON::true,
+        }, 'R2'],
+    ]);
+
+    $self->assert_not_null($res->[0][1]{parsed}{$blobId}{
+        media}{photo1}{blobId});
+    $self->assert_null($res->[0][1]{parsed}{$blobId}{
+        media}{photo1}{uri});
+
+    $self->assert_null($res->[1][1]{parsed}{$blobId}{
+        media}{photo1}{blobId});
+    $self->assert_not_null($res->[1][1]{parsed}{$blobId}{
+        media}{photo1}{uri});
+}

@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_get_nocalendars
+    :min_version_3_1 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    # asserts that changes on special mailboxes such as calendars
+    # aren't listed as regular mailboxes
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ];
+
+    xlog $self, "get existing mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $mboxes = $res->[0][1]{list};
+
+    xlog $self, "create calendar";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ], $using);
+    $self->assert_not_null($res->[0][1]{created});
+
+    xlog $self, "get updated mailboxes";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(scalar @{$mboxes}, scalar @{$res->[0][1]{list}});
+}

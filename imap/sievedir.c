@@ -60,6 +60,7 @@
 #include "sievedir.h"
 #include "util.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 #ifdef USE_SIEVE
 #include "sieve/bc_parse.h"
@@ -77,6 +78,8 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
     char path[PATH_MAX];
     int dir_len;
     int r = SIEVEDIR_OK;
+
+    assert(sievedir);
 
     if ((dp = opendir(sievedir)) == NULL) {
         if (errno == ENOENT) return SIEVEDIR_OK;
@@ -145,6 +148,8 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
 {
     struct buf buf = BUF_INITIALIZER;
 
+    assert(sievedir);
+
     buf_printf(&buf, "%s/%s", sievedir, script);
 
     int fd = open(buf_cstring(&buf), 0);
@@ -186,6 +191,8 @@ EXPORTED const char *sievedir_get_active(const char *sievedir)
     char link[PATH_MAX];
     ssize_t tgt_len;
 
+    assert(sievedir);
+
     snprintf(link, sizeof(link), "%s/%s", sievedir, DEFAULTBC_NAME);
 
     tgt_len = readlink(link, target, sizeof(target) - 1);
@@ -215,6 +222,8 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     char active[PATH_MAX];
     char tmp[PATH_MAX+4];  /* +4 for ".NEW" */
 
+    assert(sievedir);
+
     if (sievedir_script_isactive(sievedir, name)) {
         /* already active - nothing to do here */
         return SIEVEDIR_OK;
@@ -236,7 +245,7 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
     if (rename(tmp, active) < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename active script link",
                 "oldpath=<%s> newpath=<%s>", tmp, active);
-        unlink(tmp);
+        xunlink(tmp);
         return SIEVEDIR_IOERROR;
     }
 
@@ -247,8 +256,10 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 {
     char active[PATH_MAX];
 
+    assert(sievedir);
+
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
-    if (unlink(active) != 0 && errno != ENOENT) {
+    if (xunlink(active) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
                 "link=<%s>", active);
         return SIEVEDIR_IOERROR;
@@ -261,9 +272,11 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 {
     char path[PATH_MAX];
 
+    assert(sievedir);
+
     /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    if (unlink(path) != 0 && errno != ENOENT) {
+    if (xunlink(path) != 0 && errno != ENOENT) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
                 "path=<%s>", path);
         return SIEVEDIR_IOERROR;
@@ -278,6 +291,8 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
     /* rename script and bytecode; move active link */
     char oldpath[PATH_MAX], newpath[PATH_MAX];
     int r;
+
+    assert(sievedir);
 
     snprintf(oldpath, sizeof(oldpath),
              "%s/%s%s", sievedir, oldname, BYTECODE_SUFFIX);
@@ -300,15 +315,19 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     char new_bcpath[PATH_MAX];
     int fd = -1;
 
+    assert(sievedir);
+
     /* parse the script */
     sieve_script_t *s = NULL;
     char *myerrors = NULL;
-    int r;
-    sieve_script_parse_string(NULL, content, &myerrors, &s);
-    if (errors) *errors = myerrors;
-    else free(myerrors);
+    int r = sieve_script_parse_string(NULL, content, &myerrors, &s);
 
-    if (!s) return SIEVEDIR_INVALID;
+    if (r) {
+        if (s) sieve_script_free(&s);
+        if (errors) *errors = myerrors;
+        else free(myerrors);
+        return SIEVEDIR_INVALID;
+    }
 
     /* generate the bytecode */
     bytecode_info_t *bc = NULL;
@@ -329,7 +348,7 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     }
 
     /* make sure no stray hardlink is lying around */
-    unlink(new_bcpath);
+    xunlink(new_bcpath);
 
     /* open the new bytecode file */
     fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
@@ -366,7 +385,7 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
  done:
     if (fd >= 0) {
         close(fd);
-        if (r) unlink(new_bcpath);
+        if (r) xunlink(new_bcpath);
     }
     if (bc) sieve_free_bytecode(&bc);
     if (s) sieve_script_free(&s);
@@ -374,3 +393,17 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     return (r ? r : SIEVEDIR_OK);
 }
 #endif /* USE_SIEVE */
+
+EXPORTED int sievedir_valid_path(const char *sievedir)
+{
+    if (!sievedir || *sievedir != '/') return 0;
+
+    char *resolved = realpath(sievedir, NULL);
+
+    if (!resolved && errno != ENOENT) return 0;
+
+    free(resolved);
+
+    return 1;
+}
+

@@ -59,8 +59,14 @@
 #define CHARSET_KEEPHTML (1<<9)
 #define CHARSET_TRIMWS (1<<10)
 #define CHARSET_UNORM_NFC (1<<11)
+#define CHARSET_KEEP_ANGLEURI (1<<12)
+#define CHARSET_UNORM_NFKC_CF (1<<13)
 
 #define CHARSET_UNKNOWN_CHARSET (NULL)
+
+/* RFC 5322, 2.1.1 */
+#define MIME_MAX_HEADER_LENGTH 78
+#define MIME_MAX_LINE_LENGTH 998
 
 #include "util.h"
 #include "xsha1.h"
@@ -133,13 +139,15 @@ extern int charset_searchfile(const char *substr, comp_pat *pat,
 extern const char *charset_decode_mimebody(const char *msg_base, size_t len,
                                            int encoding, char **retval,
                                            size_t *outlen);
-extern char *charset_encode_mimebody(const char *msg_base, size_t len,
-                                     char *retval, size_t *outlen,
-                                     int *outlines, int wrap);
+extern char *charset_b64encode_mimebody(const char *msg_base, size_t len,
+                                        char *retval, size_t *outlen,
+                                        int *outlines, int wrap);
 extern char *charset_qpencode_mimebody(const char *msg_base, size_t len,
                                        int force_quote, size_t *outlen);
-extern char *charset_to_utf8(const char *msg_base, size_t len, charset_t charset, int encoding);
+extern char *charset_to_utf8cstr(const char *msg_base, size_t len, charset_t charset, int encoding);
 extern char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t charset, int encoding);
+
+extern int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset_t charset, int encoding);
 
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
@@ -176,13 +184,39 @@ extern int charset_extract(int (*cb)(const struct buf *text, void *rock),
 EXPORTED char *charset_extract_plain(const char *html);
 
 struct char_counts {
+    size_t total;
     size_t valid;
     size_t replacement;
     size_t invalid;
+    size_t cntrl;
+    size_t bytelen[5]; // n-th position = count of n-byte chars, position 0 counts surrogates and invalid code points
 };
 
 /* Count the number of valid, invalid and replacement UTF-8 characters
  * in the first INT32_MAX bytes of data. */
 extern struct char_counts charset_count_validutf8(const char *data, size_t datalen);
+
+/* Encode and append a MIME parameter 'name' and 'value' to 'buf' */
+#define CHARSET_PARAM_QENCODE 0 // use RFC 2047 encoding
+#define CHARSET_PARAM_XENCODE 1 // use RFC 2231 encoding
+#define CHARSET_PARAM_NEWLINE (1<<1) // force newline before parameter
+extern void charset_append_mime_param(struct buf *buf, unsigned flags,
+                                      const char *name, const char *value);
+
+/* Transform the UTF-8 string 's' of length 'len' into
+ * a titlecased, canonicalized, NULL-terminated UTF-8 string
+ * per the i;unicode-casemap collation.
+ *
+ * If 'len' is -1, then 's' MUST be NULL-terminated.
+ *
+ * https://www.rfc-editor.org/rfc/rfc5051.html
+ */
+extern char *unicode_casemap(const char *s, ssize_t len);
+
+extern char *charset_idna_to_utf8(const char *domain);
+extern char *charset_idna_to_ascii(const char *domain);
+
+extern void charset_lib_init(void);
+extern void charset_lib_done(void);
 
 #endif /* INCLUDED_CHARSET_H */

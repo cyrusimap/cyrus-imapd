@@ -65,13 +65,17 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
                               int mandatory, json_t *invalid, const char *fmt,
                               void *dst);
 
+#define PATCH_NO_REMOVE   (1<<0) // only relevant for create
+#define PATCH_ALLOW_ARRAY (1<<1)
+
 /* Apply patch to a deep copy of val and return the result.
  * Return NULL on error. If invalid is a JSON array, then
  * the erroneous path in patch is appended as JSON string */
-extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *invalid);
+extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch,
+                                      json_t *invalid, unsigned flags);
 
 /* Create a patch-object that transforms src into dst. */
-extern json_t *jmap_patchobject_create(json_t *src, json_t *dst);
+extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);
 
 /* Return non-zero src and its RFC 6901 encoding differ */
 extern int jmap_pointer_needsencode(const char *src);
@@ -117,6 +121,7 @@ extern void jmap_parser_push_index(struct jmap_parser *parser,
 extern void jmap_parser_pop(struct jmap_parser *parser);
 extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
+HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path);
 extern void jmap_parser_serverset(struct jmap_parser *parser, const char *prop, json_t *val);
 
 extern json_t *jmap_server_error(int r);
@@ -136,15 +141,14 @@ extern char *jmap_decode_base64_nopad(const char *b64, size_t b64len);
  * - data points to the encoded bytes
  * - datalen indicates the byte length of data
  * - confidence indicates the threshold for charset detection (0 to 1.0)
- * - dst points to a buffer for the decoded output. The buffer is NOT
- *   reset to allow for consecutive decoding.
+ * - dst points to a buffer for the decoded output. This buffer is reset
  * - (optional) is_encoding_problem is set for invalid byte sequences
  *
  */
 extern void jmap_decode_to_utf8(const char *charset, int encoding,
                                 const char *data, size_t datalen,
                                 float confidence,
-                                struct buf *buf,
+                                struct buf *dst,
                                 int *is_encoding_problem);
 
 extern const char *jmap_encode_rawdata_blobid(const char prefix,
@@ -184,6 +188,8 @@ extern json_t *jmap_header_as_groupedaddresses(const char *raw);
 extern json_t *jmap_emailaddresses_from_addr(struct address *addr,
                                              enum header_form form);
 
+extern int jmap_is_valid_id(const char *id);
+
 #define JMAP_BLOBID_SIZE 42
 extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
 
@@ -193,6 +199,7 @@ extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(conversation_id_t cid, char *buf);
 
+#ifdef HAVE_ICAL
 struct jmap_caleventid {
     const char *raw; /* as requested by client */
     const char *ical_uid;
@@ -207,34 +214,6 @@ extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, str
 extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
 
 extern void jmap_alertid_encode(icalcomponent *valarm, struct buf *buf);
-
-#define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
-
-extern char *jmap_notifmboxname(const char *userid);
-extern int jmap_create_notify_collection(const char *userid, mbentry_t **mbentryptr);
-extern char *jmap_caleventnotif_format_fromheader(const char *userid);
-extern int jmap_create_caleventnotif(struct mailbox *notifmbox,
-                                     const char *userid,
-                                     const struct auth_state *authstate,
-                                     const char *calmboxname,
-                                     const char *type,
-                                     const char *ical_uid,
-                                     const strarray_t *schedule_addresses,
-                                     const char *comment,
-                                     int is_draft,
-                                     json_t *jevent,
-                                     json_t *jpatch);
-
-typedef struct transaction_t txn_t; // defined in httpd.h
-
-extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
-                                        const char *userid,
-                                        const struct auth_state *authstate,
-                                        const char *calmboxname,
-                                        const char *ical_uid,
-                                        const strarray_t *schedule_addresses,
-                                        int is_draft,
-                                        icalcomponent *oldical,
-                                        icalcomponent *newical);
+#endif /* HAVE_ICAL */
 
 #endif /* JMAP_UTIL_H */

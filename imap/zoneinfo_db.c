@@ -65,7 +65,7 @@
 
 #define DB config_zoneinfo_db
 
-struct db *zoneinfodb;
+static struct db *zoneinfodb;
 static int zoneinfo_dbopen = 0;
 static struct buf databuf = BUF_INITIALIZER;
 
@@ -73,6 +73,9 @@ EXPORTED int zoneinfo_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
+
+    if (zoneinfo_dbopen)
+        return 0;
 
     if (!fname) fname = config_getstring(IMAPOPT_ZONEINFO_DB_PATH);
 
@@ -243,7 +246,8 @@ struct findrock {
     const char *find;
     int tzid_only;
     time_t changedsince;
-    int (*proc)();
+    int (*proc)(const char *tzid, int tzidlen,
+                struct zoneinfo *zi, void *rock);
     void *rock;
 };
 

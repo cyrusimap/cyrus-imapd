@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_categories
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+
+    xlog $self, "create a contact with two categories";
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+CATEGORIES:cat1,cat2
+END:VCARD
+EOF
+
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $data = $carddav->Request('GET', $href);
+    $self->assert_matches(qr/cat1,cat2/, $data->{content});
+
+    my $fetch = $jmap->CallMethods([['Contact/get', {ids => [$id]}, "R2"]]);
+    $self->assert_not_null($fetch);
+    $self->assert_str_equals('Contact/get', $fetch->[0][0]);
+    $self->assert_str_equals('R2', $fetch->[0][2]);
+    $self->assert_str_equals('Forrest', $fetch->[0][1]{list}[0]{firstName});
+
+    my $res = $jmap->CallMethods([['Contact/set', {
+                    update => {$id => {firstName => "foo"}}
+                }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    $data = $carddav->Request('GET', $href);
+    $self->assert_matches(qr/cat1,cat2/, $data->{content});
+
+}

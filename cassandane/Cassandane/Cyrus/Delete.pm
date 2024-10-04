@@ -152,6 +152,15 @@ sub check_folder_not_ondisk
     }
 }
 
+sub check_syslog
+{
+    my ($self, $instance) = @_;
+
+    my $remove_empty_pat = qr/Remove of supposedly empty directory/;
+
+    $self->assert_null($instance->_check_syslog($remove_empty_pat));
+}
+
 sub test_self_inbox_imm
     :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
 {
@@ -218,6 +227,8 @@ sub test_self_inbox_imm
     $self->check_folder_not_ondisk($subfolder);
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_self_inbox_del
@@ -293,6 +304,8 @@ sub test_self_inbox_del
     $self->check_folder_not_ondisk($subfolder);
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    $self->check_syslog($self->{instance});
 }
 
 # old version of this test for builds without newer httpd features
@@ -370,6 +383,8 @@ sub test_admin_inbox_imm_legacy
     $self->check_folder_not_ondisk($subfolder);
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_admin_inbox_imm
@@ -448,14 +463,14 @@ EOF
 
     xlog $self, "Verify user data files/directories exist";
     my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
-    $self->assert( -f $data->{user}{'sub'});
-    $self->assert( -f $data->{user}{seen});
-    $self->assert( -f $data->{user}{dav});
-    $self->assert( -f $data->{user}{counters});
-    $self->assert( -f $data->{user}{conversations});
-    $self->assert( -f $data->{user}{xapianactive});
-    $self->assert( -f "$data->{user}{sieve}/defaultbc");
-    $self->assert( -d $data->{xapian}{t1});
+    $self->assert_file_test($data->{user}{'sub'}, '-f');
+    $self->assert_file_test($data->{user}{seen}, '-f');
+    $self->assert_file_test($data->{user}{dav}, '-f');
+    $self->assert_file_test($data->{user}{counters}, '-f');
+    $self->assert_file_test($data->{user}{conversations}, '-f');
+    $self->assert_file_test($data->{user}{xapianactive}, '-f');
+    $self->assert_file_test("$data->{user}{sieve}/defaultbc", '-f');
+    $self->assert_file_test($data->{xapian}{t1}, '-d');
 
     xlog $self, "admin can delete $inbox";
     $admintalk->delete($inbox);
@@ -496,19 +511,21 @@ EOF
         && !$self->{instance}->{config}->get_bool('mailbox_legacy_dirs'))
     {
         # Entire UUID-hashed directory should be removed
-        $self->assert( !-e dirname($data->{user}{dav}));
+        $self->assert_not_file_test(dirname($data->{user}{dav}), '-e');
     }
     else {
         # Name-hashed directory will be left behind, so check individual files
-        $self->assert( !-e $data->{user}{'sub'});
-        $self->assert( !-e $data->{user}{seen});
-        $self->assert( !-e $data->{user}{dav});
-        $self->assert( !-e $data->{user}{counters});
-        $self->assert( !-e $data->{user}{conversations});
-        $self->assert( !-e $data->{user}{xapianactive});
+        $self->assert_not_file_test($data->{user}{'sub'}, '-e');
+        $self->assert_not_file_test($data->{user}{seen}, '-e');
+        $self->assert_not_file_test($data->{user}{dav}, '-e');
+        $self->assert_not_file_test($data->{user}{counters}, '-e');
+        $self->assert_not_file_test($data->{user}{conversations}, '-e');
+        $self->assert_not_file_test($data->{user}{xapianactive}, '-e');
     }
-    $self->assert( !-e $data->{user}{sieve});
-    $self->assert( !-e $data->{xapian}{t1});
+    $self->assert_not_file_test($data->{user}{sieve}, '-e');
+    $self->assert_not_file_test($data->{xapian}{t1}, '-e');
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_admin_inbox_del
@@ -590,6 +607,8 @@ sub test_admin_inbox_del
     $self->check_folder_not_ondisk($subfolder);
     $self->check_folder_not_ondisk($inbox, deleted => 1);
     $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_bz3781
@@ -628,11 +647,9 @@ sub test_bz3781
 
     $self->check_folder_not_ondisk($subfolder);
 
-    if ($self->{instance}->{have_syslog_replacement}) {
-        # We should have generated an IOERROR
-        my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: bogus filename/, "@lines");
-    }
+    # We should have generated an IOERROR
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: bogus filename/);
 }
 
 sub test_cyr_expire_delete
@@ -697,10 +714,12 @@ sub test_cyr_expire_delete
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
 
     # the folder should not exist now!
-    $self->assert(!-d $datapath);
+    $self->assert_not_file_test($datapath, '-d');
 
     # and not exist from mbpath either...
     $self->assert_null($self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername"));
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_allowdeleted
@@ -743,6 +762,8 @@ sub test_allowdeleted
     $talk->select($result->[1][2]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_cyr_expire_delete_with_annotation
@@ -804,15 +825,17 @@ sub test_cyr_expire_delete_with_annotation
     $self->check_messages(\%msg_inbox);
 
     my ($path) = $self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername");
-    $self->assert(-d "$path");
+    $self->assert_file_test($path, '-d');
 
     xlog $self, "Run cyr_expire -D now, it shouldn't delete.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
-    $self->assert(-d "$path");
+    $self->assert_file_test($path, '-d');
 
     xlog $self, "Run cyr_expire -D now, with -a, skipping annotation.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-a' );
-    $self->assert(!-d "$path");
+    $self->assert_not_file_test($path, '-d');
+
+    $self->check_syslog($self->{instance});
 }
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/2413
@@ -857,7 +880,7 @@ sub test_cyr_expire_dont_resurrect_convdb
 
     # expect user has a conversations database
     my $convdbfile = $self->{instance}->get_conf_user_file("cassandane", "conversations");
-    $self->assert(-f $convdbfile);
+    $self->assert_file_test($convdbfile, '-f');
 
     # log cassandane user out before it gets thrown out anyway
     undef $talk;
@@ -868,7 +891,7 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # expect user does not have a conversations database
-    $self->assert(!-f $convdbfile);
+    $self->assert_not_file_test($convdbfile, '-f');
     $self->check_folder_not_ondisk($inbox);
     $self->check_folder_ondisk($inbox, deleted => 1);
 
@@ -877,14 +900,16 @@ sub test_cyr_expire_dont_resurrect_convdb
     $self->check_folder_ondisk($inbox, deleted => 1);
 
     # expect user does not have a conversations database
-    $self->assert(!-f $convdbfile);
+    $self->assert_not_file_test($convdbfile, '-f');
 
     xlog $self, "Run cyr_expire -D now.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
     $self->check_folder_not_ondisk($inbox, deleted => 1);
 
     # expect user does not have a conversations database
-    $self->assert(!-f $convdbfile);
+    $self->assert_not_file_test($convdbfile, '-f');
+
+    $self->check_syslog($self->{instance});
 }
 
 sub test_no_delete_with_children
@@ -908,6 +933,156 @@ sub test_no_delete_with_children
 
     $talk->delete($subfolder);
     $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $self->check_syslog($self->{instance});
+}
+
+sub test_cyr_expire_inherit_annot
+    :DelayedDelete :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "Create subfolder";
+    my $subfolder = 'INBOX.A';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Set /vendor/cmu/cyrus-imapd/expire annotation on inbox";
+    $talk->setmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/expire", '1s');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    xlog $self, "Create message";
+    $store->set_folder($subfolder);
+    $self->make_message('msg1') or die;
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    xlog $self, "Run cyr_expire";
+    sleep(2);
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '1s' );
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+
+    $self->check_syslog($self->{instance});
+}
+
+sub test_cyr_expire_noexpire
+    :DelayedDelete :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $noexpire_annot = '/shared/vendor/cmu/cyrus-imapd/noexpire_until';
+
+    xlog $self, "Create subfolder";
+    my $subfolder = 'INBOX.A';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Set /vendor/cmu/cyrus-imapd/expire annotation on subfolder";
+    $talk->setmetadata($subfolder, "/shared/vendor/cmu/cyrus-imapd/expire", '1s');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    xlog $self, "Create message";
+    $store->set_folder($subfolder);
+    $self->make_message('msg1') or die;
+
+    xlog $self, "Set $noexpire_annot annotation on inbox";
+    $talk->setmetadata('INBOX', $noexpire_annot, '0');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    sleep(2);
+    xlog $self, "Run cyr_expire";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '1s', '-v', '-v', '-v' );
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    xlog $self, "Remove $noexpire_annot from inbox";
+    $talk->setmetadata('INBOX', $noexpire_annot, '');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    xlog $self, "Run cyr_expire";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '1s', '-v', '-v', '-v' );
+
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+
+    $self->check_syslog($self->{instance});
+}
+
+sub test_cyr_expire_delete_noexpire
+    :DelayedDelete :min_version_3_9 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $store = $self->{store};
+    my $adminstore = $self->{adminstore};
+    my $talk = $store->get_client();
+    my $admintalk = $adminstore->get_client();
+
+    my $noexpire_annot = '/shared/vendor/cmu/cyrus-imapd/noexpire_until';
+
+    my $subfoldername = 'foo';
+    my $subfolder = 'INBOX.foo';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Setting /vendor/cmu/cyrus-imapd/delete annotation.";
+    $talk->setmetadata($subfolder, "/shared/vendor/cmu/cyrus-imapd/delete", '1s');
+
+    $self->check_folder_ondisk($subfolder);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog $self, "Delete $subfolder";
+    $talk->unselect();
+    $talk->delete($subfolder)
+        or $self->fail("Cannot delete folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Ensure we can't select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($subfolder);
+
+    my ($path) = $self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername");
+    $self->assert(-d "$path");
+
+    xlog $self, "Set $noexpire_annot annotation on inbox";
+    $talk->setmetadata('INBOX', $noexpire_annot, '0');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    sleep(2);
+    xlog $self, "Run cyr_expire";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '1s' );
+    $self->assert(-d "$path");
+
+    xlog $self, "Remove $noexpire_annot annotation from inbox";
+    $talk->setmetadata('INBOX', $noexpire_annot, '');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+
+    xlog $self, "Run cyr_expire";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '1s' );
+    $self->assert(!-d "$path");
+
+    $self->check_syslog($self->{instance});
 }
 
 1;

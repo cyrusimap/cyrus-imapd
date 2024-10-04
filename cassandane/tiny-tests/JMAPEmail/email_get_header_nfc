@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64);
+use MIME::QuotedPrint qw(encode_qp);
+
+sub test_email_get_header_nfc
+    :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $jmap = $self->{jmap};
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $nonNfcEmailAddress =
+        "\N{U+1F71}\N{U+1F73}\N{U+1F75}" . '@' .
+        "\N{U+1F77}\N{U+1F79}\N{U+1F7B}.local";
+    my $normalizedEmailAddress =
+        "\N{U+03AC}\N{U+03AD}\N{U+03AE}" . '@' .
+        "\N{U+03AF}\N{U+03CC}\N{U+03CD}.local";
+    my $normalizedEmailAddressEncoded =
+        "\N{U+03AC}\N{U+03AD}\N{U+03AE}" . '@' .
+        "xn--kxa2dd.local";
+
+    my $nonNfcXHeaderValue =       "0.5\N{U+212B}";
+    my $normalizedXHeaderValue =   "0.5\N{U+00C5}";
+
+    my $mime = <<"EOF";
+From: from\@local
+To: $nonNfcEmailAddress
+Subject: test
+Date: Mon, 27 May 2024 02:31:37 -0400
+Content-Type: text/plain;charset=utf-8
+X-My-Header: $nonNfcXHeaderValue
+Mime-Version: 1.0
+
+test
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids',
+            },
+            properties => [
+                'to',
+                'header:to',
+                'header:x-my-header:asText',
+                'header:x-my-header',
+            ],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals($normalizedEmailAddressEncoded,
+        $res->[1][1]{list}[0]{to}[0]{email});
+    $self->assert_str_equals(" $nonNfcEmailAddress",
+        $res->[1][1]{list}[0]{'header:to'});
+    $self->assert_str_equals($normalizedXHeaderValue,
+        $res->[1][1]{list}[0]{'header:x-my-header:asText'});
+    $self->assert_str_equals(" $nonNfcXHeaderValue",
+        $res->[1][1]{list}[0]{'header:x-my-header'});
+}

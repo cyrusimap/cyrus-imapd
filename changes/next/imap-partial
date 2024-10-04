@@ -1,0 +1,15 @@
+
+Description:
+
+Adds support for IMAP PARTIAL (RFC 9394) and
+INPROGRESS (draft-ietf-extra-imap-inprogress) extensions
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None

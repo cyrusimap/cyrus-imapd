@@ -44,6 +44,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <getopt.h>
 #include <libgen.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -79,15 +80,26 @@ struct incremental_record {
 
 int main(int argc, char *argv[])
 {
-    int option;
+    int opt;
     int i;
     char *alt_config = NULL;
     struct incremental_record irec;
 
     progname = basename(argv[0]);
 
-    while ((option = getopt(argc, argv, "vC:")) != EOF) {
-        switch (option) {
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:v";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "verbose", no_argument, NULL, 'v' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'v':
             verbose++;
             break;
@@ -160,7 +172,6 @@ static int dump_me(struct findall_data *data, void *rock)
     int r;
     char boundary[128];
     struct imapurl url;
-    char imapurl[MAX_MAILBOX_PATH+1];
     struct incremental_record *irec = (struct incremental_record *) rock;
     struct searchargs searchargs;
     struct index_state *state;
@@ -196,11 +207,14 @@ static int dump_me(struct findall_data *data, void *rock)
     memset(&url, 0, sizeof(struct imapurl));
     url.server = config_servername;
     url.mailbox = name;
-    imapurl_toURL(imapurl, &url);
-    printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
+
+    struct buf urlbuf = BUF_INITIALIZER;
+    imapurl_toURL(&urlbuf, &url);
+    printf("  <mailbox-url>%s</mailbox-url>\n", buf_cstring(&urlbuf));
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
     printf("  <nextuid>%u</nextuid>\n", state->mailbox->i.last_uid + 1);
     printf("\n");
+    buf_free(&urlbuf);
 
     memset(&searchargs, 0, sizeof(struct searchargs));
     searchargs.root = search_expr_new(NULL, SEOP_TRUE);

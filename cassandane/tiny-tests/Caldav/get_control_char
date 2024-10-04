@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_get_control_char
+    :min_version_3_9 :needs_ical_ctrl :MagicPlus
+{
+    my ($self) = @_;
+
+    my $caldav = $self->{caldav};
+    my $plusstore = $self->{instance}->get_service('imap'
+        )->create_store(username => 'cassandane+dav');
+    my $imap = $plusstore->get_client();
+
+    # Assert that CONTROL chars are omitted when reading
+    # iCalendar data from disk.
+
+    my $mimeMsg = <<EOF;
+User-Agent: Net-DAVTalk/0.01
+From: <cassandane\@local>
+Subject: test
+Date: Mon, 28 Sep 2015 15:24:34 +0200
+Message-ID: <c6da9d16e00f7c3431b75f346a28594ca22a1f7d\@local>
+Content-Type: text/calendar; charset=utf-8; component=VEVENT
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment;
+	filename*0="test.ics"
+Content-Length: 394
+MIME-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+DESCRIPTION:ct\x{15}rl
+SUMMARY:test
+CLASS:PRIVATE
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $mimeMsg =~ s/\r?\n/\r\n/gs;
+    $imap->append('#calendars.Default', $mimeMsg) || die $@;
+
+    my $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');
+    $self->assert_matches(qr/DESCRIPTION:ctrl/, $res->{content});
+}

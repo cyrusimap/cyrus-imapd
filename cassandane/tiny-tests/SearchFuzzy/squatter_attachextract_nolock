@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_squatter_attachextract_nolock
+    :min_version_3_9 :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor(
+        tracedir => $tracedir,
+        trace_delay_seconds => 1,
+        response_delay_seconds => 1,
+    );
+
+    xlog $self, "Make plain text message";
+    $self->make_message("msg1",
+        mime_type => "text/plain",
+        body => "bodyterm");
+
+    xlog $self, "Make message with attachment";
+    $self->make_message("msg2",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."Content-Transfer-Encoding: base64\r\n"
+        ."\r\n"
+        # that's "attachterm"
+        ."YXR0YWNodGVybQo="
+        ."\r\n--123456789abcdef--\r\n");
+
+    xlog $self, "Clear syslog";
+    $self->{instance}->getsyslog();
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
+
+    xlog $self, "Inspect syslog and extractor trace files";
+    my $released_timestamp = undef;
+    my $reacquired_timestamp = undef;
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @log = $self->{instance}->getsyslog(
+            qr/squatter\[\d+\]: (released|reacquired) mailbox lock/);
+
+        ($released_timestamp) = ($log[0] =~ /released.+unixepoch=<(\d+)>/);
+        $self->assert_not_null($released_timestamp);
+
+        ($reacquired_timestamp) = ($log[1] =~ /reacquired.+unixepoch=<(\d+)>/);
+        $self->assert_not_null($reacquired_timestamp);
+    }
+
+    my @tracefiles = glob($tracedir."/*_PUT_*");
+    $self->assert_num_equals(1, scalar @tracefiles);
+    my $extractor_timestamp = stat($tracefiles[0])->ctime;
+    $self->assert_not_null($extractor_timestamp);
+
+    xlog $self, "Assert extractor got called without mailbox lock";
+    if (defined $released_timestamp) {
+        $self->assert_num_lt($extractor_timestamp, $released_timestamp);
+    }
+    if (defined $reacquired_timestamp) {
+        $self->assert_num_lt($reacquired_timestamp, $extractor_timestamp);
+    }
+
+    xlog $self, "Assert terms actually got indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([2], $uids);
+}

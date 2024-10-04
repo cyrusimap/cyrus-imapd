@@ -51,8 +51,10 @@ use File::Path qw(rmtree);
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::Words;
 use Cassandane::Generator;
+use Cassandane::GenericListener;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 use Cassandane::PortManager;
@@ -92,7 +94,6 @@ sub new
         replica => 0,
         imapmurder => 0,
         httpmurder => 0,
-        backups => 0,
         start_instances => 1,
         services => [ 'imap' ],
         store => 1,
@@ -101,6 +102,8 @@ sub new
         deliver => 0,
         jmap => 0,
         install_certificates => 0,
+        squatter => 0,
+        smtpdaemon => 0,
     };
     map {
         $want->{$_} = delete $params->{$_}
@@ -136,6 +139,47 @@ sub id
 {
     my ($self) = @_;
     return $self->{_name}; # XXX something cleverer?
+}
+
+sub filter
+{
+    my ($self) = @_;
+
+    my $filter = $self->SUPER::filter(@_);
+
+    $filter->{enable_wanted_properties} = sub {
+        return if not exists $self->{_name};
+        my $sub = $self->can($self->{_name});
+        return if not defined $sub;
+
+        # n.b. cannot be used to unwant, sorry
+        foreach my $attr (attributes::get($sub)) {
+            next if $attr !~ m/^want(_service)?_(\w+)$/;
+
+            # XXX Since this is a 'filter', it could also check
+            # XXX whether the required components are configured
+            # XXX ala :needs_foo, and skip the test if they're
+            # XXX missing, rather than failing to start them.
+            # XXX That is, :want_service_http could be taken to
+            # XXX imply :needs_component_httpd, and the test
+            # XXX skipped if it's unavailable.  But note that
+            # XXX there isn't a clean mapping between the names!
+            # XXX For now, tests will need to be annotated with
+            # XXX both attributes in these cases.
+
+            $self->{_current_magic} = "Test function attribute ':$attr'";
+            if (defined $1 && $1 eq '_service') {
+                $self->want_services($2);
+            }
+            else {
+                $self->want($2);
+            }
+            $self->{_current_magic} = undef;
+        }
+        return;
+    };
+
+    return $filter;
 }
 
 # will magically cause some special actions to be taken during test
@@ -180,6 +224,18 @@ sub want_services
 
 }
 
+sub needs
+{
+    my ($self, $category, $key, $want_value) = @_;
+
+    # $category and $key are as per cyr_buildinfo output. $want_value is
+    # optional and defaults to '1', but can be a particular value for
+    # category=>key pairs that aren't boolean.
+    # See Cassandane::Unit:TestCase::is_feature_missing to see how
+    # needs are used.
+    $self->{needs}->{$category}->{$key} = $want_value // 1;
+}
+
 sub config_set
 {
     my ($self, %pairs) = @_;
@@ -190,6 +246,7 @@ sub config_set
     }
 }
 
+# XXX put these in alphabetical order someday
 magic(ReverseACLs => sub {
     shift->config_set(reverseacls => 1);
 });
@@ -207,7 +264,6 @@ magic(CSyncReplication => sub {
 });
 magic(IMAPMurder => sub { shift->want('imapmurder'); });
 magic(HTTPMurder => sub { shift->want('httpmurder'); });
-magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
 });
@@ -299,7 +355,7 @@ magic(FastMailEvent => sub {
         event_content_inclusion_mode => 'standard',
         event_content_size => 1,  # just the first byte
         event_exclude_specialuse => '\\Junk',
-        event_extra_params => 'modseq vnd.fastmail.clientId service uidnext vnd.fastmail.sessionId vnd.cmu.envelope vnd.fastmail.convUnseen vnd.fastmail.convExists vnd.fastmail.cid vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.cmu.mailboxACL vnd.fastmail.counters messages vnd.cmu.unseenMessages flagNames',
+        event_extra_params => 'modseq vnd.fastmail.clientId service uidnext vnd.fastmail.sessionId vnd.cmu.envelope vnd.fastmail.convUnseen vnd.fastmail.convExists vnd.fastmail.cid vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.cmu.mailboxACL vnd.fastmail.counters messages vnd.cmu.unseenMessages flagNames vnd.cmu.visibleUsers',
         event_groups => 'mailbox message flags calendar applepushservice',
     );
 });
@@ -326,13 +382,15 @@ magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
 });
 magic(SearchAttachmentExtractor => sub {
-    my $port = Cassandane::PortManager::alloc();
-    shift->config_set('search_attachment_extractor_url' =>
+    my $port = Cassandane::PortManager::alloc("localhost");
+    my $self = shift;
+    $self->config_set('search_attachment_extractor_url' =>
         "http://localhost:$port/extractor");
+    $self->config_set('search_attachment_extractor_request_timeout' => '3s');
+    $self->config_set('search_attachment_extractor_idle_timeout' => '3s');
 });
 magic(SearchLanguage => sub {
-    my $self = shift;
-    $self->config_set('search_index_language' => 'yes');
+    shift->config_set('search_index_language' => 'yes');
 });
 magic(SieveUTF8Fileinto => sub {
     shift->config_set('sieve_utf8fileinto' => 'yes');
@@ -386,6 +444,57 @@ magic(CalDAVNoDefaultCalendar => sub {
         caldav_create_default => 'no',
     );
 });
+magic(AltPTSDBPath => sub {
+    shift->config_set(
+        'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
+    );
+});
+magic(ArchivePartition => sub {
+    my $conf = shift;
+    $conf->config_set('archivepartition-default' => '@basedir@/archive');
+    $conf->config_set('archive_enabled' => 'yes');
+    $conf->config_set('archive_after' => '7d');
+});
+magic(ArchiveNow => sub {
+    my $conf = shift;
+    $conf->config_set('archivepartition-default' => '@basedir@/archive');
+    $conf->config_set('archive_enabled' => 'yes');
+    $conf->config_set('archive_after' => '0d');
+});
+magic(AllowCalendarAdmin => sub {
+    my $conf = shift;
+    $conf->config_set('caldav_allowcalendaradmin' => 'yes');
+});
+magic(NoCheckSyslog => sub {
+    my $self = shift;
+    $self->{no_check_syslog} = 1;
+});
+magic(JmapMaxCalendarEventNotifs => sub {
+    my $conf = shift;
+    # set to some small number
+    $conf->config_set('jmap_max_calendareventnotifs' => 10);
+});
+magic(NoReplicaonly => sub {
+    my $self = shift;
+    $self->{no_replicaonly} = 1;
+});
+magic(ConversationMaxThread10 => sub {
+    my $self = shift;
+    $self->config_set('conversation_max_thread' => 10);
+});
+magic(SlowIO => sub {
+    my $self = shift;
+    $self->config_set('debug_slowio' => 'yes');
+});
+magic(Mboxgroups => sub {
+    my $self = shift;
+    $self->config_set('auth_mech' => 'mboxgroups');
+});
+magic(CaldavAlarmOnlyVevent => sub {
+    my $self = shift;
+    $self->config_set('caldav_alarm_support_components' => 'VEVENT');
+});
+
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
@@ -413,6 +522,8 @@ sub _run_magic
             next if $a =~ m/^(?:min|max)_version_/;
             # ignore feature test attribution here
             next if $a =~ m/^needs_/;
+            # ignore want attribution here
+            next if $a =~ m/^want_/;
             die "Unknown attribute $a"
                 unless defined $magic_handlers{$m};
             next if $seen{$m};
@@ -432,7 +543,6 @@ sub _create_instances
     my $frontend_service_port;
     my $backend1_service_port;
     my $backend2_service_port;
-    my $backupd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
     $self->{_config} = $self->{_config}->clone();
@@ -460,7 +570,7 @@ sub _create_instances
 
         if ($want->{replica} || $want->{csyncreplica})
         {
-            $sync_port = Cassandane::PortManager::alloc();
+            $sync_port = Cassandane::PortManager::alloc("localhost");
             $conf->set(
                 # sync_client will find the port in the config
                 sync_host => 'localhost',
@@ -473,8 +583,8 @@ sub _create_instances
 
         if ($want->{imapmurder} || $want->{httpmurder})
         {
-            $mupdate_port = Cassandane::PortManager::alloc();
-            $backend1_service_port = Cassandane::PortManager::alloc();
+            $mupdate_port = Cassandane::PortManager::alloc("localhost");
+            $backend1_service_port = Cassandane::PortManager::alloc("localhost");
 
             $conf->set(
                 servername => "localhost:$backend1_service_port",
@@ -493,19 +603,6 @@ sub _create_instances
             );
         }
 
-        if ($want->{backups})
-        {
-            $backupd_port = Cassandane::PortManager::alloc();
-            $conf->set(
-                backup_sync_host => "localhost",
-                backup_sync_port => $backupd_port,
-                backup_sync_authname => 'repluser',
-                backup_sync_password => 'repluser',
-                backup_sync_try_imap => 'no',
-                xbackup_enabled => 'yes',
-            );
-        }
-
         my $sub = $self->{_name};
         if ($sub =~ s/^test_/config_/ && $self->can($sub))
         {
@@ -514,6 +611,7 @@ sub _create_instances
 
         $instance_params{config} = $conf;
         $instance_params{install_certificates} = $want->{install_certificates};
+        $instance_params{smtpdaemon} = $want->{smtpdaemon};
 
         $instance_params{description} = "main instance for test $self->{_name}";
         $self->{instance} = Cassandane::Instance->new(%instance_params);
@@ -521,11 +619,25 @@ sub _create_instances
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
 
+        if ($want->{squatter}) {
+            $self->{instance}->add_daemon(
+                name => 'squatter',
+                argv => [
+                    'squatter',
+                    '-R',
+                ],
+                wait => 'y',
+            );
+        }
+
         if ($want->{replica} || $want->{csyncreplica})
         {
             my %replica_params = %instance_params;
-            $replica_params{config} = $conf->clone();
+            $replica_params{config} = $self->{_config}->clone();
             $replica_params{config}->set(sync_rightnow_channel => undef);
+            unless ($self->{no_replicaonly}) {
+                $replica_params{config}->set(replicaonly => 'yes');
+            }
             my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
             if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
                 xlog $self, "replica instance: using [cyrus replica] configuration";
@@ -551,8 +663,8 @@ sub _create_instances
 
         if ($want->{imapmurder} || $want->{httpmurder})
         {
-            $frontend_service_port = Cassandane::PortManager::alloc();
-            $backend2_service_port = Cassandane::PortManager::alloc();
+            $frontend_service_port = Cassandane::PortManager::alloc("localhost");
+            $backend2_service_port = Cassandane::PortManager::alloc("localhost");
 
             # set up a front end on which we also run the mupdate master
             my $frontend_conf = $self->{_config}->clone();
@@ -671,32 +783,6 @@ sub _create_instances
             $self->{backend2}->_setup_for_deliver()
                 if ($want->{deliver});
         }
-
-        if ($want->{backups})
-        {
-            # set up a backup server
-            my $backup_conf = $self->{_config}->clone();
-            $backup_conf->set(
-                temp_path => '@basedir@/tmp',
-                backup_keep_previous => 'yes',
-                'backuppartition-default' => '@basedir@/data/backup',
-            );
-
-            my $cyrus_backup_prefix = $cassini->val('cyrus backup', 'prefix');
-            if (defined $cyrus_backup_prefix and -d $cyrus_backup_prefix) {
-                xlog $self, "backup instance: using [cyrus backup] configuration";
-                $instance_params{installation} = 'backup';
-            }
-
-            $instance_params{description} = "backup server for test $self->{_name}";
-            $instance_params{config} = $backup_conf;
-
-            $self->{backups} = Cassandane::Instance->new(%instance_params,
-                                                         setup_mailbox => 0);
-            $self->{backups}->add_service(name => 'backup',
-                                          port => $backupd_port,
-                                          argv => ['backupd']);
-        }
     }
 
     if ($want->{gen})
@@ -782,6 +868,11 @@ sub set_up
         xlog $self, "HTTP service objects not setup due to :NoStartInstances"
                     . " magic!";
     }
+
+    if ($self->{no_check_syslog}) {
+        xlog $self, "Disabling syslog checks for test instance";
+    }
+
     xlog $self, "Calling test function";
 }
 
@@ -797,8 +888,6 @@ sub _start_instances
         if (defined $self->{backend2});
     $self->{replica}->start()
         if (defined $self->{replica});
-    $self->{backups}->start()
-        if (defined $self->{backups});
 
     $self->{store} = undef;
     $self->{adminstore} = undef;
@@ -909,31 +998,41 @@ sub tear_down
 
     if (defined $self->{instance})
     {
-        eval { push @stop_errors, $self->{instance}->stop() };
+        eval {
+            push @stop_errors, $self->{instance}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{instance}->get_basedir();
         $self->{instance} = undef;
     }
-    if (defined $self->{backups})
-    {
-        eval { push @stop_errors, $self->{backups}->stop() };
-        push @basedirs, $self->{backups}->get_basedir();
-        $self->{backups} = undef;
-    }
     if (defined $self->{backend2})
     {
-        eval { push @stop_errors, $self->{backend2}->stop() };
+        eval {
+            push @stop_errors, $self->{backend2}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{backend2}->get_basedir();
         $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
-        eval { push @stop_errors, $self->{replica}->stop() };
+        eval {
+            push @stop_errors, $self->{replica}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{replica}->get_basedir();
         $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
-        eval { push @stop_errors, $self->{frontend}->stop() };
+        eval {
+            push @stop_errors, $self->{frontend}->stop(
+                no_check_syslog => defined $self->{no_check_syslog}
+            );
+        };
         push @basedirs, $self->{frontend}->get_basedir();
         $self->{frontend} = undef;
     }
@@ -961,7 +1060,7 @@ sub post_tear_down
     }
 
     die "Found some stray processes"
-        if (Cassandane::GenericDaemon::kill_processes_on_ports(
+        if (Cassandane::GenericListener::kill_processes_on_ports(
                     Cassandane::PortManager::free_all()));
 }
 
@@ -985,6 +1084,8 @@ sub make_message
 
     my $msg = $self->{gen}->generate(subject => $subject, %attrs);
     $msg->remove_headers('subject') if !defined $subject;
+    $msg->remove_headers('to') if exists $attrs{to} and not $attrs{to};
+    $msg->remove_headers('from') if exists $attrs{from} and not $attrs{from};
     $self->_save_message($msg, $store);
 
     return $msg;
@@ -1174,6 +1275,7 @@ sub run_replication
     my $meta = delete $opts{meta};
     my $nosyncback = delete $opts{nosyncback};
     my $allusers = delete $opts{allusers};
+    my $stagetoarchive = delete $opts{stagetoarchive};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
@@ -1208,6 +1310,7 @@ sub run_replication
     push(@cmd, '-u', $user) if defined $user;
     push(@cmd, '-m', $mailbox) if defined $mailbox;
     push(@cmd, '-A') if $allusers;  # n.b. boolean
+    push(@cmd, '-a') if $stagetoarchive; # n.b. boolean
 
     my %run_options;
     $run_options{cyrus} = 1;
@@ -1271,11 +1374,7 @@ sub check_conversations
         redirects => {stdout => $filename},
     }, 'ctl_conversationsdb', '-A', '-r', '-v');
 
-    local $/;
-    open FH, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my $str = <FH>;
-    close(FH);
+    my $str = slurp_file($filename);
 
     xlog $self, "RESULT: $str";
     $self->assert_matches(qr/is OK/, $str);
@@ -1489,6 +1588,157 @@ sub assert_sieve_matches
                            'sievec', $tmp, "$filename");
     $self->assert_str_equals(digest_file_hex($bcname, "MD5"),
                              digest_file_hex($filename, "MD5"));
+}
+
+sub assert_syslog_matches
+{
+    my ($self, $instance, $pattern) = @_;
+
+    if ($instance->{have_syslog_replacement}) {
+        $self->assert((scalar $instance->getsyslog($pattern) >= 1),
+                      "syslog does not match pattern $pattern");
+    }
+}
+
+sub assert_syslog_does_not_match
+{
+    my ($self, $instance, $pattern) = @_;
+
+    if ($instance->{have_syslog_replacement}) {
+        $self->assert((scalar $instance->getsyslog($pattern) == 0),
+                      "syslog matches pattern $pattern");
+    }
+}
+
+# create a bunch of mailboxes and messages with various flags and annots,
+# returning a hash of what to expect to find there later
+sub populate_user
+{
+    my ($self, $instance, $store, $folders) = @_;
+
+    my $created = {};
+
+    my @specialuse = qw(Drafts Junk Sent Trash);
+
+    foreach my $folder (@{$folders}) {
+        $store->set_folder($folder);
+
+        # create some messages
+        foreach my $n (1 .. 20) {
+            my $msg = $self->make_message("Message $n", store => $store);
+            $created->{mailboxes}->{$folder}->{messages}->{$msg->uid()} = $msg;
+        }
+
+        # fizzbuzz some flags
+        my $talk = $store->get_client();
+        $talk->select($folder);
+        my $n = 1;
+        while (my ($uid, $msg)
+                = each %{$created->{mailboxes}->{$folder}->{messages}})
+        {
+            my @flags;
+
+            if ($n % 3 == 0) {
+                # fizz
+                $talk->store("$uid", '+flags', '(\\Flagged)');
+                $self->assert_str_equals(
+                    'ok', $talk->get_last_completion_response()
+                );
+                push @flags, '\\Flagged';
+            }
+            if ($n % 5 == 0) {
+                # buzz
+                $talk->store("$uid", '+flags', '(\\Deleted)');
+                $self->assert_str_equals(
+                    'ok', $talk->get_last_completion_response()
+                );
+                push @flags, '\\Deleted';
+            }
+
+            $msg->set_attribute('flags', \@flags) if scalar @flags;
+            $n++;
+        }
+
+        # make sure the messages are as expected
+        $store->set_fetch_attributes('uid', 'flags');
+        $self->check_messages($created->{mailboxes}->{$folder}->{messages},
+                              store => $store,
+                              check_guid => 0,
+                              keyed_on => 'uid');
+
+        # maybe set a special use annotation if the folder name is such
+        my ($suflag, @extra) = grep {
+            lc $folder =~ m{^(?:INBOX[./])?$_$}
+        } @specialuse;
+        if ($suflag and not scalar @extra) {
+            $talk->setmetadata($folder, '/private/specialuse', "\\$suflag");
+            $self->assert_str_equals('ok',
+                                     $talk->get_last_completion_response());
+            $created->{mailboxes}->{$folder}->{specialuse} = "\\$suflag";
+        }
+    }
+
+    # XXX ought to be conditional on whether $instance was built with sieve
+    # XXX support, but Cassandane::BuildInfo doesn't currently support
+    # XXX choosing an instance to ask about...
+    my $scriptname = random_word();
+    my $scriptcontent = 'keep;';
+
+    $instance->install_sieve_script($scriptcontent,
+                                    name => $scriptname,
+                                    username => $store->{username});
+    $self->assert_sieve_exists($instance, $store->{username}, $scriptname);
+    $self->assert_sieve_active($instance, $store->{username}, $scriptname);
+
+    $created->{sieve}->{scripts}->{$scriptname} = $scriptcontent;
+    $created->{sieve}->{active} = $scriptname;
+
+    return $created;
+}
+
+# check that the contents of the store match the data returned by
+# populate_user()
+sub check_user
+{
+    my ($self, $instance, $store, $expected) = @_;
+
+    die "bad expected hash" if ref $expected ne 'HASH';
+
+    foreach my $folder (keys %{$expected->{mailboxes}}) {
+        $store->set_folder($folder);
+        $store->set_fetch_attributes('uid', 'flags');
+        $self->check_messages($expected->{mailboxes}->{$folder}->{messages},
+                              store => $store,
+                              check_guid => 0,
+                              keyed_on => 'uid');
+
+        my $specialuse = $expected->{mailboxes}->{$folder}->{specialuse};
+        if ($specialuse) {
+            my $talk = $store->get_client();
+            my $res = $talk->getmetadata($folder, '/private/specialuse');
+            $self->assert_str_equals('ok',
+                                     $talk->get_last_completion_response());
+            $self->assert_not_null($res);
+
+            $self->assert_str_equals($specialuse,
+                                     $res->{$folder}->{'/private/specialuse'});
+        }
+    }
+
+    if (exists $expected->{sieve}) {
+        while (my ($scriptname, $scriptcontent)
+               = each %{$expected->{sieve}->{scripts}})
+        {
+            $self->assert_sieve_exists($instance, $store->{username},
+                                       $scriptname, 1);
+            $self->assert_sieve_matches($instance, $store->{username},
+                                        $scriptname, $scriptcontent);
+        }
+        if ($expected->{sieve}->{active}) {
+            $self->assert_sieve_active($instance, $store->{username},
+                                       $expected->{sieve}->{active});
+        }
+    }
 }
 
 1;

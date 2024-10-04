@@ -68,7 +68,7 @@
 
 #define QDB config_quota_db
 
-HIDDEN struct db *qdb;
+static struct db *qdb;
 
 /* skanky reuse of mboxname locks.  Ideally we would rename
  * them to something more general and use them elsewhere */
@@ -88,18 +88,25 @@ static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
 };
 
 /* IMAP atoms for various quota resources */
-EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
+EXPORTED const char * const legacy_quota_names[QUOTA_NUMRESOURCES] = {
     "STORAGE",                  /* QUOTA_STORAGE -- RFC 2087 */
     "MESSAGE",                  /* QUOTA_MESSAGE -- RFC 2087 */
     "X-ANNOTATION-STORAGE",     /* QUOTA_ANNOTSTORAGE */
     "X-NUM-FOLDERS"             /* QUOTA_NUMFOLDERS */
 };
 
+EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
+    "STORAGE",                  /* QUOTA_STORAGE      -- RFC 9208 */
+    "MESSAGE",                  /* QUOTA_MESSAGE      -- RFC 9208 */
+    "ANNOTATION-STORAGE",       /* QUOTA_ANNOTSTORAGE -- RFC 9208 */
+    "MAILBOX"                   /* QUOTA_NUMFOLDERS   -- RFC 9208 */
+};
+
 EXPORTED const quota_t quota_units[QUOTA_NUMRESOURCES] = {
-    1024,               /* QUOTA_STORAGE -- RFC 2087 */
-    1,                  /* QUOTA_MESSAGE -- RFC 2087 */
-    1024,               /* QUOTA_ANNOTSTORAGE */
-    1                   /* QUOTA_NUMFOLDERS */
+    1024,               /* QUOTA_STORAGE      -- RFC 9208 */
+    1,                  /* QUOTA_MESSAGE      -- RFC 9208 */
+    1024,               /* QUOTA_ANNOTSTORAGE -- RFC 9208 */
+    1                   /* QUOTA_NUMFOLDERS   -- RFC 9208 */
 };
 
 EXPORTED int quota_name_to_resource(const char *str)
@@ -164,7 +171,7 @@ static int quota_parseval(const char *data, size_t datalen,
 
     /* new dlist format */
     if (data[0] == '%') {
-        if (dlist_parsemap(&dl, 0, 0, data, datalen))
+        if (dlist_parsemap(&dl, 0, data, datalen))
             goto out;
 
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
@@ -234,6 +241,7 @@ out:
 EXPORTED int quota_read_withconversations(struct quota *quota)
 {
     int r = quota_read(quota, NULL, 0);
+    if (r) return r;
 
     if (config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS)) {
         struct conversations_state *local_cstate = NULL;
@@ -251,7 +259,7 @@ EXPORTED int quota_read_withconversations(struct quota *quota)
         if (local_cstate) conversations_commit(&local_cstate);
     }
 
-    return r;
+    return 0;
 }
 
 /*
@@ -344,6 +352,8 @@ EXPORTED int quota_check(const struct quota *q,
 EXPORTED void quota_use(struct quota *q,
                enum quota_resource res, quota_t delta)
 {
+    if (delta)
+        q->dirty = 1;
     /* prevent underflow */
     if ((delta < 0) && (-delta > q->useds[res])) {
         syslog(LOG_INFO, "Quota underflow for root %s, resource %s,"
@@ -360,6 +370,7 @@ struct quota_foreach_t {
     quotaproc_t *proc;
     void *rock;
     struct txn **tid;
+    unsigned use_conv : 1;
 };
 
 static int do_onequota(void *rock,
@@ -378,6 +389,9 @@ static int do_onequota(void *rock,
 
     /* XXX - error if not parsable? */
     if (datalen && !quota_parseval(data, datalen, &quota, iswrite)) {
+        if (fd->use_conv) {
+            quota_read_withconversations(&quota);
+        }
         r = fd->proc(&quota, fd->rock);
     }
 
@@ -388,7 +402,7 @@ static int do_onequota(void *rock,
 }
 
 EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
-                  void *rock, struct txn **tid)
+                           void *rock, struct txn **tid, unsigned flags)
 {
     int r;
     char *search = prefix ? (char *)prefix : "";
@@ -399,6 +413,7 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
     foreach_d.proc = proc;
     foreach_d.rock = rock;
     foreach_d.tid = tid;
+    foreach_d.use_conv = !!(flags & QUOTA_USE_CONV);
 
     r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
                      do_onequota, &foreach_d, tid);
@@ -450,7 +465,7 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    if (mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
+    if (quota->dirty && mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
         if (silent)
             quota->modseq = mboxname_setquotamodseq(quota->root, quota->modseq);
         else
@@ -519,6 +534,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     quota_init(&q, quotaroot);
 
     r = quota_read(&q, &tid, 1);
+    if (r) syslog(LOG_ERR, "QUOTAERROR: failed to read quota for %s (%s)", mboxname, error_message(r));
 
     if (!r) {
         int res;
@@ -540,6 +556,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
             }
         }
         r = quota_write(&q, silent, &tid);
+        if (r) syslog(LOG_ERR, "QUOTAERROR: failed to write quota for %s (%s)", mboxname, error_message(r));
     }
 
     if (r) {
@@ -680,7 +697,7 @@ static void done_cb(void*rock __attribute__((unused)))
 
 static void init_internal() {
     if (!quota_initialized) {
-        quotadb_init(0);
+        quotadb_init();
         quota_initialized = 1;
     }
     if (!quota_dbopen) {
@@ -689,11 +706,8 @@ static void init_internal() {
 }
 
 /* must be called after cyrus_init */
-EXPORTED void quotadb_init(int myflags)
+EXPORTED void quotadb_init(void)
 {
-    if (myflags & QUOTADB_SYNC) {
-        cyrusdb_sync(QDB);
-    }
     cyrus_modules_add(done_cb, NULL);
 }
 

@@ -69,6 +69,11 @@ sub new
         # explicitly requested filename: just use it
         $filename = $params{filename};
     }
+    elsif (defined $ENV{CASSINI_FILENAME}) {
+        xlog "Using ini file from environment:"
+             . " filename=\"$ENV{CASSINI_FILENAME}\"";
+        $filename = $ENV{CASSINI_FILENAME};
+    }
     else {
         # check some likely places, in order
         foreach my $dir (q{.},
@@ -123,6 +128,11 @@ sub new
     {
         die "couldn't find a cassandane.ini file";
     }
+
+    # pre-validate cassandane.core_pattern early -- if the configured
+    # pattern is invalid the qr// will crash out
+    my $core_pattern = $self->val('cassandane', 'core_pattern');
+    $core_pattern = qr{$core_pattern} if $core_pattern;
 
     $instance = $self
         unless defined $instance;
@@ -209,10 +219,37 @@ sub get_section
     my ($self, $section) = @_;
     my $inifile = $self->{inifile};
     my %params;
+    my $filename = $self->{filename} || 'inifile';
     if ($inifile->SectionExists($section)) {
-        map { $params{$_} = $inifile->val($section, $_) } $inifile->Parameters($section);
+        foreach my $key ($inifile->Parameters($section)) {
+            # n.b. if there are multiple values for this section.key,
+            # val() in scalar context returns them joined by $/, which is
+            # nasty.  So call it in list context instead, even though we
+            # don't support multiple values, and use the last one...
+            my @values = $inifile->val($section, $key);
+
+            if (scalar @values > 1) {
+                # ... and whinge if there were multiple!
+                xlog "$filename: multiple values for $section.$key,"
+                     . " using last ($values[-1])";
+                if (get_verbose()) {
+                    xlog "$filename: $section.$key=<$_>" for @values;
+                }
+            }
+
+            $params{$key} = $values[-1];
+        }
     }
     return \%params;
+}
+
+sub get_core_pattern
+{
+    my ($self) = @_;
+
+    my $core_pattern = $self->val('cassandane', 'core_pattern',
+                                  '^core.*?(?:\.(\d+))?$');
+    return qr{$core_pattern};
 }
 
 1;

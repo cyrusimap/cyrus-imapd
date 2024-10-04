@@ -7,6 +7,8 @@
 #include <config.h>
 #endif
 
+#include "lib/assert.h"
+
 /*
  * This is gnarly, sorry :(  We might have been configured to build
  * with OpenSSL, or we might not.  Some older versions of OpenSSL
@@ -34,19 +36,38 @@
  * void MD5Init(MD5_CTX *);
  * void MD5Update(MD5_CTX *, const void *data, size_t len);
  * void MD5Final(unsigned char[MD5_DIGEST_LENGTH], MD5_CTX *);
+ * void md5(const void *data, size_t len, unsigned char[MD5_DIGEST_LENGTH]);
  */
 
 #ifdef HAVE_SSL
 #include <openssl/md5.h>
+#include <openssl/evp.h>
 
-#define MD5Init                     MD5_Init
-#define MD5Update                   MD5_Update
-#define MD5Final                    MD5_Final
+#define md5(d,l,h)        assert(EVP_Digest(d, l, h, NULL, EVP_md5(), NULL))
+
+#define MD5_CTX           EVP_MD_CTX*
+
+#define MD5Init(c)        assert((*c = EVP_MD_CTX_new())           \
+                                 && EVP_DigestInit(*c, EVP_md5()))
+#define MD5Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
+#define MD5Final(h,c)                  \
+    do {                               \
+        EVP_DigestFinal(*c, h, NULL);  \
+        EVP_MD_CTX_free(*c);           \
+    } while(0);
 
 #else
 
 #include <sasl/md5global.h>
 #include <sasl/md5.h>
+
+#define md5(d,l,h)                              \
+    do {                                        \
+        MD5_CTX c;                              \
+        _sasl_MD5Init(&c);                      \
+        _sasl_MD5Update(&c, d, l);              \
+        _sasl_MD5Final(h, &c);                  \
+    } while(0);
 
 #define MD5Init                     _sasl_MD5Init
 #define MD5Update(c,d,l)            _sasl_MD5Update(c, (unsigned char*)d, l)

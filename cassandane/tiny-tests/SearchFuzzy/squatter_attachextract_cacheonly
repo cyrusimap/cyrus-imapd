@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_squatter_attachextract_cacheonly
+    :min_version_3_9 :SearchAttachmentExtractor :NoCheckSyslog
+{
+    my ($self) = @_;
+    my $instance = $self->{instance};
+    my $imap = $self->{store}->get_client();
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor(tracedir => $tracedir);
+
+    xlog "Instruct squatter to only use attachextract cache";
+    my $cachedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->squatter_attachextract_cache_run($cachedir,
+        "--attachextract-cache-only", "--allow-partials");
+
+    xlog "Assert text bodies of both messages are indexed";
+    my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
+    $self->assert_deep_equals([1,2], $uids);
+
+    xlog "Assert attachments of both messages are not indexed";
+    $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
+    $self->assert_deep_equals([], $uids);
+
+    xlog "Assert extractor did not get got called";
+    my @tracefiles = glob($tracedir."/*");
+    $self->assert_num_equals(0, scalar @tracefiles);
+
+    xlog "Assert cache contains no file";
+    my @files = glob($cachedir."/*");
+    $self->assert_num_equals(0, scalar @files);
+}

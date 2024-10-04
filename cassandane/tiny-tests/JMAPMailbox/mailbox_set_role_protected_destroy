@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_role_protected_destroy
+    :min_version_3_3 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create protected and unprotected roles";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'drafts',
+                },
+                mboxB => {
+                    name => 'B',
+                    role => 'xspecialuse',
+                },
+            },
+        }, "R2"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[1][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'drafts',
+        $mboxB => 'xspecialuse',
+    }, \%roleByMbox);
+
+    xlog "destroy protected and unprotected roles in one method";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxA, $mboxB],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxA}{type});
+    $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxB}{type});
+
+    xlog "destroy protected and unprotected roles in separate method";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxA],
+        }, 'R1'],
+        ['Mailbox/set', {
+            destroy => [$mboxB],
+        }, 'R2'],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R3'],
+    ]);
+    $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxA}{type});
+    $self->assert_deep_equals([$mboxB], $res->[1][1]{destroyed});
+    %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'drafts',
+    }, \%roleByMbox);
+}

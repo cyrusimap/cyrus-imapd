@@ -218,18 +218,22 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
                       struct protstream *clientout,
                       struct protstream *serverin,
                       struct protstream *serverout,
+                      int extra_read_fd,
+                      int *extra_read_flag,
                       unsigned long timeout_sec)
 {
     struct protgroup *protout = NULL;
     struct timeval timeout = { timeout_sec, 0 };
     int n, ret = 0;
 
-    n = prot_select(protin, PROT_NO_FD, &protout, NULL,
+    n = prot_select(protin, extra_read_fd, &protout, extra_read_flag,
                     timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
         syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
         fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
     }
+
+    if (extra_read_flag && *extra_read_flag) n--;
 
     if (n && protout) {
         /* see who has input */

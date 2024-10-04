@@ -3,28 +3,35 @@ package Cassandane::Net::SMTPServer;
 use strict;
 use warnings;
 use Data::Dumper;
-use Net::Server::PreForkSimple;
+use File::Spec::Functions qw(catfile);
+use File::Temp qw(mkstemps);
+use Net::Server::PreFork;
 
 use lib ".";
 use Net::XmtpServer;
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use JSON;
 
-use base qw(Net::XmtpServer Net::Server::PreForkSimple);
+use base qw(Net::XmtpServer Net::Server::PreFork);
 
 sub new {
-    my $class = shift;
-    return $class->SUPER::new(@_);
+    my ($class, $params, @args) = @_;
+
+    my $messages_dir = delete $params->{messages_dir};
+
+    my $Self = $class->SUPER::new($params, @args);
+    $Self->{messages_dir} = $messages_dir;
+    $Self->{message_fh} = undef;
+    $Self->{_rcpt_to_count} = 0;
+    return $Self;
 }
 
 sub override {
     my $Self = shift;
     my $stage = shift;
     if ($Self->{server}{control_file} and -e $Self->{server}{control_file}) {
-        local $/ = undef;
-        open(FH, "<$Self->{server}{control_file}");
-        my $data = decode_json(<FH>);
-        close(FH);
+        my $data = decode_json(slurp_file($Self->{server}{control_file}));
         if ($data->{$stage}) {
             $Self->send_client_resp(@{$data->{$stage}});
             return 1;
@@ -48,8 +55,8 @@ sub new_connection {
 }
 
 sub helo {
-    my ($Self) = @_;
-    $Self->mylog("SMTP: HELO");
+    my ($Self, $Host) = @_;
+    $Self->mylog("SMTP: HELO $Host");
     return if $Self->override('helo');
     $Self->send_client_resp(250, "localhost",
                             "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES");
@@ -58,6 +65,7 @@ sub helo {
 sub mail_from {
     my ($Self, $From, @FromExtra) = @_;
     $Self->mylog("SMTP: MAIL FROM $From @FromExtra");
+    $Self->{_rcpt_to_count} = 0;
     return if $Self->override('from');
     # don't just quietly accept garbage!
     if ($From =~ m/[<>]/ || grep { m/[<>]/ } @FromExtra) {
@@ -74,7 +82,7 @@ sub rcpt_to {
     $Self->{_rcpt_to_count}++;
     if ($Self->{_rcpt_to_count} > 10) {
         $Self->send_client_resp(550, "5.5.3 Too many recipients");
-    } elsif ($To =~ /\@fail\.to\.deliver$/i) {
+    } elsif ($To =~ /[<>]/ || $To =~ /\@fail\.to\.deliver$/i) {
         $Self->send_client_resp(553, "5.1.1 Bad destination mailbox address");
         $Self->mylog("SMTP: 553 5.1.1");
     } else {
@@ -85,14 +93,40 @@ sub rcpt_to {
 sub begin_data {
     my ($Self) = @_;
     $Self->mylog("SMTP: BEGIN DATA");
+    if ($Self->{messages_dir} and not $Self->{message_fh}) {
+        my $template = catfile($Self->{messages_dir}, 'message_XXXXXX');
+        eval {
+            $Self->{message_fh} = mkstemps($template, '.smtp');
+        };
+        if ($@) {
+            xlog "mkstemps($template, '.smtp') failed, not saving message";
+        }
+    }
     return if $Self->override('begin_data');
     $Self->send_client_resp(354, "ok");
     return 1;
 }
 
+sub output_body {
+    my ($Self, $Fh, $Data) = @_;
+
+    # n.b. we only receive this callback if we were configured with
+    # store_msg => 1, but note that, despite the name, that option
+    # has nothing to do with what we're doing here
+    if ($Self->{message_fh}) {
+        print { $Self->{message_fh} } $Data;
+    }
+
+    $Self->SUPER::output_body($Fh, $Data);
+}
+
 sub end_data {
     my ($Self) = @_;
     $Self->mylog("SMTP: END DATA");
+    if ($Self->{message_fh}) {
+        close $Self->{message_fh};
+        $Self->{message_fh} = undef;
+    }
     return if $Self->override('end_data');
     $Self->send_client_resp(250, "ok");
     return 0;
@@ -101,6 +135,7 @@ sub end_data {
 sub rset {
     my ($Self) = @_;
     $Self->mylog("SMTP: RSET");
+    $Self->{_rcpt_to_count} = 0;
     return if $Self->override('rset');
     $Self->send_client_resp(250, "ok");
     return 0;

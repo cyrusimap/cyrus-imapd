@@ -55,7 +55,7 @@ command in :cyrusman:`cyradm(8)`:
 
 .. parsed-literal::
 
-    localhost> **listaclmamilbox tech/%**
+    localhost> **listaclmailbox tech/%**
     tech/Commits:
       group:tech lrswipkxtea
       anyone lrs
@@ -69,7 +69,7 @@ command in :cyrusman:`cyradm(8)`:
       group:tech lrswipkxtecda
       anyone lrsp
 
-    localhost> **listaclmamilbox user/bovik/%**
+    localhost> **listaclmailbox user/bovik/%**
     user/bovik/Drafts:
       bovik lrswipkxtecda
     user/bovik/Sent:
@@ -226,7 +226,7 @@ If the ``loginuseacl`` configuration option is turned on, than any Kerberos iden
 Shared Secrets Logins
 =====================
 
-Some mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanism (such as CRAM-MD5 and DIGEST-MD5), you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :ref:`Cyrus SASL distribution <cyrussasl:sasl-index>`)
+The SCRAM mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanisms, you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :ref:`Cyrus SASL distribution <cyrussasl:sasl-index>`).
 
 Quotas
 ******
@@ -321,9 +321,14 @@ the sender.
 Quota Warnings Upon Select When User Has ``d`` Rights
 =====================================================
 
-When a user selects a mailbox whose quota root has usage that is close to or over the limit and the user has ``d`` rights on the mailbox, the server will issue an alert notifying the user that usage is close to or over the limit. The threshold of usage at which the server will issue quota warnings is set by the ``quotawarn`` configuration option.
+When a user selects a mailbox whose quota root has usage that is close to or
+over the limit and the user has ``d`` rights on the mailbox, the server will
+issue an alert notifying the user that usage is close to or over the limit.
+The threshold of usage at which the server will issue quota warnings is set
+by the ``quotawarnpercent`` configuration option.
 
-The server only issues warnings when the user has ``d`` rights because only users with ``d`` rights are capable of correcting the problem.
+The server only issues warnings when the user has ``d`` rights because only
+users with ``d`` rights are capable of correcting the problem.
 
 Quotas and Partitions
 =====================
@@ -400,8 +405,6 @@ uses the server identity
 ``imap.host@realm``, where
 ``host`` is the first component of the server's host
 name and ``realm`` is the server's Kerberos realm.
-When the POP3 server is invoked with the ``-k`` switch, the
-server exports MIT's KPOP protocol instead of generic POP3.
 
 The syslog facility
 *******************

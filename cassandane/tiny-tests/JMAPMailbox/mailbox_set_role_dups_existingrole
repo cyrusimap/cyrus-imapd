@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_role_dups_existingrole
+    :min_version_3_3 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R1'],
+        ['Mailbox/set', {
+            create => {
+                mboxA => {
+                    name => 'A',
+                    role => 'junk',
+                },
+            },
+        }, "R2"],
+    ]);
+    my $inbox = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($inbox);
+    my $mboxA = $res->[1][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+
+    xlog "Can't create a mailbox with a duplicate role";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxB => {
+                    name => 'B',
+                    role => 'junk',
+                },
+            },
+        }, "R1"],
+    ]);
+    $self->assert_deep_equals(['role'], $res->[0][1]{notCreated}{'mboxB'}{properties});
+
+    xlog "Can't update a mailbox with a duplicate role";
+    # create it first
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mboxB => {
+                    name => 'B',
+                },
+            },
+        }, "R1"],
+    ]);
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+    # now update
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxB => {
+                    name => 'B',
+                    role => 'junk',
+                },
+            },
+        }, "R1"],
+        ['Mailbox/get', {
+            properties => ['role', 'name'],
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals(['role'], $res->[0][1]{notUpdated}{$mboxB}{properties});
+    my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
+    $self->assert_deep_equals({
+        $inbox => 'inbox',
+        $mboxA => 'junk',
+        $mboxB => undef,
+    }, \%roleByMbox);
+}

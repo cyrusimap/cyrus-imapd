@@ -136,6 +136,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { NULL,                 NULL },                 /* REPORT       */
+        { NULL,                 NULL },                 /* SEARCH       */
         { &meth_trace,          NULL },                 /* TRACE        */
         { NULL,                 NULL },                 /* UNBIND       */
         { NULL,                 NULL }                  /* UNLOCK       */
@@ -184,6 +185,8 @@ static void jmap_init(struct buf *serverinfo)
     my_jmap_settings.server_capabilities = json_object();
 
     jmap_core_init(&my_jmap_settings);
+    jmap_blob_init(&my_jmap_settings);
+    jmap_quota_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
     jmap_mdn_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
@@ -193,6 +196,7 @@ static void jmap_init(struct buf *serverinfo)
 #ifdef USE_SIEVE
     jmap_sieve_init(&my_jmap_settings);
 #endif
+    jmap_admin_init(&my_jmap_settings);
 
     if (ws_enabled) {
         jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
@@ -209,8 +213,10 @@ static void jmap_init(struct buf *serverinfo)
 static int jmap_auth(const char *userid __attribute__((unused)))
 {
     /* Set namespace */
-    mboxname_init_namespace(&jmap_namespace,
-                            httpd_userisadmin || httpd_userisproxyadmin);
+    unsigned options =
+        (httpd_userisadmin || httpd_userisproxyadmin) ? NAMESPACE_OPTION_ADMIN : 0;
+    mboxname_init_namespace(&jmap_namespace, options);
+
     return 0;
 }
 
@@ -234,7 +240,8 @@ static void jmap_reset(void)
 
 static void jmap_shutdown(void)
 {
-    free_hash_table(&my_jmap_settings.methods, NULL);
+    free_hash_table(&my_jmap_settings.methods,
+                    (void (*)(void *)) &ptrarray_free);
     json_decref(my_jmap_settings.server_capabilities);
     ptrarray_fini(&my_jmap_settings.getblob_handlers);
     int i;
@@ -541,8 +548,9 @@ static int meth_post(struct transaction_t *txn,
 static char *parse_accept_header(const char **hdr)
 {
     char *val = NULL;
-    struct accept *accept = parse_accept(hdr);
-    if (accept) {
+    dynarray_t *da = parse_accept(hdr);
+    if (dynarray_size(da)) {
+        struct accept *accept = dynarray_nth(da, 0);
         char *type = NULL;
         char *subtype = NULL;
         struct param *params = NULL;
@@ -552,11 +560,13 @@ static char *parse_accept_header(const char **hdr)
         free(type);
         free(subtype);
         param_free(&params);
-        struct accept *tmp;
-        for (tmp = accept; tmp && tmp->token; tmp++) {
-            free_accept(tmp);
+
+        int i;
+        for (i = 0; i < dynarray_size(da); i++) {
+            accept = dynarray_nth(da, i);
+            free_accept(accept);
         }
-        free(accept);
+        dynarray_free(&da);
     }
     return val;
 }
@@ -594,6 +604,9 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
 
         // binary decode if needed
         int encoding = part->charset_enc & 0xff;
+        if (!encoding && part->encoding) {
+            encoding = encoding_lookupname(part->encoding);
+        }
         base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
 
         if (!base) {
@@ -613,8 +626,17 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
         }
     }
 
+    if (ctx->mboxp) {
+        *ctx->mboxp = mbox;
+        mbox = NULL;
+
+        if (mr && ctx->recordp) {
+            msgrecord_get_index_record(mr, ctx->recordp);
+        }
+    }
+
  done:
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     if (body) {
         message_free_body(body);
         free(body);
@@ -845,6 +867,8 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
     return r;
 }
 
+static int jmap_upload_rights = ACL_INSERT|ACL_EXPUNGE|ACL_DELETEMSG;
+
 /* this takes a namespace lock and tries to either create or
  * grant access to the target upload collection.  You can only
  * write to somebody's upload collection if you have write access
@@ -860,7 +884,7 @@ static int _create_upload_collection(const char *accountid,
 
     if (!r) {
         int rights = httpd_myrights(httpd_authstate, mbentry);
-        if (!(rights & ACL_INSERT)) {
+        if ((rights & jmap_upload_rights) != jmap_upload_rights) {
             if (!has_shared_rw_rights(accountid)) {
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
@@ -913,9 +937,11 @@ static int _create_upload_collection(const char *accountid,
         cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                       JACL_READITEMS | JACL_WRITE, NULL, NULL);
 
+        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> oldacl=<%s> newacl=<%s>",
+                httpd_userid, mailbox_acl(*mailboxp), newacl);
+
         /* ok, change the mailboxes database */
-        r = mboxlist_sync_setacls(mbentry->name, newacl,
-                                  mailbox_modseq_dirty(*mailboxp));
+        r = mboxlist_setacls(mbentry->name, newacl, mailbox_modseq_dirty(*mailboxp), /*silent*/0);
         if (r) {
             syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                    mbentry->name, error_message(r));
@@ -950,7 +976,7 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     }
 
     int rights = httpd_myrights(httpd_authstate, mbentry);
-    if (!(rights & ACL_INSERT)) {
+    if ((rights & jmap_upload_rights) != jmap_upload_rights) {
         mboxlist_entry_free(&mbentry);
         return _create_upload_collection(accountid, mailboxp);
     }
@@ -1001,9 +1027,10 @@ static int jmap_upload(struct transaction_t *txn)
     const char **hdr;
     time_t now = time(NULL);
     struct appendstate as;
+    char *accountid = NULL;
     char *normalisedtype = NULL;
     int rawmessage = 0;
-
+    struct conversations_state *cstate = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
 
@@ -1020,23 +1047,35 @@ static int jmap_upload(struct transaction_t *txn)
 
     if (datalen > (size_t) my_jmap_settings.limits[MAX_SIZE_UPLOAD]) {
         txn->error.desc = "JSON upload byte size exceeds maxSizeUpload";
-        return HTTP_PAYLOAD_TOO_LARGE;
+        ret = HTTP_CONTENT_TOO_LARGE;
+        goto done;
     }
 
     /* Resource must be {accountId}/ with no trailing path */
-    char *accountid = xstrdup(txn->req_tgt.resource);
+    accountid = xstrdup(txn->req_tgt.resource);
     char *slash = strchr(accountid, '/');
     if (!slash || *(slash + 1) != '\0') {
         ret = HTTP_NOT_FOUND;
+        txn->error.desc = "unknown uploadUrl";
         goto done;
     }
     *slash = '\0';
 
+    r = conversations_open_user(accountid, 0, &cstate);
+    if (r) {
+        syslog(LOG_ERR, "jmap_upload: can't open conversations db for %s: %s",
+               accountid, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+        txn->error.desc = "can't open upload conversations db";
+        goto done;
+    }
+
     r = jmap_open_upload_collection(accountid, &mailbox);
     if (r) {
         syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
-               error_message(r), accountid);
+               accountid, error_message(r));
         ret = HTTP_NOT_FOUND;
+        txn->error.desc = "can't open upload collection";
         goto done;
     }
 
@@ -1048,12 +1087,22 @@ static int jmap_upload(struct transaction_t *txn)
         goto done;
     }
 
-    const char *type = "application/octet-stream";
     if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
-        type = hdr[0];
+        // Strip any parameters from Content-Type header
+        char *maintype = NULL, *subtype = NULL;
+        struct param *param = NULL;
+        message_parse_type(hdr[0], &maintype, &subtype, &param);
+        if (maintype && subtype) {
+            lcase(maintype);
+            lcase(subtype);
+            normalisedtype = strconcat(maintype, "/", subtype, NULL);
+        }
+        free(maintype);
+        free(subtype);
+        param_free(&param);
     }
-    /* Remove CFWS and encodings from type */
-    normalisedtype = charset_decode_mimeheader(type, CHARSET_KEEPCASE);
+    if (!normalisedtype)
+        normalisedtype = xstrdup("application/octet-stream");
 
     if (!strcasecmp(normalisedtype, "message/rfc822")) {
         struct protstream *stream = prot_readmap(data, datalen);
@@ -1066,6 +1115,8 @@ static int jmap_upload(struct transaction_t *txn)
         // otherwise we gotta clean up and make it an attachment
         if (ftruncate(fileno(f), 0L) < 0 || fseek(f, 0L, SEEK_SET) < 0) {
             syslog(LOG_ERR, "IOERROR: failed to reset file in JMAP upload");
+            ret = HTTP_SERVER_ERROR;
+            goto done;
         }
     }
 
@@ -1113,7 +1164,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    fprintf(f, "Content-Type: %s\r\n", type);
+    fputs("Content-Type: application/octet-stream\r\n", f);
 
     int domain = data_domain(data, datalen);
     switch (domain) {
@@ -1125,14 +1176,6 @@ static int jmap_upload(struct transaction_t *txn)
             break;
         default:
             break; // no CTE == 7bit
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
-        fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
-        fprintf(f, "Content-Description: %s\r\n", hdr[0]);
     }
 
     fprintf(f, "Content-Length: %u\r\n", (unsigned) datalen);
@@ -1166,8 +1209,15 @@ wrotebody:
         append_abort(&as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
-        ret = HTTP_SERVER_ERROR;
-        txn->error.desc = "append_fromstage() failed";
+        if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
+            /* XXX  Should never happen, but DTRT anyways */
+            ret = HTTP_NO_STORAGE;
+            txn->error.desc = "Mailbox is over quota";
+        }
+        else {
+            ret = HTTP_SERVER_ERROR;
+            txn->error.desc = "append_fromstage() failed";
+        }
         goto done;
     }
 
@@ -1193,6 +1243,8 @@ wrotebody:
     json_object_set_new(resp, "expires", json_string(datestr));
     json_object_set_new(resp, "type", json_string(normalisedtype));
 
+    ret = HTTP_CREATED;
+
 done:
     free(normalisedtype);
     free(accountid);
@@ -1207,6 +1259,10 @@ done:
         else r = mailbox_commit(mailbox);
         mailbox_close(&mailbox);
     }
+    if (cstate) {
+        if (r) conversations_abort(&cstate);
+        else conversations_commit(&cstate);
+    }
 
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
@@ -1215,11 +1271,29 @@ done:
     // checkpoint before replying
     sync_checkpoint(httpd_in);
 
-    /* Output the JSON object */
-    if (resp)
-        ret = json_response(HTTP_CREATED, txn, resp);
+    if (!resp) {
+        /* Create Problem Details Object */
+        const char *type, *limit;
 
-    return ret;
+        if (ret == HTTP_CONTENT_TOO_LARGE) {
+            type = "urn:ietf:params:jmap:error:limit";
+            limit = "maxSizeUpload";
+        }
+        else {
+            type = "about:blank";
+            limit = NULL;
+        }
+
+        resp = json_pack("{s:s s:s* s:s s:i s:s}",
+                         "type", type,
+                         "limit", limit,
+                         "title", error_message(ret) + 4,
+                         "status", atoi(error_message(ret)),
+                         "detail", txn->error.desc);
+    }
+
+    /* Output the JSON object */
+    return json_response(ret, txn, resp);
 }
 
 /* Handle a GET on the session endpoint */
@@ -1438,7 +1512,7 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
                 const char *val = json_string_value(jval);
 
                 if (val &&
-                    strarray_find_case(httpd_log_headers, hdrname, 0) >= 0) {
+                    strarray_contains_case(httpd_log_headers, hdrname)) {
                     buf_printf(logbuf, "; %s=\"%s\"", hdrname, val);
                 }
             }
@@ -1482,7 +1556,8 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
     int do_close = 0;
 
     xsyslog(LOG_DEBUG, "JMAP eventSource push",
-            "accountid=<%s>, now=<%ld>, next_poll=<%ld>, next_ping=<%ld>",
+            "accountid=<%s>, now=<" TIME_T_FMT ">,"
+            " next_poll=<" TIME_T_FMT ">, next_ping=<" TIME_T_FMT ">",
             jpush->accountid, now, jpush->next_poll, jpush->next_ping);
 
     buf_reset(buf);

@@ -72,9 +72,9 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
         gettimeofday(&tv, NULL);
 
         /* use sec.clocks */
-        snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu.%lu",
+        snprintf(buf, sizeof(buf), "%s%s%s/%s-" TIME_T_FMT ".%.6lu",
                  config_dir, FNAME_LOGDIR, userid, config_ident,
-                 (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
+                 tv.tv_sec, (unsigned long)tv.tv_usec);
     }
     else if (config_getswitch(IMAPOPT_TELEMETRY_BYSESSIONID)) {
         const char *sid = session_id();
@@ -136,9 +136,9 @@ EXPORTED void telemetry_rusage(char *userid)
          * Some systems provide significantly more data, but POSIX
          * guarantees user & sys CPU time.
          */
-        syslog(LOG_NOTICE, "USAGE %s user: %lu.%.6d sys: %lu.%.6d", userid,
-               (unsigned long)user.tv_sec, (int)user.tv_usec,
-               (unsigned long)sys.tv_sec, (int)sys.tv_usec);
+        syslog(LOG_INFO, "USAGE %s user: " TIME_T_FMT ".%.6d sys: " TIME_T_FMT ".%.6d", userid,
+               user.tv_sec, (int)user.tv_usec,
+               sys.tv_sec, (int)sys.tv_usec);
 
         previous = current;
     }

@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Getopt::Std;
+
+# XXX Will probably need to embed Cassandane::Net::Server if we want
+# XXX cyrus master to be able to manage this rather than Cassandane.
+# XXX See utils/fakeldapd for an example of that.
+use lib '.';
+use Cassandane::Net::SMTPServer;
+
+my %opts;
+getopts("C:b:h:p:v", \%opts);
+
+my $host = $opts{h} || 'localhost';
+my $port = int($opts{p} // 0);
+die "need a port" if not $port;
+my $basedir = $opts{b} || $ENV{CASSANDANE_BASEDIR};
+die "need a basedir" if not $basedir;
+my $verbose = $opts{v} || $ENV{CASSANDANE_VERBOSE};
+
+my $smtpd = Cassandane::Net::SMTPServer->new({
+    cass_verbose => $verbose,
+    xmtp_personality => 'smtp',
+    host => $host,
+    port => $port,
+    min_servers => 1,
+    min_spare_servers => 1,
+    ## max_servers => 50,
+    ## max_spare_servers => 10,
+    ## max_requests => 1000,
+    control_file => "$basedir/conf/smtpd.json",
+    xmtp_tmp_dir => "$basedir/tmp/",
+    store_msg => 1,
+    messages_dir => "$basedir/smtpd/",
+});
+$smtpd->run() or die;
+exit 0; # Never reached

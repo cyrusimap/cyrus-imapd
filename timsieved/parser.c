@@ -82,10 +82,10 @@ extern int sieved_userisadmin;
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static const char *referral_host = NULL;
 
-int authenticated = 0;
-int verify_only = 0;
-int starttls_done = 0;
-sasl_ssf_t sasl_ssf = 0;
+static int authenticated = 0;
+static int verify_only = 0;
+static int starttls_done = 0;
+static sasl_ssf_t sasl_ssf = 0;
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
@@ -586,6 +586,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
 
   prot_flush(sieved_out);
 
+  if (authenticated && ret == TRUE)
+      actions_unsetuser();
+
   return ret;
 
  error:
@@ -887,8 +890,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   sasl_getprop(sieved_saslconn, SASL_SSF, &val);
   sasl_ssf = *((sasl_ssf_t *) val);
 
-  if (sasl_ssf &&
-      config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
+  if (sasl_ssf) {
       capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
                    sasl_ssf);
       prot_flush(sieved_out);

@@ -48,6 +48,7 @@ use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
 use File::stat;
+use JSON;
 use POSIX qw(geteuid :signal_h :sys_wait_h :errno_h);
 use DateTime;
 use BSD::Resource;
@@ -65,17 +66,18 @@ use List::Util qw(uniqstr);
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::Wait;
 use Cassandane::Mboxname;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
-use Cassandane::GenericDaemon;
+use Cassandane::GenericListener;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
+use Cassandane::MasterDaemon;
 use Cassandane::Cassini;
 use Cassandane::PortManager;
-use Cassandane::Net::SMTPServer;
 use Cassandane::BuildInfo;
 
 use lib '../perl/imap';
@@ -103,7 +105,8 @@ sub new
         starts => [],
         services => {},
         events => [],
-        generic_daemons => {},
+        daemons => {},
+        generic_listeners => {},
         re_use_dir => 0,
         setup_mailbox => 1,
         persistent => 0,
@@ -116,6 +119,7 @@ sub new
         _pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
         install_certificates => 0,
         _pid => $$,
+        smtpdaemon => 0,
     };
 
     $self->{name} = $params{name}
@@ -148,6 +152,8 @@ sub new
         if defined $params{pwcheck};
     $self->{install_certificates} = $params{install_certificates}
         if defined $params{install_certificates};
+    $self->{smtpdaemon} = $params{smtpdaemon}
+        if defined $params{smtpdaemon};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
@@ -421,16 +427,11 @@ sub add_service
     # Add a hardcoded recover START if we're doing an actual IMAP test.
     if ($name =~ m/imap/)
     {
-        if (!grep { $_->{name} eq 'recover'; } @{$self->{starts}})
-        {
-            $self->add_start(name => 'recover',
-                             argv => [ qw(ctl_cyrusdb -r) ]);
-        }
+        $self->add_recover();
     }
 
-    my $srv = Cassandane::ServiceFactory->create(%params);
+    my $srv = Cassandane::ServiceFactory->create(instance => $self, %params);
     $self->{services}->{$name} = $srv;
-    $srv->set_config($self->{config});
     return $srv;
 }
 
@@ -458,30 +459,61 @@ sub add_start
     push(@{$self->{starts}}, Cassandane::MasterStart->new(%params));
 }
 
+sub remove_start
+{
+    my ($self, $name) = @_;
+    $self->{starts} = [ grep { $_->{name} ne $name } @{$self->{starts}} ];
+}
+
+sub add_recover
+{
+    my ($self) = @_;
+
+    if (!grep { $_->{name} eq 'recover'; } @{$self->{starts}})
+    {
+        $self->add_start(name => 'recover',
+                         argv => [ qw(ctl_cyrusdb -r) ]);
+    }
+}
+
 sub add_event
 {
     my ($self, %params) = @_;
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
 }
 
-sub add_generic_daemon
+sub add_daemon
+{
+    my ($self, %params) = @_;
+
+    my $name = $params{name};
+    die "Missing parameter 'name'"
+        unless defined $name;
+    die "Already have a daemon named \"$name\""
+        if defined $self->{daemons}->{$name};
+
+    $self->{daemons}->{$name} = Cassandane::MasterDaemon->new(%params);
+}
+
+sub add_generic_listener
 {
     my ($self, %params) = @_;
 
     my $name = delete $params{name};
     die "Missing parameter 'name'"
         unless defined $name;
-    die "Already have a generic daemon named \"$name\""
-        if defined $self->{generic_daemons}->{$name};
+    die "Already have a generic listener named \"$name\""
+        if defined $self->{generic_listeners}->{$name};
 
-    my $daemon = Cassandane::GenericDaemon->new(
-            name => $name,
-            config => $self->{config},
-            %params
+    $params{config} //= $self->{config};
+
+    my $listener = Cassandane::GenericListener->new(
+        name => $name,
+        %params
     );
 
-    $self->{generic_daemons}->{$name} = $daemon;
-    return $daemon;
+    $self->{generic_listeners}->{$name} = $listener;
+    return $listener;
 }
 
 sub set_config
@@ -489,8 +521,6 @@ sub set_config
     my ($self, $conf) = @_;
 
     $self->{config} = $conf;
-    map { $_->set_config($conf); } (values %{$self->{services}},
-                                    values %{$self->{generic_daemons}});
 }
 
 sub _find_binary
@@ -505,10 +535,10 @@ sub _find_binary
 
     my $base = $self->{cyrus_destdir} . $self->{cyrus_prefix};
 
-    if ($name eq 'delve') {
+    if ($name =~ m/xapian-.*$/) {
         my $lib = `ldd $base/libexec/imapd` || die "can't ldd imapd";
         $lib =~ m{(/\S+)/lib/libxapian-([0-9.]+)\.so};
-        return "$1/bin/xapian-delve-$2";
+        return "$1/bin/$name-$2";
     }
 
     foreach (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
@@ -543,7 +573,7 @@ sub _binary
     my $cassini = Cassandane::Cassini->instance();
 
     if ($cassini->bool_val('valgrind', 'enabled') &&
-        !($name =~ m/delve$/) &&
+        !($name =~ m/xapian.*$/) &&
         !($name =~ m/\.pl$/) &&
         !($name =~ m/^\//))
     {
@@ -578,9 +608,11 @@ sub _binary
 
 sub _imapd_conf
 {
-    my ($self) = @_;
+    my ($self, $prefix) = @_;
 
-    return $self->{basedir} . '/conf/imapd.conf';
+    my $fname = $prefix ? "$prefix-imapd.conf" : 'imapd.conf';
+
+    return $self->{basedir} . "/conf/$fname";
 }
 
 sub _master_conf
@@ -633,7 +665,6 @@ sub _build_skeleton
         'conf',
         'conf/certs',
         'conf/cores',
-        'conf/db',
         'conf/sieve',
         'conf/socket',
         'conf/proc',
@@ -652,6 +683,7 @@ sub _build_skeleton
         'data',
         'meta',
         'run',
+        'smtpd',
         'tmp',
     );
     foreach my $sd (@subdirs)
@@ -664,14 +696,18 @@ sub _build_skeleton
 
 sub _generate_imapd_conf
 {
-    my ($self) = @_;
+    my ($self, $config, $prefix) = @_;
+
+    # Be very careful about setting $config options in this
+    # function.  Anything that is set here cannot be varied
+    # per test!
 
     if (defined $self->{services}->{http}) {
         my $davhost = $self->{services}->{http}->host;
         if (defined $self->{services}->{http}->port) {
             $davhost .= ':' . $self->{services}->{http}->port;
         }
-        $self->{config}->set(
+        $config->set(
             webdav_attachments_baseurl => "http://$davhost"
         );
     }
@@ -679,32 +715,23 @@ sub _generate_imapd_conf
     my ($cyrus_major_version, $cyrus_minor_version) =
         Cassandane::Instance->get_version($self->{installation});
 
-    $self->{config}->set_variables(
+    $config->set_variables(
         name => $self->{name},
         basedir => $self->{basedir},
         cyrus_prefix => $self->{cyrus_prefix},
         prefix => getcwd(),
     );
-    $self->{config}->set(
+    $config->set(
         sasl_pwcheck_method => 'saslauthd',
         sasl_saslauthd_path => "$self->{basedir}/run/mux",
         notifysocket => "dlist:$self->{basedir}/run/notify",
         event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
-        $self->{config}->set(imipnotifier => 'imip');
-        $self->{config}->set_bits('event_groups',
-                                  'mailbox message flags calendar');
-
-        if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
-            $self->{config}->set(
-                smtp_backend => 'host',
-                smtp_host => $self->{smtphost},
-            );
-        }
+        $config->set_bits('event_groups', 'mailbox message flags calendar');
     }
     else {
-        $self->{config}->set_bits('event_groups', 'mailbox message flags');
+        $config->set_bits('event_groups', 'mailbox message flags');
     }
     if ($self->{buildinfo}->get('search', 'xapian')) {
         my %xapian_defaults = (
@@ -717,12 +744,13 @@ sub _generate_imapd_conf
             't3searchpartition-default' => "$self->{basedir}/search3",
         );
         while (my ($k, $v) = each %xapian_defaults) {
-            if (not defined $self->{config}->get($k)) {
-                $self->{config}->set($k => $v);
+            if (not defined $config->get($k)) {
+                $config->set($k => $v);
             }
         }
     }
-    $self->{config}->generate($self->_imapd_conf());
+
+    $config->generate($self->_imapd_conf($prefix));
 }
 
 sub _emit_master_entry
@@ -731,6 +759,10 @@ sub _emit_master_entry
 
     my $params = $entry->master_params();
     my $name = delete $params->{name};
+    my $config = delete $params->{config};
+
+    # if this master entry has its own confix, it will have a prefixed name
+    my $imapd_conf = $self->_imapd_conf($config ? $name : undef);
 
     # Convert ->{argv} to ->{cmd}
     my $argv = delete $params->{argv};
@@ -741,7 +773,7 @@ sub _emit_master_entry
     my $bin = shift @args;
     $params->{cmd} = join(' ',
         $self->_binary($bin),
-        '-C', $self->_imapd_conf(),
+        '-C', $imapd_conf,
         @args
     );
 
@@ -760,7 +792,6 @@ sub _generate_master_conf
     my ($self) = @_;
 
     my $filename = $self->_master_conf();
-    my $conf = $self->_imapd_conf();
     open MASTER,'>',$filename
         or die "Cannot open $filename for writing: $!";
 
@@ -785,7 +816,12 @@ sub _generate_master_conf
         print MASTER "}\n";
     }
 
-    # $self->{generic_daemons} is daemons *not* managed by master
+    if (scalar %{$self->{daemons}})
+    {
+        print MASTER "DAEMON {\n";
+        $self->_emit_master_entry($_) for values %{$self->{daemons}};
+        print MASTER "}\n";
+    }
 
     close MASTER;
 }
@@ -804,7 +840,7 @@ sub _add_services_from_cyrus_conf
         chomp;
         s/\s*#.*//;             # strip comments
         next if m/^\s*$/;       # skip empty lines
-        my ($m) = m/^(START|SERVICES|EVENTS)\s*{/;
+        my ($m) = m/^(START|SERVICES|EVENTS|DAEMON)\s*{/;
         if ($m)
         {
             $in = $m;
@@ -836,7 +872,7 @@ sub _add_services_from_cyrus_conf
 
             if ($k eq 'listen')
             {
-                my $aa = Cassandane::GenericDaemon::parse_address($v);
+                my $aa = Cassandane::GenericListener::parse_address($v);
                 $params{host} = $aa->{host};
                 $params{port} = $aa->{port};
             }
@@ -852,7 +888,7 @@ sub _add_services_from_cyrus_conf
         }
         if ($in eq 'SERVICES')
         {
-            $self->add_service(name => $name, %params);
+            $self->add_service(instance => $self, name => $name, %params);
         }
     }
 
@@ -907,7 +943,7 @@ sub _start_master
     # a second set of Cassandane tests on this machine, which is
     # also going to fail miserably.  In any case we want to know.
     foreach my $srv (values %{$self->{services}},
-                     values %{$self->{generic_daemons}})
+                     values %{$self->{generic_listeners}})
     {
         die "Some process is already listening on " . $srv->address()
             if $srv->is_listening();
@@ -940,10 +976,10 @@ sub _start_master
                 description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
 
-    # Start any other defined daemons
-    foreach my $daemon (values %{$self->{generic_daemons}})
+    # Start any other defined listeners
+    foreach my $listener (values %{$self->{generic_listeners}})
     {
-        $self->run_command({ cyrus => 0 }, $daemon->get_argv());
+        $self->run_command({ cyrus => 0 }, $listener->get_argv());
     }
 
     # Wait until all the defined services are reported as listening.
@@ -952,7 +988,7 @@ sub _start_master
     # might be a bit slow.
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}},
-                     values %{$self->{generic_daemons}})
+                     values %{$self->{generic_listeners}})
     {
         timed_wait(sub
                 {
@@ -1054,38 +1090,22 @@ sub _start_smtpd
 {
     my ($self) = @_;
 
-    my $basedir = $self->{basedir};
+    return if not $self->{smtpdaemon};
 
-    my $host = 'localhost';
+    my $smtp_host = $self->{config}->get('smtp_host');
+    die "smtp_host requested but not configured"
+        if not $smtp_host or $smtp_host eq 'bogus:0';
 
-    my $port = Cassandane::PortManager::alloc();
+    my ($host, $port) = split /:/, $smtp_host;
 
-    my $smtppid = fork();
-    unless ($smtppid) {
-        # Child process.
-        # XXX This child still has the whole test's process space
-        # XXX still mapped, and when it exits, all our destructors
-        # XXX will be called, leaving the test in who knows what
-        # XXX state...
-        $SIG{TERM} = sub { die "killed" };
-
-        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
-
-        $0 = "cassandane smtpd: $basedir";
-
-        my $smtpd = Cassandane::Net::SMTPServer->new({
-            cass_verbose => 1,
-            xmtp_personality => 'smtp',
-            host => $host,
-            port => $port,
-            max_servers => 3, # default is 50, yikes
-            control_file => "$basedir/conf/smtpd.json",
-        });
-        $smtpd->run() or die;
-        exit 0; # Never reached
-    }
-
-    # Parent process.
+    my $smtppid = $self->run_command({
+            cyrus => 0,
+            background => 1,
+        },
+        abs_path('utils/fakesmtpd'),
+        '-h', $host,
+        '-p', $port,
+    );
 
     # give the child a moment to actually start up
     sleep 1;
@@ -1093,21 +1113,19 @@ sub _start_smtpd
     # and then make sure it did!
     my $waitstatus = waitpid($smtppid, WNOHANG);
     if ($waitstatus == 0) {
-        $self->{smtphost} = $host . ':' . $port;
-
-        xlog "started smtpd as $smtppid";
+        xlog "started fakesmtpd as $smtppid";
         push @{$self->{_shutdowncallbacks}}, sub {
             local *__ANON__ = "kill_smtpd";
             my $self = shift;
-            xlog "killing smtpd $smtppid";
+            xlog "killing fakesmtpd $smtppid";
             kill(15, $smtppid);
-            waitpid($smtppid, 0);
+            $self->reap_command($smtppid);
         };
     }
     else {
         # child process already exited, something has gone wrong
         Cassandane::PortManager::free($port);
-        die "smtpd with pid=$smtppid failed to start";
+        die "fakesmtpd with pid=$smtppid failed to start";
     }
 }
 
@@ -1117,7 +1135,7 @@ sub start_httpd {
     my $basedir = $self->{basedir};
 
     my $host = 'localhost';
-    $port ||= Cassandane::PortManager::alloc();
+    $port ||= Cassandane::PortManager::alloc($host);
 
     my $httpdpid = fork();
     unless ($httpdpid) {
@@ -1172,24 +1190,55 @@ sub start
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
 
-    if ($self->{description} =~ m/^main instance for test /) {
-        # Start SMTP server before generating imapd config, we need to
-        # to set smtp_host to the auto-assigned TCP port it listens on.
-        $self->_start_smtpd();
+    # arrange for fakesmtpd to be started by Cassandane if we need it
+    # XXX should make it a Cyrus waitdaemon instead like fakesaslauthd
+    if ($self->{smtpdaemon}) {
+        my ($maj, $min) =
+            Cassandane::Instance->get_version($self->{installation});
+
+        if ($maj > 3 || ($maj == 3 && $min >= 1)) {
+            my $host = 'localhost';
+            my $port = Cassandane::PortManager::alloc($host);
+
+            $self->{config}->set(
+                smtp_host => "$host:$port",
+            );
+        }
+        else {
+            die "smtpdaemon requested but Cyrus $maj.$min is too old";
+        }
     }
 
     # arrange for fakesaslauthd to be started by master
-    # XXX make this run as a DAEMON rather than a START
     my $fakesaslauthd_socket = "$self->{basedir}/run/mux";
+    my $fakesaslauthd_isdaemon = 1;
     if ($self->{authdaemon}) {
-        $self->add_start(
-            name => 'fakesaslauthd',
-            argv => [
-                abs_path('utils/fakesaslauthd'),
-                '-p', $fakesaslauthd_socket,
-            ],
-        );
+        my ($maj, $min) = Cassandane::Instance->get_version(
+                            $self->{installation});
+        if ($maj < 3 || ($maj == 3 && $min < 4)) {
+            $self->add_start(
+                name => 'fakesaslauthd',
+                argv => [
+                    abs_path('utils/fakesaslauthd'),
+                    '-p', $fakesaslauthd_socket,
+                ],
+            );
+            $fakesaslauthd_isdaemon = 0;
+        }
+        elsif (not exists $self->{daemons}->{fakesaslauthd}) {
+            $self->add_daemon(
+                name => 'fakesaslauthd',
+                argv => [
+                    abs_path('utils/fakesaslauthd'),
+                    '-p', $fakesaslauthd_socket,
+                ],
+                wait => 'y',
+            );
+        }
     }
+
+    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
+                                                    $self->{cyrus_prefix});
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
@@ -1198,9 +1247,21 @@ sub start
         $self->_build_skeleton();
         # TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
         # TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
-        $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
-                                                        $self->{cyrus_prefix});
-        $self->_generate_imapd_conf();
+
+        # the main imapd.conf
+        $self->_generate_imapd_conf($self->{config});
+
+        # individual prefix-imapd.conf for master entries that want one
+        foreach my $me (values %{$self->{services}},
+                        values %{$self->{daemons}},
+                        @{$self->{starts}},
+                        @{$self->{events}})
+        {
+            if ($me->{config}) {
+                $self->_generate_imapd_conf($me->{config}, $me->{name});
+            }
+        }
+
         $self->_generate_master_conf();
         $self->install_certificates() if $self->{install_certificates};
         $self->_fix_ownership();
@@ -1208,8 +1269,13 @@ sub start
     elsif (!scalar $self->{services})
     {
         $self->_add_services_from_cyrus_conf();
+        # XXX START, EVENTS, DAEMON entries will be missed here if reusing
+        # XXX the directory.  Does it matter?  Maybe not, since the master
+        # XXX conf already contains them, so they'll still run, just
+        # XXX cassandane won't know about it.
     }
     $self->setup_syslog_replacement();
+    $self->_start_smtpd() if $self->{smtpdaemon};
     $self->_start_notifyd();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();
@@ -1218,7 +1284,7 @@ sub start
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
     # socket before anything starts trying to connect to services
-    if ($self->{authdaemon}) {
+    if ($self->{authdaemon} && !$fakesaslauthd_isdaemon) {
         my $tries = 0;
         while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
             $tries += usleep(10_000); # 10ms as us
@@ -1338,12 +1404,18 @@ sub _detect_core_program
     my $lines = 0;
     my $prog;
 
+    my $bindir_pattern = qr{
+        \/
+        (?:bin|sbin|libexec)
+        \/
+    }x;
+
     open STRINGS, '-|', ('strings', '-a', $core)
         or die "Cannot run strings on $core: $!";
     while (<STRINGS>)
     {
         chomp;
-        if (m/\/bin\//)
+        if (m/$bindir_pattern/)
         {
             $prog = $_;
             last;
@@ -1356,12 +1428,15 @@ sub _detect_core_program
     return $prog;
 }
 
-sub _check_cores
+sub find_cores
 {
     my ($self) = @_;
-
     my $coredir = $self->{basedir} . '/conf/cores';
-    my $ncores = 0;
+
+    my $cassini = Cassandane::Cassini->instance();
+    my $core_pattern = $cassini->get_core_pattern();
+
+    my @cores;
 
     return unless -d $coredir;
     opendir CORES, $coredir
@@ -1369,22 +1444,64 @@ sub _check_cores
     while ($_ = readdir CORES)
     {
         next if m/^\./;
-        next unless m/^core(\.\d+)?$/;
+        next unless m/$core_pattern/;
         my $core = "$coredir/$_";
         next if -z $core;
         chmod(0644, $core);
-        $ncores++;
+        push @cores, $core;
 
         my $prog = _detect_core_program($core);
 
         xlog "Found core file $core";
-        xlog "   from program $prog" if defined $prog;
+        if (defined $prog) {
+           xlog "   from program $prog";
+           my ($bin) = $prog =~ m/^(\S+)/; # binary only
+           xlog "   debug: sudo gdb $bin $core";
+        }
     }
     closedir CORES;
 
-    return "Core files found in $coredir" if $ncores;
+    return @cores;
+}
 
-    return;
+sub _check_cores
+{
+    my ($self) = @_;
+    my $coredir = $self->{basedir} . '/conf/cores';
+
+    return "Core files found in $coredir" if scalar $self->find_cores();
+}
+
+sub _check_mupdate
+{
+    my ($self) = @_;
+
+    my $mupdate_server = $self->{config}->get('mupdate_server');
+    return if not $mupdate_server; # not in a murder
+
+    my $serverlist = $self->{config}->get('serverlist');
+    return if $serverlist; # don't sync mboxlist on frontends
+
+    # Run ctl_mboxlist -m to sync backend mailboxes with mupdate.
+    #
+    # You typically run this from START, and we do, but at test start
+    # there's no mailboxes yet, so there's nothing to sync, and if
+    # something is broken it probably won't be detected.
+    my $basedir = $self->{basedir};
+    eval {
+        $self->run_command({
+                redirects => { stdout => "$basedir/ctl_mboxlist.out",
+                               stderr => "$basedir/ctl_mboxlist.err",
+                             },
+                cyrus => 1,
+            }, 'ctl_mboxlist', '-m');
+    };
+    if ($@) {
+        my @err = slurp_file("$basedir/ctl_mboxlist.err");
+        chomp for @err;
+        xlog "ctl_mboxlist -m failed: " . Dumper \@err;
+        return "unable to sync local mailboxes with mupdate";
+    }
 }
 
 sub _check_sanity
@@ -1431,11 +1548,18 @@ sub _check_sanity
 
 sub _check_syslog
 {
-    my ($self) = @_;
+    my ($self, $pattern) = @_;
+
+    if (defined $pattern) {
+        # pattern is optional but must be a regex if present
+        die "getsyslog: pattern is not a regular expression"
+            if lc ref($pattern) ne 'regexp';
+    }
 
     my @lines = $self->getsyslog();
-
-    my @errors = grep { m/ERROR|TRACELOG|Unknown code ____/ } @lines;
+    my @errors = grep {
+        m/ERROR|TRACELOG|Unknown code ____/ || ($pattern && m/$pattern/)
+    } @lines;
 
     @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
 
@@ -1504,9 +1628,18 @@ sub send_sighup
     return 1;
 }
 
+#
+# n.b. If you are stopping the instance intending to restart it again later,
+# you must set:
+#     $instance->{'re_use_dir'} => 1
+# before restarting, otherwise it will wipe and re-initialise its basedir
+# during startup, probably ruining whatever you were trying to do.  It
+# will still use the same directory name though, so it won't be obvious
+# from the logs that this is happening!
+#
 sub stop
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
     $self->_init_basedir_and_name();
 
@@ -1516,6 +1649,7 @@ sub stop
     my @errors;
 
     push @errors, $self->_check_sanity();
+    push @errors, $self->_check_mupdate();
 
     xlog "stop $self->{description}: basedir $self->{basedir}";
 
@@ -1543,7 +1677,7 @@ sub stop
 
     push @errors, $self->_check_valgrind_logs();
     push @errors, $self->_check_cores();
-    push @errors, $self->_check_syslog();
+    push @errors, $self->_check_syslog() unless $params{no_check_syslog};
 
     # filter out empty errors (shouldn't be any, but just in case)
     @errors = grep { $_ } @errors;
@@ -1812,7 +1946,7 @@ sub _fork_command
     {
         push(@cmd, $self->_binary($binary), '-C', $self->_imapd_conf());
     }
-    elsif ($binary eq 'delve') {
+    elsif ($binary =~ m/xapian.*$/) {
         push(@cmd, $self->_binary($binary));
     }
     else {
@@ -1977,11 +2111,11 @@ sub describe
         printf "        ";
         $srv->describe();
     }
-    printf "    generic daemons:\n";
-    foreach my $daemon (values %{$self->{generic_daemons}})
+    printf "    generic listeners:\n";
+    foreach my $listener (values %{$self->{generic_listeners}})
     {
         printf "        ";
-        $daemon->describe();
+        $listener->describe();
     }
 }
 
@@ -2178,6 +2312,17 @@ sub setup_syslog_replacement
         return;
     }
 
+    # Can't reliably replace syslog when source fortification is in play,
+    # and syslog_probe can't reliably detect whether the replacement has
+    # worked or not in this case, so just turn syslog replacement off if
+    # we detect source fortification
+    if ($self->{buildinfo}->get('version', 'FORTIFY_LEVEL')) {
+        xlog "Cyrus was built with -D_FORTIFY_SOURCE";
+        xlog "tests will not examine syslog output";
+        $self->{have_syslog_replacement} = 0;
+        return;
+    }
+
     $self->{syslog_fname} = "$self->{basedir}/conf/log/syslog";
     $self->{have_syslog_replacement} = 1;
 
@@ -2193,15 +2338,11 @@ sub setup_syslog_replacement
 
     $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r');
 
-    my @lines;
-
     if ($self->{_syslogfh}) {
         $self->{_syslogfh}->seek($syslog_start, 0);
         $self->{_syslogfh}->blocking(0);
 
-        @lines = $self->getsyslog();
-
-        if (not scalar grep { m/\bthe magic word\b/ } @lines) {
+        if (not scalar $self->getsyslog(qr/\bthe magic word\b/)) {
             xlog "didn't find the magic word when probing syslog";
             xlog "tests will not examine syslog output";
 
@@ -2226,16 +2367,38 @@ sub setup_syslog_replacement
 # fail on systems where the syslog replacement doesn't work.
 sub getsyslog
 {
-    my ($self) = @_;
+    my ($self, $pattern) = @_;
+
+    if (defined $pattern) {
+        # pattern is optional but must be a regex if present
+        die "getsyslog: pattern is not a regular expression"
+            if lc ref($pattern) ne 'regexp';
+    }
     my $logname = $self->{name};
+    my @lines;
+
     if ($self->{have_syslog_replacement} && $self->{_syslogfh}) {
+        # https://github.com/Perl/perl5/issues/21240
+        # eof status is no longer cleared automatically in newer perls
+        if ($self->{_syslogfh}->eof()) {
+            $self->{_syslogfh}->clearerr();
+        }
+        if ($self->{_syslogfh}->error()) {
+            die "error reading $self->{syslog_fname}";
+        }
+
         # hopefully unobtrusively, let busy log finish writing
         usleep(100_000); # 100ms (0.1s) as us
-        my @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
+        @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
+
+        if (defined $pattern) {
+            @lines = grep { m/$pattern/ } @lines;
+        }
+
         chomp for @lines;
-        return @lines;
     }
-    return ();
+
+    return @lines;
 }
 
 sub _get_sqldb
@@ -2459,12 +2622,8 @@ sub run_mbpath
             stdout => $filename,
         },
     }, 'mbpath', '-j', @args);
-    open(FH, "<$filename") || return;
-    local $/ = undef;
-    my $str = <FH>;
-    close(FH);
 
-    return decode_json($str);
+    return decode_json(slurp_file($filename));
 }
 
 sub _mkastring
@@ -2628,10 +2787,11 @@ sub run_dbcommand
 
 sub read_mailboxes_db
 {
-    my ($self) = @_;
+    my ($self, $params) = @_;
 
     # run ctl_mboxlist -d to dump mailboxes.db to a file
-    my $outfile = $self->get_basedir() . "/$$-ctl_mboxlist.out";
+    my $outfile = $params->{outfile}
+                  || $self->get_basedir() . "/$$-ctl_mboxlist.out";
     $self->run_command({
         cyrus => 1,
         redirects => {
@@ -2639,46 +2799,39 @@ sub read_mailboxes_db
         },
     }, 'ctl_mboxlist', '-d');
 
-    my $records = {};
+    return JSON::decode_json(slurp_file($outfile));
+}
 
-    open my $fh, '<', $outfile or die "$outfile: $!";
-    foreach my $line (<$fh>) {
-        if ($line =~ m {
-                ^
-                ([^\t]*)                # mailbox
-                \t                      # one tab
-                (\d+)                   # mbtype
-                \x20                    # one space
-                ([^\x20]+)              # (server!)partition
-                \x20                    # one space
-                (.*)                    # acl
-                $
-            }x)
-        {
-            my ($server, $partition);
+sub run_cyr_info
+{
+    my ($self, @args) = @_;
 
-            if (index($3, '!') != -1) {
-                ($server, $partition) = split /!/, $3;
-            }
-            else {
-                $partition = $3;
-            }
+    my $filename = $self->{basedir} . "/cyr_info.out";
 
-            $records->{$1} = {
-                mbtype => $2,
-                server => $server,
-                partition => $partition,
-                acl => { split /\t/, $4 },
-            };
-        }
-        else {
-            xlog "failed to parse ctl_mboxlist -d output: <$line>";
-            die "failed to parse ctl_mboxlist -d output";
-        }
+    $self->run_command({
+            cyrus => 1,
+            redirects => { stdout => $filename },
+        },
+        'cyr_info',
+        # we get -C for free
+        '-M', $self->_master_conf(),
+        @args
+    );
+
+    open RESULTS, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    my @res = readline(RESULTS);
+    close RESULTS;
+
+    if ($args[0] eq 'proc') {
+        # if we see any of our fake daemons, no we didn't
+        my @fakedaemons = qw(fakesaslauthd fakeldapd);
+        my $pattern = q{\b(?:} . join(q{|}, @fakedaemons) . q{)\b};
+        my $re = qr{$pattern};
+        @res = grep { $_ !~ m/$re/ } @res;
     }
-    close $fh;
 
-    return $records;
+    return @res;
 }
 
 1;

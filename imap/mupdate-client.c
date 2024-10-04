@@ -72,8 +72,6 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
-const char service_name[] = "mupdate";
-
 static struct protocol_t mupdate_protocol =
 { "mupdate", "mupdate", TYPE_STD,
   { { { 1, "* OK" },
@@ -620,7 +618,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         switch(handle->cmd.s[0]) {
         case 'B':
             if (!strncmp(handle->cmd.s, "BAD", 3)) {
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 syslog(LOG_ERR, "mupdate BAD response: %s", handle->arg1.s);
@@ -629,7 +627,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 }
                 goto done;
             } else if (!strncmp(handle->cmd.s, "BYE", 3)) {
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 syslog(LOG_ERR, "mupdate BYE response: %s", handle->arg1.s);
@@ -642,7 +640,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
         case 'D':
             if (!strncmp(handle->cmd.s, "DELETE", 6)) {
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 memset(&box, 0, sizeof(box));
@@ -662,21 +660,21 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         case 'M':
             if (!strncmp(handle->cmd.s, "MAILBOX", 7)) {
                 /* Mailbox Name */
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 if (ch != ' ') {
                     r = MUPDATE_PROTOCOL_ERROR;
                     goto done;
                 }
 
                 /* Server */
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg2));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg2));
                 if (ch != ' ') {
                     r = MUPDATE_PROTOCOL_ERROR;
                     goto done;
                 }
 
                 /* ACL */
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg3));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg3));
                 CHECKNEWLINE(handle, ch);
 
                 /* Handle mailbox command */
@@ -695,7 +693,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
             goto badcmd;
         case 'N':
             if (!strncmp(handle->cmd.s, "NO", 2)) {
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 syslog(LOG_DEBUG, "mupdate NO response: %s", handle->arg1.s);
@@ -709,7 +707,7 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         case 'O':
             if (!strncmp(handle->cmd.s, "OK", 2)) {
                 /* It's all good, grab the attached string and move on */
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
 
                 CHECKNEWLINE(handle, ch);
                 if (wait_for_ok) {
@@ -722,14 +720,14 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         case 'R':
             if (!strncmp(handle->cmd.s, "RESERVE", 7)) {
                 /* Mailbox Name */
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 if (ch != ' ') {
                     r = MUPDATE_PROTOCOL_ERROR;
                     goto done;
                 }
 
                 /* Server */
-                ch = getstring(handle->conn->in, handle->conn->out, &(handle->arg2));
+                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg2));
                 CHECKNEWLINE(handle, ch);
 
                 /* Handle reserve command */

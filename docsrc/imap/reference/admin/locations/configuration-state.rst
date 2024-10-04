@@ -30,7 +30,6 @@ Despite the name, most of what's stored in ``<configdirectory>`` is state
 information.  Here's a list of files typically located therein:
 
     * :ref:`imap-concepts-deployment-db-annotations`
-    * :ref:`imap-concepts-deployment-db-backups`
     * :ref:`imap-concepts-deployment-db-deliver`
     * :ref:`imap-concepts-deployment-db-mailboxes`
     * :ref:`imap-concepts-deployment-db-fetchnews`

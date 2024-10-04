@@ -250,7 +250,12 @@ sub from_rfc3501($)
 sub to_rfc3501($)
 {
     my ($dt) = @_;
-    return strftime("%e-" . $rfc822_months[$dt->month -1] . "-%Y %T %z", localtime($dt->epoch));
+
+    my @lt = localtime($dt->epoch);
+    return strftime("%e-"
+                    . $rfc822_months[$lt[4]]
+                    . "-%Y %T %z",
+                    @lt);
 }
 
 1;

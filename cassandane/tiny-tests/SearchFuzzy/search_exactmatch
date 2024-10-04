@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_search_exactmatch
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    xlog $self, "Generate and index test messages.";
+    $self->make_message("test1",
+        body => "Test1 body with some long text and there is even more ".
+                "and more and more and more and more and more and more ".
+                "and more and more and some text and more and more and ".
+                "and more and more and more and more and more and more ".
+                "and almost at the end some other text that is a match ",
+    ) || die;
+    $self->make_message("test2",
+        body => "Test2 body with some other text",
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Select INBOX";
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    xlog $self, 'SEARCH for FUZZY exact match';
+    my $query = '"some text"';
+    $uids = $talk->search('fuzzy', 'body', $query) || die;
+    $self->assert_num_equals(1, scalar @$uids);
+
+    my %m;
+    $r = $self->get_snippets('INBOX', $uids, { body => $query });
+    %m = map { lc($_->[2]) => $_->[3] } @{ $r->{snippets} };
+    $self->assert(index($m{body}, "<mark>some text</mark>") != -1);
+    $self->assert(index($m{body}, "<mark>some</mark> long <mark>text</mark>") == -1);
+}

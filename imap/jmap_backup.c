@@ -115,18 +115,13 @@ static jmap_method_t jmap_backup_methods_nonstandard[] = {
 
 HIDDEN void jmap_backup_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_backup_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_backup_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                             JMAP_BACKUP_EXTENSION, json_object());
 
-        for (mp = jmap_backup_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_backup_methods_nonstandard, settings);
     }
 
     /* Initialize PRODID value
@@ -375,7 +370,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/0);
+    r = mailbox_open_irl(mbentry->name, &rrock->mailbox);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for reading",
                mbentry->name);
@@ -385,11 +380,11 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     if ((rrock->jrestore->mode & UNDO_ALL) &&
         rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch) {
         syslog(log_level,
-               "skipping '%s': cutoff (%ld) prior to mailbox history (%ld)",
+               "skipping '%s': cutoff (" TIME_T_FMT ") prior to mailbox history (" TIME_T_FMT")",
                mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
                rrock->mailbox->i.changes_epoch);
 
-        jmap_closembox(rrock->req, &rrock->mailbox);
+        mailbox_close(&rrock->mailbox);
         return HTTP_UNPROCESSABLE;
     }
 
@@ -403,7 +398,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
         resource = rrock->resource_name_cb(msg, rrock->rock);
         syslog(log_level,
-               "UID %u: expunged: %x, savedate: %ld, updated: %ld, name: %s",
+               "UID %u: expunged: %x, savedate: " TIME_T_FMT ","
+               " updated: " TIME_T_FMT ", name: %s",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                record->savedate, record->last_updated,
                resource ? resource : "NULL");
@@ -497,8 +493,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             /* Close and re-open mailbox (to avoid deadlocks).
                We also do this on initial entry into the loop
                to switch from a read lock to a write lock. */
-            jmap_closembox(rrock->req, &rrock->mailbox);
-            r = jmap_openmbox(rrock->req, mbentry->name, &rrock->mailbox, /*rw*/1);
+            mailbox_close(&rrock->mailbox);
+            r = mailbox_open_iwl(mbentry->name, &rrock->mailbox);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
                        mbentry->name);
@@ -517,7 +513,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         rrock->deletedmodseq = rrock->mailbox->i.deletedmodseq;
 
     if (!rrock->keep_open)
-        jmap_closembox(rrock->req, &rrock->mailbox);
+        mailbox_close(&rrock->mailbox);
 
     return r;
 }
@@ -668,7 +664,11 @@ struct contact_rock {
     struct buf buf;
 
     /* per-addressbook */
+#ifdef HAVE_LIBICALVCARD
+    vcardcomponent *group_vcard;
+#else
     struct vparse_card *group_vcard;
+#endif
 };
 
 static char *contact_resource_name(message_t *msg, void *rock)
@@ -739,6 +739,58 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = (char *)mailbox_uniqueid(mailbox) };
             struct contact_rock *crock = (struct contact_rock *) rock;
+#ifdef HAVE_LIBICALVCARD
+            vcardcomponent *vcard = record_to_vcard_x(mailbox, record);
+
+            if (!vcard) {
+                r = IMAP_INTERNAL;
+            }
+            else {
+                const char *uid = vcardcomponent_get_uid(vcard);
+
+                if (!crock->group_vcard) {
+                    /* Create the group vCard */
+                    char datestr[RFC3339_DATETIME_MAX];
+                    vcardcomponent *gcard;
+
+                    time_to_rfc3339(time(0), datestr, RFC3339_DATETIME_MAX);
+                    buf_reset(&crock->buf);
+                    buf_printf(&crock->buf, "Restored %.10s", datestr);
+
+                    /* Look for existing group vCard with same date prefix */
+                    struct group_rock grock = { buf_cstring(&crock->buf), 0 };
+                    enum carddav_sort sort = CARD_SORT_FULLNAME | CARD_SORT_DESC;
+                    if (carddav_foreach_sort(crock->carddavdb, &mbentry,
+                                             &sort, 1, _group_name_cb, &grock)) {
+                        buf_printf(&crock->buf, " (%u)", grock.num+1);
+                    }
+
+                    gcard =
+                        vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
+                                             vcardproperty_new_version(VCARD_VERSION_40),
+                                             vcardproperty_new_kind(VCARD_KIND_GROUP),
+                                             vcardproperty_new_prodid(_prodid),
+                                             vcardproperty_new_uid(makeuuid()),
+                                             vcardproperty_new_fn(buf_cstring(&crock->buf)),
+                                             NULL);
+
+                    crock->group_vcard = gcard;
+                }
+
+                /* Add the recreated contact as a member of the group */
+                if (!strncmp(uid, "urn:uuid:", 9)) {
+                    buf_setcstr(&crock->buf, uid);
+                }
+                else {
+                    buf_reset(&crock->buf);
+                    buf_printf(&crock->buf, "urn:uuid:%s", uid);
+                }
+                vcardcomponent_add_property(crock->group_vcard,
+                                            vcardproperty_new_member(buf_cstring(&crock->buf)));
+            }
+
+            vcardcomponent_free(vcard);
+#else /* !HAVE_LIBICALVCARD */
             struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
             if (!vcard || !vcard->objects) {
@@ -782,6 +834,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             }
 
             vparse_free_card(vcard);
+#endif /* HAVE_LIBICALVCARD */
         }
     }
 
@@ -805,16 +858,26 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
     rrock->keep_open = 1;
     r = restore_collection_cb(mbentry, rock);
 
+#ifdef HAVE_LIBICALVCARD
+    if (!r && crock->group_vcard) {
+        /* Store the group vCard of recreated contacts */
+        r = carddav_store_x(*mailboxp, crock->group_vcard, NULL, 0, NULL, 
+                            rrock->req->accountid, rrock->req->authstate,
+                            /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
+    }
+    vcardcomponent_free(crock->group_vcard);
+#else
     if (!r && crock->group_vcard) {
         /* Store the group vCard of recreated contacts */
         r = carddav_store(*mailboxp, crock->group_vcard, NULL, 0, NULL, NULL, 
                           rrock->req->accountid, rrock->req->authstate,
-                          /*ignorequota*/ 0);
+                          /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
     }
     vparse_free_card(crock->group_vcard);
+#endif
     crock->group_vcard = NULL;
 
-    jmap_closembox(rrock->req, mailboxp);
+    mailbox_close(mailboxp);
 
     return r;
 }
@@ -833,9 +896,10 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_contacts(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_contacts(%s, " TIME_T_FMT ")",
            addrhomeset, restore.cutoff);
 
     struct contact_rock crock =
@@ -858,6 +922,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     free(addrhomeset);
     carddav_close(crock.carddavdb);
     buf_free(&crock.buf);
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -919,12 +984,13 @@ static int do_scheduling(jmap_req_t *req,
     /* XXX Hack for Outlook */
     if (!icalcomponent_get_first_invitee(comp)) return 0;
 
-    get_schedule_addresses(req->txn->req_hdrs, mboxname,
-                           req->userid, schedule_addresses);
+    caldav_get_schedule_addresses(req->txn->req_hdrs, mboxname,
+                                  req->userid, schedule_addresses);
 
-    if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
+    if (strarray_contains_case(schedule_addresses, organizer)) {
         /* Organizer scheduling object resource */
-        sched_request(req->userid, schedule_addresses, organizer, oldical, ical);
+        sched_request(req->userid, req->userid, schedule_addresses, organizer,
+                      oldical, ical, SCHED_MECH_JMAP_RESTORE);
     } else {
         /* Attendee scheduling object resource */
         int omit_reply = 0;
@@ -937,7 +1003,7 @@ static int do_scheduling(jmap_req_t *req,
                  prop;
                  prop = icalcomponent_get_next_property(comp,
                                                         ICAL_ATTENDEE_PROPERTY)) {
-                const char *addr = icalproperty_get_attendee(prop);
+                const char *addr = icalproperty_get_decoded_calendaraddress(prop);
 
                 if (!addr || strncasecmp(addr, "mailto:", 7) ||
                     strcasecmp(strarray_nth(schedule_addresses, 0), addr+7)) {
@@ -954,7 +1020,8 @@ static int do_scheduling(jmap_req_t *req,
         }
 
         if (!omit_reply && strarray_size(schedule_addresses))
-            sched_reply(req->userid, schedule_addresses, oldical, ical);
+            sched_reply(req->userid, req->userid, schedule_addresses,
+                        oldical, ical, SCHED_MECH_JMAP_RESTORE);
     }
 
     return 0;
@@ -1125,9 +1192,9 @@ static int recreate_calendar(const mbentry_t *mbentry,
         mbname_set_isdeleted(mbname, 0);
         free(mbname_pop_boxes(mbname));
         mbname_push_boxes(mbname, "%");
-        annotatemore_findall_pattern(mbname_intname(mbname), 0/*uid*/,
-                                     disp_annot, 0/*since_modseq*/,
-                                     &lookup_cal_by_dispname, &crock, 0/*flags*/);
+        annotatemore_findall_mboxname(mbname_intname(mbname), 0/*uid*/,
+                                      disp_annot, 0/*since_modseq*/,
+                                      &lookup_cal_by_dispname, &crock, 0/*flags*/);
         mbname_free(&mbname);
 
         if (crock.mboxname) {
@@ -1208,7 +1275,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
     jmap_req_t *req = rrock->req;
     int r;
 
-    r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
         return r;
@@ -1220,6 +1287,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
     while ((msg = mailbox_iter_step(iter))) {
         /* XXX  Look for existing resource with same UID */
         const struct index_record *record = msg_record(msg);
+        const message_t *nextmsg;
 
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             r = recreate_resource((message_t *) msg, newmailbox,
@@ -1228,13 +1296,16 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
         if (!r) rrock->jrestore->num_undone[DESTROYS]++;
 
         if (record->uid < mailbox->i.last_uid &&
-            record->recno % BATCH_SIZE == 0) {
+            record->recno % BATCH_SIZE == 0 &&
+            (nextmsg = mailbox_iter_step(iter))) {
             /* Close and re-open mailbox (to avoid deadlocks) */
-            uint32_t nextuid = record->uid+1;
+            uint32_t nextuid;
+
+            message_get_uid((message_t *) nextmsg, &nextuid);
 
             mailbox_iter_done(&iter);
-            jmap_closembox(req, &mailbox);
-            r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+            mailbox_close(&mailbox);
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
                        mbentry->name);
@@ -1247,7 +1318,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
     }
     mailbox_iter_done(&iter);
 
-    jmap_closembox(req, &mailbox);
+    mailbox_close(&mailbox);
 
     return 0;
 }
@@ -1275,7 +1346,6 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
             /* Calendar was destroyed after cutoff -
                restore calendar and resources */
             struct mailbox *newmailbox = NULL;
-            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
 
             if (!(rrock->jrestore->mode & DRY_RUN)) {
                 r = recreate_calendar(mbentry, rrock, &newmailbox);
@@ -1292,7 +1362,6 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
                                            req->accountid, req->authstate,
                                            /*mboxevent*/NULL, /*flags*/0);
             }
-            mboxname_release(&namespacelock);
         }
         else {
             /* Calendar was destroyed before cutoff - not interested */
@@ -1320,9 +1389,10 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_calendars(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_calendars(%s, " TIME_T_FMT ")",
            calhomeset, restore.cutoff);
 
     struct calendar_rock crock =
@@ -1343,6 +1413,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     free(crock.inboxname);
     free(crock.outboxname);
     caldav_close(crock.caldavdb);
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1411,9 +1482,10 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
 
-    syslog(restore.log_level, "jmap_backup_restore_notes(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_notes(%s, " TIME_T_FMT ")",
            subfolder ? subfolder : "NULL", restore.cutoff);
 
     if (subfolder) {
@@ -1430,6 +1502,8 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         }
         free(notes);
     }
+
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1536,7 +1610,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
-            syslog(log_level, "skipping '%s': destroyed (%ld) before cutoff",
+            syslog(log_level, "skipping '%s': destroyed (" TIME_T_FMT ") before cutoff",
                    mbentry->name, timestamp);
 
             return 0;
@@ -1545,7 +1619,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         isdestroyed_mbox = 1;
     }
 
-    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/0);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
         return r;
@@ -1564,7 +1638,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         int ignore_draft = 0;
 
         syslog(log_level,
-               "UID %u: expunged: %x, draft: %x, intdate: %ld, updated: %ld",
+               "UID %u: expunged: %x, draft: %x,"
+               " intdate: " TIME_T_FMT ", updated: " TIME_T_FMT,
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                (record->system_flags & FLAG_DRAFT),
                record->internaldate, record->last_updated);
@@ -1575,7 +1650,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                     so use it to make sure the message has a Message-ID */
             struct conversations_state *cstate = mailbox_get_cstate_full(mailbox, /*allow_deleted*/1);
             // if we still fail to get cstate, then we need to look up the msgid for sure
-            if ((!cstate || conversations_guid_cid_lookup(cstate, guid)) &&
+            if ((!cstate || conversations_guid_cid_lookup(cstate, guid, NULL)) &&
                 !message_get_messageid((message_t *) msg, &mrock->buf)) {
                 msgid = buf_cstring(&mrock->buf);
             }
@@ -1703,7 +1778,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     }
 
     mailbox_iter_done(&iter);
-    jmap_closembox(rrock->req, &mailbox);
+    mailbox_close(&mailbox);
 
     return 0;
 }
@@ -1723,7 +1798,7 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
     struct message_t *message = (struct message_t *) data;
     ptrarray_t *deleted = &message->deleted;
     hash_table *mailboxes = (hash_table *) rock;
-    time_t last_removed;
+    time_t last_removed = 0;
     int i;
 
     if (!message->ignore) ptrarray_sort(deleted, &rmail_cmp);
@@ -1829,7 +1904,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
         }
         else {
-            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
             mbentry_t newmbentry = MBENTRY_INITIALIZER;
             mbentry_t *parent = NULL;
 
@@ -1881,7 +1955,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                         }
                     }
                 }
-                
+
                 mbname_free(&ancestor);
             }
             mboxlist_entry_free(&parent);
@@ -1899,7 +1973,6 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                                            0/*flags*/,
                                            &newmailbox);
             }
-            mboxname_release(&namespacelock);
 
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
@@ -1928,8 +2001,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     }
 
     if (!r) {
-        r = jmap_openmbox(req, mboxname, &mailbox,
-                          /*rw*/newmailbox == NULL || num_unflag);
+        int rw = (newmailbox == NULL || num_unflag);
+        r = rw ? mailbox_open_iwl(mboxname, &mailbox) : mailbox_open_irl(mboxname, &mailbox);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
                    mboxname, error_message(r));
@@ -1966,7 +2039,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
         if (++count % BATCH_SIZE == 0) {
             /* Close and re-open mailboxes (to avoid deadlocks) */
-            jmap_closembox(req, &mailbox);
+            mailbox_close(&mailbox);
 
             if (newmailbox) {
                 mailbox_close(&newmailbox);
@@ -1979,8 +2052,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 }
             }
 
-            r = jmap_openmbox(req, mboxname, &mailbox,
-                              /*rw*/newmailbox == NULL || num_unflag);
+            int rw = (newmailbox == NULL || num_unflag);
+            r = rw ? mailbox_open_iwl(mboxname, &mailbox)
+                   : mailbox_open_irl(mboxname, &mailbox);
             if (r) {
                 syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
                        mboxname, error_message(r));
@@ -2037,9 +2111,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         mailbox_commit(mailbox);
     }
 
-    jmap_closembox(req, &mailbox);
-
   done:
+    mailbox_close(&mailbox);
     mailbox_close(&newmailbox);
     mbname_free(&mbname);
     rrock->result = r;
@@ -2060,12 +2133,13 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         goto done;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     hash_table emailids = HASH_TABLE_INITIALIZER;
     hash_table msgids = HASH_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_mail(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_mail(%s, " TIME_T_FMT ")",
            inbox, restore.cutoff);
 
     struct mail_rock mrock = {
@@ -2107,6 +2181,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     free_hash_table(&emailids, &message_t_free);
     free_hash_table(&msgids, &message_t_free);
     free(inbox);
+    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {

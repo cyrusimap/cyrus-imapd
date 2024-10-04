@@ -43,7 +43,7 @@
 error_table http
 
 # HTTP Response Status Codes
-# (from draft-ietf-httpbis-semantics unless otherwise noted)
+# (from RFC 9110 unless otherwise noted)
 #
 # Commented-out codes are currently unused by Cyrus
 
@@ -166,8 +166,8 @@ ec HTTP_LENGTH_REQUIRED,
 ec HTTP_PRECOND_FAILED,
    "412 Precondition Failed"
 
-ec HTTP_PAYLOAD_TOO_LARGE,
-   "413 Payload Too Large"
+ec HTTP_CONTENT_TOO_LARGE,
+   "413 Content Too Large"
 
 ec HTTP_URI_TOO_LONG,
    "414 URI Too Long"
@@ -191,7 +191,7 @@ ec HTTP_MISDIRECTED,
    "421 Misdirected Request"
 
 ec HTTP_UNPROCESSABLE,
-   "422 Unprocessable Entity"
+   "422 Unprocessable Content"
 
 ec HTTP_LOCKED,
    "423 Locked"                          /* RFC 4918 (WebDAV) */

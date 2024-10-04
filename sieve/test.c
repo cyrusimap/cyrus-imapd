@@ -58,6 +58,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "libconfig.h"
 #include "assert.h"
@@ -66,6 +67,7 @@
 #include "comparator.h"
 #include "tree.h"
 #include "sieve/sieve.h"
+#include "imap/global.h"
 #include "imap/mailbox.h"
 #include "imap/mboxname.h"
 #include "imap/message.h"
@@ -74,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 #include "hash.h"
 #include "times.h"
 
@@ -142,8 +145,6 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
 
-    *body = NULL;
-
     if (!m->cache_full) {
         fill_cache(m);
     }
@@ -205,11 +206,11 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
     else {
         printf("removing header '%s[%d]'\n", head, index);
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
     }
 
     return SIEVE_OK;
@@ -400,7 +401,7 @@ static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
     int day_inc = -1;
-    unsigned t;
+    unsigned t = 0;
     size_t i;
 
     if (sn->days & (1 << tm->tm_wday)) {
@@ -587,18 +588,19 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
 
     int r = 0;
 
-    if (!md->content.body) {
-        /* parse the message body if we haven't already */
-        r = message_parse_file_buf(md->data, &md->content.map,
-                                   &md->content.body, NULL);
-        if (r) {
-            json_decref(jfilter);
-            return 0;
+    if (!md->content.matchmime) {
+        if (!md->content.body) {
+            /* parse the message body if we haven't already */
+            r = message_parse_file_buf(md->data, &md->content.map,
+                                       &md->content.body, NULL);
+            if (r) {
+                json_decref(jfilter);
+                return 0;
+            }
         }
-    }
-
-    if (!md->content.matchmime)
+        /* build the query filter */
         md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
+    }
 
     /* Run query */
     if (md->content.matchmime)
@@ -648,6 +650,7 @@ int main(int argc, char *argv[])
     sieve_execute_t *exe = NULL;
     message_data_t *m = NULL;
     char *tmpscript = NULL, *script = NULL, *message = NULL;
+    char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
     int c, force_fail = 0;
     int fd, res;
     struct stat sbuf;
@@ -710,9 +713,9 @@ int main(int argc, char *argv[])
     }
 
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    cyrus_init(alt_config, "test", 0, 0);
 
-    mboxname_init_namespace(&test_namespace, /*isadmin*/0);
+    mboxname_init_namespace(&test_namespace, /*options*/0);
     sd.ns = &test_namespace;
     // anyone authstate
     sd.authstate = auth_newstate("anyone");
@@ -727,7 +730,6 @@ int main(int argc, char *argv[])
     }
     else {
         char magic[BYTECODE_MAGIC_LEN];
-        char tempname[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *err = NULL;
@@ -824,7 +826,7 @@ int main(int argc, char *argv[])
 
     if (tmpscript) {
         /* Remove temp bytecode file */
-        unlink(tmpscript);
+        xunlink(tmpscript);
     }
 
     if (message) {
@@ -877,5 +879,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

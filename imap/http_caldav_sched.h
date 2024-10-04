@@ -59,6 +59,7 @@
 
 #endif /* WITH_DKIM */
 
+#include "calsched_support.h"
 #include "http_dav.h"
 #include "ical_support.h"
 #include "itip_support.h"
@@ -106,7 +107,6 @@ enum {
 extern unsigned config_allowsched;
 extern const char *ical_prodid;
 extern icaltimezone *utc_zone;
-extern struct strlist *cua_domains;
 extern icalarray *rscale_calendars;
 
 extern icalcomponent *busytime_query_local(struct transaction_t *txn,
@@ -132,17 +132,33 @@ extern int isched_send(struct caldav_sched_param *sparam, const char *recipient,
 
 extern int sched_busytime_query(struct transaction_t *txn,
                                 struct mime_type_t *mime, icalcomponent *comp);
-extern void sched_request(const char *userid, const strarray_t *schedule_addresses, const char *organizer,
-                          icalcomponent *oldical, icalcomponent *newical);
-extern void sched_reply(const char *userid, const strarray_t *schedule_addresses,
-                        icalcomponent *oldical, icalcomponent *newical);
-extern void sched_deliver(const char *userid, const char *sender, const char *recipient,
+extern void schedule_one_attendee(const char *cal_ownerid, const char *sched_userid,
+                                  const strarray_t *schedule_addresses,
+                                  const char *organizer, const char *attendee,
+                                  icaltimetype h_cutoff,
+                                  icalcomponent *oldical, icalcomponent *newical,
+                                  enum sched_mechanism mech);
+
+extern void sched_request(const char *cal_ownerid, const char *sched_userid,
+                          const strarray_t *schedule_addresses,
+                          const char *organizer,
+                          icalcomponent *oldical, icalcomponent *newical,
+                          enum sched_mechanism mech);
+extern void sched_reply(const char *cal_ownerid, const char *sched_userid,
+                        const strarray_t *schedule_addresses,
+                        icalcomponent *oldical, icalcomponent *newical,
+                        enum sched_mechanism mech);
+extern void sched_deliver(const char *cal_ownerid, const char *sched_userid,
+                          const char *sender, const char *recipient,
                           void *data, void *rock);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
                              const strarray_t *schedule_addresses);
-extern void get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
-                                   const char *userid, strarray_t *addresses);
+
+extern void caldav_get_schedule_addresses(hdrcache_t req_hdrs,
+                                          const char *mboxname,
+                                          const char *userid,
+                                          strarray_t *addresses);
 
 #endif /* HTTP_CALDAV_SCHED_H */

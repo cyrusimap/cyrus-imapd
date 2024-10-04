@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test replication of user-defined flags
+#
+sub test_userflags
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+    $master_store->set_fetch_attributes(qw(uid flags));
+    $replica_store->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A",
+                                  flags => ["\\Flagged", '$UserFlagA'],
+                                  store => $master_store);
+    $exp{B} = $self->make_message("Message B",
+                                  flags => [ '$UserFlagB' ],
+                                  store => $master_store);
+    $exp{C} = $self->make_message("Message C",
+                                  flags => [ '$UserFlagC' ],
+                                  store => $master_store);
+    $exp{D} = $self->make_message("Message D",
+                                  flags => [ '$UserFlagD' ],
+                                  store => $master_store);
+
+    my $master_talk = $master_store->get_client();
+
+    xlog $self, "master PERMANENTFLAGS response should have all four flags";
+    my $perm = $master_talk->get_response_code('permanentflags');
+    my @flags = sort grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([ '$UserFlagA',
+                                '$UserFlagB',
+                                '$UserFlagC',
+                                '$UserFlagD' ], \@flags);
+
+    xlog $self, "clear some flags on master before replica ever sees them";
+    $master_talk->store('1:4', '-flags', '($UserFlagC $UserFlagD)');
+    $exp{C}->set_attribute(flags => undef);
+    $exp{D}->set_attribute(flags => undef);
+
+    xlog $self, "master PERMANENTFLAGS response should still have all flags";
+    $perm = $master_talk->get_response_code('permanentflags');
+    @flags = sort grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([ '$UserFlagA',
+                                '$UserFlagB',
+                                '$UserFlagC',
+                                '$UserFlagD' ], \@flags);
+
+    my $replica_talk = $replica_store->get_client();
+
+    xlog $self, "replica PERMANENTFLAGS response should have no userflags";
+    $perm = $replica_talk->get_response_code('permanentflags');
+    @flags = sort grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([], \@flags);
+
+    xlog $self, "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog $self, "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog $self, "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    xlog $self, "master PERMANENTFLAGS response should still have all flags";
+    $master_store->disconnect();
+    $master_store->connect();
+    $master_store->_select();
+    $master_talk = $master_store->get_client();
+    $perm = $master_talk->get_response_code('permanentflags');
+    @flags = sort grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([ '$UserFlagA',
+                                '$UserFlagB',
+                                '$UserFlagC',
+                                '$UserFlagD' ], \@flags);
+
+    xlog $self, "replica PERMANENTFLAGS response should now have all flags";
+    $replica_store->disconnect();
+    $replica_store->connect();
+    $replica_store->_select();
+    $replica_talk = $replica_store->get_client();
+    $perm = $replica_talk->get_response_code('permanentflags');
+    @flags = sort grep { !m{^\\} } @$perm;
+    $self->assert_deep_equals([ '$UserFlagA',
+                                '$UserFlagB',
+                                '$UserFlagC',
+                                '$UserFlagD' ], \@flags);
+}

@@ -63,8 +63,13 @@ void strarray_fini(strarray_t *);
 strarray_t *strarray_new(void);
 void strarray_free(strarray_t *);
 
+#define strarray_appendv(sa, s) strarray_nth((sa), strarray_append((sa), (s)))
+#define strarray_addv(sa, s) strarray_nth((sa), strarray_add((sa), (s)))
+#define strarray_add_casev(sa, s) strarray_nth((sa), strarray_add_case((sa), (s)))
+
 int strarray_append(strarray_t *, const char *);
 int strarray_add(strarray_t *, const char *);
+int strarray_addm(strarray_t *sa, char *s);
 int strarray_add_case(strarray_t *, const char *);
 int strarray_appendm(strarray_t *, char *);
 void strarray_set(strarray_t *, int idx, const char *);
@@ -112,6 +117,8 @@ int strarray_find(const strarray_t *sa, const char *match,
                   int starting);
 int strarray_find_case(const strarray_t *sa, const char *match,
                        int starting);
+#define strarray_contains(sa, match) (strarray_find(sa, match, 0) >= 0)
+#define strarray_contains_case(sa, match) (strarray_find_case(sa, match, 0) >= 0)
 
 int strarray_intersect(const strarray_t *sa, const strarray_t *b);
 int strarray_intersect_case(const strarray_t *sa, const strarray_t *b);

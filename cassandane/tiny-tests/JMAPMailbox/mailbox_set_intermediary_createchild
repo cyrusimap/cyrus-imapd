@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_intermediary_createchild
+    :min_version_3_1 :max_version_3_4 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $imap->create("INBOX.i1.i2.i3.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                1 => {
+                    name => 'bar',
+                    parentId => $mboxByName{'i2'}->{id},
+                },
+            }
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1}{id});
+
+    xlog $self, "Assert mailbox tree";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(6, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'i2'});
+    $self->assert_not_null($mboxByName{'i3'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{i3}->{parentId});
+    $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+}

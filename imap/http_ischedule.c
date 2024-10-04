@@ -52,6 +52,8 @@
 
 #include <libical/ical.h>
 
+#include <libxml/parser.h>
+
 #include "global.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
@@ -141,6 +143,7 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* PROPPATCH    */
         { NULL,                 NULL }, /* PUT          */
         { NULL,                 NULL }, /* REPORT       */
+        { NULL,                 NULL }, /* SEARCH       */
         { &meth_trace,          NULL }, /* TRACE        */
         { NULL,                 NULL }, /* UNBIND       */
         { NULL,                 NULL }  /* UNLOCK       */
@@ -212,7 +215,7 @@ static int meth_get_isched(struct transaction_t *txn,
     /* Fill in iSchedule-Capabilities */
     isched_capa_hdr(txn, &lastmod, &sbuf);
 
-    /* We don't handle GET on a anything other than ?action=capabilities */
+    /* We don't handle GET on anything other than ?action=capabilities */
     action = hash_lookup("action", &txn->req_qparams);
     if (!action || action->next || strcmp(action->s, "capabilities")) {
         txn->error.desc = "Invalid action";
@@ -258,7 +261,8 @@ static int meth_get_isched(struct transaction_t *txn,
         struct mime_type_t *mime;
         struct icaltimetype date;
         icaltimezone *utc = icaltimezone_get_utc_timezone();
-        int i, n, maxlen;
+        int i, n;
+        int64_t maxlen;
 
         /* Start construction of our query-result */
         if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
@@ -343,10 +347,10 @@ static int meth_get_isched(struct transaction_t *txn,
             }
         }
 
-        maxlen = config_getint(IMAPOPT_MAXMESSAGESIZE);
-        if (!maxlen) maxlen = INT_MAX;
+        maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+        if (maxlen <= 0) maxlen = BYTESIZE_UNLIMITED;
         buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%d", maxlen);
+        buf_printf(&txn->buf, "%" PRIi64, maxlen);
         xmlNewChild(capa, NULL, BAD_CAST "max-content-length",
                     BAD_CAST buf_cstring(&txn->buf));
 
@@ -489,7 +493,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+    if ((txn->error.desc = get_icalcomponent_errstr(ical, ICAL_SUPPORT_STRICT))) {
         assert(!buf_len(&txn->buf));
         buf_setcstr(&txn->buf, txn->error.desc);
         txn->error.desc = buf_cstring(&txn->buf);
@@ -534,7 +538,7 @@ static int meth_post_isched(struct transaction_t *txn,
             unsigned flags = SCHEDFLAG_ISCHEDULE;
             if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
             struct sched_data sched_data =
-                { flags, ical, NULL, NULL,
+                { SCHED_MECH_ISCHEDULE, flags, ical, NULL, NULL,
                   ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
@@ -567,7 +571,8 @@ static int meth_post_isched(struct transaction_t *txn,
                     sched_param_fini(&sparam);
 
                     if (r) sched_data.status = REQSTAT_NOUSER;
-                    else sched_deliver(httpd_userid, httpd_userid, recipient, &sched_data, authstate);
+                    else sched_deliver(httpd_userid, httpd_userid, httpd_userid,
+                                       recipient, &sched_data, authstate);
 
                     xml_add_schedresponse(root, NULL, BAD_CAST recipient,
                                           BAD_CAST sched_data.status);
@@ -679,11 +684,11 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     /* Determine Originator based on method and component */
     if (method == ICAL_METHOD_REPLY) {
         prop = icalcomponent_get_first_invitee(comp);
-        originator = icalproperty_get_invitee(prop);
+        originator = icalproperty_get_decoded_calendaraddress(prop);
     }
     else {
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        originator = icalproperty_get_organizer(prop);
+        originator = icalproperty_get_decoded_calendaraddress(prop);
     }
     buf_printf(&hdrs, "Originator: %s\r\n", originator);
 
@@ -701,7 +706,8 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
              prop;
              prop = icalcomponent_get_next_property(comp,
                                                     ICAL_ATTENDEE_PROPERTY)) {
-            buf_printf(&hdrs, "%c%s", sep, icalproperty_get_attendee(prop));
+            buf_printf(&hdrs, "%c%s", sep,
+                       icalproperty_get_decoded_calendaraddress(prop));
             sep = ',';
         }
         buf_printf(&hdrs, "\r\n");

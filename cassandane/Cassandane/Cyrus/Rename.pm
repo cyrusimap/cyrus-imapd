@@ -98,6 +98,29 @@ sub test_rename_asuser
     $self->assert_num_equals(1, scalar @postdata);
 }
 
+sub test_xrename
+	:min_version_3_8_2
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.src") || die;
+    $self->{store}->set_folder("INBOX.src");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX.src") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->_imap_cmd('XRENAME', 0, '', "INBOX.src", "INBOX.dst");
+    $imaptalk->select("INBOX.dst") || die;
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postdata);
+}
+
 #
 # Test Bug #3586 - rename subfolders
 #
@@ -629,7 +652,7 @@ sub test_rename_user
 }
 
 sub test_rename_deepuser
-    :AllowMoves :Replication :SyncLog
+    :AllowMoves :Replication :SyncLog :needs_component_replication
 {
     my ($self) = @_;
 
@@ -641,7 +664,7 @@ sub test_rename_deepuser
 
     $admintalk->create("user.cassandane.foo") || die;
     $admintalk->create("user.cassandane.bar") || die;
-    $admintalk->create("user.cassandane.bar.sub") || die;
+    $admintalk->create("user.cassandane.bar.sub folder") || die;
 
     # replicate and check initial state
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
@@ -653,7 +676,7 @@ sub test_rename_deepuser
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
     $self->assert(not $admintalk->get_last_error());
 
-    $res = $admintalk->select("user.newuser.bar.sub");
+    $res = $admintalk->select("user.newuser.bar.sub folder");
     $self->assert(not $admintalk->get_last_error());
 
     # replicate and check the renames
@@ -663,6 +686,7 @@ sub test_rename_deepuser
 
 sub test_rename_user_sieve
     :AllowMoves :Replication :SyncLog :needs_component_sieve
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -774,6 +798,7 @@ sub test_rename_paths
 
 sub test_rename_deepuser_unixhs
     :AllowMoves :Replication :SyncLog :UnixHierarchySep
+    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -922,6 +947,55 @@ sub test_intermediate_cleanup
     );
 
     _match_intermediates($self, %set);
+}
+
+sub test_rename_user_sharee
+    :AllowMoves :NoAltNameSpace :ReverseACLs :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Test user rename with shares";
+
+    my %exp;
+
+    $admintalk->create("user.foo") || die;
+    $admintalk->create("user.foo.shared") || die;
+    $admintalk->setacl("user.foo.shared", 'cassandane' => 'lrs') || die;
+
+    $admintalk->create("user.foo.#calendars") || die;
+    $admintalk->create("user.foo.#calendars.events") || die;
+    $admintalk->setacl("user.foo.#calendars.events", 'cassandane' => 'lrs') || die;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.sub");
+    $imaptalk->subscribe("INBOX.sub");
+    $imaptalk->subscribe("user.foo.shared");
+    $imaptalk->subscribe("user.foo.#calendars.events");
+
+    my $structure = {
+        'INBOX' => [ '\\HasChildren' ],
+        'INBOX.sub'  => [ '\\Subscribed', '\\HasNoChildren' ],
+        'user.foo.#calendars.events'  => [ '\\Subscribed', '\\HasNoChildren' ],
+        'user.foo.shared'  => [ '\\Subscribed', '\\HasNoChildren' ],
+    };
+
+
+    my $list = $imaptalk->list([qw( vendor.cmu-dav )], '', '*', 'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $newstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "newuser");
+    my $newtalk = $newstore->get_client();
+
+    $list = $newtalk->list([qw( vendor.cmu-dav )], '', '*', 'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
 }
 
 1;

@@ -89,18 +89,13 @@ static jmap_method_t jmap_mdn_methods_nonstandard[] = {
 
 HIDDEN void jmap_mdn_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_mdn_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_mdn_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_MDN, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_mdn_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_mdn_methods_nonstandard, settings);
     }
 
 }
@@ -275,7 +270,7 @@ static json_t *generate_mdn(struct jmap_req *req,
     }
 
     /* Open the mailbox */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = mailbox_open_iwl(mboxname, &mbox);
     if (r) goto done;
 
     /* Load the message */
@@ -420,7 +415,7 @@ static json_t *generate_mdn(struct jmap_req *req,
   done:
     if (r && err == NULL) err = jmap_server_error(r);
     if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     free(mboxname);
     buf_free(&buf);
 
@@ -644,7 +639,7 @@ static int jmap_mdn_parse(jmap_req_t *req)
             json_array_append_new(parse.not_parsable, json_string(blobid));
         }
         msgrecord_unref(&mr);
-        jmap_closembox(req, &mbox);
+        mailbox_close(&mbox);
         message_free_body(body);
         free(body);
         buf_free(&buf);

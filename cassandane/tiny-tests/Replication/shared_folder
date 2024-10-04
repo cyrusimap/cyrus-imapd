@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test replication of messages APPENDed to the master
+#
+sub test_shared_folder
+    :Replication :SyncLog :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $adminstore = $mastersvc->create_store(username => 'admin');
+    my $admintalk = $adminstore->get_client();
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    xlog $self, "creating shared folder";
+
+    $admintalk->create('shared.folder');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl('shared.folder', 'cassandane' => 'lrswipkxtecdn');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+
+    $master_store->set_folder('shared.folder');
+    $replica_store->set_folder('shared.folder');
+
+    xlog $self, "generating messages A..D";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
+
+    xlog $self, "Before replication, the master should have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog $self, "Before replication, the replica should have no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+
+    xlog $self, "After replication, the master should still have all four messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog $self, "After replication, the replica should now have all four messages";
+    $self->check_messages(\%exp, store => $replica_store);
+}

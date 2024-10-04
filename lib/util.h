@@ -71,17 +71,20 @@
 extern const char CYRUS_VERSION[];
 
 #ifdef ENABLE_REGEX
-# ifdef HAVE_PCREPOSIX_H
+# if defined HAVE_PCREPOSIX_H
 #  include <pcre.h>
 #  include <pcreposix.h>
-# else /* !HAVE_PCREPOSIX_H */
-#  ifdef HAVE_RXPOSIX_H
-#   include <rxposix.h>
-#  else /* !HAVE_RXPOSIX_H */
-#   include <regex.h>
-#  endif /* HAVE_RXPOSIX_H */
-# endif /* HAVE_PCREPOSIX_H */
-#endif /* ENABLE_REGEX */
+# elif defined HAVE_PCRE2POSIX_H
+#  ifndef PCRE2POSIX_H_INCLUDED
+#   include <pcre2posix.h>
+#   define PCRE2POSIX_H_INCLUDED
+#  endif
+# elif defined HAVE_RXPOSIX_H
+#  include <rxposix.h>
+# else
+#  include <regex.h>
+# endif
+#endif
 
 #ifdef HAVE_LIBUUID
 #include <uuid/uuid.h>
@@ -106,6 +109,7 @@ typedef unsigned long long int bit64;
 typedef unsigned long long int modseq_t;
 #define MODSEQ_FMT "%llu"
 #define atomodseq_t(s) strtoull(s, NULL, 10)
+char *modseqtoa(modseq_t modseq);
 
 #define Uisalnum(c) isalnum((int)((unsigned char)(c)))
 #define Uisalpha(c) isalpha((int)((unsigned char)(c)))
@@ -174,6 +178,7 @@ int strcmpsafe(const char *a, const char *b);
 int strcasecmpsafe(const char *a, const char *b);
 /* ditto strncmp */
 int strncmpsafe(const char *a, const char *b, size_t n);
+int strncasecmpsafe(const char *a, const char *b, size_t n);
 
 /* NULL isn't "" */
 int strcmpnull(const char *a, const char *b);
@@ -211,7 +216,7 @@ extern int create_tempfile(const char *path);
 extern char *create_tempdir(const char *path, const char *subname);
 
 /* recursively call remove(3) on path and its descendants, except
- * symlinks. Returns zero on sucess, or the first non-zero return
+ * symlinks. Returns zero on success, or the first non-zero return
  * value of remove on error. */
 extern int removedir(const char *path);
 
@@ -293,8 +298,9 @@ void _buf_ensure(struct buf *buf, size_t len);
 const char *buf_cstring(const struct buf *buf);
 const char *buf_cstringnull(const struct buf *buf);
 const char *buf_cstringnull_ifempty(const struct buf *buf);
-char *buf_release(struct buf *buf);
+const char *buf_cstring_or_empty(const struct buf *buf);
 char *buf_newcstring(struct buf *buf);
+char *buf_release(struct buf *buf);
 char *buf_releasenull(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
@@ -320,6 +326,8 @@ void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
                 __attribute__((format(printf, 2, 0)));
 void buf_printf(struct buf *buf, const char *fmt, ...)
                 __attribute__((format(printf, 2, 3)));
+void buf_replace_buf(struct buf *buf, size_t offset, size_t length,
+                     const struct buf *replace);
 int buf_replace_all(struct buf *buf, const char *match,
                     const char *replace);
 int buf_replace_char(struct buf *buf, char match, char replace);
@@ -365,6 +373,10 @@ char *strconcat(const char *s1, ...);
 int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
 int bin_to_lchex(const void *bin, size_t binlen, char *hex);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
+
+int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags);
+int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen);
+int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen);
 
 /* use getpassphrase on machines which support it */
 #ifdef HAVE_GETPASSPHRASE

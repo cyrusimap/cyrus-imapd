@@ -54,6 +54,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/poll.h>
+#include <inttypes.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -73,6 +74,7 @@
 #include "retry.h"
 #include "quota.h"
 #include "util.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -92,6 +94,8 @@ struct stagemsg {
     strarray_t parts; /* buffer of current stage parts */
     struct message_guid guid;
 };
+
+static uint64_t append_counter;
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
                           seqset_t *newseen);
@@ -272,6 +276,11 @@ EXPORTED int append_commit(struct appendstate *as)
             append_addseen(as->mailbox, as->userid, as->seen_seq);
     }
 
+    /* Send the list of MessageCopy or MessageAppend event notifications at once.
+     * We want to do this before the Modseq event gets sent by mailbox_commit().
+     */
+    mboxevent_notify(&as->mboxevents);
+
     /* We want to commit here to guarantee mailbox on disk vs
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
@@ -282,9 +291,6 @@ EXPORTED int append_commit(struct appendstate *as)
         append_abort(as);
         return r;
     }
-
-    /* send the list of MessageCopy or MessageAppend event notifications at once */
-    mboxevent_notify(&as->mboxevents);
 
     append_free(as);
     return 0;
@@ -312,8 +318,8 @@ EXPORTED int append_abort(struct appendstate *as)
  * with the file for the given mailboxname and returns the open file
  * so it can double as the spool file
  */
-EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
-                      int msgnum, struct stagemsg **stagep, const char *sourcefile)
+EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate __attribute__((unused)),
+                      int msgnum __attribute__((unused)), struct stagemsg **stagep, const char *sourcefile)
 {
     struct stagemsg *stage;
     char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
@@ -328,8 +334,8 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     stage = xmalloc(sizeof(struct stagemsg));
     strarray_init(&stage->parts);
 
-    snprintf(stage->fname, sizeof(stage->fname), "%d-%d-%d",
-             (int) getpid(), (int) internaldate, msgnum);
+    snprintf(stage->fname, sizeof(stage->fname), "%d-%" PRIu64,
+             (int) getpid(), append_counter++);
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
@@ -342,7 +348,7 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
     /* create this file and put it into stage->parts[0] */
-    unlink(stagefile);
+    xunlink(stagefile);
     if (sourcefile) {
         r = mailbox_copyfile(sourcefile, stagefile, 0);
         if (r) {
@@ -436,10 +442,9 @@ static int callout_receive_reply(const char *callout,
     }
 
     p = prot_new(fd, /*write*/0);
-    prot_setisclient(p, 1);
 
     /* read and parse the reply as a dlist */
-    c = dlist_parse(results, /*parsekeys*/0, /*isbackup*/0, p);
+    c = dlist_parse(results, /*parsekeys*/0, /*isarchive*/0, p);
     r = (c == EOF ? IMAP_SYS_ERROR : 0);
 
 out:
@@ -805,53 +810,66 @@ static int append_apply_flags(struct appendstate *as,
 
     for (i = 0; i < flags->count; i++) {
         const char *flag = strarray_nth(flags, i);
+        long need_rights = 0; // keep track of required ACLs
+
         if (!strcasecmp(flag, "\\seen")) {
-            r = append_setseen(as, msgrec);
-            if (r) goto out;
-            mboxevent_add_flag(mboxevent, flag);
+            if (as->myrights & (need_rights = ACL_SETSEEN)) {
+                r = append_setseen(as, msgrec);
+                if (r) goto out;
+                mboxevent_add_flag(mboxevent, flag);
+            }
         }
         else if (!strcasecmp(flag, "\\expunged")) {
             /* NOTE - this is a fake internal name */
-            if (as->myrights & ACL_DELETEMSG) {
+            if (as->myrights & (need_rights = ACL_DELETEMSG)) {
                 internal_flags |= FLAG_INTERNAL_EXPUNGED;
             }
         }
         else if (!strcasecmp(flag, "\\snoozed")) {
             /* NOTE - this is a fake internal name */
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 internal_flags |= FLAG_INTERNAL_SNOOZED;
             }
         }
         else if (!strcasecmp(flag, "\\deleted")) {
-            if (as->myrights & ACL_DELETEMSG) {
+            if (as->myrights & (need_rights = ACL_DELETEMSG)) {
                 system_flags |= FLAG_DELETED;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
         else if (!strcasecmp(flag, "\\draft")) {
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 system_flags |= FLAG_DRAFT;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
         else if (!strcasecmp(flag, "\\flagged")) {
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 system_flags |= FLAG_FLAGGED;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
         else if (!strcasecmp(flag, "\\answered")) {
-            if (as->myrights & ACL_WRITE) {
+            if (as->myrights & (need_rights = ACL_WRITE)) {
                 system_flags |= FLAG_ANSWERED;
                 mboxevent_add_flag(mboxevent, flag);
             }
         }
-        else if (as->myrights & ACL_WRITE) {
+        else if (as->myrights & (need_rights = ACL_WRITE)) {
             r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
             if (r) goto out;
             r = msgrecord_set_userflag(msgrec, userflag, 1);
             if (r) goto out;
             mboxevent_add_flag(mboxevent, flag);
+        }
+
+        if (need_rights && !(as->myrights & need_rights)) {
+            // One or more ACLs were missing to set the flag
+            char aclstr[ACL_STRING_MAX];
+            cyrus_acl_masktostr(need_rights, aclstr);
+            xsyslog(LOG_ERR, "could not write flag due missing ACL",
+                    "flag=<%s> need_rights=<%s> mailboxid=<%s>",
+                    flag, aclstr, mailbox_uniqueid(as->mailbox));
         }
     }
 
@@ -867,7 +885,8 @@ out:
 
 struct findstage_cb_rock {
     const char *partition;
-    const char *stagefile;
+    const char *guid;
+    char *fname;
 };
 
 static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
@@ -886,19 +905,25 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
         struct stat sbuf;
         const char *msgpath = mbentry_datapath(mbentry, rec->uid);
         if (msgpath && !stat(msgpath, &sbuf)) {
-            /* link the first stage part to the existing message file */
-            r = cyrus_copyfile(msgpath, rock->stagefile, 0/*flags*/);
-            if (r) {
-                /* don't fail - worst case, we will use existing stage */
-                r = 0;
+            FILE *file = fopen(msgpath, "r");
+            // errors just mean "skip this file"
+            if (file) {
+                struct body *body = NULL;
+                r = message_parse_file(file, NULL, NULL, &body, msgpath);
+                if (!r && !strcmp(rock->guid, message_guid_encode(&body->guid)))
+                    rock->fname = xstrdup(msgpath);
+                if (body) {
+                    message_free_body(body);
+                    free(body);
+                }
+                fclose(file);
             }
-            else r = CYRUSDB_DONE;
         }
     }
 
     mboxlist_entry_free(&mbentry);
 
-    return r;
+    return rock->fname ? CYRUSDB_DONE : 0;
 }
 
 /*
@@ -929,6 +954,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1] = "";
+    char *linkfile = NULL;
 
     assert(stage != NULL && stage->parts.count);
 
@@ -954,17 +980,23 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
         if (cstate) {
-            struct findstage_cb_rock rock = { mailbox_partition(mailbox), stagefile };
+            char *guid = xstrdup(message_guid_encode(&(*body)->guid));
+            struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
 
-            r = conversations_guid_foreach(cstate,
-                                           message_guid_encode(&(*body)->guid),
-                                           findstage_cb, &rock);
-            if (r && r != CYRUSDB_DONE) {
-                r = IMAP_IOERROR;
-                goto out;
+            // ignore errors, it's OK for this to fail
+            conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
+
+            // if we found a file, remember it
+            if (rock.fname) {
+                syslog(LOG_NOTICE, "found existing file %s for %s; linking", guid, rock.fname);
+                linkfile = rock.fname;
             }
+
+            free(guid);
         }
     }
+
+    if (linkfile) goto havefile;
 
     for (i = 0 ; i < stage->parts.count ; i++) {
         /* ok, we've successfully created the file */
@@ -999,14 +1031,16 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
             xsyslog(LOG_ERR, "IOERROR: creating message file",
                              "filename=<%s>", stagefile);
-            unlink(stagefile);
+            xunlink(stagefile);
             goto out;
         }
 
         strarray_append(&stage->parts, stagefile);
     }
 
-    /* 'stagefile' contains the message and is on the same partition
+havefile:
+
+    /* 'linkfile' or 'stagefile' contains the message and is on the same partition
        as the mailbox we're looking at */
 
     /* Setup */
@@ -1058,7 +1092,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     r = msgrecord_get_fname(msgrec, &fname);
     if (r) goto out;
 
-    r = mailbox_copyfile(stagefile, fname, nolink);
+    r = mailbox_copyfile(linkfile ? linkfile : stagefile, fname, nolink);
     if (r) goto out;
 
     FILE *destfile = fopen(fname, "r");
@@ -1131,7 +1165,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     if (in_object_storage) {  // must delete local file
-        if (unlink(fname) != 0) // unlink should do it.
+        if (xunlink(fname) != 0) // unlink should do it.
             if (!remove (fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error", fname);
     }
@@ -1162,6 +1196,7 @@ out:
     if (newflags)
         strarray_free(newflags);
     freeentryatts(system_annots);
+    free(linkfile);
     if (r) {
         append_abort(as);
         msgrecord_unref(&msgrec);
@@ -1188,7 +1223,7 @@ EXPORTED int append_removestage(struct stagemsg *stage)
 
     while ((p = strarray_pop(&stage->parts))) {
         /* unlink the staging file */
-        if (unlink(p) != 0) {
+        if (xunlink(p) != 0) {
             xsyslog(LOG_ERR, "IOERROR: error unlinking file",
                              "filename=<%s>", p);
         }
@@ -1241,7 +1276,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     if (r) goto out;
     as->nummsg++;
 
-    unlink(fname);
+    xunlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
         xsyslog(LOG_ERR, "IOERROR: creating message file",
@@ -1403,7 +1438,8 @@ out:
  * contains the name of the user whose \Seen flag gets set.
  */
 EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
-                         ptrarray_t *msgrecs, int nolink, int is_same_user)
+                         ptrarray_t *msgrecs, int nolink, int is_same_user,
+                         struct progress_rock *prock)
 {
     int msg;
     char *srcfname = NULL;
@@ -1434,6 +1470,8 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         uint32_t src_uid;
         uint32_t src_system_flags;
         uint32_t src_internal_flags;
+
+        if (prock) prock->cb(msg, msgrecs->count, prock);
 
         r = msgrecord_get_uid(src_msgrec, &src_uid);
         if (r) goto out;

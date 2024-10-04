@@ -665,6 +665,7 @@ sub _sc_list {
     $lfh->[2]->print($$cyrref->error, "\n");
     return 1;
   }
+  $w = 0;
   foreach my $mbx (@res) {
     $l = $mbx->[0];
     if ($mbx->[1] ne '') {
@@ -1765,7 +1766,7 @@ Connect to the *server* specified on the port specified.
 
 =item C<--auth> I<mechanism>
 
-Use the mechanism specified to authenticate. One of PLAIN, LOGIN, DIGEST-MD5, etc.
+Use the mechanism specified to authenticate. One of PLAIN, LOGIN, etc.
 
 =item C<--help>
 

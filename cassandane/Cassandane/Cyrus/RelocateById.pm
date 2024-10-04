@@ -45,6 +45,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 sub new
 {
@@ -90,15 +91,7 @@ sub test_user_nomatch
         },
     }, 'relocate_by_id', '-u', $user);
 
-    my $output;
-
-    { # XXX we should dedup all these slurps sometime...
-        local $/;
-        open my $fh, '<', $errfile
-            or die "Cannot open $errfile for reading: $!";
-        $output = <$fh>;
-        close $fh;
-    }
+    my $output = slurp_file($errfile);
 
     # better complain if the user requested doesn't exist!
     $self->assert_matches(qr{$user: user not found}, $output);
@@ -120,15 +113,7 @@ sub test_mailbox_nomatch
         },
     }, 'relocate_by_id', $mailbox);
 
-    my $output;
-
-    { # XXX we should dedup all these slurps sometime...
-        local $/;
-        open my $fh, '<', $errfile
-            or die "Cannot open $errfile for reading: $!";
-        $output = <$fh>;
-        close $fh;
-    }
+    my $output = slurp_file($errfile);
 
     # better complain if the mailbox requested doesn't exist!
     $self->assert_matches(qr{$mailbox: mailbox not found}, $output);

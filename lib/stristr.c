@@ -27,19 +27,18 @@
  extern "C" {
 #endif
 
-EXPORTED char *stristr(const char *String, const char *Pattern)
+EXPORTED char *strinstr(const char *String, size_t StringLen, const char *Pattern)
 {
       char *pptr, *sptr, *start;
-      size_t  slen, plen;
+      size_t slen = StringLen;
+      size_t plen = strlen(Pattern);
 
-      for (start = (char *)String,
-           slen  = strlen(String),
-           plen  = strlen(Pattern);
+      if (!plen) return (char *)String;
+      if (!slen) return NULL;
 
+      for (start = (char *)String;
            /* while string length not shorter than pattern length */
-
            slen >= plen;
-
            start++, slen--)
       {
             /* find start of pattern in string */
@@ -69,6 +68,11 @@ EXPORTED char *stristr(const char *String, const char *Pattern)
             }
       }
       return(NULL);
+}
+
+EXPORTED char *stristr(const char *String, const char *Pattern)
+{
+      return strinstr(String, strlen(String), Pattern);
 }
 
 #if defined(__cplusplus) && __cplusplus

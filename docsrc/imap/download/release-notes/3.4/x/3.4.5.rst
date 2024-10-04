@@ -1,0 +1,48 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.4.5 Release Notes
+==============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.5/cyrus-imapd-3.4.5.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.4.5/cyrus-imapd-3.4.5.tar.gz.sig
+
+.. _relnotes-3.4.5-changes:
+
+Changes since 3.4.4
+===================
+
+Build changes
+-------------
+
+* Fixed: iCal GEO property is text in new libical versions
+* Fixed: docs now build correctly with python3 and Sphinx 3.4
+
+Bug fixes
+---------
+
+* Fixed :issue:`4154`: JMAP Mailbox/get missed shared accounts when
+  altnamespace enabled (thanks Qiu Yingbo)
+* Fixed :issue:`4189`: sieveshell segfaults after quit command (thanks
+  Christian Walther)
+* Fixed :issue:`4216`: httpd killed by SIGSEGV for calendar request (thanks
+  Дилян Палаузов)
+* Fixed :issue:`4285`: jmap_mail: fix typo in HTML to plain extractor
+* Fixed :issue:`4162`: :cyrusman:`quota(8)` now correctly accepts ``-n``
+  argument (thanks Christian Walther)
+* Fixed :issue:`3240`: Seen flag broken on shared mailbox without sharedseen
+* Fixed :issue:`4257`: various memory leaks
+* Fixed :issue:`3917`: Sieve enotify implementation bugs
+
+Other changes
+-------------
+
+* Fixed :issue:`4109`: testrunner.pl now exits early if binary components
+  missing
+* Fixed :issue:`4380`: ``backend_version()`` now properly parses the remote
+  server's version string, and can recognise when it is newer than the local
+  server.  This means XFER to a newer backend no longer requires a local
+  software update to recognise the new version number first.
+* Fixed :issue:`4199`: cassandane.ini: don't choke on repeated params

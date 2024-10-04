@@ -42,9 +42,19 @@ There are various annotations that **cyr_expire** respects:
   messages
 - ``/vendor/cmu/cyrus-imapd/delete`` which controls the deletion of
   messages
+- ``/vendor/cmu/cyrus-imapd/noexpire_until`` which disables the expire
+  and delete operations per user
 
-These mailbox annotations specify the age(in days) of messages in the
-given mailbox that should be expired/archived/deleted.
+The first three mailbox annotations specify the age of messages in the
+given mailbox that should be expired/archived/deleted. The
+age is specified as a duration, the default unit are days.
+The duration format is defined in :cyrusman:`imapd.conf(5)`.
+
+The last mailbox annotation specifies the UNIX epoch time in seconds
+until which expiring messages or removing deleted mailboxes is blocked.
+The zero epoch time represents infinity. This annotation has precedence
+over any of the other annotations or command line flags. It must only
+be set on the user inbox and applies to all mailboxes of that user.
 
 The value of the ``/vendor/cmu/cyrus-imapd/expire`` annotation is
 inherited by all children of the mailbox on which it is set, so an
@@ -84,7 +94,7 @@ Options
 
     |cli-dash-c-text|
 
-.. option:: -A archive-duration
+.. option:: -A archive-duration, --archive-duration=archive-duration
 
     Archive non-flagged messages older than *archive-duration* to the
     archive partition, allowing mailbox messages to be split between fast
@@ -92,67 +102,69 @@ Options
     ``archivepartition-*`` has been set in your config.
     This value is only used for entries which do not have a
     corresponding ``/vendonr/cmu/cyrus-imapd/archive`` mailbox annotation.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
     |v3-new-feature|
 
-.. option:: -D delete-duration
+.. option:: -D delete-duration, --delete-duration=delete-duration
 
     Remove previously deleted mailboxes older than *delete-duration*
     (when using the "delayed" delete mode).
-    The value can be a floating point number, and may have a suffix to
-    specify the unit of time.  If no suffix, the value is number of days.
-    Valid suffixes are **d** (days), **h** (hours), **m** (minutes) and
-    **s** (seconds).
     This value is only used for entries which do not have a
     corresponding ``/verdor/cmu/cyrus-imapd/delete`` mailbox annotation.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
-.. option:: -E expire-duration
+.. option:: -E expire-duration, --expire-duration=expire-duration
 
     Prune the duplicate database of entries older than *expire-duration*.
     This value is only used for entries which do not have a corresponding
     ``/vendor/cmu/cyrus-imapd/expire`` mailbox annotation.
-    Format is the same as delete-duration.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
-.. option:: -X expunge-duration
+.. option:: -X expunge-duration, --expunge-duration=expunge-duration
 
     Expunge previously deleted messages older than *expunge-duration*
     (when using the "delayed" expunge mode).
-    Format is the same as delete-duration.
+    The duration format is defined in :cyrusman:`imapd.conf(5)`. The default
+    unit are days.
 
-.. option:: -c
+.. option:: -c, --no-conversations
 
     Do not expire conversation database entries, even if the conversations
     feature is enabled.
 
     |v3-new-feature|
 
-.. option:: -x
+.. option:: -x, --no-expunge
 
     Do not expunge messages even if using delayed expunge mode.  This
     reduces IO traffic considerably, allowing ``cyr_expire`` to be run
     frequently to clean up the duplicate database without overloading
     the machine.
 
-.. option:: -p mailbox-prefix
+.. option:: -p mailbox-prefix, --prefix=mailbox-prefix
 
     Only find mailboxes starting with this prefix,  e.g.
     "user.justgotspammedlots".
 
-.. option:: -u userid
+.. option:: -u userid, --userid=userid
 
     Only find mailboxes belonging to this user,  e.g.
     "justgotspammedlots@example.com".
 
-.. option:: -t
+.. option:: -t, --prune-userflags
 
     Remove any user flags which are not used by remaining (not expunged)
     messages.
 
-.. option:: -v
+.. option:: -v, --verbose
 
     Enable verbose output.
 
-.. option:: -a
+.. option:: -a, --ignore-annotations
 
     Skip the annotation lookup, so all ``/vendor/cmu/cyrus-imapd/expire``
     annotations are ignored entirely.  It behaves as if they were not

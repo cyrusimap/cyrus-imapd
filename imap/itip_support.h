@@ -67,7 +67,19 @@
 #define REQSTAT_PERMFAIL        "5.2;Invalid calendar service"
 #define REQSTAT_REJECTED        "5.3;No scheduling support for user"
 
+enum sched_mechanism {
+    SCHED_MECH_CALDAV         = 0,
+    SCHED_MECH_ISCHEDULE      = 1,
+    SCHED_MECH_SIEVE          = 2,
+    SCHED_MECH_JMAP_SET       = 3,
+    SCHED_MECH_JMAP_PARTREPLY = 4,
+    SCHED_MECH_JMAP_RESTORE   = 5,
+};
+
+extern const char *sched_mechanisms[];
+
 struct sched_data {
+    enum sched_mechanism mech;
     unsigned flags;
     icalcomponent *itip;
     icalcomponent *oldical;
@@ -83,14 +95,16 @@ struct sched_data {
 #define SCHEDFLAG_IS_UPDATE        (1<<2)
 #define SCHEDFLAG_INVITES_ONLY     (1<<3)
 #define SCHEDFLAG_UPDATES_ONLY     (1<<4)
-#define SCHEDFLAG_DELETE_CANCELED  (1<<5)
+#define SCHEDFLAG_DELETE_CANCELLED (1<<5)
+#define SCHEDFLAG_ALLOW_PUBLIC     (1<<6)
 
 #define SCHED_ISCHEDULE(sched)        (sched->flags & SCHEDFLAG_ISCHEDULE)
 #define SCHED_IS_REPLY(sched)         (sched->flags & SCHEDFLAG_IS_REPLY)
 #define SCHED_IS_UPDATE(sched)        (sched->flags & SCHEDFLAG_IS_UPDATE)
 #define SCHED_INVITES_ONLY(sched)     (sched->flags & SCHEDFLAG_INVITES_ONLY)
 #define SCHED_UPDATES_ONLY(sched)     (sched->flags & SCHEDFLAG_UPDATES_ONLY)
-#define SCHED_DELETE_CANCELED(sched)  (sched->flags & SCHEDFLAG_DELETE_CANCELED)
+#define SCHED_DELETE_CANCELLED(sched) (sched->flags & SCHEDFLAG_DELETE_CANCELLED)
+#define SCHED_ALLOW_PUBLIC(sched)     (sched->flags & SCHEDFLAG_ALLOW_PUBLIC)
 
 #define SCHED_STATUS(sched, isched, ical) \
     (sched->status = SCHED_ISCHEDULE(sched) ? isched : ical)
@@ -121,7 +135,6 @@ enum sched_deliver_outcome {
 
 extern unsigned config_allowsched;
 extern struct strlist *cua_domains;
-extern icaltimezone *utc_zone;
 
 struct proplist {
     icalproperty *prop;
@@ -157,6 +170,8 @@ extern int organizer_changed(icalcomponent *oldcomp, icalcomponent *newcomp);
 
 extern icalcomponent *master_to_recurrence(icalcomponent *master,
                                            icalproperty *recurid);
+
+extern void itip_strip_personal_data(icalcomponent *comp);
 
 extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,

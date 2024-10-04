@@ -43,6 +43,8 @@ use warnings;
 
 use base qw(Test::Unit::TestCase);
 use Data::Dumper;
+use DateTime;
+use DateTime::Format::ISO8601;
 
 use lib '.';
 use Cassandane::Util::Log;
@@ -110,6 +112,26 @@ sub _skip_version
     return;
 }
 
+sub is_feature_missing
+{
+    my ($self, $category, $key, $want_value) = @_;
+
+    if (defined $want_value) {
+        my $actual = $buildinfo->get($category, $key);
+        if ($actual ne $want_value) {
+            xlog "$category.$key not '$want_value' (is '$actual'),",
+                 "$self->{_name} will be skipped";
+            return 1;
+        }
+    }
+    elsif (not $buildinfo->get($category, $key)) {
+        xlog "$category.$key not enabled, $self->{_name} will be skipped";
+        return 1;
+    }
+
+    return;
+}
+
 sub filter
 {
     my ($self) = @_;
@@ -142,18 +164,14 @@ sub filter
             foreach my $attr (attributes::get($sub)) {
                 next if $attr !~
                     m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
-
-                if (defined $3) {
-                    my $actual = $buildinfo->get($1, $2);
-                    if ($actual ne $3) {
-                        xlog "$1.$2 not '$3' (is '$actual'),",
-                             "$self->{_name} will be skipped";
-                        return 1;
-                    }
-                }
-                elsif (not $buildinfo->get($1, $2)) {
-                    xlog "$1.$2 not enabled, $self->{_name} will be skipped";
-                    return 1;
+                return 1 if $self->is_feature_missing($1, $2, $3);
+            }
+            return if not exists $self->{needs};
+            while (my ($category, $subhash) = each %{$self->{needs}}) {
+                while (my ($key, $want_value) = each %{$subhash}) {
+                    return 1 if $self->is_feature_missing($category,
+                                                          $key,
+                                                          $want_value);
                 }
             }
             return;
@@ -162,6 +180,28 @@ sub filter
         {
             my ($method) = @_;
             return 1 if $method =~ m/_slow$/;
+            return;
+        },
+        slow_only => sub
+        {
+            my ($method) = @_;
+            return 1 if $method !~ m/_slow$/;
+            return;
+        },
+        skip_runtime_check => sub
+        {
+            # To use: add a skip_check method to your test suite that
+            # implements logic to determine whether some test should run or
+            # not (perhaps by examining $self->{_name}).  Return undef if
+            # the test should run, or a message explaining why the test is
+            # being skipped
+            return if not $self->can('skip_check');
+            my $reason = $self->skip_check();
+            if ($reason) {
+                xlog "$self->{_name} will be skipped:",
+                     "skip_check said '$reason'";
+                return 1;
+            }
             return;
         },
     };
@@ -330,7 +370,103 @@ sub assert_num_lte
                   "$actual is not less-than-or-equal-to $expected");
 }
 
-sub new_test_url {
+sub assert_num_gt
+{
+    my ($self, $expected, $actual) = @_;
+
+    $self->assert(($actual > $expected),
+                  "$actual is not greater-than $expected");
+}
+
+sub assert_num_lt
+{
+    my ($self, $expected, $actual) = @_;
+
+    $self->assert(($actual < $expected),
+                  "$actual is not less-than $expected");
+}
+
+sub assert_date_matches
+{
+    my ($self, $expected, $actual, $tolerance) = @_;
+
+    my ($expected_dt, $expected_str, $actual_dt, $actual_str);
+
+    # $expected may be a DateTime object or an ISO8601 string
+    my $reftype = ref $expected;
+    if (not $reftype) {
+        $expected_str = $expected;
+        $expected_dt = DateTime::Format::ISO8601->parse_datetime($expected);
+    }
+    elsif ($reftype ne 'DateTime') {
+        die "wanted string or 'DateTime' for expected, got '$reftype'";
+    }
+    else {
+        $expected_dt = $expected;
+        $expected_str = $expected_dt->stringify();
+    }
+
+    # $actual may be a DateTime object or an ISO8601 string
+    $reftype = ref $actual;
+    if (not $reftype) {
+        $actual_str = $actual;
+        $actual_dt = DateTime::Format::ISO8601->parse_datetime($actual);
+    }
+    elsif ($reftype ne 'DateTime') {
+        die "wanted string or 'DateTime' for actual, got '$reftype'";
+    }
+    else {
+        $actual_dt = $actual;
+        $actual_str = $actual_dt->stringify();
+    }
+
+    # $tolerance is in seconds, default 0
+    $tolerance //= 0;
+
+    # XXX here is where to check that timezones match:
+    # XXX * if one has a timezone and the other doesn't, fail
+    # XXX * if both have timezones but they're different, fail
+    # XXX otherwise, carry on...
+
+    my $diff = $expected_dt->epoch() - $actual_dt->epoch();
+
+    my $msg = "expected '$expected_str', got '$actual_str'";
+    if ($tolerance) {
+        $msg .= " (difference $diff is greater than $tolerance)";
+    }
+
+    $self->assert((abs($diff) <= $tolerance), $msg);
+}
+
+sub assert_file_test
+{
+    my ($self, $path, $test_type) = @_;
+
+    # see `perldoc -f -X` for valid test types
+    $test_type ||= '-e';
+    my $test = "$test_type \$path";
+    xlog "XXX test=<$test> path=<$path>";
+    my $result = eval $test;
+    die $@ if $@;
+    $self->assert($result, "'$path' failed '$test_type' test");
+}
+
+sub assert_not_file_test
+{
+    my ($self, $path, $test_type) = @_;
+
+    # see `perldoc -f -X` for valid test types
+    $test_type ||= '-e';
+    my $test = "$test_type \$path";
+    xlog "XXX test=<$test> path=<$path>";
+    my $result = eval $test;
+    die $@ if $@;
+    $self->assert(!$result,
+                  "'$path' unexpectedly passed '$test_type' test");
+}
+
+sub new_test_url
+{
     my ($self, $content_or_app) = @_;
 
     return Cassandane::Util::TestURL->new({

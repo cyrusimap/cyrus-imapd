@@ -124,6 +124,8 @@ static const char index_mod64[256] = {
 
 #define FNAME_SHAREDPREFIX "shared"
 
+#define GLOBAL_LOCKNAME "$GLOBAL"
+
 EXPORTED int open_mboxlocks_exist(void)
 {
     return open_mboxlocks ? 1 : 0;
@@ -131,6 +133,19 @@ EXPORTED int open_mboxlocks_exist(void)
 
 static struct mboxlocklist *create_lockitem(const char *name)
 {
+#if 0
+    // disable this log tracking!
+    if (!strncmp(name, "*U*", 3)) {
+        // LOCK ORDERING!
+        struct mboxlocklist *item;
+        for (item = open_mboxlocks; item; item = item->next) {
+             if (strncmp(item->l.name, "*U*", 3)) continue;
+             if (strcmp(name, item->l.name) < 0) {
+                syslog(LOG_ERR, "IOERROR: namelock ordering wrong %s < %s", name, item->l.name);
+             }
+        }
+    }
+#endif
     struct mboxlocklist *item = xmalloc(sizeof(struct mboxlocklist));
     item->next = open_mboxlocks;
     open_mboxlocks = item;
@@ -183,8 +198,8 @@ static void remove_lockitem(struct mboxlocklist *remitem)
 
 /* name locking support */
 
-EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
-                  int locktype_and_flags)
+static int mboxname_lock_item(const char *mboxname, struct mboxlock **mboxlockptr,
+                              int locktype_and_flags)
 {
     const char *fname;
     int r = 0;
@@ -234,12 +249,44 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                      nonblock, fname);
     if (!r) lockitem->l.locktype = locktype;
     else if (errno == EWOULDBLOCK) r = IMAP_MAILBOX_LOCKED;
-    else r = errno;
+    else r = IMAP_IOERROR;
 
 done:
-    if (r) remove_lockitem(lockitem);
-    else *mboxlockptr = &lockitem->l;
+    if (r) {
+        xsyslog(LOG_ERR, "can not lock mailbox",
+                "name=<%s> error=<%s>", mboxname, error_message(r));
+        remove_lockitem(lockitem);
+    }
+    else if (mboxlockptr) {
+        *mboxlockptr = &lockitem->l;
+    }
 
+    return r;
+}
+
+EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
+                           int locktype_and_flags)
+{
+    if (config_take_globallock && locktype_and_flags & LOCK_EXCLUSIVE) {
+        // if we have an exclusive lock, we MUST already be holding
+	// the shared global lock, or we have to open it.
+	if (!mboxname_islocked(GLOBAL_LOCKNAME)) {
+	    int r = mboxname_lock_item(GLOBAL_LOCKNAME, NULL, LOCK_SHARED);
+	    if (r) return r;
+	}
+    }
+    return mboxname_lock_item(mboxname, mboxlockptr, locktype_and_flags);
+}
+
+EXPORTED int mboxname_run_with_lock(int (*cb)(void *), void *rock)
+{
+    if (!config_take_globallock) return IMAP_MAILBOX_BADNAME;
+    if (open_mboxlocks) return IMAP_MAILBOX_LOCKED;
+    struct mboxlock *global_lock = NULL;
+    int r = mboxname_lock_item(GLOBAL_LOCKNAME, &global_lock, LOCK_EXCLUSIVE);
+    if (r) return r;
+    r = cb(rock);
+    mboxname_release(&global_lock);
     return r;
 }
 
@@ -261,6 +308,13 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
     }
 
     remove_lockitem(lockitem);
+
+    // if the top item is the global lock, remove that now - since
+    // everything it was protecting has already closed
+    if (!config_take_globallock) return;
+    if (!open_mboxlocks) return;
+    if (strcmpsafe(open_mboxlocks->l.name, GLOBAL_LOCKNAME)) return;
+    remove_lockitem(open_mboxlocks);
 }
 
 EXPORTED int mboxname_islocked(const char *mboxname)
@@ -573,8 +627,34 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     return mbname;
 }
 
-EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid)
+EXPORTED mbname_t *mbname_from_extname(const char *extname,
+                                       const struct namespace *ns,
+                                       const char *userid)
 {
+    mbname_t *mbname = NULL, *userparts = NULL;
+    char *freeme = NULL;
+
+    if (extname && ns->isutf8) {
+        /* Encode extname from UTF-8 to IMAP UTF-7. */
+        charset_t cs = charset_lookupname("utf-8");
+        if (cs == CHARSET_UNKNOWN_CHARSET) {
+            /* huh? */
+            syslog(LOG_INFO, "charset utf-8 is unknown");
+            return NULL;
+        }
+
+        /* Encode mailbox name in IMAP UTF-7 */
+        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        charset_free(&cs);
+
+        if (!freeme) {
+            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+            return NULL;
+        }
+
+        extname = freeme;
+    }
+
     int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS) && !ns->isadmin;
     int cdother = config_getswitch(IMAPOPT_CROSSDOMAINS_ONLYOTHER);
     /* old-school virtdomains requires admin to be a different domain than the userid */
@@ -583,27 +663,27 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     /* specialuse magic */
     if (extname && extname[0] == '\\') {
         char *intname = mboxlist_find_specialuse(extname, userid);
-        mbname_t *mbname = mbname_from_intname(intname);
+        mbname = mbname_from_intname(intname);
         free(intname);
-        return mbname;
+        goto done;
     }
 
-    mbname_t *mbname = xzmalloc(sizeof(mbname_t));
+    mbname = xzmalloc(sizeof(mbname_t));
     char sepstr[2];
     char *p = NULL;
 
     if (!extname)
-        return mbname;
+        goto done;
 
     if (!*extname)
-        return mbname; // empty string, *sigh*
+        goto done; // empty string, *sigh*
 
     sepstr[0] = ns->hier_sep;
     sepstr[1] = '\0';
 
     mbname->extname = xstrdup(extname); // may as well cache it
 
-    mbname_t *userparts = mbname_from_userid(userid);
+    userparts = mbname_from_userid(userid);
 
     if (admindomains) {
         p = strrchr(mbname->extname, '@');
@@ -762,36 +842,6 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
 
  done:
     mbname_free(&userparts);
-
-    return mbname;
-}
-
-EXPORTED mbname_t *mbname_from_extnameUTF8(const char *extname, const struct namespace *ns, const char *userid)
-{
-    mbname_t *mbname;
-    char *freeme = NULL;
-
-    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-        charset_t cs = charset_lookupname("utf-8");
-        if (cs == CHARSET_UNKNOWN_CHARSET) {
-            /* huh? */
-            syslog(LOG_INFO, "charset utf-8 is unknown");
-            return NULL;
-        }
-
-        /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
-        charset_free(&cs);
-
-        if (!freeme) {
-            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
-            return NULL;
-        }
-
-        extname = freeme;
-    }
-
-    mbname = mbname_from_extname(extname, ns, userid);
     free(freeme);
 
     return mbname;
@@ -894,38 +944,6 @@ EXPORTED char *mboxname_to_userid(const char *intname)
     char *res = xstrdupnull(mbname_userid(mbname));
     mbname_free(&mbname);
     return res;
-}
-
-EXPORTED char *mboxname_from_externalUTF8(const char *extname,
-                                          const struct namespace *ns,
-                                          const char *userid)
-{
-    char *intname, *freeme = NULL;
-
-    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-        charset_t cs = charset_lookupname("utf-8");
-        if (cs == CHARSET_UNKNOWN_CHARSET) {
-            /* huh? */
-            syslog(LOG_INFO, "charset utf-8 is unknown");
-            return NULL;
-        }
-
-        /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
-        charset_free(&cs);
-
-        if (!freeme) {
-            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
-            return NULL;
-        }
-
-        extname = freeme;
-    }
-
-    intname = mboxname_from_external(extname, ns, userid);
-    free(freeme);
-
-    return intname;
 }
 
 EXPORTED char *mboxname_from_external(const char *extname, const struct namespace *ns, const char *userid)
@@ -1334,6 +1352,20 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
 
     backdoor->extname = buf_release(&buf);
 
+    if (ns->isutf8) {
+        /* Decode extname from IMAP UTF-7 to UTF-8. */
+        charset_t cs = charset_lookupname("imap-utf-7");
+        char *decoded = charset_to_utf8cstr(backdoor->extname,
+                                            strlen(backdoor->extname),
+                                            cs, ENCODING_NONE);
+        if (decoded) {
+            free(backdoor->extname);
+            backdoor->extname = decoded;
+        }
+
+        charset_free(&cs);
+    }
+
  done:
 
     buf_free(&buf);
@@ -1370,17 +1402,19 @@ EXPORTED const strarray_t *mbname_boxes(const mbname_t *mbname)
 /*
  * Create namespace based on config options.
  */
-EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
+EXPORTED int mboxname_init_namespace(struct namespace *namespace, unsigned options)
 {
     const char *prefix;
 
     assert(namespace != NULL);
 
-    namespace->isadmin = isadmin;
+    namespace->isutf8  = !!(options & NAMESPACE_OPTION_UTF8);
+    namespace->isadmin = !!(options & NAMESPACE_OPTION_ADMIN);
 
     namespace->hier_sep =
         config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
-    namespace->isalt = !isadmin && config_getswitch(IMAPOPT_ALTNAMESPACE);
+    namespace->isalt =
+        !namespace->isadmin && !!config_getswitch(IMAPOPT_ALTNAMESPACE);
 
     namespace->accessible[NAMESPACE_INBOX] = 1;
     namespace->accessible[NAMESPACE_USER] = !config_getswitch(IMAPOPT_DISABLE_USER_NAMESPACE);
@@ -1405,7 +1439,7 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
             !strncmp(namespace->prefix[NAMESPACE_USER], prefix, strlen(prefix)))
             return IMAP_NAMESPACE_BADPREFIX;
 
-        if (!isadmin) {
+        if (!namespace->isadmin) {
             sprintf(namespace->prefix[NAMESPACE_SHARED], "%.*s%c",
                 MAX_NAMESPACE_PREFIX-1, prefix, namespace->hier_sep);
         }
@@ -1427,7 +1461,7 @@ EXPORTED struct namespace *mboxname_get_adminnamespace()
 {
     static struct namespace ns;
     if (!admin_namespace) {
-        mboxname_init_namespace(&ns, /*isadmin*/1);
+        mboxname_init_namespace(&ns, NAMESPACE_OPTION_ADMIN);
         admin_namespace = &ns;
     }
     return admin_namespace;
@@ -1499,19 +1533,94 @@ EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
     return res ? 1 : 0;
 }
 
-/*
- * If (internal) mailbox 'name' is a CALENDAR mailbox
- * returns boolean
- */
-EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) return 1;  /* Only works on backends */
-    int res = 0;
+#define PREFIX_FLAG_NONIMAP     (1<<0)
 
-    mbname_t *mbname = mbname_from_intname(name);
+static const struct mailbox_prefix {
+    enum imapopt opt;
+    unsigned flags : 1;
+
+} mailbox_prefixes[] = {
+    { IMAPOPT_NOTESMAILBOX,               0                   },
+    { IMAPOPT_CALENDARPREFIX,             PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_ADDRESSBOOKPREFIX,          PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_DAVDRIVEPREFIX,             PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_DAVNOTIFICATIONSPREFIX,     PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPNOTIFICATIONFOLDER,     PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPSUBMISSIONFOLDER,       PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER, PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_JMAPUPLOADFOLDER,           PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_SIEVE_FOLDER,               PREFIX_FLAG_NONIMAP },
+    { IMAPOPT_ZERO,                       0                   }
+};
+
+static int _mbname_prefix_isanyof(const mbname_t *mbname,
+                                  const struct mailbox_prefix prefixes[],
+                                  unsigned flags)
+{
     const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+
+    if (strarray_size(boxes)) {
+        int i;
+
+        for (i = 0; prefixes[i].opt != IMAPOPT_ZERO; i++) {
+            if (flags && !(flags & prefixes[i].flags)) continue;
+
+            const char *prefix = config_getstring(prefixes[i].opt);
+
+            if (!strcmpsafe(prefix, strarray_nth(boxes, 0))) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * If 'mbname' is a user's 'system' mailbox (toplevel non-IMAP)
+ * returns non-zero
+ */
+EXPORTED int mbname_issystem(const mbname_t *mbname)
+{
+    return (strarray_size(mbname_boxes(mbname)) == 1 &&
+            _mbname_prefix_isanyof(mbname, mailbox_prefixes, PREFIX_FLAG_NONIMAP));
+}
+
+/*
+ * If (internal) mailbox ('name', 'mbtype') is a ('prefix', 'need_mbtype') mailbox
+ * returns non-zero
+ */
+EXPORTED int mboxname_isa(const char *name, int mbtype,
+                          enum imapopt prefix, int need_mbtype)
+{
+    mbtype = mbtype_isa(mbtype);
+
+    if (mbtype) {
+        /* Only works on backends */
+        switch (need_mbtype) {
+        case MBTYPE_EMAIL:       // Email, Notes
+        case MBTYPE_COLLECTION:  // DAV drive, DAV notifications, JMAP upload
+            /* mbtype/prefix ratio is 1 to many,
+               so we can only be deterministic on non-matching mbtype */
+            if (mbtype != need_mbtype) return 0;
+            break;
+
+        default:
+            /* mbtype/prefix ratio is 1 to 1,
+               so we can be deterministic on matching mbtype */
+            if (mbtype == need_mbtype) return 1;
+            break;
+        }
+    }
+
+    int res = 0;
+    mbname_t *mbname = mbname_from_intname(name);
+    const struct mailbox_prefix prefixes[] = {
+        { prefix,       0 },
+        { IMAPOPT_ZERO, 0 }
+    };
+
+    if (_mbname_prefix_isanyof(mbname, prefixes, 0))
         res = 1;
 
     mbname_free(&mbname);
@@ -1519,18 +1628,17 @@ EXPORTED int mboxname_iscalendarmailbox(const char *name, int mbtype)
 }
 
 /*
- * If (internal) mailbox 'name' is a ADDRESSBOOK mailbox
- * returns boolean
+ * If (internal) mailbox 'name' is a user's non-delivery mailbox
+ * returns non-zero
  */
-EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
+EXPORTED int mboxname_isnonimapmailbox(const char *name, int mbtype)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_ADDRESSBOOK) return 1;  /* Only works on backends */
-    int res = 0;
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 1;  /* Only works on backends */
 
+    int res = 0;
     mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+
+    if (_mbname_prefix_isanyof(mbname, mailbox_prefixes, PREFIX_FLAG_NONIMAP))
         res = 1;
 
     mbname_free(&mbname);
@@ -1538,165 +1646,27 @@ EXPORTED int mboxname_isaddressbookmailbox(const char *name, int mbtype)
 }
 
 /*
- * If (internal) mailbox 'name' is a DAVDRIVE mailbox
- * returns boolean
+ * If (internal) mailbox 'name' is a user's non-delivery mailbox
+ * returns non-zero
  */
-EXPORTED int mboxname_isdavdrivemailbox(const char *name, int mbtype)
+EXPORTED int mboxname_isnondeliverymailbox(const char *name, int mbtype)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
-    int res = 0;
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 1;  /* Only works on backends */
 
+    int res = 0;
     mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_DAVDRIVEPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+
+    if (mbname_isdeleted(mbname) ||
+        _mbname_prefix_isanyof(mbname, mailbox_prefixes, 0)) {
         res = 1;
+    }
 
     mbname_free(&mbname);
     return res;
 }
 
-/*
- * If (internal) mailbox 'name' is a DAVNOTIFICATIONS mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isdavnotificationsmailbox(const char *name, int mbtype)
+static int _mboxname_isspecialuse(const char *name, const char *specialuse)
 {
-    if (mbtype_isa(mbtype) == MBTYPE_COLLECTION) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a JMAPNOTIFICATIONS mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isjmapnotificationsmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_JMAPNOTIFY) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPNOTIFICATIONFOLDER);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's "Notes" mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__((unused)))
-{
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_NOTESMAILBOX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #jmapsubmission mailbox
- * returns boolean
- */
-EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_JMAPSUBMIT) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPSUBMISSIONFOLDER);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #jmappushsubscription mailbox
- * returns boolean
- */
-EXPORTED int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_JMAPPUSHSUB) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #jmap upload mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isjmapuploadmailbox(const char *name, int mbtype __attribute__((unused)))
-{
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_JMAPUPLOADFOLDER);
-
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's #sieve mailbox
- * returns boolean
- */
-EXPORTED int mboxname_issievemailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) == MBTYPE_SIEVE) return 1;  /* Only works on backends */
-    int res = 0;
-
-    mbname_t *mbname = mbname_from_intname(name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_SIEVE_FOLDER);
-
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
-        res = 1;
-
-    mbname_free(&mbname);
-    return res;
-}
-
-/*
- * If (internal) mailbox 'name' is a user's \Scheduled mailbox
- * returns boolean
- */
-EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
-{
-    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 0;  /* Only works on backends */
-
     char *userid = mboxname_to_userid(name);
     struct buf attrib = BUF_INITIALIZER;
     int res = 0;
@@ -1707,7 +1677,7 @@ EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
         strarray_t *uses = strarray_split(buf_cstring(&attrib),
                                           " ", STRARRAY_TRIM);
 
-        if (strarray_find_case(uses, "\\Scheduled", 0) >= 0) {
+        if (strarray_contains_case(uses, specialuse)) {
             res = 1;
         }
         strarray_free(uses);
@@ -1717,6 +1687,17 @@ EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
     free(userid);
 
     return res;
+}
+
+/*
+ * If (internal) mailbox 'name' is a user's \Scheduled mailbox
+ * returns non-zero
+ */
+EXPORTED int mboxname_isscheduledmailbox(const char *name, int mbtype)
+{
+    if (mbtype_isa(mbtype) != MBTYPE_EMAIL) return 0;  /* Only works on backends */
+
+    return _mboxname_isspecialuse(name, "\\Scheduled");
 }
 
 EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
@@ -2218,13 +2199,11 @@ EXPORTED char *mboxname_metapath(const char *partition,
         metaflag = IMAP_ENUM_METAPARTITION_FILES_ANNOTATIONS;
         filename = FNAME_ANNOTATIONS;
         break;
-#ifdef WITH_DAV
     case META_DAV:
         snprintf(confkey, 256, "metadir-dav-%s", partition);
         metaflag = IMAP_ENUM_METAPARTITION_FILES_DAV;
         filename = FNAME_DAV;
         break;
-#endif
     case META_ARCHIVECACHE:
         snprintf(confkey, 256, "metadir-archivecache-%s", partition);
         metaflag = IMAP_ENUM_METAPARTITION_FILES_ARCHIVECACHE;
@@ -2294,8 +2273,8 @@ EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
     if (withtime) {
         struct timeval tv;
         gettimeofday( &tv, NULL );
-        snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s.%X",
-                 deletedprefix, name+domainlen, (unsigned) tv.tv_sec);
+        snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s.%llX",
+                 deletedprefix, name+domainlen, (unsigned long long) tv.tv_sec);
     } else {
         snprintf(result+domainlen, MAX_MAILBOX_BUFFER-domainlen, "%s.%s",
                  deletedprefix, name+domainlen);
@@ -2384,7 +2363,11 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
             mboxlist_entry_free(&mbentry_byname);
         }
 
-        if (!r && mbentry && mbentry->uniqueid && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+        if (r || !mbentry || !mbentry->uniqueid) {
+            syslog(LOG_INFO, "Falling back to using legacy location for %s.%s",
+                   mbname_userid(mbname), suffix);
+        }
+        else if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             fname = mboxid_conf_getpath(mbentry->uniqueid, suffix);
         }
 
@@ -3171,9 +3154,19 @@ static modseq_t mboxname_domodseq(const char *fname,
     return counters.highestmodseq;
 }
 
+EXPORTED void mboxname_assert_canadd(const mbname_t *mbname)
+{
+    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
+    // add code for suppressing particular users by filename
+    const char *userid = mbname_userid(mbname);
+    if (!userid) return;
+    assert(!user_isreplicaonly(userid));
+}
+
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     modseq_t modseq = mboxname_domodseq(fname, mboxname, last, MBOXMODSEQ, mbtype, flags, 1);
@@ -3219,6 +3212,7 @@ EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
 EXPORTED modseq_t mboxname_nextquotamodseq(const char *mboxname, modseq_t last)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     modseq_t modseq = mboxname_domodseq(fname, mboxname, last, QUOTAMODSEQ, 0, 0, 1);
@@ -3267,6 +3261,7 @@ EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
 EXPORTED modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     modseq_t modseq = mboxname_domodseq(fname, mboxname, last, RACLMODSEQ, 0, 0, 1);
@@ -3316,6 +3311,7 @@ EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
     struct mboxname_counters counters;
     int fd = -1;
     mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
     char *fname = mboxname_conf_getpath(mbname, "counters");
 
     /* XXX error handling */

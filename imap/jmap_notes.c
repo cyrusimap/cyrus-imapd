@@ -105,18 +105,13 @@ HIDDEN void jmap_notes_init(jmap_settings_t *settings)
 {
     if (!config_getstring(IMAPOPT_NOTESMAILBOX)) return;
 
-    jmap_method_t *mp;
-    for (mp = jmap_notes_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_notes_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_NOTES_EXTENSION, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_notes_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_notes_methods_nonstandard, settings);
     }
 }
 
@@ -314,8 +309,8 @@ static int _note_get(message_t *msg, json_t *note, hash_table *props,
 
         charset = charset_lookupname(charset_id);
         if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
-            char *dec = charset_to_utf8(buf_cstring(buf), buf_len(buf),
-                                        charset, encoding);
+            char *dec = charset_to_utf8cstr(buf_cstring(buf), buf_len(buf),
+                                            charset, encoding);
             buf_setcstr(buf, dec);
             free(dec);
         }
@@ -472,7 +467,7 @@ static int jmap_note_get(jmap_req_t *req)
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
@@ -503,7 +498,7 @@ static int jmap_note_get(jmap_req_t *req)
     get.state = buf_release(&buf);
     jmap_ok(req, jmap_get_reply(&get));
 
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
 
 done:
     jmap_parser_fini(&parser);
@@ -752,7 +747,7 @@ static void _notes_update_cb(const char *id, message_t *msg,
                    id, error_message(r));
         }
         else {
-            json_t *new_note = jmap_patchobject_apply(note, patch, NULL);
+          json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
 
             if (new_note) {
                 r = _note_create(msg_mailbox(msg), new_note, &updated_note);
@@ -867,7 +862,7 @@ static int jmap_note_set(jmap_req_t *req)
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 1);
+    r = mailbox_open_iwl(mbentry->name, &mbox);
     assert(mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
@@ -955,7 +950,7 @@ static int jmap_note_set(jmap_req_t *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return 0;
@@ -978,7 +973,7 @@ static int change_cmp(const void **a, const void **b)
 static int jmap_note_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     struct mailbox *mbox = NULL;
     mbentry_t *mbentry = NULL;
     int userflag;
@@ -999,7 +994,7 @@ static int jmap_note_changes(jmap_req_t *req)
         goto done;
     }
 
-    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
 
     r = mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0);
@@ -1057,7 +1052,7 @@ static int jmap_note_changes(jmap_req_t *req)
         }
     }
     mailbox_iter_done(&iter);
-    jmap_closembox(req, &mbox);
+    mailbox_close(&mbox);
     buf_free(&buf);
 
     if (changes.max_changes) {

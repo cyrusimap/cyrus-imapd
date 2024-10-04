@@ -172,6 +172,7 @@ sub common_basic
 }
 
 sub test_basic_idled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -196,6 +197,7 @@ sub test_basic_noidled
 }
 
 sub test_basic_abortedidled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -253,6 +255,7 @@ sub common_delivery
 }
 
 sub test_delivery_idled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -277,6 +280,7 @@ sub test_delivery_noidled
 }
 
 sub test_delivery_abortedidled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -318,7 +322,7 @@ sub common_shutdownfile
     $self->assert_null($talk->get_response_code('alert'));
 
     xlog $self, "Write some text to the shutdown file";
-    my $admin_store = $svc->create_store(folder => 'user.casssandane',
+    my $admin_store = $svc->create_store(folder => 'user.cassandane',
                                          username => 'admin');
     my $shut_message = "The Mayans were right";
     $admin_store->get_client()->setmetadata("",
@@ -367,6 +371,7 @@ sub common_shutdownfile
 }
 
 sub test_shutdownfile_idled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -391,6 +396,7 @@ sub test_shutdownfile_noidled
 }
 
 sub test_shutdownfile_abortedidled
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -404,6 +410,7 @@ sub test_shutdownfile_abortedidled
 }
 
 sub test_sigterm
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -421,23 +428,20 @@ sub test_sigterm
     my $store = $svc->create_store(folder => 'INBOX');
     my $talk = $store->get_client();
 
-    # User logged in SESSIONID=<0604061-1337148251-29539-1>
-    my $rem = $talk->get_response_code('remainder');
-    my (undef, $start, $imapd_pid, undef) =
-        ($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
-    # cyrus switched pid and start at one point - the start will ALWAYS
-    # be larger than the pid, so....
-    ($imapd_pid, $start) = ($start, $imapd_pid) if ($start < $imapd_pid);
-    $self->assert_not_null($imapd_pid);
-    $imapd_pid = 0 + $imapd_pid;
-    $self->assert($imapd_pid > 1);
-    xlog $self, "PID of imapd process is $imapd_pid";
-
     $store->_select();
 
     xlog $self, "Sending the IDLE command";
     $store->idle_begin()
         or die "IDLE failed: $@";
+
+    # procinfo: pid SP servicename SP host [SP user] [SP mailbox] [SP cmdname]
+    my $procinfo = join '', $self->{instance}->run_cyr_info('proc');
+    my ($imapd_pid, undef) =
+        ($procinfo =~ m/^(\d+) imap (.+) cassandane user.cassandane Idle$/);
+    $self->assert_not_null($imapd_pid);
+    $imapd_pid = 0 + $imapd_pid;
+    $self->assert($imapd_pid > 1);
+    xlog $self, "PID of imapd process is $imapd_pid";
 
     xlog $self, "Poll for any unsolicited response - should be none";
     my $r = $store->idle_response({}, 0);
@@ -471,6 +475,7 @@ sub test_sigterm
 }
 
 sub test_sigterm_many
+    :needs_component_idled
 {
     my ($self) = @_;
 
@@ -543,6 +548,7 @@ sub test_sigterm_many
 }
 
 sub test_idled_default_timeout
+    :needs_component_idled
 {
     my ($self) = @_;
 

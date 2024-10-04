@@ -45,6 +45,7 @@
 #include "config.h"
 
 #include <fcntl.h>
+#include <getopt.h>
 #include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -80,6 +81,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "xunlink.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -123,7 +125,6 @@ static struct hash_table confighash;
 static int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
 
 extern int _sasl_debug;
-extern char *optarg;
 
 static strarray_t stashed_strings = STRARRAY_INITIALIZER;
 
@@ -252,7 +253,7 @@ imtest_fatal(const char *msg, ...)
     if (output_socket && output_socket_opened &&
         stat(output_socket, &sbuf) != -1 &&
         sbuf.st_ino == output_socket_ino) {
-        unlink(output_socket);
+        xunlink(output_socket);
     }
     if (msg != NULL) {
         va_list ap;
@@ -630,20 +631,22 @@ static int tls_dump(const char *s, int len)
 
 /* taken from OpenSSL apps/s_cb.c */
 
-static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
-                        long argl __attribute__((unused)), long ret)
+static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
+                        size_t len __attribute__((unused)), int argi,
+                        long argl __attribute__((unused)), int ret,
+                        size_t *processed __attribute__((unused)))
 {
     if (!do_dump)
         return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-        printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
+        printf("read from %08lX [%08lX] (%d bytes => %d (0x%X))\n",
                (unsigned long) bio, (unsigned long) argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
         return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-        printf("write to %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
+        printf("write to %08lX [%08lX] (%d bytes => %d (0x%X))\n",
                (unsigned long) bio, (unsigned long) argp,
                argi, ret, ret);
         tls_dump(argp, (int) ret);
@@ -686,7 +689,7 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
      * created for us, so we can use it for debugging purposes.
      */
     if (verbose==1)
-        BIO_set_callback(SSL_get_rbio(tls_conn), bio_dump_cb);
+        BIO_set_callback_ex(SSL_get_rbio(tls_conn), bio_dump_cb);
 
     /* Dump the negotiation for loglevels 3 and 4 */
     if (verbose==1)
@@ -834,12 +837,11 @@ static sasl_security_properties_t *make_secprops(int min,int max)
  * Initialize SASL and set necessary options
  */
 static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
-                     unsigned flags)
+                     unsigned flags, char localip[], char remoteip[])
 {
     int saslresult;
     sasl_security_properties_t *secprops=NULL;
     socklen_t addrsize;
-    char localip[60], remoteip[60];
     struct sockaddr_storage saddr_l;
     struct sockaddr_storage saddr_r;
 
@@ -947,6 +949,8 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
         saslresult = sasl_decode64(str, strlen(str),
                                    *line, len, (unsigned *) linelen);
         if (saslresult != SASL_OK && saslresult != SASL_CONTINUE) {
+            xzfree(*line);
+            *linelen = 0;
             printf("base64 decoding error\n");
             return STAT_NO;
         }
@@ -1277,6 +1281,8 @@ static void interactive(struct protocol_t *protocol, char *filename)
     struct sockaddr_un sunsock;
     int salen;
 
+    FD_ZERO(&accept_set);
+
     /* open the file if available */
     if (filename != NULL) {
         if ((fd = open(filename, O_RDONLY)) == -1) {
@@ -1291,7 +1297,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
         /* can't have this and a file for input */
         sunsock.sun_family = AF_UNIX;
         strlcpy(sunsock.sun_path, output_socket, sizeof(sunsock.sun_path));
-        unlink(output_socket);
+        xunlink(output_socket);
 
         listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
         if(listen_sock < 0) imtest_fatal("could not create output socket");
@@ -1428,9 +1434,10 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
                 if (unauth) {
                     /* Reset auth and connection state (other than TLS) */
+                    char localip[60], remoteip[60];
                     sasl_dispose(&conn);
                     if (init_sasl(protocol->service, NULL,
-                                  0, 128, 0) != IMTEST_OK) {
+                                  0, 128, 0, localip, remoteip) != IMTEST_OK) {
                         imtest_fatal("SASL initialization");
                     }
                     unauth = 0;
@@ -1520,7 +1527,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 
         if(stat(output_socket, &sbuf) != -1
            && sbuf.st_ino == output_socket_ino) {
-            unlink(output_socket);
+            xunlink(output_socket);
         }
     }
 
@@ -2354,10 +2361,6 @@ static void http_parse_mechlist(struct buf *ret, const char *str,
         *capabilities |= CAPA_LOGIN;
         return;
     }
-    else if (len == 6 && !strncmp(scheme, "Digest", len)) {
-        scheme = "DIGEST-MD5";
-        len = strlen(scheme);
-    }
     else if (len == 9 && !strncmp(scheme, "Negotiate", len)) {
         scheme = "GSS-SPNEGO";
         len = strlen(scheme);
@@ -2454,10 +2457,6 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
         return saslresult;
     }
 
-    if (!strcmp(mechusing, "DIGEST-MD5")) {
-        mechusing = "Digest";
-        do_base64 = 0;
-    }
     else if (!strcmp(mechusing, "GSS-SPNEGO")) {
         mechusing = "Negotiate";
     }
@@ -2575,7 +2574,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
 
                             /* Trim leading and trailing BWS */
                             while (strchr(" \t", *++value));
-                            val_len = strcspn(value, ", \t");
+                            val_len = strcspn(value, ", \t\r\n");
 
                             /* Check known parameters */
                             if (!strncmp("sid", token, tok_len)) {
@@ -2663,8 +2662,7 @@ static int http_do_auth(struct sasl_cmd_t *sasl_cmd __attribute__((unused)),
                 result = auth_http_basic(servername);
             }
         } else {
-            if (!strcasecmp(mech, "digest")) mech = "DIGEST-MD5";
-            else if (!strcasecmp(mech, "negotiate")) mech = "GSS-SPNEGO";
+            if (!strcasecmp(mech, "negotiate")) mech = "GSS-SPNEGO";
 
             if (!mechlist || !stristr(mechlist, mech)) {
                 printf("[Server did not advertise HTTP %s]\n", ucase(mech));
@@ -2707,7 +2705,7 @@ static void usage(char *prog, char *prot)
     else if (!strcasecmp(prot, "nntp"))
         printf("             (\"user\" for AUTHINFO USER/PASS\n");
     else if (!strcasecmp(prot, "http"))
-        printf("             (\"basic\", \"digest\", \"negotiate\", \"ntlm\")\n");
+        printf("             (\"basic\", \"negotiate\", \"scram-sha-1\", \"scram-sha-256\")\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
 #ifdef HAVE_SSL
@@ -2725,6 +2723,13 @@ static void usage(char *prog, char *prot)
                prot);
     }
 #endif /* HAVE_ZLIB */
+    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
+        !strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp") ||
+        !strcasecmp(prot, "http") || !strcasecmp(prot, "sieve"))
+        printf("  -H ip    : Enable the HAProxy protocol and send the specified client IP address in a v1 header\n"
+               "             If the address is \"unknown\", a v1 header with UNKNOWN protocol will be sent\n"
+               "             If the address is \"local\", a v2 header with LOCAL command will be sent\n");
+
     printf("  -c       : enable challenge prompt callbacks\n"
            "             (enter one-time password instead of secret pass-phrase)\n");
     printf("  -n       : number of auth attempts (default=1)\n");
@@ -2841,7 +2846,7 @@ int main(int argc, char **argv)
     sasl_ssf_t ssf;
     int maxssf = 128;
     int minssf = 0;
-    int c;
+    int opt;
     int result;
     int errflg = 0;
 
@@ -2868,6 +2873,8 @@ int main(int argc, char **argv)
     int reauth = 1;
     int dochallenge = 0, noinitresp = 0;
     char *val;
+    char localip[60], remoteip[60];
+    const char *haproxy_clientip = NULL;
 
 #undef WITH_SSL_ONLY
 
@@ -2882,11 +2889,49 @@ int main(int argc, char **argv)
 
     prog = strrchr(argv[0], '/') ? strrchr(argv[0], '/')+1 : argv[0];
 
-    /* look at all the extra args */
-    while ((c = getopt(argc, argv, "P:qscizvk:l:p:u:a:m:f:r:t:n:I:x:X:w:o:?h")) != EOF)
-        switch (c) {
+    /* keep this in alphabetical order */
+    static const char short_options[] =
+        "?H:I:P:X:a:cf:hik:l:m:n:o:p:qr:st:u:vw:x:z";
+
+    static const struct option long_options[] = {
+        /* n.b. -? is duplicated as -h */
+        { "haproxy-clientip", required_argument, NULL, 'H' },
+        { "pidfile", required_argument, NULL, 'I' },
+        { "protocol", required_argument, NULL, 'P' },
+        /* n.b. -X is duplicated as -x */
+        { "authname", required_argument, NULL, 'a' },
+        { "do-challenge", no_argument, NULL, 'c' },
+        { "input-filename", required_argument, NULL, 'f' },
+        { "help", no_argument, NULL, 'h' },
+        { "no-initial-response", no_argument, NULL, 'i' },
+        { "minssf", required_argument, NULL, 'k' },
+        { "maxssf", required_argument, NULL, 'l' },
+        { "mechanism", required_argument, NULL, 'm' },
+        { "reauth-attempts", required_argument, NULL, 'n' },
+        { "sasl-option", required_argument, NULL, 'o' },
+        { "port", required_argument, NULL, 'p' },
+        { "require-compression", no_argument, NULL, 'q' },
+        { "realm", required_argument, NULL, 'r' },
+        { "require-tls", no_argument, NULL, 's' },
+        { "keyfile", required_argument, NULL, 't' },
+        { "username", required_argument, NULL, 'u' },
+        { "verbose", no_argument, NULL, 'v' },
+        { "password", required_argument, NULL, 'w' },
+        { "output-socket", required_argument, NULL, 'x' }, /* XXX no daemonisation */
+        { "run-stress-test", no_argument, NULL, 'z' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
         case 'P':
             prot = optarg;
+            break;
+        case 'H':
+            haproxy_clientip = optarg;
             break;
         case 'q':
 #ifdef HAVE_ZLIB
@@ -2968,7 +3013,7 @@ int main(int argc, char **argv)
 
             output_socket = optarg;
 
-            if(c == 'X'){
+            if(opt == 'X'){
                 /* close all already-open file descriptors that are
                  * not stdin/stdout/stderr */
                 int i, dsize = getdtablesize();
@@ -2999,6 +3044,7 @@ int main(int argc, char **argv)
             errflg = 1;
             break;
         }
+    }
 
     if (!*prot) {
         if (!strcasecmp(prog, "imtest"))
@@ -3105,13 +3151,47 @@ int main(int argc, char **argv)
         if (protocol->sasl_cmd.parse_success) flags += SASL_SUCCESS_DATA;
 
         if (init_sasl(protocol->service, servername,
-                      minssf, maxssf, flags) != IMTEST_OK) {
+                      minssf, maxssf, flags, localip, remoteip) != IMTEST_OK) {
             imtest_fatal("SASL initialization");
         }
 
         /* set up the prot layer */
         pin = prot_new(sock, 0);
         pout = prot_new(sock, 1);
+
+        if (haproxy_clientip) {
+            /* send a HAProxy protocol header */
+            if (!strcasecmp("local", haproxy_clientip)) {
+                /* v2 header with LOCAL command */
+                struct {
+                    uint8_t sig[12];
+                    uint8_t ver_cmd;
+                    uint8_t fam;
+                    uint16_t len;
+                } v2hdr = {
+                    "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A",
+                    (0x02 << 4) /* VER2 */ | 0x00 /* LOCAL  */,
+                    (0x01 << 4) /* INET */ | 0x01 /* STREAM */,
+                    0
+                };
+                prot_write(pout, (char *) &v2hdr, sizeof(v2hdr));
+            }
+            else if (!strcasecmp("unknown", haproxy_clientip)) {
+                /* v1 header with UNKNOWN protocol */
+                prot_puts(pout, "PROXY UNKNOWN\r\n");
+            }
+            else {
+                /* v1 header with TCP4 addresses */
+                const char *localport = strchr(localip, ';');
+                const char *remoteport = strchr(remoteip, ';');
+
+                prot_printf(pout, "PROXY TCP4 %s %.*s %s %s\r\n",
+                            haproxy_clientip,
+                            (int) (remoteport - remoteip), localip,
+                            localport+1, remoteport+1);
+            }
+            prot_flush(pout);
+        }
 
 #ifdef HAVE_SSL
         if (dossl==1) {

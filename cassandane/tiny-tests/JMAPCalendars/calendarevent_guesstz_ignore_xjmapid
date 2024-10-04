@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_guesstz_ignore_xjmapid
+    :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "PUT non-IANA VTIMEZONE with a X-JMAP-ID";
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+PRODID:Microsoft Exchange Server 2010
+VERSION:2.0
+BEGIN:VTIMEZONE
+X-JMAP-ID:/(UTC-05:00) Eastern Time (US & Canada)
+TZID:(UTC-05:00) Eastern Time (US & Canada)
+BEGIN:STANDARD
+DTSTART:16010101T020000
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=11
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=2SU;BYMONTH=3
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+SUMMARY:test
+DTSTART;TZID="(UTC-05:00) Eastern Time (US & Canada)":20230124T160000
+DTEND;TZID="(UTC-05:00) Eastern Time (US & Canada)":20230124T163000
+UID:8d5eabe8-88c4-4b6a-87b9-6b6a27d253c1
+CLASS:PUBLIC
+PRIORITY:5
+DTSTAMP:20230119T221533Z
+TRANSP:OPAQUE
+STATUS:CONFIRMED
+SEQUENCE:1
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $href = '/dav/calendars/user/cassandane/Default/test.ics';
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar',
+    );
+
+    xlog $self, "Assert VTIMEZONE converts to IANA timezone";
+
+    my $res = $jmap->CallMethods([
+        [ 'CalendarEvent/get', {
+            properties => ['timeZone'],
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('America/New_York',
+        $res->[0][1]{list}[0]{timeZone});
+
+    my $eventId = $res->[0][1]{list}[0]{id};
+    $res = $jmap->CallMethods([
+        [ 'CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'test2',
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $res = $jmap->CallMethods([
+        [ 'CalendarEvent/get', {
+            properties => ['title', 'timeZone'],
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('test2',
+        $res->[0][1]{list}[0]{title});
+    $self->assert_str_equals('America/New_York',
+        $res->[0][1]{list}[0]{timeZone});
+
+    xlog "Assert non-IANA VTIMEZONE is kept in iCalendar";
+    $res = $caldav->Request('GET', $href);
+    $self->assert($res->{content} =~
+        m/DTSTART;TZID=\"\(UTC-05:00\) Eastern Time \(US & Canada\)\"/);
+    $self->assert($res->{content} =~
+        m/TZID:\(UTC-05:00\) Eastern Time \(US & Canada\)/);
+}

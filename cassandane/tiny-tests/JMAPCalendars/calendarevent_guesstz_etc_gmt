@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_guesstz_etc_gmt
+    :min_version_3_7
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog $self, "PUT non-IANA VTIMEZONE with an unknown UTC offset";
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+PRODID:Xxx
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:foo
+LAST-MODIFIED:20221209T093419Z
+X-PROLEPTIC-TZNAME:LMT
+BEGIN:STANDARD
+TZNAME:-0930
+TZOFFSETFROM:-0918
+TZOFFSETTO:-0935
+DTSTART:19121001T000000
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+SUMMARY:test
+DTSTART;TZID=foo:20230124T160000
+DTEND;TZID=foo:20230124T163000
+UID:8d5eabe8-88c4-4b6a-87b9-6b6a27d253c1
+CLASS:PUBLIC
+PRIORITY:5
+DTSTAMP:20230119T221533Z
+TRANSP:OPAQUE
+STATUS:CONFIRMED
+SEQUENCE:1
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $href = '/dav/calendars/user/cassandane/Default/test.ics';
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar',
+    );
+
+    xlog $self, "Assert VTIMEZONE converts to IANA timezone";
+
+    my $res = $jmap->CallMethods([
+        [ 'CalendarEvent/get', {
+            properties => ['timeZone'],
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('Etc/GMT+10', $res->[0][1]{list}[0]{timeZone});
+}

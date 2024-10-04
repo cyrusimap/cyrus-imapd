@@ -61,7 +61,6 @@
 
 #include "carddav_db.h"
 #include "message.h"
-#include "xapian_wrap.h"
 
 struct email_contactfilter {
     const char *accountid;
@@ -124,13 +123,6 @@ extern void jmap_email_filtercondition_validate(const char *field, json_t *arg,
  *
  * Returns non-zero if filter matches.
  * On error, sets the JMAP error in err. */
-struct matchmime {
-    char *dbpath;
-    xapian_dbw_t *dbw;
-    message_t *m;
-    const struct buf *mime;
-    void *convmatch;
-};
 typedef struct matchmime matchmime_t;
 extern matchmime_t *jmap_email_matchmime_new(const struct buf *buf, json_t **err);
 extern void jmap_email_matchmime_free(matchmime_t **matchmimep);

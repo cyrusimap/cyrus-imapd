@@ -81,8 +81,16 @@ comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
         }
     }
     else if (c->match == B_COUNT) {
-        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT, ":count",
-                     c->collation == B_OCTET ? "i;octet" : "i;ascii-casemap");
+        const char *invalid_collation;
+
+        switch (c->collation) {
+        case B_OCTET:          invalid_collation = "i;octet";           break;
+        case B_UNICODECASEMAP: invalid_collation = "i;unicode-casemap"; break;
+        default:               invalid_collation = "i;ascii-casemap";   break;
+        }
+
+        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
+                     ":count", invalid_collation);
     }
 
     return c;
@@ -268,17 +276,9 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_IMAP4FLAGS;
         break;
 
-    case B_DENOTIFY:
-        capability = "notify";
-        supported = parse_script->support & SIEVE_CAPA_NOTIFY;
-        init_comptags(&p->u.d.comp);
-        p->u.d.comp.collation = B_ASCIICASEMAP;
-        p->u.d.priority = -1;
-        break;
-
-    case B_NOTIFY:
     case B_ENOTIFY:
-        /* actual type and availability will be determined by parser */
+        capability = "enotify";
+        supported = parse_script->support & SIEVE_CAPA_ENOTIFY;
         p->u.n.priority = -1;
         break;
 
@@ -320,10 +320,14 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_SNOOZE;
         break;
 
-    case B_PROCESSIMIP:
-        capability = "vnd.cyrus.imip";
-        supported = parse_script->support & SIEVE_CAPA_IMIP;
+    case B_PROCESSCAL:
+        capability = "processcal";
+        supported = parse_script->support & SIEVE_CAPA_PROCESSCAL;
         break;
+
+    case B_IKEEP_TARGET:
+        capability = "vnd.cyrus.implicit_keep_target";
+        supported = parse_script->support & SIEVE_CAPA_IKEEP_TARGET;
     }
 
     if (!supported) {
@@ -440,11 +444,16 @@ void free_test(test_t *t)
     free(t);
 }
 
+static void free_target_mailbox(struct TargetMailbox *t)
+{
+    free(t->folder);
+    free(t->specialuse);
+    free(t->mailboxid);
+}
+
 static void free_fileinto(struct Fileinto *f)
 {
-    free(f->folder);
-    free(f->specialuse);
-    free(f->mailboxid);
+    free_target_mailbox(&f->t);
     strarray_free(f->flags);
 }
 
@@ -537,6 +546,10 @@ void free_tree(commandlist_t *cl)
             strarray_free(cl->u.dh.values);
             break;
 
+        case B_LOG:
+            free(cl->u.l.text);
+            break;
+
         case B_SNOOZE:
             free_fileinto(&cl->u.sn.f);
             strarray_free(cl->u.sn.addflags);
@@ -545,10 +558,16 @@ void free_tree(commandlist_t *cl)
             free(cl->u.sn.tzid);
             break;
 
-        case B_PROCESSIMIP:
-            free(cl->u.imip.calendarid);
-            free(cl->u.imip.outcome_var);
-            free(cl->u.imip.errstr_var);
+        case B_PROCESSCAL:
+            strarray_free(cl->u.cal.addresses);
+            free(cl->u.cal.organizers);
+            free(cl->u.cal.calendarid);
+            free(cl->u.cal.outcome_var);
+            free(cl->u.cal.reason_var);
+            break;
+
+        case B_IKEEP_TARGET:
+            free_target_mailbox(&cl->u.ikt);
             break;
         }
 

@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_issue_LP52545479
+    :min_version_3_1
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendar1 => {
+                    name => 'calendar1',
+                    color => 'coral',
+                    sortOrder => 1,
+                    isVisible => JSON::true,
+                }
+            },
+        }, 'R1'],
+    ], [ $self->default_using ]);
+    my $calendarId = $res->[0][1]{created}{calendar1}{id};
+    $self->assert_not_null($calendarId);
+
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    firstName => "firstName",
+                    lastName => "lastName",
+                    notes => "x" x 1024
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarIds => {
+                        $calendarId => JSON::true,
+                    },
+                    uid => '58ADE31-custom-UID',
+                    title => 'event1',
+                    start => '2015-11-07T09:00:00',
+                    duration => 'PT5M',
+                    sequence => 42,
+                    timeZone => 'Etc/UTC',
+                    showWithoutTime => JSON::false,
+                    locale => 'en',
+                    description => 'x' x 1024,
+                    freeBusyStatus => 'busy',
+                    privacy => 'secret',
+                    participants => undef,
+                    alerts => undef,
+                }
+            },
+        }, 'R2'],
+    ], [ $self->default_using ]);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+    my $eventId1 = $res->[1][1]{created}{event1}{id};
+    $self->assert_not_null($eventId1);
+
+    my $res_annot_storage = 'ANNOTATION-STORAGE';
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        $res_annot_storage = 'X-ANNOTATION-STORAGE';
+    }
+
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_quotalimits(storage => 1,
+                            $res_annot_storage => 1); # that's 1024 bytes
+
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+              update => {
+                  $contactId1 => {
+                      lastName => "updatedLastName",
+                  }
+              }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+              update => {
+                  $eventId1 => {
+                      description => "y" x 2048,
+                  }
+              }
+        }, 'R2'],
+    ], [ $self->default_using ]);
+    $self->assert_str_equals('overQuota', $res->[0][1]{notUpdated}{$contactId1}{type});
+    $self->assert(not exists $res->[0][1]{updated}{$contactId1});
+    $self->assert_str_equals('overQuota', $res->[1][1]{notUpdated}{$eventId1}{type});
+    $self->assert(not exists $res->[1][1]{updated}{$eventId1});
+}

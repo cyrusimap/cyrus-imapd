@@ -83,6 +83,8 @@ struct quota {
     char *scanmbox;
     quota_t scanuseds[QUOTA_NUMRESOURCES];
 
+    /* inforation for changes */
+    int dirty;
     modseq_t modseq;
 };
 
@@ -90,6 +92,7 @@ struct quota {
 #define QUOTA_UNLIMITED     (-1)
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
+extern const char * const legacy_quota_names[QUOTA_NUMRESOURCES];
 extern const quota_t quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 
@@ -126,8 +129,10 @@ extern int quota_deleteroot(const char *quotaroot, int silent);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);
 
+#define QUOTA_USE_CONV (1<<0)
+
 extern int quota_foreach(const char *prefix, quotaproc_t *proc,
-                         void *rock, struct txn **);
+                         void *rock, struct txn **, unsigned flags);
 
 /* open the quotas db */
 void quotadb_open(const char *fname);
@@ -140,8 +145,7 @@ extern int quotadb_foreach(const char *prefix, size_t prefixlen,
 void quotadb_close(void);
 
 /* initialize database structures */
-#define QUOTADB_SYNC 0x02
-void quotadb_init(int flags);
+void quotadb_init(void);
 
 /* done with database stuff */
 void quotadb_done(void);

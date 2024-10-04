@@ -16,13 +16,14 @@ Cassandane tests are run out of the Cassandane directory itself, without
 installing Cassandane anywhere.  This is not the result of deliberate policy so
 much as implementation laziness.
 
-All runtime state is created under the directory /var/tmp/cass/, and
-results reports are written to the current working directory.  Apart from
-reports, Cassandane does not require write permission to its source directory.
+All runtime state is created under the cassandane rootdir configured in
+cassandane.ini (by default: /var/tmp/cass).
 
-Cassandane (or more precisely, the Cyrus code it exercises) needs to be run
-either as the superuser or as the "cyrus" user.  If run as another user,
-it attempts to use 'sudo' to re-run itself as the "cyrus" user.
+Internally, Cassandane (or more precisely, the Cyrus code it exercises) needs
+to be run either as the superuser or as the "cyrus" user.  But you should
+generally invoke Cassandane as yourself, not as "cyrus" or "root".  It will
+try to re-run itself using sudo, which you already configured during setup
+(didn't you?)
 
 The script 'testrunner.pl' is your interface for running Cassandane tests.
 There are several other Perl scripts in the directory, but they are utilities
@@ -30,132 +31,92 @@ which were helpful during manual testing rather than part of the test suite
 itself.
 
 With no arguments, testrunner.pl runs all the tests that come with Cassandane
-and reports the results in the jUnit test report format.  The testrunner.pl
-exit code will be 0 if all tests passed, non-zero otherwise.
+and reports the results to the terminal in the 'prettier' test report format.
+The testrunner.pl exit code will be 0 if all tests passed, non-zero otherwise.
 
+    $ ./testrunner.pl
+    [  OK  ] Cyrus::ACL.reconstruct
+    [  OK  ] Cyrus::ACL.move
+    [  OK  ] Cyrus::ACL.delete
+    ...
 
-root@testbox# ls reports
-ls: cannot access reports: No such file or directory
+There are several test report formats to choose from, by invoking testrunner.pl
+with the -f 'format' option.
 
-root@testbox# ./testrunner.pl
+-f pretty:
+    Human readable output to the terminal, showing the ok/failed/error status
+    and name for each test, as well as the error reports from any not-ok tests.
+    This gets noisy in the case of failures!  It's mostly useful when debugging
+    single tests, especially in conjunction with -vvv.
 
-root@testbox# ls reports
-TEST-Cassandane.Cyrus.Conversations.xml  TEST-Cassandane.Test.DateTime.xml
-TEST-Cassandane.Cyrus.Replication.xml    TEST-Cassandane.Test.Instance.xml
-TEST-Cassandane.Cyrus.Simple.xml         TEST-Cassandane.Test.Message.xml
-TEST-Cassandane.Test.Address.xml         TEST-Cassandane.Test.MessageStoreFactory.xml
-TEST-Cassandane.Test.Config.xml
+-f prettier (the default):
+    As for pretty, but without the noise when problems occur.  This is most
+    useful when running many (or all) tests at once.  A list of failed tests
+    is written to $rootdir/failed, and the full error reports for any failed
+    tests are written to $rootdir/reports, so you can still access these details
+    if you find yourself needing them after the fact.
 
+-f xml:
+    This writes reports in jUnit format.  The reports will be xml files in a
+    subdirectory "reports" of the current directory at the time testrunner.pl
+    was invoked.  Note that this is NOT the same "reports" file as used by
+    -f prettier.  This format is apparently useful for integration with various
+    CI systems, though it's not used by our Github CI.
 
-The jUnit format is the default because it's widely used and in particular it's
-compatible with the Jenkins Continuous Integration server.  The reports will be
-available in the directory reports/ and will be named TEST-Cassandane.*.xml,
-one XML file for each group of tests.
+-f tap:
+    TAP is a common format which originated with Perl and is now widely used,
+    see http://en.wikipedia.org/wiki/Test_Anything_Protocol for more
+    information.  This seems to prints a single character for each test, or
+    something.  I'm not sure what it's useful for, since if a test fails you
+    don't know which one or why.
 
-Conveniently, the first line of each XML report will contain a count of the
-number of test failures in the corresponding group, so you can use "head" to
-discover if anything went wrong.
-
-root@testbox# head -1 reports/TEST*.xml
-
-==> reports/TEST-Cassandane.Cyrus.Conversations.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Cyrus.Simple.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Test.Address.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Test.Config.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Test.CyrusInstance.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Test.DateTime.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Test.MessageStoreFactory.xml <==
-<testsuite failures="0"
-
-==> reports/TEST-Cassandane.Test.Message.xml <==
-<testsuite failures="0"
-
-More useful for manual running is the TAP output format, which is designed for
-automated use but is also more human friendly.  TAP is a common format which
-originated with Perl and is now widely used, see
-http://en.wikipedia.org/wiki/Test_Anything_Protocol for more information. The
-TAP format can be selected by using the "-f tap" option to testrunner.pl.
-
-
-root@testbox# ./testrunner.pl -f tap
-.........................................................................
-.........................................................................
-..........................................................
-Time: 295 wallclock secs ( 0.25 usr  0.01 sys + 398.16 cusr 35.72 csys = 434.14 CPU)
-
-OK (204 tests)
-
-
-You can run only a subset of tests by giving an argument to testrunner.pl.
-The argument can be
-
- * a group of tests (which is a directory under Cassandane/ )
-
-    me@testbox% ./testrunner.pl Cassandane/Cyrus
-
- * likewise, but specified with "." or "::" separators
-
-    me@testbox% ./testrunner.pl Cassandane.Cyrus
-
-    me@testbox% ./testrunner.pl Cassandane::Cyrus
-
- * a test suite (which maps to a Perl module under Cassandane/ )
-
-    me@testbox% ./testrunner.pl Cassandane/Cyrus/Quota.pm
-
- * likewise, but using the Perl module name syntax
-
-    me@testbox% ./testrunner.pl Cassandane::Cyrus::Quota
+You can run just a subset of tests by giving arguments to testrunner.pl.
+Tests to run are most commonly specified as:
 
  * a test suite without the leading Cassandane::Cyrus
 
-    me@testbox% ./testrunner.pl Quota
+    $ ./testrunner.pl Quota
 
  * a single test in a single test suite
 
-    me@testbox% ./testrunner.pl Quota.quotarename
+    $ ./testrunner.pl Quota.quotarename
 
-Arguments can be negated by using a leading exclamation mark (!)
-character.  Note that you will need to escape the ! from the
-shell:
+Multiple test suites or tests can be specified as well:
 
-    me@testbox% ./testrunner.pl \!Quota
+    $ ./testrunner.pl Admin Quota.quotarename
+
+Arguments can be negated by using a leading exclamation mark (!) or tilde (~)
+character.  Note that you may need to escape the ! from the shell, so ~ is
+generally preferable:
+
+    $ ./testrunner.pl ~Quota
 
 will run all the tests from all the suites except the Quota suite.
 Arguments accumulate from left to right, so e.g.
 
-    me@testbox% ./testrunner.pl Quota \!Quota.quotarename
+    $ ./testrunner.pl Quota ~Quota.quotarename
 
-will run all the tests in the Quota suite except the quoterename test.
+will run all the tests in the Quota suite except the quotarename test.
 
 The -v (or --verbose) option to testrunner.pl causes both Cassandane and
-several Cyrus programs run by Cassandane, to emit a lot of information
-to stderr.  The output from Cassandane is prefixed by "=====>".  Log
-messages are also written to the syslog.
+several Cyrus programs run by Cassandane to emit a lot of information to
+stderr.  You can specify this option multiple times for increased verbosity,
+and the single-character version can be stacked, like -vvv.
 
 The --valgrind option to testrunner.pl runs all the Cyrus executables
 using Valgrind.  This is of course much slower but is recommended
 because it finds many subtle bugs.  The Valgrind logs are saved in
-the files /var/tmp/cass/$instance/vglogs/$name.$pid.  Cassandane will
+the files $rootdir/$instance/vglogs/$name.$pid.  Cassandane will
 examine these logs after each test finishes, and will fail the test
 if there are any errors (including memory leaks) reported.
 
 The --cleanup option causes Cassandane to do two things.  Firstly, it
-immediately cleans up any files left over in /var/tmp/cass/.  Secondly,
+immediately cleans up any files left over in $rootdir.  Secondly,
 it cleans up any such files after each test, unless the test fails.
-This should be helpful when /var/tmp does not have much room.  Be aware
-that Cassandane tests can use over 20 MB per test, most of which is due
-to inefficiencies in the Berkeley DB library.
+This should be helpful when the filesystem in use does not have much room,
+such as when running on a tmpfs filesystem.  You'll probably find this useful,
+so enable cassandane.cleanup in your cassandane.ini rather than typing it
+all the time.  Then use --no-cleanup to override it when you don't want that.
 
+testrunner.pl also accepts a bunch of other options that are not documented
+here.  Consult the script itself for the full and most up-to-date set.

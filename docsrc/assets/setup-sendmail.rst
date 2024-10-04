@@ -33,7 +33,7 @@ Add cf/feature/anfi_vcyrus.m4
 #############################
 Create the file cf/feature/anfi_vcyrus.m4:
 
-.. code-block:: m4
+.. code-block::
 
   divert(-1)
   dnl

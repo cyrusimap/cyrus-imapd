@@ -103,7 +103,10 @@
 
 #define HOSTNAME_SIZE 512
 
-/* each mailbox has the following data */
+/* Each mailbox has the following data.
+ * If you change or extend this struct, you MUST also update the
+ * dump and undump implementations in ctl_mboxlist.c!
+ */
 struct mboxlist_entry {
     char *name;
     char *ext_name;
@@ -128,6 +131,10 @@ struct mboxlist_entry {
 
 typedef struct mboxlist_entry mbentry_t;
 
+/* Each name_history entry has the following data.
+ * If you change or extend this struct, you MUST also update the
+ * dump and undump implementations in ctl_mboxlist.c!
+ */
 typedef struct {
     char *name;
     time_t mtime;
@@ -143,6 +150,9 @@ mbentry_t *mboxlist_entry_create();
 char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int isnew);
 char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);
 char *mbentry_archivepath(const struct mboxlist_entry *mbentry, uint32_t);
+
+int mbentry_is_local_mailbox(const struct mboxlist_entry *mbentry);
+#define mbentry_is_remote_mailbox(mbentry) (!mbentry_is_local_mailbox(mbentry))
 
 mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
 
@@ -172,7 +182,9 @@ int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
-int mboxlist_update(const mbentry_t *mbentry, int localonly);
+#define mboxlist_update(m, l) mboxlist_update_full(m, l, 0)
+int mboxlist_update_full(const mbentry_t *mbentry, int localonly,
+                         int silent);
 /* Update but take the usernamespace lock first */
 int mboxlist_updatelock(const mbentry_t *mbentry, int localonly);
 
@@ -228,6 +240,8 @@ int mboxlist_createmailboxlock(const mbentry_t *mbentry,
 #define MBOXLIST_DELETE_SILENT              (1<<4)
 /* unprotect_specialuse ignores the specialuse_protect config */
 #define MBOXLIST_DELETE_UNPROTECT_SPECIALUSE (1<<5)
+/* for sync_reset - wipe everything */
+#define MBOXLIST_DELETE_ENTIRELY             (1<<6)
 /* delayed delete */
 /* Translate delete into rename */
 /* prepare MailboxDelete notification if mboxevent is not NULL */
@@ -271,10 +285,16 @@ int mboxlist_setacl(const struct namespace *namespace, const char *name,
 
 /* Change all ACLs on mailbox */
 int mboxlist_updateacl_raw(const char *name, const char *acl);
-int mboxlist_sync_setacls(const char *name, const char *acl, modseq_t foldermodseq);
+int mboxlist_setacls(const char *name, const char *acl, modseq_t foldermodseq, int silent);
 int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq);
 
 int mboxlist_set_racls(int enabled);
+int mboxlist_update_raclmodseq(const char *userid);
+
+/* user groups */
+int mboxlist_set_usergroup(const char *userid, const char *group, int val, int silent);
+int mboxlist_lookup_usergroups(const char *userid, strarray_t *dest);
+
 
 int mboxlist_cleanup_deletedentries(const mbentry_t *mbentry, time_t mark);
 
@@ -377,13 +397,13 @@ int mboxlist_checksub(const char *name, const char *userid);
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid,
                        const struct auth_state *auth_state,
-                       int add, int force, int notify);
+                       int add, int force, int notify, int silent);
 
 /* set or create quota root */
 int mboxlist_setquotas(const char *root,
                        quota_t newquotas[QUOTA_NUMRESOURCES],
                        modseq_t modseq, int force);
-int mboxlist_unsetquota(const char *root);
+int mboxlist_unsetquota(const char *root, int silent);
 
 /* handle interemediates */
 int mboxlist_update_intermediaries(const char *mboxname, int mbtype, modseq_t modseq);
@@ -396,8 +416,7 @@ void mboxlist_open(const char *name);
 void mboxlist_close(void);
 
 /* initialize database structures */
-#define MBOXLIST_SYNC 0x02
-void mboxlist_init(int flags);
+void mboxlist_init(void);
 
 /* done with database stuff */
 void mboxlist_done(void);

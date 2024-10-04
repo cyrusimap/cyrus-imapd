@@ -1,0 +1,163 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_calendar_set_defaultalerts
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CalDAV = $self->{caldav};
+
+    my $alert1Id = '589c1b45-ca59-4072-90fb-93c41491e484';
+    my $alert2Id = '899fd3e7-c0a0-442d-a04f-725c58728afb';
+
+    my $defaultAlertsWithTime = {
+        $alert1Id => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT1H',
+            },
+            action => 'email',
+        },
+        $alert2Id => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+
+    my $alert3Id = '2905eb80-48af-4e0f-85cc-de58155a2152';
+
+    my $defaultAlertsWithoutTime = {
+        $alert3Id => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        },
+    };
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                1 => {
+                    name => 'test',
+                    color => 'blue',
+                    defaultAlertsWithTime => $defaultAlertsWithTime,
+                    defaultAlertsWithoutTime => $defaultAlertsWithoutTime,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => ['#1'],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+    $self->assert_deep_equals($defaultAlertsWithTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    my $alert4Id = '5e7b49d3-fcef-484f-8d31-f9fb178ebc65';
+    my $alert4 = {
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            relativeTo => 'start',
+            offset => '-PT30M',
+        },
+        action => 'display',
+    };
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    "defaultAlertsWithTime/$alert1Id" => undef,
+                    "defaultAlertsWithTime/$alert4Id" => $alert4,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calendarId],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+                              ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+
+    delete $defaultAlertsWithTime->{$alert1Id};
+    $defaultAlertsWithTime->{$alert4Id} = $alert4;
+    $self->assert_deep_equals($defaultAlertsWithTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    "defaultAlertsWithoutTime/$alert3Id/trigger/offset" => '-PT5M',
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calendarId],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+
+    $defaultAlertsWithoutTime->{$alert3Id}{trigger}{offset} = '-PT5M';
+    $self->assert_deep_equals($defaultAlertsWithTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithTime => undef,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calendarId],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime,
+        $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calendarId => {
+                    defaultAlertsWithoutTime => undef,
+                }
+            }
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calendarId],
+            properties => ['defaultAlertsWithTime', 'defaultAlertsWithoutTime'],
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calendarId});
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithoutTime});
+}

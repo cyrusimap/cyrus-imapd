@@ -99,27 +99,23 @@ int json_array_find(json_t *array, const char *needle)
     return -1;
 }
 
-#ifdef NEED_JANSSON_JSON_DUMPB
-/* https://jansson.readthedocs.io/en/2.11/apiref.html#c.json_dumpb */
-EXPORTED size_t json_dumpb(const json_t *json,
-                           char *buffer, size_t size, size_t flags)
+/* Get the property with the given key, if it exists.
+   Otherwise, create is with the given json_pack() args */
+json_t *json_object_get_vanew(json_t *obj, const char *key,
+                              const char *fmt, ...)
 {
-    char *s;
-    size_t slen;
+    json_t *val = json_object_get(obj, key);
 
-    s = json_dumps(json, flags);
-    if (!s) return 0;
-    slen = strlen(s);
+    if (!val) {
+        json_error_t jerr;
+        va_list va;
 
-    if (slen > size) {
-        free(s);
-        return slen;
+        va_start(va, fmt);
+        val = json_vpack_ex(&jerr, 0, fmt, va);
+        va_end(va);
+
+        json_object_set_new(obj, key, val);
     }
 
-    /* n.b. json_dumpb() does NOT nul-terminate the buffer! */
-    memcpy(buffer, s, slen);
-    free(s);
-
-    return slen;
+    return val;
 }
-#endif

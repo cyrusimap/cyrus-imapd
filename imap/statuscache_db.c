@@ -176,6 +176,8 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     if (p < dend) sdata->size = strtoull(p, &p, 10);
     if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
     if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
+    if (p < dend) sdata->deleted = strtoul(p, &p, 10);
+    if (p < dend) sdata->deleted_storage = strtoull(p, &p, 10);
 
     if (*p++ != ')') return;
 
@@ -292,11 +294,12 @@ static int statuscache_store(const char *mboxname,
 
 
     buf_printf(&databuf,
-                       "I %u (%u %u %u %u %llu " MODSEQ_FMT " " MODSEQ_FMT ")",
+                       "I %u (%u %u %u %u " QUOTA_T_FMT " " MODSEQ_FMT " " MODSEQ_FMT " %u " QUOTA_T_FMT")",
                        STATUSCACHE_VERSION,
                        sdata->messages, sdata->uidnext,
                        sdata->uidvalidity, sdata->mboptions, sdata->size,
-                       sdata->createdmodseq, sdata->highestmodseq);
+                       sdata->createdmodseq, sdata->highestmodseq,
+                       sdata->deleted, sdata->deleted_storage);
 
     r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
@@ -401,6 +404,8 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     sdata->size = mailbox->i.quota_mailbox_used;
     sdata->createdmodseq = mailbox->i.createdmodseq;
     sdata->highestmodseq = mailbox->i.highestmodseq;
+    sdata->deleted = mailbox->i.deleted;
+    sdata->deleted_storage = mailbox->i.quota_deleted_used;
 
     // mbentry items are also available from an open mailbox
     sdata->uidvalidity = mailbox->i.uidvalidity;

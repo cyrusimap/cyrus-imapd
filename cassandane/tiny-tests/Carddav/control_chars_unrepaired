@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_control_chars_unrepaired
+    :min_version_3_0 :max_version_3_2
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    # make sure we don't try to repair by default
+    $self->{instance}->{config}->set('carddav_repair_vcard' => 'no');
+    $self->_start_instances();
+
+    # :NoStartInstances magic means set_up() didn't do this bit for us
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    $self->{carddav} = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($Id);
+    $self->assert_str_equals($Id, 'foo');
+    my $href = "$Id/bar.vcf";
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:123456789
+N:Gump;Forrest;;Mr.
+FN:Forrest\b Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    # vcard containing control character should be rejected
+    eval { $CardDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard') };
+    my $Err = $@;
+    $self->assert_matches(qr/valid-address-data/, $Err);
+}

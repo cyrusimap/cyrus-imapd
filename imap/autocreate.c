@@ -66,6 +66,7 @@
 #include "xmalloc.h"
 #include "mailbox.h"
 #include "mboxlist.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -217,7 +218,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         goto failed_start;
     }
 
-    /* check if sievedir is defined in impad.conf */
+    /* check if sievedir is defined in imapd.conf */
     if (!config_getstring(IMAPOPT_SIEVEDIR)) {
         syslog(LOG_ERR, "autocreate_sieve: sievedir option is not defined in"
                "imapd.conf");
@@ -401,7 +402,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     if (rename(script_names.bctmpname, script_names.bcscriptname)) {
         syslog(LOG_ERR, "autocreate_sieve: rename %s -> %s failed: %m",
                script_names.bctmpname, script_names.bcscriptname);
-        unlink(script_names.bcscriptname);
+        xunlink(script_names.bcscriptname);
         goto failed2;
     }
 
@@ -409,8 +410,8 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     if (symlink(script_names.bclinkname, script_names.defaultname)) {
         if (errno != EEXIST) {
             syslog(LOG_WARNING, "autocreate_sieve: error the symlink-ing %m.");
-            unlink(script_names.scriptname);
-            unlink(script_names.bcscriptname);
+            xunlink(script_names.scriptname);
+            xunlink(script_names.bcscriptname);
         }
     }
 
@@ -454,7 +455,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                        "%s: %m", script_names.tmpname2);
                 xclose(out_fd);
                 xclose(in_fd);
-                unlink(script_names.tmpname2);
+                xunlink(script_names.tmpname2);
                 goto success;
            }
         } /* while */
@@ -467,15 +468,15 @@ static int autocreate_sieve(const char *userid, const char *source_script)
                        "%s: %m", script_names.bcscriptname);
                 xclose(out_fd);
                 xclose(in_fd);
-                unlink(script_names.tmpname2);
+                xunlink(script_names.tmpname2);
                 goto success;
         } /* if else if */
 
         /* rename the temporary created sieve script to its final name. */
         if (rename(script_names.tmpname2, compiled_source_script)) {
             if (errno != EEXIST) {
-                unlink(script_names.tmpname2);
-                unlink(compiled_source_script);
+                xunlink(script_names.tmpname2);
+                xunlink(compiled_source_script);
             } /* if (errno) */
             goto success;
         }
@@ -488,9 +489,9 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     return 0;
 
  failed3:
-    unlink(script_names.tmpname1);
+    xunlink(script_names.tmpname1);
  failed2:
-    unlink(script_names.bctmpname);
+    xunlink(script_names.bctmpname);
     xclose(in_fd);
  failed1:
     xclose(out_fd);
@@ -528,7 +529,7 @@ static int autochangesub(struct findall_data *data, void *rock)
     /* ignore all user mailboxes, we only want shared */
     if (mboxname_isusermailbox(name, 0)) return 0;
 
-    r = mboxlist_changesub(name, userid, auth_state, 1, 0, 1);
+    r = mboxlist_changesub(name, userid, auth_state, 1, 0, 1, 1);
 
     /* unless this name was explicitly chosen, ignore the failure */
     if (!was_explicit) return 0;
@@ -699,7 +700,7 @@ done:
 int autocreate_user(struct namespace *namespace, const char *userid)
 {
     int r = IMAP_MAILBOX_NONEXISTENT; /* default error if we break early */
-    int autocreatequota = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    int64_t autocreatequota = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
     int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATE_QUOTA_MESSAGES);
     int n;
     struct auth_state *auth_state = NULL;
@@ -776,7 +777,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
                                1/*isadmin*/, userid, auth_state,
                                MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
 
-    if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1);
+    if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1, 1);
     if (r) {
         syslog(LOG_ERR, "autocreateinbox: User %s, INBOX failed. %s",
                userid, error_message(r));
@@ -790,8 +791,8 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
             newquotas[res] = QUOTA_UNLIMITED;
 
-        if (autocreatequota)
-            newquotas[QUOTA_STORAGE] = autocreatequota;
+        if (autocreatequota > 0)
+            newquotas[QUOTA_STORAGE] = autocreatequota / 1024;
 
         if (autocreatequotamessage)
             newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
@@ -837,8 +838,8 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         }
 
         /* subscribe if requested */
-        if (strarray_find(subscribe, name, 0) >= 0) {
-            r = mboxlist_changesub(foldername, userid, auth_state, 1, 1, 1);
+        if (strarray_contains(subscribe, name)) {
+            r = mboxlist_changesub(foldername, userid, auth_state, 1, 1, 1, 1);
             if (!r) {
                 numsub++;
                 syslog(LOG_NOTICE,"autocreateinbox: User %s, subscription to %s succeeded",

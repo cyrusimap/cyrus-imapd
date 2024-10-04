@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mix_fuzzy_and_nonfuzzy
+    :min_version_3_0
+{
+    my ($self) = @_;
+    $self->create_testmessages();
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Select INBOX";
+    $talk->select("INBOX") || die;
+
+    xlog $self, "SEARCH for from \"foo\@example.com\" with FUZZY body \"connection\"";
+    my $r = $talk->search(
+        "fuzzy", ["body", { Quote => "connection" }],
+        "from", { Quote => "foo\@example.com" }
+    ) || die;
+    $self->assert_num_equals(2, scalar @$r);
+}

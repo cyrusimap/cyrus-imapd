@@ -46,6 +46,7 @@
 #include <config.h>
 #include <stdio.h>
 #include <string.h>
+#include "assert.h"
 #include "util.h"
 #include "glob.h"
 #include "xmalloc.h"
@@ -58,6 +59,7 @@
 EXPORTED glob *glob_init(const char *str, char sep)
 {
     struct buf buf = BUF_INITIALIZER;
+    int r;
 
     buf_appendcstr(&buf, "(^");
     while (*str) {
@@ -109,7 +111,9 @@ EXPORTED glob *glob_init(const char *str, char sep)
     buf_appendcstr(&buf, "]|$)");
 
     glob *g = xmalloc(sizeof(glob));
-    regcomp(&g->regex, buf_cstring(&buf), REG_EXTENDED);
+    r = regcomp(&g->regex, buf_cstring(&buf), REG_EXTENDED);
+    /* XXX handle regex compilation failure properly! */
+    assert(r == 0);
     buf_free(&buf);
 
     return g;

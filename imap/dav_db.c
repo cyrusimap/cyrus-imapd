@@ -63,6 +63,7 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -192,11 +193,21 @@
     " PRIMARY KEY (rowid, ical_recurid, userid)"                             \
     " FOREIGN KEY (rowid, ical_recurid) REFERENCES jscal_objs (rowid, ical_recurid) ON DELETE CASCADE );"
 
+// dropped in version 16
 #define CMD_CREATE_CARDCACHE                                            \
     "CREATE TABLE IF NOT EXISTS vcard_jmapcache ("                      \
     " rowid INTEGER NOT NULL PRIMARY KEY,"                              \
     " jmapversion INTEGER NOT NULL,"                                    \
     " jmapdata TEXT NOT NULL,"                                          \
+    " FOREIGN KEY (rowid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_CREATE_JSCARDCACHE                                          \
+    "CREATE TABLE IF NOT EXISTS jscard_cache ("                         \
+    " rowid INTEGER NOT NULL,"                                          \
+    " userid TEXT NOT NULL,"                                            \
+    " jmapversion INTEGER NOT NULL,"                                    \
+    " jmapdata TEXT NOT NULL,"                                          \
+    " PRIMARY KEY (rowid, userid)"                                      \
     " FOREIGN KEY (rowid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
 
 #define CMD_CREATE_SIEVE                                                \
@@ -220,7 +231,8 @@
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_CARD CMD_CREATE_EM CMD_CREATE_GR \
                    CMD_CREATE_OBJS CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE   \
-                   CMD_CREATE_SIEVE CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE
+                   CMD_CREATE_SIEVE CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE \
+                   CMD_CREATE_JSCARDCACHE
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
@@ -273,9 +285,13 @@
     "INSERT INTO jscal_objs" \
     " SELECT rowid, '', modseq, createdmodseq, dtstart, dtend, alive, '' FROM ical_objs;"
 
+#define CMD_DBUPGRADEv16 \
+    "DROP TABLE vcard_jmapcache;" \
+    CMD_CREATE_JSCARDCACHE
+
 static int sievedb_upgrade(sqldb_t *db);
 
-struct sqldb_upgrade davdb_upgrade[] = {
+static const struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
   { 4, CMD_DBUPGRADEv4, NULL },
@@ -290,10 +306,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   /* Don't upgrade to version 13.  This was an intermediate Sieve DB version */
   { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
   { 15, CMD_DBUPGRADEv15, NULL },
+  { 16, CMD_DBUPGRADEv16, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 15
+#define DB_VERSION 16
 
 static sqldb_t *reconstruct_db;
 
@@ -387,6 +404,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     struct buf attrib = BUF_INITIALIZER;
 #endif
     int (*addproc)(struct mailbox *) = NULL;
+    int writelock = 0;
     int r = 0;
 
     signals_poll();
@@ -397,6 +415,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     case MBTYPE_COLLECTION:
     case MBTYPE_ADDRESSBOOK:
         addproc = &mailbox_add_dav;
+        writelock = 1; // write lock so we can delete stale index records
         break;
 #endif
 #ifdef USE_SIEVE
@@ -415,7 +434,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
             strarray_t *specialuse =
                 strarray_split(buf_cstring(&attrib), NULL, 0);
 
-            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+            if (strarray_contains(specialuse, "\\Snoozed")) {
                 addproc = &mailbox_add_email_alarms;
             }
             strarray_free(specialuse);
@@ -428,7 +447,10 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     if (addproc) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        r = mailbox_open_irl(mbentry->name, &mailbox);
+        if (writelock)
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
+        else
+            r = mailbox_open_irl(mbentry->name, &mailbox);
         if (!r) r = addproc(mailbox);
         mailbox_close(&mailbox);
     }
@@ -496,13 +518,13 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
         if (audit_tool) {
             printf("Not auditing %s, reconstruct failed %s\n", userid, error_message(r));
         }
-        unlink(buf_cstring(&newfname));
+        xunlink(buf_cstring(&newfname));
     }
     else {
         syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
         if (audit_tool) {
             run_audit_tool(audit_tool, userid, buf_cstring(&fname), buf_cstring(&newfname));
-            unlink(buf_cstring(&newfname));
+            xunlink(buf_cstring(&newfname));
         }
         else {
             rename(buf_cstring(&newfname), buf_cstring(&fname));

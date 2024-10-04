@@ -44,7 +44,6 @@
 #ifndef DAV_UTIL_H
 #define DAV_UTIL_H
 
-#include "httpd.h"
 #include "mailbox.h"
 #include "util.h"
 
@@ -63,6 +62,7 @@
 #define XML_NS_SYSFLAG  "http://cyrusimap.org/ns/sysflag/"
 #define XML_NS_DAVMOUNT "http://purl.org/NET/webdav/mount/"
 #define XML_NS_JMAPCAL  "urn:ietf:params:jmap:calendars"
+#define XML_NS_CYRUS    "http://cyrusimap.org/ns/"
 
 /* Index into preconditions array */
 enum {
@@ -158,6 +158,7 @@ int dav_get_validators(struct mailbox *mailbox, void *data,
                        const char *userid, struct index_record *record,
                        const char **etag, time_t *lastmod);
 
+typedef struct transaction_t txn_t; // defined in httpd.h
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
