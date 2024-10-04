@@ -74,6 +74,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 #define REQ_OK          0
 #define REQ_DENY        1
 #define REQ_UNK         2

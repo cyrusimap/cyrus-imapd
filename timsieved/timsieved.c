@@ -73,6 +73,7 @@
 #include "imap/proxy.h"
 #include "imap/sync_log.h"
 #include "lib/assert.h"
+#include "master/service.h"
 #include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"

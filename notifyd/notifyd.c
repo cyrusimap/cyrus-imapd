@@ -67,6 +67,7 @@
 #include "xmalloc.h"
 #include "strarray.h"
 
+#include "master/service.h"
 
 /* global state */
 const int config_need_data = 0;

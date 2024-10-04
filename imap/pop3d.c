@@ -93,6 +93,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 #include "statuscache.h"
 
 #include "iostat.h"

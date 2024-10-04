@@ -106,6 +106,8 @@
 #include "imap/imap_err.h"
 #include "imap/http_err.h"
 
+#include "master/service.h"
+
 #ifdef WITH_DAV
 #include "http_dav.h"
 #endif

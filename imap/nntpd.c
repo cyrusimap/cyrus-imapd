@@ -114,6 +114,8 @@
 #include "imap/imap_err.h"
 #include "imap/nntp_err.h"
 
+#include "master/service.h"
+
 extern int optind;
 extern char *optarg;
 extern int opterr;
