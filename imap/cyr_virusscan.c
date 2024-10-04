@@ -249,7 +249,7 @@ static struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL
 
 
 /* forward declarations */
-int usage(char *name);
+void usage(char *name) __attribute__((noreturn));
 int scan_me(struct findall_data *, void *);
 unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
@@ -395,7 +395,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-int usage(char *name)
+void usage(char *name)
 {
     printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ] [-v]\n"
            "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
