@@ -102,10 +102,12 @@ struct scan_rock {
 };
 
 /* globals for callback functions */
-int disinfect = 0;
-int email_notification = 0;
-struct infected_mbox *public = NULL;
-struct infected_mbox *user = NULL;
+static int disinfect = 0;
+static int email_notification = 0;
+#if 0
+static struct infected_mbox *public = NULL;
+#endif
+static struct infected_mbox *user = NULL;
 
 static int verbose = 0;
 
@@ -234,7 +236,7 @@ void clamav_destroy(void *state)
     free(st);
 }
 
-struct scan_engine engine =
+static struct scan_engine engine =
 { "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy };
 
 #elif defined(HAVE_SOME_UNKNOWN_VIRUS_SCANNER)
@@ -242,7 +244,7 @@ struct scan_engine engine =
 
 #else
 /* NO configured virus scanner */
-struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
+static struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
 #endif
 
 

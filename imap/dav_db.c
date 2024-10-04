@@ -291,7 +291,7 @@
 
 static int sievedb_upgrade(sqldb_t *db);
 
-struct sqldb_upgrade davdb_upgrade[] = {
+static const struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
   { 4, CMD_DBUPGRADEv4, NULL },
