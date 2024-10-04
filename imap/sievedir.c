@@ -321,10 +321,13 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     sieve_script_t *s = NULL;
     char *myerrors = NULL;
     int r = sieve_script_parse_string(NULL, content, &myerrors, &s);
-    if (errors) *errors = myerrors;
-    else free(myerrors);
 
-    if (!s) return SIEVEDIR_INVALID;
+    if (r) {
+        if (s) sieve_script_free(&s);
+        if (errors) *errors = myerrors;
+        else free(myerrors);
+        return SIEVEDIR_INVALID;
+    }
 
     /* generate the bytecode */
     bytecode_info_t *bc = NULL;
