@@ -248,13 +248,16 @@ static int meth_get(struct transaction_t *txn,
 
     env = strarray_splitm(NULL, buf_release(&txn->buf), "\t", 0);
     strarray_append(env, NULL);
+    char **const environ_orig = environ;
     environ = env->data;
 
     /* Run script */
     if (command_popen(&cmd, "rw", cwd, script, NULL)) {
         ret = HTTP_SERVER_ERROR;
+        environ = environ_orig;
         goto done;
     }
+    environ = environ_orig;
 
     /* Send request body */
     prot_putbuf(cmd->stdin_prot, &txn->req_body.payload);
