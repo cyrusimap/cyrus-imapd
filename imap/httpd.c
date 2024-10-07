@@ -508,7 +508,11 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-/* Array of HTTP methods known by our server. */
+/* Array of HTTP methods known by our server.
+ * Keep this up to date with reject_http_method_tag() in imparse.c
+ * XXX Would be nice if this table were in libcyrus somewhere rather than
+ * XXX directly in httpd, so that imparse could use it directly.
+ */
 const struct known_meth_t http_methods[] = {
     { "ACL",           0,                          CYRUS_HTTP_ACL_TOTAL },
     { "BIND",          0,                          CYRUS_HTTP_BIND_TOTAL },
