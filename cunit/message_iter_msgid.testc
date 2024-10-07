@@ -455,41 +455,49 @@ static void test_escaped_quoted_localpart(void)
 static void test_malformed_angles(void)
 {
 #define C_MSGID1    "<604.05.00006@example.com>"
-#define C_MSGID2    "<607.08.09@gmail.com"
+#define C_MSGID2    "<607.08.09@gmail.com" // <- malformed
 #define C_MSGID3    "<6000A-0B-0000C@apple.com>"
-    static const char C_MSGIDS[] =
-        C_MSGID1 " " C_MSGID2 " " C_MSGID3;
-    char *s;
-    char *m1;
-    char *m2;
-    char *m3;
 
-    /* We checked in the "simple" test that buffers are unmolested,
-     * so this time just pass message_iter_msgid() a const variable */
-    s = (char *)C_MSGIDS;
+    const char *test_cases[] = {
+        C_MSGID1 " " C_MSGID2 " " C_MSGID3, // malformed at 2nd place,
+        C_MSGID2 " " C_MSGID1 " " C_MSGID3, // malformed at 1st place,
+        C_MSGID1 " " C_MSGID3 " " C_MSGID2, // malformed at 3rd place,
+    };
 
-    /* each call should returns a separate newly allocated string
-     * which is the next msgid in the input */
+    for (size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]); i++) {
+        const char *input = test_cases[i];
 
-    m1 = message_iter_msgid(s, 0, &s);
-    CU_ASSERT_PTR_NOT_NULL(m1);
-    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
-    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+        /* We checked in the "simple" test that buffers are unmolested,
+         * so this time just pass message_iter_msgid() a const variable */
+        char *s = (char*) input;
+        char *m1;
+        char *m2;
+        char *m3;
 
-    m2 = message_iter_msgid(s, 0, &s);
-    CU_ASSERT_PTR_NOT_NULL(m2);
-    CU_ASSERT_STRING_EQUAL(m2, C_MSGID3);
-    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+        /* each call should returns a separate newly allocated string
+         * which is the next msgid in the input */
 
-    /* we stop seeing msgids after 2nd msgid */
-    m3 = message_iter_msgid(s, 0, &s);
-    CU_ASSERT_PTR_NULL(m3);
+        m1 = message_iter_msgid(s, 0, &s);
+        CU_ASSERT_PTR_NOT_NULL(m1);
+        CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+        CU_ASSERT(s >= input && s <= input+strlen(input));
 
-    /* check the returned msgids are all distinct */
-    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+        m2 = message_iter_msgid(s, 0, &s);
+        CU_ASSERT_PTR_NOT_NULL(m2);
+        CU_ASSERT_STRING_EQUAL(m2, C_MSGID3);
+        CU_ASSERT(s >= input && s <= input+strlen(input));
 
-    free(m1);
-    free(m2);
+        /* we stop seeing msgids after 2nd msgid */
+        m3 = message_iter_msgid(s, 0, &s);
+        CU_ASSERT_PTR_NULL(m3);
+
+        /* check the returned msgids are all distinct */
+        CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+
+        free(m1);
+        free(m2);
+    }
+
 #undef C_MSGID1
 #undef C_MSGID2
 #undef C_MSGID3
