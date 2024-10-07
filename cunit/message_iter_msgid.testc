@@ -622,6 +622,22 @@ static void test_regression(void)
             .input = "#",
             .outcome = REJECT,
         },
+        {
+            .input = "<",
+            .outcome = REJECT,
+        },
+        {
+            .input = "<a",
+            .outcome = REJECT,
+        },
+        {
+            .input = "<a@b",
+            .outcome = REJECT,
+        },
+        {
+            .input = "<P[20",
+            .outcome = REJECT,
+        },
     };
 
     for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
@@ -643,4 +659,4 @@ static void test_regression(void)
     }
 }
 
-    /* vim: set ft=c: */
+/* vim: set ft=c: */
