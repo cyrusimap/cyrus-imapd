@@ -473,6 +473,20 @@ struct client_behavior_registry {
 
     /* non-standard - track for possible deprecation */
     uint32_t did_xlist        : 1;   /* used XLIST  */
+
+    /* what kinds of tags is this client using? */
+    uint32_t did_tag_num      : 1;   /* only numbers */
+    uint32_t did_tag_alpha    : 1;   /* only letters */
+    uint32_t did_tag_alnum    : 1;   /* only numbers and letters */
+    uint32_t did_tag_base64   : 1;   /* only base64 characters */
+    uint32_t did_tag_dot      : 1;   /* tags contain dots */
+    uint32_t did_tag_sep      : 1;   /* tags contain - or _ */
+    uint32_t did_tag_colon    : 1;   /* tags contain : */
+    uint32_t did_tag_angle    : 1;   /* tags contain < or > */
+    uint32_t did_tag_other    : 1;   /* tags contains other characters */
+    uint32_t did_tag_POST     : 1;   /* used string "POST" as a tag */
+    uint32_t did_tag_PUT      : 1;   /* used string "PUT" as a tag */
+    uint32_t did_tag_inv      : 1;   /* we rejected an invalid tag */
 };
 
 #endif /* INCLUDED_IMAPD_H */
