@@ -419,7 +419,7 @@ int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
 int httpd_userisanonymous = 1;
 const char *httpd_localip = NULL, *httpd_remoteip = NULL;
-struct protstream *httpd_out = NULL;
+static struct protstream *httpd_out;
 struct protstream *httpd_in = NULL;
 strarray_t *httpd_log_headers = NULL;
 char *httpd_altsvc = NULL;
