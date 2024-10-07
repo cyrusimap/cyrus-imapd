@@ -5845,6 +5845,7 @@ static char *extract_angle_bracket_msgid(char *src, char **rem)
 
     /* find the end of the msgid */
     if ((cp = strchr(cp, '>')) == NULL) {
+        src = NULL;
         goto done;
     }
 
@@ -5872,6 +5873,7 @@ static char *extract_angle_bracket_msgid(char *src, char **rem)
 
     if (*src != '@' || *(dst-1) == '<') {
         xzfree(msgid);
+        src = strchr(src, '<');
         goto done;
     }
     *dst++ = *src++;
@@ -5882,6 +5884,7 @@ static char *extract_angle_bracket_msgid(char *src, char **rem)
 
     if (*src != '>' || *(dst-1) == '@') {
         xzfree(msgid);
+        src = strchr(src, '<');
         goto done;
     }
 
