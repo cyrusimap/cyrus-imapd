@@ -133,6 +133,7 @@ static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 {
+    const char *text = error_message(r);
     int code;
 
     if (resp) {
@@ -146,6 +147,8 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 
     switch (r) {
     case 0:
+        /* n.b. can't rely on error_message(0) to produce a success string */
+        text = "Success";
         code = LMTP_OK;
         break;
 
@@ -224,7 +227,7 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
         break;
     }
 
-    prot_printf(pout, error_message(code), error_message(r), session_id());
+    prot_printf(pout, error_message(code), text, session_id());
     prot_puts(pout, "\r\n");
 }
 
