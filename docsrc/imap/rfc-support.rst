@@ -321,7 +321,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`4550`
 
     Internet Email to Support Diverse Service Environments (Lemonade)
-    Profile
+    Profile, obsoleted by :rfc:`5550`.
 
 :rfc:`4551`
 
@@ -549,7 +549,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     .. NOTE::
 
         The URL-PARTIAL capability is implemented.  The CONTEXT=SEARCH,
-        CONTEXT=SORT, CONVERT, I18NLEVEL=1, and NOTIFY capabilities
+        CONTEXT=SORT, CONVERT, and I18NLEVEL=1 capabilities
         are not implemented.
 
 :rfc:`5593`
