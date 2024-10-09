@@ -1543,7 +1543,6 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
 
         domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
         if (!domains) domains = config_defdomain;
-        if (!domains) domains = config_servername;
 
         tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         while ((domain = tok_next(&tok))) {

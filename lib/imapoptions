@@ -635,7 +635,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "calendar_user_address_set", NULL, STRING, "2.5.0" }
 /* Space-separated list of domains corresponding to calendar user
    addresses for which the server is responsible.  If not set (the
-   default), the value of the "servername" option will be used. */
+   default), the value of the "defaultdomain" option will be used. */
 
 { "calendar_component_set", "VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL", BITFIELD("VEVENT", "VTODO", "VJOURNAL", "VFREEBUSY", "VAVAILABILITY", "VPOLL"), "3.1.7" }
 /* Space-separated list of iCalendar component types that calendar
