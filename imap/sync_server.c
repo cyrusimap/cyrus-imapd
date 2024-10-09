@@ -105,6 +105,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 #include "message_guid.h"
 #include "sync_support.h"
 /*#include "cdb.h"*/

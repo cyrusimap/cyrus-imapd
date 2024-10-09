@@ -65,6 +65,8 @@
 #include "xmalloc.h"
 #include "ptloader.h"
 
+#include "master/service.h"
+
 struct pts_module *pts_modules[] = {
     &pts_http,
 #ifdef HAVE_LDAP

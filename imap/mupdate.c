@@ -92,6 +92,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 /* Sent to clients that we can't accept a connection for. */
 static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";
 

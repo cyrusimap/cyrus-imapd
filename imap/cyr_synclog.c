@@ -58,6 +58,7 @@
 #include "util.h"
 #include "xmalloc.h"
 
+__attribute__((noreturn))
 void usage(const char *name) {
     fprintf(stderr, "Usage: %s [-C altconfig] [-{type}] value\n", name);
 

@@ -106,6 +106,8 @@
 #include "imap/imap_err.h"
 #include "imap/http_err.h"
 
+#include "master/service.h"
+
 #ifdef WITH_DAV
 #include "http_dav.h"
 #endif
@@ -481,8 +483,8 @@ ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static int tls_init(int client_auth, struct buf *serverinfo);
 static void starttls(struct http_connection *conn, int timeout);
-void usage(void);
-void shut_down(int code) __attribute__ ((noreturn));
+void usage(void) __attribute__((noreturn));
+void shut_down(int code) __attribute__((noreturn));
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
