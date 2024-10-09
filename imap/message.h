@@ -379,7 +379,9 @@ extern const struct message_guid *msg_guid(const message_t *m);
 /* Find a message-id looking thingy in a string.  Returns a pointer to the
  * alloc'd id and the remaining string is returned in the **loc parameter.
  */
-extern char *message_iter_msgid(char *str, char **rem);
+#define MESSAGE_ITER_MSGID_FLAG_DEFAULT                  (0)
+#define MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET       (1<<0)
+extern char *message_iter_msgid(char *str, unsigned flags, char **rem);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
