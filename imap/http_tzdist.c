@@ -1809,16 +1809,17 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 {
     icalproperty *prop;
     icaltimetype at;
-    struct icalrecurrencetype rrule;
+    struct icalrecurrencetype *rrule;
     unsigned ver = '2';
     int hour;
 
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    rrule = icalproperty_get_rrule(prop);
+    rrule = icalproperty_get_recurrence(prop);
 
 #ifdef HAVE_RSCALE
-    if (rrule.rscale && strcasecmp(rrule.rscale, "GREGORIAN")) {
+    if (rrule->rscale && strcasecmp(rrule->rscale, "GREGORIAN")) {
         /* POSIX rules are based on Gregorian calendar only */
+        icalrecurrencetype_unref(rrule);
         return 0;
     }
 #endif
@@ -1827,16 +1828,16 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     at = icalproperty_get_dtstart(prop);
     hour = at.hour;
 
-    if (rrule.by_day[0] == ICAL_RECURRENCE_ARRAY_MAX) {
+    if (rrule->by_day[0] == ICAL_RECURRENCE_ARRAY_MAX) {
         /* date - Julian yday */
         buf_printf(buf, ",J%u", month_doy_offsets[0][at.month - 1] + at.day);
     }
     else {
         /* BYDAY */
         unsigned month;
-        int week = icalrecurrencetype_day_position(rrule.by_day[0]);
-        int wday = icalrecurrencetype_day_day_of_week(rrule.by_day[0]);
-        int yday = rrule.by_year_day[0];
+        int week = icalrecurrencetype_day_position(rrule->by_day[0]);
+        int wday = icalrecurrencetype_day_day_of_week(rrule->by_day[0]);
+        int yday = rrule->by_year_day[0];
 
         if (yday != ICAL_RECURRENCE_ARRAY_MAX) {
             /* BYYEARDAY */
@@ -1859,9 +1860,9 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
         }
         else {
             /* BYMONTH */
-            int mday = rrule.by_month_day[0];
+            int mday = rrule->by_month_day[0];
 
-            month = rrule.by_month[0];
+            month = rrule->by_month[0];
 
             if (mday != ICAL_RECURRENCE_ARRAY_MAX) {
                 /* MONTHDAY:  wday >= mday */
@@ -1899,6 +1900,8 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
         if (at.minute || at.second) buf_printf(buf, ":%02u", at.minute);
         if (at.second) buf_printf(buf, ":%02u", at.second);
     }
+
+    icalrecurrencetype_unref(rrule);
 
     return ver;
 }

@@ -3911,7 +3911,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty *prop;
-    struct icalrecurrencetype rt = ICALRECURRENCETYPE_INITIALIZER;
+    struct icalrecurrencetype *rt = NULL;
     icaltimetype dtstart = icaltime_null_time();
     hashu64_table rdates = HASHU64_TABLE_INITIALIZER;
     hashu64_table overrides = HASHU64_TABLE_INITIALIZER;
@@ -3994,8 +3994,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         /* Grab RRULE and RDATEs to check RSCALE and overrides */
         prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-        if (prop) {
-            rt = icalproperty_get_rrule(prop);
+        if (!rt && prop) {
+            rt = icalproperty_get_recurrence(prop);
             dtstart = icalcomponent_get_dtstart(comp);
 
             for (prop = icalcomponent_get_first_property(comp,
@@ -4019,7 +4019,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
     }
 
-    if (rt.freq != ICAL_NO_RECURRENCE) {
+    if (rt) {
         /* Strip overrides that occur before start of RRULE */
         /* XXX  This is a bugfix for Fantastical when splitting a
            recurring event with existing overrides prior to the split */
@@ -4032,7 +4032,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
 #ifdef HAVE_RSCALE
         /* Make sure we support the provided RSCALE in an RRULE */
-        if (rscale_calendars && rt.rscale && *rt.rscale) {
+        if (rscale_calendars && rt->rscale && *rt->rscale) {
             /* Perform binary search on sorted icalarray */
             unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
@@ -4040,7 +4040,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 unsigned mid = start + (end - start) / 2;
                 const char **rscale =
                     icalarray_element_at(rscale_calendars, mid);
-                int r = strcasecmp(rt.rscale, *rscale);
+                int r = strcasecmp(rt->rscale, *rscale);
 
                 if (r == 0) found = 1;
                 else if (r < 0) end = mid;
@@ -4326,6 +4326,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (myoldical && myoldical != oldical) icalcomponent_free(myoldical);
     if (oldical) icalcomponent_free(oldical);
     if (myical) icalcomponent_free(myical);
+    if (rt) icalrecurrencetype_unref(rt);
     strarray_fini(&schedule_addresses);
     free_hashu64_table(&rdates, NULL);
     free_hashu64_table(&overrides, NULL);
