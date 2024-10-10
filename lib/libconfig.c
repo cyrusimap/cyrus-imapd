@@ -847,7 +847,6 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     /* create an array of calendar-user-address-set domains */
     cua_domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
     if (!cua_domains) cua_domains = config_defdomain;
-    if (!cua_domains) cua_domains = config_servername;
 
     tok_init(&tok, cua_domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
     while ((domain = tok_next(&tok)))
