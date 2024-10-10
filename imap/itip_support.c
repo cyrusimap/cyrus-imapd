@@ -461,9 +461,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                     break;
 
                 case ICAL_RRULE_PROPERTY: {
-                    struct icalrecurrencetype rrule =
-                        icalproperty_get_rrule(prop);
-                    ptrarray_append(&rrules, &rrule);
+                    struct icalrecurrencetype *rrule =
+                        icalproperty_get_recurrence(prop);
+                    ptrarray_append(&rrules, rrule);
                     break;
                 }
 
@@ -526,7 +526,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                 for (i = 0; !valid && i < size; i++) {
                     struct icalrecurrencetype *rrule = ptrarray_nth(&rrules, i);
                     icalrecur_iterator *ritr =
-                        icalrecur_iterator_new(*rrule, dtstart);
+                        icalrecurrence_iterator_new(rrule, dtstart);
 
                     for (this = icalrecur_iterator_next(ritr);
                          !icaltime_is_null_time(this);
@@ -537,6 +537,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                         break;
                     }
                     icalrecur_iterator_free(ritr);
+                    icalrecurrencetype_unref(rrule);
                 }
 
                 if (!valid) {
