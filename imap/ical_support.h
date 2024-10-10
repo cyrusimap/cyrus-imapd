@@ -61,6 +61,32 @@
 #define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 
+typedef struct icalrecurrencetype icalrecurrencetype_t;
+
+extern icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val);
+
+#define icalproperty_get_recurrence(prop)                       \
+    icalvalue_get_recurrence(icalproperty_get_value(prop))
+
+#define icalproperty_set_recurrence(prop, rt)                   \
+    icalproperty_set_value(prop, icalvalue_new_recurrence(rt))
+
+#ifdef HAVE_RECUR_BY_REF
+#define icalrecurrence_iterator_new(rt, tt)  icalrecur_iterator_new(rt, tt)
+#define icalvalue_new_recurrence(rt)         icalvalue_new_recur(rt)
+#define icalvalue_set_recurrence(val, rt)    icalvalue_set_recur(val, rt)
+
+#else /* !HAVE_RECUR_BY_REF */
+#define icalrecurrence_iterator_new(rt, tt)  icalrecur_iterator_new(*(rt), tt)
+#define icalvalue_new_recurrence(rt)         icalvalue_new_recur(*(rt))
+#define icalvalue_set_recurrence(val, rt)    icalvalue_set_recur(val, *(rt))
+
+extern icalrecurrencetype_t *icalrecurrencetype_new(void);
+extern icalrecurrencetype_t *icalrecurrencetype_clone(icalrecurrencetype_t *rt);
+extern icalrecurrencetype_t *icalrecurrencetype_new_from_string(const char *str);
+extern void icalrecurrencetype_unref(icalrecurrencetype_t *rt);
+#endif /* HAVE_RECUR_BY_REF */
+
 #ifdef HAVE_PARTTYPE_VOTER
 #define HAVE_VPOLL_SUPPORT
 #endif
