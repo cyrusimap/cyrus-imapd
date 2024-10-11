@@ -3702,6 +3702,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                          entry++);
 
                     if (entry->name) {
+                        prop->ns = pctx->ns[entry->ns];
                         int rights = httpd_myrights(httpd_authstate,
                                                     pctx->txn->req_tgt.mbentry);
                         if (!entry->put) {
@@ -3738,7 +3739,12 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                     }
                     else if (pctx->txn->req_tgt.namespace->id != URL_NS_PRINCIPAL) {
                         /* Write "dead" property */
-                        proppatch_todb(prop, set, pctx, propstat, NULL);
+                        for (long unsigned int i = 0; i < sizeof(known_namespaces) / sizeof(struct dav_namespace_t); i++)
+                            if (!strcmp((const char*)prop->ns->href, known_namespaces[i].href)) {
+                                prop->ns = pctx->ns[i];
+                                break;
+                            }
+                        proppatch_todb_internal(prop, set, pctx, propstat, NULL, 1);
                     }
                 }
             }
