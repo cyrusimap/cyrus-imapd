@@ -754,6 +754,7 @@ extern int mailbox_add_sieve(struct mailbox *mailbox);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox);
 
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
+__attribute__((nonnull))
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
 #define mailbox_has_conversations(m) mailbox_has_conversations_full(m, 0)
