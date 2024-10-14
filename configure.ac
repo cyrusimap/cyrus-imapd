@@ -2364,6 +2364,56 @@ AS_IF(
     )]
 )
 
+dnl check whether sscanf et al support 'm' modifier for dynamic allocation
+AC_CACHE_CHECK(
+    [whether the sscanf() function supports the 'm' modifier],
+    [cyrus_cv_sscanf_m_modifier],
+    [
+        AC_LANG_PUSH([C])
+        saved_CFLAGS="$CFLAGS"
+        saved_CPPFLAGS="$CPPFLAGS"
+        CFLAGS="$CFLAGS -Wall -Werror -Wno-unused"
+        CPPFLAGS="$CPPFLAGS -Wall -Werror -Wno-unused"
+        AC_RUN_IFELSE(
+            [AC_LANG_PROGRAM(
+                [[
+                    #include <errno.h>
+                    #include <stdio.h>
+                    #include <string.h>
+                ]],
+                [[
+                    int fields = -1, ival = -1;
+                    char buf[32] = "", *sval = NULL;
+                    const char input[] = "23 cat dog";
+
+                    errno = 0;
+                    fields = sscanf(input, "%d %s %ms", &ival, buf, &sval);
+
+                    if (errno != 0) return 1;
+                    if (fields < 0) return 2;
+                    if (fields < 3) return 3;
+                    if (ival != 23) return 4;
+                    if (strcmp(buf, "cat")) return 5;
+                    if (sval == NULL) return 6;
+                    if (sval && strcmp(sval, "dog")) return 7;
+                    /* let sval leak, not worth trying to prevent it */
+                ]])
+            ],
+            [cyrus_cv_sscanf_m_modifier=yes],
+            [cyrus_cv_sscanf_m_modifier=no],
+            [cyrus_cv_sscanf_m_modifier=no]
+        )
+        CFLAGS="$saved_CFLAGS"
+        CPPFLAGS="$saved_CPPFLAGS"
+        AC_LANG_POP([C])
+    ])
+AS_IF(
+    [test "x$cyrus_cv_sscanf_m_modifier" = "xyes"],
+    [AC_DEFINE(HAVE_SSCANF_M_MODIFIER,[],
+        [Do we have support for sscanf 'm' modifier?]
+    )]
+)
+
 dnl documentation generation (sphinx, perl2rst, gitpython)
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
