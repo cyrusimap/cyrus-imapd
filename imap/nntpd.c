@@ -3999,6 +3999,11 @@ static void cmd_post(char *msgid, int mode)
 }
 
 #ifdef HAVE_SSL
+static const struct tls_alpn_t nntp_alpn_map[] = {
+    { "nntp", NULL, NULL },
+    { NULL,   NULL, NULL }
+};
+
 static void cmd_starttls(int nntps)
 {
     int result;
@@ -4014,10 +4019,11 @@ static void cmd_starttls(int nntps)
         return;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("nntp",
                                  5,        /* depth to verify */
                                  !nntps,   /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -4030,6 +4036,11 @@ static void cmd_starttls(int nntps)
 
         return;
     }
+
+#ifdef HAVE_TLS_ALPN
+    /* enable TLS ALPN extension */
+    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) nntp_alpn_map);
+#endif
 
     if (nntps == 0)
     {

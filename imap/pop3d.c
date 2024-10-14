@@ -1150,6 +1150,11 @@ void uidl_msg(uint32_t msgno)
 }
 
 #ifdef HAVE_SSL
+static const struct tls_alpn_t pop3_alpn_map[] = {
+    { "pop3", NULL, NULL },
+    { NULL,   NULL, NULL }
+};
+
 static void cmd_starttls(int pop3s)
 {
     int result;
@@ -1162,10 +1167,11 @@ static void cmd_starttls(int pop3s)
         return;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("pop3",
                                  5,        /* depth to verify */
                                  !pop3s,   /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -1178,6 +1184,11 @@ static void cmd_starttls(int pop3s)
 
         return;
     }
+
+#ifdef HAVE_TLS_ALPN
+    /* enable TLS ALPN extension */
+    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) pop3_alpn_map);
+#endif
 
     if (pop3s == 0)
     {
