@@ -6313,7 +6313,10 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                                struct propstat propstat[],
                                void *rock __attribute__((unused)))
 {
-    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+    const char *explanation = NULL;
+    if (pctx->txn->req_tgt.flags & (TGT_MANAGED_ATTACH | TGT_SCHED_INBOX | TGT_SCHED_OUTBOX))
+        explanation = "Cannot be altered on Attachments, Inbox, or Outbox";
+    else if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         const xmlChar *value = NULL;
 
         if (set) {
@@ -6324,34 +6327,36 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
                 /* Make sure it is a value we understand */
                 if (cur->type != XML_ELEMENT_NODE) continue;
-                if ((!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
+                if (!value && (!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
                      !xmlStrcmp(cur->name, BAD_CAST "transparent")) &&
                      !xmlStrcmp(cur->ns->href, BAD_CAST XML_NS_CALDAV)) {
                     value = cur->name;
-                    break;
                 }
                 else {
-                    /* Unknown value */
                     xml_add_prop(HTTP_CONFLICT, pctx->ns[NS_DAV],
                                  &propstat[PROPSTAT_CONFLICT],
                                  prop->name, prop->ns, NULL, 0);
+                    xmlNewTextChild(propstat[PROPSTAT_CONFLICT].root, NULL, BAD_CAST "responsedescription",
+                                    value ? BAD_CAST "More than one values set"
+                                    : BAD_CAST "Not recognized value");
 
-                    *pctx->ret = HTTP_FORBIDDEN;
+                    *pctx->ret = HTTP_CONFLICT;
 
                     return 0;
                 }
             }
         }
-
-        proppatch_todb(prop, set, pctx, propstat, (void *) value);
+        if (value || !set)
+            return proppatch_todb(prop, set, pctx, propstat, (void *) value);
+        explanation = "No value set";
     }
-    else {
-        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-                     &propstat[PROPSTAT_FORBID],
-                     prop->name, prop->ns, NULL, 0);
+    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
+                 prop->name, prop->ns, NULL, 0);
+    if (explanation)
+        xmlNewTextChild(propstat[PROPSTAT_FORBID].root, NULL,
+                        BAD_CAST "responsedescription", BAD_CAST explanation);
 
-        *pctx->ret = HTTP_FORBIDDEN;
-    }
+    *pctx->ret = HTTP_FORBIDDEN;
 
     return 0;
 }
