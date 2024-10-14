@@ -9273,6 +9273,11 @@ out:
 }
 
 #ifdef HAVE_SSL
+static const struct tls_alpn_t imap_alpn_map[] = {
+    { "imap", NULL, NULL },
+    { NULL,   NULL, NULL }
+};
+
 /*
  * this implements the STARTTLS command, as described in RFC 2595.
  * one caveat: it assumes that no external layer is currently present.
@@ -9292,10 +9297,11 @@ static void cmd_starttls(char *tag, int imaps)
         return;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("imap",
                                  5,        /* depth to verify */
                                  !imaps,   /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -9309,6 +9315,11 @@ static void cmd_starttls(char *tag, int imaps)
 
         return;
     }
+
+#ifdef HAVE_TLS_ALPN
+    /* enable TLS ALPN extension */
+    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) imap_alpn_map);
+#endif
 
     if (imaps == 0)
     {
