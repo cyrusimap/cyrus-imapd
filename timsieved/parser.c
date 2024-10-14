@@ -916,6 +916,11 @@ reset:
 }
 
 #ifdef HAVE_SSL
+static const struct tls_alpn_t sieve_alpn_map[] = {
+    { "managesieve", NULL, NULL },
+    { NULL,          NULL, NULL }
+};
+
 static int cmd_starttls(struct protstream *sieved_out,
                         struct protstream *sieved_in,
                         struct saslprops_t *saslprops)
@@ -928,10 +933,11 @@ static int cmd_starttls(struct protstream *sieved_out,
         return TIMSIEVE_FAIL;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("sieve",
                                  5,        /* depth to verify */
                                  1,        /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -941,6 +947,11 @@ static int cmd_starttls(struct protstream *sieved_out,
 
         return TIMSIEVE_FAIL;
     }
+
+#ifdef HAVE_TLS_ALPN
+    /* enable TLS ALPN extension */
+    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) sieve_alpn_map);
+#endif
 
     prot_printf(sieved_out, "OK \"Begin TLS negotiation now\"\r\n");
     /* must flush our buffers before starting tls */

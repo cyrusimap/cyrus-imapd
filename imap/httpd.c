@@ -1254,6 +1254,7 @@ static unsigned h2_is_available(void *http_conn)
 static const struct tls_alpn_t http_alpn_map[] = {
     { "h2",       &h2_is_available, &http_conn },
     { "http/1.1", NULL,             NULL },
+    { "http/1.0", NULL,             NULL },
     { NULL,       NULL,             NULL }
 };
 
