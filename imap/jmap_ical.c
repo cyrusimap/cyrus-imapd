@@ -637,7 +637,7 @@ get_icalxparam_value(icalproperty *prop, const char *name)
 
 static void unescape_ical_text(struct buf *buf, const char *s)
 {
-    for (; *s; s++) {
+    for (; s && *s; s++) {
         if (*s == '\\') {
             switch (*++s) {
                 case 'n':
@@ -3252,7 +3252,7 @@ locations_from_ical(icalcomponent *comp,
             const char *uri = icalvalue_as_ical_string(icalproperty_get_value(prop));
             struct buf sanitized_geouri = BUF_INITIALIZER;
 
-            if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+            if (uri && geouri_sanitize(uri, &sanitized_geouri) == 0) {
                 uri = buf_cstring(&sanitized_geouri);
                 struct buf title = BUF_INITIALIZER;
                 const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
@@ -6972,7 +6972,7 @@ const char *locations_to_ical_keep_old_main(json_t *locations,
 
     const char *uri = icalproperty_get_value_as_string(prop);
     struct buf sanitized_geouri = BUF_INITIALIZER;
-    if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+    if (uri && geouri_sanitize(uri, &sanitized_geouri) == 0) {
         if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
                 !strcmpsafe(mainloc_coords, buf_cstring(&sanitized_geouri))) {
             // Previous X-APPLE-STRUCTURED-LOCATION still matches
