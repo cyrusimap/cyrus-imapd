@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use Cwd qw(abs_path);
+
+sub test_regex_timeout
+    :min_version_3_9 :needs_component_sieve :NoAltNameSpace :NoStartInstances
+{
+    my ($self) = @_;
+
+    # The regex below takes ~0.75s to execute on the given input
+    $self->{instance}->{config}->set('sieve_regex_timeout' => '0.5');
+    $self->_start_instances();
+
+    xlog, $self, "Create manifold user and make it readable by cassandane";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", cassandane => 'lrs');
+
+    xlog $self, "Install a script for cassandane";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["regex", "imap4flags"];
+if header :regex "Subject"
+  "a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?aaaaaaaaaaaaaaaaaaaaaaaaa" {
+    addflag "\\\\Flagged";
+    keep;
+}
+EOF
+    );
+
+    xlog $self, "Install a script for manifold";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["regex", "imap4flags"];
+if header :regex "Subject" "aaaa" {
+    keep :flags "\\\\Flagged";
+}
+EOF
+    , username => 'manifold');
+
+    my $msg = $self->{gen}->generate(subject => 'aaaaaaaaaaaaaaaaaaaaaaaaa');
+    $self->{instance}->deliver($msg, users => [ 'cassandane', 'manifold' ]);
+
+    xlog $self, "Check that the message made it to INBOX due to Sieve failure";
+    $self->{store}->set_folder('INBOX');
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $msg->set_attribute(uid => 1);
+    $msg->set_attribute(flags => [ '\\Recent', '$SieveFailed' ]);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the message made it to manifold INBOX with \Flagged";
+    $self->{store}->set_folder('user.manifold');
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+    $msg->set_attribute(uid => 1);
+    $msg->set_attribute(flags => [ '\\Recent', '\\Flagged' ]);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}
+
