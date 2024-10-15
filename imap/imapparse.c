@@ -593,7 +593,7 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
     c = prot_getc(pin);
     if (c != '(') {
         prot_printf(pout,
-                    "%s BAD Missing source options in Search\r\n",
+                    "%s BAD Missing source options in Esearch\r\n",
                     searchargs->tag);
         goto bad;
     }
@@ -632,7 +632,7 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
         }
         else {
             prot_printf(pout,
-                        "%s BAD Invalid Search source option %s\r\n",
+                        "%s BAD Invalid Esearch source option %s\r\n",
                         searchargs->tag, opt.s);
             goto bad;
         }
@@ -642,7 +642,13 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
     if (c == IMAP_LITERAL_TOO_LARGE) return c;
     if (c != ')') {
         prot_printf(pout,
-                    "%s BAD Missing close parenthesis in Search\r\n",
+                    "%s BAD Missing close parenthesis in Esearch\r\n",
+                    searchargs->tag);
+        goto bad;
+    }
+    else if (!searchargs->multi.filter) {
+        prot_printf(pout,
+                    "%s BAD Missing source mailbox(es) in Esearch\r\n",
                     searchargs->tag);
         goto bad;
     }
