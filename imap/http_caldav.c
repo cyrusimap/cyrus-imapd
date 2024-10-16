@@ -6204,6 +6204,9 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
     size_t datalen = 0;
     int r = 0;
 
+    if (!fctx->txn->req_tgt.userid || fctx->txn->req_tgt.resource)
+        return HTTP_NOT_FOUND;
+
     if (propstat) {
         const char *prop_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
@@ -6566,8 +6569,10 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
     const char *value = NULL;
     int r = 0;
 
-    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) || fctx->req_tgt->resource)
+    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) ||
+        !fctx->req_tgt->userid || fctx->req_tgt->resource) {
         return HTTP_NOT_FOUND;
+    }
 
     r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
                                      httpd_userid, &attrib);
