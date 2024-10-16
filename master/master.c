@@ -2887,7 +2887,7 @@ static void check_undermanned(struct service *s, int si, int wdi)
     }
 }
 
-static void master_ready(const char *ready_file)
+static void master_ready(const char *ready_file, int ready)
 {
     int fd;
 
@@ -2895,6 +2895,12 @@ static void master_ready(const char *ready_file)
 
     if (!ready_file) ready_file = config_getstring(IMAPOPT_MASTER_READY_FILE);
     if (!ready_file) return;
+
+    if (!ready) {
+        /* remove file to say we're no longer ready! */
+        unlink(ready_file);
+        return;
+    }
 
     if (cyrus_mkdir(ready_file, 0755 /* ignored */)) return;
 
@@ -3236,7 +3242,7 @@ int main(int argc, char **argv)
     }
 
     /* ok, we're going to start spawning like mad now */
-    master_ready(ready_file); /* ready for work */
+    master_ready(ready_file, 1); /* ready for work */
 
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
@@ -3465,6 +3471,9 @@ finished:
             }
         }
     }
+
+    /* tell caller we're done */
+    master_ready(ready_file, 0);
 
     /* XXX paranoia: burn through child table, complain if anything there? */
 
