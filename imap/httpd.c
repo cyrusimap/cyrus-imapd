@@ -1383,6 +1383,14 @@ static int reset_saslconn(sasl_conn_t **conn)
 }
 
 
+static const char* const http_versions[] = {
+    "HTTP/1.0", HTTP_VERSION, HTTP2_VERSION
+};
+
+static const size_t n_http_versions =
+    sizeof(http_versions) / sizeof(http_versions[0]);
+
+
 static int parse_request_line(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
@@ -1423,18 +1431,15 @@ static int parse_request_line(struct transaction_t *txn)
     }
 
     /* Check HTTP-Version - MUST be HTTP/1.x */
-    else if (strlen(req_line->ver) != HTTP_VERSION_LEN
-             || strncmp(req_line->ver, HTTP_VERSION, HTTP_VERSION_LEN-1)
-             || !isdigit(req_line->ver[HTTP_VERSION_LEN-1])) {
-        ret = HTTP_BAD_VERSION;
-        buf_printf(&txn->buf,
-                   "This server only speaks %.*sx",
-                   HTTP_VERSION_LEN-1, HTTP_VERSION);
-        txn->error.desc = buf_cstring(&txn->buf);
-    }
-    else if (req_line->ver[HTTP_VERSION_LEN-1] == '0') {
+    else if (!strcmp(req_line->ver, http_versions[VER_1_0])) {
         /* HTTP/1.0 connection */
         txn->flags.ver = VER_1_0;
+    }
+    else if (strcmp(req_line->ver, HTTP_VERSION)) {
+        ret = HTTP_BAD_VERSION;
+        buf_printf(&txn->buf,
+                   "This server only speaks %s or earlier", HTTP_VERSION);
+        txn->error.desc = buf_cstring(&txn->buf);
     }
     tok_fini(&tok);
 
@@ -2595,12 +2600,8 @@ EXPORTED const char *http_statusline(unsigned ver, long code)
 {
     static struct buf statline = BUF_INITIALIZER;
 
-    if (ver == VER_2) buf_setcstr(&statline, HTTP2_VERSION);
-    else {
-        buf_setmap(&statline, HTTP_VERSION, HTTP_VERSION_LEN-1);
-        buf_putc(&statline, ver + '0');
-    }
-
+    assert(ver < n_http_versions);
+    buf_setcstr(&statline, http_versions[ver]);
     buf_putc(&statline, ' ');
     buf_appendcstr(&statline, error_message(code));
     return buf_cstring(&statline);
