@@ -179,6 +179,7 @@ void test_cyrusdb(void)
     snprintf(fname, sizeof(fname), "%s/%s", config_dir, "foo.db");
 
     r = cyrusdb_open(dbname, fname, CYRUSDB_CREATE, &db);
+    if (!r) r = cyrusdb_store(db, key, keylen, "foo", strlen("foo"), &tid);
     if (!r) r = cyrusdb_fetch(db, key, keylen, &data, &datalen, &tid);
     if (!r) r = cyrusdb_commit(db, tid);
 
