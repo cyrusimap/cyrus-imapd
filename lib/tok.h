@@ -46,7 +46,6 @@
 #ifndef __CYRUS_TOK_H__
 #define __CYRUS_TOK_H__
 
-#include <config.h>
 #include <sys/types.h>
 #include "xmalloc.h"
 

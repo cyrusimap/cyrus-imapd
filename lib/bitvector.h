@@ -43,10 +43,6 @@
 #ifndef __CYRUS_LIB_BITVECTOR_H__
 #define __CYRUS_LIB_BITVECTOR_H__
 
-#include <config.h>
-#include <sys/types.h>
-#include <limits.h>
-
 typedef struct bitvector bitvector_t;
 
 #define BV_NOALLOCSIZE 8

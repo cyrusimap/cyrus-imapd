@@ -1,7 +1,6 @@
 #ifndef INCLUDED_PROCINFO_H
 #define INCLUDED_PROCINFO_H
 
-#include <config.h>
 #include <sys/types.h>
 #include <time.h>
 
