@@ -4,6 +4,16 @@
 
 #include <inttypes.h>
 
+#if HAVE_VALGRIND_VALGRIND_H
+#include <valgrind/valgrind.h>
+#else
+/* no valgrind header? assume we're NOT running on valgrind. might
+ * lead to test failures if we are running on valgrind after all,
+ * but without the header there's no way to tell
+ */
+#define RUNNING_ON_VALGRIND (0)
+#endif
+
 static void test_initialize(void)
 {
     const struct slowio slowio_zero = {0};
@@ -125,7 +135,9 @@ static void test_slower_than_rate_limit(void)
 
         diff = end - start;
         /* should have taken basically no time at all */
-        CU_ASSERT(diff < 2 /* ms! */);
+        if (!RUNNING_ON_VALGRIND) {
+            CU_ASSERT(diff < 2 /* ms! */);
+        }
     }
 }
 
