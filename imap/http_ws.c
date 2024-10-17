@@ -158,25 +158,6 @@ static const char *wslay_error_as_str(enum wslay_error err_code)
     }
 }
 
-static ssize_t h1_send_cb(wslay_event_context_ptr ev,
-                          const uint8_t *data, size_t len,
-                          int flags __attribute__((unused)),
-                          void *user_data)
-{
-    struct transaction_t *txn = (struct transaction_t *) user_data;
-
-    int r = prot_write(txn->conn->pout, (const char *) data, len);
-
-    xsyslog(LOG_DEBUG, "WS send", "len=<%zu>, r=<%d>", len, r);
-
-    if (r) {
-        wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
-        return -1;
-    }
-
-    return len;
-}
-
 static ssize_t h1_recv_cb(wslay_event_context_ptr ev,
                           uint8_t *buf, size_t len,
                           int flags __attribute__((unused)),
@@ -212,9 +193,9 @@ static ssize_t h1_recv_cb(wslay_event_context_ptr ev,
     return n;
 }
 
-static ssize_t h2_send_cb(wslay_event_context_ptr ev,
-                          const uint8_t *data, size_t len,
-                          int flags, void *user_data)
+static ssize_t send_cb(wslay_event_context_ptr ev,
+                       const uint8_t *data, size_t len,
+                       int flags, void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
     int last_chunk = (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
@@ -732,7 +713,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     struct ws_context *ctx;
     struct wslay_event_callbacks callbacks = {
         NULL, /* recv (assigned below)            */
-        NULL, /* send (assigned below)            */
+        send_cb,
         NULL, /* genmask                          */
         NULL, /* on_frame_recv_start (debug only) */
         NULL, /* on_frame_recv_chunk              */
@@ -821,7 +802,6 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         ptrarray_add(&txn->conn->shutdown_callbacks, &_h1_shutdown);
 
         callbacks.recv_callback = &h1_recv_cb;
-        callbacks.send_callback = &h1_send_cb;
 
         resp_code = HTTP_SWITCH_PROT;
     }
@@ -830,7 +810,6 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         txn->flags.te = TE_CHUNKED;
 
         callbacks.recv_callback = &h2_recv_cb;
-        callbacks.send_callback = &h2_send_cb;
 
         resp_code = HTTP_OK;
     }
