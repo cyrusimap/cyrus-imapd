@@ -1304,7 +1304,7 @@ static void display_message(struct transaction_t *txn,
                             const char *mboxname, const struct index_record *record,
                             struct body *body, const struct buf *msg_buf)
 {
-    struct body toplevel;
+    struct body toplevel = {0};
     struct buf *buf = &txn->resp_body.payload;
     unsigned level = 0;
 
@@ -1341,9 +1341,8 @@ static void display_message(struct transaction_t *txn,
     buf_reset(buf);
 
     /* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
-    memset(&toplevel, 0, sizeof(struct body));
-    toplevel.type = "MESSAGE";
-    toplevel.subtype = "RFC822";
+    toplevel.type = (char *) "MESSAGE";
+    toplevel.subtype = (char *) "RFC822";
     toplevel.subpart = body;
 
     display_part(txn, &toplevel, record, "", msg_buf, level);
