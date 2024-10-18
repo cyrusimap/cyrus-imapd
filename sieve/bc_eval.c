@@ -2119,7 +2119,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 /* Parse/split the method URI */
                 if (!strncasecmp(method, "mailto:", 7)) {
                     strarray_insertm(cmd.u.n.options, 0, method+7);
-                    method = "mailto";
+                    method = (char *) "mailto";
                 }
                 else if (!strncasecmp(method,
                                       "https://cyrusimap.org/notifiers/", 32)) {

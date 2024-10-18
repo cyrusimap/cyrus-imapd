@@ -1160,13 +1160,19 @@ static void config_read_file(const char *filename)
                    as one value unless told otherwise */
 
                 if (imapopts[opt].t == OPT_ENUM) {
-                    /* normalize on/off values */
+                    /* normalize on/off values
+                     * we don't write to p in this section of the parser, so
+                     * this is safe, but if that ever changes it'll crash!
+                     */
                     if (!strcmp(p, "1") || !strcmp(p, "yes") ||
-                        !strcmp(p, "t") || !strcmp(p, "true")) {
-                        p = "on";
-                    } else if (!strcmp(p, "0") || !strcmp(p, "no") ||
-                               !strcmp(p, "f") || !strcmp(p, "false")) {
-                        p = "off";
+                        !strcmp(p, "t") || !strcmp(p, "true"))
+                    {
+                        p = (char *) "on";
+                    }
+                    else if (!strcmp(p, "0") || !strcmp(p, "no") ||
+                             !strcmp(p, "f") || !strcmp(p, "false"))
+                    {
+                        p = (char *) "off";
                     }
                 } else if (imapopts[opt].t == OPT_BITFIELD) {
                     /* split the string into separate values */

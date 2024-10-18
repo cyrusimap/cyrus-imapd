@@ -2050,7 +2050,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     int r, sasl_result;
     char *success_data;
     sasl_ssf_t ssf;
-    char *ssfmsg = NULL;
+    const char *ssfmsg = NULL;
     const void *val;
     int failedloginpause;
     struct proc_limits limits;
@@ -2571,7 +2571,7 @@ static int newsgroups_cb(const char *mailbox,
 static void cmd_list(char *arg1, char *arg2)
 {
     if (!arg1)
-        arg1 = "active";
+        arg1 = (char *) "active";
     else
         lcase(arg1);
 
@@ -2579,7 +2579,7 @@ static void cmd_list(char *arg1, char *arg2)
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = "*";
+        if (!arg2) arg2 = (char *) "*";
 
         erock.cmd = "ACTIVE";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -2636,7 +2636,7 @@ static void cmd_list(char *arg1, char *arg2)
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = "*";
+        if (!arg2) arg2 = (char *) "*";
 
         erock.cmd = "NEWSGROUPS";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -3637,7 +3637,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if (!port || !*port) port = "119";
+    if (!port || !*port) port = (char *) "119";
     if (getaddrinfo(host, port, &hints, &res0) != 0) {
         syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
         return;
