@@ -186,7 +186,7 @@ static void index_thread_refs(struct index_state *state,
                               int usinguid);
 
 static seqset_t *_parse_sequence(struct index_state *state,
-                                      const char *sequence, int usinguid);
+                                 const char *sequence, int usinguid);
 static void massage_header(char *hdr);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
@@ -396,8 +396,8 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     return r;
 }
 
-EXPORTED int index_expunge(struct index_state *state, char *sequence,
-                  int need_deleted)
+EXPORTED int index_expunge(struct index_state *state, const char *sequence,
+                           int need_deleted)
 {
     int r;
     uint32_t msgno;
@@ -1195,10 +1195,10 @@ EXPORTED int index_fetchresponses(struct index_state *state,
  * command.)
  */
 EXPORTED int index_fetch(struct index_state *state,
-                const char *sequence,
-                int usinguid,
-                const struct fetchargs *fetchargs,
-                int *fetchedsomething)
+                         const char *sequence,
+                         int usinguid,
+                         const struct fetchargs *fetchargs,
+                         int *fetchedsomething)
 {
     seqset_t *seq;
     seqset_t *vanishedlist = NULL;
@@ -1289,7 +1289,7 @@ EXPORTED int index_fetch(struct index_state *state,
 /*
  * Perform a STORE command on a sequence
  */
-EXPORTED int index_store(struct index_state *state, char *sequence,
+EXPORTED int index_store(struct index_state *state, const char *sequence,
                          struct storeargs *storeargs)
 {
     struct mailbox *mailbox;
@@ -3103,18 +3103,17 @@ out:
 /*
  * Performs a COPY command
  */
-EXPORTED int
-index_copy(struct index_state *state,
-           char *sequence,
-           int usinguid,
-           char *name,
-           char **copyuidp,
-           int nolink,
-           struct namespace *namespace,
-           int isadmin,
-           int ismove,
-           int ignorequota,
-           struct progress_rock *prock)
+EXPORTED int index_copy(struct index_state *state,
+                        const char *sequence,
+                        int usinguid,
+                        char *name,
+                        char **copyuidp,
+                        int nolink,
+                        struct namespace *namespace,
+                        int isadmin,
+                        int ismove,
+                        int ignorequota,
+                        struct progress_rock *prock)
 {
     struct copyargs copyargs;
     int i;
@@ -3350,8 +3349,8 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
 /*
  * Performs a COPY command from a local mailbox to a remote mailbox
  */
-EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
-                      int usinguid, struct protstream *pout)
+EXPORTED int index_copy_remote(struct index_state *state, const char *sequence,
+                               int usinguid, struct protstream *pout)
 {
     uint32_t msgno;
     seqset_t *seq;
@@ -8149,8 +8148,8 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     return &over;
 }
 
-EXPORTED extern char *index_getheader(struct index_state *state,
-                                      uint32_t msgno, char *hdr)
+EXPORTED char *index_getheader(struct index_state *state,
+                               uint32_t msgno, const char *hdr)
 {
     static struct buf staticbuf = BUF_INITIALIZER;
     strarray_t headers = STRARRAY_INITIALIZER;
@@ -8246,7 +8245,7 @@ EXPORTED int index_hasrights(const struct index_state *state, int rights)
  * Parse a sequence into an array of sorted & merged ranges.
  */
 static seqset_t *_parse_sequence(struct index_state *state,
-                                      const char *sequence, int usinguid)
+                                 const char *sequence, int usinguid)
 {
     unsigned maxval;
 
