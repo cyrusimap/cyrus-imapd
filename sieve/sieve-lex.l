@@ -62,8 +62,8 @@ extern int encoded_char; /* used to receive encoded-char feedback from parser */
 
 static unsigned long long tonum(const char *str);
 static int decode_string(struct buf *buf);
-extern void sieveerror(sieve_script_t *, char *);
-extern void sieveerror_f(sieve_script_t *, char *fmt, ...);
+extern void sieveerror(sieve_script_t *, const char *);
+extern void sieveerror_f(sieve_script_t *, const char *fmt, ...);
 %}
 
 %option yylineno

@@ -71,7 +71,7 @@ enum {
 struct banner_t {
     u_char auto_capa;           /* capability response sent automatically
                                    in banner? */
-    char *resp;                 /* end of banner response */
+    const char *resp;           /* end of banner response */
 };
 
 struct capa_t {

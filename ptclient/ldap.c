@@ -761,7 +761,7 @@ static int ptsmodule_get_dn(
     char *base = NULL, *filter = NULL;
     char *domain = NULL;
     char domain_filter[1024];
-    char *attrs[] = {LDAP_NO_ATTRS,NULL}; //do not return all attrs!
+    char *attrs[] = {(char *) LDAP_NO_ATTRS,NULL}; //do not return all attrs!
     char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
     LDAPMessage *res = NULL;
     LDAPMessage *entry;
@@ -783,7 +783,7 @@ static int ptsmodule_get_dn(
 
         strcpy(authzid, "u:");
         strcpy(authzid+2, canon_id);
-        c.ldctl_oid = LDAP_CONTROL_PROXY_AUTHZ;
+        c.ldctl_oid = (char *) LDAP_CONTROL_PROXY_AUTHZ;
         c.ldctl_value.bv_val = authzid;
         c.ldctl_value.bv_len = size + 2;
         c.ldctl_iscritical = 1;

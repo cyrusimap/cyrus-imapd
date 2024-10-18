@@ -72,8 +72,8 @@ EXPORTED int imparse_word(char **s, char **retval)
  * by 's'.  On success, places a pointer to the parsed word in the
  * pointer at 'retval', returns the character following the word, and
  * modifies the pointer at 's' to point after the returned character.
- * On failure, returns EOF, modifies the pointer at 'retval' to point
- * at the empty string, and modifies 's' to point around the syntax error.
+ * On failure, returns EOF, sets the pointer at 'retval' to NULL,
+ * and modifies 's' to point around the syntax error.
  * Modifies the input buffer.
  */
 EXPORTED int imparse_astring(char **s, char **retval)
@@ -91,7 +91,7 @@ EXPORTED int imparse_astring(char **s, char **retval)
     case '\r':
     case '\n':
         /* Invalid starting character */
-        *retval = "";
+        *retval = NULL;
         return EOF;
 
     default:
@@ -117,7 +117,7 @@ EXPORTED int imparse_astring(char **s, char **retval)
                 return *(*s)++;
             }
             else if (c == '\0' || c == '\r' || c == '\n') {
-                *retval = "";
+                *retval = NULL;
                 return EOF;
             }
             *d++ = c;
@@ -131,7 +131,7 @@ EXPORTED int imparse_astring(char **s, char **retval)
             len = len*10 + c - '0';
         }
         if (!sawdigit || c != '}' || *(*s)++ != '\r' || *(*s)++ != '\n') {
-            *retval = "";
+            *retval = NULL;
             return EOF;
         }
         *retval = *s;
