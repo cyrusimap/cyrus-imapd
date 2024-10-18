@@ -8148,8 +8148,8 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
     return &over;
 }
 
-EXPORTED extern char *index_getheader(struct index_state *state,
-                                      uint32_t msgno, char *hdr)
+EXPORTED char *index_getheader(struct index_state *state,
+                               uint32_t msgno, const char *hdr)
 {
     static struct buf staticbuf = BUF_INITIALIZER;
     strarray_t headers = STRARRAY_INITIALIZER;
