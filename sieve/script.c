@@ -341,7 +341,7 @@ EXPORTED void sieve_script_free(sieve_script_t **s)
     }
 }
 
-static void add_header(sieve_interp_t *i, int isenv, char *header,
+static void add_header(sieve_interp_t *i, int isenv, const char *header,
                        void *message_context, struct buf *out)
 {
     const char **h;
@@ -480,7 +480,7 @@ static int send_notify_callback(sieve_interp_t *interp,
     return ret;
 }
 
-static char *action_to_string(action_t action)
+static const char *action_to_string(action_t action)
 {
     switch(action)
         {
@@ -507,7 +507,7 @@ static char *action_to_string(action_t action)
     /* never reached */
 }
 
-static char *sieve_errstr(int code)
+static const char *sieve_errstr(int code)
 {
     switch (code)
         {
