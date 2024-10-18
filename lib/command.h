@@ -46,9 +46,8 @@
 #ifndef INCLUDED_COMMAND_H
 #define INCLUDED_COMMAND_H
 
-#include <config.h>
 #include <sys/types.h>
-#include <stdarg.h>
+
 #include "prot.h"
 #include "strarray.h"
 
