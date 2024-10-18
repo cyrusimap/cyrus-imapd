@@ -125,7 +125,7 @@ static void usage(void)
     exit(-1);
 }
 
-int init_net(const char *host, char *port,
+int init_net(const char *host, const char *port,
              struct protstream **in, struct protstream **out)
 {
     int sock = -1;
@@ -246,7 +246,7 @@ static int fetch(char *msgid, int bymsgid,
 int main(int argc, char *argv[])
 {
     int opt;
-    char *alt_config = NULL, *port = "119";
+    const char *alt_config = NULL, *port = "119";
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
@@ -277,6 +277,8 @@ int main(int argc, char *argv[])
     while (-1 != (opt = getopt_long(argc, argv,
                                     short_options, long_options, NULL)))
     {
+        char *colon;
+
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -284,8 +286,10 @@ int main(int argc, char *argv[])
 
         case 's': /* server */
             server = xstrdup(optarg);
-            if ((port = strchr(server, ':')))
-                *port++ = '\0';
+            if ((colon = strchr(server, ':'))) {
+                *colon = '\0';
+                port = colon + 1;
+            }
             else
                 port = "119";
             break;
