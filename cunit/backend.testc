@@ -1446,7 +1446,7 @@ static int server_auxprop_init(const sasl_utils_t *utils __attribute__((unused))
     static sasl_auxprop_plug_t plug = {
         .features = 0,
         .auxprop_lookup = server_auxprop_lookup,
-        .name = "testserver-hack"
+        .name = (char *) "testserver-hack"
     };
 
     *out_version = max_version;

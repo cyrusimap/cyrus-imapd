@@ -564,7 +564,7 @@ static int send_response(void *ac, void *ic, void *sc,
            src->msg, src->subj, src->addr, m->name, src->fromaddr);
 
     if (src->fcc.mailbox) {
-        message_data_t vmc = { .name = "vacation-autoresponse" };
+        message_data_t vmc = { .name = (char *) "vacation-autoresponse" };
 
         (void) fileinto(&src->fcc, ic, sc, &vmc, errmsg);
     }

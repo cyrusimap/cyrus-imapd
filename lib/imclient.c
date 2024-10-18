@@ -901,9 +901,9 @@ static void imclient_eof(struct imclient *imclient)
     imclient->readytxt = 0;
 
     for (cmdcb = imclient->cmdcallback; cmdcb; cmdcb = cmdcb->next) {
-        reply.keyword = "EOF";
+        reply.keyword = (char *) "EOF";
         reply.msgno = -1;
-        reply.text = "";
+        reply.text = (char *) "";
         (*cmdcb->proc)(imclient, cmdcb->rock, &reply);
         if (!cmdcb->next) {
             cmdcb->next = cmdcallback_freelist;
