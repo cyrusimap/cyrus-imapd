@@ -264,7 +264,7 @@ extern int index_fetch(struct index_state *state,
                        const struct fetchargs* fetchargs,
                        int* fetchedsomething);
 extern int index_store(struct index_state *state,
-                       char *sequence,
+                       const char *sequence,
                        struct storeargs *storeargs);
 extern int index_run_annotator(struct index_state *state,
                                const char *sequence, int usinguid,
@@ -294,7 +294,7 @@ extern int index_search(struct index_state *state,
                         struct searchargs *searchargs, int usinguid,
                         struct progress_rock *prock);
 extern int index_copy(struct index_state *state,
-                      char *sequence,
+                      const char *sequence,
                       int usinguid,
                       char *name,
                       char **copyuidp,
@@ -341,7 +341,7 @@ extern char *index_getheader(struct index_state *state, uint32_t msgno,
                              char *hdr);
 extern unsigned long index_getsize(struct index_state *state, uint32_t msgno);
 extern unsigned long index_getlines(struct index_state *state, uint32_t msgno);
-extern int index_copy_remote(struct index_state *state, char *sequence,
+extern int index_copy_remote(struct index_state *state, const char *sequence,
                              int usinguid, struct protstream *pout);
 
 struct searchargs *new_searchargs(const char *tag, int state,
