@@ -43,7 +43,7 @@
 #ifndef INCLUDED_AUTH_H
 #define INCLUDED_AUTH_H
 
-#include "lib/strarray.h"
+#include "strarray.h"
 
 struct auth_state;
 
