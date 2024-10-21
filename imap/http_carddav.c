@@ -229,13 +229,13 @@ static const struct prop_entry carddav_props[] = {
       propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Language" },
+      propfind_fromhdr, NULL, (void *) "Content-Language" },
     { "getcontentlength", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_getcontenttype, NULL, "Content-Type" },
+      propfind_getcontenttype, NULL, (void *) "Content-Type" },
     { "getetag", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
@@ -247,7 +247,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_lockdisc, NULL, NULL },
     { "resourcetype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_restype, proppatch_restype, "addressbook" },
+      propfind_restype, proppatch_restype, (void *) "addressbook" },
     { "supportedlock", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
       propfind_suplock, NULL, NULL },
@@ -307,7 +307,7 @@ static const struct prop_entry carddav_props[] = {
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV,
       PROP_COLLECTION,
-      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
+      propfind_sync_token, NULL, (void *) SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
     { "share-access", NS_DAV,
@@ -340,7 +340,7 @@ static const struct prop_entry carddav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
       PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, "" },
+      propfind_sync_token, NULL, (void *) "" },
 
     /* Apple Push Notifications Service properties */
     { "push-transports", NS_CS,
