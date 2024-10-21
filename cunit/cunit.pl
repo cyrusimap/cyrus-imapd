@@ -434,7 +434,7 @@ sub suite_found_param
 #
 # Also scan for variable declarations of the form
 #
-# [static] char * foo = CUNIT_PARAM("stringliteral");
+# [static] [const] char * foo = CUNIT_PARAM("stringliteral");
 #
 # and make them a parameter for the containing test suite.
 #
@@ -481,7 +481,7 @@ sub suite_scan_for_tests($)
                 next;
             }
 
-            my ($param) = m/^(?:static\s+)char\s*\*\s*(\w+)\s*=\s*CUNIT_PARAM\s*\(/;
+            my ($param) = m/^(?:static\s+)?(?:const\s+)?char\s*\*\s*(\w+)\s*=\s*CUNIT_PARAM\s*\(/;
             if (defined $param)
             {
                 suite_found_param($suite, $param);

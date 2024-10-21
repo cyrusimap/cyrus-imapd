@@ -321,7 +321,7 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
 {
     const struct {
         int required;
-        char *fname;
+        const char *fname;
     } reports[] = {
         { 1, FNAME_PROM_SERVICE_REPORT },
         { 0, FNAME_PROM_USAGE_REPORT   },

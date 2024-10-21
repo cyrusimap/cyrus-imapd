@@ -107,7 +107,7 @@ enum SieveFileType {
 };
 static struct sieve_scripts_info {
     enum SieveFileType stype;
-    char *ext;
+    const char *ext;
 } sieve_names[] = {
     {SIEVE_TMP_1, ".script.NEW"},
     {SIEVE_TMP_2, ".NEW"},

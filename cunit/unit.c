@@ -283,10 +283,10 @@ void __cunit_params_end(void)
 CU_BOOL CU_assertFormatImplementation(
     CU_BOOL bValue,
     unsigned int uiLine,
-    char strFile[],
-    char strFunction[],
+    const char strFile[],
+    const char strFunction[],
     CU_BOOL bFatal,
-    char strConditionFormat[],
+    const char strConditionFormat[],
     ...)
 {
     va_list args;

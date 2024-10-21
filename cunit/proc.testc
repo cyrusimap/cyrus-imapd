@@ -246,16 +246,19 @@ static int collect_procs_cb(pid_t pid,
 
 static void test_proc_foreach(void)
 {
+#define FIELDS(s, c, u, m, x) \
+    { (char *)(s), (char *)(c), (char *)(u), (char *)(m), (char *)(x) }
+
     struct {
         struct proc_handle *handle;
         struct procdata_fields fields;
     } tests[] = {
-        { NULL, { "sn0", "ch0", "ui0", "mb0", "cm0" } },
-        { NULL, { "sn1", "ch1", "ui1", "mb1", "cm1" } },
-        { NULL, { "sn2", "ch2", "ui2", "mb2", "cm2" } },
-        { NULL, { "sn3", "ch3", "ui3", "mb3", "cm3" } },
-        { NULL, { "sn4", "ch4", "ui4", "mb4", "cm4" } },
-        { NULL, { "sn5", "ch5", "ui5", "mb5", "cm5" } },
+        { NULL, FIELDS("sn0", "ch0", "ui0", "mb0", "cm0") },
+        { NULL, FIELDS("sn1", "ch1", "ui1", "mb1", "cm1") },
+        { NULL, FIELDS("sn2", "ch2", "ui2", "mb2", "cm2") },
+        { NULL, FIELDS("sn3", "ch3", "ui3", "mb3", "cm3") },
+        { NULL, FIELDS("sn4", "ch4", "ui4", "mb4", "cm4") },
+        { NULL, FIELDS("sn5", "ch5", "ui5", "mb5", "cm5") },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     const pid_t mypid = getpid();
