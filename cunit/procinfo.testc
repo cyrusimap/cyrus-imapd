@@ -29,7 +29,7 @@ static void not_test_add_procinfo_generic(void)
     CU_ASSERT_PTR_NOT_NULL(pinfo);
 
     CU_ASSERT_EQUAL(piarray.count, 1);
-    CU_ASSERT_TRUE((piarray.alloc >= piarray.count));
+    CU_ASSERT((piarray.alloc >= piarray.count));
     CU_ASSERT_PTR_NOT_NULL(piarray.data);
 
     CU_ASSERT_EQUAL(pinfo->pid, 2342);
@@ -55,7 +55,7 @@ static void test_add_procinfo(void)
     CU_ASSERT_EQUAL(res, 0);
 
     CU_ASSERT_EQUAL(piarray.count, 1);
-    CU_ASSERT_TRUE((piarray.alloc >= piarray.count));
+    CU_ASSERT((piarray.alloc >= piarray.count));
     CU_ASSERT_PTR_NOT_NULL(piarray.data);
 
     pinfo = piarray.data[0];
@@ -69,8 +69,8 @@ static void test_add_procinfo(void)
     CU_ASSERT_STRING_EQUAL(pinfo->cmdname, "command");
     CU_ASSERT_STRING_NOT_EQUAL(pinfo->state, "");
     CU_ASSERT_NOT_EQUAL(pinfo->start, 0);
-    CU_ASSERT_TRUE((pinfo->start <= time(NULL)));
-    CU_ASSERT_TRUE((pinfo->vmsize > 0));
+    CU_ASSERT((pinfo->start <= time(NULL)));
+    CU_ASSERT((pinfo->vmsize > 0));
 
     deinit_piarray(&piarray);
 }
@@ -113,25 +113,25 @@ static void test_sort_procinfo(void)
     pinfo1->vmsize = 1;
     pinfo2->vmsize = 2;
 
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "p") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "s") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "q") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "t") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "v") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "h") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "u") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "r") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "c") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "p") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "s") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "q") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "t") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "v") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "h") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "u") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "r") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "c") > 0));
 
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "P") > 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "S") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "Q") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "T") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "V") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "H") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "U") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "R") < 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "C") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "P") > 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "S") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "Q") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "T") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "V") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "H") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "U") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "R") < 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo2, "C") < 0));
 
     pinfo3 = piarray.data[2];
     pinfo4 = piarray.data[3];
@@ -143,25 +143,25 @@ static void test_sort_procinfo(void)
     pinfo3->vmsize = 1;
     pinfo4->vmsize = 2;
 
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "p") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "s") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "q") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "t") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "v") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "h") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "u") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "r") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "c") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "p") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "s") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "q") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "t") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "v") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "h") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "u") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "r") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo1, &pinfo3, "c") == 0));
 
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "P") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "S") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "Q") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "T") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "V") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "H") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "U") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "R") == 0));
-    CU_ASSERT_TRUE((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "C") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "P") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "S") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "Q") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "T") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "V") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "H") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "U") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "R") == 0));
+    CU_ASSERT((sort_procinfo QSORT_R_COMPAR_ARGS(&pinfo2, &pinfo4, "C") == 0));
 
     deinit_piarray(&piarray);
 }
