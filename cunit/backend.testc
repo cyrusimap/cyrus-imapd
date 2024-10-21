@@ -1299,6 +1299,15 @@ static void server_cmdloop(struct server_state *state)
     }
 }
 
+static volatile int server_in_shutdown = 0;
+static void server_handle_signal(int sig)
+{
+    if (sig == SIGTERM || sig == SIGINT || sig == SIGQUIT) {
+        fprintf(stderr, "server got signal %d\n", sig);
+        server_in_shutdown = 1;
+    }
+}
+
 /*
  * Start the server.  Forks a child process, which does some once-off
  * server initialisation and then enters a service loop.  The service
@@ -1331,11 +1340,14 @@ static pid_t server_start(struct server_state *state)
 
     /* Main connection loop.  This is a toy, single-threaded server
      * which handles one connection at a time. */
-    for (;;)
-    {
+    if (SIG_ERR == signal(SIGTERM, &server_handle_signal)) {
+        perror("signal");
+        exit(1);
+    }
+    while (!server_in_shutdown) {
         /* Wait for a connection */
         if (server_accept(state) < 0)
-            exit(1);
+            break;
 
         /* Run the main command loop for this connection */
         server_cmdloop(state);
@@ -1343,6 +1355,9 @@ static pid_t server_start(struct server_state *state)
         /* Forget the per-connection state */
         server_unaccept(state);
     }
+
+    sasl_done();
+    exit(1);
 }
 
 /*
