@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char *dirname = NULL, *backup1 = NULL, *backup2 = NULL;
     strarray_t files = STRARRAY_INITIALIZER;
-    char *msg = "";
+    const char *msg = "";
     int i, rotated = 0;
 
     /* keep this in alphabetical order */

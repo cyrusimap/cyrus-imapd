@@ -405,7 +405,7 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
                            void *rock, struct txn **tid, unsigned flags)
 {
     int r;
-    char *search = prefix ? (char *)prefix : "";
+    const char *search = prefix ? prefix : "";
     struct quota_foreach_t foreach_d;
 
     init_internal();
@@ -416,7 +416,7 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
     foreach_d.use_conv = !!(flags & QUOTA_USE_CONV);
 
     r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
-                     do_onequota, &foreach_d, tid);
+                        do_onequota, &foreach_d, tid);
 
     return r;
 }
