@@ -217,9 +217,10 @@ static int do_examine(struct findall_data *data, void *rock)
     int j;
     int *ok_count = (int *) rock;
 
-    /* don't want partial matches */
+    /* don't want partial matches or intermediate mailboxes */
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
+    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) return 0;
 
     signals_poll();
 
@@ -397,9 +398,10 @@ static int do_quota(struct findall_data *data, void *rock)
     struct stat sbuf;
     int *ok_count = (int *) rock;
 
-    /* don't want partial matches */
+    /* don't want partial matches or intermediate mailboxes */
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
+    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) return 0;
 
     signals_poll();
 
@@ -473,9 +475,10 @@ static int do_compare(struct findall_data *data, void *rock)
     uint32_t *uids = NULL, nalloc, count = 0, msgno;
     int *ok_count = (int *) rock;
 
-    /* don't want partial matches */
+    /* don't want partial matches or intermediate mailboxes */
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
+    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) return 0;
 
     signals_poll();
 
