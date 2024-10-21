@@ -16,7 +16,7 @@
 #define QUOTAROOT               "user.smurf"
 #define QUOTAROOT_NONEXISTENT   "no-such-quotaroot"
 
-static char *backend = CUNIT_PARAM("quotalegacy,skiplist");
+static const char *backend = CUNIT_PARAM("quotalegacy,skiplist");
 
 static void test_names(void)
 {
