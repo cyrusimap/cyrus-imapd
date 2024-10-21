@@ -456,7 +456,7 @@ static int dump_file(int first, int sync,
 
 struct data_file {
     int metaname;
-    char *fname;
+    const char *fname;
 };
 
 /* even though 2.4.x doesn't use cyrus.expunge, we need to be aware
@@ -622,7 +622,8 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
     if (mboxname_isusermailbox(mailbox_name(mailbox), 1)) {
         userid = mboxname_to_userid(mailbox_name(mailbox));
         int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-        char *fname = NULL, *ftag = NULL;
+        char *fname = NULL;
+        const char *ftag = NULL;
 
         /* Dump seen and subs files */
         for (i = 0; i< NUM_USER_DATA_FILES; i++) {

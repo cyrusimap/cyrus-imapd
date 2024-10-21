@@ -451,17 +451,19 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
             buf_printf(&plainbuf, "RSVP       : %s\r\n", originator->partstat);
     }
     else {
+        const char *prefix;
+
         if (status) buf_printf(&plainbuf, "Status     : %s\r\n", status);
 
-        for (cp = "Attendees  : ", recip=recipients; recip; recip=recip->next) {
+        for (prefix = "Attendees  : ", recip=recipients; recip; recip=recip->next) {
             if (recip->name && strcasecmp(recip->name, recip->addr))
-                buf_printf(&plainbuf, "%s* %s <%s>", cp, recip->name, recip->addr);
+                buf_printf(&plainbuf, "%s* %s <%s>", prefix, recip->name, recip->addr);
             else
-                buf_printf(&plainbuf, "%s* %s", cp, recip->addr);
+                buf_printf(&plainbuf, "%s* %s", prefix, recip->addr);
             if (recip->role) buf_printf(&plainbuf, "\t(%s)", recip->role);
             buf_appendcstr(&plainbuf, "\r\n");
 
-            cp = TEXT_INDENT;
+            prefix = TEXT_INDENT;
         }
 
         if (descrip) {
@@ -524,10 +526,12 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
             buf_printf(&msgbuf, HTML_ROW, "RSVP", originator->partstat);
     }
     else {
+        const char *prefix;
+
         if (status) buf_printf(&msgbuf, HTML_ROW, "Status", status);
 
         buf_appendcstr(&msgbuf, "<tr><td><b>Attendees</b></td>");
-        for (cp = "<td>", recip = recipients; recip; recip = recip->next) {
+        for (prefix = "<td>", recip = recipients; recip; recip = recip->next) {
             if (recip->name) {
                 HTMLencode(&tmpbuf, recip->name);
                 recip->name = buf_cstring(&tmpbuf);
@@ -535,10 +539,10 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
             else recip->name = recip->addr;
 
             buf_printf(&msgbuf, "%s&#8226; <a href=\"mailto:%s\">%s</a>",
-                    cp, recip->addr, recip->name);
+                       prefix, recip->addr, recip->name);
             if (recip->role) buf_printf(&msgbuf, " <i>(%s)</i>", recip->role);
 
-            cp = "\r\n  <br>";
+            prefix = "\r\n  <br>";
         }
         buf_appendcstr(&msgbuf, "</td></tr>\r\n");
 
