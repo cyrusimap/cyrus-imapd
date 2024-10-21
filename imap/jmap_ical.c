@@ -1732,7 +1732,7 @@ static json_t* recurrence_byX_fromical(short byX[], size_t nmemb, int (*conv)(in
 
     size_t i;
     int tmp[nmemb];
-    for (i = 0; i < nmemb && byX[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
+    for (i = 0; i < nmemb; i++) {
         tmp[i] = conv(byX[i]);
     }
 
@@ -1750,26 +1750,28 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 {
     char *s = NULL;
     struct buf buf = BUF_INITIALIZER;
-    size_t i;
+    short i;
+    json_t *recur;
 
-    struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
-    if (rrule.freq == ICAL_NO_RECURRENCE) {
-        return json_null();
+    struct icalrecurrencetype *rrule = icalproperty_get_recurrence(prop);
+    if (rrule->freq == ICAL_NO_RECURRENCE) {
+        recur = json_null();
+        goto done;
     }
 
-    json_t *recur = json_pack("{s:s}", "@type", "RecurrenceRule");
+    recur = json_pack("{s:s}", "@type", "RecurrenceRule");
 
     /* frequency */
-    s = lcase(xstrdup(icalrecur_freq_to_string(rrule.freq)));
+    s = lcase(xstrdup(icalrecur_freq_to_string(rrule->freq)));
     json_object_set_new(recur, "frequency", json_string(s));
     free(s);
 
-    json_object_set_new(recur, "interval", json_integer(rrule.interval));
+    json_object_set_new(recur, "interval", json_integer(rrule->interval));
 
 #ifdef HAVE_RSCALE
     /* rscale */
-    if (rrule.rscale) {
-        s = xstrdup(rrule.rscale);
+    if (rrule->rscale) {
+        s = xstrdup(rrule->rscale);
         s = lcase(s);
         json_object_set_new(recur, "rscale", json_string(s));
         free(s);
@@ -1777,7 +1779,7 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 
     /* skip */
     const char *skip = NULL;
-    switch (rrule.skip) {
+    switch (rrule->skip) {
         case ICAL_SKIP_BACKWARD:
             skip = "backward";
             break;
@@ -1793,31 +1795,29 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 #endif
 
     /* firstDayOfWeek */
-    s = xstrdup(icalrecur_weekday_to_string(rrule.week_start));
+    s = xstrdup(icalrecur_weekday_to_string(rrule->week_start));
     s = lcase(s);
     json_object_set_new(recur, "firstDayOfWeek", json_string(s));
     free(s);
 
     /* byDay */
     json_t *jbd = json_array();
-    for (i = 0; i < ICAL_BY_DAY_SIZE; i++) {
+    short *by_day = icalrecur_byrule_data(rrule, ICAL_BY_DAY);
+    short size = icalrecur_byrule_size(rrule, ICAL_BY_DAY);
+    for (i = 0; i < size; i++) {
         json_t *jday;
         icalrecurrencetype_weekday weekday;
         int pos;
 
-        if (rrule.by_day[i] == ICAL_RECURRENCE_ARRAY_MAX) {
-            break;
-        }
-
         jday = json_object();
-        weekday = icalrecurrencetype_day_day_of_week(rrule.by_day[i]);
+        weekday = icalrecurrencetype_day_day_of_week(by_day[i]);
 
         s = xstrdup(icalrecur_weekday_to_string(weekday));
         s = lcase(s);
         json_object_set_new(jday, "day", json_string(s));
         free(s);
 
-        pos = icalrecurrencetype_day_position(rrule.by_day[i]);
+        pos = icalrecurrencetype_day_position(by_day[i]);
         if (pos) {
             json_object_set_new(jday, "nthOfPeriod", json_integer(pos));
         }
@@ -1837,14 +1837,11 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 
     /* byMonth */
     json_t *jbm = json_array();
-    for (i = 0; i < ICAL_BY_MONTH_SIZE; i++) {
-        short bymonth;
+    short *by_month = icalrecur_byrule_data(rrule, ICAL_BY_MONTH);
+    size = icalrecur_byrule_size(rrule, ICAL_BY_MONTH);
+    for (i = 0; i < size; i++) {
+        short bymonth = by_month[i];
 
-        if (rrule.by_month[i] == ICAL_RECURRENCE_ARRAY_MAX) {
-            break;
-        }
-
-        bymonth = rrule.by_month[i];
         buf_printf(&buf, "%d", icalrecurrencetype_month_month(bymonth));
         if (icalrecurrencetype_month_is_leap(bymonth)) {
             buf_appendcstr(&buf, "L");
@@ -1859,56 +1856,63 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
         json_decref(jbm);
     }
 
-    if (rrule.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_MONTH_DAY))) {
         json_object_set_new(recur, "byMonthDay",
-                recurrence_byX_fromical(rrule.by_month_day,
-                    ICAL_BY_MONTHDAY_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_MONTH_DAY),
+                                size, &identity_int));
     }
-    if (rrule.by_year_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_YEAR_DAY))) {
         json_object_set_new(recur, "byYearDay",
-                recurrence_byX_fromical(rrule.by_year_day,
-                    ICAL_BY_YEARDAY_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_YEAR_DAY),
+                                size, &identity_int));
     }
-    if (rrule.by_week_no[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_WEEK_NO))) {
         json_object_set_new(recur, "byWeekNo",
-                recurrence_byX_fromical(rrule.by_week_no,
-                    ICAL_BY_WEEKNO_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_WEEK_NO),
+                                size, &identity_int));
     }
-    if (rrule.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_HOUR))) {
         json_object_set_new(recur, "byHour",
-                recurrence_byX_fromical(rrule.by_hour,
-                    ICAL_BY_HOUR_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_HOUR),
+                                size, &identity_int));
     }
-    if (rrule.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_MINUTE))) {
         json_object_set_new(recur, "byMinute",
-                recurrence_byX_fromical(rrule.by_minute,
-                    ICAL_BY_MINUTE_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_MINUTE),
+                                size, &identity_int));
     }
-    if (rrule.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_SECOND))) {
         json_object_set_new(recur, "bySecond",
-                recurrence_byX_fromical(rrule.by_second,
-                    ICAL_BY_SECOND_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_SECOND),
+                                size, &identity_int));
     }
-    if (rrule.by_set_pos[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_SET_POS))) {
         json_object_set_new(recur, "bySetPosition",
-                recurrence_byX_fromical(rrule.by_set_pos,
-                    ICAL_BY_SETPOS_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_SET_POS),
+                                size, &identity_int));
     }
 
-    if (rrule.count != 0) {
+    if (rrule->count != 0) {
         /* Recur count takes precedence over until. */
-        json_object_set_new(recur, "count", json_integer(rrule.count));
-    } else if (!icaltime_is_null_time(rrule.until)) {
+        json_object_set_new(recur, "count", json_integer(rrule->count));
+    } else if (!icaltime_is_null_time(rrule->until)) {
         icaltimetype dtuntil;
-        if (rrule.until.is_date) {
-            dtuntil = rrule.until;
+        if (rrule->until.is_date) {
+            dtuntil = rrule->until;
             dtuntil.hour = 23;
             dtuntil.minute = 59;
             dtuntil.second = 59;
             dtuntil.is_date = 0;
         }
         else {
-            dtuntil = icaltime_convert_to_zone(rrule.until, untiltz);
+            dtuntil = icaltime_convert_to_zone(rrule->until, untiltz);
         }
         struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
         jmapical_datetime_from_icaltime(dtuntil, &until);
@@ -1923,6 +1927,8 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
         recur = json_null();
     }
 
+  done:
+    icalrecurrencetype_unref(rrule);
     buf_free(&buf);
     return recur;
 }
@@ -6590,27 +6596,19 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
 
     if (!json_array_size(parser->invalid)) {
         /* Add RRULE to component */
-        struct icalrecurrencetype rt =
-            icalrecurrencetype_from_string(buf_ucase(&buf));
-        if (rt.freq != ICAL_NO_RECURRENCE) {
-            icalproperty *prop = NULL;
-            if (kind == ICAL_RRULE_PROPERTY) {
-                prop = icalproperty_new_rrule(rt);
+        struct icalrecurrencetype *rt =
+            icalrecurrencetype_new_from_string(buf_ucase(&buf));
+        if (rt->freq != ICAL_NO_RECURRENCE) {
+            icalproperty *prop = icalproperty_new(kind);
+            if (prop) {
+                icalproperty_set_recurrence(prop, rt);
+                icalcomponent_add_property(comp, prop);
             }
-            else if (kind == ICAL_EXRULE_PROPERTY) {
-                prop = icalproperty_new_exrule(rt);
-            }
-            if (prop) icalcomponent_add_property(comp, prop);
         } else {
             syslog(LOG_ERR, "jmap_ical: generated bogus RRULE: %s", buf_cstring(&buf));
             jmap_parser_invalid(parser, NULL);
         }
-        // XXX this should go to libical
-        if (rt.rscale) {
-            free(rt.rscale);
-            rt.rscale = NULL;
-        }
-        icalrecurrencetype_clear(&rt);
+        icalrecurrencetype_unref(rt);
     }
 
     buf_free(&buf);

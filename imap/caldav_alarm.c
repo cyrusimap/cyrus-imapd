@@ -795,7 +795,7 @@ static int check_by_array(const short *byX, short size,
     memcpy(my_byX, byX, size * sizeof(short));
 
     /* convert each value to seconds and determine actual length of data */
-    for (len = 0; len < size && my_byX[len] != ICAL_RECURRENCE_ARRAY_MAX; len++) {
+    for (len = 0; len < size; len++) {
         my_byX[len] *= to_seconds;
     }
 
@@ -891,12 +891,14 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                  prop =
                      icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
 
-                struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
-                int recur_interval = rrule.interval;
+                struct icalrecurrencetype *rrule =
+                    icalproperty_get_recurrence(prop);
+                int recur_interval = rrule->interval;
                 const char *bypart = "";
                 int disable = 0;
+                short size;
 
-                switch (rrule.freq) {
+                switch (rrule->freq) {
                 case ICAL_YEARLY_RECURRENCE:
                 case ICAL_MONTHLY_RECURRENCE:
                 case ICAL_WEEKLY_RECURRENCE:
@@ -925,20 +927,20 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                     break;
                 }
 
-                if (rrule.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                if ((size = icalrecur_byrule_size(rrule, ICAL_BY_SECOND))) {
                     bypart = "SECOND";
-                    disable = check_by_array(rrule.by_second, ICAL_BY_SECOND_SIZE,
-                                             recur_interval, 1);
+                    disable = check_by_array(icalrecur_byrule_data(rrule, ICAL_BY_SECOND),
+                                             size, recur_interval, 1);
                 }
-                else if (rrule.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                else if ((size = icalrecur_byrule_size(rrule, ICAL_BY_MINUTE))) {
                     bypart = "MINUTE";
-                    disable = check_by_array(rrule.by_minute, ICAL_BY_MINUTE_SIZE,
-                                             recur_interval, 60);
+                    disable = check_by_array(icalrecur_byrule_data(rrule, ICAL_BY_MINUTE),
+                                             size, recur_interval, 60);
                 }
-                else if (rrule.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                else if ((size = icalrecur_byrule_size(rrule, ICAL_BY_HOUR))) {
                     bypart = "HOUR";
-                    disable = check_by_array(rrule.by_hour, ICAL_BY_HOUR_SIZE,
-                                             recur_interval, 3600);
+                    disable = check_by_array(icalrecur_byrule_data(rrule, ICAL_BY_HOUR),
+                                             size, recur_interval, 3600);
                 }
                 else if (recur_interval < min_interval) {
                     disable = 1;
@@ -949,11 +951,14 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                             "Disabling alarms for high frequence calendar entry",
                             "freq=<%s> interval=<%u> bypart=<%s>"
                             " mboxname=<%s> imap_uid=<%d>",
-                            icalrecur_freq_to_string(rrule.freq),
-                            rrule.interval, bypart,
+                            icalrecur_freq_to_string(rrule->freq),
+                            rrule->interval, bypart,
                             mailbox_name(mailbox), uid);
+                    icalrecurrencetype_unref(rrule);
                     return 0;
                 }
+
+                icalrecurrencetype_unref(rrule);
             }
 
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
