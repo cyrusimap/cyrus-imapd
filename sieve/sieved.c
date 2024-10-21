@@ -1770,7 +1770,7 @@ static void generate_script(bytecode_input_t *d, int bc_len)
 
     if (requires) {
         unsigned long long capa;
-        char *sep = "";
+        const char *sep = "";
         int n;
 
         printf("require [");

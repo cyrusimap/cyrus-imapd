@@ -1126,7 +1126,7 @@ static void display_part(struct transaction_t *txn,
         /* message/rfc822 */
         struct body *subpart = body->subpart;
         struct address *addr;
-        char *sep;
+        const char *sep;
 
         /* Display enclosed message header as a shaded table */
         buf_printf_markup(buf, level++,

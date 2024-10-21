@@ -11062,19 +11062,22 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
         }
         else if (dst_encoding == ENCODING_BASE64) {
             // Pre-flight encoder to determine length
-            size_t b64_len = 0;
-            char *b64 = "";
+            size_t b64_len;
             charset_b64encode_mimebody(NULL, body_len, NULL, &b64_len, NULL,
                                        /*wrap*/ 1);
             if (b64_len) {
                 // Now encode the body
-                b64 = xmalloc(b64_len);
+                char *b64 = xmalloc(b64_len);
                 charset_b64encode_mimebody(body, body_len, b64, &b64_len, NULL,
                                            /*wrap*/ 1);
                 strarray_appendm(&freeme, b64);
+                dst_body = b64;
+                dst_len = b64_len;
             }
-            dst_body = b64;
-            dst_len = b64_len;
+            else {
+                dst_body = "";
+                dst_len = 0;
+            }
         }
     }
 
