@@ -407,10 +407,23 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
     cmp = a->week_start - b->week_start;
     if (cmp) return cmp;
 
-    cmp = memcmp(a->by_second, b->by_second,
-                 sizeof(a->by_second) / sizeof(a->by_second[0]));
+    cmp = strcasecmpsafe(a->rscale, b->rscale);
     if (cmp) return cmp;
 
+    cmp = a->skip - b->skip;
+    if (cmp) return cmp;
+
+#ifdef HAVE_RECUR_BY_REF
+    short i;
+    for (i = 0; i < ICAL_BY_NUM_PARTS; i++) {
+        cmp = a->by[i].size - b->by[i].size;
+        if (cmp) return cmp;
+
+        cmp = memcmp(a->by[i].data, b->by[i].data,
+                     a->by[i].size * sizeof(a->by[i].data[0]));
+        if (cmp) return cmp;
+    }
+#else /* !HAVE_RECUR_BY_REF */
     cmp = memcmp(a->by_minute, b->by_minute,
                  sizeof(a->by_minute) / sizeof(a->by_minute[0]));
     if (cmp) return cmp;
@@ -442,12 +455,7 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
     cmp = memcmp(a->by_set_pos, b->by_set_pos,
                  sizeof(a->by_set_pos) / sizeof(a->by_set_pos[0]));
     if (cmp) return cmp;
-
-    cmp = strcasecmpsafe(a->rscale, b->rscale);
-    if (cmp) return cmp;
-
-    cmp = a->skip - b->skip;
-    if (cmp) return cmp;
+#endif /* HAVE_RECUR_BY_REF */
 
     return 0;
 }
@@ -3336,6 +3344,74 @@ EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
     icalrecurrencetype_t rt = icalvalue_get_recur(val);
 
     return icalrecurrencetype_clone(&rt);
+}
+
+EXPORTED short *icalrecur_byrule_data(icalrecurrencetype_t *rt,
+                                      icalrecurrencetype_byrule rule)
+{
+    switch (rule) {
+    case ICAL_BY_MONTH:     return rt->by_month;
+    case ICAL_BY_WEEK_NO:   return rt->by_week_no;
+    case ICAL_BY_YEAR_DAY:  return rt->by_year_day;
+    case ICAL_BY_MONTH_DAY: return rt->by_month_day;
+    case ICAL_BY_DAY:       return rt->by_day;
+    case ICAL_BY_HOUR:      return rt->by_hour;
+    case ICAL_BY_MINUTE:    return rt->by_minute;
+    case ICAL_BY_SECOND:    return rt->by_second;
+    case ICAL_BY_SET_POS:   return rt->by_set_pos;
+    default:                return NULL;
+    }
+}
+
+EXPORTED short icalrecur_byrule_size(icalrecurrencetype_t *rt,
+                                     icalrecurrencetype_byrule rule)
+{
+    short *byX, max, size;
+
+    switch (rule) {
+    case ICAL_BY_MONTH:
+        byX = rt->by_month;
+        max = ICAL_BY_MONTH_SIZE;
+        break;
+    case ICAL_BY_WEEK_NO:
+        byX = rt->by_week_no;
+        max = ICAL_BY_WEEKNO_SIZE;
+        break;
+    case ICAL_BY_YEAR_DAY:
+        byX = rt->by_year_day;
+        max = ICAL_BY_YEARDAY_SIZE;
+        break;
+    case ICAL_BY_MONTH_DAY:
+        byX = rt->by_month_day;
+        max = ICAL_BY_MONTHDAY_SIZE;
+        break;
+    case ICAL_BY_DAY:
+        byX = rt->by_day;
+        max = ICAL_BY_DAY_SIZE;
+        break;
+    case ICAL_BY_HOUR:
+        byX = rt->by_hour;
+        max = ICAL_BY_HOUR_SIZE;
+        break;
+    case ICAL_BY_MINUTE:
+        byX = rt->by_minute;
+        max = ICAL_BY_MINUTE_SIZE;
+        break;
+    case ICAL_BY_SECOND:
+        byX = rt->by_second;
+        max = ICAL_BY_SECOND_SIZE;
+        break;
+    case ICAL_BY_SET_POS:
+        byX = rt->by_set_pos;
+        max = ICAL_BY_SETPOS_SIZE;
+        break;
+    default:
+        return 0;
+    }
+
+    for (size = 0; size < max && byX[size] != ICAL_RECURRENCE_ARRAY_MAX; size++);
+
+    return size;
 }
 #endif /* !HAVE_RECUR_BY_REF */
 
