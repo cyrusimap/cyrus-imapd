@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_thread_get_nobracket_message_id
+  : needs_component_jmap {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    my $mime = <<'EOF';
+From: alice@local
+To: bob@local
+Subject: test
+Message-ID: no-angle-brackets.or.at-symbol
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 8bit;charset=utf-8
+
+hello
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => [ 'messageId', 'threadId' ],
+            },
+            'R2'
+        ],
+    ]);
+    my $messageId = $res->[1][1]{list}[0]{messageId}[0];
+    $self->assert_not_null($messageId);
+    my $threadId = $res->[1][1]{list}[0]{threadId};
+    $self->assert_not_null($threadId);
+
+    $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    e2 => {
+                        mailboxIds    => { '$inbox' => JSON::true },
+                        subject       => "re: test",
+                        messageId     => ['valid-messageid@example.com'],
+                        inReplyTo     => [$messageId],
+                        references    => [$messageId],
+                        from          => [ { email => 'bob@local' } ],
+                        to            => [ { email => 'alice@local' } ],
+                        bodyStructure => {
+                            type   => 'text/plain',
+                            partId => '1',
+                        },
+                        bodyValues => {
+                            1 => {
+                                value => 'test',
+                            },
+                        },
+                    }
+                },
+            },
+            'R1'
+        ],
+        [ 'Email/query', {}, 'R2' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R2',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => [
+                    'subject',
+                    'messageId',
+                    'threadId',
+                    'header:message-id',
+                    'header:in-reply-to',
+                    'header:references'
+                ],
+            },
+            'R2'
+        ],
+    ]);
+
+    $self->assert_str_equals($res->[2][1]{list}[0]{threadId},
+        $res->[2][1]{list}[1]{threadId});
+}
