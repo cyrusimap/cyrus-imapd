@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_index_tier_audit_bug
+    :min_version_3_3 :needs_search_xapian
+{
+    my ($self) = @_;
+
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "create a message";
+    $self->make_message("xyzzy") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "assert that we can find the message";
+    my $uids = $talk->search('fuzzy', 'subject', 'xyzzy');
+    $self->assert_num_equals(1, scalar @$uids);
+
+    xlog "assert that we have a part";
+    my ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals(1, scalar @$parts);
+    $self->assert_num_equals(1, scalar @$gdocs);
+
+    xlog "compact to t2 tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1');
+
+    xlog "assert that the message is now in t2";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t2} . "/xapian");
+    $self->assert_num_equals(1, scalar @$parts);
+    $self->assert_num_equals(1, scalar @$gdocs);
+
+    xlog "assert that the message isn't in t1 still";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals(0, scalar @$parts);
+    $self->assert_num_equals(0, scalar @$gdocs);
+
+    xlog "assert that we can still find the message";
+    $uids = $talk->search('fuzzy', 'subject', 'xyzzy');
+    $self->assert_num_equals(1, scalar @$uids);
+
+    xlog "run an audit";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-A');
+
+    xlog "assert that we can still find the message";
+    $uids = $talk->search('fuzzy', 'subject', 'xyzzy');
+    $self->assert_num_equals(1, scalar @$uids);
+
+    xlog "assert that the message is now in t2";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t2} . "/xapian");
+    $self->assert_num_equals(1, scalar @$parts);
+    $self->assert_num_equals(1, scalar @$gdocs);
+
+    xlog "assert that the message isn't in t1 still";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals(0, scalar @$parts);
+    $self->assert_num_equals(0, scalar @$gdocs);
+
+    xlog "compact to t2 tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1');
+
+    xlog "assert that the message is now in t2";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t2} . "/xapian");
+    $self->assert_num_equals(1, scalar @$parts);
+    $self->assert_num_equals(1, scalar @$gdocs);
+
+    xlog "assert that the message isn't in t1 still";
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals(0, scalar @$parts);
+    $self->assert_num_equals(0, scalar @$gdocs);
+
+    xlog "assert that we can still find the message";
+    $uids = $talk->search('fuzzy', 'subject', 'xyzzy');
+    $self->assert_num_equals(1, scalar @$uids);
+}
