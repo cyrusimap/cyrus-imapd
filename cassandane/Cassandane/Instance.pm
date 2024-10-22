@@ -2082,8 +2082,18 @@ sub _fork_command
             or die "Cannot redirect STDERR to $redirects{stderr}: $!";
     }
 
-    exec @cmd;
-    die "Cannot run $binary: $!";
+    # exec in a block by itself shushes the "Statement unlikely to be reached"
+    # warning, which is generated when exec is followed by something other
+    # than die
+    { exec @cmd; }
+
+    # If exec failed, then this process is still a clone of a Worker.  If we
+    # die here it would report a test failure, then loop around and try to
+    # run the next test!  And if we exit here, it would deconstruct the real
+    # Worker's memory space out from under it.  Need to use POSIX::_exit
+    # to bypass all that and have the child process actually exit.
+    xlog "Cannot run $binary: $!";
+    POSIX::_exit(71); # EX_OSERR
 }
 
 sub _handle_wait_status
