@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_options {
+    my ($self) = @_;
+
+    my $caldav = $self->{caldav};
+
+    sub get_options {
+        my ($url) = shift;
+        my $res = $caldav->ua()->request(
+            'OPTIONS',
+            $caldav->request_url($url),
+            { headers => { Authorization => $caldav->auth_header() } }
+        );
+        return $res->{headers}{dav};
+    }
+
+    $self->assert(grep(/calendar-access/,
+            @{ get_options('/dav/calendars/user/cassandane/Default') }));
+    $self->assert(grep(/calendar-access/,
+            @{ get_options('/dav/calendars/user/cassandane/') }));
+    $self->assert(grep(/calendar-access/,
+            @{ get_options('/dav/calendars/') }));
+
+    $self->assert(not grep(/calendar-access/, @{ get_options('/dav/') }));
+    $self->assert(not grep(/calendar-access/, @{ get_options('/') }));
+}
