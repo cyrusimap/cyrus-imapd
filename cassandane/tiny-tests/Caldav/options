@@ -16,13 +16,38 @@ sub test_options {
         return $res->{headers}{dav};
     }
 
-    $self->assert(grep(/calendar-access/,
-            @{ get_options('/dav/calendars/user/cassandane/Default') }));
-    $self->assert(grep(/calendar-access/,
-            @{ get_options('/dav/calendars/user/cassandane/') }));
-    $self->assert(grep(/calendar-access/,
-            @{ get_options('/dav/calendars/') }));
+    # Non-calendar collections - no scheduling
+    $self->assert_null(@{ get_options('/') });
+    $self->assert(not grep(/calendar-auto-schedule/,
+                           @{ get_options('/dav/') }));
 
-    $self->assert(not grep(/calendar-access/, @{ get_options('/dav/') }));
-    $self->assert(not grep(/calendar-access/, @{ get_options('/') }));
+    # Calendar collections - scheduling enabled by default
+    $self->assert(grep(/calendar-auto-schedule/,
+            @{ get_options('/dav/calendars/') }));
+    $self->assert(grep(/calendar-auto-schedule/,
+            @{ get_options('/dav/calendars/user/') }));
+    $self->assert(grep(/calendar-auto-schedule/,
+            @{ get_options('/dav/calendars/user/cassandane/') }));
+    $self->assert(grep(/calendar-auto-schedule/,
+            @{ get_options('/dav/calendars/user/cassandane/Default') }));
+
+    # Disable scheduling on Default calendar
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:CY="http://cyrusimap.org/ns/">
+  <D:set>
+    <D:prop>
+      <CY:scheduling-enabled>F</CY:scheduling-enabled>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    
+    my $res = $caldav->Request('PROPPATCH',
+                               "/dav/calendars/user/cassandane/Default",
+                               $xml, 'Content-Type' => 'text/xml');
+
+    # Scheduling should NOT be advertised
+    $self->assert(not grep(/calendar-auto-schedule/,
+            @{ get_options('/dav/calendars/user/cassandane/Default') }));
 }
