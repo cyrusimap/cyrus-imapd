@@ -8218,10 +8218,10 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
                    txn->req_tgt.path);
         strarray_appendm(&txn->resp_body.links, buf_release(&link));
     }
-    if (txn->req_tgt.allow & ALLOW_CAL_SCHED) {
+    if ((txn->req_tgt.allow & ALLOW_CAL_SCHED) && txn->req_tgt.mbentry) {
         struct buf temp = BUF_INITIALIZER;
         if (!annotatemore_lookup_mbe(txn->req_tgt.mbentry, DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled", "", &temp)
-            && (!strcasecmp(buf_cstring(&temp), "F") || !strcasecmp(temp.s, "no")))
+            && (!strcasecmp(buf_cstring(&temp), "F") || !strcasecmp(buf_cstring(&temp), "no")))
                 txn->req_tgt.allow &= ~ALLOW_CAL_SCHED;
         buf_free(&temp);
     };
