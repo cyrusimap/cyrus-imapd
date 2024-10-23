@@ -59,7 +59,17 @@ my $examples_dir = abs_path('../doc/examples/libcyrus');
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({}, @_);
+
+    my $self = $class->SUPER::new({}, @_);
+
+    my $cassini = Cassandane::Cassini->instance();
+    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+    my $rootdir_mount_opts = qx{findmnt -n -o OPTIONS --target $rootdir};
+
+    $self->{rootdir_is_noexec} = (defined $rootdir_mount_opts
+                                  && $rootdir_mount_opts =~ m/\bnoexec\b/);
+
+    return $self;
 }
 
 sub set_up
@@ -205,31 +215,36 @@ sub run_test
         die $@;
     }
 
-    my $runerr = $self->{instance}->{basedir} . "/$name.err";
+    my $exe = $self->{instance}->{basedir} . "/$name";
 
-    my @cmd;
-    if ($cassini->bool_val('valgrind', 'enabled')) {
-        push @cmd, $self->{instance}->_valgrind_setup($name);
+    if ($self->{rootdir_is_noexec} || ! -x $exe) {
+        xlog $self, "$exe is not executable, won't try to run it";
     }
+    else {
+        my $runerr = $self->{instance}->{basedir} . "/$name.err";
+        my @cmd;
 
-    push @cmd, $self->{instance}->{basedir} . "/$name",
-               '-C', $self->{instance}->_imapd_conf();
+        if ($cassini->bool_val('valgrind', 'enabled')) {
+            push @cmd, $self->{instance}->_valgrind_setup($name);
+        }
 
-    eval {
-        $self->{instance}->run_command({
-                cyrus => 0,
-                redirects => {
-                    stderr => $runerr,
+        push @cmd, $exe, '-C', $self->{instance}->_imapd_conf();
+
+        eval {
+            $self->{instance}->run_command({
+                    cyrus => 0,
+                    redirects => {
+                        stderr => $runerr,
+                    },
                 },
-            },
-            @cmd,
-        );
-    };
-    if ($@) {
-        xlog "$name failed:\n" . slurp_file($runerr);
-        die $@;
+                @cmd,
+            );
+        };
+        if ($@) {
+            xlog "$name failed:\n" . slurp_file($runerr);
+            die $@;
+        }
     }
-
 }
 
 1;
