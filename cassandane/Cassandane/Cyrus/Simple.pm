@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Simple;
 use strict;
 use warnings;
+use Cwd qw(getcwd realpath);
 use Data::Dumper;
 use DateTime;
 
@@ -359,6 +360,35 @@ sub test_fatals_abort_disabled
                           $e->{'-text'});
 
     # post-test sanity checks will complain for us if a core was left behind
+}
+
+sub test_fork_noexec
+{
+    my ($self) = @_;
+
+    # need some not-executable file to test with, crash.c will do
+    my $noexec_file = realpath('utils/crash.c');
+    # it had better exist, and not be executable
+    $self->assert_file_test($noexec_file, '-e');
+    $self->assert_not_file_test($noexec_file, '-x');
+
+    my $expect_pid = $$;
+    my $expect_cwd = getcwd();
+
+    # try to run it... the exec in the forked child process will fail
+    eval {
+        $self->{instance}->run_command({ cyrus => 0, }, $noexec_file);
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    # the child process had better exit!
+    $self->assert_matches(qr{exited with code 71}, $e->get_message());
+
+    # this test had better still be running in the same process!
+    $self->assert_num_equals($expect_pid, $$);
+
+    # cwd better not have changed!
+    $self->assert_str_equals($expect_cwd, getcwd());
 }
 
 1;
