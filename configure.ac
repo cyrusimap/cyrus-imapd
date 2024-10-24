@@ -1095,16 +1095,8 @@ AC_ARG_WITH(ldap,
         [AS_HELP_STRING([--with-ldap=DIR], [use LDAP (in DIR) (experimental) [/usr/local]])],
         with_ldap="${withval}", with_ldap="no")
 
-dnl select mode of afspts
-AC_ARG_ENABLE(krb5afspts,
-        [AS_HELP_STRING([--enable-krb5afspts], [compile afskrb PTS module with krb5 support])])
-
 if test "x$enable_afs" = "xyes"; then
 # krb5afspts is only valid if AFS is enabled, so check inside here.
-    AS_IF([test "x$enable_krb5afspts" = "xyes"], [SASL_SET_GSSAPI_LIBS
-      AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])
-    ])
-
     SAVE_CFLAGS="$CFLAGS"
     CFLAGS="${CFLAGS} -I${with_afs_incdir}"
     AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libafscom_err.a -lresolv"
@@ -1228,18 +1220,6 @@ AM_CONDITIONAL([SERVER], [test "$enable_server" != "no"])
 
 dnl this is the new simple check for kerberos; since the person had to
 dnl compile SASL, we might as well use the same checks.
-AC_ARG_WITH(krb,
-        [AS_HELP_STRING([--with-krb=DIR], [use Kerberos from DIR])],
-        with_krb="$withval", with_krb="no")
-
-AC_ARG_WITH(krbimpl,
-        [AS_HELP_STRING([--with-krbimpl=kth|mit], [assume Kerberos 4 from KTH or MIT])],
-        with_krbimpl="$withval", with_krbimpl="kth")
-
-AC_ARG_ENABLE(statickrb,
-        [AS_HELP_STRING([--enable-statickrb], [link Kerberos statically])],
-        with_statickrb="yes", with_statickrb="no")
-
 AC_ARG_WITH(krb5-config,
         [AS_HELP_STRING([--with-krb5-config=PATH], [use krb5-config from PATH])],
         with_krb5config="$withval", with_krb5config="no")
@@ -1260,77 +1240,6 @@ if test "$with_krb5config" != "no"; then
     LDFLAGS="$KRB5_LDFLAGS $LDFLAGS"
     CFLAGS="$KRB5_CFLAGS $CFLAGS"
 fi
-
-dnl In order to compile kerberos4, we need libkrb and libdes.
-
-dnl we might need -lresolv for kerberos
-AC_CHECK_LIB(resolv,res_search)
-
-if test "$with_statickrb" = "yes" -a ! -d "$with_krb"; then
-      AC_MSG_ERROR([--enable-statickrb specified but --with-krb did not specify a valid directory])
-fi
-
-if test "$with_krb" != "no"; then
-dnl Do we need DES for kerberos?
-AC_ARG_WITH(krbdes,
-        [AS_HELP_STRING([--without-krbdes], [disable Kerberos DES implementation])],, with_krbdes="yes")
-if test "$with_krbdes" = "yes"; then
-  AC_CHECK_LIB(des,des_ecb_encrypt,
-      if test "$with_statickrb" = "yes"; then
-          KRB_LIBS="$with_krb/lib/libdes.a"
-      else
-          KRB_LIBS="-ldes"
-      fi,
-  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
-fi
-fi
-
-dnl if we were ambitious, we'd look more aggressively for the
-dnl krb4 install
-if test -d ${with_krb}; then
-   AC_CACHE_CHECK(for Kerberos includes, cyrus_cv_krbinclude, [
-     for krbhloc in include/kerberosIV include
-     do
-       if test -f ${with_krb}/${krbhloc}/krb.h ; then
-         cyrus_cv_krbinclude=${with_krb}/${krbhloc}
-         break
-       fi
-     done
-     ])
-
-   if test -n "${cyrus_cv_krbinclude}"; then
-     CPPFLAGS="$CPPFLAGS -I${cyrus_cv_krbinclude}"
-   fi
-   CMU_ADD_LIBPATH(${with_krb}/lib)
-fi
-
-if test "$with_krbimpl" != "kth"; then
-  KRBLIB="krb4"
-else
-  KRBLIB="krb"
-fi
-
-if test "$with_des" != no; then
-  AC_CHECK_HEADER(krb.h,
-    AC_CHECK_LIB(${KRBLIB}, krb_mk_priv,
-      if test "$with_statickrb" = "yes"; then
-          KRB_LIBS="$KRB_LIBS $with_krb/lib/lib${KRBLIB}.a"
-      else
-          KRB_LIBS="$KRB_LIBS -l${KRBLIB}"
-      fi,
-                 AC_WARN(No Kerberos V4 found); krb4=no,
-           $KRB_LIBS),
-    krb4=no)
-else
-  AC_WARN(No DES library found for Kerberos V4 support)
-  krb4=no
-fi
-
-if test "${krb4}" != no; then
-  AC_DEFINE(HAVE_KRB,[],[Support for Kerberos?])
-fi
-
-LIBS="$KRB_LIBS $LIBS"
 
 SASL_SET_GSSAPI_LIBS
 
@@ -1423,11 +1332,6 @@ if test "$with_ssl" != "no"; then
     SSL_CPPFLAGS="$ssl_cppflags"
     SSL_LIBS="$ssl_ldflags $ssl_libs"
     AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
-    if test "${krb4}" != no; then
-       AC_DEFINE(OPENSSL_ENABLE_OLD_DES_SUPPORT,[],[Configure OpenSSL to provide legacy des apis])
-       AC_DEFINE(OPENSSL_DES_LIBDES_COMPATIBILITY,[],[Configure OpenSSL to provide krb4-compatible legacy des apis])
-    fi
-
     AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
        AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?]))
 fi
@@ -2630,7 +2534,6 @@ Cyrus Server configured components
    autocreate:         $enable_autocreate
    idled:              $enable_idled
    httpd:              $enable_http
-   kerberos V4:        $krb4
    murder:             $enable_murder
    nntpd:              $enable_nntp
    replication:        $enable_replication

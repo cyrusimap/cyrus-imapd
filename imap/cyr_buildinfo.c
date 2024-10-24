@@ -130,11 +130,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "httpd", json_false());
 #endif
-#ifdef HAVE_KRB
-    json_object_set_new(component, "kerberos_v4", json_true());
-#else
-    json_object_set_new(component, "kerberos_v4", json_false());
-#endif
 #ifdef USE_MURDER
     json_object_set_new(component, "murder", json_true());
 #else
