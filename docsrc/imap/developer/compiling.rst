@@ -117,10 +117,10 @@ SASL Authentication
     to pass Cyrus IMAP's PLAIN authentication unit tests."
     `sasl binaries`_, sasl2-bin, sasl2-bin, "no", "Administration tools for
     managing SASL."
-    `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "yes/no", "Development
+    `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "no", "Development
     headers required to enable Kerberos v5 authentication capabilities, also
     known as the authentication mechanism *GSSAPI*. Configure option:
-    ``--with-krbimpl=mit``."
+    ``--with-gss_impl=mit``."
 
 Alternate database formats
 ##########################

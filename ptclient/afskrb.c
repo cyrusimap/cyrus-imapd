@@ -60,11 +60,7 @@
 #include <sys/un.h>
 #include <sys/uio.h>
 
-#ifdef AFSPTS_USE_KRB5
 #include <krb5.h>
-#else
-#include <krb.h>
-#endif
 
 #include "auth_pts.h"
 #include "libconfig.h"
@@ -118,8 +114,6 @@ int is_local_realm(const char *realm)
 
     return 0;
 }
-
-#ifdef AFSPTS_USE_KRB5
 
 /*
  * Convert 'identifier' into canonical form.
@@ -250,193 +244,6 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     return retbuf;
 }
 
-
-#else /* AFSPTS_USE_KRB5 not defined */
-
-/* Sanity Check */
-# if PTS_DB_KEYSIZE < MAX_K_NAME_SZ
-#  error PTS_DB_KEYSIZE is smaller than MAX_K_NAME_SZ
-# endif
-
-/* where is krb.equiv? */
-# ifndef KRB_MAPNAME
-#  define KRB_MAPNAME (SYSCONF_DIR "/krb.equiv")
-# endif
-
-/*
- * Parse a line 'src' from an /etc/krb.equiv file.
- * Sets the buffer pointed to by 'principal' to be the kerberos
- * identity and sets the buffer pointed to by 'localuser' to
- * be the local user.  Both buffers must be of size one larger than
- * MAX_K_NAME_SZ.  Returns 1 on success, 0 on failure.
- */
-static int parse_krbequiv_line(const char *src,
-                               char *principal,
-                               char *localuser)
-{
-    int i;
-
-    while (Uisspace(*src)) src++;
-    if (!*src) return 0;
-
-    for (i = 0; *src && !Uisspace(*src); i++) {
-        if (i >= MAX_K_NAME_SZ) return 0;
-        *principal++ = *src++;
-    }
-    *principal = 0;
-
-    if (!Uisspace(*src)) return 0; /* Need at least one separator */
-    while (Uisspace(*src)) src++;
-    if (!*src) return 0;
-
-    for (i = 0; *src && !Uisspace(*src); i++) {
-        if (i >= MAX_K_NAME_SZ) return 0;
-        *localuser++ = *src++;
-    }
-    *localuser = 0;
-    return 1;
-}
-
-/*
- * Map a remote kerberos principal to a local username.  If a mapping
- * is found, a pointer to the local username is returned.  Otherwise,
- * a NULL pointer is returned.
- * Eventually, this may be more sophisticated than a simple file scan.
- */
-static char *auth_map_krbid(const char *real_aname,
-                            const char *real_inst,
-                            const char *real_realm)
-{
-    static char localuser[MAX_K_NAME_SZ + 1];
-    char principal[MAX_K_NAME_SZ + 1];
-    char aname[ANAME_SZ];
-    char inst[INST_SZ];
-    char realm[REALM_SZ];
-    char lrealm[REALM_SZ];
-    char krbhst[MAX_HSTNM];
-    char *p;
-    char buf[1024];
-    FILE *mapfile;
-
-    if (!(mapfile = fopen(KRB_MAPNAME, "r"))) {
-        /* If the file can't be opened, don't do mappings */
-        return 0;
-    }
-
-    for (;;) {
-        if (!fgets(buf, sizeof(buf), mapfile)) break;
-        if (parse_krbequiv_line(buf, principal, localuser) == 0 ||
-            kname_parse(aname, inst, realm, principal) != 0) {
-            /* Ignore badly formed lines */
-            continue;
-        }
-        if (!strcmp(aname, real_aname) && !strcmp(inst, real_inst) &&
-            !strcmp(realm, real_realm)) {
-            fclose(mapfile);
-
-            aname[0] = inst[0] = realm[0] = '\0';
-            if (kname_parse(aname, inst, realm, localuser) != 0) {
-                return 0;
-            }
-
-            /* Upcase realm name */
-            for (p = realm; *p; p++) {
-                if (Uislower(*p)) *p = toupper(*p);
-            }
-
-            if (*realm) {
-                if (krb_get_lrealm(lrealm,1) == 0 &&
-                    strcmp(lrealm, realm) == 0) {
-                    *realm = 0;
-                }
-                else if (krb_get_krbhst(krbhst, realm, 1)) {
-                    return 0;           /* Unknown realm */
-                }
-            }
-
-            strcpy(localuser, aname);
-            if (*inst) {
-                strcat(localuser, ".");
-                strcat(localuser, inst);
-            }
-            if (*realm) {
-                strcat(localuser, "@");
-                strcat(localuser, realm);
-            }
-
-            return localuser;
-        }
-    }
-
-    fclose(mapfile);
-    return 0;
-}
-
-/*
- * Convert 'identifier' into canonical form.
- * Returns a pointer to a static buffer containing the canonical form
- * or NULL if 'identifier' is invalid.
- */
-static char *afspts_canonifyid(const char *identifier, size_t len)
-{
-    static char retbuf[MAX_K_NAME_SZ+1];
-    char aname[ANAME_SZ];
-    char inst[INST_SZ];
-    char realm[REALM_SZ];
-    char lrealm[REALM_SZ];
-    char krbhst[MAX_HSTNM];
-    char *canon_buf;
-    char *p;
-
-    if(!len) len = strlen(identifier);
-
-    canon_buf = xmalloc(len + 1);
-    memcpy(canon_buf, identifier, len);
-    canon_buf[len] = '\0';
-
-    aname[0] = inst[0] = realm[0] = '\0';
-    if (kname_parse(aname, inst, realm, canon_buf) != 0) {
-        free(canon_buf);
-        return 0;
-    }
-
-    free(canon_buf);
-
-    /* Upcase realm name */
-    for (p = realm; *p; p++) {
-        if (Uislower(*p)) *p = toupper(*p);
-    }
-
-    if (*realm) {
-        if (krb_get_lrealm(lrealm,1) == 0 &&
-            strcmp(lrealm, realm) == 0) {
-            *realm = 0;
-        }
-        else if (krb_get_krbhst(krbhst, realm, 1)) {
-            return 0;           /* Unknown realm */
-        }
-    }
-
-    /* Check for krb.equiv remappings. */
-    p = auth_map_krbid(aname, inst, realm);
-    if (p) {
-        strcpy(retbuf, p);
-        return retbuf;
-    }
-
-    strcpy(retbuf, aname);
-    if (*inst) {
-        strcat(retbuf, ".");
-        strcat(retbuf, inst);
-    }
-    if (*realm && !is_local_realm(realm)) {
-        strcat(retbuf, "@");
-        strcat(retbuf, realm);
-    }
-
-    return retbuf;
-}
-#endif /* AFSPTS_USE_KRB5 */
 
 /* API */
 

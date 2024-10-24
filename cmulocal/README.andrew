@@ -64,8 +64,8 @@ CMU_SASL
 
   Provides --with-sasldir.
 
-CMU_KRB4
-  This attempts to find Kerberos 4 libraries and set up CFLAGS and LIBS
+CMU_KRB5
+  This attempts to find Kerberos 5 libraries and set up CFLAGS and LIBS
   appropriately. It also updates and substitutes RPATH for shared library
   stuff.
 

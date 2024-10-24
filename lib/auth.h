@@ -65,7 +65,6 @@ extern struct auth_mech *auth_mechs[];
  * if libcyrus was not built with support for them */
 extern struct auth_mech auth_unix;
 extern struct auth_mech auth_pts;
-extern struct auth_mech auth_krb;
 extern struct auth_mech auth_krb5;
 extern struct auth_mech auth_mboxgroups;
 

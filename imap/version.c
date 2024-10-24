@@ -44,9 +44,6 @@
 
 #include <sasl/sasl.h>
 #include <sys/utsname.h>
-#ifdef HAVE_KRB
-#include <krb.h>
-#endif
 
 #include <string.h>
 #include "version.h"
@@ -158,10 +155,6 @@ EXPORTED void id_response(struct protstream *pout)
              "; lock = %s", lock_method_desc);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
              "; nonblock = %s", nonblock_method_desc);
-#ifdef HAVE_KRB
-    snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
-             " (%s)", krb4_version);
-#endif
     if (idle_method_desc)
         snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
                  "; idle = %s", idle_method_desc);

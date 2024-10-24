@@ -190,7 +190,7 @@ Authentication
 The user authenticates to the frontend server via any supported SASL 
 mechanism or via plaintext. If authentication is successful, the front 
 end server will authenticate to the backend server using a SASL 
-mechanism (in our case KERBEROS_V4 or GSSAPI) as a privileged user. This 
+mechanism (in our case GSSAPI) as a privileged user. This 
 user is able to switch to the authorization of the actual user being 
 proxied for and any authorization checks happen as if the user actually 
 authenticated directly to the backend server. Note this is a native 

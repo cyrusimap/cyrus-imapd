@@ -2865,10 +2865,8 @@ product version in the capabilities
 { "srs_separator", NULL, STRING, "3.1.2" }
 /* The separator to appear immediately after SRS[01] in rewritten addresses. */
 
-{ "srvtab", "", STRING, "2.3.17" }
-/* The pathname of \fIsrvtab\fR file containing the server's private
-   key.  This option is passed to the SASL library and overrides its
-   default setting. */
+{ "srvtab", "", STRING, "UNRELEASED", "UNRELEASED" }
+/* Deprecated: This option does nothing. */
 
 { "submitservers", NULL, STRING, "2.3.17" }
 /* A list of users and groups that are allowed to resolve "urlauth=submit+"

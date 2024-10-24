@@ -1453,7 +1453,6 @@ lib_libcyrus_la_SOURCES = \
     lib/acl.c \
     lib/acl_afs.c \
     lib/auth.c \
-    lib/auth_krb.c \
     lib/auth_krb5.c \
     lib/auth_mboxgroups.c \
     lib/auth_pts.c \
@@ -1614,8 +1613,7 @@ dist_man3_MANS = \
 
 dist_man5_MANS = \
     man/cyrus.conf.5 \
-    man/imapd.conf.5 \
-    man/krb.equiv.5
+    man/imapd.conf.5
 
 dist_man8_MANS = \
     man/arbitron.8 \

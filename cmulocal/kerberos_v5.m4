@@ -138,7 +138,6 @@ AC_ARG_WITH(krb5-impl,
           KRB5_INC_FLAGS="-I${KRB5_INC_DIR}"
           AC_SUBST(KRB5_INC_FLAGS)
           AC_SUBST(KRB5_LIB_FLAGS)
-          AC_DEFINE(HAVE_KRB5,,[Kerberos V5 is present])dnl zephyr uses this
           AC_DEFINE(KRB5,,[Use Kerberos 5. (maybe find what needs this and nuke it)])
           if test "X$RPATH" = "X"; then
                 RPATH=""

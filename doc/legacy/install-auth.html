@@ -20,7 +20,7 @@ distributed with Cyrus IMAPd.
 <h2>Authentication Mechanisms</h2>
 
 At this writing, the underlying Cyrus SASL library supports a
-variety of SASL mechanisms, including CRAM-MD5, DIGEST-MD5, KERBEROS_V4,
+variety of SASL mechanisms, including PLAIN, SCRAM-SHA-1, SCRAM-SHA-256
 and GSSAPI.  The Cyrus IMAP, POP, and LMTP servers also support
 STARTTLS using client-side certificates and the EXTERNAL
 authentication method.
@@ -112,69 +112,6 @@ saslauthd</tt>".  The SASL library will then make calls to an external
 utility running as root to authenticate users.
 
 <h3>Kerberos</h3><a name="kerberos"></a>
-
-<h4>Configuring Kerberos v4</h4>
-
-<p>Cyrus IMAP supports Kerberos v4 if the SASL library was compiled
-with KERBEROS_V4 support.</p>
-
-<p>You'll have to
-create a Kerberos v4 identity for the server and add the server's key to
-the "<tt>srvtab</tt>" file.  The file must be readable by the cyrus
-user. The server's Kerberos identity is "<tt>imap.HOST@REALM</tt>",
-where "<tt>HOST</tt>" is the first component of the machine's host
-name and "<tt>REALM</tt>" is the machine's Kerberos realm.</p>
-
-<ol>
-<li>Here is a sample session, creating a srvtab file for the
-host named "<tt>foobar</tt>":
-
-<pre>
-<kbd>   ksrvutil -f /var/imap/srvtab add
-</kbd></pre>
-
-<p>Here is the information "<tt>ksrvutil</tt>" requests.  Respond by
-filling in values or by pressing <KBD>RETURN</KBD>.  In this example,
-the host name is "<tt>foobar</tt>" and the realm is
-"<tt>ANDREW.CMU.EDU</tt>".</p>
-
-<pre>
-   Name: <kbd>imap</kbd>
-   Instance: <KBD>foobar</KBD>
-   Realm: <KBD>ANDREW.CMU.EDU</KBD>
-   Version number:
-   New principal: imap.foobar@ANDREW.CMU.EDU; version 0
-   Is this correct? (y,n) [y]
-   Password:
-   Verifying, please re-enter Password:
-   Key successfully added.
-   Would you like to add another key? (y,n) [y] <KBD>n</KBD>
-</pre></li>
-
-<li><p>If you plan to install Kerberized POP, create the Kerberos
-identity "<tt>pop.HOST@REALM</tt>" and add the key to the "<tt>srvtab</tt>"
-file.  Likewise, if you plan on using LMTP over TCP, create the
-Kerberos identity "<tt>lmtp.HOST@REALM</tt>" and add the key to the
-"<tt>srvtab</tt>" file.</p></li>
-
-<li><P>Make the "<TT>srvtab</TT>" file owned by the cyrus user:
-<pre>
-<kbd>   chown cyrus /var/imap/srvtab
-</kbd></pre></li>
-
-<li>Add the option srvtab option to <tt>/etc/imapd.conf</tt>:
-<pre>   srvtab: /var/imap/srvtab</pre></li>
-
-<li>Test using <tt>imtest -m KERBEROS_V4</tt>.  <tt>imtest</tt> will
-attempt to authorize as the current Unix user regardless of the
-current ticket's held.  Override this with the <tt>-u</tt> option.</li>
-</ol>
-
-<h4>Troubleshooting Kerberos_V4 problems</h4>
-
-<p>Run the program "<tt>krbck</tt>" (found in the <tt>imap</tt>
-directory) as the cyrus user on the IMAP server.  This program will
-diagnose some common Kerberos v4 configuration errors.</p>
 
 <h4>Configuring Kerberos v5</h4>
 

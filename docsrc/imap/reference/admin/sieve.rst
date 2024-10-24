@@ -128,7 +128,7 @@ If your server is running, you'll get a message similar to the following one::
     Escape character is '^]'.
     "IMPLEMENTATION" "Cyrus timsieved v3.8.3"
     "VERSION" "1.0"
-    "SASL" "ANONYMOUS PLAIN KERBEROS_V4 GSSAPI"
+    "SASL" "ANONYMOUS PLAIN GSSAPI"
     "SIEVE" "fileinto reject envelope vacation imapflags notify subaddress regex"
     "NOTIFY" "mailto"
     "UNAUTHENTICATE"
