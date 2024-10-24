@@ -130,16 +130,12 @@ static std::string lang_prefix(const std::string& iso_lang, const std::string& p
 
 static std::string lang_doc_key(const char *cyrusid)
 {
-    std::string key(XAPIAN_LANG_DOC_KEYPREFIX ".");
-    key += cyrusid;
-    return key;
+    return std::string{XAPIAN_LANG_DOC_KEYPREFIX "."} + cyrusid;
 }
 
 static std::string lang_count_key(const std::string& iso_lang)
 {
-    std::string key(XAPIAN_LANG_COUNT_KEYPREFIX ".");
-    key += iso_lang;
-    return key;
+    return XAPIAN_LANG_COUNT_KEYPREFIX "." + iso_lang;
 }
 
 static int calculate_language_counts(const Xapian::Database& db,
@@ -246,8 +242,7 @@ static std::string format_doclangs(const std::set<std::string>& doclangs)
         if (it != doclangs.begin()) val << ",";
         val << *it;
     }
-    std::string s = val.str();
-    return s;
+    return val.str();
 }
 
 static std::string parse_langcode(const char *str)
@@ -1021,9 +1016,8 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, enum search
                 myaddr.domain = domains[i];
 
                 // index entire addr-spec
-                char *a = address_get_all(&myaddr, /*canon_domain*/1);
-                if (a) {
-                    add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
+                if (char *a = address_get_all(&myaddr, /*canon_domain*/1)) {
+                    add_boolean_nterm(*dbw->document, prefix + 'A' + a);
                     free(a);
                 }
 
@@ -1156,7 +1150,7 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, enum search_
                     }
                     // Store detected languages in document.
                     dbw->doclangs->insert(iso_lang.c_str());
-                    add_boolean_nterm(*dbw->document, std::string("XI") + iso_lang);
+                    add_boolean_nterm(*dbw->document, "XI" + iso_lang);
                 }
             }
             else if (partnum == SEARCH_PART_SUBJECT) {
@@ -1584,7 +1578,7 @@ static Xapian::Query *query_new_language(const xapian_db_t *db __attribute__((un
         syslog(LOG_DEBUG, "Xapian: invalid language in query: %s", str);
         return new Xapian::Query(Xapian::Query::MatchNothing);
     }
-    return new Xapian::Query(std::string(get_term_prefix(partnum)) + val);
+    return new Xapian::Query(get_term_prefix(partnum) + val);
 }
 
 static Xapian::Query *query_new_priority(const xapian_db_t *db __attribute__((unused)),
@@ -1596,7 +1590,7 @@ static Xapian::Query *query_new_priority(const xapian_db_t *db __attribute__((un
         syslog(LOG_DEBUG, "Xapian: invalid priority in query: %s", str);
         return new Xapian::Query(Xapian::Query::MatchNothing);
     }
-    return new Xapian::Query(std::string(get_term_prefix(partnum)) + val);
+    return new Xapian::Query(get_term_prefix(partnum) + val);
 }
 
 static Xapian::Query *query_new_listid(const xapian_db_t *db,
@@ -1754,12 +1748,10 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
             if (myaddr.mailbox && !wildcard_localpart && !wildcard_domain) {
                 // Query complete email addresses with A prefix
                 Xapian::Query q = Xapian::Query::MatchNothing;
-                char *a = address_get_all(&myaddr, /*canon_domain*/ 1);
-                if (a) {
-                    std::string term(prefix + 'A' + std::string(a));
-                    q = Xapian::Query(term);
+                if (char *a = address_get_all(&myaddr, /*canon_domain*/ 1)) {
+                    q = Xapian::Query(prefix + 'A' + a);
+                    free(a);
                 }
-                free(a);
 
                 if (db->db_versions->lower_bound(16) !=
                         db->db_versions->begin()) {
