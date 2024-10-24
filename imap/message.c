@@ -2142,10 +2142,10 @@ EXPORTED int message_write_cache(struct index_record *record, const struct body 
     buf_reset(&cacheitem_buffer);
     memset(ib, 0, sizeof(ib));
 
-    toplevel.type = "MESSAGE";
-    toplevel.subtype = "RFC822";
     /* we cast away const because we know that we're only using
-     * toplevel.subpart as const in message_write_section(). */
+     * toplevel as const in message_write_section(). */
+    toplevel.type = (char *) "MESSAGE";
+    toplevel.subtype = (char *) "RFC822";
     toplevel.subpart = (struct body *)body;
 
     subject = charset_parse_mimeheader(body->subject, charset_flags);
@@ -3450,15 +3450,15 @@ static void message_read_binarybody(struct body *body, const char **sect,
  * Read cached envelope, binary bodystructure response and binary bodystructure
  * of the specified record.  Populates 'body' which must be freed by the caller.
  */
-EXPORTED void message_read_bodystructure(const struct index_record *record, struct body **body)
+EXPORTED void message_read_bodystructure(const struct index_record *record,
+                                         struct body **body)
 {
     struct protstream *strm;
-    struct body toplevel;
+    struct body toplevel = {0};
     const char *binbody;
 
-    memset(&toplevel, 0, sizeof(struct body));
-    toplevel.type = "MESSAGE";
-    toplevel.subtype = "RFC822";
+    toplevel.type = (char *) "MESSAGE";
+    toplevel.subtype = (char *) "RFC822";
     toplevel.subpart = *body = xzmalloc(sizeof(struct body));
 
     /* Read envelope response from cache */
@@ -4826,7 +4826,7 @@ static int message_parse_cbodystructure(message_t *m)
     struct protstream *prot = NULL;
     const char *cachestr = cacheitem_base(&m->record, CACHE_SECTION);
     const char *cacheend = cachestr + cacheitem_size(&m->record, CACHE_SECTION);
-    struct body toplevel;
+    struct body toplevel = {0};
     int r;
 
     /* We're reading the cache - double check we have it */
@@ -4848,9 +4848,8 @@ static int message_parse_cbodystructure(message_t *m)
     }
     if (r) goto done;
 
-    memset(&toplevel, 0, sizeof(struct body));
-    toplevel.type = "MESSAGE";
-    toplevel.subtype = "RFC822";
+    toplevel.type = (char *) "MESSAGE";
+    toplevel.subtype = (char *) "RFC822";
     toplevel.subpart = m->body;
 
     r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel,

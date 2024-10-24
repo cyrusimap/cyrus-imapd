@@ -28,7 +28,7 @@ typedef bit32 XXX_CACHE32_TYPE;
 extern int verbose;
 
 struct offset {
-    char *name;
+    const char *name;
     unsigned pos;
     size_t val;
 };

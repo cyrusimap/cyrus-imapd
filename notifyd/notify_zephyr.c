@@ -121,13 +121,13 @@ char* notify_zephyr(const char *class, const char *priority,
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
-    notice.z_class = *class ? (char *) class : MAIL_CLASS;
+    notice.z_class = *class ? (char *) class : (char *) MAIL_CLASS;
     notice.z_class_inst = *priority ? (char *) priority :
-        *mailbox ? (char *) mailbox : "INBOX";
+        *mailbox ? (char *) mailbox : (char *) "INBOX";
 
-    notice.z_opcode = "";
+    notice.z_opcode = (char *) "";
     notice.z_sender = mysender;
-    notice.z_default_format = "From Post Office $1:\n$2";
+    notice.z_default_format = (char *) "From Post Office $1:\n$2";
 
     notice.z_recipient = (char *) user;
 

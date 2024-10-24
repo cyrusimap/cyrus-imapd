@@ -367,13 +367,13 @@ static const struct prop_entry caldav_props[] = {
       propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Language" },
+      propfind_fromhdr, NULL, (void *) "Content-Language" },
     { "getcontentlength", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_getcontenttype, NULL, "Content-Type" },
+      propfind_getcontenttype, NULL, (void *) "Content-Type" },
     { "getetag", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
@@ -385,7 +385,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_lockdisc, NULL, NULL },
     { "resourcetype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_restype, proppatch_restype, "calendar" },
+      propfind_restype, proppatch_restype, (void *) "calendar" },
     { "supportedlock", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
       propfind_suplock, NULL, NULL },
@@ -444,7 +444,7 @@ static const struct prop_entry caldav_props[] = {
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV,
       PROP_COLLECTION,
-      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
+      propfind_sync_token, NULL, (void *) SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
     { "share-access", NS_DAV,
@@ -460,13 +460,13 @@ static const struct prop_entry caldav_props[] = {
     /* Backwards compatibility with Apple calendar sharing clients */
     { "invite", NS_CS,
       PROP_COLLECTION,
-      propfind_invite, NULL, "calendarserver-sharing" },
+      propfind_invite, NULL, (void *) "calendarserver-sharing" },
     { "allowed-sharing-modes", NS_CS,
       PROP_COLLECTION,
       propfind_sharingmodes, NULL, NULL },
     { "shared-url", NS_CS,
       PROP_COLLECTION,
-      propfind_sharedurl, NULL, "calendarserver-sharing" },
+      propfind_sharedurl, NULL, (void *) "calendarserver-sharing" },
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV,
@@ -550,7 +550,7 @@ static const struct prop_entry caldav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
       PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, "" },
+      propfind_sync_token, NULL, (void *) "" },
 
     /* Apple Mobile Me properties */
     { "bulk-requests", NS_MECOM,
@@ -5807,7 +5807,7 @@ static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
     if (fctx->req_tgt->flags != TGT_SCHED_INBOX) return HTTP_NOT_FOUND;
 
     return propfind_calurl(name, ns, fctx,
-                           prop, resp, propstat, SCHED_DEFAULT);
+                           prop, resp, propstat, (void  *) SCHED_DEFAULT);
 }
 
 

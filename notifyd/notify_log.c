@@ -57,7 +57,7 @@ char* notify_log(const char *class, const char *priority,
                  const char *fname __attribute__((unused)))
 {
     struct buf opt_str = BUF_INITIALIZER;
-    char *sep = "";
+    const char *sep = "";
     int i;
 
     if (nopt) {

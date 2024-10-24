@@ -159,13 +159,13 @@ static const struct prop_entry notify_props[] = {
       propfind_fromdb, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Language" },
+      propfind_fromhdr, NULL, (void *) "Content-Language" },
     { "getcontentlength", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Type" },
+      propfind_fromhdr, NULL, (void *) "Content-Type" },
     { "getetag", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
@@ -218,7 +218,7 @@ static const struct prop_entry notify_props[] = {
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV,
       PROP_COLLECTION,
-      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
+      propfind_sync_token, NULL, (void *) SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Notifications (draft-pot-webdav-notifications) properties */
     { "notificationtype", NS_DAV,
@@ -228,12 +228,12 @@ static const struct prop_entry notify_props[] = {
     /* Backwards compatibility with Apple notifications clients */
     { "notificationtype", NS_CS,
       PROP_RESOURCE,
-      propfind_notifytype, NULL, "calendarserver-sharing" },
+      propfind_notifytype, NULL, (void *) "calendarserver-sharing" },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
       PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, "" },
+      propfind_sync_token, NULL, (void *) "" },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };

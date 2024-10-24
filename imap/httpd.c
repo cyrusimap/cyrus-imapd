@@ -2558,15 +2558,21 @@ void parse_query_params(struct transaction_t *txn, const char *query)
     tok_init(&tok, query, "&", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
     while ((param = tok_next(&tok))) {
         struct strlist *vals;
-        char *key, *value;
+        char *key, *eq;
+        const char *value;
         size_t len;
 
         /* Split param into key and optional value */
         key = param;
-        value = strchr(param, '=');
+        eq = strchr(param, '=');
 
-        if (!value) value = "";
-        else *value++ = '\0';
+        if (eq) {
+            *eq = '\0';
+            value = eq + 1;
+        }
+        else {
+            value = "";
+        }
         len = strlen(value);
         buf_ensure(&txn->buf, len+1);
 
@@ -3900,15 +3906,23 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
     }
 
     if (txn->error.desc) {
-        const char **hdr, *host = config_servername;
-        char *port = NULL;
+        const char **hdr;
+        const char *host = config_servername, *port = NULL;
+        char *freeme = NULL;
         unsigned level = 0;
 
         if (txn->req_hdrs &&
             (hdr = spool_getheader(txn->req_hdrs, ":authority")) &&
-            hdr[0] && *hdr[0]) {
-            host = (char *) hdr[0];
-            if ((port = strchr(host, ':'))) *port++ = '\0';
+            hdr[0] && *hdr[0])
+        {
+            char *colon;
+
+            host = freeme = xstrdup(hdr[0]);
+            colon = strchr(freeme, ':');
+            if (colon) {
+                *colon = '\0';
+                port = colon + 1;
+            }
         }
 
         if (!port) {
@@ -3937,6 +3951,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         buf_printf_markup(html, --level, "</html>");
 
         txn->resp_body.type = "text/html; charset=utf-8";
+        free(freeme);
     }
 
     write_body(code, txn, buf_cstring(html), buf_len(html));

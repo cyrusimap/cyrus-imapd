@@ -726,7 +726,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         struct buf rrule = BUF_INITIALIZER;
         struct hash_table byrules;
         struct icalrecurrencetype *rt;
-        char *sep = "";
+        const char *sep = "";
 
         construct_hash_table(&byrules, 10, 1);
 
