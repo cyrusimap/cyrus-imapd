@@ -223,3 +223,4 @@
 [paths]
 ## make = /usr/bin/make
 ## pkg-config = /usr/bin/pkg-config
+## findmnt = /usr/bin/findmnt
