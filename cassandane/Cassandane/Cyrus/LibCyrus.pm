@@ -64,7 +64,8 @@ sub new
 
     my $cassini = Cassandane::Cassini->instance();
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $rootdir_mount_opts = qx{findmnt -n -o OPTIONS --target $rootdir};
+    my $findmnt = $cassini->val('paths', 'findmnt', '/usr/bin/findmnt');
+    my $rootdir_mount_opts = qx{$findmnt -n -o OPTIONS --target $rootdir};
 
     $self->{rootdir_is_noexec} = (defined $rootdir_mount_opts
                                   && $rootdir_mount_opts =~ m/\bnoexec\b/);
