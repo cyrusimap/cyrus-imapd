@@ -176,8 +176,8 @@ EXPORTED int tls_enabled(void)
 
 static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 {
-    char   *str;
-    int     w;
+    const char  *str;
+    int         w;
 
     if (var_imapd_tls_loglevel==0) return;
 

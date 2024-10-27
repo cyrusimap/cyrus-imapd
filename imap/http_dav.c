@@ -261,10 +261,10 @@ static const struct prop_entry principal_props[] = {
     /* CalDAV Scheduling (RFC 6638) properties */
     { "schedule-inbox-URL", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_INBOX },
+      propfind_calurl, NULL, (void *) SCHED_INBOX },
     { "schedule-outbox-URL", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_OUTBOX },
+      propfind_calurl, NULL, (void *) SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CALDAV,
       PROP_COLLECTION,
       propfind_caluseraddr, proppatch_caluseraddr, NULL },

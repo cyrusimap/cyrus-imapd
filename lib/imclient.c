@@ -901,9 +901,9 @@ static void imclient_eof(struct imclient *imclient)
     imclient->readytxt = 0;
 
     for (cmdcb = imclient->cmdcallback; cmdcb; cmdcb = cmdcb->next) {
-        reply.keyword = "EOF";
+        reply.keyword = (char *) "EOF";
         reply.msgno = -1;
-        reply.text = "";
+        reply.text = (char *) "";
         (*cmdcb->proc)(imclient, cmdcb->rock, &reply);
         if (!cmdcb->next) {
             cmdcb->next = cmdcallback_freelist;
@@ -1826,7 +1826,7 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
 #endif
 
 EXPORTED int tls_start_clienttls(struct imclient *imclient,
-                        unsigned *layer, char **authid, int fd)
+                        unsigned *layer, const char **authid, int fd)
 {
     int sts;
     SSL_SESSION *session;
@@ -1834,7 +1834,7 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
     X509 *peer;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
-    char *tls_peer_CN = "";
+    const char *tls_peer_CN = "";
 
     if (!imclient->tls_conn)
         imclient->tls_conn = (SSL *) SSL_new(imclient->tls_ctx);
@@ -1923,7 +1923,7 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
   int result;
   struct authresult theresult;
   sasl_ssf_t ssf;
-  char *auth_id;
+  const char *auth_id;
 
   imclient_send(imclient, tlsresult, (void *)&theresult,
                 "STARTTLS");
