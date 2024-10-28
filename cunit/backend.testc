@@ -1342,6 +1342,12 @@ static pid_t server_start(struct server_state *state)
 
         /* Forget the per-connection state */
         server_unaccept(state);
+
+        /* This loops forever until it's killed off by an uncaught SIGTERM.
+         * It MUST NOT exit(0) nor return, otherwise it'll make a mess of the
+         * cunit internal state that's still in memory since we did fork()
+         * but not exec().
+         */
     }
 }
 
