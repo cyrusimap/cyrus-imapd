@@ -87,3 +87,26 @@
     obj:*/libcunit*
     ...
 }
+
+{
+   # shush leaked SASL internal state in toy server process
+   backend_child_process_sasl_state
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:malloc
+   fun:_dlfo_mappings_segment_allocate
+   fun:_dl_find_object_update_1
+   fun:_dl_find_object_update
+   fun:dl_open_worker_begin
+   fun:_dl_catch_exception
+   fun:dl_open_worker
+   fun:_dl_catch_exception
+   fun:_dl_open
+   fun:dlopen_doit
+   fun:_dl_catch_exception
+   fun:_dl_catch_error
+   fun:_dlerror_run
+   fun:dlopen_implementation
+   ...
+}
