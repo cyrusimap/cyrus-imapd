@@ -87,7 +87,7 @@ static void imap_postcapability(struct backend *s)
 }
 
 struct protocol_t imap_protocol =
-{ "imap", "imap", TYPE_STD,
+{ "imap", "imap", NULL, TYPE_STD,
   { { { 1, NULL },
       { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
         CAPAF_MANY_PER_LINE,

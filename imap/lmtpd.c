@@ -167,7 +167,7 @@ int deliver_logfd = -1; /* used in lmtpengine.c */
 static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp", TYPE_STD,
+{ "lmtp", "lmtp", NULL, TYPE_STD,
   { { { 0, "220 " },
       { "LHLO", "lmtpproxyd", "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,

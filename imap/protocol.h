@@ -44,6 +44,7 @@
 #define _INCLUDED_PROTOCOL_H
 
 #include "saslclient.h"
+#include "tls.h"
 
 enum {
     /* protocol types */
@@ -122,8 +123,9 @@ struct stdprot_t {
 };
 
 struct protocol_t {
-    const char *service;       /* INET service name */
-    const char *sasl_service;  /* SASL service name */
+    const char *service;               /* INET service name */
+    const char *sasl_service;          /* SASL service name */
+    const struct tls_alpn_t *alpn_map; /* ALPN protocols */
     unsigned type;
     union {
        struct stdprot_t std;
@@ -137,7 +139,5 @@ struct protocol_t {
        } spec;
     } u;
 };
-
-
 
 #endif /* _INCLUDED_PROTOCOL_H */

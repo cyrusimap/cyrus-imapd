@@ -124,7 +124,7 @@ static int logout(struct backend *be __attribute__((unused)))
 }
 
 static struct protocol_t protocol =
-{ "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
+{ "http", "HTTP", NULL, TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
 
 
 /* API */

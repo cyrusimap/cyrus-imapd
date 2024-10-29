@@ -83,7 +83,7 @@ static int logout(struct backend *s __attribute__((unused)));
 
 
 HIDDEN struct protocol_t http_protocol =
-{ "http", "HTTP", TYPE_SPEC,
+{ "http", "HTTP", NULL, TYPE_SPEC,
   { .spec = { &login, &ping, &logout } }
 };
 

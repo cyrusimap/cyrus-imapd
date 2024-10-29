@@ -131,7 +131,7 @@ static int logout(struct backend *s __attribute__((unused)))
 
 
 static struct protocol_t http =
-{ "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
+{ "http", "HTTP", NULL, TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
 
 static int extractor_connect(struct extractor_ctx *ext)
 {

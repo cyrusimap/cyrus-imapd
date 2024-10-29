@@ -125,7 +125,7 @@ static char *sieve_parsesuccess(char *str, const char **status)
 }
 
 static struct protocol_t sieve_protocol =
-{ "sieve", SIEVE_SERVICE_NAME, TYPE_STD,
+{ "sieve", SIEVE_SERVICE_NAME, NULL, TYPE_STD,
   { { { 1, "OK" },
       { "CAPABILITY", NULL, "OK", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_QUOTE_WORDS,

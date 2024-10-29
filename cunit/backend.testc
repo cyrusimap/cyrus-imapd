@@ -89,6 +89,7 @@ static struct protocol_t test_prot =
 {
     /* .service is setup in default_conditions() */
     .sasl_service = SASLSERVICE,
+    .alpn_map = NULL,
     .type = TYPE_STD,
     .u.std = {
         .banner = {

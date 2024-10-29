@@ -262,7 +262,7 @@ static char *nntp_parsesuccess(char *str, const char **status)
 }
 
 static struct protocol_t nntp_protocol =
-{ "nntp", "nntp", TYPE_STD,
+{ "nntp", "nntp", NULL, TYPE_STD,
   { { { 0, "20" },
       { "CAPABILITIES", NULL, ".", NULL,
         CAPAF_ONE_PER_LINE,

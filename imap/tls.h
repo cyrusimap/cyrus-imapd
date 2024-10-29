@@ -53,17 +53,17 @@ int tls_enabled(void);
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"
 
-#ifdef HAVE_SSL
-
-#include <openssl/ssl.h>
-
-#include "global.h" /* for saslprops_t */
-
 struct tls_alpn_t {
     const char *id;
     unsigned (*check_availability)(void *rock);
     void *rock;
 };
+
+#ifdef HAVE_SSL
+
+#include <openssl/ssl.h>
+
+#include "global.h" /* for saslprops_t */
 
 /* init tls */
 int tls_init_serverengine(const char *ident,
