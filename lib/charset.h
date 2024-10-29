@@ -69,7 +69,7 @@
 #define MIME_MAX_HEADER_LENGTH 78
 #define MIME_MAX_LINE_LENGTH 998
 
-#include "util.h"
+#include "buf.h"
 #include "xsha1.h"
 
 #define charset_base64_len_unpadded(n) \
