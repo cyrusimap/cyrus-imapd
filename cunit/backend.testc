@@ -691,12 +691,12 @@ static void test_oneline_caps(void)
     caps_common();
 }
 
-#ifdef HAVE_SSL
 /*
  * Test STARTTLS
  */
 static void test_starttls(void)
 {
+#ifdef HAVE_SSL
     struct backend *be;
     const char *auth_status = NULL;
     char *mechs;
@@ -724,14 +724,8 @@ static void test_starttls(void)
 
     backend_disconnect(be);
     free(be);
-}
-#else
-/*
- * cunit.pl doesn't process C macros, so it expects this to exist
- * regardless of the state of HAVE_SSL
- */
-static void test_starttls(void) { }
 #endif
+}
 
 /* TODO: test UNIX socket comms too */
 /* TODO: test IPv6 socket comms too */
