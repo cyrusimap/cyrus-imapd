@@ -86,8 +86,13 @@ static void imap_postcapability(struct backend *s)
     }
 }
 
+static const struct tls_alpn_t imap_alpn_map[] = {
+    { "imap", NULL, NULL },
+    { NULL, NULL, NULL },
+};
+
 struct protocol_t imap_protocol =
-{ "imap", "imap", NULL, TYPE_STD,
+{ "imap", "imap", imap_alpn_map, TYPE_STD,
   { { { 1, NULL },
       { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
         CAPAF_MANY_PER_LINE,

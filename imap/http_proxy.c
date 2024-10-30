@@ -82,8 +82,13 @@ static int ping(struct backend *s, const char *userid);
 static int logout(struct backend *s __attribute__((unused)));
 
 
+static const struct tls_alpn_t http_alpn_map[] = {
+    { "http/1.1", NULL, NULL },
+    { NULL,       NULL, NULL },
+};
+
 HIDDEN struct protocol_t http_protocol =
-{ "http", "HTTP", NULL, TYPE_SPEC,
+{ "http", "HTTP", http_alpn_map, TYPE_SPEC,
   { .spec = { &login, &ping, &logout } }
 };
 

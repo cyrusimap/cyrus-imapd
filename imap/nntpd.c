@@ -261,8 +261,13 @@ static char *nntp_parsesuccess(char *str, const char **status)
     return success;
 }
 
+static const struct tls_alpn_t nntp_alpn_map[] = {
+    { "nntp", NULL, NULL },
+    { NULL,   NULL, NULL }
+};
+
 static struct protocol_t nntp_protocol =
-{ "nntp", "nntp", NULL, TYPE_STD,
+{ "nntp", "nntp", nntp_alpn_map, TYPE_STD,
   { { { 0, "20" },
       { "CAPABILITIES", NULL, ".", NULL,
         CAPAF_ONE_PER_LINE,
@@ -3999,11 +4004,6 @@ static void cmd_post(char *msgid, int mode)
 }
 
 #ifdef HAVE_SSL
-static const struct tls_alpn_t nntp_alpn_map[] = {
-    { "nntp", NULL, NULL },
-    { NULL,   NULL, NULL }
-};
-
 static void cmd_starttls(int nntps)
 {
     int result;

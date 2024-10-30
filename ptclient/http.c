@@ -123,8 +123,15 @@ static int logout(struct backend *be __attribute__((unused)))
     return 0;
 }
 
+static const struct tls_alpn_t http_alpn_map[] = {
+    { "http/1.1", NULL, NULL },
+    { NULL, NULL, NULL },
+};
+
 static struct protocol_t protocol =
-{ "http", "HTTP", NULL, TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
+{ "http", "HTTP", http_alpn_map, TYPE_SPEC,
+  { .spec = { &login, &ping, &logout } }
+};
 
 
 /* API */
