@@ -2913,10 +2913,8 @@ static void master_ready(const char *ready_file, int ready)
         xsyslog(LOG_ERR, "unable to create ready file",
                          "fname=<%s>",
                          ready_file);
+        exit(EX_OSERR);
     }
-
-    /* we did our best */
-    errno = 0;
 }
 
 int main(int argc, char **argv)
