@@ -469,6 +469,7 @@ struct client_behavior_registry {
     uint32_t did_searchres    : 1;   /* used SAVE on SEARCH */
     uint32_t did_replace      : 1;   /* used REPLACE */
     uint32_t did_uidonly      : 1;   /* used ENABLE UIDONLY  */
+    uint32_t did_unselect     : 1;   /* used UNSELECT */
     uint32_t did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
 
     /* non-standard - track for possible deprecation */
