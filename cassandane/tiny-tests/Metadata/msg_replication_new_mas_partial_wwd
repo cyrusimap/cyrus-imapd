@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_msg_replication_new_mas_partial_wwd
-    :needs_component_replication
 {
     my ($self) = @_;
 
