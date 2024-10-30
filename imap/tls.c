@@ -1574,6 +1574,30 @@ EXPORTED int tls_get_info(SSL *conn, char *buf, size_t len)
     return (strlen(buf));
 }
 
+/* takes a cyrus alpn map, mallocs and constructs an openssl one in
+ * protos, which caller must free when done
+ */
+static void alpn_get_protos(const struct tls_alpn_t *alpn_map,
+                            unsigned char **pprotos,
+                            unsigned int *pprotos_len)
+{
+    struct buf protos = BUF_INITIALIZER;
+    const struct tls_alpn_t *alpn;
+
+    for (alpn = alpn_map; alpn && alpn->id; alpn++) {
+        if (!alpn->check_availability || alpn->check_availability(alpn->rock)) {
+            size_t len = strlen(alpn->id);
+            assert(len > 0 && len <= 255);
+            buf_putc(&protos, len);
+            buf_appendcstr(&protos, alpn->id);
+        }
+    }
+
+    assert(buf_len(&protos) <= UINT_MAX);
+    *pprotos_len = buf_len(&protos);
+    *pprotos = (unsigned char *) buf_releasenull(&protos);
+}
+
 // I am the client
 HIDDEN int tls_init_clientengine(int verifydepth,
                           const char *var_server_cert,
@@ -1663,8 +1687,9 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 }
 
 HIDDEN int tls_start_clienttls(int readfd, int writefd,
-                        int *layerbits, char **authid, SSL **ret,
-                        SSL_SESSION **sess)
+                               int *layerbits, char **authid,
+                               const struct tls_alpn_t *alpn_map,
+                               SSL **ret, SSL_SESSION **sess)
 {
     const SSL_CIPHER *cipher;
     X509   *peer;
@@ -1681,6 +1706,24 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
         syslog(LOG_DEBUG, "setting up TLS connection");
 
     if (authid) *authid = NULL;
+
+#ifdef HAVE_TLS_ALPN
+    if (alpn_map) {
+        unsigned char *protos = NULL;
+        unsigned int protos_len;
+
+        alpn_get_protos(alpn_map, &protos, &protos_len);
+
+        if (SSL_CTX_set_alpn_protos(c_ctx, protos, protos_len)) {
+            syslog(LOG_ERR, "TLS client engine: failed to set ALPN protos");
+        }
+
+        free(protos);
+    }
+    else {
+        SSL_CTX_set_alpn_protos(c_ctx, NULL, 0);
+    }
+#endif
 
     tls_conn = (SSL *) SSL_new(c_ctx);
     if (tls_conn == NULL) {

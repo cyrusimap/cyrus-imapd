@@ -82,8 +82,9 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
                         SSL **ret);
 
 int tls_start_clienttls(int readfd, int writefd,
-                        int *layerbits, char **authid, SSL **ret,
-                        SSL_SESSION **sess);
+                        int *layerbits, char **authid,
+                        const struct tls_alpn_t *alpn_map,
+                        SSL **ret, SSL_SESSION **sess);
 
 /* reset tls */
 int tls_reset_servertls(SSL **conn);
