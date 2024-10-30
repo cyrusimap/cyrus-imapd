@@ -53,8 +53,9 @@ int tls_enabled(void);
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"
 
+#define MAX_TLS_ALPN_ID (15)
 struct tls_alpn_t {
-    const char *id;
+    char id[MAX_TLS_ALPN_ID + 1];
     unsigned (*check_availability)(void *rock);
     void *rock;
 };

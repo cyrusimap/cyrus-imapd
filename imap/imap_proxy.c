@@ -88,7 +88,7 @@ static void imap_postcapability(struct backend *s)
 
 static const struct tls_alpn_t imap_alpn_map[] = {
     { "imap", NULL, NULL },
-    { NULL, NULL, NULL },
+    { "",     NULL, NULL },
 };
 
 struct protocol_t imap_protocol =

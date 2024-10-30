@@ -263,7 +263,7 @@ static char *nntp_parsesuccess(char *str, const char **status)
 
 static const struct tls_alpn_t nntp_alpn_map[] = {
     { "nntp", NULL, NULL },
-    { NULL,   NULL, NULL }
+    { "",     NULL, NULL }
 };
 
 static struct protocol_t nntp_protocol =

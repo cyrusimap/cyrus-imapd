@@ -727,7 +727,7 @@ static int alpn_select_cb(SSL *ssl __attribute__((unused)),
     for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
         struct tls_alpn_t *alpn;
 
-        for (alpn = (struct tls_alpn_t *) server_list; alpn->id; alpn++) {
+        for (alpn = (struct tls_alpn_t *) server_list; alpn->id[0]; alpn++) {
             if ((in[0] == strlen(alpn->id)) &&
                 memcmp(alpn->id, in + 1, in[0]) == 0 &&
                 (!alpn->check_availability || alpn->check_availability(alpn->rock))) {
@@ -1189,7 +1189,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     saslprops_reset(saslprops);
 
 #ifdef HAVE_TLS_ALPN
-    if (alpn_map)
+    if (alpn_map && alpn_map->id[0])
         SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
     else
         SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
@@ -1584,10 +1584,10 @@ static void alpn_get_protos(const struct tls_alpn_t *alpn_map,
     struct buf protos = BUF_INITIALIZER;
     const struct tls_alpn_t *alpn;
 
-    for (alpn = alpn_map; alpn && alpn->id; alpn++) {
+    for (alpn = alpn_map; alpn && alpn->id[0]; alpn++) {
         if (!alpn->check_availability || alpn->check_availability(alpn->rock)) {
             size_t len = strlen(alpn->id);
-            assert(len > 0 && len <= 255);
+            assert(len > 0 && len <= MAX_TLS_ALPN_ID);
             buf_putc(&protos, len);
             buf_appendcstr(&protos, alpn->id);
         }
@@ -1708,7 +1708,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     if (authid) *authid = NULL;
 
 #ifdef HAVE_TLS_ALPN
-    if (alpn_map) {
+    if (alpn_map && alpn_map->id[0]) {
         unsigned char *protos = NULL;
         unsigned int protos_len;
 

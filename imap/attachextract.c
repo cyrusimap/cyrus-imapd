@@ -131,7 +131,7 @@ static int logout(struct backend *s __attribute__((unused)))
 
 static const struct tls_alpn_t http_alpn_map[] = {
     { "http/1.1", NULL, NULL },
-    { NULL, NULL, NULL },
+    { "",         NULL, NULL },
 };
 
 static struct protocol_t http =

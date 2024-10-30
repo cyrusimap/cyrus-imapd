@@ -1255,7 +1255,7 @@ static const struct tls_alpn_t http_alpn_map[] = {
     { "h2",       &h2_is_available, &http_conn },
     { "http/1.1", NULL,             NULL },
     { "http/1.0", NULL,             NULL },
-    { NULL,       NULL,             NULL }
+    { "",         NULL,             NULL },
 };
 
 static void _reset_tls(struct http_connection *conn)

@@ -9277,7 +9277,7 @@ out:
 #ifdef HAVE_SSL
 static const struct tls_alpn_t imap_alpn_map[] = {
     { "imap", NULL, NULL },
-    { NULL,   NULL, NULL }
+    { "",     NULL, NULL }
 };
 
 /*

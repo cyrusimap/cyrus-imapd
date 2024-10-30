@@ -126,7 +126,7 @@ static char *sieve_parsesuccess(char *str, const char **status)
 
 static const struct tls_alpn_t sieve_alpn_map[] = {
     { "managesieve", NULL, NULL },
-    { NULL,          NULL, NULL }
+    { "",            NULL, NULL },
 };
 
 static struct protocol_t sieve_protocol =

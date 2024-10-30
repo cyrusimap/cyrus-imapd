@@ -166,7 +166,7 @@ static struct backend *backend = NULL;
 
 static const struct tls_alpn_t pop3_alpn_map[] = {
     { "pop3", NULL, NULL },
-    { NULL,   NULL, NULL }
+    { "",     NULL, NULL }
 };
 
 static struct protocol_t pop3_protocol =
