@@ -2898,7 +2898,7 @@ static void master_ready(const char *ready_file, int ready)
 
     if (!ready) {
         /* remove file to say we're no longer ready! */
-        unlink(ready_file);
+        xunlink(ready_file);
         return;
     }
 
