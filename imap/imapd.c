@@ -896,7 +896,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
-                        "%s",
+                        "%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -925,8 +925,9 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_savedate    ? " savedate=<1>"     : "",
                         client_behavior.did_searchres   ? " searchres=<1>"    : "",
                         client_behavior.did_uidonly     ? " uidonly=<1>"      : "",
-                        client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
+                        client_behavior.did_unselect    ? " unselect=<1>"     : "",
 
+                        client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
                         client_behavior.did_xlist       ? " xlist=<1>"        : "");
 }
 
@@ -2579,6 +2580,8 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Unselect")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
+
+                client_behavior.did_unselect = 1;
 
                 cmd_close(tag.s, cmd.s);
 
