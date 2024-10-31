@@ -1,12 +1,5 @@
 This is a collection of autoconf macros which've been written by
-various people at CMU.  To use it, use "aclocal -I cmulocal" (after
-the first time, automake should automatically use the -I cmulocal, if
-you've called CMU_INIT_AUTOMAKE in configure.ac).
-
-CMU_INIT_AUTOMAKE
-  If you use automake, you should call this after AM_INIT_AUTOMAKE.
-  It adds "-I cmulocal" to the aclocal command line, so that when
-  automake runs aclocal, aclocal'll continue to pick up these macros.
+various people at CMU.  To use it, use "aclocal -I cmulocal".
 
 CMU_ADD_LIBPATH
   Add -L(arg), and possibly -R(arg) (or whatever the runpath is) to
@@ -17,55 +10,3 @@ CMU_ADD_LIBPATH_TO
 
 CMU_GUESS_RUNPATH_SWITCH
   Attempts to guess what the runpath switch is (-R or whatever).
-
-CMU_COMERR
-  Requires that com_err exist in the collection (at CMU, do this by
-  running "cvs checkout com_err", and adding com_err to DIST_SUBDIRS
-  in your Makefile.am).
-
-  It sets the output variable COMPILE_ET to the compile_et program to
-  use, and adds the appropriate paths to LDFLAGS and CPPFLAGS.
-
-  It does *not* add -lcom_err to LIBS (this would cause later library
-  checks to fail if com_err needs to be built), so Makefiles need to
-  explicitly add -lcom_err (which, after all, should always exist as
-  long as the com_err compile doesn't blow up).  Makefiles should do
-  this by using LIB_COMERR, which will substitute to the appropriate
-  magic to use to grab the library.  (This may involve a libtool archive;
-  you should be using libtool to link your program if you distribute
-  libraries with it that the program may link against).
-
-  Note that com_err will only be compiled if the configure script
-  can't find compile_et or libcom_err; if the system already has them,
-  the configure script will use the system installation (although, due
-  to some autoconf wonkiness, com_err will still be configured; it just
-  won't show up in the @subdirs@ expansion).
-
-CMU_NANA
-  Adds --with-nana, set by default; if set, attempts to link against
-  libnana.  If not set, or if libnana is unavailable, or if we're not
-  using gcc, it defines WITHOUT_NANA.
-
-CMU_PROG_LIBTOOL
-  Just like AM_PROG_LIBTOOL, except it performs a couple little hacks
-  to make sure that things don't break on picky vendor compilers
-  which whine about empty translation units. [DEPRECATED - DO NOT USE]
-
-CMU_PTHREADS
-  This attempts to link against libpthread (failing if it can't be found),
-  and attempts to do any system-specific setup required for thread
-  support (for example, most things want _REENTRANT to be defined,
-  but Solaris wants _POSIX_PTHREAD_SEMANTICS and __EXTENSIONS__, IRIX
-  wants to see _SGI_REENTRANT_FUNCTIONS, etc).
-
-CMU_SASL
-  This tries to find a SASL library, and calls AC_SUBST on LIB_SASL
-  if it finds one, or tells the user to go ftp it if it doesn't exist.
-
-  Provides --with-sasldir.
-
-CMU_KRB5
-  This attempts to find Kerberos 5 libraries and set up CFLAGS and LIBS
-  appropriately. It also updates and substitutes RPATH for shared library
-  stuff.
-
