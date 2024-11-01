@@ -203,7 +203,7 @@ Plaintext Authentication
 The SASL library has several ways of verifying plaintext passwords. Plaintext passwords are passed either by the IMAP ``LOGIN`` command or by the SASL ``PLAIN`` mechanism (under a TLS layer).
 
 * PAM
-* Kerberos v4: Plaintext passwords are verified by obtaining a ticket for the server's Kerberos identity, to protect against Kerberos server spoofing attacks.
+* GSSAPI: Plaintext passwords are verified by obtaining a ticket for the server's Kerberos identity, to protect against Kerberos server spoofing attacks.
 
 * ``/etc/passwd``
 * ``/etc/shadow``: ``sasl_auto_transition`` automatically creates secrets for shared secret authentication when given a password.
@@ -215,11 +215,9 @@ To disallow the use of plaintext passwords for authentication, you can set ``all
 Kerberos Logins
 ===============
 
-The Kerberos SASL mechanism supports the ``KERBEROS_V4`` authentication mechanism. The mechanism requires that a ``srvtab`` file exist in the location given in the ``srvtab`` configuration option. The ``srvtab`` file must be readable by the Cyrus server and must contain a ``imap.$host@$realm`` service key, where ``$host`` is the first component of the server's host name and ``$realm`` is the server's Kerberos realm.
+The Kerberos SASL mechanism supports the ``GSSAPI`` authentication mechanism. The mechanism requires that a ``keytab`` file exist in the location given in the ``sasl_keytab`` configuration option. The ``keytab`` file must be readable by the Cyrus server and must contain a ``$service/$host@$realm`` service key.  ``$host`` is the first component of the server's host name, the FQDN or IP address (whatever the client uses). ``$realm`` is the server's Kerberos realm. ``$service`` is name of the service: ``imap``, ``HTTP``, ``sieve``.
 
 The server will permit logins by identities in the local realm and identities in the realms listed in the ``loginrealms`` option in :cyrusman:`imapd.conf(5)`.
-
-The file ``/etc/krb.equiv`` contains mappings between Kerberos principals. The file contains zero or more lines, each containing two fields. Any identity matching the first field of a line is permitted to log in as the identity in the second field.
 
 If the ``loginuseacl`` configuration option is turned on, than any Kerberos identity that is granted the ``a`` right on the user's ``INBOX`` is permitted to log in as that user.
 

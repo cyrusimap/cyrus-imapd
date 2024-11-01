@@ -66,7 +66,7 @@ Options
 .. option:: -l num, --maxssf=num
 
     Maximum protection layer to use (**0**\ =none; **1**\ =integrity;
-    etc).  For example if you are using the KERBEROS_V4 authentication
+    etc).  For example if you are using the GSSAPI authentication
     mechanism specifying **0** will force imtest to not use any layer
     and specifying **1** will force it to use the integrity layer.  By
     default the maximum supported protection layer will be used.

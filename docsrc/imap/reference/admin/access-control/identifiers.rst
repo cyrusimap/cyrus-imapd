@@ -83,18 +83,6 @@ Using the Kerberos authorization mechanism, ACIs are of the form:
 If ``$instance`` is omitted, it defaults to the null string. If
 ``$realm`` is omitted, it defaults to the local realm.
 
-The file ``/etc/krb.equiv`` contains mappings between Kerberos
-principals. The file contains zero or more lines, each containing two
-fields. Any identity matching the first field of a line is changed to
-the second identity during canonicalization. For example, a line in
-``/etc/krb.equiv`` of:
-
-::
-
-    bovik@REMOTE.COM bovik
-
-will cause the identity ``bovik@REMOTE.COM`` to be treated as if it
-were the local identity ``bovik``.
 
 Alternative Authorization
 ^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -112,7 +112,7 @@ $client->processoneevent until $done;
 print "not " unless $didcap;
 print "ok 7\n";
 
-# if we support kerberos 4 or gssapi auth, log in that way.
+# if we support gssapi auth, log in that way.
 foreach $cap (@caps) {
   $client = Cyrus::IMAP->new($server);
   # this is not fatal because someone might not have e.g. Krb5 tickets
