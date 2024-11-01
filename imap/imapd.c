@@ -239,10 +239,10 @@ static struct event_groups {
 
 #define QUIRK_SEARCHFUZZY (1<<0)
 static struct id_data {
-    struct attvaluelist *params;
+    hash_table params;
     int did_id;
     int quirks;
-} imapd_id;
+} imapd_id = { HASH_TABLE_INITIALIZER, 0, 0 };
 
 #ifdef HAVE_SSL
 /* our tls connection, if any */
@@ -871,15 +871,9 @@ static void event_groups_free(struct event_groups **groups)
 
 static void imapd_log_client_behavior(void)
 {
-    struct attvaluelist *p = imapd_id.params;
-    const char *id_name = NULL;
-
-    for (; p; p = p->next) {
-        if (0 == strcasecmp(p->attrib, "name")) {
-            id_name = buf_cstring(&p->value);
-            break;
-        }
-    }
+    const char *id_name    = hash_lookup("name", &imapd_id.params);
+    const char *id_vendor  = hash_lookup("vendor", &imapd_id.params);
+    const char *id_version = hash_lookup("version", &imapd_id.params);
 
     /* log the client behaviors
      *
@@ -890,7 +884,8 @@ static void imapd_log_client_behavior(void)
      * are a bit easier to skim and a bit smaller.
      */
     xsyslog(LOG_NOTICE, "session ended",
-                        "sessionid=<%s> userid=<%s> id.name=<%s>"
+                        "sessionid=<%s> userid=<%s>"
+                        " id.vendor=<%s> id.name=<%s> id.version=<%s>"
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s"
@@ -900,7 +895,9 @@ static void imapd_log_client_behavior(void)
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
-                        id_name,
+                        id_vendor    ? id_vendor    : "",
+                        id_name      ? id_name      : "",
+                        id_version   ? id_version   : "",
 
                         client_behavior.did_annotate    ? " annotate=<1>"     : "",
                         client_behavior.did_binary      ? " binary=<1>"       : "",
@@ -3407,10 +3404,22 @@ static void cmd_noop(char *tag, char *cmd)
 }
 
 static void clear_id() {
-    if (imapd_id.params) {
-        freeattvalues(imapd_id.params);
-    }
+    free_hash_table(&imapd_id.params, &free);
     memset(&imapd_id, 0, sizeof(struct id_data));
+    construct_hash_table(&imapd_id.params, 32, 1);
+}
+
+static void log_id_param(const char *key, void *data, void *rock)
+{
+    struct buf *logbuf = (struct buf *) rock;
+    const char *val = (const char *) data;
+
+    /* should we check for and format literals here ??? */
+    buf_printf(logbuf, " \"%s\" ", key);
+    if (!val || !strcmp(val, "NIL"))
+        buf_printf(logbuf, "NIL");
+    else
+        buf_printf(logbuf, "\"%s\"", val);
 }
 
 /*
@@ -3500,7 +3509,7 @@ static void cmd_id(char *tag)
             }
 
             /* ok, we're happy enough */
-            appendattvalue(&imapd_id.params, field.s, &arg);
+            hash_insert(field.s, xstrdup(buf_cstring(&arg)), &imapd_id.params);
         }
 
         if (c != ')') {
@@ -3523,18 +3532,8 @@ static void cmd_id(char *tag)
        eventually this should be a callback or something. */
     if (npair) {
         struct buf logbuf = BUF_INITIALIZER;
-        struct attvaluelist *pptr;
 
-        for (pptr = imapd_id.params; pptr; pptr = pptr->next) {
-            const char *val = buf_cstring(&pptr->value);
-
-            /* should we check for and format literals here ??? */
-            buf_printf(&logbuf, " \"%s\" ", pptr->attrib);
-            if (!val || !strcmp(val, "NIL"))
-                buf_printf(&logbuf, "NIL");
-            else
-                buf_printf(&logbuf, "\"%s\"", val);
-        }
+        hash_enumerate(&imapd_id.params, &log_id_param, &logbuf);
 
         syslog(LOG_INFO, "client id sessionid=<%s> userid=<%s>:%s",
                          session_id(),
