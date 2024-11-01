@@ -1294,11 +1294,6 @@ static int tls_init(int client_auth, struct buf *serverinfo)
         return HTTP_SERVER_ERROR;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) http_alpn_map);
-#endif
-
     httpd_tls_enabled = 1;
 
     return 0;
@@ -1307,7 +1302,9 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 static void starttls(struct http_connection *conn, int timeout)
 {
     int result = tls_start_servertls(conn->pin->fd, conn->pout->fd,
-                                     timeout, &saslprops, (SSL **) &conn->tls_ctx);
+                                     timeout, &saslprops,
+                                     http_alpn_map,
+                                     (SSL **) &conn->tls_ctx);
 
     /* if error */
     if (result == -1) {

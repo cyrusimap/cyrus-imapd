@@ -1226,6 +1226,7 @@ static void cmd_starttls(struct server_state *state)
                             /*writefd*/state->out->fd,
                             /*timeout_sec*/3000,
                             &saslprops,
+                            NULL,
                             &tls_conn);
     if (r < 0) {
         server_printf(state, "BAD STARTTLS negotiation failed\r\n");

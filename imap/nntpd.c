@@ -4037,11 +4037,6 @@ static void cmd_starttls(int nntps)
         return;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) nntp_alpn_map);
-#endif
-
     if (nntps == 0)
     {
         prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
@@ -4053,6 +4048,7 @@ static void cmd_starttls(int nntps)
                                1, /* write */
                                nntps ? 180 : nntp_timeout,
                                &saslprops,
+                               nntp_alpn_map,
                                &tls_conn);
 
     /* if error */

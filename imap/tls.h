@@ -61,7 +61,7 @@ int tls_enabled(void);
 
 struct tls_alpn_t {
     const char *id;
-    unsigned (*check_availabilty)(void *rock);
+    unsigned (*check_availability)(void *rock);
     void *rock;
 };
 
@@ -77,7 +77,9 @@ int tls_init_clientengine(int verifydepth,
 
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
-                        struct saslprops_t *saslprops, SSL **ret);
+                        struct saslprops_t *saslprops,
+                        const struct tls_alpn_t *alpn_map,
+                        SSL **ret);
 
 int tls_start_clienttls(int readfd, int writefd,
                         int *layerbits, char **authid, SSL **ret,
@@ -94,12 +96,6 @@ int tls_prune_sessions(void);
 
 /* fill string buffer with info about tls connection */
 int tls_get_info(SSL *conn, char *buf, size_t len);
-
-/* Select an application protocol from the client list in order of preference */
-int tls_alpn_select(SSL *ssl,
-                    const unsigned char **out, unsigned char *outlen,
-                    const unsigned char *in, unsigned int inlen,
-                    void *server_list);
 
 #endif /* HAVE_SSL */
 

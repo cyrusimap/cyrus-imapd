@@ -1185,11 +1185,6 @@ static void cmd_stls(int pop3s)
         return;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) pop3_alpn_map);
-#endif
-
     if (pop3s == 0)
     {
         prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
@@ -1208,6 +1203,7 @@ static void cmd_stls(int pop3s)
                                1, /* write */
                                pop3s ? 180 : popd_timeout,
                                &saslprops,
+                               pop3_alpn_map,
                                &tls_conn);
 
     /* put the iplocalport and ipremoteport back */

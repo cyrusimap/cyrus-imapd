@@ -716,6 +716,41 @@ static int tls_rand_init(void)
 #endif
 }
 
+/* Select an application protocol from the client list in order of preference */
+static int alpn_select_cb(SSL *ssl __attribute__((unused)),
+                          const unsigned char **out, unsigned char *outlen,
+                          const unsigned char *in, unsigned int inlen,
+                          void *server_list)
+{
+    strarray_t ids = STRARRAY_INITIALIZER;
+
+    for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
+        struct tls_alpn_t *alpn;
+
+        for (alpn = (struct tls_alpn_t *) server_list; alpn->id; alpn++) {
+            if ((in[0] == strlen(alpn->id)) &&
+                memcmp(alpn->id, in + 1, in[0]) == 0 &&
+                (!alpn->check_availability || alpn->check_availability(alpn->rock))) {
+
+                strarray_fini(&ids);
+
+                *out = in + 1;
+                *outlen = in[0];
+                return SSL_TLSEXT_ERR_OK;
+            }
+        }
+
+        strarray_appendm(&ids, xstrndup((const char *) in + 1, in[0]));
+    }
+
+    char *proto = strarray_join(&ids, ", ");
+    xsyslog(LOG_NOTICE, "ALPN failed", "proto=<%s>", proto);
+    free(proto);
+    strarray_fini(&ids);
+
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -1128,7 +1163,9 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
   * on success.
   */
 EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
-                                 struct saslprops_t *saslprops, SSL **ret)
+                                 struct saslprops_t *saslprops,
+                                 const struct tls_alpn_t *alpn_map,
+                                 SSL **ret)
 {
     int     sts;
     unsigned int n;
@@ -1150,6 +1187,13 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
         syslog(LOG_DEBUG, "setting up TLS connection");
 
     saslprops_reset(saslprops);
+
+#ifdef HAVE_TLS_ALPN
+    if (alpn_map)
+        SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
+    else
+        SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
+#endif
 
     tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {
@@ -1749,41 +1793,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     *ret = tls_conn;
 
     return r;
-}
-
-/* Select an application protocol from the client list in order of preference */
-EXPORTED int tls_alpn_select(SSL *ssl __attribute__((unused)),
-                             const unsigned char **out, unsigned char *outlen,
-                             const unsigned char *in, unsigned int inlen,
-                             void *server_list)
-{
-    strarray_t ids = STRARRAY_INITIALIZER;
-
-    for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
-        struct tls_alpn_t *alpn;
-
-        for (alpn = (struct tls_alpn_t *) server_list; alpn->id; alpn++) {
-            if ((in[0] == strlen(alpn->id)) &&
-                memcmp(alpn->id, in + 1, in[0]) == 0 &&
-                (!alpn->check_availabilty || alpn->check_availabilty(alpn->rock))) {
-
-                strarray_fini(&ids);
-
-                *out = in + 1;
-                *outlen = in[0];
-                return SSL_TLSEXT_ERR_OK;
-            }
-        }
-
-        strarray_appendm(&ids, xstrndup((const char *) in + 1, in[0]));
-    }
-
-    char *proto = strarray_join(&ids, ", ");
-    xsyslog(LOG_NOTICE, "ALPN failed", "proto=<%s>", proto);
-    free(proto);
-    strarray_fini(&ids);
-
-    return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
 #else

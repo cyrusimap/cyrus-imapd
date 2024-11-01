@@ -949,11 +949,6 @@ static int cmd_starttls(struct protstream *sieved_out,
         return TIMSIEVE_FAIL;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) sieve_alpn_map);
-#endif
-
     prot_printf(sieved_out, "OK \"Begin TLS negotiation now\"\r\n");
     /* must flush our buffers before starting tls */
     prot_flush(sieved_out);
@@ -962,6 +957,7 @@ static int cmd_starttls(struct protstream *sieved_out,
                                1, /* write */
                                sieved_timeout,
                                saslprops,
+                               sieve_alpn_map,
                                &tls_conn);
 
     /* if error */
