@@ -892,7 +892,7 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s"
-                        "%s%s%s%s"
+                        "%s%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s%s%s",
 
@@ -934,6 +934,7 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_tag_alpha   ? " tag_alpha=<1>"    : "",
                         client_behavior.did_tag_alnum   ? " tag_alnum=<1>"    : "",
                         client_behavior.did_tag_base64  ? " tag_base64=<1>"   : "",
+                        client_behavior.did_tag_onedot  ? " tag_onedot=<1>"   : "",
 
                         client_behavior.did_tag_dot     ? " tag_dot=<1>"      : "",
                         client_behavior.did_tag_sep     ? " tag_sep=<1>"      : "",
@@ -1562,6 +1563,10 @@ static void record_client_tag_behaviour(const char *tag)
     }
     else if (saw && (saw & ~TAG_BASE64) == 0) {
         client_behavior.did_tag_base64 = 1;
+        return;
+    }
+    else if (saw == TAG_SAW_DOT && !tag[1]) {
+        client_behavior.did_tag_onedot = 1;
         return;
     }
 

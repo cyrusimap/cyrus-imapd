@@ -480,6 +480,7 @@ struct client_behavior_registry {
     uint32_t did_tag_alpha    : 1;   /* only letters */
     uint32_t did_tag_alnum    : 1;   /* only numbers and letters */
     uint32_t did_tag_base64   : 1;   /* only base64 characters */
+    uint32_t did_tag_onedot   : 1;   /* single dot */
     uint32_t did_tag_dot      : 1;   /* tags contain dots */
     uint32_t did_tag_sep      : 1;   /* tags contain - or _ */
     uint32_t did_tag_colon    : 1;   /* tags contain : */
