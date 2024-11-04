@@ -2670,36 +2670,34 @@ EXPORTED const char *xapian_version_string()
 }
 
 struct xapian_doc {
-    Xapian::TermGenerator *termgen;
-    Xapian::Document *doc;
+    Xapian::TermGenerator termgen;
+    Xapian::Document doc;
 };
 
 EXPORTED xapian_doc_t *xapian_doc_new(void)
 {
-    xapian_doc_t *doc = (xapian_doc_t *) xzmalloc(sizeof(struct xapian_doc));
-    doc->doc = new Xapian::Document;
-    doc->termgen = new Xapian::TermGenerator;
-    doc->termgen->set_document(*doc->doc);
+    xapian_doc_t *doc = new xapian_doc;
+    doc->termgen.set_document(doc->doc);
     return doc;
 }
 
 EXPORTED void xapian_doc_index_text(xapian_doc_t *doc,
                                     const char *text, size_t len)
 {
-    doc->termgen->index_text(Xapian::Utf8Iterator(text, len));
+    doc->termgen.index_text(Xapian::Utf8Iterator(text, len));
 }
 
 EXPORTED size_t xapian_doc_termcount(xapian_doc_t *doc)
 {
-    return doc->doc->termlist_count();
+    return doc->doc.termlist_count();
 }
 
 EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
                                      int(*cb)(const char*, void*),
                                      void *rock)
 {
-    for (Xapian::TermIterator ti = doc->doc->termlist_begin();
-            ti != doc->doc->termlist_end(); ++ti) {
+    for (Xapian::TermIterator ti = doc->doc.termlist_begin();
+            ti != doc->doc.termlist_end(); ++ti) {
         int r = cb((*ti).c_str(), rock);
         if (r) return r;
     }
@@ -2708,14 +2706,12 @@ EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
 
 EXPORTED void xapian_doc_reset(xapian_doc_t *doc)
 {
-    doc->doc->clear_values();
+    doc->doc.clear_values();
 }
 
 EXPORTED void xapian_doc_close(xapian_doc_t *doc)
 {
-    delete doc->termgen;
-    delete doc->doc;
-    free(doc);
+    delete doc;
 }
 
 EXPORTED int xapian_charset_flags(int flags)
