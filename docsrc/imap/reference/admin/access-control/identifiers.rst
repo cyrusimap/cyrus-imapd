@@ -34,8 +34,8 @@ Kerberos vs. Unix Authorization
 -------------------------------
 
 The Cyrus IMAP server comes with four authorization mechanisms, one is
-compatible with Unix-style (``/etc/passwd``) authorization, one for use
-with Kerberos 4, one for use with Kerberos 5, and one for use with an
+compatible with Unix-style (``/etc/passwd``) authorization, one called
+``mboxgroups``, one for use with Kerberos 5, and one for use with an
 external authorization process (ptloader) which can interface with
 other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
 
