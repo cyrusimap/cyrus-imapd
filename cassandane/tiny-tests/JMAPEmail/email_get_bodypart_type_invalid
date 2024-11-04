@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_bodypart_type_invalid
+{
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    xlog $self, "Create message with invalid Content-Type header in bodypart";
+    my $mime = <<'EOF';
+From: from@example.com
+To: to@example.com
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Message-ID: <B250C648@example.com>
+Content-Type: multipart/related;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain;charset=utf-8
+
+test
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Disposition: inline; filename="foo.bar"
+Content-Transfer-Encoding: base64
+Content-Type: image/not/valid
+
+tQF26TgIDYO3PNbLnNh1W/9pG96H1EHck5zVUBcqelr1It81PdMEyyb7Xjckth7SYohWOnnr6ZE9
+GbvY+OOJ9xGXmlUo0fHAi341Z6uIXlZxBVQXrY53NBujXQTpPXMO8jtmCgXb6VO/xO0gyfKwVvV5
+U6N9NWGNLKz1n5EIf6g=
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    xlog $self, "Assert invalid Content-Type becomes application/octet-stream";
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R0' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R0',
+                    name     => 'Email/query',
+                    path     => '/ids',
+                },
+                properties => ['bodyStructure'],
+            },
+            'R1'
+        ],
+    ]);
+    $self->assert_str_equals(
+        'application/octet-stream',
+        $res->[1][1]{list}[0]{bodyStructure}{subParts}[1]{type}
+    );
+    $self->assert_null(
+        $res->[1][1]{list}[0]{bodyStructure}{subParts}[1]{charset});
+}

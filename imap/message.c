@@ -1293,12 +1293,12 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     message_parse_rfc822space(&hdr);
     if (!hdr) goto done;
 
-    /* Ignore header if no '/' character */
+    /* Reject header if no '/' character */
     if (*hdr++ != '/') goto done;
 
-    /* Skip whitespace before subtype, ignore header if no subtype */
+    /* Skip whitespace before subtype, reject header if no subtype */
     message_parse_rfc822space(&hdr);
-    if (!hdr) return;
+    if (!hdr) goto done;
 
     /* Find end of subtype token */
     subtype = hdr;
@@ -1310,7 +1310,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     /* Skip whitespace after subtype */
     message_parse_rfc822space(&hdr);
 
-    /* Ignore header if not at end of header or parameter delimiter */
+    /* Reject header if not at end of header or parameter delimiter */
     if (hdr && *hdr != ';') goto done;
 
     /* Save content type & subtype */
@@ -1348,6 +1348,17 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     }
 
 done:
+    if (*typep == NULL || *subtypep == NULL) {
+        /* Reject a non-empty Content-Type header value that does not
+         * parse to both a top-level type and sub-type. Rather than
+         * leaving the body type fields empty, set them to
+         * "application/octet-stream" so that they do not get handled
+         * as the default "text/plain" content type. */
+        free(*typep);
+        *typep = xstrdup("application");
+        free(*subtypep);
+        *subtypep = xstrdup("octet-stream");
+    }
     free(decbuf);
 }
 
