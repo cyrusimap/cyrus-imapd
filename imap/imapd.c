@@ -892,9 +892,9 @@ static void imapd_log_client_behavior(void)
                         "%s%s%s%s"
                         "%s%s%s%s"
                         "%s%s"
-                        "%s%s%s%s%s"
-                        "%s%s%s%s"
-                        "%s%s%s%s",
+                        "%s%s%s%s%s%s"
+                        "%s%s%s%s%s%s"
+                        "%s%s%s%s%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
@@ -930,17 +930,21 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
                         client_behavior.did_xlist       ? " xlist=<1>"        : "",
 
+                        client_behavior.did_tag_only_num     ? " tag_only_num=<1>"      : "",
+                        client_behavior.did_tag_only_alpha   ? " tag_only_alpha=<1>"    : "",
+                        client_behavior.did_tag_only_alnum   ? " tag_only_alnum=<1>"    : "",
+                        client_behavior.did_tag_only_alnumdot? " tag_only_alnumdot=<1>"    : "",
+                        client_behavior.did_tag_only_base64  ? " tag_only_base64=<1>"   : "",
+                        client_behavior.did_tag_only_onedot  ? " tag_only_onedot=<1>"   : "",
+
                         client_behavior.did_tag_num     ? " tag_num=<1>"      : "",
                         client_behavior.did_tag_alpha   ? " tag_alpha=<1>"    : "",
-                        client_behavior.did_tag_alnum   ? " tag_alnum=<1>"    : "",
-                        client_behavior.did_tag_base64  ? " tag_base64=<1>"   : "",
-                        client_behavior.did_tag_onedot  ? " tag_onedot=<1>"   : "",
-
                         client_behavior.did_tag_dot     ? " tag_dot=<1>"      : "",
                         client_behavior.did_tag_sep     ? " tag_sep=<1>"      : "",
                         client_behavior.did_tag_colon   ? " tag_colon=<1>"    : "",
                         client_behavior.did_tag_angle   ? " tag_angle=<1>"    : "",
 
+                        client_behavior.did_tag_base64  ? " tag_bases64=<1>"    : "",
                         client_behavior.did_tag_other   ? " tag_other=<1>"    : "",
                         client_behavior.did_tag_POST    ? " tag_POST=<1>"     : "",
                         client_behavior.did_tag_PUT     ? " tag_PUT=<1>"      : "",
@@ -1511,12 +1515,12 @@ static void record_client_tag_behaviour(const char *tag)
     /* whole string checks */
     if (strcmp(tag, "POST") == 0) {
         client_behavior.did_tag_POST = 1;
-        client_behavior.did_tag_alpha = 1;
+        client_behavior.did_tag_only_alpha = 1;
         return;
     }
     else if (strcmp(tag, "PUT") == 0) {
         client_behavior.did_tag_PUT = 1;
-        client_behavior.did_tag_alpha = 1;
+        client_behavior.did_tag_only_alpha = 1;
         return;
     }
 
@@ -1550,23 +1554,29 @@ static void record_client_tag_behaviour(const char *tag)
 
     /* exclusive checks */
     if (saw == TAG_SAW_NUM) {
-        client_behavior.did_tag_num = 1;
+        client_behavior.did_tag_only_num = 1;
         return;
     }
     else if (saw == TAG_SAW_ALPHA) {
-        client_behavior.did_tag_alpha = 1;
-        return;
-    }
-    else if (saw == (TAG_SAW_NUM | TAG_SAW_ALPHA)) {
-        client_behavior.did_tag_alnum = 1;
-        return;
-    }
-    else if (saw && (saw & ~TAG_BASE64) == 0) {
-        client_behavior.did_tag_base64 = 1;
+        client_behavior.did_tag_only_alpha = 1;
         return;
     }
     else if (saw == TAG_SAW_DOT && !tag[1]) {
-        client_behavior.did_tag_onedot = 1;
+        client_behavior.did_tag_only_onedot = 1;
+        return;
+    }
+    else if (saw == (TAG_SAW_NUM | TAG_SAW_ALPHA)) {
+        client_behavior.did_tag_only_alnum = 1;
+        return;
+    }
+    else if ((saw & (TAG_SAW_NUM | TAG_SAW_ALPHA))
+             && (saw & ~(TAG_SAW_NUM | TAG_SAW_ALPHA | TAG_SAW_DOT)) == 0)
+    {
+        client_behavior.did_tag_only_alnumdot = 1;
+        return;
+    }
+    else if (saw && (saw & ~TAG_BASE64) == 0) {
+        client_behavior.did_tag_only_base64 = 1;
         return;
     }
 
@@ -1574,6 +1584,14 @@ static void record_client_tag_behaviour(const char *tag)
     xsyslog(LOG_INFO, "saw an unusual tag", "tag=<%s>", tag);
 
     /* inclusive checks */
+    if ((saw & TAG_SAW_NUM)) {
+        client_behavior.did_tag_num = 1;
+    }
+
+    if ((saw & TAG_SAW_ALPHA)) {
+        client_behavior.did_tag_alpha = 1;
+    }
+
     if ((saw & TAG_SAW_DOT)) {
         client_behavior.did_tag_dot = 1;
     }
@@ -1588,6 +1606,10 @@ static void record_client_tag_behaviour(const char *tag)
 
     if ((saw & TAG_SAW_ANGLE)) {
         client_behavior.did_tag_angle = 1;
+    }
+
+    if ((saw & TAG_SAW_B64EXTRA)) {
+        client_behavior.did_tag_base64 = 1;
     }
 
     if ((saw & TAG_SAW_OTHER)) {
