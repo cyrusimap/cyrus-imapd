@@ -46,22 +46,6 @@ Use the source from Git
 Read our :ref:`Guide to GitHub <github-guide>` for details on how to
 access our GitHub repository, and fork/clone the source.
 
-External Tools
-==============
-
-These are projects that are not directly developed or managed
-under the umbrella of the Cyrus Project, but may provide enhancements
-or additional functionality.
-
-Both of these projects are not under active development, but are
-definitely worthwhile and would be Good Things to have available.
-If you think you'd be interested in taking them on and bringing them
-up to speed, we encourage you to contact the original authors.
-
-There is an effort to develop `Cyrus utilities <http://sourceforge.net/projects/cyrus-utils/>`_.
-
-Additionally, a Cyrus administrative GUI is available from http://korreio.sf.net
-
 Licensing
 =========
 
