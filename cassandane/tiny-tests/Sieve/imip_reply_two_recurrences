@@ -1,0 +1,213 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imip_reply_two_recurrences
+    :needs_component_httpd :want_service_http
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $IMAP->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "09b59913-30b2-4f90-982a-7ce6e2a56655";
+    my $href = "$CalendarId/$uuid.ics";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "processcalendar", "editheader"];
+set "outcome" "no_action";
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processcalendar :updatesonly :deletecanceled :outcome "outcome" :reason "reason";
+    if string "\${outcome}" "updated" {
+        setflag "\\\\Flagged";
+        keep;
+    }
+    elsif not string :is "\${outcome}" "no_action" {
+        addheader "X-ME-Cal-Outcome" "\${outcome}";
+        addheader "X-ME-Cal-Reason" "\${reason}";
+    }
+}
+EOF
+    );
+
+    my $event = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+PRODID:-//CyrusIMAP.org/Cyrus 
+ 3.9.0-alpha0-505-g9990cb6f27-fm-20230621.001-g9990cb6f//EN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+LAST-MODIFIED:20230427T153319Z
+X-LIC-LOCATION:Australia/Melbourne
+TZUNTIL:20230630T000000Z
+BEGIN:STANDARD
+TZNAME:AEST
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+DTSTART:20080406T030000
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:AEDT
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+DTSTART:20081005T020000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:09b59913-30b2-4f90-982a-7ce6e2a56655
+SEQUENCE:0
+DTSTAMP:20230622T024211Z
+CREATED:20230622T024156Z
+DTSTART;TZID=Australia/Melbourne:20230626T090000
+DURATION:PT1H
+PRIORITY:0
+SUMMARY:imip update bug
+RRULE:FREQ=DAILY;COUNT=5
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+ORGANIZER;X-JMAP-ID=Y3NrZWV0QGZhc3RtYWlsdGVhbS5jb20;CN=Emerson Leaf;
+ EMAIL=cassandane@example.com:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=Y3NrZWV0QGZhc3RtYWlsdGVhbS5jb20;CN=Emerson Leaf;
+ EMAIL=cassandane@example.com;CUTYPE=INDIVIDUAL;X-JMAP-ROLE=owner;
+ X-JMAP-ROLE=attendee;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:
+ cassandane@example.com
+ATTENDEE;X-JMAP-ID=Y3NrZWV0QGV4YW1wbGUuZm0;CN=Emerson Leaf;
+ EMAIL=foo@example.net;CUTYPE=INDIVIDUAL;X-JMAP-ROLE=attendee;
+ PARTSTAT=ACCEPTED;X-DTSTAMP=20230622T024237Z;X-SEQUENCE=0:mailto:
+ foo@example.net
+X-APPLE-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+X-JMAP-SENT-BY;VALUE=TEXT:foo@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    xlog $self, "Create an event on calendar";
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('Emerson Leaf',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('accepted',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+
+
+    my $imip = <<'EOF';
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Foo <foo\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REPLY; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//CyrusIMAP.org/Cyrus 
+ 3.9.0-alpha0-499-gf27bbf33e2-fm-20230619.001-gf27bbf33//EN
+METHOD:REPLY
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+LAST-MODIFIED:20230427T153319Z
+X-LIC-LOCATION:Australia/Melbourne
+TZUNTIL:20230630T000000Z
+BEGIN:STANDARD
+TZNAME:AEST
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+DTSTART:20080406T030000
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+TZNAME:AEDT
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+DTSTART:20081005T020000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Australia/Melbourne:20230629T090000
+UID:09b59913-30b2-4f90-982a-7ce6e2a56655
+DTSTAMP:20230622T024256Z
+CREATED:20230622T024156Z
+DTSTART;TZID=Australia/Melbourne:20230629T090000
+DURATION:PT1H
+SEQUENCE:0
+PRIORITY:0
+SUMMARY:imip update bug
+STATUS:CONFIRMED
+ORGANIZER;X-JMAP-ID=Y3NrZWV0QGZhc3RtYWlsdGVhbS5jb20;CN=Emerson Leaf;
+ EMAIL=cassandane@example.com:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=Y3NrZWV0QGV4YW1wbGUuZm0;CN=Emerson Leaf;
+ EMAIL=foo@example.net;CUTYPE=INDIVIDUAL;X-JMAP-ROLE=attendee;
+ PARTSTAT=TENTATIVE;RSVP=FALSE;X-SEQUENCE=0;X-DTSTAMP=20230622T024255Z:
+ mailto:foo@example.net
+X-APPLE-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+X-JMAP-SENT-BY;VALUE=TEXT:cassandane@example.com
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Australia/Melbourne:20230630T090000
+UID:09b59913-30b2-4f90-982a-7ce6e2a56655
+DTSTAMP:20230622T024256Z
+CREATED:20230622T024156Z
+DTSTART;TZID=Australia/Melbourne:20230630T090000
+DURATION:PT1H
+SEQUENCE:0
+PRIORITY:0
+SUMMARY:imip update bug
+STATUS:CONFIRMED
+ORGANIZER;X-JMAP-ID=Y3NrZWV0QGZhc3RtYWlsdGVhbS5jb20;CN=Emerson Leaf;
+ EMAIL=cassandane@example.com:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=Y3NrZWV0QGV4YW1wbGUuZm0;CN=Emerson Leaf;
+ EMAIL=foo@example.net;CUTYPE=INDIVIDUAL;X-JMAP-ROLE=attendee;
+ PARTSTAT=TENTATIVE;RSVP=FALSE;X-SEQUENCE=0;X-DTSTAMP=20230622T024255Z:
+ mailto:foo@example.net
+X-APPLE-DEFAULT-ALARM;VALUE=BOOLEAN:TRUE
+X-JMAP-SENT-BY;VALUE=TEXT:cassandane@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver iMIP reply";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+
+    xlog $self, "Check that the reply made it to calendar";
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    # top level is not updated
+    $self->assert_str_equals('Emerson Leaf',
+                             $events->[0]{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('accepted',
+                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+    # particular recurrence is
+    my $recur = '2023-06-29T09:00:00';
+
+    $self->assert_str_equals('Emerson Leaf',
+                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('tentative',
+                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{scheduleStatus});
+    # particular recurrence is
+    $recur = '2023-06-30T09:00:00';
+
+    $self->assert_str_equals('Emerson Leaf',
+                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{name});
+    $self->assert_str_equals('tentative',
+                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{scheduleStatus});
+}
