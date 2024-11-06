@@ -399,13 +399,13 @@ static std::string detect_language(const struct buf *part)
         std::string code(CLD2::LanguageCode(lang));
         std::transform(code.begin(), code.end(), code.begin(), ::tolower);
         // Map CLD2 special codes to ISO 639.
-        if (!code.compare("zh-Hant")) {
+        if (code == "zh-hant") {
             code = "zh";
         }
-        else if (!code.compare("sr-ME" )) {
+        else if (code == "sr-me" ) {
             code = "sr"; // not a political statement!
         }
-        else if (!code.compare("xxx")) {
+        else if (code == "xxx") {
             code = "";
         }
         iso_lang = parse_langcode(code.c_str());
