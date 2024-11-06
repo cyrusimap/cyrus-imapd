@@ -19,7 +19,7 @@ sub test_admin_rewrite_calendarevent_privacy
 );
 
     xlog $self, "Make sure regular user can't call Admin method";
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Admin/rewriteCalendarEventPrivacy', {}, 'R1'],
     ], \@using);
     $self->assert_str_equals('accountNotSupportedByMethod',
@@ -28,7 +28,7 @@ sub test_admin_rewrite_calendarevent_privacy
     my $event1Uid = '40d11f36-245b-4a03-8034-df25f38f9f61';
 
     xlog $self, "create two calendar events";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
                 event1 => {

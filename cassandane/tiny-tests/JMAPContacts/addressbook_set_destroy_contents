@@ -28,7 +28,7 @@ EOF
     my $cardId = basename($carddav->NewContact($abookId, $VCard), '.vcf');
 
     xlog "Destroy addressbook (with and without onDestroyRemoveContents)";
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['AddressBook/set', {
             destroy => [$abookId],
         }, 'R1'],

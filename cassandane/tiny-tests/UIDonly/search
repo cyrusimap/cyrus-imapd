@@ -24,7 +24,7 @@ sub test_search
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     xlog $self, "SEARCH";
-    $res = $imaptalk->search('not', 'deleted');
+    my $res = $imaptalk->search('not', 'deleted');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_num_equals(8, scalar @{$res});
     $self->assert_num_equals(2, $res->[0]);

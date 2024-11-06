@@ -62,7 +62,7 @@ sub test_shared_multiget
 EOF
 
     xlog "Run calendar-multiget report";
-    $mgRes = $CalDAV->Request('REPORT', 'Default', $xmlMultiget,
+    my $mgRes = $CalDAV->Request('REPORT', 'Default', $xmlMultiget,
         'Content-Type' => 'application/xml',
     );
 

@@ -52,7 +52,7 @@ EOF
     $caldav->Request('PUT', 'Default/test.ics', $ical, 'Content-Type' => 'text/calendar');
 
     xlog $self, "Assert timezone ids are mapped to IANA names";
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         [ 'CalendarEvent/query', {}, 'R1' ],
         [
             'CalendarEvent/get',
@@ -102,14 +102,14 @@ EOF
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
     $self->assert_str_equals('Australia/Sydney', $res->[1][1]{list}[0]{timeZone});
-    my @locations = values %{ $res->[1][1]{list}[0]{locations} };
+    @locations = values %{ $res->[1][1]{list}[0]{locations} };
     $self->assert_deep_equals(
         \@locations,
         [ { '@type' => 'Location', timeZone => 'Asia/Singapore', relativeTo => 'end' } ]
     );
 
     $res = $caldav->Request('GET', 'Default/test.ics');
-    my $ical = Data::ICal->new(data => $res->{content});
+    $ical = Data::ICal->new(data => $res->{content});
 
     xlog "Assert non-IANA VTIMEZONEs are kept";
     my @timezoneTzIds = sort

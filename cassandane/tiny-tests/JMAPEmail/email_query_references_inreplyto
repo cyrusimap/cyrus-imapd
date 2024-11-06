@@ -61,7 +61,7 @@ sub test_email_query_references_inreplyto
     xlog $self, "run squatter";
     $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         [
             'Email/query',
             {
@@ -140,7 +140,7 @@ if
 EOF
     );
 
-    $mime = <<'EOF';
+    my $mime = <<'EOF';
 From: foo@local
 To: bar@local
 Message-Id: <091e0683cc1a@example.com>

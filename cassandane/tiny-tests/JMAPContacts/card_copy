@@ -218,7 +218,7 @@ return;
         }, 'R2'],
     ]);
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
-    $blob = $jmap->Download({ accept => 'image/jpeg' },
+    my $blob = $jmap->Download({ accept => 'image/jpeg' },
                                'other3', $res->[0][1]{list}[0]{avatar}{blobId});
     $self->assert_str_equals('image/jpeg',
                              $blob->{headers}->{'content-type'});

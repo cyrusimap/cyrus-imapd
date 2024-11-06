@@ -20,7 +20,7 @@ sub test_store
     $self->check_messages(\%exp);
 
     xlog $self, "ENABLE UIDONLY & CONDSTORE";
-    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY', 'CONDSTORE');
+    my $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY', 'CONDSTORE');
     $self->assert_num_equals(1, $res->{uidonly});
     $self->assert_num_equals(1, $res->{condstore});
 

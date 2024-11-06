@@ -87,7 +87,7 @@ EOF
     });
 
     while (my ($rowid, $row) = each %{$ical_rows}) {
-        my @cols = (), @vals = ();
+        my (@cols, @vals);
         while (my($k, $v) = each %{$row}) {
             # make sure we insert in same order
             push(@cols, $k);
@@ -99,7 +99,7 @@ EOF
     }
 
     while (my ($rowid, $row) = each %{$jscal_rows}) {
-        my @cols = (), @vals = ();
+        my (@cols, @vals);
         while (my($k, $v) = each %{$row}) {
             # make sure we insert in same order
             push(@cols, $k);
