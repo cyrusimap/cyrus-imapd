@@ -17,7 +17,7 @@ use utf8;
                     },
                     from => [{ email => 'foo@local' }],
                     to => [{ email => 'bar@local' }],
-                    subject => $_->{id},
+                    subject => "some subject",
                     bodyStructure => {
                         type => 'text/plain',
                         partId => 'part1',
