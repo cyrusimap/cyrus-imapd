@@ -1011,6 +1011,9 @@ sub _start_master
                 },
                 description => $srv->address() . " to be in LISTEN state");
     }
+    timed_wait(sub { -e "$self->{basedir}/master.ready" },
+               description => "master.ready file exists"
+    );
     xlog "_start_master: all services listening";
 }
 
@@ -1691,6 +1694,7 @@ sub stop
     push @errors, $self->_check_valgrind_logs();
     push @errors, $self->_check_cores();
     push @errors, $self->_check_syslog() unless $params{no_check_syslog};
+    push @errors, "master ready file still exists" if -e "$self->{basedir}/master.ready";
 
     # filter out empty errors (shouldn't be any, but just in case)
     @errors = grep { $_ } @errors;
