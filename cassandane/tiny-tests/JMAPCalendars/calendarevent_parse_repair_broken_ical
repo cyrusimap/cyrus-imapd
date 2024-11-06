@@ -186,9 +186,8 @@ EOF
 
     for my $tc (@testCases) {
         $tc->{ical} =~ s/\r?\n/\r\n/gs;
-
         my @properties = keys %{$tc->{wantParsed}};
-        push(@properties, @{$tc->{wantAlsoProperties}});
+        push(@properties, @{$tc->{wantAlsoProperties} || []});
 
         xlog $self, "Running test case: $tc->{desc}";
 
