@@ -140,7 +140,7 @@ sub test_calendar_set_defaultalerts_shared
     $self->assert_shared_defaultalerts($t, 'no alarm!', 'no alarm!');
 }
 
-sub _can_match {
+sub _can_match_b {
     my $event = shift;
     my $want = shift;
 
@@ -177,7 +177,7 @@ sub assert_alarm_notifs {
         my $found = 0;
         my @newwant;
         foreach my $data (@want) {
-            if (not $found and _can_match($event, $data)) {
+            if (not $found and _can_match_b($event, $data)) {
                 $found = 1;
             }
             else {

@@ -222,7 +222,7 @@ EOF
     $self->assert_alarms();
 }
 
-sub _can_match {
+sub _can_match_a {
     my $event = shift;
     my $want = shift;
 
@@ -260,7 +260,7 @@ sub assert_alarms {
         my $found = 0;
         my @newwant;
         foreach my $data (@want) {
-            if (not $found and _can_match($event, $data)) {
+            if (not $found and _can_match_a($event, $data)) {
                 $found = 1;
             }
             else {
