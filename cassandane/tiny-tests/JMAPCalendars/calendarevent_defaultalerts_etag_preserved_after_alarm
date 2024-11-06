@@ -87,7 +87,7 @@ sub test_calendarevent_defaultalerts_etag_preserved_after_alarm
     $self->assert_num_equals(1, scalar @notifs);
 
     xlog $self, "Get event ETag after alarm fired";
-    my %Headers;
+    %Headers = ();
     if ($caldav->{user}) {
         $Headers{'Authorization'} = $caldav->auth_header();
     }

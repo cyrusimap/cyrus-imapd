@@ -36,7 +36,7 @@ EOF
     my $emailId = $res->[0][1]{ids}[0];
     $self->assert_not_null($emailId);
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         [
             'Email/query',
             {

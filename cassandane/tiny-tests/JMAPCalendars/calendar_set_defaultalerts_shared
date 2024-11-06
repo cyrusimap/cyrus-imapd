@@ -335,7 +335,7 @@ sub create_test
     $self->assert(exists $res->[1][1]{updated}{Default});
 
     xlog $self, 'Sharee sets useDefaultAlerts=true';
-    my $res = $shareeJmap->CallMethods([
+    $res = $shareeJmap->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'owner',
             update => {

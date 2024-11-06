@@ -24,7 +24,7 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 
     xlog "Get all calendars (to create #calendars mailbox) ";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Calendar/get', {
          }, "R1"]]);
     $self->assert_not_null($res);
@@ -65,7 +65,7 @@ EOF
         }}, "R1"]]);
 
     xlog "Get all quotas";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Quota/get', {
          }, "R1"]]);
     $self->assert_not_null($res);

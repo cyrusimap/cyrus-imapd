@@ -39,7 +39,7 @@ EOF
     xlog $self, "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Email/query', {
             filter => {
                 body => "ＵＦＪ",

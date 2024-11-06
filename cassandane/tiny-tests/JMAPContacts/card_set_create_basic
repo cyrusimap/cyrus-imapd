@@ -34,7 +34,7 @@ sub test_card_set_create_basic
     my $name = 'Mr. John Q. Public, Esq.';
     my $id = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/set', {
             create => {
                 "1" => {

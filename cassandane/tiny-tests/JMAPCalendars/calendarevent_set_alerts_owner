@@ -106,8 +106,8 @@ sub test_calendarevent_set_alerts_owner
         'calalarmd', '-t' => $now->epoch() + 60);
 
     xlog $self, "assert alarm is fired";
-    my $data = $self->{instance}->getnotify();
-    my @events;
+    $data = $self->{instance}->getnotify();
+    @events = ();
     foreach (@$data) {
         if ($_->{CLASS} eq 'EVENT') {
             my $e = decode_json($_->{MESSAGE});

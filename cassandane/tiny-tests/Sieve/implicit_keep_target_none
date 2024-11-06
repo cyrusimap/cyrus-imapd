@@ -15,7 +15,7 @@ sub test_implicit_keep_target_none
 
     xlog $self, "Allow plus address delivery";
     $imaptalk->setacl($folder, 'anyone' => 'p');
-    my $imaptalk = $self->{store}->get_client();
+    $imaptalk = $self->{store}->get_client();
 
     xlog $self, "Install a script";
     $self->{instance}->install_sieve_script(<<EOF
