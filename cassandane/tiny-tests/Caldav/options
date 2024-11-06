@@ -13,7 +13,7 @@ sub test_options {
             $caldav->request_url($url),
             { headers => { Authorization => $caldav->auth_header() } }
         );
-        return $res->{headers}{dav};
+        return $res->{headers}{dav} || [];
     };
 
     # Non-calendar collections - no scheduling
