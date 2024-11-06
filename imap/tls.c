@@ -1411,6 +1411,25 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     return r;
 }
 
+/* query which (if any) ALPN protocol was chosen
+ * caller must free the returned string
+ */
+EXPORTED char *tls_get_alpn_protocol(const SSL *conn)
+{
+    char *proto = NULL;
+
+#ifdef HAVE_TLS_ALPN
+    const unsigned char *data = NULL;
+    unsigned int len = 0;
+
+    SSL_get0_alpn_selected(conn, &data, &len);
+    if (data && len)
+        proto = xstrndup((const char *) data, len);
+#endif
+
+    return proto;
+}
+
 EXPORTED int tls_reset_servertls(SSL **conn)
 {
     int r = 0;

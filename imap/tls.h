@@ -87,6 +87,11 @@ int tls_start_clienttls(int readfd, int writefd,
                         const struct tls_alpn_t *alpn_map,
                         SSL **ret, SSL_SESSION **sess);
 
+/* query which (if any) ALPN protocol was chosen
+ * caller must free the returned string
+ */
+char *tls_get_alpn_protocol(const SSL *conn);
+
 /* reset tls */
 int tls_reset_servertls(SSL **conn);
 
