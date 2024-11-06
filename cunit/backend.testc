@@ -56,6 +56,7 @@ struct server_state {
     sasl_conn_t *saslconn;          /* the sasl connection context */
 #ifdef HAVE_SSL
     SSL *tls_conn;
+    char tls_alpn_proto[64];
 #endif
     struct protstream *in;
     struct protstream *out;
@@ -742,7 +743,8 @@ static void alpn_common(const struct tls_alpn_t *client_alpn_map,
                         unsigned n_client_protocols,
                         const struct tls_alpn_t *server_alpn_map,
                         unsigned n_server_protocols,
-                        int expect_success)
+                        int expect_success,
+                        const char *expect_protocol)
 {
     struct backend *be;
     const char *auth_status = NULL;
@@ -766,11 +768,29 @@ static void alpn_common(const struct tls_alpn_t *client_alpn_map,
                          USERID, callbacks, &auth_status, /*fd*/-1);
     if (expect_success) {
         CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(be->tlsconn);
+
         CU_ASSERT_EQUAL(server_state->is_connected, 1);
         CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
         CU_ASSERT_EQUAL(server_state->is_tls, 1);
 
         CU_ASSERT(CAPA(be, CAPA_STARTTLS))
+
+        if (expect_protocol) {
+            char *client_proto = NULL;
+
+            client_proto = tls_get_alpn_protocol(be->tlsconn);
+            CU_ASSERT_PTR_NOT_NULL(client_proto);
+            CU_ASSERT_STRING_EQUAL(client_proto, expect_protocol);
+            free(client_proto);
+
+            CU_ASSERT_STRING_EQUAL(server_state->tls_alpn_proto,
+                                   expect_protocol);
+        }
+        else {
+            CU_ASSERT_PTR_NULL(tls_get_alpn_protocol(be->tlsconn));
+            CU_ASSERT_STRING_EQUAL(server_state->tls_alpn_proto, "");
+        }
 
         r = backend_ping(be, NULL);
         CU_ASSERT_EQUAL(r, 0);
@@ -799,7 +819,8 @@ static void test_alpn_match_single(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_SUCCESS);
+                ALPN_COMMON_EXPECT_SUCCESS,
+                "foo");
 #endif
 }
 
@@ -815,7 +836,8 @@ static void test_alpn_match_client_only(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 NULL,
                 0,
-                ALPN_COMMON_EXPECT_SUCCESS);
+                ALPN_COMMON_EXPECT_SUCCESS,
+                NULL);
 #endif
 }
 
@@ -831,7 +853,8 @@ static void test_alpn_match_server_only(void)
                 0,
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_SUCCESS);
+                ALPN_COMMON_EXPECT_SUCCESS,
+                NULL);
 #endif
 }
 
@@ -852,7 +875,8 @@ static void test_alpn_match_client_multi(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_SUCCESS);
+                ALPN_COMMON_EXPECT_SUCCESS,
+                "foo");
 #endif
 }
 
@@ -873,7 +897,8 @@ static void test_alpn_match_server_multi(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_SUCCESS);
+                ALPN_COMMON_EXPECT_SUCCESS,
+                "foo");
 #endif
 }
 
@@ -886,8 +911,8 @@ static void test_alpn_match_multi(void)
         { "",    NULL, NULL },
     };
     struct tls_alpn_t server_map[] = {
-        { "foo", NULL, NULL },
         { "bar", NULL, NULL },
+        { "foo", NULL, NULL },
         { "",    NULL, NULL },
     };
 
@@ -895,7 +920,8 @@ static void test_alpn_match_multi(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_SUCCESS);
+                ALPN_COMMON_EXPECT_SUCCESS,
+                "foo"); /* XXX we use client pref order rather than server */
 #endif
 }
 
@@ -915,7 +941,8 @@ static void test_alpn_nomatch_single(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_FAIL);
+                ALPN_COMMON_EXPECT_FAIL,
+                NULL);
 #endif
 }
 
@@ -936,7 +963,8 @@ static void test_alpn_nomatch_client_multi(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_FAIL);
+                ALPN_COMMON_EXPECT_FAIL,
+                NULL);
 #endif
 }
 
@@ -957,7 +985,8 @@ static void test_alpn_nomatch_server_multi(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_FAIL);
+                ALPN_COMMON_EXPECT_FAIL,
+                NULL);
 #endif
 }
 
@@ -979,7 +1008,8 @@ static void test_alpn_nomatch_multi(void)
                 sizeof(client_map) / sizeof(client_map[0]),
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
-                ALPN_COMMON_EXPECT_FAIL);
+                ALPN_COMMON_EXPECT_FAIL,
+                NULL);
 #endif
 }
 
@@ -1168,6 +1198,7 @@ static void server_unaccept(struct server_state *state)
         tls_reset_servertls(&state->tls_conn);
         state->tls_conn = NULL;
     }
+    memset(state->tls_alpn_proto, 0, sizeof(state->tls_alpn_proto));
 #endif
 }
 
@@ -1459,6 +1490,7 @@ static void cmd_starttls(struct server_state *state)
 #ifdef HAVE_SSL
     int r;
     SSL *tls_conn = NULL;
+    char *alpn_proto = NULL;
     static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
     r = tls_init_serverengine("backend_test", /*verifydepth*/5,
@@ -1499,6 +1531,15 @@ static void cmd_starttls(struct server_state *state)
     prot_settls(state->out, tls_conn);
     state->tls_conn = tls_conn;
     state->is_tls = 1;
+
+    if ((alpn_proto = tls_get_alpn_protocol(tls_conn))) {
+        snprintf(state->tls_alpn_proto, sizeof(state->tls_alpn_proto),
+                 "%s", alpn_proto);
+        free(alpn_proto);
+    }
+    else {
+        memset(state->tls_alpn_proto, 0, sizeof(state->tls_alpn_proto));
+    }
 #else
     server_printf(state, "BAD this server is not built with SSL\r\n");
     server_flush(state);
