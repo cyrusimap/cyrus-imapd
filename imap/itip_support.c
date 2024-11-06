@@ -537,7 +537,6 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                         break;
                     }
                     icalrecur_iterator_free(ritr);
-                    icalrecurrencetype_unref(rrule);
                 }
 
                 if (!valid) {
@@ -622,6 +621,10 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 
     free_hash_table(&override_table, NULL);
     free_hash_table(&rdate_table, NULL);
+
+    for (int i = 0; i < ptrarray_size(&rrules); i++) {
+        icalrecurrencetype_unref(ptrarray_nth(&rrules, i));
+    }
     ptrarray_fini(&rrules);
 
     return attendee;
