@@ -1,5 +1,8 @@
 package Cassandane::Util::TestURL;
 
+use strict;
+use warnings;
+
 use Plack::Loader;
 use Plack::Request;
 use Plack::Response;
