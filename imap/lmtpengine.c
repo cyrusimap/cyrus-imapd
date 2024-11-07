@@ -662,7 +662,7 @@ static int savemsg(struct clientdata *cd,
 
     strcat(p++, ";");
     fold[nfold++] = p;
-    /*p += */sprintf(p, " %s", datestr);
+    sprintf(p, " %s", datestr);
 
     struct buf rbuf = BUF_INITIALIZER;
     buf_setcstr(&rbuf, "Received: ");
