@@ -106,7 +106,7 @@ static std::set<int> read_db_versions(const Xapian::Database &database)
     return versions;
 }
 
-static void write_db_versions(Xapian::WritableDatabase &database, std::set<int> &versions)
+static void write_db_versions(Xapian::WritableDatabase &database, const std::set<int> &versions)
 {
     std::ostringstream val;
     for (std::set<int>::iterator it = versions.begin(); it != versions.end(); ++it) {
@@ -763,8 +763,7 @@ EXPORTED int xapian_dbw_openmem(struct xapian_dbw **dbwp)
     dbw->is_inmemory = true;
 
     dbw->database = new Xapian::WritableDatabase{"", Xapian::DB_BACKEND_INMEMORY};
-    std::set<int> db_versions {XAPIAN_DB_CURRENT_VERSION};
-    write_db_versions(*dbw->database, db_versions);
+    write_db_versions(*dbw->database, {XAPIAN_DB_CURRENT_VERSION});
 
     int r = xapian_dbw_init(dbw);
     if (r) {
