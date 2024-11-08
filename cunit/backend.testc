@@ -921,7 +921,7 @@ static void test_alpn_match_multi(void)
                 server_map,
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_SUCCESS,
-                "foo"); /* XXX we use client pref order rather than server */
+                "bar");
 #endif
 }
 

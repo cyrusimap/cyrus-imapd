@@ -119,6 +119,7 @@
 
 /* Application-specific. */
 #include "assert.h"
+#include "hash.h"
 #include "nonblock.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -716,39 +717,76 @@ static int tls_rand_init(void)
 #endif
 }
 
+static char *alpn_to_string(const struct tls_alpn_t *alpn_map)
+{
+    const struct tls_alpn_t *alpn;
+    struct buf buf = BUF_INITIALIZER;
+    const char *sep = "";
+
+    for (alpn = alpn_map; alpn && alpn->id[0]; alpn++) {
+        if (!alpn->check_availability || alpn->check_availability(alpn->rock)) {
+            buf_printf(&buf, "%s%s", sep, alpn->id);
+            sep = ", ";
+        }
+    }
+
+    return buf_releasenull(&buf);
+}
+
 /* Select an application protocol from the client list in order of preference */
 static int alpn_select_cb(SSL *ssl __attribute__((unused)),
                           const unsigned char **out, unsigned char *outlen,
                           const unsigned char *in, unsigned int inlen,
                           void *server_list)
 {
-    strarray_t ids = STRARRAY_INITIALIZER;
+    hash_table client_protos = HASH_TABLE_INITIALIZER;
+    struct tls_alpn_t *alpn;
+    int r = SSL_TLSEXT_ERR_ALERT_FATAL;
+
+    /* keys are protocols as cstrings, values are where we saw it */
+    construct_hash_table(&client_protos, 10, 1);
 
     for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
-        struct tls_alpn_t *alpn;
+        char proto[MAX_TLS_ALPN_ID + 1] = "";
+        unsigned len = in[0];
 
-        for (alpn = (struct tls_alpn_t *) server_list; alpn->id[0]; alpn++) {
-            if ((in[0] == strlen(alpn->id)) &&
-                memcmp(alpn->id, in + 1, in[0]) == 0 &&
-                (!alpn->check_availability || alpn->check_availability(alpn->rock))) {
-
-                strarray_fini(&ids);
-
-                *out = in + 1;
-                *outlen = in[0];
-                return SSL_TLSEXT_ERR_OK;
-            }
+        if (len <= MAX_TLS_ALPN_ID) {
+            memcpy(proto, &in[1], len);
+            hash_insert(proto, (void *) &in[0], &client_protos);
         }
-
-        strarray_appendm(&ids, xstrndup((const char *) in + 1, in[0]));
     }
 
-    char *proto = strarray_join(&ids, ", ");
-    xsyslog(LOG_NOTICE, "ALPN failed", "proto=<%s>", proto);
-    free(proto);
-    strarray_fini(&ids);
+    for (alpn = (struct tls_alpn_t *) server_list; alpn->id[0]; alpn++) {
+        const unsigned char *found;
 
-    return SSL_TLSEXT_ERR_ALERT_FATAL;
+        if ((found = hash_lookup(alpn->id, &client_protos))
+            && (!alpn->check_availability
+                || alpn->check_availability(alpn->rock)))
+        {
+            *out = &found[1];
+            *outlen = found[0];
+            r = SSL_TLSEXT_ERR_OK;
+            goto done;
+        }
+    }
+
+done:
+    if (r != SSL_TLSEXT_ERR_OK) {
+        strarray_t *client_wanted = hash_keys(&client_protos);
+        char *print_client = strarray_join(client_wanted, ", ");
+        char *print_server = alpn_to_string(server_list);
+
+        xsyslog(LOG_NOTICE, "ALPN failed",
+                            "client_protos=<%s> server_protos=<%s>",
+                            print_client, print_server);
+
+        free(print_client);
+        free(print_server);
+        strarray_free(client_wanted);
+    }
+
+    free_hash_table(&client_protos, NULL);
+    return r;
 }
 
  /*
