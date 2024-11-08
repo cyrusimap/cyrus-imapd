@@ -1525,7 +1525,16 @@ static void reap_child(void)
                 }
             }
 
-            proc_cleanup(&c->proc_handle);
+            if (s && !in_shutdown && failed) {
+                /* we don't have a proc_handle for service processes because
+                 * they manage it themselves, but if one crashed it won't have
+                 * cleaned it up
+                 */
+                proc_force_cleanup(pid);
+            }
+            else {
+                proc_cleanup(&c->proc_handle);
+            }
             centry_set_state(c, SERVICE_STATE_DEAD);
         } else {
             /* Are we multithreaded now? we don't know this child */
