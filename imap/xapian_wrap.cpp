@@ -2496,9 +2496,8 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
         // Generate snippets for each detected message language.
         // The first non-empty snippet wins.
         size_t prev_size = buf_len(snipgen->buf);
-        for (std::set<std::string>::iterator it = doclangs.begin(); it != doclangs.end(); ++it) {
-            const std::string& iso_lang = *it;
-            if (iso_lang.compare("en")) {
+        for (const std::string& iso_lang : doclangs) {
+            if (iso_lang != "en") {
                 try {
                     Xapian::Stem stemmer = get_stemmer(iso_lang);
                     int r = xapian_snipgen_make_snippet(snipgen, part, &stemmer);
