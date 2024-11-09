@@ -452,7 +452,7 @@ class CyrusMetadataCompactor : public Xapian::Compactor
 
         std::string resolve_duplicate_metadata(const std::string &key,
                                                size_t num_tags,
-                                               const std::string tags[])
+                                               const std::string tags[]) override
         {
             if (key.rfind("cyrusid.", 0) == 0) {
                 uint8_t indexlevel = parse_indexlevel(tags[0]);
