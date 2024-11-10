@@ -52,6 +52,7 @@ extern int proc_register(struct proc_handle **handlep,
                          const char *mailbox,
                          const char *cmd);
 extern void proc_cleanup(struct proc_handle **handlep);
+extern void proc_force_cleanup(pid_t pid);
 
 typedef int procdata_t(pid_t pid,
                        const char *servicename, const char *clienthost,
