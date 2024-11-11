@@ -245,9 +245,8 @@ static std::string format_doclangs(const std::set<std::string>& doclangs)
     return val.str();
 }
 
-static std::string parse_langcode(const char *str)
+static std::string parse_langcode(std::string lstr)
 {
-    std::string lstr(str);
     std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
     // accept syntax for two and three letter ISO 639 codes
     if (!(isalpha(lstr[0]) && isalpha(lstr[1]) &&
@@ -408,7 +407,7 @@ static std::string detect_language(const struct buf *part)
         else if (code == "xxx") {
             code = "";
         }
-        iso_lang = parse_langcode(code.c_str());
+        iso_lang = parse_langcode(code);
     }
 
     return iso_lang;
