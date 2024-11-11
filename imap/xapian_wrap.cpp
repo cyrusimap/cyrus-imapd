@@ -1154,7 +1154,7 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, enum search_
             }
             else if (partnum == SEARCH_PART_SUBJECT) {
                 // Keep subject text to index by language later.
-                dbw->subjects->push_back(buf_cstring(part));
+                dbw->subjects->emplace_back(buf_cstring(part));
             }
 #endif /* HAVE_CLD2 */
         }
@@ -1805,9 +1805,9 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
         }
 
         if (!domain_queries.empty()) {
-            queries.push_back(Xapian::Query(Xapian::Query::OP_OR,
+            queries.emplace_back(Xapian::Query::OP_OR,
                         domain_queries.begin(),
-                        domain_queries.end()));
+                        domain_queries.end());
         }
 
         free(utf8_domain);
@@ -2560,8 +2560,7 @@ EXPORTED int xapian_filter(const char *dest, const char **sources,
         // Open databases and aggregate database-level metadata.
         while (*sources) {
             thispath = *sources++;
-            const Xapian::Database srcdb {thispath};
-            srcdbs.push_back(srcdb);
+            srcdbs.emplace_back(thispath);
         }
 
         // Copy all matching documents.
