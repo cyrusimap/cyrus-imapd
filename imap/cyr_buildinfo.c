@@ -179,8 +179,14 @@ static json_t *buildinfo()
 #endif
 #ifdef HAVE_SSL
     json_object_set_new(dependency, "openssl", json_true());
+# ifdef HAVE_TLS_ALPN
+    json_object_set_new(dependency, "openssl_alpn", json_true());
+# else
+    json_object_set_new(dependency, "openssl_alpn", json_false());
+# endif
 #else
     json_object_set_new(dependency, "openssl", json_false());
+    json_object_set_new(dependency, "openssl_alpn", json_false());
 #endif
 #ifdef HAVE_ZLIB
     json_object_set_new(dependency, "zlib", json_true());
