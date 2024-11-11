@@ -106,7 +106,7 @@ static std::set<int> read_db_versions(const Xapian::Database &database)
     return versions;
 }
 
-static void write_db_versions(Xapian::WritableDatabase &database, std::set<int> &versions)
+static void write_db_versions(Xapian::WritableDatabase &database, const std::set<int> &versions)
 {
     std::ostringstream val;
     for (std::set<int>::iterator it = versions.begin(); it != versions.end(); ++it) {
@@ -763,8 +763,7 @@ EXPORTED int xapian_dbw_openmem(struct xapian_dbw **dbwp)
     dbw->is_inmemory = true;
 
     dbw->database = new Xapian::WritableDatabase{"", Xapian::DB_BACKEND_INMEMORY};
-    std::set<int> db_versions {XAPIAN_DB_CURRENT_VERSION};
-    write_db_versions(*dbw->database, db_versions);
+    write_db_versions(*dbw->database, {XAPIAN_DB_CURRENT_VERSION});
 
     int r = xapian_dbw_init(dbw);
     if (r) {
@@ -2497,9 +2496,8 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
         // Generate snippets for each detected message language.
         // The first non-empty snippet wins.
         size_t prev_size = buf_len(snipgen->buf);
-        for (std::set<std::string>::iterator it = doclangs.begin(); it != doclangs.end(); ++it) {
-            const std::string& iso_lang = *it;
-            if (iso_lang.compare("en")) {
+        for (const std::string& iso_lang : doclangs) {
+            if (iso_lang != "en") {
                 try {
                     Xapian::Stem stemmer = get_stemmer(iso_lang);
                     int r = xapian_snipgen_make_snippet(snipgen, part, &stemmer);
@@ -2672,36 +2670,34 @@ EXPORTED const char *xapian_version_string()
 }
 
 struct xapian_doc {
-    Xapian::TermGenerator *termgen;
-    Xapian::Document *doc;
+    Xapian::TermGenerator termgen;
+    Xapian::Document doc;
 };
 
 EXPORTED xapian_doc_t *xapian_doc_new(void)
 {
-    xapian_doc_t *doc = (xapian_doc_t *) xzmalloc(sizeof(struct xapian_doc));
-    doc->doc = new Xapian::Document;
-    doc->termgen = new Xapian::TermGenerator;
-    doc->termgen->set_document(*doc->doc);
+    xapian_doc_t *doc = new xapian_doc;
+    doc->termgen.set_document(doc->doc);
     return doc;
 }
 
 EXPORTED void xapian_doc_index_text(xapian_doc_t *doc,
                                     const char *text, size_t len)
 {
-    doc->termgen->index_text(Xapian::Utf8Iterator(text, len));
+    doc->termgen.index_text(Xapian::Utf8Iterator(text, len));
 }
 
 EXPORTED size_t xapian_doc_termcount(xapian_doc_t *doc)
 {
-    return doc->doc->termlist_count();
+    return doc->doc.termlist_count();
 }
 
 EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
                                      int(*cb)(const char*, void*),
                                      void *rock)
 {
-    for (Xapian::TermIterator ti = doc->doc->termlist_begin();
-            ti != doc->doc->termlist_end(); ++ti) {
+    for (Xapian::TermIterator ti = doc->doc.termlist_begin();
+            ti != doc->doc.termlist_end(); ++ti) {
         int r = cb((*ti).c_str(), rock);
         if (r) return r;
     }
@@ -2710,14 +2706,12 @@ EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
 
 EXPORTED void xapian_doc_reset(xapian_doc_t *doc)
 {
-    doc->doc->clear_values();
+    doc->doc.clear_values();
 }
 
 EXPORTED void xapian_doc_close(xapian_doc_t *doc)
 {
-    delete doc->termgen;
-    delete doc->doc;
-    free(doc);
+    delete doc;
 }
 
 EXPORTED int xapian_charset_flags(int flags)
