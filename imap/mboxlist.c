@@ -1631,6 +1631,7 @@ static int mboxlist_create_namecheck(const char *mboxname,
             if (!mbname_isdeleted(mbname) && mbname_userid(mbname) && strarray_size(mbname_boxes(mbname))) {
                 /* Disallow creating user.X.* when no user.X */
                 r = IMAP_PERMISSION_DENIED;
+                mbname_free(&mbname);
                 goto done;
             }
             mbname_free(&mbname);
