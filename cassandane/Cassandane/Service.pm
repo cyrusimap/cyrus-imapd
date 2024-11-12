@@ -108,6 +108,15 @@ sub set_port
     return $self->{_listener}->set_port($port);
 }
 
+sub is_ssl
+{
+    my ($self) = @_;
+
+    # assume '-s' service argument indicates SSL and its absense
+    # indicates plaintext
+    return scalar grep { $_ eq '-s' } @{$self->{argv}};
+}
+
 # Return a hash of parameters suitable for passing
 # to MessageStoreFactory::create.
 sub store_params
