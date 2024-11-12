@@ -60,17 +60,11 @@ sub create
     }
 
     # try and guess some service-specific defaults
-    if ($name =~ m/imaps/)
+    if ($name =~ m/imap(s?)/)
     {
-        return Cassandane::IMAPService->new(
-                                argv => ['imapd', '-s'],
-                                %params);
-    }
-    elsif ($name =~ m/imap/)
-    {
-        return Cassandane::IMAPService->new(
-                                argv => ['imapd'],
-                                %params);
+        my @argv = 'imapd';
+        push @argv, '-s' if $1;
+        return Cassandane::IMAPService->new(argv => \@argv, %params);
     }
     elsif ($name =~ m/sync/)
     {
@@ -78,11 +72,11 @@ sub create
                                 argv => ['imapd'],
                                 %params);
     }
-    elsif ($name =~ m/http/)
+    elsif ($name =~ m/http(s?)/)
     {
-        return Cassandane::Service->new(
-                                argv => ['httpd'],
-                                %params);
+        my @argv = 'httpd';
+        push @argv, '-s' if $1;
+        return Cassandane::Service->new(argv => \@argv, %params);
     }
     elsif ($name =~ m/lmtp/)
     {
