@@ -114,6 +114,38 @@ sub do_imap_starttls
     }
 }
 
+# check if we selected the expected ALPN protocol.
+# if the underlying IO::Socket::SSL object isn't accessible, pass undef
+# and this check will examine logs instead
+sub assert_alpn_protocol
+{
+    my ($self, $socket, $protocol) = @_;
+
+    if ($socket) {
+        if ($protocol) {
+            $self->assert_str_equals($protocol, $socket->alpn_selected());
+        }
+        else {
+            $self->assert_null($socket->alpn_selected());
+        }
+    }
+    else {
+        return if !$self->{instance}->{have_syslog_replacement};
+
+        my @lines = $self->{instance}->getsyslog(qr{starttls: \S+ with cipher});
+        $self->assert_num_equals(1, scalar @lines);
+
+        if ($protocol) {
+            $self->assert_matches(qr{; application protocol = $protocol},
+                                  $lines[0]);
+        }
+        else {
+            $self->assert_does_not_match(qr{; application protocol =},
+                                         $lines[0]);
+        }
+    }
+}
+
 sub test_imap_none
 {
     my ($self) = @_;
@@ -129,6 +161,8 @@ sub test_imap_none
 
     $talk->select("INBOX");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_alpn_protocol($talk->{Socket}, undef);
 }
 
 sub test_imap_good
@@ -146,6 +180,8 @@ sub test_imap_good
 
     $talk->select("INBOX");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_alpn_protocol($talk->{Socket}, 'imap');
 }
 
 sub test_imap_bad
@@ -176,6 +212,8 @@ sub test_imaps_none
 
     $talk->select("INBOX");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_alpn_protocol($talk->{Socket}, undef);
 }
 
 sub test_imaps_good
@@ -188,6 +226,8 @@ sub test_imaps_good
 
     $talk->select("INBOX");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_alpn_protocol($talk->{Socket}, 'imap');
 }
 
 sub test_imaps_bad
