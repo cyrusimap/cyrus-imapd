@@ -97,6 +97,10 @@ sub connect
 
     if ($self->{ssl}) {
         my $ca_file = abs_path("data/certs/cacert.pem");
+        my $alpn_map = exists $params{OverrideALPN}
+                     ? delete $params{OverrideALPN}
+                     : [ 'imap' ];
+
         # XXX https://github.com/noxxi/p5-io-socket-ssl/issues/121
         # XXX With newer IO::Socket::SSL, hostname verification fails
         # XXX because our hostname is an IP address and the certificate
@@ -111,6 +115,7 @@ sub connect
                       UseSSL => $self->{ssl},
                       SSL_ca_file => $ca_file,
                       SSL_verifycn_scheme => 'none',
+                      SSL_alpn_protocols => $alpn_map,
                       UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
