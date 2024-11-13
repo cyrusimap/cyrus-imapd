@@ -24,7 +24,7 @@ sub test_noindex_multipartheaders
     . "\r\n"
     . "Return-Path: <bla\@local>\r\n"
     . "Mime-Version: 1.0\r\n"
-    . "Content-Type: text/plain"
+    . "Content-Type: text/plain\r\n"
     . "Content-Transfer-Encoding: 7bit\r\n"
     . "Subject: baz\r\n"
     . "From: blu\@local\r\n"

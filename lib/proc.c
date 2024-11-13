@@ -225,6 +225,16 @@ EXPORTED void proc_cleanup(struct proc_handle **handlep)
     }
 }
 
+/* used by master to remove proc files after service processes crash */
+EXPORTED void proc_force_cleanup(pid_t pid)
+{
+    char *fname = proc_getpath(pid, /*isnew*/0);
+
+    if (fname)
+        xunlink(fname);
+    free(fname);
+}
+
 static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 {
     int r = 0;

@@ -156,9 +156,9 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
         }
         if (!smtpclient_ehlo_hostname) {
             xsyslog(LOG_ERR,
-                    "can not determine EHLO hostname, "
+                    "smtpclient_open: can not determine EHLO hostname, "
                     "either client_bind/client_bind_name or servername option must be set",
-                    NULL);
+                    "sessionid=<%s>", session_id());
             return IMAP_INTERNAL;
         }
         if (smtp_protocol.type == TYPE_STD &&
@@ -166,7 +166,8 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
             smtp_protocol.u.std.capa_cmd.arg = smtpclient_ehlo_hostname;
         }
         else {
-            xsyslog(LOG_ERR, "unexpected smtp_protocol value", NULL);
+            xsyslog(LOG_ERR, "smtpclient_open: unexpected smtp_protocol value",
+                    "sessionid=<%s>", session_id());
             return IMAP_INTERNAL;
         }
     }
@@ -181,7 +182,8 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
         r = smtpclient_open_host(config_getstring(IMAPOPT_SMTP_HOST), smp);
     }
     else {
-        syslog(LOG_ERR, "smtpclient_open: unknown backend: %s", backend);
+        syslog(LOG_ERR, "smtpclient_open: sessionid=<%s> unknown backend: %s",
+               session_id(), backend);
         r = IMAP_INTERNAL;
     }
     return r;
@@ -263,8 +265,10 @@ static int expect_code_cb(smtpclient_t *sm, void *rock)
         if (ecrock->code[i] != resp->code[i]) {
             const char *text = buf_cstring(&resp->text);
 
-            syslog(LOG_ERR, "smtpclient: unexpected response%s%s: code=%c%c%c text=%s",
-                   ecrock->cmd ? " to " : "",
+            syslog(LOG_ERR,
+                   "smtpclient: sessionid=<%s> unexpected response%s%s:"
+                   " code=%c%c%c text=%s",
+                   session_id(), ecrock->cmd ? " to " : "",
                    ecrock->cmd ? ecrock->cmd : "",
                    resp->code[0], resp->code[1], resp->code[2], text);
 
@@ -382,10 +386,12 @@ static void smtpclient_logerror(smtpclient_t *sm, const char *cmd, int r)
         const char *errstr = prot_error(sm->backend->out);
         if (!errstr) errstr = prot_error(sm->backend->in);
         if (!errstr) errstr = error_message(r);
-        syslog(LOG_ERR, "smtpclient: %s during %s", errstr, cmd);
+        syslog(LOG_ERR, "smtpclient: sessionid=<%s> %s during %s",
+               session_id(), errstr, cmd);
     }
     else {
-        syslog(LOG_ERR, "smtpclient: %s during %s", error_message(r), cmd);
+        syslog(LOG_ERR, "smtpclient: sessionid=<%s> %s during %s",
+               session_id(), error_message(r), cmd);
     }
 }
 
@@ -467,7 +473,8 @@ __attribute__((unused)) static int smtpclient_quit(smtpclient_t *sm)
     struct expect_code_rock rock = { "QUIT", "2" };
     r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) {
-        syslog(LOG_INFO, "smtpclient: QUIT without reply: %s", error_message(r));
+        syslog(LOG_INFO, "smtpclient: sessionid=<%s> QUIT without reply: %s",
+               session_id(), error_message(r));
         return r;
     }
 
@@ -673,15 +680,21 @@ static int validate_envelope_params(ptrarray_t *params)
     for (i = 0; i < ptrarray_size(params); i++) {
         smtp_param_t *param = ptrarray_nth(params, i);
         if (!smtp_is_valid_esmtp_keyword(param->key)) {
-            syslog(LOG_ERR, "smtpclient: invalid estmp keyword: \"%s\"", param->key);
+            syslog(LOG_ERR,
+                   "smtpclient: sessionid=<%s> invalid estmp keyword: \"%s\"",
+                   session_id(), param->key);
             return IMAP_PROTOCOL_ERROR;
         }
         if (!strcasecmp(param->key, "AUTH")) {
-            syslog(LOG_ERR, "smptclient: rejecting AUTH parameter in envelope");
+            syslog(LOG_ERR,
+                   "smptclient: sessionid=<%s> rejecting AUTH parameter in envelope",
+                   session_id());
             return IMAP_PERMISSION_DENIED;
         }
         if (param->val && !smtp_is_valid_esmtp_value(param->val)) {
-            syslog(LOG_ERR, "smtpclient: invalid estmp value: \"%s\"", param->val);
+            syslog(LOG_ERR,
+                   "smtpclient: sessionid=<%s> invalid estmp value: \"%s\"",
+                   session_id(), param->val);
             return IMAP_PROTOCOL_ERROR;
         }
     }
@@ -694,20 +707,24 @@ static int validate_envelope(smtp_envelope_t *env)
     int i, r;
 
     if (!env->from.addr) {
-        syslog(LOG_ERR, "smtpclient: envelope missing sender");
+      syslog(LOG_ERR, "smtpclient: sessionid=<%s> envelope missing sender",
+             session_id());
         return IMAP_PROTOCOL_ERROR;
     }
     r = validate_envelope_params(&env->from.params);
     if (r) return r;
 
     if (!env->rcpts.count) {
-        syslog(LOG_ERR, "smtpclient: envelope missing recipients");
+      syslog(LOG_ERR, "smtpclient: sessionid=<%s> envelope missing recipients",
+             session_id());
         return IMAP_PROTOCOL_ERROR;
     }
     for (i = 0; i < env->rcpts.count; i++) {
         smtp_addr_t *addr = ptrarray_nth(&env->rcpts, i);
         if (!addr->addr) {
-            syslog(LOG_ERR, "smtpclient: invalid recipient at position %d", i);
+            syslog(LOG_ERR,
+                   "smtpclient: sessionid=<%s> invalid recipient at position %d",
+                   session_id(), i);
             return IMAP_PROTOCOL_ERROR;
         }
         r = validate_envelope_params(&addr->params);
@@ -864,8 +881,9 @@ EXPORTED const char *smtpclient_has_ext(smtpclient_t *sm, const char *name)
     if (!sm->have_exts) {
         int r = smtpclient_ehlo(sm);
         if (r) {
-            syslog(LOG_ERR, "smtpclient: can't EHLO for extensions: %s",
-                    error_message(r));
+            syslog(LOG_ERR,
+                   "smtpclient: sessionid=<%s> can't EHLO for extensions: %s",
+                   session_id(), error_message(r));
             return NULL;
         }
     }
@@ -904,7 +922,9 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
     bk = backend_connect(NULL, host, &smtp_protocol, NULL, sasl_cb, NULL, logfd);
     if (sasl_cb) free_callbacks(sasl_cb);
     if (!bk) {
-        syslog(LOG_ERR, "smptclient_open: can't connect to host: %s", host);
+        syslog(LOG_ERR,
+               "smptclient_open: sessionid=<%s> can't connect to host: %s",
+               session_id(), host);
         if (logfd != -1) close(logfd);
         r = IMAP_INTERNAL;
         goto done;
@@ -1024,13 +1044,15 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
         r = pipe(p_parent);
     }
     if (r < 0) {
-        syslog(LOG_ERR, "smtpclient_open: can't create pipe: %m");
+        syslog(LOG_ERR, "smtpclient_open: sessionid=<%s> can't create pipe: %m",
+               session_id());
         r = IMAP_SYS_ERROR;
         goto done;
     }
     pid_t pid = fork();
     if (pid < 0) {
-        syslog(LOG_ERR, "smtpclient_open: can't fork: %m");
+        syslog(LOG_ERR, "smtpclient_open: sessionid=<%s> can't fork: %m",
+               session_id());
         r = IMAP_SYS_ERROR;
         goto done;
     }
@@ -1046,7 +1068,9 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
         close(p_parent[1]);
 
         execl(config_getstring(IMAPOPT_SENDMAIL), "sendmail", "-bs", (char *)NULL);
-        syslog(LOG_ERR, "smtpclient_open: can't exec sendmail: %m");
+        syslog(LOG_ERR,
+               "smtpclient_open: sessionid=<%s> can't exec sendmail: %m",
+               session_id());
         exit(1);
     }
 
@@ -1066,7 +1090,9 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     /* Create backend and setup context */
     bk = backend_connect_pipe(ctx->infd, ctx->outfd, &smtp_protocol, 0, logfd);
     if (!bk) {
-        syslog(LOG_ERR, "smptclient_open: can't open sendmail backend");
+        syslog(LOG_ERR,
+               "smptclient_open: sessionid=<%s> can't open sendmail backend",
+               session_id());
         r = IMAP_INTERNAL;
         smtpclient_sendmail_freectx(ctx);
         if (logfd != -1) close(logfd);
