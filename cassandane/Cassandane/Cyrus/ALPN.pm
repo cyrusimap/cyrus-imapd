@@ -48,6 +48,13 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
+# When ALPN negotiation fails, depending on the openssl version, we might get
+# a sensible error message, or an opaque reference to "1120".
+# https://github.com/openssl/openssl/issues/24300
+my $alpn_fail_pattern = qr{(?: tlsv1\salert\sno\sapplication\sprotocol
+                            |  ssl3_read_bytes:reason\(1120\)
+                            )}x;
+
 sub new
 {
     my $class = shift;
@@ -157,6 +164,48 @@ sub test_imap_bad
     $self->assert_not_null($e);
     $self->assert_matches($alpn_fail_pattern, $e);
     $self->assert_num_equals(Mail::IMAPTalk::Unconnected, $talk->state());
+}
+
+sub test_imaps_none
+{
+    my ($self) = @_;
+
+    my $imaps = $self->{instance}->get_service('imaps');
+    my $store = $imaps->create_store(username => 'cassandane');
+    my $talk = $store->get_client(OverrideALPN => undef);
+
+    $talk->select("INBOX");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
+
+sub test_imaps_good
+{
+    my ($self) = @_;
+
+    my $imaps = $self->{instance}->get_service('imaps');
+    my $store = $imaps->create_store(username => 'cassandane');
+    my $talk = $store->get_client(); # correct ALPN map is the default
+
+    $talk->select("INBOX");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
+
+sub test_imaps_bad
+{
+    my ($self) = @_;
+
+    my $imaps = $self->{instance}->get_service('imaps');
+    my $store = $imaps->create_store(username => 'cassandane');
+    my $talk;
+
+    eval {
+        $talk = $store->get_client(OverrideALPN => [ 'bogus' ]);
+    };
+    my $e = $@;
+
+    $self->assert_not_null($e);
+    $self->assert_matches($alpn_fail_pattern, $e);
+
 }
 
 1;
