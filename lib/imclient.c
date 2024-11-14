@@ -692,7 +692,6 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
                 imclient->replyliteralleft = 0;
                 continue;
             } else {
-                parsed += avail;
                 imclient->replyliteralleft -= avail;
                 return;
             }
