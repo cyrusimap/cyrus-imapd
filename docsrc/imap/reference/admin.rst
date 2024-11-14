@@ -30,7 +30,6 @@ Management
     admin/monitoring
     admin/config-mailboxdistribution
     admin/murder/murder
-    admin/nginx-proxy
     admin/tweaking
 
 .. :todo:
