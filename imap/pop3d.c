@@ -189,7 +189,7 @@ static void cmd_auth(char *arg);
 static void cmd_capa(void);
 static void cmd_pass(char *pass);
 static void cmd_user(char *user);
-static void cmd_starttls(int pop3s);
+static void cmd_stls(int pop3s);
 static int blat(int msg, int lines);
 static int openinbox(void);
 static void cmdloop(void);
@@ -521,7 +521,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on pop3s port so we should do
        TLS negotiation immediatly */
-    if (pop3s == 1) cmd_starttls(1);
+    if (pop3s == 1) cmd_stls(1);
 
     /* Create APOP challenge for banner */
     *popd_apop_chal = 0;
@@ -929,7 +929,7 @@ done:
                     /* XXX  discard any input pipelined after STLS */
                     prot_flush(popd_in);
 
-                    cmd_starttls(0);
+                    cmd_stls(0);
                 }
             }
             else {
@@ -1155,7 +1155,7 @@ static const struct tls_alpn_t pop3_alpn_map[] = {
     { NULL,   NULL, NULL }
 };
 
-static void cmd_starttls(int pop3s)
+static void cmd_stls(int pop3s)
 {
     int result;
     char *localip, *remoteip;
@@ -1216,25 +1216,15 @@ static void cmd_starttls(int pop3s)
 
     /* if error */
     if (result==-1) {
-        if (pop3s == 0) {
-            prot_printf(popd_out, "-ERR [SYS/PERM] Starttls failed\r\n");
-            syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
-        } else {
-            syslog(LOG_NOTICE, "pop3s failed: %s", popd_clienthost);
-            shut_down(0);
-        }
-        return;
+        syslog(LOG_NOTICE, "TLS negiation failed: %s", popd_clienthost);
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, popd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (pop3s == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
-        } else {
-            shut_down(0);
-        }
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_stls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -1245,9 +1235,9 @@ static void cmd_starttls(int pop3s)
     popd_tls_required = 0;
 }
 #else
-static void cmd_starttls(int pop3s __attribute__((unused)))
+static void cmd_stls(int pop3s __attribute__((unused)))
 {
-    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
+    fatal("cmd_stls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 

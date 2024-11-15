@@ -1997,17 +1997,15 @@ static void cmd_starttls(struct conn *C, const char *tag)
 
     /* if error */
     if (result==-1) {
-        prot_printf(C->pout, "%s NO Starttls negotiation failed\r\n",
-                    tag);
-        syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s",
-               C->clienthost);
-        return;
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", C->clienthost);
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&C->saslprops, C->saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */

@@ -1311,13 +1311,15 @@ static void starttls(struct http_connection *conn, int timeout)
 
     /* if error */
     if (result == -1) {
-        fatal("Error negotiating TLS", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "Error negotiating TLS");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, httpd_saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */

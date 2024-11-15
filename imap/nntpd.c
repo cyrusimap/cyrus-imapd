@@ -4057,25 +4057,15 @@ static void cmd_starttls(int nntps)
 
     /* if error */
     if (result == -1) {
-        if (nntps == 0) {
-            prot_printf(nntp_out, "580 Starttls failed\r\n");
-            syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
-            return;
-        } else {
-            syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
-            shut_down(0);
-        }
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", nntp_clienthost);
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, nntp_saslconn);
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (nntps == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
-        } else {
-            shut_down(0);
-        }
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
