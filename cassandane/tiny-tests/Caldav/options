@@ -6,30 +6,30 @@ sub test_options {
 
     my $caldav = $self->{caldav};
 
-    sub get_options {
+    my $get_options = sub {
         my ($url) = shift;
         my $res = $caldav->ua()->request(
             'OPTIONS',
             $caldav->request_url($url),
             { headers => { Authorization => $caldav->auth_header() } }
         );
-        return $res->{headers}{dav};
-    }
+        return $res->{headers}{dav} || [];
+    };
 
     # Non-calendar collections - no scheduling
-    $self->assert_null(@{ get_options('/') });
+    $self->assert_null(@{ $get_options->('/') });
     $self->assert(not grep(/calendar-auto-schedule/,
-                           @{ get_options('/dav/') }));
+                           @{ $get_options->('/dav/') }));
 
     # Calendar collections - scheduling enabled by default
     $self->assert(grep(/calendar-auto-schedule/,
-            @{ get_options('/dav/calendars/') }));
+            @{ $get_options->('/dav/calendars/') }));
     $self->assert(grep(/calendar-auto-schedule/,
-            @{ get_options('/dav/calendars/user/') }));
+            @{ $get_options->('/dav/calendars/user/') }));
     $self->assert(grep(/calendar-auto-schedule/,
-            @{ get_options('/dav/calendars/user/cassandane/') }));
+            @{ $get_options->('/dav/calendars/user/cassandane/') }));
     $self->assert(grep(/calendar-auto-schedule/,
-            @{ get_options('/dav/calendars/user/cassandane/Default') }));
+            @{ $get_options->('/dav/calendars/user/cassandane/Default') }));
 
     # Disable scheduling on Default calendar
     my $xml = <<EOF;
@@ -49,5 +49,5 @@ EOF
 
     # Scheduling should NOT be advertised
     $self->assert(not grep(/calendar-auto-schedule/,
-            @{ get_options('/dav/calendars/user/cassandane/Default') }));
+            @{ $get_options->('/dav/calendars/user/cassandane/Default') }));
 }

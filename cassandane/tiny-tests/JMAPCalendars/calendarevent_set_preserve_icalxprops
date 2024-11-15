@@ -64,8 +64,8 @@ EOF
     $self->assert_str_equals('x-mainevent-prop',
         $res->[0][1]{list}[0]{'cyrusimap.org:iCalProps'}[0][0]);
 
-    my @alarmIcalProps = sort { $_->[0] cmp $_->[1] } @{
-        $res->[0][1]{list}[0]{alerts
+    my @alarmIcalProps = sort { $a->[0] cmp $b->[0] } @{
+        $res->[0][1]{list}[0]{'alerts'
             }{'E576FA39-51B6-45FA-AAF3-7CCE1F21802E'
             }{'cyrusimap.org:iCalProps'}};
     $self->assert_num_equals(2, scalar @alarmIcalProps);
@@ -100,8 +100,8 @@ EOF
     $self->assert_str_equals('x-mainevent-prop',
         $res->[1][1]{list}[0]{'cyrusimap.org:iCalProps'}[0][0]);
 
-    my @alarmIcalProps = sort { $_->[0] cmp $_->[1] } @{
-        $res->[1][1]{list}[0]{alerts
+    @alarmIcalProps = sort { $a->[0] cmp $b->[0] } @{
+        $res->[1][1]{list}[0]{'alerts'
             }{'E576FA39-51B6-45FA-AAF3-7CCE1F21802E'
             }{'cyrusimap.org:iCalProps'}};
     $self->assert_num_equals(2, scalar @alarmIcalProps);
@@ -143,8 +143,8 @@ EOF
     $self->assert_str_equals('x-mainevent-prop',
         $res->[1][1]{list}[0]{'cyrusimap.org:iCalProps'}[0][0]);
 
-    my @alarmIcalProps = sort { $_->[0] cmp $_->[1] } @{
-        $res->[1][1]{list}[0]{alerts
+    @alarmIcalProps = sort { $a->[0] cmp $b->[0] } @{
+        $res->[1][1]{list}[0]{'alerts'
             }{'E576FA39-51B6-45FA-AAF3-7CCE1F21802E'
             }{'cyrusimap.org:iCalProps'}};
     $self->assert_num_equals(2, scalar @alarmIcalProps);

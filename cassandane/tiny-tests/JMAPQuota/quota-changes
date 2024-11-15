@@ -65,7 +65,7 @@ sub test_quota_changes
     $state = $res->[0][1]{'newState'};
 
     xlog "Get all calendars (to create #calendars mailbox) ";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Calendar/get', {
          }, "R1"]]);
     $self->assert_not_null($res);

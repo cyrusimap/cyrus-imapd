@@ -59,7 +59,7 @@ EOF
     $self->assert(exists $res->[0][1]{updated}{$emailId});
 
     xlog $self, "Deliver reply with encoded UTF-8 subject";
-    my $mime = <<'EOF';
+    $mime = <<'EOF';
 From: bob@local
 To: alic@local
 Subject: =?utf-8?q?Re:_=C2=A1Hola,_se=C3=B1or!?=

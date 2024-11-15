@@ -10,7 +10,7 @@ sub test_email_get_createdmodseq
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
 
     xlog $self, "Append duplicate messages";
-    $mimeMessage = <<'EOF';
+    my $mimeMessage = <<'EOF';
 From: <from@local>
 To: to@local
 Subject: test
@@ -25,7 +25,7 @@ EOF
     $imap->append('INBOX', '17-Aug-2023 15:13:54 +0200', $mimeMessage) || die $@;
 
     $imap->select('INBOX');
-    $fetch = $imap->fetch('1:2', ['INTERNALDATE', 'CREATEDMODSEQ']);
+    my $fetch = $imap->fetch('1:2', ['INTERNALDATE', 'CREATEDMODSEQ']);
     $self->assert_str_equals(
         $fetch->{1}{internaldate}, $fetch->{2}{internaldate}
     );
@@ -34,7 +34,7 @@ EOF
     );
 
     # The createdModseq must be the lower modseq.
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => {

@@ -82,7 +82,7 @@ EOF
 
     xlog $self, "Assert that iMIP message is sent";
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
     xlog $self, "Assert privacy property is not present in iTIP REPLY";
@@ -91,7 +91,7 @@ EOF
 
     xlog $self, "Organizer updates invite with recurrence override";
 
-    my $imip = <<'EOF';
+    $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400
 From: Sally Sender <sender@example.net>
 To: Cassandane <cassandane@example.com>
@@ -137,7 +137,7 @@ EOF
     $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
     xlog $self, "Assert user-set privacy property is preserved";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
             ids => [$eventId],
             properties => ['id', 'privacy', 'recurrenceOverrides'],
@@ -146,6 +146,7 @@ EOF
     $self->assert_str_equals('secret', $res->[0][1]{list}[0]->{privacy});
 
     xlog $self, "Assert privacy property on override matches main event";
-    $self->assert_null($res->[0][1]{list}[0]->{
-        recurrenceOverrides}{'2021-09-24T15:30:00'}{privacy});
+    $self->assert_null(
+      $res->[0][1]{list}[0]->{recurrenceOverrides}{'2021-09-24T15:30:00'}{privacy}
+    );
 }

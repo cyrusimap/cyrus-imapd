@@ -34,7 +34,7 @@ sub test_card_set_create_name_unknown_prop
                             {
                                 kind => 'given',
                                 value => 'Robert',
-                                foo => bar
+                                foo => 'bar',
                             },
                             {
                                 kind => 'given2',

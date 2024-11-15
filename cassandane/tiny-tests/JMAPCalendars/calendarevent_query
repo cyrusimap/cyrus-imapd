@@ -39,7 +39,7 @@ sub test_calendarevent_query
     );
 
     xlog $self, "create events";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
                 eventA1 => {

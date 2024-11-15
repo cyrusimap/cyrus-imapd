@@ -21,7 +21,7 @@ sub test_email_query_no_guidsearch_ignore_jmapuploads
     xlog $self, "Create Trash mailbox";
     $imap->create("Trash", "(USE (\\Trash))") || die;
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{
                 property => 'name',

@@ -110,7 +110,7 @@ sub test_restore_mail_twice
     $self->assert_null($res->[1][1]{list}[0]{mailboxIds}->{$inbox->{id}});
 
     # need a gap between destroys otherwise we will restore both copies
-    my $mark = time();
+    $mark = time();
     sleep 2;
 
     xlog "destroy email1 again";

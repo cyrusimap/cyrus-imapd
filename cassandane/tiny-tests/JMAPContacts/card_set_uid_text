@@ -18,7 +18,7 @@ sub test_card_set_uid_text
 
     my $id = 'e2640cc234ad93b9@example.com';
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/set', {
             create => {
                 "1" => {

@@ -26,7 +26,7 @@ EOF
     # XXX: can't use a result reference in array
     my $blobId = 'G67501cd2e1eaaf65d25e6f3b49554d2193f06ee8';
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Blob/upload', {
             create => {
                 b1 => {

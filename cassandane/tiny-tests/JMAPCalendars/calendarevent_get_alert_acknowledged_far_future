@@ -31,7 +31,7 @@ END:VCALENDAR
 EOF
     $caldav->Request('PUT', 'Default/test.ics', $ical, 'Content-Type' => 'text/calendar');
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         [ 'CalendarEvent/query', {}, 'R1' ],
         [
             'CalendarEvent/get',

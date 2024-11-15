@@ -24,7 +24,7 @@ EOF
     $mimeMsg =~ s/\r\n$//;
     $imap->append('INBOX', $mimeMsg) || die $@;
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Email/query', { }, 'R1'],
         ['Email/get', {
             '#ids' => {

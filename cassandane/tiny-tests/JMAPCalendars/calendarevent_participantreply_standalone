@@ -145,6 +145,6 @@ sub test_calendarevent_participantreply_standalone
         xlog $self, "verify that NO iMIP messages are sent to organizer/attendee";
         $data = $self->{instance}->getnotify();
         @imips = grep { $_->{METHOD} eq 'imip' } @$data;
-        $self->assert_null($imips);
+        $self->assert_null($imips[0]);
     }
 }

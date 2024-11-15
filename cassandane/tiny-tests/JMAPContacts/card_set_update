@@ -134,7 +134,7 @@ sub test_card_set_update
     ]);
 
     my $abookid = $res->[0][1]{created}{"1"}{id};
-    my $href = "$abookid/$id.vcf";
+    $href = "$abookid/$id.vcf";
 
     $res = $jmap->CallMethods([
         ['ContactCard/set', {

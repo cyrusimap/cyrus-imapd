@@ -43,7 +43,7 @@ sub test_email_copy_snoozed
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
 
     xlog $self, "create snoozed email";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Email/set', {
             create => {
                 1 => {

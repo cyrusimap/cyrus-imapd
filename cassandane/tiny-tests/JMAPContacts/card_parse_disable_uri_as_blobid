@@ -23,7 +23,7 @@ EOF
     my $blobId = $data->{blobId};
     $self->assert_not_null($blobId);
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['ContactCard/parse', {
             blobIds => [$blobId],
         }, 'R1'],
@@ -33,13 +33,17 @@ EOF
         }, 'R2'],
     ]);
 
-    $self->assert_not_null($res->[0][1]{parsed}{$blobId}{
-        media}{photo1}{blobId});
-    $self->assert_null($res->[0][1]{parsed}{$blobId}{
-        media}{photo1}{uri});
+    $self->assert_not_null(
+      $res->[0][1]{parsed}{$blobId}{media}{photo1}{blobId}
+    );
+    $self->assert_null(
+      $res->[0][1]{parsed}{$blobId}{media}{photo1}{uri}
+    );
 
-    $self->assert_null($res->[1][1]{parsed}{$blobId}{
-        media}{photo1}{blobId});
-    $self->assert_not_null($res->[1][1]{parsed}{$blobId}{
-        media}{photo1}{uri});
+    $self->assert_null(
+      $res->[1][1]{parsed}{$blobId}{media}{photo1}{blobId}
+    );
+    $self->assert_not_null(
+      $res->[1][1]{parsed}{$blobId}{media}{photo1}{uri}
+    );
 }

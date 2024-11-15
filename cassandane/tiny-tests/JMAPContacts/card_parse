@@ -41,7 +41,7 @@ EOF
     my $res = $jmap->Upload($card, "text/vcard");
     my $blobId = $res->{blobId};
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/parse', {
             blobIds => [ $blobId ],
             properties => [ "\@type", "uid", "name", "media", "vCardProps" ]
