@@ -42,7 +42,9 @@ use strict;
 use warnings;
 use Cwd qw(abs_path);
 use Data::Dumper;
+use HTTP::Tiny;
 use IO::Socket::SSL;
+use XML::Spice;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -61,7 +63,8 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(tls_server_cert => '@basedir@/conf/certs/cert.pem',
-                 tls_server_key => '@basedir@/conf/certs/key.pem');
+                 tls_server_key => '@basedir@/conf/certs/key.pem',
+                 httpmodules => 'caldav');
 
     my $self = $class->SUPER::new({
         config => $config,
@@ -245,7 +248,165 @@ sub test_imaps_bad
 
     $self->assert_not_null($e);
     $self->assert_matches($alpn_fail_pattern, $e);
+}
 
+sub do_https_request
+{
+    my ($self, $service, $alpn_map) = @_;
+
+    my $ca_file = abs_path("data/certs/cacert.pem");
+
+    my $client = HTTP::Tiny->new(verify_SSL => 1,
+                                 SSL_options => {
+                                    SSL_ca_file => $ca_file,
+                                    SSL_verifycn_scheme => 'none',
+                                    SSL_alpn_protocols => $alpn_map,
+                                 });
+
+    my $url = sprintf("https://%s:%s@%s:%s/dav/calendars",
+                      'cassandane', 'secret',
+                      $service->host(), $service->port());
+
+    my $content = x('D:propfind', { 'xmlns:D' => 'DAV:' },
+                    x('D:prop',
+                      x('D:current-user-principal')));
+
+    my $response = $client->request('PROPFIND', $url, {
+        headers => {
+            'content-type' => 'application/xml; charset=utf8',
+        },
+        content => "$content", # stringify the XML::Spice::Chunk
+    });
+
+    return $response;
+}
+
+sub test_https_none
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = undef;
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(1, $response->{success});
+    $self->assert_alpn_protocol(undef, undef);
+}
+
+sub test_https_http10
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'http/1.0' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(1, $response->{success});
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}
+
+sub test_https_http11
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'http/1.1' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(1, $response->{success});
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}
+
+sub test_https_multi
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'http/1.1', 'http/1.0' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(1, $response->{success});
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}
+
+sub test_https_h2
+    :want_service_https :needs_component_httpd :needs_dependency_nghttp2
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'h2' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    # HTTP::Tiny can't speak h2, so the request itself will fail
+    $self->assert_num_equals(0, $response->{success});
+    $self->assert_str_equals('Internal Exception', $response->{reason});
+
+    # but we can still examine the log to check the ALPN result
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}
+
+sub test_https_multi2
+    :want_service_https :needs_component_httpd :needs_dependency_nghttp2
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'h2', 'http/1.1', 'http/1.0' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    # HTTP::Tiny can't speak h2, so the request itself will fail
+    $self->assert_num_equals(0, $response->{success});
+    $self->assert_str_equals('Internal Exception', $response->{reason});
+
+    # but we can still examine the log to check the ALPN result
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}
+
+sub test_https_bad
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'bogus' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(0, $response->{success});
+    $self->assert_str_equals('Internal Exception', $response->{reason});
+    $self->assert_matches($alpn_fail_pattern, $response->{content});
 }
 
 1;
