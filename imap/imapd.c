@@ -412,7 +412,7 @@ static int parse_fetch_args(const char *tag, const char *cmd,
                             struct fetchargs *fa);
 static void cmd_fetch(char *tag, char *sequence, int usinguid);
 static void cmd_store(char *tag, char *sequence, int usinguid);
-static void cmd_search(char *tag, char *cmd);
+static void cmd_search(char *tag, char *cmd, int usinguid);
 static void cmd_sort(char *tag, int usinguid);
 static void cmd_thread(char *tag, int usinguid);
 static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
@@ -1539,7 +1539,8 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Esearch")) {
                 if (c != ' ') goto missingargs;
 
-                cmd_search(tag.s, cmd.s);
+                /* ESearch does not explicitly use "Uid ..." commands */
+                cmd_search(tag.s, cmd.s, 0);
 
                 prometheus_increment(CYRUS_IMAP_ESEARCH_TOTAL);
             }
@@ -1996,9 +1997,8 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Search")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
                 if (c != ' ') goto missingargs;
-            search:
 
-                cmd_search(tag.s, cmd.s);
+                cmd_search(tag.s, cmd.s, 0);
 
                 prometheus_increment(CYRUS_IMAP_SEARCH_TOTAL);
             }
@@ -2174,7 +2174,9 @@ static void cmdloop(void)
                     goto store;
                 }
                 else if (!strcmp(arg1.s, "search")) {
-                    goto search;
+                    cmd_search(tag.s, arg1.s, usinguid);
+
+                    prometheus_increment(CYRUS_IMAP_SEARCH_TOTAL);
                 }
                 else if (!strcmp(arg1.s, "sort")) {
                     goto sort;
@@ -5760,33 +5762,33 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static void cmd_search(char *tag, char *cmd)
+static void cmd_search(char *tag, char *cmd, int usinguid)
 {
     int c;
     struct searchargs *searchargs;
     clock_t start = clock();
     char mytime[100];
-    int usinguid = 0, n = 0;
+    int n = 0;
     int state = GETSEARCH_CHARSET_KEYWORD|GETSEARCH_RETURN;
 
     if (backend_current) {
         /* remote mailbox */
-        prot_printf(backend_current->out, "%s %s ", tag, cmd);
+        if (usinguid) {
+            /* pass on Uid to backend */
+            prot_printf(backend_current->out, "%s Uid %s ", tag, cmd);
+        } else {
+            prot_printf(backend_current->out, "%s %s ", tag, cmd);
+        }
         if (!pipe_command(backend_current, 65536)) {
             pipe_including_tag(backend_current, tag, 0);
         }
         return;
     }
 
-    switch (cmd[0]) {
-    case 'E':  // Esearch (multisearch)
-        state |= GETSEARCH_SOURCE;
-
-        GCC_FALLTHROUGH
-
-    case 'U':  // Uid Search
+    if (cmd[0] == 'E') {
+        // Esearch (multisearch)
         usinguid = 1;
-        break;
+        state |= GETSEARCH_SOURCE;
     }
 
     /* local mailbox */
