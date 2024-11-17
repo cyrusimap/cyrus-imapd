@@ -409,7 +409,7 @@ static int parse_fetch_args(const char *tag, const char *cmd,
                             struct fetchargs *fa);
 static void cmd_fetch(char *tag, char *sequence, int usinguid);
 static void cmd_store(char *tag, char *sequence, int usinguid);
-static void cmd_search(char *tag, int usinguid);
+static void cmd_search(char *tag, char *cmd, int usinguid);
 static void cmd_sort(char *tag, int usinguid);
 static void cmd_thread(char *tag, int usinguid);
 static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
@@ -1978,9 +1978,8 @@ static void cmdloop(void)
                 if (!imapd_index && !backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
-            search:
 
-                cmd_search(tag.s, usinguid);
+                cmd_search(tag.s, cmd.s, usinguid);
 
                 prometheus_increment(CYRUS_IMAP_SEARCH_TOTAL);
             }
@@ -2156,7 +2155,9 @@ static void cmdloop(void)
                     goto store;
                 }
                 else if (!strcmp(arg1.s, "search")) {
-                    goto search;
+                    cmd_search(tag.s, arg1.s, usinguid);
+
+                    prometheus_increment(CYRUS_IMAP_SEARCH_TOTAL);
                 }
                 else if (!strcmp(arg1.s, "sort")) {
                     goto sort;
@@ -5680,7 +5681,7 @@ notflagsdammit:
     free(modified);
 }
 
-static void cmd_search(char *tag, int usinguid)
+static void cmd_search(char *tag, char *cmd, int usinguid)
 {
     int c;
     struct searchargs *searchargs;
@@ -5690,9 +5691,12 @@ static void cmd_search(char *tag, int usinguid)
 
     if (backend_current) {
         /* remote mailbox */
-        const char *cmd = usinguid ? "UID Search" : "Search";
-
-        prot_printf(backend_current->out, "%s %s ", tag, cmd);
+        if (usinguid) {
+            /* pass on Uid to backend */
+            prot_printf(backend_current->out, "%s Uid %s ", tag, cmd);
+        } else {
+            prot_printf(backend_current->out, "%s %s ", tag, cmd);
+        }
         if (!pipe_command(backend_current, 65536)) {
             pipe_including_tag(backend_current, tag, 0);
         }
