@@ -392,6 +392,7 @@ sub assert_matches
 {
     my ($self, $pattern, $string, @rest) = @_;
     my $message;
+    my $multiline;
 
     die "pattern is not a regular expression"
         if lc ref($pattern) ne 'regexp';
@@ -400,7 +401,7 @@ sub assert_matches
         $message = join('', @rest);
     }
     elsif ($string =~ m/\n./) {
-        xlog "assert_matches: multiline string:\n" . $string;
+        $multiline = 1;
         $message = "pattern /$pattern/ did not match [multiline string]";
     }
     else {
@@ -408,6 +409,9 @@ sub assert_matches
     }
 
     my $matches = $string =~ m/$pattern/;
+    if (!$matches && $multiline) {
+        xlog "assert_matches: multiline string:\n" . $string;
+    }
     $self->assert($matches, $message);
 }
 
@@ -417,6 +421,7 @@ sub assert_does_not_match
 {
     my ($self, $pattern, $string, @rest) = @_;
     my $message;
+    my $multiline;
 
     die "pattern is not a regular expression"
         if lc ref($pattern) ne 'regexp';
@@ -425,7 +430,7 @@ sub assert_does_not_match
         $message = join('', @rest);
     }
     elsif ($string =~ m/\n./) {
-        xlog "assert_does_not_match: multiline string:\n" . $string;
+        $multiline = 1;
         $message = "pattern /$pattern/ unexpectedly matched [multiline string]";
     }
     else {
@@ -433,6 +438,9 @@ sub assert_does_not_match
     }
 
     my $matches = $string =~ m/$pattern/;
+    if ($matches && $multiline) {
+        xlog "assert_does_not_match: multiline string:\n" . $string;
+    }
     $self->assert(!$matches, $message);
 }
 
