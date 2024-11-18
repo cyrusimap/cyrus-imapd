@@ -6692,7 +6692,12 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
         if (!rock->mailbox || strcmp(mailbox_name(rock->mailbox), mbentry->name)) {
             mailbox_close(&rock->mailbox);
             r = mailbox_open_irl(mbentry->name, &rock->mailbox);
-            if (r) goto done;
+            if (r) {
+                free(match->ical_uid);
+                free(match->utcstart);
+                free(match);
+                goto done;
+            }
         }
         match->ical = caldav_record_to_ical(rock->mailbox, &jscal->cdata, req->userid, NULL);
         if (!match->ical) {
