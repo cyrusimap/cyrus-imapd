@@ -857,15 +857,15 @@ static void cmd_starttls(void)
 
     /* if error */
     if (result==-1) {
-        prot_printf(sync_out, "NO Starttls failed\r\n");
-        syslog(LOG_NOTICE, "STARTTLS failed: %s", sync_clienthost);
-        return;
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", sync_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, sync_saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */

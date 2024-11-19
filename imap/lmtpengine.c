@@ -1463,15 +1463,16 @@ void lmtpmode(struct lmtp_func *func,
 
                 /* if error */
                 if (r==-1) {
-                    prot_printf(pout, "454 4.3.3 STARTTLS failed\r\n");
-                    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", cd.clienthost);
-                    continue;
+                    syslog(LOG_NOTICE,
+                           "TLS negotiation failed: %s", cd.clienthost);
+                    func->shutdown(EX_PROTOCOL);
                 }
 
                 /* tell SASL about the negotiated layer */
                 r = saslprops_set_tls(&saslprops, cd.conn);
                 if (r != SASL_OK) {
-                    fatal("saslprops_set_tls() failed: STARTTLS", EX_TEMPFAIL);
+                    syslog(LOG_NOTICE, "saslprops_set_tls() failed: STARTTLS");
+                    func->shutdown(EX_TEMPFAIL);
                 }
                 if (buf_len(&saslprops.authid)) {
                     cd.authenticated = TLSCERT_AUTHED;

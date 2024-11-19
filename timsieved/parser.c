@@ -93,6 +93,7 @@ static SSL *tls_conn = NULL;
 extern int sieved_timeout;
 
 /* from elsewhere */
+void shut_down(int code) __attribute__ ((noreturn));
 void fatal(const char *s, int code) __attribute__((noreturn));
 extern int sieved_logfd;
 extern struct backend *backend;
@@ -965,16 +966,16 @@ static int cmd_starttls(struct protstream *sieved_out,
 
     /* if error */
     if (result==-1) {
-        prot_printf(sieved_out, "NO \"Starttls failed\"\r\n");
-        syslog(LOG_NOTICE, "STARTTLS failed: %s", sieved_clienthost);
-        return TIMSIEVE_FAIL;
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", sieved_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(saslprops, sieved_saslconn);
 
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
