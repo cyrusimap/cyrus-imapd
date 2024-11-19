@@ -6693,9 +6693,9 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
             mailbox_close(&rock->mailbox);
             r = mailbox_open_irl(mbentry->name, &rock->mailbox);
             if (r) {
-                free(match->ical_uid);
-                free(match->utcstart);
-                free(match);
+                syslog(LOG_ERR, "%s: can't open mailbox %s",
+                       __func__, mbentry->name);
+                eventquery_match_free(&match);
                 goto done;
             }
         }
