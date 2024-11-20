@@ -374,7 +374,7 @@ sub test_connection_setup_failure_imapd
             $store->get_client();
         };
         my $error = $@;
-        $self->assert_matches(qr{Connection closed by other end}, $error);
+        $self->assert_not_null($error);
     }
 
     # wait a bit for the prometheus report to refresh
@@ -412,11 +412,10 @@ sub test_connection_setup_failure_imapd
     # should not have had any successful connections to imaps
     $self->assert(not exists $total->{$service_label});
 
-    # should be $badconn shutdowns counted (imapd treats this condition
-    # as an ok shutdown, not an error)
+    # should be $badconns error shutdowns counted
     $self->assert_num_equals(
         $badconns,
-        $shutdown->{"$service_label,status=\"ok\""}->{value}
+        $shutdown->{"$service_label,status=\"error\""}->{value}
     );
 
     # XXX someday: expect to find $badconns setup failures counted

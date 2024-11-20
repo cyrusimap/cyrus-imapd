@@ -9349,14 +9349,8 @@ static void cmd_starttls(char *tag, int imaps)
 
     /* if error */
     if (result==-1) {
-        if (imaps == 0) {
-            prot_printf(imapd_out, "%s NO Starttls negotiation failed\r\n", tag);
-            syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s", imapd_clienthost);
-            return;
-        } else {
-            syslog(LOG_NOTICE, "imaps TLS negotiation failed: %s", imapd_clienthost);
-            shut_down(0);
-        }
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", imapd_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
@@ -9364,11 +9358,7 @@ static void cmd_starttls(char *tag, int imaps)
 
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (imaps == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
-        } else {
-            shut_down(0);
-        }
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
