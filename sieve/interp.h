@@ -207,7 +207,7 @@ enum sieve_capa_flag {
     /* Fcc - RFC 8580 */
     SIEVE_CAPA_FCC          = 1LL<<45,
 
-    /* Mailboxid - draft-ietf-extra-sieve-mailboxid */
+    /* Mailboxid - RFC 9042 */
     SIEVE_CAPA_MAILBOXID    = 1LL<<46,
 
     /* Log - vnd.cyrus.log */
@@ -223,7 +223,7 @@ enum sieve_capa_flag {
     /* Snooze - draft-ietf-extra-sieve-snooze */
     SIEVE_CAPA_SNOOZE       = 1LL<<49,
 
-    /* ProcessCalendar - draft-ietf-extra-processimip */
+    /* ProcessCalendar - RFC 9671 */
     SIEVE_CAPA_PROCESSCAL   = 1LL<<50,
 
     /* vnd.cyrus.implicit_keep_target */

@@ -365,7 +365,7 @@ ws              [ \t]+
     /* fcc - RFC 8580 */
 <INITIAL>:fcc                  return FCC;
 
-    /* mailboxid - draft-ietf-extra-sieve-mailboxid */
+    /* mailboxid - RFC 9042 */
 <INITIAL>mailboxidexists       return MAILBOXIDEXISTS;
 <INITIAL>:mailboxid            return MAILBOXID;
 
@@ -386,7 +386,7 @@ ws              [ \t]+
     /* vnd.cyrus.jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
 
-    /* processcalendar - draft-ietf-extra-processimip   */
+    /* processcalendar - RFC 9671 */
 <INITIAL>processcalendar       return PROCESSCAL;
 <INITIAL>:allowpublic          return ALLOWPUBLIC;
 <INITIAL>:invitesonly          return INVITESONLY;  /* Fastmail-specific */

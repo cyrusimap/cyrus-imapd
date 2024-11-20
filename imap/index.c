@@ -4313,7 +4313,7 @@ static void index_printflags(struct index_state *state,
     unsigned id;
 
     if (client_capa & CAPA_UIDONLY) {
-        /* draft-ietf-extra-imap-uidonly, Section 3.3:
+        /* RFC 9586, Section 3.3:
          * UID msg-att is redundant.
          * It is replaced by the uniqueid at the beginning
          * of the UIDFETCH response.
@@ -4334,7 +4334,7 @@ static void index_printflags(struct index_state *state,
         id = msgno;
     }
     if (client_capa & CAPA_CONDSTORE) {
-        /* RFC 7162, Section 3.1 & draft-ietf-extra-imap-uidonly, Section 3.7:
+        /* RFC 7162, Section 3.1 & RFC 9586, Section 3.7:
          * MUST send MODSEQ to all untagged [UID]FETCH unsolicited responses */
         tell_flags |= TELL_MODSEQ;
     }

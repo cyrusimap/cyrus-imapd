@@ -6021,7 +6021,7 @@ static const struct comp_kind n_comp_kinds[] = {
     { VCARD_N_ADDITIONAL,      "given2",        0,          0                  },
     { VCARD_N_PREFIX,          "title",         0,          0                  },
     { VCARD_N_SUFFIX,          "credential",    FIELD_EXT,  VCARD_N_GENERATION },
-    /* Extended fields (draft-ietf-calext-vcard-jscontact-extensions) */
+    /* Extended fields (RFC 9554) */
     { VCARD_N_SECONDARY,       "surname2",      FIELD_BWD,  VCARD_N_FAMILY     },
     { VCARD_N_GENERATION,      "generation",    FIELD_BWD,  VCARD_N_SUFFIX     },
     { 0,                       NULL,            0,          0                  }
@@ -6036,7 +6036,7 @@ static const struct comp_kind adr_comp_kinds[] = {
     { VCARD_ADR_REGION,        "region",        0,          0                  },
     { VCARD_ADR_POSTAL_CODE,   "postcode",      0,          0                  },
     { VCARD_ADR_COUNTRY,       "country",       0,          0                  },
-    /* Extended fields (draft-ietf-calext-vcard-jscontact-extensions) */
+    /* Extended fields (RFC 9554) */
     { VCARD_ADR_ROOM,          "room",          FIELD_BWD,  VCARD_ADR_EXTENDED },
     { VCARD_ADR_APARTMENT,     "apartment",     FIELD_BWD,  VCARD_ADR_EXTENDED },
     { VCARD_ADR_FLOOR,         "floor",         FIELD_BWD,  VCARD_ADR_EXTENDED },

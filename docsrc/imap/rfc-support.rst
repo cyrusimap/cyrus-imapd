@@ -840,6 +840,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The JSON Meta Application Protocol (JMAP)
 
+    .. NOTE::
+
+        The PushSubscription object and its methods are not yet supported.
+
 :rfc:`8621`
 
     The JSON Meta Application Protocol (JMAP) for Mail
@@ -896,6 +900,18 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     JSON Meta Application Protocol (JMAP) for Quotas
 
+:rfc:`9553`
+
+    JSContact: A JSON Representation of Contact Data
+
+:rfc:`9554`
+
+    vCard Format Extensions for JSContact
+
+:rfc:`9555`
+
+    JSContact: Converting from and to vCard
+
 :rfc:`9585`
 
     IMAP4 Response Code for Command Progress Notifications
@@ -912,16 +928,16 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The JSON Meta Application Protocol (JMAP) for Sieve Scripts
 
+:rfc:`9671`
+
+    Sieve Email Filtering: Extension for Processing Calendar Attachments
+
 IETF RFC Drafts
 ===============
 
 draft-ietf-extra-jmapaccess
 
    The JMAPACCESS Extension for IMAP
-
-draft-ietf-extra-processimip
-
-    Sieve Email Filtering: Extension for Processing Calendar Attachments
 
 draft-ietf-extra-sieve-snooze
 

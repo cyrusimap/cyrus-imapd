@@ -1910,7 +1910,7 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     return ver;
 }
 
-/* Convert VTIMEZONE into tzif format (draft-murchison-tzdist-tzif) */
+/* Convert VTIMEZONE into tzif format (RFC 9636) */
 static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                                          icaltimetype *startp, icaltimetype *endp)
 {
