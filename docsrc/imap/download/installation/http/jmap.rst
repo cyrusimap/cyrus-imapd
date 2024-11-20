@@ -66,20 +66,21 @@ Implemented
 -----------
 
 * The core protocol (:rfc:`8620`), except for PushSubscription
-* JMAP Mail (:rfc:`8621`)
+* JMAP for Mail (:rfc:`8621`)
+* JMAP Blob Management Extension (:rfc:`9404`)
+* JMAP for Quotas (:rfc:`9425`)
+* JMAP for Sieve Scripts (:rfc:`9661`)
 * A JMAP Subprotocol for WebSocket (:rfc:`8887`)
 
 In development
 --------------
 
-* JMAP Calendars (:draft:`draft-ietf-jmap-calendars`)
+* JMAP for Calendars (:draft:`draft-ietf-jmap-calendars`)
+* JMAP for Contacts (:rfc:`draft-ietf-jmap-contacts`)
 * JMAP Sharing (:draft:`draft-ietf-jmap-sharing`)
-* JMAP Blobs (:rfc:`9404`)
-* JMAP Sieve (:draft:`draft-ietf-jmap-sieve`)
-* JMAP Contacts (:draft:`draft-ietf-jmap-jscontact`)
-* JMAP MDN (:rfc:`9007`)
+* Handling MDN with JMAP (:rfc:`9007`)
 
 Not implemented
 ---------------
-* JMAP Tasks (:draft:`draft-ietf-jmap-tasks`)
-* JMAP SMIME (:rfc:`9219`)
+* JMAP for Tasks (:draft:`draft-ietf-jmap-tasks`)
+* JMAP SMIME Signature Verification Extensions(:rfc:`9219`)

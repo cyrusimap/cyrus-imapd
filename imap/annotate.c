@@ -3696,7 +3696,7 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
     strarray_add(valid, "\\Archive");
     strarray_add(valid, "\\Drafts");
     /* strarray_add(valid, "\\Flagged"); -- we don't support virtual folders right now */
-    strarray_add(valid, "\\Important"); // draft-ietf-specialuse-important
+    strarray_add(valid, "\\Important"); // RFC 8457
     strarray_add(valid, "\\Junk");
     strarray_add(valid, "\\Sent");
     strarray_add(valid, "\\Trash");

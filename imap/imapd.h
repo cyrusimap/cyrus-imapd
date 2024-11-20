@@ -395,7 +395,7 @@ enum {
     LIST_RET_SPECIALUSE =       (1<<2),  /* RFC 6154 */
     LIST_RET_STATUS =           (1<<3),  /* RFC 5819 */
     LIST_RET_MYRIGHTS =         (1<<4),  /* RFC 8440 */
-    LIST_RET_METADATA =         (1<<5)   /* draft-murchison-imap-list-metadata */
+    LIST_RET_METADATA =         (1<<5)   /* RFC 9590 */
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
@@ -434,7 +434,7 @@ enum {
     CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
     CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
     CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
-    CAPA_UIDONLY =      (1<<3),  /* draft-ietf-extra-imap-uidonly */
+    CAPA_UIDONLY =      (1<<3),  /* RFC 9586 */
     CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
 };
 

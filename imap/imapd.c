@@ -423,12 +423,12 @@ static struct capa_struct base_capabilities[] = {
     { "IDLE",                  CAPA_POSTAUTH|CAPA_STATE,         /* RFC 2177 */
       { .statep = &imapd_idle_enabled }                       },
     { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
-    { "INPROGRESS",            CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-inprogress */
+    { "INPROGRESS",            CAPA_POSTAUTH,           { 0 } }, /* RFC 9585 */
     { "JMAPACCESS",            CAPA_POSTAUTH|CAPA_STATE,         /* draft-ietf-extra-jmapaccess */
       { .statep = &imapd_jmapaccess_enabled }                 },
     { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */
-    { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-list-metadata */
+    { "LIST-METADATA",         CAPA_POSTAUTH,           { 0 } }, /* RFC 9590 */
     { "LIST-MYRIGHTS",         CAPA_POSTAUTH,           { 0 } }, /* RFC 8440 */
     { "LIST-STATUS",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5819 */
     { "LITERAL+",              CAPA_OMNIAUTH|CAPA_REVCONFIG,     /* RFC 7888 */
@@ -472,7 +472,7 @@ static struct capa_struct base_capabilities[] = {
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
-    { "UIDONLY",               CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-extra-imap-uidonly */
+    { "UIDONLY",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9586 */
     { "UIDPLUS",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4315 */
     { "UNAUTHENTICATE",        CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8437 */
       { .statep = &imapd_userisadmin }                        },

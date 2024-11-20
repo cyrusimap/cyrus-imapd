@@ -326,7 +326,7 @@ extern void sieverestart(FILE *f);
 /* fcc - RFC 8580 */
 %token FCC
 
-/* mailboxid - draft-ietf-extra-sieve-mailboxid */
+/* mailboxid - RFC 9042 */
 %token MAILBOXID MAILBOXIDEXISTS
 
 /* snooze - draft-ietf-extra-sieve-snooze */
@@ -341,7 +341,7 @@ extern void sieverestart(FILE *f);
 /* vnd.cyrus.jmapquery */
 %token JMAPQUERY
 
-/* processcalendar - draft-ietf-extra-processimip */
+/* processcalendar - RFC 9671 */
 %token PROCESSCAL ALLOWPUBLIC INVITESONLY UPDATESONLY DELETECANCELLED
 %token ORGANIZERS CALENDARID OUTCOME REASON
 %type <cl> caltags

@@ -540,7 +540,7 @@ static const struct sieve_capa_t {
     /* Fcc - RFC 8580 */
     { "fcc", SIEVE_CAPA_FCC },
 
-    /* Mailboxid - draft-ietf-extra-sieve-mailboxid */
+    /* Mailboxid - RFC 9042 */
     { "mailboxid", SIEVE_CAPA_MAILBOXID },
 
     /* Log - vnd.cyrus.log */
@@ -556,7 +556,7 @@ static const struct sieve_capa_t {
     { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },        // legacy capability
     { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
 
-    /* ProcessCalendar - draft-ietf-extra-processimip */
+    /* ProcessCalendar - RFC 9671 */
     { "processcalendar", SIEVE_CAPA_PROCESSCAL },
     { "vnd.cyrus.imip",  SIEVE_CAPA_PROCESSCAL },     // legacy capability
 
