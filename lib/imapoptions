@@ -372,7 +372,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    file or mailboxes list entry?  It's noisy so disabled by default, but
    can be very useful for tracking down what happened if things look strange. */
 
-{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5", "mboxgroups"), "UNRELEASED" }
+{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb5", "mboxgroups"), "UNRELEASED" }
 /* The authorization mechanism to use. */
 
 { "autocreateinboxfolders", NULL, STRING, "2.5.0", "2.5.0", "autocreate_inbox_folders" }
