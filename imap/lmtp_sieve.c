@@ -1237,7 +1237,13 @@ static int sieve_snooze(void *ac,
     }
 
     char *intname = mboxlist_find_specialuse("\\Snoozed", userid);
-    if (!intname) goto done;
+    if (!intname) {
+        xsyslog(LOG_NOTICE,
+                "Sieve: can't find \\Snoozed mailbox",
+                "sessionid=<%s> userid=<%s> msgid=<%s>",
+                session_id(), userid, md->id);
+        goto done;
+    }
 
     /* Determine until time */
     time_t now = time(NULL), until;
@@ -1253,7 +1259,14 @@ static int sieve_snooze(void *ac,
         tz = icaltimezone_get_builtin_timezone_from_tzid(sn->tzid);
 
         if (!tz) tz = icaltimezone_get_builtin_timezone(sn->tzid);
-        if (!tz) goto done;
+        if (!tz) {
+            xsyslog(LOG_NOTICE,
+                    "Sieve: unknown time zone",
+                    "sessionid=<%s> userid=<%s> msgid=<%s> tzid=<%s>",
+                    session_id(), userid, md->id, sn->tzid);
+            ret = IMAP_NOTFOUND;
+            goto done;
+        }
 
         tt = icaltime_current_time_with_zone(tz);
         wday = icaltime_day_of_week(tt) - 1;
@@ -1389,6 +1402,12 @@ static int sieve_snooze(void *ac,
                           &imap4flags, annots, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader, ACTION_SNOOZE,
                           intname, md->date, until, quotaoverride, 0);
+    if (ret) {
+        xsyslog(LOG_NOTICE,
+                "Sieve: delivery to \\Snoozed mailbox failed",
+                "sessionid=<%s> userid=<%s> msgid=<%s> err=<%s>",
+                session_id(), userid, md->id, error_message(ret));
+    }
 
     strarray_free(imapflags);
     freeentryatts(annots);
