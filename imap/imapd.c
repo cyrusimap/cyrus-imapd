@@ -534,7 +534,7 @@ static int parse_fetch_args(const char *tag, const char *cmd,
 static void fetchargs_fini (struct fetchargs *fa);
 static void cmd_fetch(char *tag, char *sequence, int usinguid);
 static void cmd_store(char *tag, char *sequence, int usinguid);
-static void cmd_search(char *tag, char *cmd);
+static void cmd_search(const char *tag, const char *cmd);
 static void cmd_sort(char *tag, int usinguid);
 static void cmd_thread(char *tag, int usinguid);
 static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
@@ -6117,7 +6117,7 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static void cmd_search(char *tag, char *cmd)
+static void cmd_search(const char *tag, const char *cmd)
 {
     int c;
     struct searchargs *searchargs;
@@ -6128,6 +6128,8 @@ static void cmd_search(char *tag, char *cmd)
 
     if (backend_current) {
         /* remote mailbox */
+        if (cmd[0] == 'U') cmd = "UID Search";
+
         prot_printf(backend_current->out, "%s %s ", tag, cmd);
         if (!pipe_command(backend_current, 65536)) {
             pipe_including_tag(backend_current, tag, 0);
