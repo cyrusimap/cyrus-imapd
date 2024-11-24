@@ -386,6 +386,64 @@ sub assert_num_lt
                   "$actual is not less-than $expected");
 }
 
+# override assert_matches from Test::Unit:Assert, whose default failure
+# message is very hard to read in common cases
+sub assert_matches
+{
+    my ($self, $pattern, $string, @rest) = @_;
+    my $message;
+    my $multiline;
+
+    die "pattern is not a regular expression"
+        if lc ref($pattern) ne 'regexp';
+
+    if (@rest) {
+        $message = join('', @rest);
+    }
+    elsif ($string =~ m/\n./) {
+        $multiline = 1;
+        $message = "pattern /$pattern/ did not match [multiline string]";
+    }
+    else {
+        $message = "pattern /$pattern/ did not match string \"$string\"";
+    }
+
+    my $matches = $string =~ m/$pattern/;
+    if (!$matches && $multiline) {
+        xlog "assert_matches: multiline string:\n" . $string;
+    }
+    $self->assert($matches, $message);
+}
+
+# override assert_does_not_match from Test::Unit:Assert, whose default failure
+# message is very hard to read in common cases
+sub assert_does_not_match
+{
+    my ($self, $pattern, $string, @rest) = @_;
+    my $message;
+    my $multiline;
+
+    die "pattern is not a regular expression"
+        if lc ref($pattern) ne 'regexp';
+
+    if (@rest) {
+        $message = join('', @rest);
+    }
+    elsif ($string =~ m/\n./) {
+        $multiline = 1;
+        $message = "pattern /$pattern/ unexpectedly matched [multiline string]";
+    }
+    else {
+        $message = "pattern /$pattern/ unexpectedly matched string \"$string\"";
+    }
+
+    my $matches = $string =~ m/$pattern/;
+    if ($matches && $multiline) {
+        xlog "assert_does_not_match: multiline string:\n" . $string;
+    }
+    $self->assert(!$matches, $message);
+}
+
 sub assert_date_matches
 {
     my ($self, $expected, $actual, $tolerance) = @_;
