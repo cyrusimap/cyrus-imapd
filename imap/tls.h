@@ -53,17 +53,18 @@ int tls_enabled(void);
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"
 
+#define MAX_TLS_ALPN_ID (15)
+struct tls_alpn_t {
+    char id[MAX_TLS_ALPN_ID + 1];
+    unsigned (*check_availability)(void *rock);
+    void *rock;
+};
+
 #ifdef HAVE_SSL
 
 #include <openssl/ssl.h>
 
 #include "global.h" /* for saslprops_t */
-
-struct tls_alpn_t {
-    const char *id;
-    unsigned (*check_availabilty)(void *rock);
-    void *rock;
-};
 
 /* init tls */
 int tls_init_serverengine(const char *ident,
@@ -77,11 +78,19 @@ int tls_init_clientengine(int verifydepth,
 
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
-                        struct saslprops_t *saslprops, SSL **ret);
+                        struct saslprops_t *saslprops,
+                        const struct tls_alpn_t *alpn_map,
+                        SSL **ret);
 
 int tls_start_clienttls(int readfd, int writefd,
-                        int *layerbits, char **authid, SSL **ret,
-                        SSL_SESSION **sess);
+                        int *layerbits, char **authid,
+                        const struct tls_alpn_t *alpn_map,
+                        SSL **ret, SSL_SESSION **sess);
+
+/* query which (if any) ALPN protocol was chosen
+ * caller must free the returned string
+ */
+char *tls_get_alpn_protocol(const SSL *conn);
 
 /* reset tls */
 int tls_reset_servertls(SSL **conn);
@@ -94,12 +103,6 @@ int tls_prune_sessions(void);
 
 /* fill string buffer with info about tls connection */
 int tls_get_info(SSL *conn, char *buf, size_t len);
-
-/* Select an application protocol from the client list in order of preference */
-int tls_alpn_select(SSL *ssl,
-                    const unsigned char **out, unsigned char *outlen,
-                    const unsigned char *in, unsigned int inlen,
-                    void *server_list);
 
 #endif /* HAVE_SSL */
 

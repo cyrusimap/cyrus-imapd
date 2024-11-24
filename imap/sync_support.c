@@ -107,8 +107,13 @@ static struct sync_client_state rightnow_sync_cs;
 static char *imap_sasl_parsesuccess(char *str, const char **status);
 static void imap_postcapability(struct backend *s);
 
+static const struct tls_alpn_t imap_alpn_map[] = {
+    { "imap", NULL, NULL },
+    { "",     NULL, NULL },
+};
+
 struct protocol_t imap_csync_protocol =
-{ "imap", "imap", TYPE_STD,
+{ "imap", "imap", imap_alpn_map, TYPE_STD,
   { { { 1, NULL },
       { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
         CAPAF_MANY_PER_LINE,
@@ -136,7 +141,7 @@ struct protocol_t imap_csync_protocol =
 };
 
 struct protocol_t csync_protocol =
-{ "csync", "csync", TYPE_STD,
+{ "csync", "csync", NULL, TYPE_STD,
   { { { 1, "* OK" },
       { NULL, NULL, "* OK", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,

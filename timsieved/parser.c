@@ -124,8 +124,13 @@ static char *sieve_parsesuccess(char *str, const char **status)
     return success;
 }
 
+static const struct tls_alpn_t sieve_alpn_map[] = {
+    { "managesieve", NULL, NULL },
+    { "",            NULL, NULL },
+};
+
 static struct protocol_t sieve_protocol =
-{ "sieve", SIEVE_SERVICE_NAME, TYPE_STD,
+{ "sieve", SIEVE_SERVICE_NAME, sieve_alpn_map, TYPE_STD,
   { { { 1, "OK" },
       { "CAPABILITY", NULL, "OK", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_QUOTE_WORDS,
@@ -917,11 +922,6 @@ reset:
 }
 
 #ifdef HAVE_SSL
-static const struct tls_alpn_t sieve_alpn_map[] = {
-    { "managesieve", NULL, NULL },
-    { NULL,          NULL, NULL }
-};
-
 static int cmd_starttls(struct protstream *sieved_out,
                         struct protstream *sieved_in,
                         struct saslprops_t *saslprops)
@@ -949,11 +949,6 @@ static int cmd_starttls(struct protstream *sieved_out,
         return TIMSIEVE_FAIL;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) sieve_alpn_map);
-#endif
-
     prot_printf(sieved_out, "OK \"Begin TLS negotiation now\"\r\n");
     /* must flush our buffers before starting tls */
     prot_flush(sieved_out);
@@ -962,6 +957,7 @@ static int cmd_starttls(struct protstream *sieved_out,
                                1, /* write */
                                sieved_timeout,
                                saslprops,
+                               sieve_alpn_map,
                                &tls_conn);
 
     /* if error */

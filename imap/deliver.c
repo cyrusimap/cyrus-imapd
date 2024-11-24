@@ -83,7 +83,7 @@ static struct protstream *deliver_out, *deliver_in;
 static const char *sockaddr;
 
 static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp", TYPE_STD,
+{ "lmtp", "lmtp", NULL, TYPE_STD,
   { { { 0, "220 " },
       { "LHLO", "deliver", "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,

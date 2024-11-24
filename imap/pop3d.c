@@ -164,8 +164,13 @@ static struct namespace popd_namespace;
 /* PROXY stuff */
 static struct backend *backend = NULL;
 
+static const struct tls_alpn_t pop3_alpn_map[] = {
+    { "pop3", NULL, NULL },
+    { "",     NULL, NULL }
+};
+
 static struct protocol_t pop3_protocol =
-{ "pop3", "pop", TYPE_STD,
+{ "pop3", "pop", pop3_alpn_map, TYPE_STD,
   { { { 0, "+OK " },
       { "CAPA", NULL, ".", NULL,
         CAPAF_ONE_PER_LINE,
@@ -1150,11 +1155,6 @@ void uidl_msg(uint32_t msgno)
 }
 
 #ifdef HAVE_SSL
-static const struct tls_alpn_t pop3_alpn_map[] = {
-    { "pop3", NULL, NULL },
-    { NULL,   NULL, NULL }
-};
-
 static void cmd_stls(int pop3s)
 {
     int result;
@@ -1185,11 +1185,6 @@ static void cmd_stls(int pop3s)
         return;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) pop3_alpn_map);
-#endif
-
     if (pop3s == 0)
     {
         prot_printf(popd_out, "+OK %s\r\n", "Begin TLS negotiation now");
@@ -1208,6 +1203,7 @@ static void cmd_stls(int pop3s)
                                1, /* write */
                                pop3s ? 180 : popd_timeout,
                                &saslprops,
+                               pop3_alpn_map,
                                &tls_conn);
 
     /* put the iplocalport and ipremoteport back */

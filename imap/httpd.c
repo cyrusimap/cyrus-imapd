@@ -1045,14 +1045,22 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on https port so we should do
        TLS negotiation immediately */
+    int do_h2 = 0;
     if (https == 1) {
         starttls(&http_conn, 180 /* timeout */);
+
+        /* Check negotiated protocol */
+        char *alpn = tls_get_alpn_protocol(http_conn.tls_ctx);
+        do_h2 = !strcmpsafe(alpn, "h2");
+        free(alpn);
     }
-    else if (http2_preface(&http_conn)) {
+    else {
         /* HTTP/2 client connection preface */
-        if (http2_start_session(NULL, &http_conn) != 0)
-            fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+        do_h2 = http2_preface(&http_conn);
     }
+
+    if (do_h2 && http2_start_session(NULL, &http_conn) != 0)
+        fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
 
     /* Setup the signal handler for keepalive heartbeat */
     httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE, 's');
@@ -1246,16 +1254,16 @@ EXPORTED void fatal(const char* s, int code)
 
 #ifdef HAVE_SSL
 
-static unsigned h2_is_available(void *http_conn)
+static unsigned h2_is_available(void *rock __attribute__((unused)))
 {
-    return (http2_enabled && http2_start_session(NULL, http_conn) == 0);
+    return http2_enabled;
 }
 
 static const struct tls_alpn_t http_alpn_map[] = {
-    { "h2",       &h2_is_available, &http_conn },
+    { "h2",       &h2_is_available, NULL },
     { "http/1.1", NULL,             NULL },
     { "http/1.0", NULL,             NULL },
-    { NULL,       NULL,             NULL }
+    { "",         NULL,             NULL },
 };
 
 static void _reset_tls(struct http_connection *conn)
@@ -1294,11 +1302,6 @@ static int tls_init(int client_auth, struct buf *serverinfo)
         return HTTP_SERVER_ERROR;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) http_alpn_map);
-#endif
-
     httpd_tls_enabled = 1;
 
     return 0;
@@ -1307,7 +1310,9 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 static void starttls(struct http_connection *conn, int timeout)
 {
     int result = tls_start_servertls(conn->pin->fd, conn->pout->fd,
-                                     timeout, &saslprops, (SSL **) &conn->tls_ctx);
+                                     timeout, &saslprops,
+                                     http_alpn_map,
+                                     (SSL **) &conn->tls_ctx);
 
     /* if error */
     if (result == -1) {

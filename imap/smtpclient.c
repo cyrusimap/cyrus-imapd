@@ -105,7 +105,7 @@ enum {
 static const char *smtpclient_ehlo_hostname = NULL;
 
 static struct protocol_t smtp_protocol =
-{ "smtp", "smtp", TYPE_STD,
+{ "smtp", "smtp", NULL, TYPE_STD,
   { { { 0, "220 " },
         // EHLO hostname will be set in smtpclient_open().
       { "EHLO", NULL, "250 ", NULL,

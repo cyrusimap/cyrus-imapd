@@ -1993,6 +1993,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
                                C->pout->fd, /* write */
                                180, /* 3 minutes */
                                &C->saslprops,
+                               NULL, /* no ALPN id for mupdate */
                                &C->tlsconn);
 
     /* if error */

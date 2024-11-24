@@ -536,6 +536,7 @@ EXPORTED int backend_starttls(  struct backend *s,
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &s->ext_ssf;
     r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
+                            s->prot ? s->prot->alpn_map : NULL,
                             &s->tlsconn, &s->tlssess);
     if (r == -1) return -1;
 

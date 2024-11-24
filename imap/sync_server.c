@@ -853,6 +853,7 @@ static void cmd_starttls(void)
                                1, /* write */
                                180, /* 3 minutes */
                                &saslprops,
+                               NULL, /* no ALPN id for csync */
                                &tls_conn);
 
     /* if error */

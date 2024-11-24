@@ -9279,7 +9279,7 @@ out:
 #ifdef HAVE_SSL
 static const struct tls_alpn_t imap_alpn_map[] = {
     { "imap", NULL, NULL },
-    { NULL,   NULL, NULL }
+    { "",     NULL, NULL }
 };
 
 /*
@@ -9320,11 +9320,6 @@ static void cmd_starttls(char *tag, int imaps)
         return;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) imap_alpn_map);
-#endif
-
     if (imaps == 0)
     {
         prot_printf(imapd_out, "%s OK Begin TLS negotiation now\r\n", tag);
@@ -9339,11 +9334,12 @@ static void cmd_starttls(char *tag, int imaps)
     localip = buf_release(&saslprops.iplocalport);
     remoteip = buf_release(&saslprops.ipremoteport);
 
-    result=tls_start_servertls(0, /* read */
-                               1, /* write */
-                               imaps ? 180 : imapd_timeout,
-                               &saslprops,
-                               &tls_conn);
+    result = tls_start_servertls(0, /* read */
+                                 1, /* write */
+                                 imaps ? 180 : imapd_timeout,
+                                 &saslprops,
+                                 imap_alpn_map,
+                                 &tls_conn);
 
     /* put the iplocalport and ipremoteport back */
     if (localip)  buf_initm(&saslprops.iplocalport, localip, strlen(localip));

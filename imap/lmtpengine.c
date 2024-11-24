@@ -1459,6 +1459,7 @@ void lmtpmode(struct lmtp_func *func,
                                       1, /* write */
                                       360, /* 6 minutes */
                                       &saslprops,
+                                      NULL, /* no ALPN id for lmtp */
                                       &(cd.tls_conn));
 
                 /* if error */

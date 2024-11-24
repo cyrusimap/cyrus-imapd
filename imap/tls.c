@@ -119,6 +119,7 @@
 
 /* Application-specific. */
 #include "assert.h"
+#include "hash.h"
 #include "nonblock.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -716,6 +717,78 @@ static int tls_rand_init(void)
 #endif
 }
 
+static char *alpn_to_string(const struct tls_alpn_t *alpn_map)
+{
+    const struct tls_alpn_t *alpn;
+    struct buf buf = BUF_INITIALIZER;
+    const char *sep = "";
+
+    for (alpn = alpn_map; alpn && alpn->id[0]; alpn++) {
+        if (!alpn->check_availability || alpn->check_availability(alpn->rock)) {
+            buf_printf(&buf, "%s%s", sep, alpn->id);
+            sep = ", ";
+        }
+    }
+
+    return buf_releasenull(&buf);
+}
+
+/* Select an application protocol from the client list in order of preference */
+static int alpn_select_cb(SSL *ssl __attribute__((unused)),
+                          const unsigned char **out, unsigned char *outlen,
+                          const unsigned char *in, unsigned int inlen,
+                          void *server_list)
+{
+    hash_table client_protos = HASH_TABLE_INITIALIZER;
+    struct tls_alpn_t *alpn;
+    int r = SSL_TLSEXT_ERR_ALERT_FATAL;
+
+    /* keys are protocols as cstrings, values are where we saw it */
+    construct_hash_table(&client_protos, 10, 1);
+
+    for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
+        char proto[MAX_TLS_ALPN_ID + 1] = "";
+        unsigned len = in[0];
+
+        if (len <= MAX_TLS_ALPN_ID) {
+            memcpy(proto, &in[1], len);
+            hash_insert(proto, (void *) &in[0], &client_protos);
+        }
+    }
+
+    for (alpn = (struct tls_alpn_t *) server_list; alpn->id[0]; alpn++) {
+        const unsigned char *found;
+
+        if ((found = hash_lookup(alpn->id, &client_protos))
+            && (!alpn->check_availability
+                || alpn->check_availability(alpn->rock)))
+        {
+            *out = &found[1];
+            *outlen = found[0];
+            r = SSL_TLSEXT_ERR_OK;
+            goto done;
+        }
+    }
+
+done:
+    if (r != SSL_TLSEXT_ERR_OK) {
+        strarray_t *client_wanted = hash_keys(&client_protos);
+        char *print_client = strarray_join(client_wanted, ", ");
+        char *print_server = alpn_to_string(server_list);
+
+        xsyslog(LOG_NOTICE, "ALPN failed",
+                            "client_protos=<%s> server_protos=<%s>",
+                            print_client, print_server);
+
+        free(print_client);
+        free(print_server);
+        strarray_free(client_wanted);
+    }
+
+    free_hash_table(&client_protos, NULL);
+    return r;
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -1128,7 +1201,9 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
   * on success.
   */
 EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
-                                 struct saslprops_t *saslprops, SSL **ret)
+                                 struct saslprops_t *saslprops,
+                                 const struct tls_alpn_t *alpn_map,
+                                 SSL **ret)
 {
     int     sts;
     unsigned int n;
@@ -1150,6 +1225,13 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
         syslog(LOG_DEBUG, "setting up TLS connection");
 
     saslprops_reset(saslprops);
+
+#ifdef HAVE_TLS_ALPN
+    if (alpn_map && alpn_map->id[0])
+        SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
+    else
+        SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
+#endif
 
     tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {
@@ -1367,6 +1449,25 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     return r;
 }
 
+/* query which (if any) ALPN protocol was chosen
+ * caller must free the returned string
+ */
+EXPORTED char *tls_get_alpn_protocol(const SSL *conn)
+{
+    char *proto = NULL;
+
+#ifdef HAVE_TLS_ALPN
+    const unsigned char *data = NULL;
+    unsigned int len = 0;
+
+    SSL_get0_alpn_selected(conn, &data, &len);
+    if (data && len)
+        proto = xstrndup((const char *) data, len);
+#endif
+
+    return proto;
+}
+
 EXPORTED int tls_reset_servertls(SSL **conn)
 {
     int r = 0;
@@ -1530,6 +1631,30 @@ EXPORTED int tls_get_info(SSL *conn, char *buf, size_t len)
     return (strlen(buf));
 }
 
+/* takes a cyrus alpn map, mallocs and constructs an openssl one in
+ * protos, which caller must free when done
+ */
+static void alpn_get_protos(const struct tls_alpn_t *alpn_map,
+                            unsigned char **pprotos,
+                            unsigned int *pprotos_len)
+{
+    struct buf protos = BUF_INITIALIZER;
+    const struct tls_alpn_t *alpn;
+
+    for (alpn = alpn_map; alpn && alpn->id[0]; alpn++) {
+        if (!alpn->check_availability || alpn->check_availability(alpn->rock)) {
+            size_t len = strlen(alpn->id);
+            assert(len > 0 && len <= MAX_TLS_ALPN_ID);
+            buf_putc(&protos, len);
+            buf_appendcstr(&protos, alpn->id);
+        }
+    }
+
+    assert(buf_len(&protos) <= UINT_MAX);
+    *pprotos_len = buf_len(&protos);
+    *pprotos = (unsigned char *) buf_releasenull(&protos);
+}
+
 // I am the client
 HIDDEN int tls_init_clientengine(int verifydepth,
                           const char *var_server_cert,
@@ -1619,8 +1744,9 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 }
 
 HIDDEN int tls_start_clienttls(int readfd, int writefd,
-                        int *layerbits, char **authid, SSL **ret,
-                        SSL_SESSION **sess)
+                               int *layerbits, char **authid,
+                               const struct tls_alpn_t *alpn_map,
+                               SSL **ret, SSL_SESSION **sess)
 {
     const SSL_CIPHER *cipher;
     X509   *peer;
@@ -1637,6 +1763,24 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
         syslog(LOG_DEBUG, "setting up TLS connection");
 
     if (authid) *authid = NULL;
+
+#ifdef HAVE_TLS_ALPN
+    if (alpn_map && alpn_map->id[0]) {
+        unsigned char *protos = NULL;
+        unsigned int protos_len;
+
+        alpn_get_protos(alpn_map, &protos, &protos_len);
+
+        if (SSL_CTX_set_alpn_protos(c_ctx, protos, protos_len)) {
+            syslog(LOG_ERR, "TLS client engine: failed to set ALPN protos");
+        }
+
+        free(protos);
+    }
+    else {
+        SSL_CTX_set_alpn_protos(c_ctx, NULL, 0);
+    }
+#endif
 
     tls_conn = (SSL *) SSL_new(c_ctx);
     if (tls_conn == NULL) {
@@ -1749,41 +1893,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     *ret = tls_conn;
 
     return r;
-}
-
-/* Select an application protocol from the client list in order of preference */
-EXPORTED int tls_alpn_select(SSL *ssl __attribute__((unused)),
-                             const unsigned char **out, unsigned char *outlen,
-                             const unsigned char *in, unsigned int inlen,
-                             void *server_list)
-{
-    strarray_t ids = STRARRAY_INITIALIZER;
-
-    for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
-        struct tls_alpn_t *alpn;
-
-        for (alpn = (struct tls_alpn_t *) server_list; alpn->id; alpn++) {
-            if ((in[0] == strlen(alpn->id)) &&
-                memcmp(alpn->id, in + 1, in[0]) == 0 &&
-                (!alpn->check_availabilty || alpn->check_availabilty(alpn->rock))) {
-
-                strarray_fini(&ids);
-
-                *out = in + 1;
-                *outlen = in[0];
-                return SSL_TLSEXT_ERR_OK;
-            }
-        }
-
-        strarray_appendm(&ids, xstrndup((const char *) in + 1, in[0]));
-    }
-
-    char *proto = strarray_join(&ids, ", ");
-    xsyslog(LOG_NOTICE, "ALPN failed", "proto=<%s>", proto);
-    free(proto);
-    strarray_fini(&ids);
-
-    return SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
 #else

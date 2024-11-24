@@ -795,22 +795,23 @@ sub _setup_http_service_objects
 {
     my ($self) = @_;
 
-    # nothing to do if no http service
-    require Mail::JMAPTalk;
-    require Net::CalDAVTalk;
-    require Net::CardDAVTalk;
-
+    # nothing to do if no http or https service
     my $service = $self->{instance}->get_service("http");
+    $service ||= $self->{instance}->get_service("https");
     return if !$service;
+
+    my %common_args = (
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => ($service->is_ssl() ? 'https' : 'http'),
+    );
 
     if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
         require Net::CardDAVTalk;
         $self->{carddav} = Net::CardDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
+            %common_args,
             url => '/',
             expandurl => 1,
         );
@@ -818,26 +819,18 @@ sub _setup_http_service_objects
     if ($self->{instance}->{config}->get_bit('httpmodules', 'caldav')) {
         require Net::CalDAVTalk;
         $self->{caldav} = Net::CalDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
+            %common_args,
             url => '/',
             expandurl => 1,
         );
         $self->{caldav}->UpdateAddressSet("Test User",
-                                            "cassandane\@example.com");
+                                          "cassandane\@example.com");
     }
     if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
         require Mail::JMAPTalk;
         $ENV{DEBUGJMAP} = 1;
         $self->{jmap} = Mail::JMAPTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
+            %common_args,
             url => '/jmap/',
         );
     }

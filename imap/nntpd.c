@@ -261,8 +261,13 @@ static char *nntp_parsesuccess(char *str, const char **status)
     return success;
 }
 
+static const struct tls_alpn_t nntp_alpn_map[] = {
+    { "nntp", NULL, NULL },
+    { "",     NULL, NULL }
+};
+
 static struct protocol_t nntp_protocol =
-{ "nntp", "nntp", TYPE_STD,
+{ "nntp", "nntp", nntp_alpn_map, TYPE_STD,
   { { { 0, "20" },
       { "CAPABILITIES", NULL, ".", NULL,
         CAPAF_ONE_PER_LINE,
@@ -3999,11 +4004,6 @@ static void cmd_post(char *msgid, int mode)
 }
 
 #ifdef HAVE_SSL
-static const struct tls_alpn_t nntp_alpn_map[] = {
-    { "nntp", NULL, NULL },
-    { NULL,   NULL, NULL }
-};
-
 static void cmd_starttls(int nntps)
 {
     int result;
@@ -4037,11 +4037,6 @@ static void cmd_starttls(int nntps)
         return;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) nntp_alpn_map);
-#endif
-
     if (nntps == 0)
     {
         prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
@@ -4053,6 +4048,7 @@ static void cmd_starttls(int nntps)
                                1, /* write */
                                nntps ? 180 : nntp_timeout,
                                &saslprops,
+                               nntp_alpn_map,
                                &tls_conn);
 
     /* if error */
