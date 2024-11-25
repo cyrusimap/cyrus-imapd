@@ -78,8 +78,8 @@
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
  * changes to backend_version() in backend.c.
  */
-#define MAILBOX_MINOR_VERSION   19
-#define MAILBOX_CACHE_MINOR_VERSION 13
+#define MAILBOX_MINOR_VERSION       (19) /* read comment above! */
+#define MAILBOX_CACHE_MINOR_VERSION (13)
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
