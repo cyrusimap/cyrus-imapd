@@ -63,7 +63,9 @@
 #include "mailbox.h"
 #include "map.h"
 #include "xmalloc.h"
-#include "imap_err.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 static void usage(void)
 {
