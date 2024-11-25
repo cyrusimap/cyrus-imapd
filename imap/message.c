@@ -5061,9 +5061,11 @@ EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
 
 EXPORTED int message_get_deliveredto(message_t *m, struct buf *buf)
 {
-    int r = message_get_field(m, "X-Original-Delivered-To", MESSAGE_RAW, buf);
+    int r = message_get_field(m, "X-Original-Delivered-To",
+                              MESSAGE_RAW|MESSAGE_FIRST, buf);
     if (!r && buf_len(buf) == 0) {
-        r = message_get_field(m, "X-Delivered-To", MESSAGE_RAW, buf);
+        r = message_get_field(m, "X-Delivered-To",
+                              MESSAGE_RAW|MESSAGE_FIRST, buf);
     }
     return r;
 }
@@ -5325,7 +5327,7 @@ EXPORTED int message_get_fname(message_t *m, const char **fnamep)
 }
 
 /* XXX despite the name, this actually gives back ALL the values of the
- * XXX named header, unless flags contains MESSAGE_LAST
+ * XXX named header, unless flags contains MESSAGE_FIRST or MESSAGE_LAST
  */
 static void extract_one(struct buf *buf,
                         const char *name,
@@ -5336,15 +5338,21 @@ static void extract_one(struct buf *buf,
 {
     char *p = NULL;
 
-    if (raw->len && (flags & MESSAGE_LAST)) {
-        /* Skip all but the last header value */
+    if (raw->len && (flags & (MESSAGE_FIRST|MESSAGE_LAST))) {
+        /* Isolate the first (top-most) or last (bottom-most) header value */
         const char *q = raw->s;
         const char *last = raw->s;
         while ((p = strnchr(q, '\r', raw->s + raw->len - q))) {
             if (p >= raw->s + raw->len - 2)
                 break;
-            if (*(p+1) == '\n' && *(p+2) && !isspace(*(p+2)))
+            if (*(p+1) == '\n' && *(p+2) && !isspace(*(p+2))) {
+                if (flags & MESSAGE_FIRST) {
+                    buf_truncate(raw, p + 2 - raw->s);
+                    break;
+                }
+
                 last = p + 2;
+            }
             q = p + 1;
         }
         if (last != raw->s)
