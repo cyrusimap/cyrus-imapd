@@ -268,9 +268,16 @@ enum message_format
     MESSAGE_TRIM=               (1<<8),
 
     /* This flag can be OR'd into the format argument to request that
-     * only the last field of the given name is returned.  Normally only
-     * the first is returned, which is faster. */
+     * only the last field of the given name is returned
+     * (by parsing the header block top to bottom).
+     * Normally ALL the values of the named header are returned. */
     MESSAGE_LAST=               (1<<9),
+
+    /* This flag can be OR'd into the format argument to request that
+     * only the first field of the given name is returned
+     * (by parsing the header block top to bottom).
+     * Normally ALL the values of the named header are returned. */
+    MESSAGE_FIRST=              (1<<10),
 };
 
 enum message_indexflags
