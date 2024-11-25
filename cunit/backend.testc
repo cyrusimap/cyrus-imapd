@@ -204,7 +204,7 @@ struct backend_version_data {
 static void backend_version_common(void)
 {
     size_t i, n_tests;
-    struct backend_version_data data[] = {
+    const struct backend_version_data data[] = {
         /* 2.3 changed index versions a few times */
         { "Cyrus IMAP v2.3.0", 7 },
         { "Cyrus IMAP v2.3.1", 7 },
@@ -388,7 +388,7 @@ static void backend_version_common(void)
         { "Cyrus IMAP 3.8.8", 17 },
         { "Cyrus IMAP 3.8.9", 17 },
 
-        /* 3.9 supported 17..?? but we don't bother detecting that microscopically */
+        /* 3.9 supported 17..19 but we don't detect that microscopically */
         { "Cyrus IMAP 3.9.0", 17 },
         { "Cyrus IMAP 3.9.1", 17 },
         { "Cyrus IMAP 3.9.2", 17 },
@@ -400,6 +400,18 @@ static void backend_version_common(void)
         { "Cyrus IMAP 3.9.8", 17 },
         { "Cyrus IMAP 3.9.9", 17 },
 
+        /* 3.10 had just one */
+        { "Cyrus IMAP 3.10.0", 19 },
+        { "Cyrus IMAP 3.10.1", 19 },
+        { "Cyrus IMAP 3.10.2", 19 },
+        { "Cyrus IMAP 3.10.3", 19 },
+        { "Cyrus IMAP 3.10.4", 19 },
+        { "Cyrus IMAP 3.10.5", 19 },
+        { "Cyrus IMAP 3.10.6", 19 },
+        { "Cyrus IMAP 3.10.7", 19 },
+        { "Cyrus IMAP 3.10.8", 19 },
+        { "Cyrus IMAP 3.10.9", 19 },
+
         /* better test some pre-release version strings too, would be bad if
          * the parser chokes on them!
          */
@@ -407,6 +419,8 @@ static void backend_version_common(void)
         { "Cyrus IMAP 3.2.0-beta4", 16 },
         { "Cyrus IMAP 3.6.0-beta2", 17 },
         { "Cyrus IMAP 3.7.0-alpha0-1155-gf86d12f44a", 17 },
+        { "Cyrus IMAP 3.9.0-alpha0-223-g903b25195", 17 },
+        { "Cyrus IMAP 3.11.0-alpha0", 19 },
     };
 
     /* XXX there's something wrong with the toy test server that results in
