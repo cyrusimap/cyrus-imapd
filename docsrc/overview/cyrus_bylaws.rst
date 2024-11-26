@@ -23,10 +23,10 @@ The Cyrus Core Developers Group is responsible for the technical guidance of the
 The members of the Core Developers group are:
 
 * Wes Craig
-* Ken Murchison
-* Matt Selsky
 * Bron Gondwana
 * Alexey Melnikov
+* Ken Murchison
+* Matt Selsky
 
 III. The Release Engineer
 -------------------------
