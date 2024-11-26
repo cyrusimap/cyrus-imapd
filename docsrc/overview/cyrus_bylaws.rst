@@ -11,12 +11,9 @@ The Cyrus Governance Board is responsible for the overall direction of the Cyrus
 
 The Board is comprised of:
 
-* Wes Craig
-* Jeffrey Eaton
-* Ken Murchison
-* Benn Oshrin
-* Dave McMurtrie
 * Bron Gondwana
+* Ken Murchison
+* Ricardo Signes
 
 II. The Cyrus Core Developers Group
 -----------------------------------
