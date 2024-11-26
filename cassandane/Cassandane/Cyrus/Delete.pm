@@ -910,4 +910,49 @@ sub test_no_delete_with_children
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 }
 
+sub test_delete_nonexistent
+    :DelayedDelete :AltNamespace :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my @nonexistent = (
+        'Foo',
+        'Foo/bar',
+        'Foo/bar/baz',
+    );
+
+    my $talk = $self->{store}->get_client();
+
+    # try deleting some folders that never existed
+    foreach my $folder (@nonexistent) {
+        $talk->delete($folder);
+
+        $self->assert_str_not_equals(
+            'bye',
+            $talk->get_last_completion_response());
+    }
+
+    # create them
+    foreach my $folder (@nonexistent) {
+        $talk->create($folder);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    # delete them (in reverse order) while they do exist
+    foreach my $folder (reverse @nonexistent) {
+        $talk->delete($folder);
+
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    # try deleting some folders that used to exist
+    foreach my $folder (@nonexistent) {
+        $talk->delete($folder);
+
+        $self->assert_str_not_equals(
+            'bye',
+            $talk->get_last_completion_response());
+    }
+}
+
 1;
