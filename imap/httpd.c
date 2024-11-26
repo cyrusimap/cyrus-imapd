@@ -1263,6 +1263,7 @@ static const struct tls_alpn_t http_alpn_map[] = {
     { "h2",       &h2_is_available, NULL },
     { "http/1.1", NULL,             NULL },
     { "http/1.0", NULL,             NULL },
+    { "http/0.9", NULL,             NULL },
     { "",         NULL,             NULL },
 };
 
@@ -1391,7 +1392,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 
 
 static const char* const http_versions[] = {
-    "HTTP/1.0", HTTP_VERSION, HTTP2_VERSION
+    "HTTP/0.9", "HTTP/1.0", HTTP_VERSION, HTTP2_VERSION
 };
 
 static const size_t n_http_versions =
@@ -1429,8 +1430,21 @@ static int parse_request_line(struct transaction_t *txn)
         txn->error.desc = buf_cstring(&txn->buf);
     }
     else if (!(req_line->ver = tok_next(&tok))) {
-        ret = HTTP_BAD_REQUEST;
-        txn->error.desc = "Missing HTTP-version in request-line";
+        /* Check for a HTTP/0.9 request: GET SP request-target CRLF <EOF>
+           (see https://www.w3.org/Protocols/HTTP/AsImplemented.html) */
+        prot_NONBLOCK(httpd_in);
+        if (!strcmp(req_line->meth, "GET") && prot_peek(httpd_in) == EOF) {
+            txn->flags.ver = VER_0_9;
+
+            /* Fake an empty header block */
+            prot_ungetc('\n', httpd_in);
+            prot_ungetc('\r', httpd_in);
+        }
+        else {
+            ret = HTTP_BAD_REQUEST;
+            txn->error.desc = "Missing HTTP-version in request-line";
+        }
+        prot_BLOCK(httpd_in);
     }
     else if (tok_next(&tok)) {
         ret = HTTP_BAD_REQUEST;
@@ -1541,7 +1555,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
 
     if (txn->flags.redirect) return 0;
 
-    /* Check for mandatory Host header (HTTP/1.1+ only) */
+    /* Check for Host header (mandatory for HTTP/1.1) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Host"))) {
         if (hdr[1]) {
             txn->error.desc = "Too many Host headers";
@@ -1554,15 +1568,18 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     }
     else {
         switch (txn->flags.ver) {
+        case VER_1_1:
+            txn->error.desc = "Missing Host header";
+            return HTTP_BAD_REQUEST;
+
         case VER_2:
-            /* HTTP/2 - check for :authority pseudo header */
+            /* Check for :authority pseudo header */
             if (spool_getheader(txn->req_hdrs, ":authority")) break;
 
-            /* Fall through and create an :authority pseudo header */
             GCC_FALLTHROUGH
 
-        case VER_1_0:
-            /* HTTP/1.0 - create an :authority pseudo header from URI */
+        default:
+            /* Create an :authority pseudo header from URI */
             if (txn->req_uri->server) {
                 buf_setcstr(&txn->buf, txn->req_uri->server);
                 if (txn->req_uri->port)
@@ -1573,11 +1590,6 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             spool_cache_header(xstrdup(":authority"),
                                buf_release(&txn->buf), txn->req_hdrs);
             break;
-
-        case VER_1_1:
-        default:
-            txn->error.desc = "Missing Host header";
-            return HTTP_BAD_REQUEST;
         }
     }
 
@@ -2436,7 +2448,7 @@ static int parse_connection(struct transaction_t *txn)
     const char **conn = spool_getheader(txn->req_hdrs, "Connection");
     int i;
 
-    if (!httpd_timeout || txn->flags.ver == VER_1_0) {
+    if (!httpd_timeout || txn->flags.ver < VER_1_1) {
         /* Non-persistent connection by default */
         txn->flags.conn |= CONN_CLOSE;
     }
@@ -2457,7 +2469,7 @@ static int parse_connection(struct transaction_t *txn)
             switch (txn->flags.ver) {
             case VER_1_1:
                 if (!(txn->flags.conn & CONN_CLOSE)) {
-                    /* Only persistent connections can uitilize these options */
+                    /* Only persistent connections can utilize these options */
                     if (!strcasecmp(token, "upgrade")) {
                         /* Client wants to upgrade */
                         parse_upgrade(txn);
@@ -3607,6 +3619,14 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
     syslog(LOG_DEBUG, "write_body(code = %ld, flags.te = %#x, len = %u)",
            code, txn->flags.te, len);
+
+    if (txn->flags.ver == VER_0_9) {
+        /* A HTTP/0.9 response has no status-line or headers
+           (see https://www.w3.org/Protocols/HTTP/AsImplemented.html) */
+        prot_write(txn->conn->pout, buf, len);
+        log_request(code, txn);
+        return;
+    }
 
     if (txn->flags.te & TE_CHUNKED) last_chunk = !(code || len);
     else {
@@ -4810,7 +4830,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
     int ret;
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
-    if ((txn->flags.ver != VER_2) || !ws_enabled || !cparams) {
+    if ((txn->flags.ver < VER_2) || !ws_enabled || !cparams) {
         return HTTP_NOT_IMPLEMENTED;
     }
 
