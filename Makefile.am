@@ -1623,8 +1623,18 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 
 lib/imapopts.h: lib/imapopts.c
 
+if ENABLE_RELEASE_CHECKS
+    CFG2HDR_FORBID_UNRELEASED="--forbid-unreleased"
+else
+    CFG2HDR_FORBID_UNRELEASED=
+endif
+
 lib/imapopts.c: lib/imapoptions tools/config2header
-	$(AM_V_GEN)$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
+	$(AM_V_GEN)$(top_srcdir)/tools/config2header \
+	    CC="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
+	    $(top_builddir)/lib/imapopts.c \
+	    $(top_builddir)/lib/imapopts.h \
+	    < $(top_srcdir)/lib/imapoptions
 
 imap_cvt_xlist_specialuse_SOURCES = imap/mutex_fake.c imap/cvt_xlist_specialuse.c
 imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
