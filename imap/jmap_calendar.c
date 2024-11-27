@@ -7585,6 +7585,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     struct jmap_caleventid *eid = jmap_caleventid_decode(src_id);
     struct caldav_data *cdata = NULL;
     r = caldav_lookup_uid(src_db, eid->ical_uid, &cdata);
+    jmap_caleventid_free(&eid);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s", src_id, error_message(r));
         goto done;
@@ -7594,7 +7595,6 @@ static void _calendarevent_copy(jmap_req_t *req,
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
-    jmap_caleventid_free(&eid);
 
     /* Check privacy */
     if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
