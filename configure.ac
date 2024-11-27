@@ -112,6 +112,16 @@ AC_SUBST(GCOV_CXXFLAGS)
 AC_SUBST(GCOV_LDFLAGS)
 AC_SUBST(GCOV_LIBS)
 
+dnl enable stricter checks for preparing releases (disabled by default)
+AC_ARG_ENABLE([release-checks],
+              [AS_HELP_STRING([--enable-release-checks],
+                              [enable release checks])],
+              [],
+              [enable_release_checks=no]
+)
+AM_CONDITIONAL([ENABLE_RELEASE_CHECKS],
+               [test "x$enable_release_checks" = "xyes"])
+
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
@@ -2602,4 +2612,5 @@ Build info:
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
    xxd:                $XXD
+   release checks:     $enable_release_checks
 "
