@@ -2363,6 +2363,11 @@ AS_IF(
 )
 
 dnl documentation generation (sphinx, perl2rst, gitpython)
+AC_DEFUN([WARN_DOCDEPS], [
+    AM_COND_IF([ENABLE_RELEASE_CHECKS],
+               [AC_MSG_ERROR([No $1, cannot regenerate docs])],
+               [AC_MSG_WARN([No $1, won't be able to regenerate docs])])
+])
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
             AS_HELP_STRING([--with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
@@ -2373,12 +2378,12 @@ AS_CASE([$with_sphinx_build],
         [no],   [SPHINX_BUILD=''],
         [*],    [AC_PATH_PROG(SPHINX_BUILD, sphinx-build, [], [$with_sphinx_build])])
 AS_IF([test -z "$SPHINX_BUILD"],
-      [AC_MSG_WARN([No sphinx-build, won't be able to regenerate docs])])
+      [WARN_DOCDEPS([sphinx-build])])
 AC_SUBST([SPHINX_BUILD])
 
 AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                      [have_ppvr=yes],
-                     [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])
+                     [WARN_DOCDEPS([Pod::POM::View::Restructured])
                        have_ppvr=no
                      ])
 
@@ -2390,8 +2395,7 @@ AS_CASE([$HAVE_PYMOD_GIT],
     AX_PYTHON_MODULE([git], [], [python3])
     AS_CASE([$HAVE_PYMOD_GIT],
             [yes],  [],
-            [*],    [
-         AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+            [*],    [WARN_DOCDEPS([GitPython])])
 ])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
