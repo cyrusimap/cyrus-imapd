@@ -52,6 +52,8 @@ my @enum_values = ();
 
 my %vars;
 my %known_vars = map { $_ => 1 } qw(CC);
+my %opts;
+my %known_opts = map { $_ => 1 } qw(forbid-unreleased);
 
 # process command line arguments
 while (scalar @ARGV) {
@@ -60,6 +62,12 @@ while (scalar @ARGV) {
         die "unrecognised variable $1" if not exists $known_vars{$1};
         die "missing value for $1" if not defined $2;
         $vars{$1} = $2;
+        shift @ARGV;
+    }
+    elsif ($ARGV[0] =~ m{^--([-\w]+)(?:=(.*))?$}) {
+        # --option or --option=value
+        die "unrecognised option $ARGV[0]" if not exists $known_opts{$1};
+        $opts{$1} = $2 // 1;
         shift @ARGV;
     }
     else {
@@ -158,13 +166,24 @@ sub parse_last_modified
             # "UNRELEASED" strings in lib/imapoptions with the version
             # number that is about to be released.
             # If you're not building a release, ignore it. :)
+            my $prefix;
+
+            if ($opts{'forbid-unreleased'}) {
+                $prefix = -t STDERR ? "\033[31;1merror:\033[0m" : 'error:';
+            }
+            else {
+                $prefix = -t STDERR ? "\033[33;1mwarning:\033[0m" : 'warning:',
+            }
+
             my $w = join q{ },
                     "$0:",
-                    -t STDERR ? "\033[33;1mwarning:\033[0m" : 'warning:',
+                    $prefix,
                     'build contains UNRELEASED config options';
             print STDERR "$w\n";
 
             $__warned_unreleased ++;
+
+            exit 1 if $opts{'forbid-unreleased'};
         }
 
         return "0xFFFFFFFF";
