@@ -121,6 +121,13 @@ AC_ARG_ENABLE([release-checks],
 )
 AM_CONDITIONAL([ENABLE_RELEASE_CHECKS],
                [test "x$enable_release_checks" = "xyes"])
+AM_COND_IF([ENABLE_RELEASE_CHECKS], [
+    AC_MSG_CHECKING([for changes files hanging around])
+    extra_changes_files=$(ls $srcdir/changes/next | grep -cv '0000-TEMPLATE')
+    AC_MSG_RESULT([$extra_changes_files])
+    AS_IF([test $extra_changes_files -ne 0],
+          [AC_MSG_ERROR([found changes files hanging around])])
+])
 
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
