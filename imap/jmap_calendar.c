@@ -4025,15 +4025,12 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
             struct jmap_caleventid *eid = jmap_caleventid_decode(id);
-            if (eid) {
-                ptrarray_t *eventids = hash_lookup(eid->ical_uid, &eventids_by_uid);
-                if (!eventids) {
-                    eventids = ptrarray_new();
-                    hash_insert(eid->ical_uid, eventids, &eventids_by_uid);
-                }
-                ptrarray_append(eventids, eid);
+            ptrarray_t *eventids = hash_lookup(eid->ical_uid, &eventids_by_uid);
+            if (!eventids) {
+                eventids = ptrarray_new();
+                hash_insert(eid->ical_uid, eventids, &eventids_by_uid);
             }
-            else json_array_append(get.not_found, jval);
+            ptrarray_append(eventids, eid);
         }
 
         /* Lookup events by UID */
