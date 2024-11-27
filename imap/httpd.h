@@ -418,9 +418,10 @@ typedef void (*txn_done_t)(struct transaction_t *txn);
 
 /* HTTP version flags */
 enum {
-    VER_1_0 =           0,
-    VER_1_1 =           1,
-    VER_2 =             2
+    VER_0_9 =           0,
+    VER_1_0 =           1,
+    VER_1_1 =           2,
+    VER_2 =             3,
 };
 
 /* Connection token flags */
