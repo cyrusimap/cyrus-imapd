@@ -342,19 +342,96 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
 
 
 #ifdef ENABLE_REGEX
+#include <errno.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <syslog.h>
+
+#include "libconfig.h"
+
+static sigjmp_buf jmpbuf;
+static volatile sig_atomic_t canjump;
+
+static void sig_alrm(int sig __attribute__((unused)))
+{
+    if (!canjump) return;  // unexpected signal, ignore
+
+    canjump = 0;
+    siglongjmp(jmpbuf, 1); // jump back to octet_regex()
+}
+
 static int octet_regex(const char *text, size_t tlen, const char *pat,
                        strarray_t *match_vars,
                        void *rock __attribute__((unused)))
 {
+    static struct sigaction action;
+    static double timeout;
+    struct itimerval it = { 0 };
+    struct timeval start, end;
     regmatch_t pm[MAX_MATCH_VARS+1];
     size_t nmatch = 0;
-    int r;
+    static int r;
 
     if (match_vars) {
         strarray_fini(match_vars);
         nmatch = MAX_MATCH_VARS+1;
         memset(&pm, 0, sizeof(pm));
     }
+
+    if (!action.sa_handler) {
+        const char *timeoutstr = config_getstring(IMAPOPT_SIEVE_REGEX_TIMEOUT);
+
+        if (timeoutstr) timeout = atof(timeoutstr);
+        if (timeout < 0) timeout = 0;
+
+        /*
+         * signal() on some platforms may set SA_RESTART by default.
+         *
+         * Therefore, we use sigaction().
+         */
+        action.sa_handler = &sig_alrm;
+        sigemptyset(&action.sa_mask);
+#ifdef SA_INTERRUPT
+        action.sa_flags |= SA_INTERRUPT;
+#endif
+
+        if (timeout > 0 && sigaction(SIGALRM, &action, NULL) < 0) {
+            syslog(LOG_NOTICE, "sigaction(SIGALRM) failed for Sieve :regex: %m");
+            errno = 0;
+
+            /* Return an error so script execution fails */
+            r = SIEVE_INTERNAL_ERROR;
+        }
+    }
+
+    if (r < 0) return r;
+
+    if (sigsetjmp(jmpbuf, 1)) {
+        /*
+         * regexec() timed out, return an error so script execution fails
+         *
+         * Since we have no way of freeing any resources used by
+         * regexec(), we will terminate lmtpd.
+         *
+         * The signal will not be caught until after deliver()
+         * completes and we return to the top of the lmtpmode() loop,
+         * so we will continue delivery to the remaining recipients.
+         */
+        gettimeofday(&end, 0);
+        syslog(LOG_INFO, "Sieve :regex execution timed out after %fs",
+               timesub(&start, &end));
+        raise(SIGTERM);
+        return SIEVE_REGEX_TIMEOUT;
+    }
+
+    /* siglongjmp() is now OK */
+    canjump = 1;
+
+    /* enable timeout */
+    it.it_value.tv_usec = (long) (timeout * 1000000);
+    setitimer(ITIMER_REAL, &it, NULL);
+
+    gettimeofday(&start, 0);
 
 #ifdef REG_STARTEND
     /* pcre, BSD, some linuxes support this handy trick */
@@ -373,6 +450,15 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
     free(buf);
 #endif /* REG_STARTEND */
 
+    /* disable timeout */
+    canjump = it.it_value.tv_usec = 0;
+    setitimer(ITIMER_REAL, &it, NULL);
+
+    /* log run time */
+    gettimeofday(&end, 0);
+    syslog(LOG_INFO, "Sieve :regex run time: %fs",
+           timesub(&start, &end));
+
     if (r) {
         /* populate match variables */
         size_t var_num;
@@ -386,7 +472,7 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
     }
     return r;
 }
-#endif
+#endif /* ENABLE_REGEX */
 
 
 /* --- i;ascii-casemap comparators (RFC 4790, Section 9.2) --- */

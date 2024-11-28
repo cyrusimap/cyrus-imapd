@@ -65,6 +65,9 @@ ec SIEVE_DONE,
 ec SIEVE_SCRIPT_RELOADED,
    "Sieve script was loaded in the past"
 
+ec SIEVE_REGEX_TIMEOUT,
+   "Sieve :regex execution too long"
+
 
 # Parse errors
 
