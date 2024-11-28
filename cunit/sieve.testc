@@ -473,7 +473,7 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
     free(ctx->notify_method);
     ctx->notify_method = xstrdup(nc->method);
     free(ctx->notify_priority);
-    ctx->notify_method = xstrdup(nc->priority);
+    ctx->notify_priority = xstrdup(nc->priority);
 
     /* TODO: test returning SIEVE_FAIL */
     return SIEVE_OK;
