@@ -45,10 +45,12 @@
 
 #include <stdio.h>
 
+#include "arrayu64.h"
+#include "buf.h"
 #include "prot.h"
 #include "mailbox.h"
+#include "imap/message_guid.h"
 #include "strarray.h"
-#include "util.h"
 #include "charset.h"
 
 /* (draft standard) MIME tspecials */
