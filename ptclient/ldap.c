@@ -1341,10 +1341,8 @@ static int ptsmodule_make_authstate_group(
                     ptsm->group_base = vals[0];
                     rc = PTSM_OK;
                 } else if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
-                    char *new_domain = xstrdup(vals[0]);
-                    syslog(LOG_DEBUG, "(groups) Domain %s is now domain %s", domain, new_domain);
-                    rc = ptsmodule_standard_root_dn(new_domain, &ptsm->group_base);
-                    free(new_domain);
+                    syslog(LOG_DEBUG, "(groups) Domain %s is now domain %s", domain, vals[0]);
+                    rc = ptsmodule_standard_root_dn(vals[0], &ptsm->group_base);
                 } else {
                     rc = ptsmodule_standard_root_dn(domain, &ptsm->group_base);
                 }
