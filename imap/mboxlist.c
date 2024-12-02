@@ -378,7 +378,12 @@ static void mboxlist_dbname_to_key(const char *dbname, size_t len,
         char *inbox = mbname_dbname(mbname);
         size_t inboxlen = strlen(inbox);
 
-        if (len >= inboxlen && !strncmp(dbname, inbox, inboxlen)) {
+        if (len >= inboxlen
+            && (len == inboxlen
+                || dbname[inboxlen] == '\0'
+                || dbname[inboxlen] == DB_HIERSEP_CHAR)
+            && !strncmp(dbname, inbox, inboxlen))
+        {
             buf_appendcstr(key, "INBOX");
             dbname += inboxlen;
             len -= inboxlen;
@@ -394,7 +399,13 @@ static void mboxlist_dbname_to_key(const char *dbname, size_t len,
 static void mboxlist_dbname_from_key(const char *key, size_t len,
                                      const char *userid, struct buf *dbname)
 {
-    if (userid && len >= 6 && !strncmp(key+1, "INBOX", 5)) {
+    assert(key[0] == KEY_TYPE_NAME);
+
+    if (userid
+        && len >= 6
+        && (len == 6 || key[6] == '\0' || key[6] == DB_HIERSEP_CHAR)
+        && !strncmp(key+1, "INBOX", 5))
+    {
         mbname_t *mbname = mbname_from_userid(userid);
         char *inbox = mbname_dbname(mbname);
 
