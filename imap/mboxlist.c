@@ -374,6 +374,8 @@ static void mboxlist_dbname_to_key(const char *dbname, size_t len,
     buf_putc(key, KEY_TYPE_NAME);
 
     if (userid) {
+        syslog(LOG_DEBUG, "%s: dbname=<%.*s> len=<" SIZE_T_FMT "> userid=<%s>\n",
+                          __func__, (int) len, dbname, len, userid);
         mbname_t *mbname = mbname_from_userid(userid);
         char *inbox = mbname_dbname(mbname);
         size_t inboxlen = strlen(inbox);
@@ -392,12 +394,18 @@ static void mboxlist_dbname_to_key(const char *dbname, size_t len,
     }
 
     buf_appendmap(key, dbname, len);
+    if (userid)
+        syslog(LOG_DEBUG, "%s: => key=<%s>", __func__, buf_cstring(key));
 }
 
 static void mboxlist_dbname_from_key(const char *key, size_t len,
                                      const char *userid, struct buf *dbname)
 {
     assert(key[0] == KEY_TYPE_NAME);
+
+    if (userid)
+        syslog(LOG_DEBUG, "%s: key=<%.*s> len=<" SIZE_T_FMT "> userid=<%s>",
+                          __func__, (int) len, key, len, userid);
 
     if (userid
         && len >= 6
@@ -409,6 +417,7 @@ static void mboxlist_dbname_from_key(const char *key, size_t len,
 
         buf_setcstr(dbname, inbox);
         buf_appendmap(dbname, key+6, len-6);
+        syslog(LOG_DEBUG, "%s: => dbname=<%s>", __func__, buf_cstring(dbname));
 
         mbname_free(&mbname);
         free(inbox);
@@ -416,6 +425,9 @@ static void mboxlist_dbname_from_key(const char *key, size_t len,
     }
 
     buf_init_ro(dbname, key+1, len-1);
+
+    if (userid)
+        syslog(LOG_DEBUG, "%s: => dbname=<%s>", __func__, buf_cstring(dbname));
 }
 
 static void mboxlist_id_to_key(const char *id, struct buf *key)
