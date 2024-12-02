@@ -16,7 +16,7 @@ Table of Contents
 
    -  `3.1. Setting Up The Machine <#setting-up-the-machine>`__
    -  `3.2 Configure Script <#configure-scripts>`__
-   -  `3.3 Make <#running-the-tests>`__
+   -  `3.3 Make <#make>`__
    -  `3.4 Using Valgrind <#using-valgrind>`__
    -  `3.5 The Tests Are Failing <#the-tests-are-failing>`__
    -  `3.6 Debugging A Test <#debugging-a-test>`__
