@@ -2293,16 +2293,11 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                        have_ppvr=no
                      ])
 
-AX_PYTHON_MODULE([git], [], [python2])
+AX_PYTHON_MODULE([git])
 AS_CASE([$HAVE_PYMOD_GIT],
-        [yes],  [],
-        [*],    [
-    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
-    AX_PYTHON_MODULE([git], [], [python3])
-    AS_CASE([$HAVE_PYMOD_GIT],
-            [yes],  [],
-            [*],    [
-         AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+	[yes],  [],
+	[*],    [
+     AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])
 ])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
