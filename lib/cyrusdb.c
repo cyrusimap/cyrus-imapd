@@ -384,6 +384,12 @@ EXPORTED int cyrusdb_repack(struct db *db)
     return db->backend->repack(db->engine);
 }
 
+EXPORTED int cyrusdb_yield(struct db *db)
+{
+    if (!db->backend->yield) return 0;
+    return db->backend->yield(db->engine);
+}
+
 EXPORTED int cyrusdb_compar(struct db *db,
                    const char *a, int alen,
                    const char *b, int blen)
