@@ -24,9 +24,9 @@ Table of Contents
 -  `4. Adding Your Own Tests <#adding-your-own-tests>`__
 
    -  `4.1 Where To Put Your Tests <#where-to-put-your-tests>`__
-   -  `4.1 Adding A New Suite <#adding-a-new-suite>`__
-   -  `4.2 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
-   -  `4.3 Suite Init And Cleanup <#suite-init-and-cleanup>`__
+   -  `4.2 Adding A New Suite <#adding-a-new-suite>`__
+   -  `4.3 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
+   -  `4.4 Suite Init And Cleanup <#suite-init-and-cleanup>`__
 
 1. Introduction
 ---------------
@@ -272,7 +272,7 @@ most benefit out of unit testing
    and consider writing tests for the existing code.
 
 3.6 Debugging A Test
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
 executable, it's a shell script which sets up some environment variables
@@ -332,7 +332,7 @@ existing tests, the sensible thing to do is to `add a new test to the
 existing suite <#adding-a-test-to-a-suite>`__. Otherwise, you'll need to
 `add a new Suite <#adding-a-new-suite>`__.
 
-4.1 Adding A New Suite
+4.2 Adding A New Suite
 ----------------------
 
 Each Suite is a single C source file in the ``cunit/`` directory. Your
@@ -487,7 +487,7 @@ and this time passing.
     Suite: crc32
       Test: map ... passed
 
-4.2 Adding A Test To A Suite
+4.3 Adding A Test To A Suite
 ----------------------------
 
 Adding a new test to an existing test is easy: all you have to do is add
@@ -570,7 +570,7 @@ Now run ``make check`` and you'll see your test being built and run.
       Test: map ... passed
       Test: iovec ... passed
 
-4.3 Suite Setup And Teardown
+4.4 Suite Setup And Teardown
 ----------------------------
 
 Sometimes the behaviour of the functions under test depend on external
