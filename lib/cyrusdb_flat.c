@@ -861,5 +861,6 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
     NULL,
     NULL,
     NULL,
-    &bsearch_ncompare_mbox
+    &bsearch_ncompare_mbox,
+    NULL
 };
