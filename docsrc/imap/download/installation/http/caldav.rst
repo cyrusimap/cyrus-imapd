@@ -91,6 +91,9 @@ server-side freebusy calculations.  The Time Zone on calendars
 is used to calculate the freebusy state on events with floating
 times.  Public toggles the `lrw9` rights for the `anyone` user.
 
+When the property http://cyrusimap.org/ns/:scheduling-enabled has
+value `F` on a calendar, then the calendar does not perform scheduling.
+
 The Cyrus web GUI for CalDAV Collection Management is disabled by
 default, but can be enabled with the "caldav_allowcalendaradmin" option.
 
