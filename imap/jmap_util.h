@@ -207,7 +207,7 @@ struct jmap_caleventid {
     char *_alloced[2];
 };
 
-extern struct jmap_caleventid *jmap_caleventid_decode(const char *id);
+extern struct jmap_caleventid *jmap_caleventid_decode(const char *id) __attribute__((nonnull, returns_nonnull, warn_unused_result));
 
 extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf);
 
