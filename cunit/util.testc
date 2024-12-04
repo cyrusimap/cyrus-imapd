@@ -1,7 +1,6 @@
 #include "cunit/cyrunit.h"
 #include "util.h"
-
-extern char *__test_xsyslog_ev_fmt(const char *, ...);
+#include <malloc.h>
 
 static void test_xsyslog_ev_fmt(void)
 {
@@ -9,18 +8,18 @@ static void test_xsyslog_ev_fmt(void)
     {
 	char *result;
 
-	result = __test_xsyslog_ev_fmt("event-name", NULL);
+	result = xsyslog_ev_fmt("event-name", NULL);
 	CU_ASSERT_STRING_EQUAL(result, "event=event-name");
 	free(result);
 
-	result = __test_xsyslog_ev_fmt(
+	result = xsyslog_ev_fmt(
 	       "event-name",
 	       "firstname", "%s", "Fred",
 	       NULL);
 	CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred");
 	free(result);
 
-	result = __test_xsyslog_ev_fmt(
+	result = xsyslog_ev_fmt(
 	       "event-name",
 	       "firstname", "%s", "Fred",
 	       "lastname", "%s", "Flintstone",
@@ -29,7 +28,7 @@ static void test_xsyslog_ev_fmt(void)
 	free(result);
 
 	// now with escaping
-	result = __test_xsyslog_ev_fmt(
+	result = xsyslog_ev_fmt(
 	       "announce name",
 	       "name", "%s", "Fred Flintstone",
 	       NULL);
@@ -37,7 +36,7 @@ static void test_xsyslog_ev_fmt(void)
 	free(result);
 
 	// now with various formats
-	result = __test_xsyslog_ev_fmt(
+	result = xsyslog_ev_fmt(
 				"formats",
 				"strlt", "%-10s", "foo",
 				"strrt", "%10s", "bar",
@@ -57,7 +56,7 @@ static void test_xsyslog_ev_fmt(void)
 	free(result);
 
 	// common case: multiline text output
-        result = __test_xsyslog_ev_fmt(
+        result = xsyslog_ev_fmt(
 				"multiline",
 				"text", "%s", "I\r\nlike\r\npie!\r\n",
 				NULL
@@ -69,7 +68,7 @@ static void test_xsyslog_ev_fmt(void)
     // tests for weird __sep__ feature
     {
       char *result;
-      result = __test_xsyslog_ev_fmt(
+      result = xsyslog_ev_fmt(
 			      "sep-test",
 			      "__sep__", "!!!",
 			      "name", "%s", "Fred Flintstone",
@@ -80,6 +79,7 @@ static void test_xsyslog_ev_fmt(void)
     }
 }
 
+extern char *xsyslog_ev_escape_value(const char *);
 extern char *__test_xsyslog_ev_escape_value(const char *);
 
 static void test_xsyslog_ev_escape_value(void)
@@ -104,3 +104,4 @@ static void test_xsyslog_ev_escape_value(void)
 	free(actual);
     }
 }
+
