@@ -46,6 +46,7 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Instance;
+use Cassandane::Mboxname;
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 
@@ -79,8 +80,14 @@ sub shared_subscribe_common
     my ($self, $user1, $user2) = @_;
 
     my $service = $self->{instance}->get_service('imap');
+    my $config = $self->{instance}->{config};
 
-    my @user1_mailboxes = random_words(3);
+    my $user1_mbname = Cassandane::Mboxname->new(config => $config);
+    $user1_mbname->from_username($user1);
+
+    my @user1_mailboxes = map {
+        $user1_mbname->make_child($_);
+    } random_words(3);
     $self->{instance}->create_user($user1,
                                    subdirs => \@user1_mailboxes);
 
@@ -88,11 +95,16 @@ sub shared_subscribe_common
     my $user1_talk = $user1_store->get_client();
 
     foreach my $mb (@user1_mailboxes) {
-        $user1_talk->subscribe($mb);
-        $user1_talk->setacl($mb, $user2, 'lrs');
+        $user1_talk->subscribe($mb->to_external());
+        $user1_talk->setacl($mb->to_external(), $user2, 'lrs');
     }
 
-    my @user2_mailboxes = random_words(3);
+    my $user2_mbname = Cassandane::Mboxname->new(config => $config);
+    $user2_mbname->from_username($user2);
+
+    my @user2_mailboxes = map {
+        $user2_mbname->make_child($_);
+    } random_words(3);
     $self->{instance}->create_user($user2,
                                    subdirs => \@user2_mailboxes);
 
@@ -100,9 +112,11 @@ sub shared_subscribe_common
     my $user2_talk = $user2_store->get_client();
 
     foreach my $mb (@user2_mailboxes) {
-        $user2_talk->subscribe($mb);
-        $user2_talk->setacl($mb, $user1, 'lrs');
+        $user2_talk->subscribe($mb->to_external());
+        $user2_talk->setacl($mb->to_external(), $user1, 'lrs');
     }
+
+    $user1_talk->list('', '*');
 
     xlog("subscribe as $user1 to $user2\'s shared mb's");
     foreach my $mb (@user2_mailboxes) {
@@ -204,6 +218,15 @@ sub test_subscribe_prefix
 
     # one user is a prefix of the other!
     $self->shared_subscribe_common('chris', 'christopher');
+}
+
+sub test_subscribe_vd
+    :UnixHierarchySep :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('firstuser@example.com',
+                                   'seconduser@example.com');
 }
 
 1;
