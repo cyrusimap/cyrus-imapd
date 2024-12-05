@@ -71,6 +71,7 @@ extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
 extern struct cyrusdb_backend cyrusdb_sql;
+extern struct cyrusdb_backend cyrusdb_twom;
 extern struct cyrusdb_backend cyrusdb_twoskip;
 extern struct cyrusdb_backend cyrusdb_zeroskip;
 
@@ -81,6 +82,7 @@ static struct cyrusdb_backend *_backends[] = {
 #if defined USE_CYRUSDB_SQL
     &cyrusdb_sql,
 #endif
+    &cyrusdb_twom,
     &cyrusdb_twoskip,
 #if defined HAVE_ZEROSKIP
     &cyrusdb_zeroskip,
