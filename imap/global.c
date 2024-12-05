@@ -407,6 +407,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getswitch(IMAPOPT_SKIPLIST_ALWAYS_CHECKPOINT));
         libcyrus_config_setswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
                                   config_getswitch(IMAPOPT_ACL_ADMIN_IMPLIES_WRITE));
+        libcyrus_config_setstring(CYRUSOPT_TWOM_CHECKSUM_ENGINE,
+                                  config_getstring(IMAPOPT_TWOM_CHECKSUM_ENGINE));
 
         /* Not until all configuration parameters are set! */
         libcyrus_init();
