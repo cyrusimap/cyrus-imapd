@@ -144,6 +144,7 @@ sub _external_separator_regexp
 }
 
 
+# XXX assumes input is always in the admin namespace
 sub from_external
 {
     my ($self, $s) = @_;
@@ -166,15 +167,49 @@ sub from_external
 
 sub to_external
 {
-    my ($self) = @_;
+    my ($self, $namespace) = @_;
 
-    my @comps;
-    push(@comps, 'user', $self->{userid}) if defined $self->{userid};
-    push(@comps, split(/\./, $self->{box})) if defined $self->{box};
-    my $s = join($self->_external_separator, @comps);
-    $s .= '@' . $self->{domain} if defined $self->{domain};
+    $namespace ||= 'admin';
 
-    return ($s eq '' ? undef : $s);
+    my $altnamespace = $self->{config}->get_bool('altnamespace', 'on');
+
+    if ($namespace eq 'admin' || !$altnamespace) {
+        my @comps;
+
+        push(@comps, 'user', $self->{userid}) if defined $self->{userid};
+        push(@comps, split(/\./, $self->{box})) if defined $self->{box};
+
+        my $s = join($self->_external_separator, @comps);
+        $s .= '@' . $self->{domain} if defined $self->{domain};
+
+        return ($s eq '' ? undef : $s);
+    }
+    else {
+        # altnamespace is active, behaviour depends on whether we're
+        # the mailbox's owner or someone else
+        my @comps;
+
+        if ($namespace ne 'owner') {
+            my $userprefix = $self->{config}->get('userprefix');
+            $userprefix ||= 'Other Users';
+
+            my $userid = $self->{userid}; # XXX what if this is missing?
+            $userid .= '@' . $self->{domain} if defined $self->{domain};
+
+            push @comps, $userprefix, $userid;
+        }
+
+        if ($self->{box}) {
+            push @comps, split(/\./, $self->{box});
+        }
+        else {
+            push @comps, 'INBOX';
+        }
+
+        my $s = join($self->_external_separator, @comps);
+
+        return ($s eq '' ? undef : $s);
+    }
 }
 
 sub from_internal
