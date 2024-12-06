@@ -176,7 +176,7 @@ struct db_header {
     uint32_t flags;
     uint64_t generation;
     uint64_t num_records;
-    uint64_t num_tombstones;
+    size_t dirty_size;
     size_t repack_size;
     size_t current_size;
 };
@@ -218,7 +218,7 @@ enum {
     OFFSET_VERSION = 12,
     OFFSET_GENERATION = 16,
     OFFSET_NUM_RECORDS = 24,
-    OFFSET_NUM_TOMBSTONES = 32,
+    OFFSET_DIRTY_SIZE = 32,
     OFFSET_REPACK_SIZE = 40,
     OFFSET_CURRENT_SIZE = 48,
     OFFSET_FLAGS = 56,
@@ -324,8 +324,8 @@ static int read_header(struct dbengine *db)
     db->header.num_records
         = ntohll(*((uint64_t *)(base + OFFSET_NUM_RECORDS)));
 
-    db->header.num_tombstones
-        = ntohll(*((uint64_t *)(base + OFFSET_NUM_TOMBSTONES)));
+    db->header.dirty_size
+        = ntohll(*((uint64_t *)(base + OFFSET_DIRTY_SIZE)));
 
     db->header.repack_size
         = ntohll(*((uint64_t *)(base + OFFSET_REPACK_SIZE)));
@@ -423,7 +423,7 @@ static int write_header(struct dbengine *db)
     *((uint32_t *)(buf + OFFSET_VERSION)) = htonl(db->header.version);
     *((uint64_t *)(buf + OFFSET_GENERATION)) = htonll(db->header.generation);
     *((uint64_t *)(buf + OFFSET_NUM_RECORDS)) = htonll(db->header.num_records);
-    *((uint64_t *)(buf + OFFSET_NUM_TOMBSTONES)) = htonll(db->header.num_tombstones);
+    *((uint64_t *)(buf + OFFSET_DIRTY_SIZE)) = htonll(db->header.dirty_size);
     *((uint64_t *)(buf + OFFSET_REPACK_SIZE)) = htonll(db->header.repack_size);
     *((uint64_t *)(buf + OFFSET_CURRENT_SIZE)) = htonll(db->header.current_size);
     *((uint32_t *)(buf + OFFSET_FLAGS)) = htonl(db->header.flags);
@@ -1033,16 +1033,9 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 
     if (loc->is_exactmatch) {
         level = loc->record.level;
+        type = val ? REPLACE : DELETE;
         db->header.num_records--;
-        if (val) {
-            type = REPLACE;
-            db->header.num_tombstones++;
-        }
-        else {
-            type = DELETE;
-            db->header.num_tombstones += 2;
-            // both the old record AND this one will go away in a repack
-        }
+        db->header.dirty_size += loc->record.len;
     }
     else {
         assert(val);
@@ -1075,6 +1068,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 
     /* update header to know details of new record */
     if (val) db->header.num_records++;
+    else db->header.dirty_size += newrecord.len;
 
     loc->is_exactmatch = 1;
     loc->end = db->end;
@@ -1399,7 +1393,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
         db->header.version = VERSION;
         db->header.generation = 1;
         db->header.num_records = 0;
-        db->header.num_tombstones = 0;
+        db->header.dirty_size = 0;
         db->header.repack_size = db->end;
         db->header.current_size = db->end;
         db->header.flags = 0;
@@ -1798,6 +1792,7 @@ static int skipwrite(struct dbengine *db,
 struct dcrock {
     char *fname;
     int flags;
+    uint64_t generation;
 };
 
 static void _delayed_checkpoint_free(void *rock)
@@ -1820,13 +1815,13 @@ static void _delayed_checkpoint(void *rock)
         syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
                drock->fname, cyrusdb_strerror(r));
     }
-    else if (db->header.current_size > MINREWRITE
-             && db->header.current_size > 2 * db->header.repack_size) {
+    else if (db->header.generation == drock->generation) {
+        // if it hasn't already happened
         mycheckpoint(db);
     }
     else {
-        syslog(LOG_INFO, "twom: delayed checkpoint not needed for %s (%llu %llu)",
-               drock->fname, (LLU)db->header.repack_size, (LLU)db->header.current_size);
+        syslog(LOG_INFO, "twom: delayed checkpoint already done %s (%llu %llu)",
+               drock->fname, (LLU)db->header.generation, (LLU)drock->generation);
     }
     if (db) myclose(db);
 }
@@ -1889,8 +1884,8 @@ static int mycommit_locked(struct dbengine *db, struct txn *tid)
     if (r) goto done;
 
     if (!db->nocompact 
-           && db->header.current_size > MINREWRITE
-           && db->header.current_size > 2 * db->header.repack_size) {
+           && db->header.dirty_size > MINREWRITE
+           && db->header.current_size < 4 * db->header.dirty_size) {
         // delay the checkpoint until the user isn't waiting
         struct dcrock *drock = xzmalloc(sizeof(struct dcrock));
         drock->fname = xstrdup(FNAME(db));
@@ -2181,11 +2176,11 @@ static int dump(struct dbengine *db, int detail)
     int r = 0;
     int i;
 
-    printf("HEADER: v=%lu fl=%lu num=%llu ts=%llu sz=(%08llX/%08llX)\n",
+    printf("HEADER: v=%lu fl=%lu num=%llu sz=(%08llX/%08llX/%08llX)\n",
           (LU)db->header.version,
           (LU)db->header.flags,
           (LLU)db->header.num_records,
-          (LLU)db->header.num_tombstones,
+          (LLU)db->header.dirty_size,
           (LLU)db->header.current_size,
           (LLU)db->header.repack_size);
 
@@ -2271,7 +2266,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
     struct skiprecord record;
     size_t fwd[MAXLEVEL];
     size_t num_records = 0;
-    size_t num_tombstones = 0;
+    size_t dirty_size = 0;
     int r = 0;
     int cmp;
     int i;
@@ -2308,7 +2303,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
                 return CYRUSDB_INTERNAL;
             }
             ancestor = parent.ancestor;
-            num_tombstones++; // all ancestors are tombstones
+            dirty_size += parent.len;
         }
 
         cmp = bsearch_ncompare_raw(KEY(db, &record), record.keylen,
@@ -2341,7 +2336,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
         prevrecord = record;
 
         // count if record or tombstone
-        if (record.type == DELETE) num_tombstones++;
+        if (record.type == DELETE) dirty_size += record.len;
         else num_records++;
     }
 
@@ -2363,10 +2358,10 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
         return CYRUSDB_INTERNAL;
     }
 
-    if (num_tombstones != db->header.num_tombstones) {
-        xsyslog(LOG_ERR, "DBERROR: twom tombstone count mismatch",
-                         "filename=<%s> num_tombstones=<%llu> expected_tombstones=<%llu>",
-                         FNAME(db), (LLU)num_tombstones, (LLU)db->header.num_tombstones);
+    if (dirty_size != db->header.dirty_size) {
+        xsyslog(LOG_ERR, "DBERROR: twom dirty_size mismatch",
+                         "filename=<%s> dirty_size=<%llu> expected_size=<%llu>",
+                         FNAME(db), (LLU)dirty_size, (LLU)db->header.dirty_size);
         return CYRUSDB_INTERNAL;
     }
 
@@ -2384,7 +2379,7 @@ static int recovery1(struct dbengine *db, int *count)
     struct skiprecord fixrecord;
     size_t nextoffset = 0;
     uint64_t num_records = 0;
-    uint64_t num_tombstones = 0;
+    uint64_t dirty_size = 0;
     int changed = 0;
     int r = 0;
     int cmp;
@@ -2449,7 +2444,7 @@ static int recovery1(struct dbengine *db, int *count)
                 return CYRUSDB_INTERNAL;
             }
             ancestor = parent.ancestor;
-            num_tombstones++; // all ancestors are tombstones
+            dirty_size += parent.len;
         }
 
         cmp = bsearch_ncompare_raw(KEY(db, &record), record.keylen,
@@ -2496,7 +2491,7 @@ static int recovery1(struct dbengine *db, int *count)
         nextoffset = _getloc(db, &record, 0);
         prevrecord = record;
 
-        if (record.type == DELETE) num_tombstones++;
+        if (record.type == DELETE) dirty_size += record.len;
         else num_records++;
     }
 
@@ -2520,7 +2515,7 @@ static int recovery1(struct dbengine *db, int *count)
     /* clear the dirty flag */
     db->header.flags &= ~DIRTY;
     db->header.num_records = num_records;
-    db->header.num_tombstones = num_tombstones;
+    db->header.dirty_size = dirty_size;
     r = commit_header(db);
     if (r) return r;
 
