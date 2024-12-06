@@ -135,7 +135,7 @@ sub shared_subscribe_common
                                        'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user1_subs, $sep, {
         (map {(
-            $_ => [ '\\Subscribed', '\\HasNoChildren' ]
+            $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user1_mailboxes),
         (map {(
             $_->to_external('other') => [
@@ -157,7 +157,7 @@ sub shared_subscribe_common
                                     'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user1_subs, $sep, {
         (map {(
-            $_ => [ '\\Subscribed', '\\HasNoChildren' ]
+            $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user1_mailboxes),
     });
 
@@ -178,7 +178,7 @@ sub shared_subscribe_common
                                        'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user2_subs, $sep, {
         (map {(
-            $_ => [ '\\Subscribed', '\\HasNoChildren' ]
+            $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user2_mailboxes),
         (map {(
             $_->to_external('other') => [
@@ -201,7 +201,7 @@ sub shared_subscribe_common
                                     'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user2_subs, $sep, {
         (map {(
-            $_ => [ '\\Subscribed', '\\HasNoChildren' ]
+            $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user2_mailboxes),
     });
 }
@@ -222,12 +222,21 @@ sub test_subscribe_prefix
 }
 
 sub test_subscribe_vd
-    :UnixHierarchySep :VirtDomains :CrossDomains
+    :VirtDomains :CrossDomains
 {
     my ($self) = @_;
 
     $self->shared_subscribe_common('firstuser@example.com',
                                    'seconduser@example.com');
+}
+
+sub test_subscribe_vd_prefix
+    :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('matt@example.com',
+                                   'matthew@example.com');
 }
 
 1;

@@ -143,7 +143,6 @@ sub _external_separator_regexp
     return $self->{config}->get_bool('unixhierarchysep', 'on') ? qr/\// : qr/\./;
 }
 
-
 # XXX assumes input is always in the admin namespace
 sub from_external
 {
@@ -162,6 +161,7 @@ sub from_external
     die "Bad external name \"$s\""
         if !defined $userid || $prefix ne 'user';
 
+    map { s/\./\^/g } @comps;
     $self->_set($domain, $userid, join('.', @comps));
 }
 
@@ -173,11 +173,17 @@ sub to_external
 
     my $altnamespace = $self->{config}->get_bool('altnamespace', 'on');
 
+    my @boxes;
+    @boxes = split/\./, $self->{box} if $self->{box};
+    if ($self->{config}->get_bool('unixhierarchysep', 'on')) {
+        map { s/\^/\./g } @boxes;
+    }
+
     if ($namespace eq 'admin' || !$altnamespace) {
         my @comps;
 
-        push(@comps, 'user', $self->{userid}) if defined $self->{userid};
-        push(@comps, split(/\./, $self->{box})) if defined $self->{box};
+        push @comps, 'user', $self->{userid} if defined $self->{userid};
+        push @comps, @boxes;
 
         my $s = join($self->_external_separator, @comps);
         $s .= '@' . $self->{domain} if defined $self->{domain};
@@ -194,17 +200,17 @@ sub to_external
             $userprefix ||= 'Other Users';
 
             my $userid = $self->{userid}; # XXX what if this is missing?
-            $userid .= '@' . $self->{domain} if defined $self->{domain};
+            my $domain = $self->{domain};
+
+            if ($self->{config}->get_bool('unixhierarchysep', 'on')) {
+                $domain =~ s/\^/\./g;
+            }
+            $userid .= '@' . $domain if $domain;
 
             push @comps, $userprefix, $userid;
         }
 
-        if ($self->{box}) {
-            push @comps, split(/\./, $self->{box});
-        }
-        else {
-            push @comps, 'INBOX';
-        }
+        push @comps, (@boxes ? @boxes : 'INBOX');
 
         my $s = join($self->_external_separator, @comps);
 
