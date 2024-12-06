@@ -1586,7 +1586,7 @@ static int myfetch(struct dbengine *db,
 
     if (tidptr) {
         if (!*tidptr) {
-            r = newtxn(db, 0/*shared*/, tidptr);
+            r = newtxn(db, db->readonly, tidptr);
             if (r) return r;
         }
         else if (!db->has_lock) {
@@ -1646,11 +1646,6 @@ done:
         int r1 = mycommit(db, localtid);
         if (r1) return r1;
     }
-    else if ((*tidptr)->readonly) {
-        /* release read lock */
-        int r1 = unlock(db);
-        if (r1) return r1;
-    }
 
     return r;
 }
@@ -1685,7 +1680,11 @@ static int myforeach(struct dbengine *db,
         tidptr = &db->current_txn;
     if (tidptr) {
         if (!*tidptr) {
-            r = newtxn(db, 0/*shared*/, tidptr);
+            r = newtxn(db, db->readonly, tidptr);
+            if (r) return r;
+        }
+        else if (!db->has_lock) {
+            r = read_lock(db);
             if (r) return r;
         }
     } else {
@@ -1787,6 +1786,15 @@ static int myforeach(struct dbengine *db,
     }
 
     return r ? r : cb_r;
+}
+
+static int myyield(struct dbengine *db)
+{
+    if (WRITELOCKED(db))
+        return CYRUSDB_LOCKED;
+    if (LOCKED(db))
+        return unlock(db);
+    return 0;
 }
 
 static int myreplay(struct dbengine *db,
@@ -1994,6 +2002,10 @@ static int mystore(struct dbengine *db,
 
     /* reject store for shared locks */
     if (tidptr && *tidptr && (*tidptr)->readonly)
+        return CYRUSDB_READONLY;
+
+    /* or readonly database */
+    if (db->readonly)
         return CYRUSDB_READONLY;
 
     /* not keeping the transaction, just create one local to
@@ -2689,5 +2701,5 @@ HIDDEN struct cyrusdb_backend cyrusdb_twom =
     &consistent,
     &mycheckpoint,
     &bsearch_ncompare_raw,
-    NULL
+    &myyield,
 };
