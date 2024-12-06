@@ -623,7 +623,7 @@ static void prepare_record(struct skiprecord *record, char *buf, size_t *sizep)
 }
 
 /* only changing the record head, so only rewrite that much */
-static int rewrite_record(struct dbengine *db, struct skiprecord *record)
+static void rewrite_record(struct dbengine *db, struct skiprecord *record)
 {
     char *buf = scratchspace.s;
     size_t len;
@@ -635,52 +635,16 @@ static int rewrite_record(struct dbengine *db, struct skiprecord *record)
     prepare_record(record, buf, &len);
 
     twom_write(db, buf, len, record->offset);
-
-    return 0;
-}
-
-/* Add BLANK padding sets of 8 bytes until the entire header will write
- * in a single disk block for safety.
- * This ONLY works if the header is small enough obviously (should always be)
- * the algorithm checks if the end % BLOCKSIZE is smaller than the start % BLOCKSIZE
- * in which case we've wrapped a block */
-static int add_padding(struct dbengine *db, size_t iolen) {
-    // if it will always span a block, there's no point padding (and besides the
-    // algorithm won't work)
-    if (iolen > BLOCKSIZE - 8) return 0;
-
-    // start with 8 byte offset, because the first 8 bytes never get rewritten
-    // and end with 8 before, because if it fits exactly that's OK too
-    // consider 480 bytes in, 32 bytes to write
-    // 480+8 == 488, 480 - 8 + 32 == 504, so no padding
-    // consider 488 bytes in:
-    // 488+8 == 496, 488 - 8 + 32 == 512 -> 0 so we pad
-    // 496+8 == 504 to 8, so we pad again
-    // 504+8 == 512 -> 0, so we don't pad any more!
-    // we write the new record from 504 onwards, with the header line before the
-    // block boundary, maximising use of space!
-
-    while (((db->end + 8) % BLOCKSIZE) > ((db->end - 8 + iolen) % BLOCKSIZE)) {
-        twom_write(db, BLANK, 8, db->end);
-        db->end += 8;
-    }
-
-    return 0;
 }
 
 static int write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
 {
     size_t iolen = 0;
-    int r;
 
     assert(!record->offset);
 
     record->xxh32_tail = 0;
     prepare_record(record, scratchspace.s, &iolen);
-
-    /* ensure that the record header be contained within a single disk block */
-    r = add_padding(db, iolen);
-    if (r) return r;
 
     /* write to the mapped file, getting the offset updated */
     twom_write(db, scratchspace.s, iolen, db->end);
@@ -699,14 +663,13 @@ static int write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
 }
 
 /* you can only write records at the end */
-static int write_record(struct dbengine *db, struct skiprecord *record,
-                        const char *key, const char *val)
+static void write_record(struct dbengine *db, struct skiprecord *record,
+                         const char *key, const char *val)
 {
     char zeros[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint64_t len;
     size_t iolen = 0;
     struct iovec io[6];
-    int r;
 
     assert(!record->offset);
 
@@ -739,10 +702,6 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
     io[0].iov_base = scratchspace.s;
     io[0].iov_len = iolen;
 
-    /* ensure that the record header be contained within a single disk block */
-    r = add_padding(db, iolen);
-    if (r) return r;
-
     /* write to the mapped file, getting the offset updated */
     size_t n = twom_writev(db, io, 6, db->end);
 
@@ -754,8 +713,6 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
 
     /* and advance the known file size */
     db->end += n;
-
-    return 0;
 }
 
 /* helper to append a record, starting the transaction by dirtying the
@@ -763,19 +720,19 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
 static int append_record(struct dbengine *db, struct skiprecord *record,
                          const char *key, const char *val)
 {
-    int r;
-
     assert(db->current_txn);
 
     /* dirty the header if not already dirty */
     if (!(db->header.flags & DIRTY)) {
         db->header.flags |= DIRTY;
-        r = commit_header(db);
+        int r = commit_header(db);
         if (r) return r;
     }
 
-    if (key) return write_record(db, record, key, val);
-    else return write_nokeyrecord(db, record);
+    if (key) write_record(db, record, key, val);
+    else write_nokeyrecord(db, record);
+
+    return 0;
 }
 
 /************************** LOCATION MANAGEMENT ***************************/
@@ -1052,8 +1009,7 @@ static int stitch(struct dbengine *db, uint8_t maxlevel, size_t newoffset)
         for (i = level; i < maxlevel; i++)
             _setloc(db, &oldrecord, i, loc->forwardloc[i]);
 
-        r = rewrite_record(db, &oldrecord);
-        if (r) return r;
+        rewrite_record(db, &oldrecord);
     }
 
     /* re-read the "current record" */
@@ -2483,7 +2439,7 @@ static int recovery1(struct dbengine *db, int *count)
     for (i = 0; i < 2; i++) {
         if (prevrecord.nextloc[i] >= db->end) {
             prevrecord.nextloc[i] = 0;
-            r = rewrite_record(db, &prevrecord);
+            rewrite_record(db, &prevrecord);
             changed++;
         }
     }
@@ -2539,8 +2495,7 @@ static int recovery1(struct dbengine *db, int *count)
 
                 /* XXX - optimise adjacent same records */
                 fixrecord.nextloc[i] = record.offset;
-                r = rewrite_record(db, &fixrecord);
-                if (r) return r;
+                rewrite_record(db, &fixrecord);
                 changed++;
             }
             prev[i] = record.offset;
@@ -2551,8 +2506,7 @@ static int recovery1(struct dbengine *db, int *count)
         for (i = 0; i < 2; i++) {
             if (record.nextloc[i] >= db->end) {
                 record.nextloc[i] = 0;
-                r = rewrite_record(db, &record);
-                if (r) return r;
+                rewrite_record(db, &record);
                 changed++;
             }
         }
@@ -2574,8 +2528,7 @@ static int recovery1(struct dbengine *db, int *count)
 
             /* XXX - optimise, same as above */
             fixrecord.nextloc[i] = 0;
-            r = rewrite_record(db, &fixrecord);
-            if (r) return r;
+            rewrite_record(db, &fixrecord);
             changed++;
         }
     }
