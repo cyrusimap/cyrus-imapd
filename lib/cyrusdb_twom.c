@@ -98,10 +98,6 @@
 #define DELETE '-'
 #define COMMIT '$'
 
-/* magic 8-byte pad - space for type, easy to read on hexdump
- * and with both low and high bits to be unlikely in real data */
-#define BLANK " BLANK\x07\xa0"
-
 /********** DATA STRUCTURES *************/
 
 /* A single "record" in the twom file.  This could be a
@@ -637,7 +633,7 @@ static void rewrite_record(struct dbengine *db, struct skiprecord *record)
     twom_write(db, buf, len, record->offset);
 }
 
-static int write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
+static void write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
 {
     size_t iolen = 0;
 
@@ -658,8 +654,6 @@ static int write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
 
     /* and advance the known file size */
     db->end += iolen;
-
-    return 0;
 }
 
 /* you can only write records at the end */
@@ -1399,13 +1393,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
 
         /* append dummy after header location */
         db->end = DUMMY_OFFSET;
-        r = write_nokeyrecord(db, &dummy);
-        if (r) {
-            xsyslog(LOG_ERR, "DBERROR: error writing dummy node",
-                             "filename=<%s>",
-                             fname);
-            goto done;
-        }
+        write_nokeyrecord(db, &dummy);
 
         /* create the header */
         db->header.version = VERSION;
@@ -2203,13 +2191,6 @@ static int dump(struct dbengine *db, int detail)
 
     while (offset < db->header.current_size) {
         printf("%08llX ", (LLU)offset);
-
-        // skip over blanks
-        if (!memcmp(BASE(db) + offset, BLANK, 8)) {
-            printf("BLANK\n");
-            offset += 8;
-            continue;
-        }
 
         r = read_onerecord(db, offset, &record);
 
