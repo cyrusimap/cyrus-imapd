@@ -87,6 +87,12 @@ sub test_parts_ctor
                              'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'fanny.pack');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com.fanny.pack');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
@@ -105,6 +111,12 @@ sub test_internal_ctor
                              'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'fanny.pack');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com.fanny.pack');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
@@ -123,6 +135,12 @@ sub test_external_ctor
                              'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'fanny.pack');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com.fanny.pack');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
@@ -141,6 +159,12 @@ sub test_username_ctor
                              'quinoa.com!user.pickled');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'INBOX');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
@@ -205,6 +229,12 @@ sub test_from_internal
                              'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'fanny.pack');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com.fanny.pack');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
@@ -222,6 +252,12 @@ sub test_from_external
                              'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled.fanny.pack@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'fanny.pack');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com.fanny.pack');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
@@ -239,6 +275,12 @@ sub test_from_username
                              'quinoa.com!user.pickled');
     $self->assert_str_equals($mb->to_external,
                              'user.pickled@quinoa.com');
+    $self->assert_str_equals($mb->to_external('admin'),
+                             'user.pickled@quinoa.com');
+    $self->assert_str_equals($mb->to_external('owner'),
+                             'INBOX');
+    $self->assert_str_equals($mb->to_external('other'),
+                             'Other Users.pickled@quinoa^com');
     $self->assert_str_equals($mb->to_username,
                              'pickled@quinoa.com');
 }
