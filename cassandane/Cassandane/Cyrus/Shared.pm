@@ -81,12 +81,13 @@ sub shared_subscribe_common
 
     my $service = $self->{instance}->get_service('imap');
     my $config = $self->{instance}->{config};
+    my $sep = $config->get_bool('unixhierarchysep', 'on') ? '/' : '.';
 
-    my $user1_mbname = Cassandane::Mboxname->new(config => $config);
-    $user1_mbname->from_username($user1);
+    my $user1_inbox = Cassandane::Mboxname->new(config => $config);
+    $user1_inbox->from_username($user1);
 
     my @user1_mailboxes = map {
-        $user1_mbname->make_child($_);
+        $user1_inbox->make_child($_);
     } random_words(3);
     $self->{instance}->create_user($user1,
                                    subdirs => \@user1_mailboxes);
@@ -95,15 +96,15 @@ sub shared_subscribe_common
     my $user1_talk = $user1_store->get_client();
 
     foreach my $mb (@user1_mailboxes) {
-        $user1_talk->subscribe($mb->to_external());
-        $user1_talk->setacl($mb->to_external(), $user2, 'lrs');
+        $user1_talk->subscribe($mb->to_external('owner'));
+        $user1_talk->setacl($mb->to_external('owner'), $user2, 'lrs');
     }
 
-    my $user2_mbname = Cassandane::Mboxname->new(config => $config);
-    $user2_mbname->from_username($user2);
+    my $user2_inbox = Cassandane::Mboxname->new(config => $config);
+    $user2_inbox->from_username($user2);
 
     my @user2_mailboxes = map {
-        $user2_mbname->make_child($_);
+        $user2_inbox->make_child($_);
     } random_words(3);
     $self->{instance}->create_user($user2,
                                    subdirs => \@user2_mailboxes);
@@ -112,32 +113,32 @@ sub shared_subscribe_common
     my $user2_talk = $user2_store->get_client();
 
     foreach my $mb (@user2_mailboxes) {
-        $user2_talk->subscribe($mb->to_external());
-        $user2_talk->setacl($mb->to_external(), $user1, 'lrs');
+        $user2_talk->subscribe($mb->to_external('owner'));
+        $user2_talk->setacl($mb->to_external('owner'), $user1, 'lrs');
     }
 
     $user1_talk->list('', '*');
 
     xlog("subscribe as $user1 to $user2\'s shared mb's");
     foreach my $mb (@user2_mailboxes) {
-        $user1_talk->subscribe("Other Users.$user2.$mb");
+        $user1_talk->subscribe($mb->to_external('other'));
         $self->assert_equals('ok', $user1_talk->get_last_completion_response());
     }
 
     xlog("but not their inbox");
-    $user1_talk->subscribe("Other Users.$user2");
+    $user1_talk->subscribe($user2_inbox->to_external('other'));
     $self->assert_equals('no', $user1_talk->get_last_completion_response());
 
     xlog("make sure $user1 has the right subscriptions");
     my $user1_subs = $user1_talk->list([qw(SUBSCRIBED)],
                                        '', '*',
                                        'RETURN', [qw(CHILDREN)]);
-    $self->assert_mailbox_structure($user1_subs, '.', {
+    $self->assert_mailbox_structure($user1_subs, $sep, {
         (map {(
             $_ => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user1_mailboxes),
         (map {(
-            "Other Users.$user2.$_" => [
+            $_->to_external('other') => [
                 '\\Subscribed',
                 '\\HasNoChildren',
             ]
@@ -146,7 +147,7 @@ sub shared_subscribe_common
 
     xlog("unsub as $user1 from $user2\'s folders");
     foreach my $mb (@user2_mailboxes) {
-        $user1_talk->unsubscribe("Other Users.$user2.$mb");
+        $user1_talk->unsubscribe($mb->to_external('other'));
         $self->assert_equals('ok', $user1_talk->get_last_completion_response());
     }
 
@@ -154,7 +155,7 @@ sub shared_subscribe_common
     $user1_subs = $user1_talk->list([qw(SUBSCRIBED)],
                                     '', '*',
                                     'RETURN', [qw(CHILDREN)]);
-    $self->assert_mailbox_structure($user1_subs, '.', {
+    $self->assert_mailbox_structure($user1_subs, $sep, {
         (map {(
             $_ => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user1_mailboxes),
@@ -162,25 +163,25 @@ sub shared_subscribe_common
 
     xlog("subscribe as $user2 to $user1\'s shared mb's");
     foreach my $mb (@user1_mailboxes) {
-        $user2_talk->subscribe("Other Users.$user1.$mb");
+        $user2_talk->subscribe($mb->to_external('other'));
         $self->assert_equals('ok',
                              $user2_talk->get_last_completion_response());
     }
 
     xlog("but not their inbox");
-    $user2_talk->subscribe("Other Users.$user1");
+    $user2_talk->subscribe($user1_inbox->to_external('other'));
     $self->assert_equals('no', $user2_talk->get_last_completion_response());
 
     xlog("make sure $user2 has the right subscriptions");
     my $user2_subs = $user2_talk->list([qw(SUBSCRIBED)],
                                        '', '*',
                                        'RETURN', [qw(CHILDREN)]);
-    $self->assert_mailbox_structure($user2_subs, '.', {
+    $self->assert_mailbox_structure($user2_subs, $sep, {
         (map {(
             $_ => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user2_mailboxes),
         (map {(
-            "Other Users.$user1.$_" => [
+            $_->to_external('other') => [
                 '\\Subscribed',
                 '\\HasNoChildren',
             ]
@@ -189,7 +190,7 @@ sub shared_subscribe_common
 
     xlog("unsub as $user2 from $user1\'s folders");
     foreach my $mb (@user1_mailboxes) {
-        $user2_talk->unsubscribe("Other Users.$user1.$mb");
+        $user2_talk->unsubscribe($mb->to_external('other'));
         $self->assert_equals('ok',
                              $user2_talk->get_last_completion_response());
     }
@@ -198,7 +199,7 @@ sub shared_subscribe_common
     $user2_subs = $user2_talk->list([qw(SUBSCRIBED)],
                                     '', '*',
                                     'RETURN', [qw(CHILDREN)]);
-    $self->assert_mailbox_structure($user2_subs, '.', {
+    $self->assert_mailbox_structure($user2_subs, $sep, {
         (map {(
             $_ => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user2_mailboxes),
