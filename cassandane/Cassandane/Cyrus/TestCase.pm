@@ -1400,6 +1400,8 @@ sub assert_mailbox_structure
     my ($self, $actual, $expected_hiersep, $expected_mailbox_flags,
         $strict, $msg) = @_;
 
+    xlog "XXX expected: " . Dumper $expected_mailbox_flags;
+
     # rearrange list output into order-agnostic format
     my %actual_hash;
     foreach my $row (@{$actual}) {
