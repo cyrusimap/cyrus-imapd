@@ -66,7 +66,6 @@
 #include "assert.h"
 #include "auth.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
 #include "glob.h"
 #include "imap_err.h"
 #include "global.h"
@@ -154,7 +153,7 @@ int main(int argc, char *argv[])
 {
     struct db *db;
     const char *dbfile;
-    const char *dbtype = "twoskip";
+    const char *dbtype = "twom";
     int opt, r;
     char *alt_config = NULL;
     int db_flags = 0;
@@ -186,13 +185,13 @@ int main(int argc, char *argv[])
 	       "This is because some database backends (mainly berkeley) do not\n"
 	       "always do what you would expect with them.\n"
 	       "\nPlease use absolute pathnames instead.\n\n");
-	exit(EC_OSERR);
+	exit(1);
     }
 
     cyrus_init(alt_config, "hammer_cyrusdb", 0, 0);
 
     r = cyrusdb_open(dbtype, dbfile, db_flags, &db);
-    if (r) fatal("can't open database", EC_TEMPFAIL);
+    if (r) fatal("can't open database", 1);
 
     hammer(db);
     
