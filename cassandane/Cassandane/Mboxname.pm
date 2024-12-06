@@ -132,7 +132,7 @@ sub _external_separator
     my ($self) = @_;
     die "No Config specified"
         unless defined $self->{config};
-    return $self->{config}->get_bool('unixhierarchysep', 'off') ? '/' : '.';
+    return $self->{config}->get_bool('unixhierarchysep', 'on') ? '/' : '.';
 }
 
 sub _external_separator_regexp
@@ -140,7 +140,7 @@ sub _external_separator_regexp
     my ($self) = @_;
     die "No Config specified"
         unless defined $self->{config};
-    return $self->{config}->get_bool('unixhierarchysep', 'off') ? qr/\// : qr/\./;
+    return $self->{config}->get_bool('unixhierarchysep', 'on') ? qr/\// : qr/\./;
 }
 
 
