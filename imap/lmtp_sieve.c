@@ -492,7 +492,12 @@ static int send_rejection(const char *userid,
             config_servername, CYRUS_VERSION, SIEVE_VERSION);
     if (origreceip)
         buf_printf(&msgbuf, "Original-Recipient: rfc822; %s\r\n", origreceip);
-    buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", mailreceip);
+
+    if (config_getswitch(IMAPOPT_SIEVE_MDN_PRIVATE))
+        buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", session_id());
+    else
+        buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", mailreceip);
+
     if (origid)
         buf_printf(&msgbuf, "Original-Message-ID: %s\r\n", origid);
     buf_printf(&msgbuf, "Disposition: "
