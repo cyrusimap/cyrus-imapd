@@ -2258,7 +2258,7 @@ static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
     // Check if entry exists in WebDAV attachments
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
     if (r) {
-        xsyslog(LOG_ERR, "webdav_lookup_uid failed, ""mid=<%s> err=<%s>",
+        xsyslog(LOG_ERR, "webdav_lookup_uid failed", "mid=<%s> err=<%s>",
                 mid, cyrusdb_strerror(r));
         goto done;
     }
@@ -2342,7 +2342,7 @@ HIDDEN void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
     if (r) {
         if (r != CYRUSDB_NOTFOUND) {
-            xsyslog(LOG_ERR, "webdav_lookup_uid failed, ""mid=<%s> err=<%s>",
+            xsyslog(LOG_ERR, "webdav_lookup_uid failed", "mid=<%s> err=<%s>",
                     mid, cyrusdb_strerror(r));
         }
         return;
