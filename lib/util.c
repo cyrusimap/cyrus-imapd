@@ -2193,3 +2193,247 @@ EXPORTED char *modseqtoa(modseq_t modseq)
     buf_printf(&buf, MODSEQ_FMT, modseq);
     return buf_release(&buf);
 }
+
+static const char *xsyslog_ev_escape_value(struct buf *val)
+{
+    int needs_escaping = 0, orig_len, escaped_len;
+    const char *p;
+
+    escaped_len = orig_len = buf_len(val);
+
+    for (p = buf_cstring(val); *p; p++) {
+        switch (*p) {
+	case '\\':
+	case '\"':
+	case '\n':
+	case '\r':
+	    ++escaped_len;  // add 1 for the backslash
+
+	    // FALL THROUGH
+	case ' ':
+	    needs_escaping = 1;
+	    break;
+	}
+    }
+
+    if (needs_escaping) {
+        char *q;
+
+        escaped_len += 2;  // add 2 for surrounding DQUOTEs
+
+        buf_truncate(val, escaped_len);  // grow the buffer to escaped length
+
+        // we can now build the escaped value in place, tail to head
+        q = (char *) buf_base(val) + escaped_len - 1;
+        *q-- = '\"';  // closing DQUOTE
+
+        for (p = buf_base(val) + orig_len - 1; p >= buf_base(val); p--) {
+            char c = *p;
+
+            switch (c) {
+            case '\\':
+            case '\"':
+                needs_escaping = 1;
+                break;
+
+            case '\n':
+                needs_escaping = 1;
+                c = 'n';
+                break;
+
+            case '\r':
+                needs_escaping = 1;
+                c = 'r';
+                break;
+
+            default:
+                needs_escaping = 0;
+                break;
+            }
+
+            *q-- = c;
+
+            if (needs_escaping) *q-- = '\\';
+        }
+
+        assert(q == buf_base(val));
+        *q = '\"';  // opening DQUOTE
+    }
+
+    return buf_cstring(val);
+}
+
+static char *xsyslog_ev_fmt_va(const char *event_name, va_list ap)
+{
+    struct buf log = BUF_INITIALIZER;
+    struct buf val = BUF_INITIALIZER;
+    const char *sep = " ";  // string that separates kev=value pairs
+    const char *key;
+
+    // Add "event=(event-name)" to the log buffer
+    buf_setcstr(&val, event_name);
+    buf_printf(&log, "event=%s", xsyslog_ev_escape_value(&val));
+
+    /*
+     * Now handle the remaining arguments, which should come in threes:
+     *   key, format, value
+     *
+     * value will be buf_printf'ed with the format,
+     * and then the result will be escaped (if necessary)
+     *
+     * finally, the resulting string "key=escaped-formatted-value"
+     * will be appended to the log buffer
+     */
+    while ((key = va_arg(ap, const char *))) {
+	// special case: __sep__ means reconfigure the separator
+	if (!strcmp(key, "__sep__")) {
+	    sep = va_arg(ap, const char *);
+	}
+        else {
+            const char *fmt = va_arg(ap, const char *);
+            va_list val_ap;
+
+            va_copy(val_ap, ap);
+            buf_reset(&val);
+            buf_vprintf(&val, fmt, val_ap);
+            va_end(val_ap);
+
+            buf_printf(&log, "%s%s=%s",
+                       sep, key, xsyslog_ev_escape_value(&val));
+
+            // skip the args that printf goobled up (based on the format string)
+            for (const char *p = fmt; *p; p++) {
+                if (*p == '%') {
+                    // flags
+                    size_t nflags = strspn(++p, "#0- +'I");
+                    p += nflags;
+
+                    // field width and/or precision
+                    do {
+                        if (*p == '*') {
+                            va_arg(ap, int);
+                            p++;
+                        }
+                        else {
+                            strtol(p, (char **) &p, 10);
+                        }
+                    } while (*p == '.' && *++p);
+
+                    // length modifier
+                    char len = 0;
+                    if (strchr("hlLzt", *p)) {
+                        len = *p++;
+                        switch (len) {
+                        case 'h':
+                            if (*p == 'h') {
+                                len = 'H';
+                                p++;
+                            }
+                            break;
+                        case 'l':
+                            if (*p == 'l') {
+                                len = 'L';
+                                p++;
+                            }
+                            break;
+                        }
+                    }
+
+                    // conversion specifier
+                    switch (*p) {
+                    case 'd': case 'i':
+                    case 'o': case 'u':
+                    case 'x': case 'X':
+                        switch (len) {
+                        case 'L':
+                            va_arg(ap, long long int);
+                            break;
+                        case 'l':
+                            va_arg(ap, long int);
+                            break;
+                        case 'z':
+                            va_arg(ap, size_t);
+                            break;
+                        case 't':
+                            va_arg(ap, ptrdiff_t);
+                            break;
+                        default:
+                            va_arg(ap, int);
+                            break;
+                        }
+                        break;
+
+                    case 'e': case 'E':
+                    case 'f': case 'F':
+                    case 'g': case 'G':
+                    case 'a': case 'A':
+                        if (len == 'L')
+                            va_arg(ap, long double);
+                        else
+                            va_arg(ap, double);
+                        break;
+
+                    case 'c':
+                        va_arg(ap, int);
+                        break;
+
+                    case 's':
+                        va_arg(ap, char *);
+                        break;
+
+                    case 'p':
+                        va_arg(ap, void *);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    buf_free(&val);
+
+    return buf_release(&log);
+}
+
+EXPORTED void xsyslog_ev(int priority, const char *event_name, ...)
+{
+    va_list ap;
+    char *s;
+
+    va_start(ap, event_name);
+    s = xsyslog_ev_fmt_va(event_name, ap);
+    va_end(ap);
+
+    if (!s) {
+	syslog(priority,
+               "COULD NOT FORMAT SYSLOG STRING FOR EVENT '%s'", event_name);
+	return;
+    }
+
+    syslog(priority, "%s", s);
+    free(s);
+}
+
+// for unit testing only
+EXPORTED char *__test_xsyslog_ev_fmt(const char *event_name, ...)
+{
+    va_list ap;
+    char *s;
+
+    va_start(ap, event_name);
+    s = xsyslog_ev_fmt_va(event_name, ap);
+    va_end(ap);
+
+    return s;
+}
+
+// for unit testing only
+EXPORTED char *__test_xsyslog_ev_escape_value(const char *s)
+{
+    struct buf val = BUF_INITIALIZER;
+
+    buf_setcstr(&val, s);
+    xsyslog_ev_escape_value(&val);
+
+    return buf_release(&val);
+}

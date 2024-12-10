@@ -659,6 +659,7 @@ cunit_TESTS += \
     cunit/stristr.testc \
     cunit/times.testc \
     cunit/tok.testc \
+    cunit/util.testc \
     cunit/vparse.testc \
     cunit/dynarray.testc \
     cunit/xsha1.testc

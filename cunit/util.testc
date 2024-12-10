@@ -1,0 +1,106 @@
+#include "cunit/cyrunit.h"
+#include "util.h"
+
+extern char *__test_xsyslog_ev_fmt(const char *, ...);
+
+static void test_xsyslog_ev_fmt(void)
+{
+    // basic tests
+    {
+	char *result;
+
+	result = __test_xsyslog_ev_fmt("event-name", NULL);
+	CU_ASSERT_STRING_EQUAL(result, "event=event-name");
+	free(result);
+
+	result = __test_xsyslog_ev_fmt(
+	       "event-name",
+	       "firstname", "%s", "Fred",
+	       NULL);
+	CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred");
+	free(result);
+
+	result = __test_xsyslog_ev_fmt(
+	       "event-name",
+	       "firstname", "%s", "Fred",
+	       "lastname", "%s", "Flintstone",
+	       NULL);
+	CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred lastname=Flintstone");
+	free(result);
+
+	// now with escaping
+	result = __test_xsyslog_ev_fmt(
+	       "announce name",
+	       "name", "%s", "Fred Flintstone",
+	       NULL);
+	CU_ASSERT_STRING_EQUAL(result, "event=\"announce name\" name=\"Fred Flintstone\"");
+	free(result);
+
+	// now with various formats
+	result = __test_xsyslog_ev_fmt(
+				"formats",
+				"strlt", "%-10s", "foo",
+				"strrt", "%10s", "bar",
+				"int", "%d", -12,
+                                "ulong", "%ld", 2147483647L,
+				"double", "%f", 4.2,
+				"double-fmt", "%5.2f", 4.2,
+				NULL);
+	CU_ASSERT_STRING_EQUAL(result,
+			       "event=formats "
+			       "strlt=\"foo       \" "
+			       "strrt=\"       bar\" "
+			       "int=-12 "
+                               "ulong=2147483647 "
+			       "double=4.200000 "
+			       "double-fmt=\" 4.20\"");
+	free(result);
+
+	// common case: multiline text output
+        result = __test_xsyslog_ev_fmt(
+				"multiline",
+				"text", "%s", "I\r\nlike\r\npie!\r\n",
+				NULL
+			       );
+	CU_ASSERT_STRING_EQUAL(result, "event=multiline text=\"I\\r\\nlike\\r\\npie!\\r\\n\"");
+	free(result);
+}
+
+    // tests for weird __sep__ feature
+    {
+      char *result;
+      result = __test_xsyslog_ev_fmt(
+			      "sep-test",
+			      "__sep__", "!!!",
+			      "name", "%s", "Fred Flintstone",
+			      "occupation", "%s", "caveman",
+			      NULL);
+      CU_ASSERT_STRING_EQUAL(result, "event=sep-test!!!name=\"Fred Flintstone\"!!!occupation=caveman");
+      free(result);
+    }
+}
+
+extern char *__test_xsyslog_ev_escape_value(const char *);
+
+static void test_xsyslog_ev_escape_value(void)
+{
+    const char *test[] = {
+	/* input, expected output */
+	"foo", "foo",
+	"foo bar", "\"foo bar\"",
+	"call me \"fred\"", "\"call me \\\"fred\\\"\"",
+	"\n", "\"\\n\"",
+	"\r", "\"\\r\"",
+	"\r\n", "\"\\r\\n\"",
+	"break-my-cranck", "break-my-cranck",
+	NULL,
+    };
+    unsigned i;
+    for (i=0; test[i]; i += 2) {
+	const char *in = test[i];
+	const char *expected = test[i+1];
+	char *actual = __test_xsyslog_ev_escape_value(in);
+	CU_ASSERT_STRING_EQUAL(actual, expected);
+	free(actual);
+    }
+}
