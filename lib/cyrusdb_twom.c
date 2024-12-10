@@ -1024,6 +1024,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
+    uint64_t ancestor = 0;
     uint8_t level = 0;
     uint8_t i;
     int r;
@@ -1033,9 +1034,14 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 
     if (loc->is_exactmatch) {
         level = loc->record.level;
+        ancestor = loc->record.offset;
+        // if it's not already a delete
+        if (HASVALUE(loc->record.type)) {
+            db->header.num_records--;
+            db->header.dirty_size += loc->record.len;
+        }
+        // new type might be a delete too
         type = val ? REPLACE : DELETE;
-        db->header.num_records--;
-        db->header.dirty_size += loc->record.len;
     }
     else {
         assert(val);
@@ -1047,8 +1053,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     newrecord.level = level ? level : randlvl(1, MAXLEVEL);
     newrecord.keylen = loc->keybuf.len;
     newrecord.vallen = vallen;
-    if (loc->is_exactmatch)
-        newrecord.ancestor = loc->record.offset;
+    newrecord.ancestor = ancestor;
     for (i = 0; i < newrecord.level; i++)
         newrecord.nextloc[i+1] = loc->forwardloc[i];
     if (newrecord.level > level)
@@ -1063,7 +1068,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
         loc->forwardloc[i] = newrecord.offset;
 
     /* update all backpointers */
-    r = stitch(db, level, newrecord.offset);
+    r = stitch(db, newrecord.level, newrecord.offset);
     if (r) return r;
 
     /* update header to know details of new record */
@@ -1134,14 +1139,14 @@ static int write_lock(struct dbengine *db)
         if (fstat(db->fd, &sbuf) == -1) {
             xsyslog(LOG_ERR, "IOERROR: fstat failed",
                              "filename=<%s>", db->fname);
-            lock_unlock(db->fd, db->fname);
+            unlock(db);
             return -EIO;
         }
 
         if (stat(db->fname, &sbuffile) == -1) {
             xsyslog(LOG_ERR, "IOERROR: stat failed",
                              "filename=<%s>", db->fname);
-            lock_unlock(db->fd, db->fname);
+            unlock(db);
             return -EIO;
         }
 
@@ -1158,7 +1163,7 @@ static int write_lock(struct dbengine *db)
         if (newfd == -1) {
             xsyslog(LOG_ERR, "IOERROR: open failed",
                              "filename=<%s>", db->fname);
-            lock_unlock(db->fd, db->fname);
+            unlock(db);
             return -EIO;
         }
         dup2(newfd, db->fd);
@@ -1208,7 +1213,7 @@ static int read_lock(struct dbengine *db)
         if (fstat(db->fd, &sbuf) == -1) {
             xsyslog(LOG_ERR, "IOERROR: fstat failed",
                              "filename=<%s>", db->fname);
-            lock_unlock(db->fd, db->fname);
+            unlock(db);
             return -EIO;
         }
 
@@ -1218,7 +1223,7 @@ static int read_lock(struct dbengine *db)
         if (stat(db->fname, &sbuffile) == -1) {
             xsyslog(LOG_ERR, "IOERROR: stat failed",
                              "filename=<%s>", db->fname);
-            lock_unlock(db->fd, db->fname);
+            unlock(db);
             return -EIO;
         }
         if (sbuf.st_ino == sbuffile.st_ino) break;
@@ -1234,7 +1239,7 @@ static int read_lock(struct dbengine *db)
         if (newfd == -1) {
             xsyslog(LOG_ERR, "IOERROR: open failed",
                              "filename=<%s>", db->fname);
-            lock_unlock(db->fd, db->fname);
+            unlock(db);
             return -EIO;
         }
         dup2(newfd, db->fd);
@@ -2283,13 +2288,24 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
 
     while (fwd[0]) {
         r = read_onerecord(db, fwd[0], &record);
-        if (r) return r;
+        if (r) {
+            xsyslog(LOG_ERR, "DBERROR: failed to read record for consistent",
+                    "fname=<%s> offset=<%08llX>",
+                    FNAME(db), (LLU)fwd[0]);
+            return r;
+        }
 
         size_t ancestor = record.ancestor;
         while (ancestor) {
             struct skiprecord parent;
             r = read_onerecord(db, ancestor, &parent);
-            if (r) return r;
+            if (r) {
+                xsyslog(LOG_ERR, "DBERROR: failed to read ancestor for consistent",
+                        "fname=<%s> key=<%.*s> offset=<%08llX>",
+                        FNAME(db), (int)record.keylen, KEY(db, &record),
+                        (LLU)ancestor);
+                return r;
+            }
             cmp = bsearch_ncompare_raw(KEY(db, &record), record.keylen,
                                        KEY(db, &parent), parent.keylen);
             if (cmp) {
