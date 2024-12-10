@@ -928,6 +928,14 @@ static void imapd_log_client_behavior(void)
                         client_behavior.did_xlist       ? " xlist=<1>"        : "");
 }
 
+static void maybe_autoexpunge(void)
+{
+    if (config_getswitch(IMAPOPT_REPLICAONLY)) return;
+    if (!config_getswitch(IMAPOPT_AUTOEXPUNGE)) return;
+    if (!index_hasrights(imapd_index, ACL_EXPUNGE)) return;
+    index_expunge(imapd_index, NULL, 1);
+}
+
 static void imapd_reset(void)
 {
     int i;
@@ -968,8 +976,7 @@ static void imapd_reset(void)
         idle_stop(FILTER_NONE);
 
     if (imapd_index) {
-        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
-            index_expunge(imapd_index, NULL, 1);
+        maybe_autoexpunge();
         index_close(&imapd_index);
     }
 
@@ -3325,8 +3332,7 @@ static void cmd_unauthenticate(char *tag)
         backend_current = NULL;
     }
     else if (imapd_index) {
-        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
-            index_expunge(imapd_index, NULL, 1);
+        maybe_autoexpunge();
         index_close(&imapd_index);
     }
 
@@ -4775,8 +4781,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (imapd_index) {
-        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
-            index_expunge(imapd_index, NULL, 1);
+        maybe_autoexpunge();
         index_close(&imapd_index);
         wasopen = 1;
 
@@ -5004,9 +5009,12 @@ static void cmd_close(char *tag, char *cmd)
     }
 
     /* local mailbox */
-    if ((cmd[0] == 'C' || config_getswitch(IMAPOPT_AUTOEXPUNGE)) && index_hasrights(imapd_index, ACL_EXPUNGE)) {
+    if (cmd[0] == 'C') {
         index_expunge(imapd_index, NULL, 1);
         /* don't tell changes here */
+    }
+    else {
+        maybe_autoexpunge();
     }
 
     index_close(&imapd_index);
