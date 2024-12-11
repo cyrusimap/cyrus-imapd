@@ -36,22 +36,16 @@ The release engineer is:
 
 * ellie timoney
 
-IV. The Cyrus Roadmap
----------------------
-
-The :ref:`cyrus_roadmap` is a guideline as to the future of the Cyrus project. The Roadmap will include milestones including both new feature development as well as further development on existing features. Releases will be made in accordance with the Roadmap when possible. Changes to the Roadmap are suggested by the community at large. Changes must be approved by a series of votes. All changes must pass a simple 2/3 majority of the Core Developers Group and a simple 2/3 majority of the Governance Board.
-
-
-V. Development Process
+IV. Development Process
 ----------------------
 
-Significant new features or changes to existing code should be discussed on the cyrus-dev mailing list prior to beginning development to allow feedback from other developers. Once a solution has been proposed and accepted by rough consensus of the developers, coding should proceed. All patches must be submitted through the bug tracking system. Once submitted to the tracking system, a member of the core developers group must review the code. If there are no objections to the patch by the core developers, the core developer should then commit the code to the source repository. The submitter of the code is responsible for ensuring that the code gets reviewed by the core developers. Submitters may inquire as to the status of their patches to either the Release Engineer or CORE no more than once per week. Accepted patches will be included in the next appropriate release regardless of the Roadmap.
+Significant new features or changes to existing code should be discussed on the cyrus-dev mailing list prior to beginning development to allow feedback from other developers. Once a solution has been proposed and accepted by rough consensus of the developers, coding should proceed. All patches must be submitted through the bug tracking system. Once submitted to the tracking system, a member of the core developers group must review the code. If there are no objections to the patch by the core developers, the core developer should then commit the code to the source repository. The submitter of the code is responsible for ensuring that the code gets reviewed by the core developers. Submitters may inquire as to the status of their patches to either the Release Engineer or CORE no more than once per week. Accepted patches will be included in the next appropriate release.
 
-The Release Engineer shall make releases according to the Roadmap. If there are no blocker-level bugs, a release may be made at the Release Engineer's discretion. The Release Engineer may also classify a bug as blocker or as a security fix that requires immediate release.
+The Release Engineer shall make regular releases. If there are no blocker-level bugs, a release may be made at the Release Engineer's discretion. The Release Engineer may also classify a bug as blocker or as a security fix that requires immediate release.
 
 The Core Developers group may block a pending release with a simple majority vote.
 
-VI. Changes to the Bylaws
+V. Changes to the Bylaws
 -------------------------
 
 A simple 2/3 majority vote of the current Governance Board is required to change the bylaws.
