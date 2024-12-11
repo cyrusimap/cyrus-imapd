@@ -1032,8 +1032,20 @@ sub tear_down
 
     $self->{cleanup_basedirs} = [@basedirs];
 
-    # maybe there's multiple errors, but we can only die for one of them...
-    die $stop_errors[0] if scalar @stop_errors;
+    if (@stop_errors) {
+        if (exists $self->{'__Error__'}) {
+            # XXX this feels fragile, but there isn't a correct way for
+            # XXX tear_down to see the test's result.
+
+            # looks like we already failed, and dying again here would conceal
+            # the test failure details, which are probably more interesting
+            xlog "errors found during instance shutdown";
+        }
+        else {
+            # maybe there's multiple errors, but we can only die once...
+            die $stop_errors[0];
+        }
+    }
 
     xlog "---------- END $self->{_name} ----------";
 }
