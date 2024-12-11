@@ -22,7 +22,6 @@ The Cyrus Core Developers Group is responsible for the technical guidance of the
 
 The members of the Core Developers group are:
 
-* Wes Craig
 * Bron Gondwana
 * Alexey Melnikov
 * Ken Murchison
