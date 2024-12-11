@@ -34,7 +34,7 @@ The Release Engineer is responsible for making Cyrus releases. The Release Engin
 
 The release engineer is:
 
-* Jeroen van Meeuwen
+* ellie timoney
 
 IV. The Cyrus Roadmap
 ---------------------
