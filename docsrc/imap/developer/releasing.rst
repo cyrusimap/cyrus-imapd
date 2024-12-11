@@ -149,7 +149,8 @@ anybody else pushes in the meantime, you will end up with a mess.
 
 4. You will also be prompted to enter the pass phrase for your GPG key, do it.
 5. Generate a configure script: ``autoreconf -i -s``
-6. Generate everything else: ``./configure --enable-maintainer-mode``
+6. Generate everything else, this time with release checks enabled:
+   ``./configure --enable-maintainer-mode --enable-release-checks``
 7. Create the distribution tarball: ``make distcheck`` (yes, again! this time
    will have the correct version, now that you've tagged it.)
 8. If anything goes wrong up to here, delete the tag, fix the issue, and start

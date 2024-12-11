@@ -112,6 +112,23 @@ AC_SUBST(GCOV_CXXFLAGS)
 AC_SUBST(GCOV_LDFLAGS)
 AC_SUBST(GCOV_LIBS)
 
+dnl enable stricter checks for preparing releases (disabled by default)
+AC_ARG_ENABLE([release-checks],
+              [AS_HELP_STRING([--enable-release-checks],
+                              [enable release checks])],
+              [],
+              [enable_release_checks=no]
+)
+AM_CONDITIONAL([ENABLE_RELEASE_CHECKS],
+               [test "x$enable_release_checks" = "xyes"])
+AM_COND_IF([ENABLE_RELEASE_CHECKS], [
+    AC_MSG_CHECKING([for changes files hanging around])
+    extra_changes_files=$(ls $srcdir/changes/next | grep -cv '0000-TEMPLATE')
+    AC_MSG_RESULT([$extra_changes_files])
+    AS_IF([test $extra_changes_files -ne 0],
+          [AC_MSG_ERROR([found changes files hanging around])])
+])
+
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
@@ -2274,6 +2291,11 @@ AS_IF(
 )
 
 dnl documentation generation (sphinx, perl2rst, gitpython)
+AC_DEFUN([WARN_DOCDEPS], [
+    AM_COND_IF([ENABLE_RELEASE_CHECKS],
+               [AC_MSG_ERROR([No $1, cannot regenerate docs])],
+               [AC_MSG_WARN([No $1, won't be able to regenerate docs])])
+])
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
             AS_HELP_STRING([--with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
@@ -2284,12 +2306,12 @@ AS_CASE([$with_sphinx_build],
         [no],   [SPHINX_BUILD=''],
         [*],    [AC_PATH_PROG(SPHINX_BUILD, sphinx-build, [], [$with_sphinx_build])])
 AS_IF([test -z "$SPHINX_BUILD"],
-      [AC_MSG_WARN([No sphinx-build, won't be able to regenerate docs])])
+      [WARN_DOCDEPS([sphinx-build])])
 AC_SUBST([SPHINX_BUILD])
 
 AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                      [have_ppvr=yes],
-                     [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])
+                     [WARN_DOCDEPS([Pod::POM::View::Restructured])
                        have_ppvr=no
                      ])
 
@@ -2301,8 +2323,7 @@ AS_CASE([$HAVE_PYMOD_GIT],
     AX_PYTHON_MODULE([git], [], [python3])
     AS_CASE([$HAVE_PYMOD_GIT],
             [yes],  [],
-            [*],    [
-         AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+            [*],    [WARN_DOCDEPS([GitPython])])
 ])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
@@ -2602,4 +2623,5 @@ Build info:
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
    xxd:                $XXD
+   release checks:     $enable_release_checks
 "
