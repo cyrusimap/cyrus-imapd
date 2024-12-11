@@ -98,8 +98,10 @@
 #define DB_HIERSEP_CHAR     DB_HIERSEP_STR[0]
 #define DB_USER_PREFIX      "user" DB_HIERSEP_STR
 
-#define DB_VERSION_KEY      DB_HIERSEP_STR "VER" DB_HIERSEP_STR
-#define DB_VERSION_STR      "2"
+/* n.b. mailboxes.db isn't versioned (yet) */
+
+#define SUBDB_VERSION_KEY      DB_HIERSEP_STR "VER" DB_HIERSEP_STR
+#define SUBDB_VERSION_STR      "2"
 
 static mbname_t *mbname_from_dbname(const char *dbname);
 static char *mbname_dbname(const mbname_t *mbname);
@@ -374,11 +376,16 @@ static void mboxlist_dbname_to_key(const char *dbname, size_t len,
     buf_putc(key, KEY_TYPE_NAME);
 
     if (userid) {
+        syslog(LOG_DEBUG, "%s: dbname=<%.*s> len=<" SIZE_T_FMT "> userid=<%s>\n",
+                          __func__, (int) len, dbname, len, userid);
         mbname_t *mbname = mbname_from_userid(userid);
         char *inbox = mbname_dbname(mbname);
         size_t inboxlen = strlen(inbox);
 
-        if (len >= inboxlen && !strncmp(dbname, inbox, inboxlen)) {
+        if (len >= inboxlen
+            && (!dbname[inboxlen] || dbname[inboxlen] == DB_HIERSEP_CHAR)
+            && !strncmp(dbname, inbox, inboxlen))
+        {
             buf_appendcstr(key, "INBOX");
             dbname += inboxlen;
             len -= inboxlen;
@@ -389,17 +396,30 @@ static void mboxlist_dbname_to_key(const char *dbname, size_t len,
     }
 
     buf_appendmap(key, dbname, len);
+    if (userid)
+        syslog(LOG_DEBUG, "%s: => key=<%s>", __func__, buf_cstring(key));
 }
 
 static void mboxlist_dbname_from_key(const char *key, size_t len,
                                      const char *userid, struct buf *dbname)
 {
-    if (userid && len >= 6 && !strncmp(key+1, "INBOX", 5)) {
+    assert(key[0] == KEY_TYPE_NAME);
+
+    if (userid)
+        syslog(LOG_DEBUG, "%s: key=<%.*s> len=<" SIZE_T_FMT "> userid=<%s>",
+                          __func__, (int) len, key, len, userid);
+
+    if (userid
+        && len >= 6
+        && (!key[6] || key[6] == DB_HIERSEP_CHAR)
+        && !strncmp(key+1, "INBOX", 5))
+    {
         mbname_t *mbname = mbname_from_userid(userid);
         char *inbox = mbname_dbname(mbname);
 
         buf_setcstr(dbname, inbox);
         buf_appendmap(dbname, key+6, len-6);
+        syslog(LOG_DEBUG, "%s: => dbname=<%s>", __func__, buf_cstring(dbname));
 
         mbname_free(&mbname);
         free(inbox);
@@ -407,6 +427,9 @@ static void mboxlist_dbname_from_key(const char *key, size_t len,
     }
 
     buf_init_ro(dbname, key+1, len-1);
+
+    if (userid)
+        syslog(LOG_DEBUG, "%s: => dbname=<%s>", __func__, buf_cstring(dbname));
 }
 
 static void mboxlist_id_to_key(const char *id, struct buf *key)
@@ -4977,9 +5000,9 @@ mboxlist_opensubs(const char *userid,
         db_r = cyrusdb_open(SUBDB, subsfname, CYRUSDB_CREATE, ret);
         if (db_r == CYRUSDB_OK) {
             // set the version key
-            const char *key = DB_VERSION_KEY;
+            const char *key = SUBDB_VERSION_KEY;
             size_t keylen = strlen(key);
-            const char *data = DB_VERSION_STR;
+            const char *data = SUBDB_VERSION_STR;
             size_t datalen = strlen(data);
             db_r = cyrusdb_store(*ret, key, keylen, data, datalen, NULL);
         }
@@ -5738,9 +5761,9 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
     db_r = cyrusdb_open(SUBDB, newsubsfname, CYRUSDB_CREATE, &newsubs);
     if (!db_r) {
         /* add version record */
-        const char *key = DB_VERSION_KEY;
+        const char *key = SUBDB_VERSION_KEY;
         size_t keylen = strlen(key);
-        const char *data = DB_VERSION_STR;
+        const char *data = SUBDB_VERSION_STR;
         size_t datalen = strlen(data);
         db_r = cyrusdb_store(newsubs, key, keylen, data, datalen, &newtid);
     }
@@ -5804,8 +5827,8 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
 static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **subs)
 {
     // if we have the DB key already in the DB, nothing to do!
-    const char *key = DB_VERSION_KEY;
-    size_t keylen = strlen(DB_VERSION_KEY);
+    const char *key = SUBDB_VERSION_KEY;
+    size_t keylen = strlen(SUBDB_VERSION_KEY);
     const char *data = NULL;
     size_t datalen = 0;
     struct mboxlock *upgradelock = NULL;
