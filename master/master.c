@@ -1426,7 +1426,7 @@ static void reap_child(void)
                         s->lastreadyfail = now;
                         if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
                             if (s->babysit) {
-                                syslog(LOG_ERR, "ERROR: too many failures for"
+                                syslog(LOG_ERR, "ERROR: too many failures for "
                                        "service %s/%s, disabling for %d seconds",
                                        SERVICEPARAM(s->name),
                                        SERVICEPARAM(s->familyname),
