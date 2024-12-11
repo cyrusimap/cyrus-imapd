@@ -599,6 +599,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_zeroskip =
     &cyrusdb_zeroskip_dump,
     &cyrusdb_zeroskip_consistent,
     &cyrusdb_zeroskip_checkpoint,
-    &cyrusdb_zeroskip_compar
+    &cyrusdb_zeroskip_compar,
+    NULL
 };
 

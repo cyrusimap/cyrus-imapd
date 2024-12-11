@@ -194,6 +194,7 @@ sbin_PROGRAMS += \
     imap/cyr_userseen \
     imap/cyr_virusscan \
     imap/deliver \
+    imap/hammer_cyrusdb \
     imap/ipurge \
     imap/mbexamine \
     imap/mbpath \
@@ -909,6 +910,9 @@ imap_fetchnews_LDADD = $(LD_UTILITY_ADD)
 imap_fud_SOURCES = imap/fud.c imap/mutex_fake.c master/service.c
 imap_fud_LDADD = $(LD_SERVER_ADD)
 
+imap_hammer_cyrusdb_SOURCES = imap/cli_fatal.c imap/hammer_cyrusdb.c imap/mutex_fake.c
+imap_hammer_cyrusdb_LDADD = $(LD_UTILITY_ADD)
+
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
@@ -1470,6 +1474,7 @@ lib_libcyrus_la_SOURCES = \
     lib/cyrusdb_quotalegacy.c \
     lib/cyrusdb_skiplist.c \
     lib/cyrusdb_twoskip.c \
+    lib/cyrusdb_twom.c \
     lib/glob.c \
     lib/htmlchar.c \
     lib/htmlchar.h \

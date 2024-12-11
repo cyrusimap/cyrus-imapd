@@ -939,5 +939,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     NULL,
     /* SQL databases have all sorts of evil collations - we can't
      * make any assumptions though, so just assume raw */
-    &bsearch_ncompare_raw
+    &bsearch_ncompare_raw,
+    NULL
 };
