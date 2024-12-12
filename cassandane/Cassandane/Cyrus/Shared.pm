@@ -219,4 +219,31 @@ sub test_subscribe_prefix
     $self->shared_subscribe_common('chris', 'christopher');
 }
 
+sub test_subscribe_vd
+    :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('firstuser@example.com',
+                                   'seconduser@example.com');
+}
+
+sub test_subscribe_vd_prefix
+    :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('matt@example.com',
+                                   'matthew@example.com');
+}
+
+sub test_subscribe_vd_prefix2
+    :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('jim@example.com',
+                                   'jim@example.coma.example.com');
+}
+
 1;
