@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::Lsub;
+package Cassandane::Cyrus::Subscriptions;
 use strict;
 use warnings;
 use DateTime;
