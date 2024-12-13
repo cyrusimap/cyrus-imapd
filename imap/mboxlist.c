@@ -102,8 +102,8 @@
 /* n.b. mailboxes.db isn't versioned (yet) */
 
 #define SUBDB_VERSION_KEY      DB_HIERSEP_STR "VER" DB_HIERSEP_STR
-#define SUBDB_VERSION_STR      "2"
-#define SUBDB_VERSION_NUM      (2)
+#define SUBDB_VERSION_STR      "3"
+#define SUBDB_VERSION_NUM      (3)
 
 static mbname_t *mbname_from_dbname(const char *dbname);
 static char *mbname_dbname(const mbname_t *mbname);
@@ -5769,15 +5769,77 @@ static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
 {
     struct upgrade_rock *urock = (struct upgrade_rock *) rock;
     struct buf *namebuf = urock->namebuf;
-    char *dbname = NULL;
 
-    /* XXX don't know how to ugprade from anything else yet! */
-    assert(urock->old_version == 0);
+    if (keylen == strlen(SUBDB_VERSION_KEY)
+        && !strncmp(key, SUBDB_VERSION_KEY, keylen))
+    {
+        /* don't try to migrate version record */
+        return 0;
+    }
 
-    buf_setmap(namebuf, key, keylen);
-    dbname = mboxname_to_dbname(buf_cstring(namebuf));
-    mboxlist_dbname_to_key(dbname, strlen(dbname), urock->userid, namebuf);
-    free(dbname);
+    assert(urock->old_version >= 0 && urock->old_version <= SUBDB_VERSION_NUM);
+
+    if (urock->old_version == 0) {
+        char *dbname = NULL;
+
+        /* before versioning we used intnames, need to convert to key */
+        buf_setmap(namebuf, key, keylen);
+        dbname = mboxname_to_dbname(buf_cstring(namebuf));
+        mboxlist_dbname_to_key(dbname, strlen(dbname), urock->userid, namebuf);
+        free(dbname);
+    }
+    /* n.b. there was no version 1 */
+    else if (urock->old_version == 2) {
+        /* version 2 used keys, but handled mailboxes shared between similar
+         * usernames badly (#5146), so we need to clean up that mess
+         */
+        assert(key[0] == KEY_TYPE_NAME);
+
+        if (keylen > 6
+            && !strncmp(key+1, "INBOX", 5)
+            && key[6] != DB_HIERSEP_CHAR)
+        {
+            /* if e.g. user.matt subscribed to mailboxes belonging to
+             * user.matthew, there'll be records like "INBOXhew" to fix
+             */
+            mbname_t *mbname = mbname_from_userid(urock->userid);
+            char *inbox = mbname_dbname(mbname);
+
+            /* n.b. no hiersep char between inbox and the rest; we want to
+             * replace "INBOXhew" with "user.matthew", not with
+             * "user.matt.hew"!
+             */
+            buf_reset(namebuf);
+            buf_putc(namebuf, KEY_TYPE_NAME);
+            buf_appendcstr(namebuf, inbox);
+            buf_appendmap(namebuf, key + 6, keylen - 6);
+
+            xsyslog(LOG_DEBUG, "fixing bad shared mailbox subscription",
+                               "userid=<%s> old_key=<%.*s> new_key=<%s>",
+                               urock->userid,
+                               (int) keylen, key,
+                               buf_cstring(namebuf));
+
+            mbname_free(&mbname);
+            free(inbox);
+        }
+        else {
+            buf_setmap(namebuf, key, keylen);
+        }
+    }
+    else if (urock->old_version == SUBDB_VERSION_NUM) {
+        /* shouldn't get here, but if we do just pass it through */
+        buf_setmap(namebuf, key, keylen);
+    }
+    else {
+        /* XXX uh-oh, don't know how to upgrade from this version */
+        char buf[128];
+
+        snprintf(buf, sizeof(buf),
+                 "don't know how to upgrade sub.db from version %d",
+                 urock->old_version);
+        fatal(buf, EX_SOFTWARE);
+    }
 
     const char *newkey = buf_base(namebuf);
     size_t newkeylen = buf_len(namebuf);
