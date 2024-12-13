@@ -51,6 +51,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -102,6 +103,7 @@
 
 #define SUBDB_VERSION_KEY      DB_HIERSEP_STR "VER" DB_HIERSEP_STR
 #define SUBDB_VERSION_STR      "2"
+#define SUBDB_VERSION_NUM      (2)
 
 static mbname_t *mbname_from_dbname(const char *dbname);
 static char *mbname_dbname(const mbname_t *mbname);
@@ -120,7 +122,9 @@ static int have_racl = 0;
 static int mboxlist_opensubs(const char *userid, int create, struct db **ret);
 static void mboxlist_closesubs(struct db *sub);
 
-static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **ret);
+static int mboxlist_upgrade_subs(const char *userid,
+                                 const char *subsfname,
+                                 struct db **ret);
 
 static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock);
 static int mboxlist_changequota(const mbentry_t *mbentry, void *rock);
@@ -5555,6 +5559,7 @@ struct upgrade_rock {
     struct txn **tid;
     hash_table *ids;
     int *r;
+    int old_version;
 };
 
 static int _foreach_cb(void *rock,
@@ -5650,7 +5655,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     struct db *old = NULL;
     struct txn *tid = NULL;
     hash_table ids = HASH_TABLE_INITIALIZER;
-    struct upgrade_rock urock = { NULL, NULL, NULL, &tid, &ids, &r };
+    struct upgrade_rock urock = { NULL, NULL, NULL, &tid, &ids, &r, 0 };
     char *fname = NULL;
     const char *newfname;
 
@@ -5723,6 +5728,52 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     return r;
 }
 
+static int subsdb_needs_upgrade(const char *userid,
+                                const char *subsfname,
+                                struct db *subs,
+                                int *curr_version)
+{
+    const char *key = SUBDB_VERSION_KEY;
+    size_t keylen = strlen(SUBDB_VERSION_KEY);
+    const char *data = NULL;
+    size_t datalen = 0;
+    char *tmp, *endptr;
+    int version, r;
+
+    r = cyrusdb_fetch(subs, key, keylen, &data, &datalen, NULL);
+    switch (r) {
+    case CYRUSDB_NOTFOUND:
+        version = 0;
+        break;
+    case CYRUSDB_OK:
+        /* need a copy that's definitely null-terminated for strtol */
+        tmp = xstrndup(data, datalen);
+        errno = 0;
+        version = strtol(tmp, &endptr, 10);
+        if (errno || !(*tmp && !*endptr)) {
+            xsyslog(LOG_ERR, "ERROR: bad subscriptions db version",
+                             "userid=<%s> subsfname=<%s> version=<%.*s>",
+                             userid, subsfname, (int) datalen, data);
+            fatal("bad subscriptions db version", EX_SOFTWARE);
+        }
+        free(tmp);
+        break;
+    default:
+        /* XXX uh oh?? */
+        xsyslog(LOG_ERR, "ERROR: can't fetch subscriptions db version",
+                         "userid=<%s> subsfname=<%s>",
+                         userid, subsfname);
+        fatal("can't fetch subscriptions db version", EX_SOFTWARE);
+        break;
+    }
+
+    /* XXX if it's too new??? uh oh */
+    assert(version <= SUBDB_VERSION_NUM);
+
+    if (curr_version) *curr_version = version;
+
+    return version != SUBDB_VERSION_NUM;
+}
 
 static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
                             const char *data, size_t datalen)
@@ -5730,6 +5781,9 @@ static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
     struct upgrade_rock *urock = (struct upgrade_rock *) rock;
     struct buf *namebuf = urock->namebuf;
     char *dbname = NULL;
+
+    /* XXX don't know how to ugprade from anything else yet! */
+    assert(urock->old_version == 0);
 
     buf_setmap(namebuf, key, keylen);
     dbname = mboxname_to_dbname(buf_cstring(namebuf));
@@ -5742,7 +5796,10 @@ static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
     return cyrusdb_store(urock->db, newkey, newkeylen, data, datalen, urock->tid);
 }
 
-static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname, struct db **subs)
+static int mboxlist_upgrade_subs_work(const char *userid,
+                                      const char *subsfname,
+                                      struct db **subs,
+                                      int curr_version)
 {
     int db_r = 0;
     int r2 = 0;
@@ -5775,7 +5832,10 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
     }
 
     /* perform upgrade from old to new db */
-    struct upgrade_rock urock = { userid, &buf, newsubs, &newtid, NULL, NULL };
+    struct upgrade_rock urock = { userid, &buf,
+                                  newsubs, &newtid,
+                                  NULL, NULL,
+                                  curr_version };
     db_r = cyrusdb_foreach(oldsubs, "", 0, NULL, _upgrade_subs_cb, &urock, &oldtid);
     r2 = cyrusdb_abort(oldsubs, oldtid);
     if (!r2) r2 = cyrusdb_close(oldsubs);
@@ -5825,31 +5885,31 @@ static int mboxlist_upgrade_subs_work(const char *userid, const char *subsfname,
     return db_r ? IMAP_IOERROR : 0;
 }
 
-static int mboxlist_upgrade_subs(const char *userid, const char *subsfname, struct db **subs)
+static int mboxlist_upgrade_subs(const char *userid,
+                                 const char *subsfname,
+                                 struct db **subs)
 {
-    // if we have the DB key already in the DB, nothing to do!
-    const char *key = SUBDB_VERSION_KEY;
-    size_t keylen = strlen(SUBDB_VERSION_KEY);
-    const char *data = NULL;
-    size_t datalen = 0;
     struct mboxlock *upgradelock = NULL;
+    int curr_version;
     int r = 0;
 
-    int db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
-    // XXX: check version?
-    if (db_r == CYRUSDB_OK) return 0;
+    if (!subsdb_needs_upgrade(userid, subsfname, *subs, NULL))
+        return 0;
 
     // lock the subs namespace - we'll hold this lock while we upgrade.
     char *lockname = strconcat("$SUBS_UPGRADE$", userid, (char *)NULL);
     r = mboxname_lock(lockname, &upgradelock, LOCK_EXCLUSIVE);
     if (r) goto done;
 
-    /* if we find it this time, we lost the race and someone else already
-     * upgraded the DB.  Bonus. */
-    db_r = cyrusdb_fetch(*subs, key, keylen, &data, &datalen, NULL);
-    if (db_r != CYRUSDB_OK) {
-        syslog(LOG_NOTICE, "mboxlist_upgrade_subs(): %s", userid);
-        r = mboxlist_upgrade_subs_work(userid, subsfname, subs);
+    /* if it no longer needs upgrading, we lost the race and someone else
+     * already upgraded the DB.  Bonus. */
+    if (subsdb_needs_upgrade(userid, subsfname, *subs, &curr_version)) {
+        xsyslog(LOG_NOTICE, "upgrading user subscriptions",
+                            "userid=<%s> subsfname=<%s>"
+                            " from_version=<%d> to_version=<%d>",
+                            userid, subsfname,
+                            curr_version, SUBDB_VERSION_NUM);
+        r = mboxlist_upgrade_subs_work(userid, subsfname, subs, curr_version);
     }
 
  done:
