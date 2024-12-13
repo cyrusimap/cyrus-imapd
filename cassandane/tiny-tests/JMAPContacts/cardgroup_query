@@ -187,20 +187,24 @@ sub test_cardgroup_query
     my $id2 = $res->[0][1]{created}{"2"}{id};
     my $id3 = $res->[0][1]{created}{"3"}{id};
     my $id4 = $res->[0][1]{created}{"4"}{id};
+    my $uid1 = $res->[0][1]{created}{"1"}{uid};
+    my $uid2 = $res->[0][1]{created}{"2"}{uid};
+    my $uid3 = $res->[0][1]{created}{"3"}{uid};
+    my $uid4 = $res->[0][1]{created}{"4"}{uid};
 
     xlog $self, "create card groups";
     $res = $jmap->CallMethods([['ContactCard/set', {create => {
         "1" => { kind => 'group',
                  name => { full => "group1" },
-                 members => { $id1 => JSON::true, $id2 => JSON::true }
+                 members => { $uid1 => JSON::true, $uid2 => JSON::true }
                },
         "2" => { kind => 'group',
                  name => { full => "group2" },
-                 members => { $id3 => JSON::true }
+                 members => { $uid3 => JSON::true }
                },
         "3" => { kind => 'group',
                  name => { full => "group3" },
-                 members => { $id4 => JSON::true }
+                 members => { $uid4 => JSON::true }
                }
     }}, "R1"]]);
 
@@ -236,7 +240,7 @@ sub test_cardgroup_query
 
     xlog $self, "filter by member";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
-                    filter => { kind => "group", hasMember => $id3 }
+                    filter => { kind => "group", hasMember => $uid3 }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});

@@ -76,5 +76,5 @@ sub test_contact_query_uid
     ]);
     $self->assert_str_equals("Contact/query", $res->[0][0]);
     my %gotIds =  map { $_ => 1 } @{$res->[0][1]{ids}};
-    $self->assert_deep_equals({ $contactUid1 => 1, $contactUid3 => 1, }, \%gotIds);
+    $self->assert_deep_equals({ $contactId1 => 1, $contactId3 => 1, }, \%gotIds);
 }

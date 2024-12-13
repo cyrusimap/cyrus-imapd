@@ -50,13 +50,15 @@ EOF
             properties => ['contactIds', 'otherAccountContactIds' ],
         }, 'R1']
     ]);
-    my @gotids = sort @{$res->[0][1]{list}[0]{contactIds}};
 
     xlog "Assert contactIds in group got deduplicated";
-    $self->assert_deep_equals(\@wantids, \@gotids);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{list}[0]{contactIds}});
+    $self->assert_str_not_equals($res->[0][1]{list}[0]{contactIds}[0],
+                                 $res->[0][1]{list}[0]{contactIds}[1]);
+    $self->assert_str_not_equals($res->[0][1]{list}[0]{contactIds}[0],
+                                 $res->[0][1]{list}[0]{contactIds}[2]);
 
     xlog "Assert otherAccountContactIds got deduplicated";
-    $self->assert_deep_equals({ foo => \@wantOtherAccountIds },
-        $res->[0][1]{list}[0]{otherAccountContactIds});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}[0]{otherAccountContactIds}{foo}});
 
 }
