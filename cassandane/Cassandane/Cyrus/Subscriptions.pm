@@ -42,9 +42,15 @@ use strict;
 use warnings;
 use DateTime;
 use Data::Dumper;
+use File::Basename;
+use File::Copy;
+use File::Path qw(mkpath);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Mboxname;
+use Cassandane::Util::Log;
+use Cassandane::Util::Words;
 
 sub new
 {
@@ -219,6 +225,140 @@ sub test_lsub_extrachild
             'user.other.sub.folder'
           ],
     ], "LSUB extrachild mismatch: " . Dumper($subdata));
+}
+
+sub v2
+{
+    my ($first, @rest) = @_;
+
+    my $v2 = 'N' . $first;
+    $v2 .= "\x1f" . $_ for @rest;
+    return $v2;
+}
+
+sub upgrade_from_2_common
+{
+    my ($self, $domain) = @_;
+
+    # hardcoded localparts because we need to predict particular badness
+    my $user1 = 'matt';
+    my $user2 = 'matthew';
+
+    # optional domain for testing with/without virtdomains.
+    # we only test with no domain or the same domain, because #5146 didn't
+    # happen if the two users were in different domains, so there wouldn't be
+    # a "bad" db record to "fix"
+    if ($domain) {
+        $user1 .= "\@$domain";
+        $user2 .= "\@$domain";
+    }
+
+    my $config = $self->{instance}->{config};
+    my $sep = $config->get_bool('unixhierarchysep', 'on') ? '/' : '.';
+
+    my $user1_inbox = Cassandane::Mboxname->new(config => $config);
+    $user1_inbox->from_username($user1);
+
+    my @user1_mailboxes = map {
+        $user1_inbox->make_child($_);
+    } random_words(3);
+
+    $self->{instance}->create_user($user1,
+                                   subdirs => \@user1_mailboxes);
+
+    my $user2_inbox = Cassandane::Mboxname->new(config => $config);
+    $user2_inbox->from_username($user2);
+
+    my @user2_mailboxes = map {
+        $user2_inbox->make_child($_);
+    } random_words(3);
+
+    $self->{instance}->create_user($user2,
+                                   subdirs => \@user2_mailboxes);
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', $user1);
+    my $subdb = $mbpath->{user}->{sub};
+    my $engine = $self->{instance}->{config}->get('subscription_db') || 'flat';
+
+    # generate user1 subscriptions in the v2 format
+    my @items = (
+        # version key
+        [ 'SET', "\x1fVER\x1f", '2' ],
+        # subscribe to own inbox (user.matt)
+        [ 'SET', v2('INBOX') ],
+        # subscribe to own subdirs (user.matt.foo)
+        (map { [ 'SET', v2('INBOX', $_->box()) ] } @user1_mailboxes),
+        # some bad subscriptions as if we had hit bug #5146
+        [ 'SET', v2('INBOXhew') ], # user.matthew
+        (map { [ 'SET', v2('INBOXhew', $_->box()) ] } @user2_mailboxes),
+    );
+
+    # XXX run_dbcommand needs the file to already exist
+    mkpath(dirname($subdb));
+    open my $fh, '>', $subdb or die "open $subdb: $!";
+    close $fh;
+
+    # create v2 subscriptions file
+    $self->{instance}->run_dbcommand($subdb, $engine, @items);
+
+    # make a copy of sub.db pre-upgrade in case we want to look at it later
+    copy($subdb, "$subdb.orig");
+
+    # discard syslog accumulated so far
+    $self->{instance}->getsyslog();
+
+    # list user1's subscriptions normally (db should be upgraded on open)
+    my $service = $self->{instance}->get_service('imap');
+    my $store = $service->create_store(username => $user1);
+    my $talk = $store->get_client();
+
+    my $subdata = $talk->lsub("", "*");
+    $self->assert_mailbox_structure($subdata, $sep, {
+        $user1_inbox->to_external('owner') => [],
+        (map { $_->to_external('owner') => [] } @user1_mailboxes),
+        $user2_inbox->to_external('other') => [ '\\HasChildren' ],
+        (map { $_->to_external('other') => [] } @user2_mailboxes),
+    });
+    $talk->logout();
+
+    # check that we upgraded
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{upgrading user subscriptions});
+    my (undef, $version) = $self->{instance}->run_dbcommand($subdb, $engine,
+        [ 'GET', "\x1fVER\x1f" ]
+    );
+    $self->assert_num_equals(3, $version);
+
+    # list user's subscriptions again
+    $talk = $store->get_client();
+
+    $subdata = $talk->lsub("", "*");
+    $self->assert_mailbox_structure($subdata, $sep, {
+        $user1_inbox->to_external('owner') => [],
+        (map { $_->to_external('owner') => [] } @user1_mailboxes),
+        $user2_inbox->to_external('other') => [ '\\HasChildren' ],
+        (map { $_->to_external('other') => [] } @user2_mailboxes),
+    });
+    $talk->logout();
+
+    # better not have upgraded this time
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{upgrading user subscriptions});
+}
+
+sub test_upgrade_from_2
+{
+    my ($self) = @_;
+
+    $self->upgrade_from_2_common(undef);
+}
+
+sub test_upgrade_from_2_vd
+    :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->upgrade_from_2_common('example.com');
 }
 
 1;
