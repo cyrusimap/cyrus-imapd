@@ -19,12 +19,12 @@ sub test_contact_update_grouped_property
         expandurl => 1,
     );
 
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$uid.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
-UID:$id
+UID:$uid
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
 ITEM1.ORG:Bubba Gump Shrimp Co.
@@ -43,6 +43,7 @@ EOF
         }, 'R1']
     ]);
 
+    my $id = $res->[0][1]{list}[0]{id};
     $self->assert_equals("Bubba Gump Shrimp Co.",
                          $res->[0][1]{list}[0]{company});
 

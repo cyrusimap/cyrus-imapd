@@ -199,6 +199,10 @@ sub test_card_query_shared
     my $id2 = $res->[0][1]{created}{"card2"}{id};
     my $id3 = $res->[0][1]{created}{"card3"}{id};
     my $id4 = $res->[0][1]{created}{"card4"}{id};
+    my $uid1 = $res->[0][1]{created}{"card1"}{uid};
+    my $uid2 = $res->[0][1]{created}{"card2"}{uid};
+    my $uid3 = $res->[0][1]{created}{"card3"}{uid};
+    my $uid4 = $res->[0][1]{created}{"card4"}{uid};
 
     xlog $self, "create card groups";
     $res = $jmap->CallMethods([ [
@@ -209,17 +213,17 @@ sub test_card_query_shared
                 group1 => {
                     kind    => 'group',
                     name    => { full => "group1" },
-                    members => { $id1 => JSON::true, $id2 => JSON::true }
+                    members => { $uid1 => JSON::true, $uid2 => JSON::true }
                 },
                 group2 => {
                     kind    => 'group',
                     name    => { full => "group2" },
-                    members => { $id3 => JSON::true }
+                    members => { $uid3 => JSON::true }
                 },
                 group3 => {
                     kind    => 'group',
                     name    => { full => "group3" },
-                    members => { $id4 => JSON::true }
+                    members => { $uid4 => JSON::true }
                 }
             }
         },

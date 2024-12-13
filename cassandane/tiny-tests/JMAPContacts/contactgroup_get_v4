@@ -19,12 +19,12 @@ sub test_contactgroup_get_v4
         expandurl => 1,
     );
 
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$uid.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
-UID:$id
+UID:$uid
 KIND:group
 MEMBER:urn:uuid:60f60d95-1f33-480c-bfd6-02b93a07aefc
 MEMBER:urn:uuid:3e7cfbaf-3199-41bd-8749-38b8d1c89605
@@ -41,7 +41,7 @@ EOF
         ['ContactGroup/get', {
         }, 'R1']
     ]);
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals($uid, $res->[0][1]{list}[0]{uid});
     $self->assert_str_equals('Test', $res->[0][1]{list}[0]{name});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}[0]{contactIds}});
 }

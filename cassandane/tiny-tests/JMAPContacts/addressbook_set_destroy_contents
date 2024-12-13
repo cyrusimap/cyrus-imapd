@@ -25,15 +25,17 @@ END:VCARD
 EOF
 
     my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
-    my $cardId = basename($carddav->NewContact($abookId, $VCard), '.vcf');
+    $carddav->NewContact($abookId, $VCard);
+
+    my $res = $jmap->CallMethods([['Contact/get', {}, "R1"]]);
+    my $cardId = $res->[0][1]{list}[0]{id};
 
     xlog "Destroy addressbook (with and without onDestroyRemoveContents)";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['AddressBook/set', {
             destroy => [$abookId],
         }, 'R1'],
-# XXX  Change to ContactCard/get once implemented
-        ['Contact/get', {
+        ['ContactCard/get', {
             ids => [$cardId],
             properties => ['id'],
         }, 'R2'],
@@ -41,7 +43,7 @@ EOF
             destroy => [$abookId],
             onDestroyRemoveContents => JSON::true,
         }, 'R3'],
-        ['Contact/get', {
+        ['ContactCard/get', {
             ids => [$cardId],
             properties => ['id'],
         }, 'R2'],
