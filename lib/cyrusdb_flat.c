@@ -332,6 +332,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
             free_db(db);
             return CYRUSDB_IOERROR;
         }
+        errno = 0; /* ENOENT has been handled */
         db->fd = open(fname, O_RDWR | O_CREAT, 0644);
     }
 
