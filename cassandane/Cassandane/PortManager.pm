@@ -89,6 +89,16 @@ sub port_is_free
         LocalPort => $port,
         Proto     => 'tcp',
         ReuseAddr => 1,
+
+        # There's something odd going on with IO::Socket::IP's use of
+        # getaddrinfo, such that if you provide "::1" as the local address, and
+        # the loopback interface has inet6, but another (say, eth0) interface
+        # does not, the behavior of AI_ADDRCONFIG will be to act as if the
+        # system has no inet6 support, and so inet6 bindings should not be
+        # offered.  Something seems amiss, but I'm not sure where.  Using 0
+        # will allow ports on ::1 to seem available, though.
+        # -- rjbs, 2024-12-14
+        GetAddrInfoFlags => 0,
     );
 
     unless ($socket) {
