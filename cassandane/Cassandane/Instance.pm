@@ -1097,7 +1097,7 @@ sub _start_smtpd
 
     my $basedir = $self->{basedir};
 
-    my $host = 'localhost';
+    my $host = '127.0.0.1';
 
     my $port = Cassandane::PortManager::alloc($host);
 
@@ -1160,7 +1160,7 @@ sub start_httpd {
 
     my $basedir = $self->{basedir};
 
-    my $host = 'localhost';
+    my $host = '127.0.0.1';
     $port ||= Cassandane::PortManager::alloc($host);
 
     my $httpdpid = fork();
