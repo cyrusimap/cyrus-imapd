@@ -1213,7 +1213,7 @@ sub start
             Cassandane::Instance->get_version($self->{installation});
 
         if ($maj > 3 || ($maj == 3 && $min >= 1)) {
-            my $host = 'localhost';
+            my $host = '127.0.0.1';
             my $port = Cassandane::PortManager::alloc($host);
 
             $self->{config}->set(
