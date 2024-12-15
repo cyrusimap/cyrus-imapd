@@ -95,7 +95,7 @@ sub shared_subscribe_common
     my $user1_store = $service->create_store(username => $user1);
     my $user1_talk = $user1_store->get_client();
 
-    foreach my $mb (@user1_mailboxes) {
+    foreach my $mb ($user1_inbox, @user1_mailboxes) {
         $user1_talk->subscribe($mb->to_external('owner'));
         $user1_talk->setacl($mb->to_external('owner'), $user2, 'lrs');
     }
@@ -112,29 +112,27 @@ sub shared_subscribe_common
     my $user2_store = $service->create_store(username => $user2);
     my $user2_talk = $user2_store->get_client();
 
-    foreach my $mb (@user2_mailboxes) {
+    foreach my $mb ($user2_inbox, @user2_mailboxes) {
         $user2_talk->subscribe($mb->to_external('owner'));
         $user2_talk->setacl($mb->to_external('owner'), $user1, 'lrs');
     }
 
     xlog("subscribe as $user1 to $user2\'s shared mb's");
-    foreach my $mb (@user2_mailboxes) {
+    foreach my $mb ($user2_inbox, @user2_mailboxes) {
         $user1_talk->subscribe($mb->to_external('other'));
         $self->assert_equals('ok', $user1_talk->get_last_completion_response());
     }
-
-    xlog("but not their inbox");
-    $user1_talk->subscribe($user2_inbox->to_external('other'));
-    $self->assert_equals('no', $user1_talk->get_last_completion_response());
 
     xlog("make sure $user1 has the right subscriptions");
     my $user1_subs = $user1_talk->list([qw(SUBSCRIBED)],
                                        '', '*',
                                        'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user1_subs, $sep, {
+        $user1_inbox->to_external('owner') => [ '\\Subscribed' ],
         (map {(
             $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user1_mailboxes),
+        $user2_inbox->to_external('other') => [ '\\Subscribed' ],
         (map {(
             $_->to_external('other') => [
                 '\\Subscribed',
@@ -144,7 +142,7 @@ sub shared_subscribe_common
     });
 
     xlog("unsub as $user1 from $user2\'s folders");
-    foreach my $mb (@user2_mailboxes) {
+    foreach my $mb ($user2_inbox, @user2_mailboxes) {
         $user1_talk->unsubscribe($mb->to_external('other'));
         $self->assert_equals('ok', $user1_talk->get_last_completion_response());
     }
@@ -154,30 +152,29 @@ sub shared_subscribe_common
                                     '', '*',
                                     'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user1_subs, $sep, {
+        $user1_inbox->to_external('owner') => [ '\\Subscribed' ],
         (map {(
             $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user1_mailboxes),
     });
 
     xlog("subscribe as $user2 to $user1\'s shared mb's");
-    foreach my $mb (@user1_mailboxes) {
+    foreach my $mb ($user1_inbox, @user1_mailboxes) {
         $user2_talk->subscribe($mb->to_external('other'));
         $self->assert_equals('ok',
                              $user2_talk->get_last_completion_response());
     }
-
-    xlog("but not their inbox");
-    $user2_talk->subscribe($user1_inbox->to_external('other'));
-    $self->assert_equals('no', $user2_talk->get_last_completion_response());
 
     xlog("make sure $user2 has the right subscriptions");
     my $user2_subs = $user2_talk->list([qw(SUBSCRIBED)],
                                        '', '*',
                                        'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user2_subs, $sep, {
+        $user2_inbox->to_external('owner') => [ '\\Subscribed' ],
         (map {(
             $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user2_mailboxes),
+        $user1_inbox->to_external('other') => [ '\\Subscribed' ],
         (map {(
             $_->to_external('other') => [
                 '\\Subscribed',
@@ -187,7 +184,7 @@ sub shared_subscribe_common
     });
 
     xlog("unsub as $user2 from $user1\'s folders");
-    foreach my $mb (@user1_mailboxes) {
+    foreach my $mb ($user1_inbox, @user1_mailboxes) {
         $user2_talk->unsubscribe($mb->to_external('other'));
         $self->assert_equals('ok',
                              $user2_talk->get_last_completion_response());
@@ -198,6 +195,7 @@ sub shared_subscribe_common
                                     '', '*',
                                     'RETURN', [qw(CHILDREN)]);
     $self->assert_mailbox_structure($user2_subs, $sep, {
+        $user1_inbox->to_external('owner') => [ '\\Subscribed' ],
         (map {(
             $_->to_external('owner') => [ '\\Subscribed', '\\HasNoChildren' ]
         )} @user2_mailboxes),
