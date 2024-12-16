@@ -57,6 +57,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "byteorder.h"
+#include "crc32.h"
 #include "cyrusdb.h"
 #include "cyr_lock.h"
 #include "libcyr_cfg.h"
@@ -119,8 +120,8 @@ struct skiprecord {
     size_t nextloc[MAXLEVEL+1];
 
     /* what do our integrity checks say? */
-    uint32_t xxh_head;
-    uint32_t xxh_tail;
+    uint32_t csum_head;
+    uint32_t csum_tail;
 
     /* our key and value */
     size_t keyoffset;
@@ -173,7 +174,8 @@ struct txn {
 
 struct db_header {
     /* header info */
-    uint32_t version;
+    uint16_t version;
+    uint16_t checksum_engine;
     uint32_t flags;
     unsigned char uuid[16];
     uint64_t generation;
@@ -193,6 +195,9 @@ struct dbengine {
     char *map_base;
     size_t map_size;
 
+    // checksum engine
+    uint32_t (*csum)(const char *base, size_t len);
+
     struct db_header header;
     struct skiploc loc;
     struct skiprecord recs[2];
@@ -203,7 +208,7 @@ struct dbengine {
 
     unsigned char has_lock;
     unsigned int readonly:1;
-    unsigned int noxxh:1;
+    unsigned int nocsum:1;
     unsigned int nocompact:1;
 };
 
@@ -219,29 +224,32 @@ struct db_list {
 /* offsets of header files */
 enum {
     OFFSET_HEADER = 0,
-    OFFSET_VERSION = 16,
-    OFFSET_FLAGS = 20,
-    OFFSET_UUID = 24,
+    OFFSET_UUID = 16,
+    OFFSET_VERSION = 32,
+    OFFSET_CHECKSUM_ENGINE = 34,
+    OFFSET_FLAGS = 36,
     OFFSET_GENERATION = 40,
     OFFSET_NUM_RECORDS = 48,
     OFFSET_DIRTY_SIZE = 56,
     OFFSET_REPACK_SIZE = 64,
     OFFSET_CURRENT_SIZE = 72,
     OFFSET_MAXLEVEL = 80,
-    OFFSET_XXH = 84,
+    OFFSET_CSUM = 84,
 };
 
 #define HEADER_SIZE 88
 #define DUMMY_OFFSET HEADER_SIZE
 #define MAXRECORDHEAD ((MAXLEVEL + 6)*8)
 
-/* mount a scratch monkey */
-static union skipwritebuf {
-    uint64_t align;
-    char s[MAXRECORDHEAD];
-} scratchspace;
+enum {
+    TWOM_CHECKSUM_NULL = 0,
+    TWOM_CHECKSUM_CRC32 = 1,
+    TWOM_CHECKSUM_XXH32 = 2,
+    TWOM_CHECKSUM_XXH64 = 3,
+};
 
 static struct db_list *open_twom = NULL;
+static uint16_t twom_default_checksum_engine = 0;
 
 static int mycommit(struct dbengine *db, struct txn *tid);
 static int myabort(struct dbengine *db, struct txn *tid);
@@ -277,30 +285,54 @@ static inline uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 
 /************** HEADER ****************/
 
-#define xxh_map(base, len) (uint32_t)XXH3_64bits((base), (len))
 
-#ifdef HAVE_DECLARE_OPTIMIZE
-static uint32_t xxh_iovec(const struct iovec *iov, int nio)
-    __attribute__((optimize("-O3")));
-#endif
-static uint32_t xxh_iovec(const struct iovec *iov, int nio)
+static uint32_t csum_null(const char *base __attribute__((unused)),
+                          size_t len __attribute__((unused)))
 {
-    XXH3_state_t *state = XXH3_createState();
-    XXH3_64bits_reset(state);
-    int i;
-    for (i = 0; i < nio; i++) {
-        if (!iov[i].iov_len) continue;
-        XXH3_64bits_update(state, iov[i].iov_base, iov[i].iov_len);
+    return 0;
+}
+
+static uint32_t csum_crc32(const char *base, size_t len)
+{
+    if (!len) return 0;
+    return crc32_map(base, len);
+}
+
+static uint32_t csum_xxh32(const char *base, size_t len)
+{
+    if (!len) return 0;
+    return (uint32_t)XXH32(base, len, 0);
+}
+
+static uint32_t csum_xxh64(const char *base, size_t len)
+{
+    if (!len) return 0;
+    return (uint32_t)XXH3_64bits(base, len);
+}
+
+static void set_csum_engine(struct dbengine *db)
+{
+    switch (db->header.checksum_engine) {
+    case TWOM_CHECKSUM_NULL:
+        db->csum = csum_null;
+        return;
+    case TWOM_CHECKSUM_CRC32:
+        db->csum = csum_crc32;
+        return;
+    case TWOM_CHECKSUM_XXH32:
+        db->csum = csum_xxh32;
+        return;
+    case TWOM_CHECKSUM_XXH64:
+        db->csum = csum_xxh64;
+        return;
     }
-    XXH64_hash_t const hash = XXH3_64bits_digest(state);
-    XXH3_freeState(state);
-    return (uint32_t)hash;
+    assert(0); // BAD, unknown engine.
 }
 
 /* given an open, mapped db, read in the header information */
 static int read_header(struct dbengine *db, struct db_header *header)
 {
-    const char *base = BASE(db);
+    const char *base = db->map_base;
 
     assert(db && base);
 
@@ -315,8 +347,13 @@ static int read_header(struct dbengine *db, struct db_header *header)
         return CYRUSDB_IOERROR;
     }
 
+    memcpy(header->uuid, base + OFFSET_UUID, 16);
+
     header->version
-        = ntohl(*((uint32_t *)(base + OFFSET_VERSION)));
+        = ntohs(*((uint16_t *)(base + OFFSET_VERSION)));
+
+    header->checksum_engine
+        = ntohs(*((uint16_t *)(base + OFFSET_CHECKSUM_ENGINE)));
 
     if (header->version > VERSION) {
         syslog(LOG_ERR, "twom: version mismatch: %s has version %d",
@@ -326,8 +363,6 @@ static int read_header(struct dbengine *db, struct db_header *header)
 
     header->flags
         = ntohl(*((uint32_t *)(base + OFFSET_FLAGS)));
-
-    memcpy(header->uuid, base + OFFSET_UUID, 16);
 
     header->generation
         = ntohll(*((uint64_t *)(base + OFFSET_GENERATION)));
@@ -347,12 +382,9 @@ static int read_header(struct dbengine *db, struct db_header *header)
     header->maxlevel
         = ntohl(*((uint32_t *)(base + OFFSET_MAXLEVEL)));
 
-    if (db->noxxh)
-        return 0;
-
-    uint32_t xxh = ntohl(*((uint32_t *)(base + OFFSET_XXH)));
-    if (xxh_map(base, OFFSET_XXH) != xxh) {
-        xsyslog(LOG_ERR, "DBERROR: twom header XXH failure",
+    uint32_t csum = ntohl(*((uint32_t *)(base + OFFSET_CSUM)));
+    if (db->csum(base, OFFSET_CSUM) != csum) {
+        xsyslog(LOG_ERR, "DBERROR: twom header checksum failure",
                          "filename=<%s>",
                          FNAME(db));
         return CYRUSDB_IOERROR;
@@ -387,80 +419,45 @@ static int twom_commit(struct dbengine *db)
     return msync(db->map_base, db->end, MS_SYNC|MS_INVALIDATE);
 }
 
-static size_t twom_writev(struct dbengine *db, const struct iovec *iov, int nio, size_t offset)
-{
-    int i;
-
-    // first pass to calculate used space
-    size_t len = 0;
-    for (i = 0; i < nio; i++) {
-        len += iov[i].iov_len;
-    }
-    mm_ensure(db, offset+len);
-
-    // second pass to copy data
-    len = 0;
-    for (i = 0; i < nio; i++) {
-        if (!iov[i].iov_len) continue;
-        memcpy(db->map_base + offset + len, iov[i].iov_base, iov[i].iov_len);
-        len += iov[i].iov_len;
-    }
-
-    return len;
-}
-
-static void twom_write(struct dbengine *db, const char *val, size_t len, size_t offset)
-{
-    mm_ensure(db, offset + len);
-    memcpy(db->map_base + offset, val, len);
-}
-
 /* given an open, mapped, locked db, write the header information */
-static int write_header(struct dbengine *db, struct db_header *header)
+static void write_header(struct dbengine *db, struct db_header *header)
 {
-    char *buf = scratchspace.s;
+    mm_ensure(db, HEADER_SIZE);
+    char *base = db->map_base;
 
-    /* format one buffer */
-    memcpy(buf, HEADER_MAGIC, HEADER_MAGIC_SIZE);
-    *((uint32_t *)(buf + OFFSET_VERSION)) = htonl(header->version);
-    *((uint32_t *)(buf + OFFSET_FLAGS)) = htonl(header->flags);
-    *((uint64_t *)(buf + OFFSET_GENERATION)) = htonll(header->generation);
-    memcpy(buf + OFFSET_UUID, header->uuid, 16);
-    *((uint64_t *)(buf + OFFSET_NUM_RECORDS)) = htonll(header->num_records);
-    *((uint64_t *)(buf + OFFSET_DIRTY_SIZE)) = htonll(header->dirty_size);
-    *((uint64_t *)(buf + OFFSET_REPACK_SIZE)) = htonll(header->repack_size);
-    *((uint64_t *)(buf + OFFSET_CURRENT_SIZE)) = htonll(header->current_size);
-    *((uint32_t *)(buf + OFFSET_MAXLEVEL)) = htonl(header->maxlevel);
-    *((uint32_t *)(buf + OFFSET_XXH)) = htonl(xxh_map(buf, OFFSET_XXH));
-
-    /* write it out */
-    twom_write(db, buf, HEADER_SIZE, 0);
-
-    return 0;
+    memcpy(base, HEADER_MAGIC, HEADER_MAGIC_SIZE);
+    memcpy(base + OFFSET_UUID, header->uuid, 16);
+    *((uint16_t *)(base + OFFSET_VERSION)) = htons(header->version);
+    *((uint16_t *)(base + OFFSET_CHECKSUM_ENGINE)) = htons(header->checksum_engine);
+    *((uint32_t *)(base + OFFSET_FLAGS)) = htonl(header->flags);
+    *((uint64_t *)(base + OFFSET_GENERATION)) = htonll(header->generation);
+    *((uint64_t *)(base + OFFSET_NUM_RECORDS)) = htonll(header->num_records);
+    *((uint64_t *)(base + OFFSET_DIRTY_SIZE)) = htonll(header->dirty_size);
+    *((uint64_t *)(base + OFFSET_REPACK_SIZE)) = htonll(header->repack_size);
+    *((uint64_t *)(base + OFFSET_CURRENT_SIZE)) = htonll(header->current_size);
+    *((uint32_t *)(base + OFFSET_MAXLEVEL)) = htonl(header->maxlevel);
+    *((uint32_t *)(base + OFFSET_CSUM)) = htonl(db->csum(base, OFFSET_CSUM));
 }
 
 /* simple wrapper to write with an fsync */
 static int commit_header(struct dbengine *db)
 {
-    int r = write_header(db, &db->header);
-    if (!r) r = twom_commit(db);
-    return r;
+    write_header(db, &db->header);
+    return twom_commit(db);
 }
 
 /******************** RECORD *********************/
 
 #ifdef HAVE_DECLARE_OPTIMIZE
-static int check_tailxxh(struct dbengine *db, struct skiprecord *record)
+static int check_tailcsum(struct dbengine *db, struct skiprecord *record)
     __attribute__((optimize("-O3")));
 #endif
-static int check_tailxxh(struct dbengine *db, struct skiprecord *record)
+static int check_tailcsum(struct dbengine *db, struct skiprecord *record)
 {
-    if (db->noxxh)
-        return 0;
-
-    uint32_t xxh = record->keylen ? xxh_map(BASE(db) + record->keyoffset, PAD8(record->keylen + record->vallen + 2)) : 0;
-    if (xxh != record->xxh_tail) {
-        xsyslog(LOG_ERR, "DBERROR: invalid tail xxh",
+    if (db->nocsum) return 0;
+    uint32_t csum = record->keylen ? db->csum(BASE(db) + record->keyoffset, PAD8(record->keylen + record->vallen + 2)) : 0;
+    if (csum != record->csum_tail) {
+        xsyslog(LOG_ERR, "DBERROR: invalid tail checksum",
                          "filename=<%s> offset=<%llX>",
                          FNAME(db), (LLU)record->offset);
         return CYRUSDB_IOERROR;
@@ -510,40 +507,30 @@ static int read_onerecord(struct dbengine *db, size_t offset,
         return CYRUSDB_IOERROR;
     }
 
+    /* calculate the length */
+    record->len = 8                         /* header */
+                + 8 * (1 + record->level)   /* ptrs */
+                + 8;                        /* csums */
+
     /* long key */
     if (record->keylen == UINT16_MAX) {
-        ptr = base + offset;
-        record->keylen = ntohll(*((uint64_t *)ptr));
-        offset += 8;
+        record->len += 8;
     }
 
     /* long value */
     if (record->vallen == UINT32_MAX) {
-        ptr = base + offset;
-        record->vallen = ntohll(*((uint64_t *)ptr));
-        offset += 8;
+        record->len += 8;
     }
-
-    /* we know the length now */
-    record->len = (offset - record->offset) /* header including lengths */
-                + 8 * (1 + record->level)   /* ptrs */
-                + 8;                        /* xxhs */
-
-    if (record->keylen)
-        record->len += PAD8(record->keylen + record->vallen + 2);  /* keyval fields */
  
     /* ancestor pointer is extra */
     if (HASANCESTOR(record->type))
         record->len += 8;
 
+    if (record->keylen)
+        record->len += PAD8(record->keylen + record->vallen + 2);  /* keyval fields */
+
     if (record->offset + record->len > size)
         goto badsize;
-
-    if (HASANCESTOR(record->type)) {
-        ptr = base + offset;
-        record->ancestor = ntohll(*((uint64_t *)ptr));
-        offset += 8;
-    }
 
     for (i = 0; i <= record->level; i++) {
         ptr = base + offset;
@@ -551,19 +538,37 @@ static int read_onerecord(struct dbengine *db, size_t offset,
         offset += 8;
     }
 
+    if (HASANCESTOR(record->type)) {
+        ptr = base + offset;
+        record->ancestor = ntohll(*((uint64_t *)ptr));
+        offset += 8;
+    }
+
+    if (record->keylen == UINT16_MAX) {
+        ptr = base + offset;
+        record->keylen = ntohll(*((uint64_t *)ptr));
+        offset += 8;
+    }
+
+    if (record->vallen == UINT32_MAX) {
+        ptr = base + offset;
+        record->vallen = ntohll(*((uint64_t *)ptr));
+        offset += 8;
+    }
+
     ptr = base + offset;
-    record->xxh_head = ntohl(*((uint32_t *)ptr));
-    record->xxh_tail = ntohl(*((uint32_t *)(ptr+4)));
+    record->csum_head = ntohl(*((uint32_t *)ptr));
+    record->csum_tail = ntohl(*((uint32_t *)(ptr+4)));
     if (record->keylen) {
         record->keyoffset = offset + 8;
         record->valoffset = record->keyoffset + record->keylen + 1;
     }
 
-    if (db->noxxh)
+    if (db->nocsum)
         return 0;
 
-    uint32_t xxh = xxh_map(base + record->offset, (offset - record->offset));
-    if (xxh != record->xxh_head) {
+    uint32_t csum = db->csum(base + record->offset, (offset - record->offset));
+    if (csum != record->csum_head) {
         xsyslog(LOG_ERR, "DBERROR: twom checksum head error",
                          "filename=<%s> offset=<%08llX>",
                          FNAME(db), (LLU)offset);
@@ -578,91 +583,74 @@ badsize:
     return CYRUSDB_IOERROR;
 }
 
-/* prepare the header part of the record (everything except the key, value
- * and padding).  Used for both writes and rewrites. */
-static void prepare_record(struct skiprecord *record, char *buf, size_t *sizep)
+static size_t record_len(struct skiprecord *record)
 {
-    int len = 8;
+    assert(record->level <= MAXLEVEL);
+    // head + second baselevel + checksums + N levels
+    size_t len = 24 + record->level * 8;
+
+    if (HASANCESTOR(record->type))
+        len += 8;
+    if (record->keylen == UINT16_MAX)
+        len += 8;
+    if (record->vallen == UINT32_MAX)
+        len += 8;
+
+    if (record->keylen)
+        len += PAD8(record->keylen + record->vallen + 2);
+
+    return len;
+}
+
+static size_t write_record_header(struct dbengine *db, struct skiprecord *record)
+{
+    size_t pos = 8;
     int i;
 
-    assert(record->level <= MAXLEVEL);
+    char *base = db->map_base + record->offset;
 
-    buf[0] = record->type;
-    buf[1] = record->level;
-    if (record->keylen < UINT16_MAX) {
-        *((uint16_t *)(buf+2)) = htons(record->keylen);
-    }
-    else {
-        *((uint16_t *)(buf+2)) = htons(UINT16_MAX);
-        *((uint64_t *)(buf+len)) = htonll(record->keylen);
-        len += 8;
-    }
+    // first block is header
+    base[0] = record->type;
+    base[1] = record->level;
+    *((uint16_t *)(base+2)) = htons(record->keylen < UINT16_MAX ? record->keylen : UINT16_MAX);
+    *((uint32_t *)(base+4)) = htonl(record->vallen < UINT32_MAX ? record->vallen : UINT32_MAX);
 
-    if (record->vallen < UINT32_MAX) {
-        *((uint32_t *)(buf+4)) = htonl(record->vallen);
-    }
-    else {
-        *((uint32_t *)(buf+4)) = htonl(UINT32_MAX);
-        *((uint64_t *)(buf+len)) = htonll(record->vallen);
-        len += 8;
-    }
-
-    if (HASANCESTOR(record->type)) {
-        *((uint64_t *)(buf+len)) = htonll(record->ancestor);
-        len += 8;
-    }
-
-    /* got pointers? */
+    // one block for each level, extra for double-zero (hence the <=)
     for (i = 0; i <= record->level; i++) {
-        *((uint64_t *)(buf+len)) = htonll(record->nextloc[i]);
-        len += 8;
+        *((uint64_t *)(base+pos)) = htonll(record->nextloc[i]);
+        pos += 8;
     }
 
-    /* NOTE: xxh_tail does not change */
-    record->xxh_head = xxh_map(buf, len);
-    *((uint32_t *)(buf+len)) = htonl(record->xxh_head);
-    *((uint32_t *)(buf+len+4)) = htonl(record->xxh_tail);
-    len += 8;
+    // ancestor if present
+    if (HASANCESTOR(record->type)) {
+        *((uint64_t *)(base+pos)) = htonll(record->ancestor);
+        pos += 8;
+    }
 
-    *sizep = len;
+    // extra-length keys if present
+    if (record->keylen >= UINT16_MAX) {
+        *((uint64_t *)(base+pos)) = htonll(record->keylen);
+        pos += 8;
+    }
+    if (record->keylen >= UINT32_MAX) {
+        *((uint64_t *)(base+pos)) = htonll(record->vallen);
+        pos += 8;
+    }
+
+    // checksum the header (this is everything BEFORE the key/value block)
+    record->csum_head = db->csum(base, pos);
+    *((uint32_t *)(base+pos)) = htonl(record->csum_head);
+
+    return pos + 8;
 }
 
 /* only changing the record head, so only rewrite that much */
 static void rewrite_record(struct dbengine *db, struct skiprecord *record)
 {
-    char *buf = scratchspace.s;
-    size_t len;
-
     /* we must already be in a transaction before updating records */
     assert(db->header.flags & DIRTY);
     assert(record->offset);
-
-    prepare_record(record, buf, &len);
-
-    twom_write(db, buf, len, record->offset);
-}
-
-static void write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
-{
-    size_t iolen = 0;
-
-    assert(!record->offset);
-
-    record->xxh_tail = 0;
-    prepare_record(record, scratchspace.s, &iolen);
-
-    /* write to the mapped file, getting the offset updated */
-    twom_write(db, scratchspace.s, iolen, db->end);
-
-    /* locate the record */
-
-    record->offset = db->end;
-    record->keyoffset = 0;
-    record->valoffset = 0;
-    record->len = iolen;
-
-    /* and advance the known file size */
-    db->end += iolen;
+    write_record_header(db, record);
 }
 
 /* you can only write records at the end */
@@ -670,52 +658,43 @@ static void write_record(struct dbengine *db, struct skiprecord *record,
                          const char *key, const char *val)
 {
     char zeros[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint64_t len;
-    size_t iolen = 0;
-    struct iovec io[6];
 
     assert(!record->offset);
+    
+    size_t len = record_len(record);
+    mm_ensure(db, db->end + len);
 
-    /* we'll put the HEAD on later */
-    io[0].iov_base = scratchspace.s;
-    io[0].iov_len = 0;
-
-    io[1].iov_base = (char *)key;
-    io[1].iov_len = record->keylen;
-
-    io[2].iov_base = zeros;
-    io[2].iov_len = 1;
-
-    io[3].iov_base = (char *)val;
-    io[3].iov_len = record->vallen;
-
-    io[4].iov_base = zeros;
-    io[4].iov_len = 1;
-
-    /* pad to 8 bytes */
-    len = record->vallen + record->keylen + 2;
-    io[5].iov_base = zeros;
-    io[5].iov_len = PAD8(len) - len;
-
-    /* calculate the XXH of the tail first */
-    record->xxh_tail = xxh_iovec(io+1, 5);
-
-    /* prepare the record once we know the xxh of the tail */
-    prepare_record(record, scratchspace.s, &iolen);
-    io[0].iov_base = scratchspace.s;
-    io[0].iov_len = iolen;
-
-    /* write to the mapped file, getting the offset updated */
-    size_t n = twom_writev(db, io, 6, db->end);
-
-    /* locate the record */
+    // set the offset for the record so the header can write
     record->offset = db->end;
-    record->keyoffset = db->end + io[0].iov_len;
-    record->valoffset = record->keyoffset + record->keylen;
-    record->len = n;
 
-    /* and advance the known file size */
-    db->end += n;
+    size_t head_len = write_record_header(db, record);
+    char *tail_base = db->map_base + record->offset + head_len;
+
+    if (record->keylen) {
+        // write the tail first
+        memcpy(tail_base, key, record->keylen);
+        tail_base[record->keylen] = 0;
+        memcpy(tail_base+record->keylen+1, val, record->vallen);
+        size_t tail_len = PAD8(record->keylen+1+record->vallen+1);
+        size_t pad_len = tail_len - (record->keylen+1+record->vallen);
+        memcpy(tail_base + tail_len - pad_len, zeros, pad_len);
+    
+        // then calculate the tail checksum
+        record->csum_tail = db->csum(tail_base, tail_len);
+
+        // and remember the offsets
+        record->keyoffset = head_len;
+        record->valoffset = record->keyoffset + record->vallen + 1;
+    }
+    else {
+        // empty tail checksum for no-key record
+        record->csum_tail = 0;
+    }
+    // tail checksum writes back into the tail end of the header block!
+    *((uint32_t *)(tail_base-4)) = htonl(record->csum_tail);
+
+    // advance the end pointer
+    db->end += len;
 }
 
 /* helper to append a record, starting the transaction by dirtying the
@@ -732,8 +711,7 @@ static int append_record(struct dbengine *db, struct skiprecord *record,
         if (r) return r;
     }
 
-    if (key) write_record(db, record, key, val);
-    else write_nokeyrecord(db, record);
+    write_record(db, record, key, val);
 
     return 0;
 }
@@ -871,7 +849,7 @@ static int relocate(struct dbengine *db, struct skiploc *loc)
             loc->forwardloc[i] = _getloc(db, next, i);
 
         /* make sure this record is complete */
-        r = check_tailxxh(db, next);
+        r = check_tailcsum(db, next);
 
         loc->record = *next;
 
@@ -937,7 +915,7 @@ static int find_loc(struct dbengine *db, struct skiploc *loc, const char *key, s
                     loc->forwardloc[i] = _getloc(db, rec, i);
 
                 /* make sure this record is complete */
-                return check_tailxxh(db, rec);
+                return check_tailcsum(db, rec);
             }
 
             /* or in the gap */
@@ -988,7 +966,7 @@ static int advance_loc(struct dbengine *db, struct skiploc *loc)
     loc->is_exactmatch = 1;
 
     /* make sure this record is complete */
-    r = check_tailxxh(db, &loc->record);
+    r = check_tailcsum(db, &loc->record);
     if (r) return r;
 
     return 0;
@@ -1368,7 +1346,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     db->readonly = (flags & CYRUSDB_SHARED) ? 1 : 0;
     db->nocompact = (flags & CYRUSDB_NOCOMPACT) ? 1 : 0;
-    db->noxxh = (flags & CYRUSDB_NOCRC) ? 1 : 0;
+    db->nocsum = (flags & CYRUSDB_NOCRC) ? 1 : 0;
     db->fname = xstrdup(fname);
 
     // XXX - open readonly for readonly DB?
@@ -1415,10 +1393,11 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
 
         /* append dummy after header location */
         db->end = DUMMY_OFFSET;
-        write_nokeyrecord(db, &dummy);
+        write_record(db, &dummy, NULL, NULL);
 
         /* create the header */
         db->header.version = VERSION;
+        db->header.checksum_engine = twom_default_checksum_engine; // XXX: flags
         db->header.flags = 0;
         int i;
         for (i = 0; i < 16; i++) {
@@ -1438,6 +1417,9 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
             goto done;
         }
     }
+
+    // load the checksum engine
+    set_csum_engine(db);
 
     if (!db_is_clean(db)) {
         if (db->readonly) return CYRUSDB_IOERROR;
@@ -2243,19 +2225,19 @@ static int dump(struct dbengine *db, int detail)
 
         if (r) {
             if (record.keyoffset)
-                printf("ERROR [HEADXXH %08lX %08lX]\n",
-                        (long unsigned) record.xxh_head,
-                        (long unsigned) xxh_map(BASE(db) + record.offset,
+                printf("ERROR [HEADCSUM %08lX %08lX]\n",
+                        (long unsigned) record.csum_head,
+                        (long unsigned) db->csum(BASE(db) + record.offset,
                                                  record.keyoffset - 8));
             else
                 printf("ERROR\n");
             break;
         }
 
-        if (check_tailxxh(db, &record)) {
-            printf("ERROR [TAILXXH %08lX %08lX] ",
-                    (long unsigned) record.xxh_tail,
-                    (long unsigned) xxh_map(BASE(db) + record.keyoffset,
+        if (check_tailcsum(db, &record)) {
+            printf("ERROR [TAILCSUM %08lX %08lX] ",
+                    (long unsigned) record.csum_tail,
+                    (long unsigned) db->csum(BASE(db) + record.keyoffset,
                         PAD8(record.keylen + record.vallen + 2)));
         }
 
@@ -2669,11 +2651,31 @@ static int delete(struct dbengine *db,
     return mystore(db, key, keylen, NULL, 0, tid, force);
 }
 
+static int myinit(const char *dbdir __attribute__((unused)), int flags __attribute__((unused)))
+{
+    const char *checksum_engine = libcyrus_config_getstring(CYRUSOPT_TWOM_CHECKSUM_ENGINE);
+    if (!strcmp(checksum_engine, "null")) {
+        twom_default_checksum_engine = TWOM_CHECKSUM_NULL;
+    }
+    else if (!strcmp(checksum_engine, "crc32")) {
+        twom_default_checksum_engine = TWOM_CHECKSUM_CRC32;
+    }
+    else if (!strcmp(checksum_engine, "xxh32")) {
+        twom_default_checksum_engine = TWOM_CHECKSUM_XXH32;
+    }
+    else {
+        // default
+        twom_default_checksum_engine = TWOM_CHECKSUM_XXH64;
+    }
+    return 0;
+    return 0;
+}
+
 HIDDEN struct cyrusdb_backend cyrusdb_twom =
 {
     "twom",                  /* name */
 
-    &cyrusdb_generic_init,
+    &myinit,
     &cyrusdb_generic_done,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,

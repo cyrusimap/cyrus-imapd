@@ -161,6 +161,10 @@ static struct cyrusopt_s cyrus_options[] = {
       CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
+    { CYRUSOPT_TWOM_CHECKSUM_ENGINE,
+      CFGVAL(const char *, NULL),
+      CYRUS_OPT_STRING },
+
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };
 

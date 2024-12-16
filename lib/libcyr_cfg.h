@@ -107,6 +107,8 @@ enum cyrus_opt {
     CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
     /* ACL override */
     CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
+    /* TWOM checksum engine */
+    CYRUSOPT_TWOM_CHECKSUM_ENGINE,
 
     CYRUSOPT_LAST
 
