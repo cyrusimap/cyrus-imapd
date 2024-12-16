@@ -65,6 +65,7 @@
 #include "xunlink.h"
 
 #define XXH_STATIC_LINKING_ONLY /* access advanced declarations */
+#define XXH_INLINE_ALL          /* maximum optimise */
 #define XXH_IMPLEMENTATION      /* access definitions */
 #define XXH_NO_XXH3             /* just 32bit */
 #include "xxhash.h"
@@ -279,6 +280,10 @@ static inline uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 
 #define xxh32_map(base, len) XXH32((base), (len), 0)
 
+#ifdef HAVE_DECLARE_OPTIMIZE
+static uint32_t xxh32_iovec(const struct iovec *iov, int nio)
+    __attribute__((optimize("-O3")));
+#endif
 static uint32_t xxh32_iovec(const struct iovec *iov, int nio)
 {
     XXH32_state_t* const state = XXH32_createState();
@@ -445,6 +450,10 @@ static int commit_header(struct dbengine *db)
 
 /******************** RECORD *********************/
 
+#ifdef HAVE_DECLARE_OPTIMIZE
+static int check_tailxxh(struct dbengine *db, struct skiprecord *record)
+    __attribute__((optimize("-O3")));
+#endif
 static int check_tailxxh(struct dbengine *db, struct skiprecord *record)
 {
     if (db->noxxh)
