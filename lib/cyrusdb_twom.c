@@ -359,14 +359,8 @@ static int read_header(struct dbengine *db, struct db_header *header)
 
 static size_t mm_roundup(size_t offset)
 {
-    size_t slop;
-    // 4k, 16k and 64k slops before we hit 256k multiples
-    if (offset < (1024 * 4)) slop = (1024 * 4) - 1;
-    else if (offset < (1024 * 16)) slop = ((1024 * 16) - 1);
-    else if (offset < (1024 * 64)) slop = ((1024 * 64) - 1);
-    else slop = ((1024 * 256) - 1);
-    size_t trim = ~slop;
-    return ((offset + slop) & trim);
+    size_t page_size = 1<<14; // 16k
+    return ((offset + offset / 4) + page_size - 1) & ~(page_size - 1);
 }
 
 static void mm_ensure(struct dbengine *db, size_t offset)
