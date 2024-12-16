@@ -23,12 +23,12 @@ sub test_card_get_localizations
     # Sample card from RFC 6350
     # Second N suffix removed due to vparse bug
     # PROP-IDs added so we can easily compare the results
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
-UID:$id
+UID:$uid
 LANGUAGE:es
 FN:Gabriel García Márquez
 FN;LANGUAGE=jp:ガブリエル・ガルシア・マルケス
@@ -62,8 +62,7 @@ EOF
         version => '1.0',
         addressBookId => 'Default',
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        id => $id,
-        uid => $id,
+        uid => $uid,
         kind => 'individual',
         language => 'es',    
         vCardProps => [
@@ -127,6 +126,7 @@ EOF
     my $have_jscard = $res->[0][1]{list}[0];
 
     # Delete generated fields
+    delete $have_jscard->{id};
     delete $have_jscard->{blobId};
     delete $have_jscard->{'cyrusimap.org:blobId'};
     delete $have_jscard->{'cyrusimap.org:size'};

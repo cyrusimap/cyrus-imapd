@@ -1491,3 +1491,24 @@ EXPORTED int jmap_is_valid_id(const char *id)
     return 1;
 }
 
+EXPORTED const char *contactid_to_uid(const char *id)
+{
+    static struct buf buf = BUF_INITIALIZER;
+
+    if (!id) return NULL;
+
+    buf_reset(&buf);
+    charset_decode(&buf, id, strlen(id), ENCODING_BASE64URL);
+    return buf_cstring(&buf);
+}
+
+EXPORTED const char *contactid_from_uid(const char *uid)
+{
+    static struct buf buf = BUF_INITIALIZER;
+
+    if (!uid) return NULL;
+
+    buf_reset(&buf);
+    charset_encode(&buf, uid, strlen(uid), ENCODING_BASE64URL);
+    return buf_cstring(&buf);
+}

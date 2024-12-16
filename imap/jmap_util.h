@@ -216,4 +216,7 @@ extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
 extern void jmap_alertid_encode(icalcomponent *valarm, struct buf *buf);
 #endif /* HAVE_ICAL */
 
+extern const char *contactid_to_uid(const char *id);
+extern const char *contactid_from_uid(const char *uid);
+
 #endif /* JMAP_UTIL_H */

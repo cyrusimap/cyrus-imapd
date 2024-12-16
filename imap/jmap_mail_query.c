@@ -229,7 +229,8 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
         if (!arg) continue;
-        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) :
+            contactid_to_uid(json_string_value(arg));
         if (!groupid) continue;
         if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
 
