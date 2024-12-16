@@ -175,11 +175,13 @@ struct db_header {
     /* header info */
     uint32_t version;
     uint32_t flags;
+    unsigned char uuid[16];
     uint64_t generation;
     uint64_t num_records;
     size_t dirty_size;
     size_t repack_size;
     size_t current_size;
+    uint32_t maxlevel;
 };
 
 struct dbengine {
@@ -211,28 +213,27 @@ struct db_list {
     int refcount;
 };
 
-#define HEADER_MAGIC ("\241\002\213\015twomfile")
-#define HEADER_MAGIC_SIZE (12)
+#define HEADER_MAGIC ("\241\002\213\015twomfile\0\0\0\0")
+#define HEADER_MAGIC_SIZE (16)
 
 /* offsets of header files */
 enum {
     OFFSET_HEADER = 0,
-    OFFSET_VERSION = 12,
-    OFFSET_GENERATION = 16,
-    OFFSET_NUM_RECORDS = 24,
-    OFFSET_DIRTY_SIZE = 32,
-    OFFSET_REPACK_SIZE = 40,
-    OFFSET_CURRENT_SIZE = 48,
-    OFFSET_FLAGS = 56,
-    OFFSET_XXH32 = 60,
+    OFFSET_VERSION = 16,
+    OFFSET_FLAGS = 20,
+    OFFSET_UUID = 24,
+    OFFSET_GENERATION = 40,
+    OFFSET_NUM_RECORDS = 48,
+    OFFSET_DIRTY_SIZE = 56,
+    OFFSET_REPACK_SIZE = 64,
+    OFFSET_CURRENT_SIZE = 72,
+    OFFSET_MAXLEVEL = 80,
+    OFFSET_XXH32 = 84,
 };
 
-#define HEADER_SIZE 64
+#define HEADER_SIZE 88
 #define DUMMY_OFFSET HEADER_SIZE
 #define MAXRECORDHEAD ((MAXLEVEL + 6)*8)
-// NOTE: MAXLEVEL should be chosen so that MAXRECORDHEAD always
-// fits within BLOCKSIZE so header rewrites are atomic.
-#define BLOCKSIZE 512
 
 /* mount a scratch monkey */
 static union skipwritebuf {
@@ -293,10 +294,9 @@ static uint32_t xxh32_iovec(const struct iovec *iov, int nio)
 }
 
 /* given an open, mapped db, read in the header information */
-static int read_header(struct dbengine *db)
+static int read_header(struct dbengine *db, struct db_header *header)
 {
     const char *base = BASE(db);
-    uint32_t xxh;
 
     assert(db && base);
 
@@ -311,40 +311,42 @@ static int read_header(struct dbengine *db)
         return CYRUSDB_IOERROR;
     }
 
-    db->header.version
+    header->version
         = ntohl(*((uint32_t *)(base + OFFSET_VERSION)));
 
-    if (db->header.version > VERSION) {
+    if (header->version > VERSION) {
         syslog(LOG_ERR, "twom: version mismatch: %s has version %d",
-               FNAME(db), db->header.version);
+               FNAME(db), header->version);
         return CYRUSDB_IOERROR;
     }
 
-    db->header.generation
-        = ntohll(*((uint64_t *)(base + OFFSET_GENERATION)));
-
-    db->header.num_records
-        = ntohll(*((uint64_t *)(base + OFFSET_NUM_RECORDS)));
-
-    db->header.dirty_size
-        = ntohll(*((uint64_t *)(base + OFFSET_DIRTY_SIZE)));
-
-    db->header.repack_size
-        = ntohll(*((uint64_t *)(base + OFFSET_REPACK_SIZE)));
-
-    db->header.current_size
-        = ntohll(*((uint64_t *)(base + OFFSET_CURRENT_SIZE)));
-
-    db->header.flags
+    header->flags
         = ntohl(*((uint32_t *)(base + OFFSET_FLAGS)));
 
-    xxh = ntohl(*((uint32_t *)(base + OFFSET_XXH32)));
+    memcpy(header->uuid, base + OFFSET_UUID, 16);
 
-    db->end = db->header.current_size;
+    header->generation
+        = ntohll(*((uint64_t *)(base + OFFSET_GENERATION)));
+
+    header->num_records
+        = ntohll(*((uint64_t *)(base + OFFSET_NUM_RECORDS)));
+
+    header->dirty_size
+        = ntohll(*((uint64_t *)(base + OFFSET_DIRTY_SIZE)));
+
+    header->repack_size
+        = ntohll(*((uint64_t *)(base + OFFSET_REPACK_SIZE)));
+
+    header->current_size
+        = ntohll(*((uint64_t *)(base + OFFSET_CURRENT_SIZE)));
+
+    header->maxlevel
+        = ntohl(*((uint32_t *)(base + OFFSET_MAXLEVEL)));
 
     if (db->noxxh)
         return 0;
 
+    uint32_t xxh = ntohl(*((uint32_t *)(base + OFFSET_XXH32)));
     if (xxh32_map(base, OFFSET_XXH32) != xxh) {
         xsyslog(LOG_ERR, "DBERROR: twom header XXH failure",
                          "filename=<%s>",
@@ -416,19 +418,21 @@ static void twom_write(struct dbengine *db, const char *val, size_t len, size_t 
 }
 
 /* given an open, mapped, locked db, write the header information */
-static int write_header(struct dbengine *db)
+static int write_header(struct dbengine *db, struct db_header *header)
 {
     char *buf = scratchspace.s;
 
     /* format one buffer */
     memcpy(buf, HEADER_MAGIC, HEADER_MAGIC_SIZE);
-    *((uint32_t *)(buf + OFFSET_VERSION)) = htonl(db->header.version);
-    *((uint64_t *)(buf + OFFSET_GENERATION)) = htonll(db->header.generation);
-    *((uint64_t *)(buf + OFFSET_NUM_RECORDS)) = htonll(db->header.num_records);
-    *((uint64_t *)(buf + OFFSET_DIRTY_SIZE)) = htonll(db->header.dirty_size);
-    *((uint64_t *)(buf + OFFSET_REPACK_SIZE)) = htonll(db->header.repack_size);
-    *((uint64_t *)(buf + OFFSET_CURRENT_SIZE)) = htonll(db->header.current_size);
-    *((uint32_t *)(buf + OFFSET_FLAGS)) = htonl(db->header.flags);
+    *((uint32_t *)(buf + OFFSET_VERSION)) = htonl(header->version);
+    *((uint32_t *)(buf + OFFSET_FLAGS)) = htonl(header->flags);
+    *((uint64_t *)(buf + OFFSET_GENERATION)) = htonll(header->generation);
+    memcpy(buf + OFFSET_UUID, header->uuid, 16);
+    *((uint64_t *)(buf + OFFSET_NUM_RECORDS)) = htonll(header->num_records);
+    *((uint64_t *)(buf + OFFSET_DIRTY_SIZE)) = htonll(header->dirty_size);
+    *((uint64_t *)(buf + OFFSET_REPACK_SIZE)) = htonll(header->repack_size);
+    *((uint64_t *)(buf + OFFSET_CURRENT_SIZE)) = htonll(header->current_size);
+    *((uint32_t *)(buf + OFFSET_MAXLEVEL)) = htonl(header->maxlevel);
     *((uint32_t *)(buf + OFFSET_XXH32)) = htonl(xxh32_map(buf, OFFSET_XXH32));
 
     /* write it out */
@@ -440,7 +444,7 @@ static int write_header(struct dbengine *db)
 /* simple wrapper to write with an fsync */
 static int commit_header(struct dbengine *db)
 {
-    int r = write_header(db);
+    int r = write_header(db, &db->header);
     if (!r) r = twom_commit(db);
     return r;
 }
@@ -1081,6 +1085,10 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     if (val) db->header.num_records++;
     else db->header.dirty_size += newrecord.len;
 
+    /* track the highest level in this DB */
+    if (newrecord.level > db->header.maxlevel)
+        db->header.maxlevel = newrecord.level;
+
     loc->is_exactmatch = 1;
     loc->end = db->end;
 
@@ -1188,8 +1196,9 @@ static int write_lock(struct dbengine *db)
     }
 
     /* reread header */
-    int r = read_header(db);
+    int r = read_header(db, &db->header);
     if (r) return r;
+    db->end = db->header.current_size;
 
     /* recovery checks for consistency */
     if (!db_is_clean(db)) {
@@ -1266,8 +1275,9 @@ static int read_lock(struct dbengine *db)
     }
 
     /* reread header */
-    r = read_header(db);
+    r = read_header(db, &db->header);
     if (r) return r;
+    db->end = db->header.current_size;
 
     /* we can't read an unclean database */
     if (!db_is_clean(db)) {
@@ -1407,12 +1417,17 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
 
         /* create the header */
         db->header.version = VERSION;
+        db->header.flags = 0;
+        int i;
+        for (i = 0; i < 16; i++) {
+            db->header.uuid[i] = rand() % 256;
+        }
         db->header.generation = 1;
         db->header.num_records = 0;
         db->header.dirty_size = 0;
         db->header.repack_size = db->end;
         db->header.current_size = db->end;
-        db->header.flags = 0;
+        db->header.maxlevel = 0;
         r = commit_header(db);
         if (r) {
             xsyslog(LOG_ERR, "DBERROR: error writing header",
@@ -2151,6 +2166,9 @@ static int mycheckpoint(struct dbengine *db)
 
     /* remember the repack size */
     cr.db->header.repack_size = cr.db->end;
+
+    /* same uuid */
+    memcpy(cr.db->header.uuid, db->header.uuid, 16);
 
     /* increase the generation count */
     cr.db->header.generation = db->header.generation + 1;
