@@ -998,7 +998,7 @@ static int sieve_reject(void *ac, void *ic,
         return SIEVE_OK;
     }
 
-    body = msg_getheader(md, "original-recipient");
+    body = msg_getheader(md, config_getstring(IMAPOPT_SIEVE_MDN_ORIGINAL_RECIPIENT_HEADER));
     origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(ctx->userid, md->id, md->return_path,
                               origreceip, mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns),
