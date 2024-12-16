@@ -355,6 +355,8 @@ static int read_header(struct dbengine *db, struct db_header *header)
     header->checksum_engine
         = ntohs(*((uint16_t *)(base + OFFSET_CHECKSUM_ENGINE)));
 
+    set_csum_engine(db);
+
     if (header->version > VERSION) {
         syslog(LOG_ERR, "twom: version mismatch: %s has version %d",
                FNAME(db), header->version);
@@ -1393,22 +1395,27 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
 
         /* append dummy after header location */
         db->end = DUMMY_OFFSET;
-        write_record(db, &dummy, NULL, NULL);
 
         /* create the header */
         db->header.version = VERSION;
         db->header.checksum_engine = twom_default_checksum_engine; // XXX: flags
+        set_csum_engine(db);
         db->header.flags = 0;
+        db->header.num_records = 0;
         int i;
         for (i = 0; i < 16; i++) {
             db->header.uuid[i] = rand() % 256;
         }
         db->header.generation = 1;
-        db->header.num_records = 0;
+
+        // put the dummy on so we have the length
+        write_record(db, &dummy, NULL, NULL);
+
         db->header.dirty_size = 0;
         db->header.repack_size = db->end;
         db->header.current_size = db->end;
         db->header.maxlevel = 0;
+
         r = commit_header(db);
         if (r) {
             xsyslog(LOG_ERR, "DBERROR: error writing header",
@@ -1418,8 +1425,6 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
         }
     }
 
-    // load the checksum engine
-    set_csum_engine(db);
 
     if (!db_is_clean(db)) {
         if (db->readonly) return CYRUSDB_IOERROR;
