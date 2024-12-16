@@ -3174,7 +3174,7 @@ product version in the capabilities
    of UID, "cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
    hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID. */
 
-{ "twom_checksum_engine", "xxh64", STRINCT, "UNRELEASED" }
+{ "twom_checksum_engine", "xxh64", STRING, "UNRELEASED" }
 /* The default checksum engine for new twom databases, string values
    are currently "null", "crc32", "xxh32", "xxh64".  The default if
    not set is xxh64. */
