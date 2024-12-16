@@ -1,0 +1,20 @@
+Description:
+
+The new `sieve_mdn_private` option helps prevent leaking usernames.
+
+
+Config changes:
+
+This adds `sieve_mdn_private`, a yes/no option which, if set, will replace the
+username in the `Final-Recipient` field of Sieve-generated bounces with the
+active Cyrus session id.
+
+
+Upgrade instructions:
+
+No action required.
+
+
+GitHub issue:
+
+None.
