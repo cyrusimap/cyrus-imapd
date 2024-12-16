@@ -67,7 +67,6 @@
 #define XXH_STATIC_LINKING_ONLY /* access advanced declarations */
 #define XXH_INLINE_ALL          /* maximum optimise */
 #define XXH_IMPLEMENTATION      /* access definitions */
-#define XXH_NO_XXH3             /* just 32bit */
 #include "xxhash.h"
 
 /********** TUNING *************/
@@ -120,8 +119,8 @@ struct skiprecord {
     size_t nextloc[MAXLEVEL+1];
 
     /* what do our integrity checks say? */
-    uint32_t xxh32_head;
-    uint32_t xxh32_tail;
+    uint32_t xxh_head;
+    uint32_t xxh_tail;
 
     /* our key and value */
     size_t keyoffset;
@@ -229,7 +228,7 @@ enum {
     OFFSET_REPACK_SIZE = 64,
     OFFSET_CURRENT_SIZE = 72,
     OFFSET_MAXLEVEL = 80,
-    OFFSET_XXH32 = 84,
+    OFFSET_XXH = 84,
 };
 
 #define HEADER_SIZE 88
@@ -278,24 +277,24 @@ static inline uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 
 /************** HEADER ****************/
 
-#define xxh32_map(base, len) XXH32((base), (len), 0)
+#define xxh_map(base, len) (uint32_t)XXH3_64bits((base), (len))
 
 #ifdef HAVE_DECLARE_OPTIMIZE
-static uint32_t xxh32_iovec(const struct iovec *iov, int nio)
+static uint32_t xxh_iovec(const struct iovec *iov, int nio)
     __attribute__((optimize("-O3")));
 #endif
-static uint32_t xxh32_iovec(const struct iovec *iov, int nio)
+static uint32_t xxh_iovec(const struct iovec *iov, int nio)
 {
-    XXH32_state_t* const state = XXH32_createState();
-    XXH32_reset(state, 0);
+    XXH3_state_t *state = XXH3_createState();
+    XXH3_64bits_reset(state);
     int i;
     for (i = 0; i < nio; i++) {
         if (!iov[i].iov_len) continue;
-        XXH32_update(state, iov[i].iov_base, iov[i].iov_len);
+        XXH3_64bits_update(state, iov[i].iov_base, iov[i].iov_len);
     }
-    XXH32_hash_t const hash = XXH32_digest(state);
-    XXH32_freeState(state);
-    return hash;
+    XXH64_hash_t const hash = XXH3_64bits_digest(state);
+    XXH3_freeState(state);
+    return (uint32_t)hash;
 }
 
 /* given an open, mapped db, read in the header information */
@@ -351,8 +350,8 @@ static int read_header(struct dbengine *db, struct db_header *header)
     if (db->noxxh)
         return 0;
 
-    uint32_t xxh = ntohl(*((uint32_t *)(base + OFFSET_XXH32)));
-    if (xxh32_map(base, OFFSET_XXH32) != xxh) {
+    uint32_t xxh = ntohl(*((uint32_t *)(base + OFFSET_XXH)));
+    if (xxh_map(base, OFFSET_XXH) != xxh) {
         xsyslog(LOG_ERR, "DBERROR: twom header XXH failure",
                          "filename=<%s>",
                          FNAME(db));
@@ -432,7 +431,7 @@ static int write_header(struct dbengine *db, struct db_header *header)
     *((uint64_t *)(buf + OFFSET_REPACK_SIZE)) = htonll(header->repack_size);
     *((uint64_t *)(buf + OFFSET_CURRENT_SIZE)) = htonll(header->current_size);
     *((uint32_t *)(buf + OFFSET_MAXLEVEL)) = htonl(header->maxlevel);
-    *((uint32_t *)(buf + OFFSET_XXH32)) = htonl(xxh32_map(buf, OFFSET_XXH32));
+    *((uint32_t *)(buf + OFFSET_XXH)) = htonl(xxh_map(buf, OFFSET_XXH));
 
     /* write it out */
     twom_write(db, buf, HEADER_SIZE, 0);
@@ -459,8 +458,8 @@ static int check_tailxxh(struct dbengine *db, struct skiprecord *record)
     if (db->noxxh)
         return 0;
 
-    uint32_t xxh = record->keylen ? xxh32_map(BASE(db) + record->keyoffset, PAD8(record->keylen + record->vallen + 2)) : 0;
-    if (xxh != record->xxh32_tail) {
+    uint32_t xxh = record->keylen ? xxh_map(BASE(db) + record->keyoffset, PAD8(record->keylen + record->vallen + 2)) : 0;
+    if (xxh != record->xxh_tail) {
         xsyslog(LOG_ERR, "DBERROR: invalid tail xxh",
                          "filename=<%s> offset=<%llX>",
                          FNAME(db), (LLU)record->offset);
@@ -528,7 +527,7 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     /* we know the length now */
     record->len = (offset - record->offset) /* header including lengths */
                 + 8 * (1 + record->level)   /* ptrs */
-                + 8;                        /* xxh32s */
+                + 8;                        /* xxhs */
 
     if (record->keylen)
         record->len += PAD8(record->keylen + record->vallen + 2);  /* keyval fields */
@@ -553,8 +552,8 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     }
 
     ptr = base + offset;
-    record->xxh32_head = ntohl(*((uint32_t *)ptr));
-    record->xxh32_tail = ntohl(*((uint32_t *)(ptr+4)));
+    record->xxh_head = ntohl(*((uint32_t *)ptr));
+    record->xxh_tail = ntohl(*((uint32_t *)(ptr+4)));
     if (record->keylen) {
         record->keyoffset = offset + 8;
         record->valoffset = record->keyoffset + record->keylen + 1;
@@ -563,8 +562,8 @@ static int read_onerecord(struct dbengine *db, size_t offset,
     if (db->noxxh)
         return 0;
 
-    uint32_t xxh = xxh32_map(base + record->offset, (offset - record->offset));
-    if (xxh != record->xxh32_head) {
+    uint32_t xxh = xxh_map(base + record->offset, (offset - record->offset));
+    if (xxh != record->xxh_head) {
         xsyslog(LOG_ERR, "DBERROR: twom checksum head error",
                          "filename=<%s> offset=<%08llX>",
                          FNAME(db), (LLU)offset);
@@ -619,10 +618,10 @@ static void prepare_record(struct skiprecord *record, char *buf, size_t *sizep)
         len += 8;
     }
 
-    /* NOTE: xxh32_tail does not change */
-    record->xxh32_head = xxh32_map(buf, len);
-    *((uint32_t *)(buf+len)) = htonl(record->xxh32_head);
-    *((uint32_t *)(buf+len+4)) = htonl(record->xxh32_tail);
+    /* NOTE: xxh_tail does not change */
+    record->xxh_head = xxh_map(buf, len);
+    *((uint32_t *)(buf+len)) = htonl(record->xxh_head);
+    *((uint32_t *)(buf+len+4)) = htonl(record->xxh_tail);
     len += 8;
 
     *sizep = len;
@@ -649,7 +648,7 @@ static void write_nokeyrecord(struct dbengine *db, struct skiprecord *record)
 
     assert(!record->offset);
 
-    record->xxh32_tail = 0;
+    record->xxh_tail = 0;
     prepare_record(record, scratchspace.s, &iolen);
 
     /* write to the mapped file, getting the offset updated */
@@ -698,10 +697,10 @@ static void write_record(struct dbengine *db, struct skiprecord *record,
     io[5].iov_base = zeros;
     io[5].iov_len = PAD8(len) - len;
 
-    /* calculate the XXH32 of the tail first */
-    record->xxh32_tail = xxh32_iovec(io+1, 5);
+    /* calculate the XXH of the tail first */
+    record->xxh_tail = xxh_iovec(io+1, 5);
 
-    /* prepare the record once we know the xxh32 of the tail */
+    /* prepare the record once we know the xxh of the tail */
     prepare_record(record, scratchspace.s, &iolen);
     io[0].iov_base = scratchspace.s;
     io[0].iov_len = iolen;
@@ -2245,8 +2244,8 @@ static int dump(struct dbengine *db, int detail)
         if (r) {
             if (record.keyoffset)
                 printf("ERROR [HEADXXH %08lX %08lX]\n",
-                        (long unsigned) record.xxh32_head,
-                        (long unsigned) xxh32_map(BASE(db) + record.offset,
+                        (long unsigned) record.xxh_head,
+                        (long unsigned) xxh_map(BASE(db) + record.offset,
                                                  record.keyoffset - 8));
             else
                 printf("ERROR\n");
@@ -2255,8 +2254,8 @@ static int dump(struct dbengine *db, int detail)
 
         if (check_tailxxh(db, &record)) {
             printf("ERROR [TAILXXH %08lX %08lX] ",
-                    (long unsigned) record.xxh32_tail,
-                    (long unsigned) xxh32_map(BASE(db) + record.keyoffset,
+                    (long unsigned) record.xxh_tail,
+                    (long unsigned) xxh_map(BASE(db) + record.keyoffset,
                         PAD8(record.keylen + record.vallen + 2)));
         }
 
