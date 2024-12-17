@@ -3246,6 +3246,61 @@ EXPORTED int conversations_undump(struct conversations_state *state, FILE *fp)
     return cyrusdb_undumpfile(state->db, fp, &state->txn);
 }
 
+static int zeromodseq_b_cb(void *rock,
+                           const char *key,
+                           size_t keylen,
+                           const char *val,
+                           size_t vallen)
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    conversation_t *conv = conversation_new();
+    int r;
 
+    r = conversation_parse(val, vallen, conv, /*flags*/0);
+    if (r) goto done;
+
+    /* lower the modseqs */
+    if (conv->modseq > 1 || conv->createdmodseq > 1) {
+        conv->modseq = 1;
+        conv->createdmodseq = 1;
+        r = conversation_store(state, key, keylen, conv);
+    }
+
+done:
+    conversation_free(conv);
+    return r;
+}
+
+static int zeromodseq_f_cb(void *rock,
+                           const char *key,
+                           size_t keylen,
+                           const char *val,
+                           size_t vallen)
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    conv_status_t status;
+    int r;
+
+    r = conversation_parsestatus(val, vallen, &status);
+    if (r) return r;
+
+    if (status.threadmodseq > 1) {
+        /* reset threadmodseq */
+        status.threadmodseq = 1;
+        r = conversation_storestatus(state, key, keylen, &status);
+    }
+
+    return r;
+}
+
+EXPORTED int conversations_zero_modseq(struct conversations_state *state)
+{
+    int r = cyrusdb_foreach(state->db, "B", 1, NULL, zeromodseq_b_cb,
+                        state, &state->txn);
+    if (r) return r;
+    r = cyrusdb_foreach(state->db, "F", 1, NULL, zeromodseq_f_cb,
+                        state, &state->txn);
+    return r;
+}
 
 #undef DB
