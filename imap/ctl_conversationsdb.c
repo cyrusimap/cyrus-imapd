@@ -71,7 +71,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ };
 
 static int verbose = 0;
 
@@ -227,6 +227,78 @@ done:
     conversations_commit(&state);
     return r;
 }
+
+static int zero_modseq_cb(const mbentry_t *mbentry,
+                          void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    if (r) {
+        fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
+        return 0;
+    }
+
+    mailbox_modseq_dirty(mailbox);
+    // update the header values
+    mailbox->i.createdmodseq = 1;
+    mailbox->i.highestmodseq = 1;
+    mailbox->i.deletedmodseq = 0;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+
+        if (record->modseq > 1) {
+            struct index_record oldrecord = *record;
+            oldrecord.modseq = 1;
+            oldrecord.silentupdate = 1; // avoid bumping the highestmodseq!
+            r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+            if (r) break;
+        }
+    }
+
+    mailbox_iter_done(&iter);
+    mailbox_close(&mailbox);
+
+    if (r) return r;
+
+    if (mbentry->createdmodseq > 1 || mbentry->foldermodseq > 1) {
+        mbentry_t *copy = mboxlist_entry_copy(mbentry);
+        copy->createdmodseq = 1;
+        copy->foldermodseq = 1;
+        r = mboxlist_update_full(copy, /*localonly*/1, /*silent*/1);
+        mboxlist_entry_free(&copy);
+    }
+
+    return r;
+}
+
+static int do_zeromodseq(const char *userid)
+{
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct conversations_state *state = NULL;
+    int r = 0;
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) return r;
+
+    r = mboxlist_usermboxtree(userid, NULL, zero_modseq_cb, NULL, 0);
+    if (r) goto done;
+
+    r = conversations_zero_modseq(state);
+    if (r) goto done;
+
+    mboxname_zero_counters(inboxname);
+
+  done:
+    conversations_commit(&state);
+    free(inboxname);
+    return r;
+}
+
 
 static int build_cid_cb(const mbentry_t *mbentry,
                         void *rock __attribute__((unused)))
@@ -823,6 +895,11 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
             r = EX_NOINPUT;
         break;
 
+    case ZEROMODSEQ:
+        if (do_zeromodseq(userid))
+            r = EX_NOINPUT;
+        break;
+
     case BUILD:
         if (do_build(userid))
             r = EX_NOINPUT;
@@ -888,6 +965,7 @@ int main(int argc, char **argv)
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
         { "clearcid", required_argument, NULL, 'Z' },
+        { "clearmodseq", required_argument, NULL, 'M' },
         { 0, 0, 0, 0 },
     };
 
@@ -935,6 +1013,12 @@ int main(int argc, char **argv)
                     hashu64_insert(cid, (void*)1, zerocids);
             }
             strarray_free(ids);
+            break;
+
+        case 'M':
+            if (mode != UNKNOWN && mode != ZEROMODSEQ)
+                usage(argv[0]);
+            mode = ZEROMODSEQ;
             break;
 
         case 'b':
