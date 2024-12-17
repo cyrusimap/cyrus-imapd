@@ -2450,12 +2450,14 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     if (old && new) {
         /* we're always moving forwards */
-        assert(old->uid == new->uid);
-        assert(old->modseq <= new->modseq);
+        if (imaply_strict) {
+            assert(old->uid == new->uid);
+            assert(old->modseq <= new->modseq);
 
-        /* this flag cannot go away */
-        if (old->internal_flags & FLAG_INTERNAL_EXPUNGED)
+            /* this flag cannot go away */
+            if (old->internal_flags & FLAG_INTERNAL_EXPUNGED)
                 assert(new->internal_flags & FLAG_INTERNAL_EXPUNGED);
+        }
 
         /* we're changing the CID for any reason at all, treat as
          * a removal and re-add, so cache gets parsed and msgids

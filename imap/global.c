@@ -120,6 +120,7 @@ EXPORTED int config_httpprettytelemetry;
 EXPORTED int config_take_globallock;
 EXPORTED char *config_skip_userlock;
 EXPORTED int haproxy_protocol = 0;
+EXPORTED int imaply_strict = 1;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;

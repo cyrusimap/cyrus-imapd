@@ -278,6 +278,7 @@ static int zero_modseq_cb(const mbentry_t *mbentry,
 
 static int do_zeromodseq(const char *userid)
 {
+    imaply_strict = 0;
     char *inboxname = mboxname_user_mbox(userid, NULL);
     struct conversations_state *state = NULL;
     int r = 0;
