@@ -52,12 +52,16 @@
 
 #include "annotate.h"
 #include "append.h"
+#ifdef HAVE_ICAL
 #include "caldav_util.h"
+#endif
 #include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
 #include "index.h"
+#ifdef HAVE_ICAL
 #include "jmap_ical.h"
+#endif
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_query.h"
