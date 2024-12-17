@@ -3258,7 +3258,7 @@ static int zeromodseq_b_cb(void *rock,
     conversation_t *conv = conversation_new();
     int r;
 
-    r = conversation_parse(val, vallen, conv, /*flags*/0);
+    r = conversation_parse(val, vallen, conv, CONV_WITHALL);
     if (r) goto done;
 
     /* lower the modseqs */
