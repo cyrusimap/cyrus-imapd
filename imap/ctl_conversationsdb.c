@@ -949,7 +949,7 @@ int main(int argc, char **argv)
     int recursive = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FRST:bdruvzZ:";
+    static const char short_options[] = "AC:FMRST:bdruvzZ:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
