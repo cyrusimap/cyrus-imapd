@@ -436,6 +436,7 @@ void xsyslog_fn(int priority, const char *description,
     xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
 
 void xsyslog_ev(int priority, const char *description, ...);
+char *xsyslog_ev_fmt(const char *, ...);
 
 /*
  * GCC_VERSION macro usage:

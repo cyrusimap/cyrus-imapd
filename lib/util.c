@@ -2151,6 +2151,13 @@ EXPORTED void tcp_disable_nagle(int fd)
     }
 }
 
+EXPORTED char *modseqtoa(modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    return buf_release(&buf);
+}
+
 EXPORTED void xsyslog_fn(int priority, const char *description,
                          const char *func, const char *extra_fmt, ...)
 {
@@ -2187,13 +2194,252 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
     errno = saved_errno;
 }
 
-EXPORTED char *modseqtoa(modseq_t modseq)
+static char *xsyslog_ev_escape_value(struct buf *);
+static void  xsyslog_ev_fmt_skip_va(const char*, va_list);
+static char  xsyslog_ev_guess_printf_escape(const char *);
+
+/* xsyslog_ev:
+ *   1. use xsyslog_ev_fmt to format a string for syslogging
+ *   2. Then syslog it with the specified priority
+ *
+ * If something goes wrong in formatting, the function syslogs
+ * an unhappy message and continues.
+ */
+EXPORTED void xsyslog_ev(int priority, const char *event_name, ...)
 {
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, modseq);
-    return buf_release(&buf);
+    va_list ap;
+    va_start(ap, event_name);
+
+    char *s = xsyslog_ev_fmt_va(event_name, ap);
+    va_end(ap);
+
+    if (!s) {
+        syslog(priority, "COULD NOT FORMAT SYSLOG STRING FOR EVENT '%s'", event_name);
+        return;
+    }
+
+    syslog(priority, "%s", s);
+    free(s);
 }
 
+/* xsyslog_ev_fmt:
+ *   1. Format a key-value list for syslogging
+ *   2. Allocate a string to hold the result
+ *   3. The CALLER is responsible for freeing this string
+ *   4. Returns NULL if something goes wrong
+ *
+ * EXAMPLE:
+ *
+ *     xsyslog_ev_fmt("earthquake",
+ *                    "location", "%s", "Dubuque",
+ *                    "richter", "%5.1f", 7.9)
+ *
+ * will return the string
+ *
+ *     event=earthquake location=Dubuque richter="  7.9"
+ *
+ * char *s = xsyslog_ev_fmt(event_name,
+ *                          key1, fmt1, val1,
+ *                          key2, fmt2, val2,
+ *                          ...);
+ *
+ * The fmt_n arguments are SINGLE sprintf-style formats.  These are used to format the
+ * corresponding val_n arguments; the formatted values are then
+ * escaped with xsyslog_ev_escape_value. (This is why the richter value in the example is quoted.)
+ *
+ * The "event_name" is similarly formatted as if it had been part of a triple:
+ *    "event", "%s", event_name
+ *
+ * A sequence of chunks is built, each with the form "key_n=escaped_formatted_val_n"
+ *
+ * The chunks are concatenated with single spaces in between.
+ *
+ * The resulting string is returned.  The CALLER is responsible for freeing it.
+ *
+ * WARNING:
+ *   the function only supports a subset of sprintf-style escapes.
+ *   in particular, each format string MUST contain EXACTLY ONE %-escape.
+ *   See xsyslog_ev_guess_printf_escape below.
+ *
+ * SPECIAL EXCEPTION:
+ *   if the argument list also contains .... "__sep__", "FOO" ....
+ *   the separator string "FOO" will be used in place of the single spaces.
+ *   For example:
+ *     xsyslog_ev_fmt("earthquake", "__sep__", "; ",
+ *                    "location", "%s", "Dubuque")
+ *
+ *   will return the string
+ *
+ *       event=earthquake; location=Dubuque
+ */
+EXPORTED char *xsyslog_ev_fmt(const char *event_name, ...)
+{
+    va_list ap;
+    va_start(ap, event_name);
+    char *s = xsyslog_ev_fmt_va(event_name, ap);
+    va_end(ap);
+    return s;
+}
+
+/* xsyslog_ev_fmt_va: va_list version of xsyslog_ev_fmt
+ *
+ * same as xsyslog_ev_fmt, except it gets an initialized va_list argument
+ * instead of a variable argument list
+ *
+ * The CALLER is responsible for freeing the returned string.
+ */
+static char *xsyslog_ev_fmt_va(const char *event_name, va_list ap)
+{
+    struct buf log = BUF_INITIALIZER;
+    struct buf val = BUF_INITIALIZER;
+    const char *sep = " ";  // string that separates kev=value pairs
+    const char *key;
+
+    // Add "event=(event-name)" to the log buffer
+    buf_setcstr(&val, event_name);
+    buf_printf(&log, "event=%s", xsyslog_ev_escape_value(&val));
+
+    /*
+     * Now handle the remaining arguments, which should come in threes:
+     *   key, format, value
+     *
+     * value will be buf_printf'ed with the format,
+     * and then the result will be escaped (if necessary)
+     *
+     * finally, the resulting string "key=escaped-formatted-value"
+     * will be appended to the log buffer
+     */
+    while ((key = va_arg(ap, const char *))) {
+        // special case: __sep__ means reconfigure the separator
+        if (!strcmp(key, "__sep__")) {
+            sep = va_arg(ap, const char *);
+        }
+        else {
+            const char *fmt = va_arg(ap, const char *);
+            va_list val_ap;
+
+            va_copy(val_ap, ap);
+            buf_reset(&val);
+            buf_vprintf(&val, fmt, val_ap);
+            va_end(val_ap);
+
+            buf_printf(&log, "%s%s=%s",
+                       sep, key, xsyslog_ev_escape_value(&val));
+
+            /* Unfortunately neither ap nor val_ap is now pointing to the next 'key' argument.
+             * .. val_ap has been passed to vsprintf, which renders is unfit for further use.
+             .. ap is still pointing to 'val'.
+
+             This function understands `fmt` well enough that it can discard the
+             correct `val` argument and advance `ap` to point to the next `key`.
+            */
+            xsyslog_ev_fmt_skip_va(fmt, ap);
+
+        }
+    }
+
+    buf_free(&val);
+
+    return buf_release(&log);
+}
+
+static void xsyslog_ev_fmt_skip_va(const char* fmt, va_list ap)
+{
+    switch (xsyslog_ev_guess_printf_escape(fmt)) {
+    case 'd': (void) va_arg(ap, int);      break;
+    case 'l': (void) va_arg(ap, long);     break;
+    case 'f': (void) va_arg(ap, double);   break;
+    case 's': (void) va_arg(ap, (char *)); break;
+    case 'p': (void) va_arg(ap, (void *)); break;
+    case 0:
+        // we could handle this by skipping the va_arg call entirely, which would allow the user to write
+        //     xsyslog_ev(..., key, "foo", ...)
+        // in place of
+        //     xsyslog_ev(..., key, "foo", DUMMY, ...)
+        // but that seems morelikely to be confusing than otherwise
+    case -1:
+    default:
+        // This seems extreme at first but the alternative is to leave ap pointing to the wrong argument,
+        // and that is already undefined behavior, likely a segfault, so this is really the best we can do
+        abort();
+    }
+}
+
+/* Quick-and-dirty parser for SINGLE, COMMON printf-type escape strings
+ *
+ * return -1 if string can't be recognized
+ * return 0 if string contains no %-escapes
+ * otherwise return:
+ *   d   if the expected argument is an int
+ *   l   if the expected argument is a long
+ *   f   if the expected argument is a double
+ *   s   if the expected argument is a (char *)
+ *   p   if the expected argument is a (void *)
+ *   -1  if it's something else
+ */
+static char xsyslog_ev_guess_printf_escape(const char *s) {
+    unsigned is_long = 0;
+ TOP:
+    while (*s++ != '%') ;         // seek past first % sign
+    if (!*s) return 0;
+    if (*s == '%') { s++; goto TOP; } // it's "%%", skip it and continue
+
+    switch (*s) {  // skip optional flag
+    case '-': case '+': case ' ': case '0': case '\'': case '#':
+        s++;
+    default: ;
+    }
+
+    while (isdigit(*s) || *s == '.' || *s == '*' ) s++; // skip field width and precision
+
+    if (*s == 'l') { is_long++; s++; }
+    switch (*s) {
+    case 'd': case 'i': case '0': case 'u':
+    case 'x': case 'X': case 'c':
+        return is_long ? 'l' : 'd';
+
+    case 'e': case 'E': case 'f': case 'F':
+    case 'g': case 'G': case 'a': case 'A':
+        return 'f';
+
+    case 's':
+    case 'p':
+        return *s;
+
+    default:
+        return -1;                  // sorry, not prepared to handle this
+    }
+}
+
+// for unit testing only
+EXPORTED char __test_xsyslog_ev_guess_printf_escape(const char *s)
+{
+    return xsyslog_ev_guess_printf_escape(s);
+}
+
+/*
+  $string =~ s{\\}{\\\\}g;
+  $string =~ s{"}{\\"}g;
+  $string =~ s{\x0A}{\\n}g;
+  $string =~ s{\x0D}{\\r}g;
+
+  Takes a (struct buf *) and updates the buf in place.  Characters
+  from the list below will be translated to multi-character sequences
+  as shown:
+
+  SPC    ->     SPC    (no change)
+  \      ->     \\
+  "      ->     \"
+  RET    ->     \r
+  NL     ->     \n
+
+  Furthermore, if the input contains any of those, including SPC,
+  the entire string will be placed between DQUOTEs.  For example,
+
+  "foo"                 => "foo"                           // no changes
+  "no way"              => "\"no way\""                    // added DQUOTEs but not BS
+  "I said \"ouch\"\r\n" => "\"I said \\\"ouch\\\"\\r\\n\"" // added DQUOTES and escaped several characters
+*/
 static const char *xsyslog_ev_escape_value(struct buf *val)
 {
     int needs_escaping = 0, orig_len, escaped_len;
@@ -2203,17 +2449,17 @@ static const char *xsyslog_ev_escape_value(struct buf *val)
 
     for (p = buf_cstring(val); *p; p++) {
         switch (*p) {
-	case '\\':
-	case '\"':
-	case '\n':
-	case '\r':
-	    ++escaped_len;  // add 1 for the backslash
+        case '\\':
+        case '\"':
+        case '\n':
+        case '\r':
+            ++escaped_len;  // add 1 for the backslash
 
-	    // FALL THROUGH
-	case ' ':
-	    needs_escaping = 1;
-	    break;
-	}
+            // FALL THROUGH
+        case ' ':
+            needs_escaping = 1;
+            break;
+        }
     }
 
     if (needs_escaping) {
@@ -2261,179 +2507,4 @@ static const char *xsyslog_ev_escape_value(struct buf *val)
     }
 
     return buf_cstring(val);
-}
-
-static char *xsyslog_ev_fmt_va(const char *event_name, va_list ap)
-{
-    struct buf log = BUF_INITIALIZER;
-    struct buf val = BUF_INITIALIZER;
-    const char *sep = " ";  // string that separates kev=value pairs
-    const char *key;
-
-    // Add "event=(event-name)" to the log buffer
-    buf_setcstr(&val, event_name);
-    buf_printf(&log, "event=%s", xsyslog_ev_escape_value(&val));
-
-    /*
-     * Now handle the remaining arguments, which should come in threes:
-     *   key, format, value
-     *
-     * value will be buf_printf'ed with the format,
-     * and then the result will be escaped (if necessary)
-     *
-     * finally, the resulting string "key=escaped-formatted-value"
-     * will be appended to the log buffer
-     */
-    while ((key = va_arg(ap, const char *))) {
-	// special case: __sep__ means reconfigure the separator
-	if (!strcmp(key, "__sep__")) {
-	    sep = va_arg(ap, const char *);
-	}
-        else {
-            const char *fmt = va_arg(ap, const char *);
-            va_list val_ap;
-
-            va_copy(val_ap, ap);
-            buf_reset(&val);
-            buf_vprintf(&val, fmt, val_ap);
-            va_end(val_ap);
-
-            buf_printf(&log, "%s%s=%s",
-                       sep, key, xsyslog_ev_escape_value(&val));
-
-            // skip the args that printf goobled up (based on the format string)
-            for (const char *p = fmt; *p; p++) {
-                if (*p == '%') {
-                    // flags
-                    size_t nflags = strspn(++p, "#0- +'I");
-                    p += nflags;
-
-                    // field width and/or precision
-                    do {
-                        if (*p == '*') {
-                            va_arg(ap, int);
-                            p++;
-                        }
-                        else {
-                            strtol(p, (char **) &p, 10);
-                        }
-                    } while (*p == '.' && *++p);
-
-                    // length modifier
-                    char len = 0;
-                    if (strchr("hlLzt", *p)) {
-                        len = *p++;
-                        switch (len) {
-                        case 'h':
-                            if (*p == 'h') {
-                                len = 'H';
-                                p++;
-                            }
-                            break;
-                        case 'l':
-                            if (*p == 'l') {
-                                len = 'L';
-                                p++;
-                            }
-                            break;
-                        }
-                    }
-
-                    // conversion specifier
-                    switch (*p) {
-                    case 'd': case 'i':
-                    case 'o': case 'u':
-                    case 'x': case 'X':
-                        switch (len) {
-                        case 'L':
-                            va_arg(ap, long long int);
-                            break;
-                        case 'l':
-                            va_arg(ap, long int);
-                            break;
-                        case 'z':
-                            va_arg(ap, size_t);
-                            break;
-                        case 't':
-                            va_arg(ap, ptrdiff_t);
-                            break;
-                        default:
-                            va_arg(ap, int);
-                            break;
-                        }
-                        break;
-
-                    case 'e': case 'E':
-                    case 'f': case 'F':
-                    case 'g': case 'G':
-                    case 'a': case 'A':
-                        if (len == 'L')
-                            va_arg(ap, long double);
-                        else
-                            va_arg(ap, double);
-                        break;
-
-                    case 'c':
-                        va_arg(ap, int);
-                        break;
-
-                    case 's':
-                        va_arg(ap, char *);
-                        break;
-
-                    case 'p':
-                        va_arg(ap, void *);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    buf_free(&val);
-
-    return buf_release(&log);
-}
-
-EXPORTED void xsyslog_ev(int priority, const char *event_name, ...)
-{
-    va_list ap;
-    char *s;
-
-    va_start(ap, event_name);
-    s = xsyslog_ev_fmt_va(event_name, ap);
-    va_end(ap);
-
-    if (!s) {
-	syslog(priority,
-               "COULD NOT FORMAT SYSLOG STRING FOR EVENT '%s'", event_name);
-	return;
-    }
-
-    syslog(priority, "%s", s);
-    free(s);
-}
-
-// for unit testing only
-EXPORTED char *__test_xsyslog_ev_fmt(const char *event_name, ...)
-{
-    va_list ap;
-    char *s;
-
-    va_start(ap, event_name);
-    s = xsyslog_ev_fmt_va(event_name, ap);
-    va_end(ap);
-
-    return s;
-}
-
-// for unit testing only
-EXPORTED char *__test_xsyslog_ev_escape_value(const char *s)
-{
-    struct buf val = BUF_INITIALIZER;
-
-    buf_setcstr(&val, s);
-    xsyslog_ev_escape_value(&val);
-
-    return buf_release(&val);
 }
