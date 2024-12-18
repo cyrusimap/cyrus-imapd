@@ -52,6 +52,7 @@
 
 #include "arrayu64.h"
 #include "strarray.h"
+#include "hash.h"
 #include "util.h"
 #include "sieve/sieve_err.h"
 
@@ -297,7 +298,7 @@ void sieve_script_free(sieve_script_t **s);
 
 /* execute bytecode on a message */
 int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
-                           void *script_context, void *message_context);
+                           void *script_context, void *message_context, hash_table *prevars);
 
 /* Get space separated list of extensions supported by the implementation */
 const strarray_t *sieve_listextensions(sieve_interp_t *i);

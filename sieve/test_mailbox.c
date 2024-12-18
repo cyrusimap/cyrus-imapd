@@ -545,7 +545,7 @@ int process_message(const char *path, sieve_execute_t *exe,
     m->env_from = &e_from;
     m->env_to = &e_to;
 
-    res = sieve_execute_bytecode(exe, i, sd, m);
+    res = sieve_execute_bytecode(exe, i, sd, m, NULL);
     free_msg(m);
     fclose(f);
     close(fd);

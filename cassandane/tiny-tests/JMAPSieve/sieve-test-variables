@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_test_variables
+    :min_version_3_3 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $script = <<'EOF';
+require ["variables", "vnd.cyrus.log"];
+
+log "string: '${string}'";
+log "int: '${int}'";
+log "empty: '${empty}'";
+log "missing: '${missing}'";
+EOF
+    $script =~ s/\r?\n/\r\n/gs;
+    $script =~ s/\\/\\\\/gs;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => $script}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $scriptid = $res->[1][1]{created}{"1"}{blobId};
+
+    xlog "create email";
+    $res = $jmap->CallMethods([['Mailbox/get', { properties => ["id"] }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Whoa!" }}
+    };
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R2"],
+    ]);
+
+    my $emailid = $res->[0][1]{created}{"1"}{blobId};
+
+    xlog "test script";
+    $res = $jmap->CallMethods([
+        ['SieveScript/test', {
+            scriptBlobId => "$scriptid",
+            emailBlobIds => [ "$emailid" ],
+            envelope => JSON::null,
+            lastVacationResponse => JSON::null,
+            variables => {
+                string  => 'hello there',
+                int     => '012',
+                empty   => '',
+                notused => 'foo',
+             },
+         }, "R3"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{completed});
+
+    $self->assert_str_equals('log',
+                             $res->[0][1]{completed}{$emailid}[0][0]);
+    $self->assert_str_equals("string: 'hello there'",
+                             $res->[0][1]{completed}{$emailid}[0][2][0]);
+
+    $self->assert_str_equals('log',
+                             $res->[0][1]{completed}{$emailid}[1][0]);
+    $self->assert_str_equals("int: '012'",
+                             $res->[0][1]{completed}{$emailid}[1][2][0]);
+
+    $self->assert_str_equals('log',
+                             $res->[0][1]{completed}{$emailid}[2][0]);
+    $self->assert_str_equals("empty: ''",
+                             $res->[0][1]{completed}{$emailid}[2][2][0]);
+
+    $self->assert_str_equals('log',
+                             $res->[0][1]{completed}{$emailid}[3][0]);
+    $self->assert_str_equals("missing: ''",
+                             $res->[0][1]{completed}{$emailid}[3][2][0]);
+
+    $self->assert_str_equals('keep',
+                             $res->[0][1]{completed}{$emailid}[4][0]);
+
+    $self->assert_null($res->[0][1]{notCompleted});
+}
