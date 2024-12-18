@@ -1933,7 +1933,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     const char *key, *scriptid = NULL;
     const char *bcname = NULL, *tmpname = NULL;
-    json_t *arg, *emailids = NULL, *envelope = NULL, *err = NULL;
+    json_t *arg, *emailids = NULL, *envelope = NULL, *variables = NULL, *err = NULL;
     strarray_t env_from = STRARRAY_INITIALIZER;
     strarray_t env_to = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -1944,6 +1944,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_execute_t *exe = NULL;
     time_t last_vaca_resp = 0;
     int r;
+    hash_table vars = HASH_TABLE_INITIALIZER;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -1961,6 +1962,10 @@ static int jmap_sieve_test(struct jmap_req *req)
 
         else if (!strcmp(key, "envelope")) {
             envelope = arg;
+        }
+
+        else if (!strcmp(key, "variables")) {
+            variables = arg;
         }
 
         else if (!strcmp(key, "lastVacationResponse")) {
@@ -2017,6 +2022,26 @@ static int jmap_sieve_test(struct jmap_req *req)
         jmap_parser_pop(&parser);
     } else {
         envelope = NULL;
+    }
+
+    /* variables */
+    if (JNOTNULL(variables) && json_is_object(variables)) {
+        jmap_parser_push(&parser, "variables");
+
+        construct_hash_table(&vars, 16, 0);
+
+        const char *key;
+        json_t *value;
+
+        json_object_foreach(variables, key, value) {
+            if (json_is_string(value)) {
+                hash_insert(key, xstrdup(json_string_value(value)), &vars);
+            } else {
+                jmap_parser_invalid(&parser, key);
+            }
+        }
+    } else if JNOTNULL(variables) {
+        jmap_parser_invalid(&parser, "variables");
     }
 
     if (json_array_size(parser.invalid)) {
@@ -2166,7 +2191,9 @@ static int jmap_sieve_test(struct jmap_req *req)
             jmap_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
             err = NULL;
             m.actions = json_array();
-            sieve_execute_bytecode(exe, interp, &sd, &m);
+
+            sieve_execute_bytecode(exe, interp, &sd, &m, &vars);
+
             jmap_namespace.isutf8 = 0;
 
             if (err) {
@@ -2213,6 +2240,7 @@ done:
     strarray_fini(&env_from);
     strarray_fini(&env_to);
     buf_free(&buf);
+    free_hash_table(&vars, free);
     if (tmpname) {
         /* Remove temp bytecode file */
         xunlink(tmpname);

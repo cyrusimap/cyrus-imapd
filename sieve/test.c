@@ -846,7 +846,7 @@ int main(int argc, char *argv[])
         m->env_from = &e_from;
         m->env_to = &e_to;
 
-        res = sieve_execute_bytecode(exe, i, &sd, m);
+        res = sieve_execute_bytecode(exe, i, &sd, m, NULL);
         if (res != SIEVE_OK) {
             printf("sieve_execute_bytecode() returns %d\n", res);
             exit(1);
