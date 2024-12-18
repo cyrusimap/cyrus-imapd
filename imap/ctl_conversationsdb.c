@@ -967,6 +967,7 @@ int main(int argc, char **argv)
         { "audit", no_argument, NULL, 'A' },
         /* n.b. no long option for -C */
         { "check-folders", no_argument, NULL, 'F' },
+        { "clearmodseq", no_argument, NULL, 'M' },
         { "update-counts", no_argument, NULL, 'R' },
         { "split", no_argument, NULL, 'S' },
         { "audit-temp-directory", required_argument, NULL, 'T' },
@@ -977,7 +978,6 @@ int main(int argc, char **argv)
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
         { "clearcid", required_argument, NULL, 'Z' },
-        { "clearmodseq", required_argument, NULL, 'M' },
         { 0, 0, 0, 0 },
     };
 
