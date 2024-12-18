@@ -281,6 +281,8 @@ static int do_zeromodseq(const char *userid)
     imaply_strict = 0;
     char *inboxname = mboxname_user_mbox(userid, NULL);
     struct conversations_state *state = NULL;
+    struct quota q;
+    struct txn *txn = NULL;
     int r = 0;
 
     r = conversations_open_user(userid, 0/*shared*/, &state);
@@ -290,6 +292,15 @@ static int do_zeromodseq(const char *userid)
     if (r) goto done;
 
     r = conversations_zero_modseq(state);
+    if (r) goto done;
+
+    quota_init(&q, inboxname);
+    r = quota_read(&q, &txn, 1);
+    if (!r) {
+        q.modseq = 1;
+        r = quota_write(&q, /*silent*/1, &txn);
+    }
+    quota_free(&q);
     if (r) goto done;
 
     mboxname_zero_counters(inboxname);
