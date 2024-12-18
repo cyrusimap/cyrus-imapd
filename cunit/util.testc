@@ -2,106 +2,170 @@
 #include "util.h"
 #include <malloc.h>
 
+extern char *xsyslog_ev_escape_value(const char *);
+extern char __test_xsyslog_ev_guess_printf_escape(const char *);
+
 static void test_xsyslog_ev_fmt(void)
 {
     // basic tests
     {
-	char *result;
+        char *result;
 
-	result = xsyslog_ev_fmt("event-name", NULL);
-	CU_ASSERT_STRING_EQUAL(result, "event=event-name");
-	free(result);
+        result = xsyslog_ev_fmt("event-name", NULL);
+        CU_ASSERT_STRING_EQUAL(result, "event=event-name");
+        free(result);
 
-	result = xsyslog_ev_fmt(
-	       "event-name",
-	       "firstname", "%s", "Fred",
-	       NULL);
-	CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred");
-	free(result);
-
-	result = xsyslog_ev_fmt(
-	       "event-name",
-	       "firstname", "%s", "Fred",
-	       "lastname", "%s", "Flintstone",
-	       NULL);
-	CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred lastname=Flintstone");
-	free(result);
-
-	// now with escaping
-	result = xsyslog_ev_fmt(
-	       "announce name",
-	       "name", "%s", "Fred Flintstone",
-	       NULL);
-	CU_ASSERT_STRING_EQUAL(result, "event=\"announce name\" name=\"Fred Flintstone\"");
-	free(result);
-
-	// now with various formats
-	result = xsyslog_ev_fmt(
-				"formats",
-				"strlt", "%-10s", "foo",
-				"strrt", "%10s", "bar",
-				"int", "%d", -12,
-                                "ulong", "%ld", 2147483647L,
-				"double", "%f", 4.2,
-				"double-fmt", "%5.2f", 4.2,
-				NULL);
-	CU_ASSERT_STRING_EQUAL(result,
-			       "event=formats "
-			       "strlt=\"foo       \" "
-			       "strrt=\"       bar\" "
-			       "int=-12 "
-                               "ulong=2147483647 "
-			       "double=4.200000 "
-			       "double-fmt=\" 4.20\"");
-	free(result);
-
-	// common case: multiline text output
         result = xsyslog_ev_fmt(
-				"multiline",
-				"text", "%s", "I\r\nlike\r\npie!\r\n",
-				NULL
-			       );
-	CU_ASSERT_STRING_EQUAL(result, "event=multiline text=\"I\\r\\nlike\\r\\npie!\\r\\n\"");
-	free(result);
+               "event-name",
+               "firstname", "%s", "Fred",
+               NULL);
+        CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred");
+        free(result);
+
+        result = xsyslog_ev_fmt(
+               "event-name",
+               "firstname", "%s", "Fred",
+               "lastname", "%s", "Flintstone",
+               NULL);
+        CU_ASSERT_STRING_EQUAL(result, "event=event-name firstname=Fred lastname=Flintstone");
+        free(result);
+
+        // now with escaping
+        result = xsyslog_ev_fmt(
+               "announce name",
+               "name", "%s", "Fred Flintstone",
+               NULL);
+        CU_ASSERT_STRING_EQUAL(result, "event=\"announce name\" name=\"Fred Flintstone\"");
+        free(result);
+
+        // now with various formats
+        result = xsyslog_ev_fmt(
+                                "formats",
+                                "strlt", "%-10s", "foo",
+                                "strrt", "%10s", "bar",
+                                "int", "%d", -12,
+                                "ulong", "%ld", 2147483647L,
+                                "double", "%f", 4.2,
+                                "double-fmt", "%5.2f", 4.2,
+                                NULL);
+        CU_ASSERT_STRING_EQUAL(result,
+                               "event=formats "
+                               "strlt=\"foo       \" "
+                               "strrt=\"       bar\" "
+                               "int=-12 "
+                               "ulong=2147483647 "
+                               "double=4.200000 "
+                               "double-fmt=\" 4.20\"");
+        free(result);
+
+        // common case: multiline text output
+        result = xsyslog_ev_fmt(
+                                "multiline",
+                                "text", "%s", "I\r\nlike\r\npie!\r\n",
+                                NULL
+                               );
+        CU_ASSERT_STRING_EQUAL(result, "event=multiline text=\"I\\r\\nlike\\r\\npie!\\r\\n\"");
+        free(result);
 }
 
     // tests for weird __sep__ feature
     {
       char *result;
       result = xsyslog_ev_fmt(
-			      "sep-test",
-			      "__sep__", "!!!",
-			      "name", "%s", "Fred Flintstone",
-			      "occupation", "%s", "caveman",
-			      NULL);
+                              "sep-test",
+                              "__sep__", "!!!",
+                              "name", "%s", "Fred Flintstone",
+                              "occupation", "%s", "caveman",
+                              NULL);
       CU_ASSERT_STRING_EQUAL(result, "event=sep-test!!!name=\"Fred Flintstone\"!!!occupation=caveman");
       free(result);
     }
 }
 
-extern char *xsyslog_ev_escape_value(const char *);
-extern char *__test_xsyslog_ev_escape_value(const char *);
-
 static void test_xsyslog_ev_escape_value(void)
 {
+     const char *test[] = {
+         /* input,           expected output */
+         "foo",              "foo",
+         "foo bar",          "\"foo bar\"",
+         "call me \"fred\"", "\"call me \\\"fred\\\"\"",
+         "\n",               "\"\\n\"",
+         "\r",               "\"\\r\"",
+         "\r\n",             "\"\\r\\n\"",
+         "-12.345e67",       "-12.345e67",
+         NULL,
+     };
+
+     unsigned i;
+     for (i=0; test[i]; i += 2) {
+         const char *in = test[i];
+         const char *expected = test[i+1];
+         char *actual = __test_xsyslog_ev_escape_value(in);
+         CU_ASSERT_STRING_EQUAL(actual, expected);
+         free(actual);
+     };
+}
+
+static void test_xsyslog_ev_guess_printf_escape(void)
+{
+    char barf[] = { -1, 0 }; // function returns -1 when it is very sick
     const char *test[] = {
-	/* input, expected output */
-	"foo", "foo",
-	"foo bar", "\"foo bar\"",
-	"call me \"fred\"", "\"call me \\\"fred\\\"\"",
-	"\n", "\"\\n\"",
-	"\r", "\"\\r\"",
-	"\r\n", "\"\\r\\n\"",
-	"break-my-cranck", "break-my-cranck",
-	NULL,
+        /* input, expected output */
+
+        // Handle strings with no escapes or with only %% escapes
+        "foo", "\0",
+        "foo%%", "\0",
+        "%%foo", "\0",
+        "%%f%%o%%o%%", "\0",
+
+        // Basic escapes everyone is going to use a million times
+        "%d", "d",
+        "%u", "d",
+        "%s", "s",
+        "%f", "f",
+        "%c", "d",
+
+        // Same, with surrounding text
+        "abc%ddef", "d",
+        "abc%udef", "d",
+        "abc%sdef", "s",
+        "abc%fdef", "f",
+        "abc%cdef", "d",
+
+        // %%
+        "%%%f", "f",
+        "abc%%def%x", "d",
+
+        // Typical field widths and precisions
+        "%3d",  "d",
+        "%03d", "d",
+        "%-3d", "d",
+        "%4.2f" , "f",
+        "%-3.0f", "f",
+        "%20s",  "s",
+        "%-20s", "s",
+
+        // Unparseable
+        "%w",   barf,
+        "%-+d", barf,
+        "%!d",  barf,
+        "%",    barf,
+        "%%%",  barf,
+
+        // I mixed these up in the source code at least twice so far
+        "%o", "d",
+        "%0", barf,
+
+        NULL,
     };
     unsigned i;
     for (i=0; test[i]; i += 2) {
-	const char *in = test[i];
-	const char *expected = test[i+1];
-	char *actual = __test_xsyslog_ev_escape_value(in);
-	CU_ASSERT_STRING_EQUAL(actual, expected);
-	free(actual);
+        const char *in = test[i];
+        const char *expected = test[i+1];
+        char actual = __test_xsyslog_ev_guess_printf_escape(in);
+        if (actual != *expected) fprintf(stderr, "%s -> %c ? s/b %c \n", in, actual, *expected);
+        CU_ASSERT_EQUAL(actual, expected[0]);
     }
 }
+
 
