@@ -317,4 +317,7 @@ void sieve_free_bytecode(bytecode_info_t **p);
 int sieve_rebuild(const char *script_fname, const char *bc_fname,
                   int force, char **out_parse_errors);
 
+/* Test if a string is a valid variable name in a sieve script */
+int sieve_is_identifier(char *s);
+
 #endif

@@ -63,6 +63,7 @@
 #include "sieve/flags.h"
 #include "sieve/grammar.h"
 #include "sieve/sieve_err.h"
+#include "sieve/sieve_interface.h"
 
 #include "util.h"
 #include "imparse.h"
@@ -2614,7 +2615,7 @@ static int verify_identifier(sieve_script_t *sscript, char *s)
 {
     /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
 
-    if (!is_identifier(s)) {
+    if (!sieve_is_identifier(s)) {
         sieveerror_f(sscript,
                      "string '%s': not a valid sieve identifier", s);
         return 0;
@@ -2706,7 +2707,7 @@ static commandlist_t *build_flag(sieve_script_t *sscript,
     c->u.fl.flags = flags;
 
     if (!c->u.fl.variable) c->u.fl.variable = xstrdup("");
-    else if (!is_identifier(c->u.fl.variable)) {
+    else if (!sieve_is_identifier(c->u.fl.variable)) {
         sieveerror_c(sscript, SIEVE_INVALID_VALUE, "variablename");
     }
 
