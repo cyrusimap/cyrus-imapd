@@ -43,6 +43,9 @@ jobs:
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
         ./tools/build-with-cyruslibs.sh
+        echo "::group::Direct echo from action"
+        echo "This is a thing."
+        echo "::endgroup::"
     - name: report version information
       shell: bash
       run: |

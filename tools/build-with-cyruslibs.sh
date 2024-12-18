@@ -2,6 +2,7 @@
 
 set -e
 
+echo "::group::configure cyrus-imapd"
 : ${CYRUSLIBS:=cyruslibs}
 : ${LIBSDIR:=/usr/local/$CYRUSLIBS}
 : ${TARGET:=/usr/cyrus}
@@ -15,9 +16,18 @@ autoreconf -v -i
 echo "./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5"
 ./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5
 make lex-fix
+echo "::endgroup::"
+
+echo "::group::make cyrus-imapd"
 make -j 8
+echo "::endgroup::"
+
+echo "::group::check cyrus-imapd"
 make -j 8 check
+echo "::endgroup::"
+
+echo "::group::install cyrus-imapd"
 sudo make install
 sudo make install-binsymlinks
 sudo cp tools/mkimap /usr/cyrus/bin/mkimap
-
+echo "::endgroup::"
