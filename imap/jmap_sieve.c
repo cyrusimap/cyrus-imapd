@@ -2034,7 +2034,7 @@ static int jmap_sieve_test(struct jmap_req *req)
         json_t *value;
 
         json_object_foreach(variables, key, value) {
-            if (json_is_string(value)) {
+            if (strlen(key) && sieve_is_identifier((char *)key) && json_is_string(value)) {
                 hash_insert(key, xstrdup(json_string_value(value)), &vars);
             } else {
                 jmap_parser_invalid(&parser, key);

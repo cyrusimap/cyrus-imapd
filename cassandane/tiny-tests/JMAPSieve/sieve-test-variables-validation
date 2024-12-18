@@ -80,12 +80,15 @@ EOF
             envelope => JSON::null,
             lastVacationResponse => JSON::null,
             variables => {
-              null   => JSON::null,
-              object => {},
-              array  => [],
-              num    => 32,
-              bool   => JSON::true,
-              good   => "this value is okay",
+              null     => JSON::null,
+              object   => {},
+              array    => [],
+              num      => 32,
+              bool     => JSON::true,
+              good     => "this value is okay",
+              ''       => "invalid, empty",
+              '@@foo'  => 'invalid, used by internal things',
+              'no way' => 'invalid characters',
             },
          }, "R3"]
     ]);
@@ -93,7 +96,7 @@ EOF
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
     $self->assert_deep_equals(
-        [ sort map { "variables/$_" } qw(null object array num bool) ],
+        [ sort map { "variables/$_" } qw(null object array num bool), '', '@@foo', 'no way' ],
         [ sort @{ $res->[0][1]{'arguments'} } ],
     );
 }
