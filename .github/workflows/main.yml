@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-        image: cyrusimapdocker/cyrus-bookworm:latest
+        image: ghcr.io/cyrusimap/cyrus-docker:bookworm
         options: --init
     steps:
     - uses: actions/checkout@v4
@@ -25,9 +25,6 @@ jobs:
     - name: install missing or frequently-updated deps
       shell: bash
       run: |
-        cpanm IO::File::fcntl
-        cpanm Digest::CRC
-        cpanm XML::Simple # XXX could be grabbed from apt by docker image
         cpanm Mail::IMAPTalk # in image, but fetch latest!
     - name: setup git safe directory
       shell: bash
