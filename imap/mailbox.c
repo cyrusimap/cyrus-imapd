@@ -4633,7 +4633,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                                 struct index_record *record)
 {
     int r;
-    struct utimbuf settime;
+    struct timespec settime[2];
     uint32_t changeflags = CHANGE_ISAPPEND;
 
     assert(mailbox_index_islocked(mailbox, 1));
@@ -4730,9 +4730,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
-        settime.actime = settime.modtime = record->internaldate;
-        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // mabe there is no file in directory.
-            if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
+        settime[0].tv_sec  = settime[1].tv_sec  = record->internaldate;
+        settime[0].tv_nsec = settime[1].tv_nsec = UTIME_NOW;
+        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // maybe there is no file in directory.
+            if (utimensat(0, mailbox_record_fname(mailbox, record), settime, 0) == -1)
                 return IMAP_IOERROR;
 
         /* write the cache record before buffering the message, it
