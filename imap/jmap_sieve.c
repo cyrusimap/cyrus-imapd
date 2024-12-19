@@ -1884,6 +1884,44 @@ static void sieve_log(void *sc __attribute__((unused)),
     json_array_append_new(m->actions, json_pack("[s {} [s]]", "log", text));
 }
 
+static int processcal(void *ac,
+                      void *ic __attribute__((unused)),
+                      void *sc __attribute__((unused)),
+                      void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    sieve_cal_context_t *cal = (sieve_cal_context_t *) ac;
+    message_data_t *m = (message_data_t *) mc;
+    json_t *args = json_object();
+
+    if (cal->calendarid)
+        json_object_set_new(args, "calendarid", json_string(cal->calendarid));
+
+    if (cal->addresses)
+        _strlist(args, "addresses", cal->addresses);
+
+    if (cal->organizers)
+        json_object_set_new(args, "organizers", json_string(cal->organizers));
+
+    if (cal->allow_public)
+        json_object_set_new(args, "allowpublic", json_true());
+
+    if (cal->invites_only)
+        json_object_set_new(args, "invitesonly", json_true());
+
+    if (cal->delete_cancelled)
+        json_object_set_new(args, "deletecanceled", json_true());
+
+    if (cal->updates_only)
+        json_object_set_new(args, "updatesonly", json_true());
+
+    json_array_append_new(m->actions,
+                          json_pack("[s o []]", "processcal", args));
+
+    return SIEVE_OK;
+}
+
+
 static int getinclude(void *sc __attribute__((unused)),
                       const char *script,
                       int isglobal __attribute__((unused)),
@@ -2147,7 +2185,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_notify(interp, notify, NULL);
     sieve_register_snooze(interp, snooze);
     sieve_register_logger(interp, sieve_log);
-        
+    sieve_register_processcal(interp, processcal);
     sieve_register_include(interp, getinclude);
     sieve_register_execute_error(interp, execute_error);
 

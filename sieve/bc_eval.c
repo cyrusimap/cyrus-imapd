@@ -2582,6 +2582,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 buf_free(&cal_ctx.reason);
             }
             else {
+                *errmsg = "No processcal handler";
                 return SIEVE_RUN_ERROR;
             }
             break;
