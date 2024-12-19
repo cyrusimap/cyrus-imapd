@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_misc_upload_pagesize_ending_dash
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # We need to upload data that will have a total size of 4096 on disk
+    # after Cyrus adds its RFC822 header section to create the DAV resource.
+    # We can fix the length of that header section to 184 by specifying
+    # the 'servername' config option to '127.0.0.1 (used in the From: header).
+    # Thus, the length of the data uploaded needs to be 3912,
+    # with the final char being '-' on its own line
+    my $email = 'X' x 3909 . "\r\n-";
+    my $data = $jmap->Upload($email, "text/plain");
+
+    $self->assert_not_null($data);
+    $self->assert_num_equals(3912, $data->{size});
+    $self->assert_str_equals("text/plain", $data->{type});
+}

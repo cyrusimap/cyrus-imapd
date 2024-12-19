@@ -1964,7 +1964,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
         len = endline - line;
         msg->offset += len;
 
-        if (line[0] == '-' && line[1] == '-' &&
+        if (len >= 2 && line[0] == '-' && line[1] == '-' &&
             message_pendingboundary(line, len, boundaries)) {
             body->boundary_size = len;
             body->boundary_lines++;
