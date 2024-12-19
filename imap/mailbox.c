@@ -4543,26 +4543,28 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     /* the UID has to match, of course, for it to be the same
      * record.  XXX - test fields like "internaldate", etc here
      * too?  Maybe replication should be more strict about it */
-    assert(record->uid == oldrecord.uid);
-    assert(message_guid_equal(&oldrecord.guid, &record->guid));
+    if (imaply_strict) {
+        assert(record->uid == oldrecord.uid);
+        assert(message_guid_equal(&oldrecord.guid, &record->guid));
 
-    if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        /* it is a sin to unexpunge a message.  unexpunge.c copies
-         * the data from the old record and appends it with a new
-         * UID, which is righteous in the eyes of the IMAP client */
-        assert(record->internal_flags & FLAG_INTERNAL_EXPUNGED);
+        if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            /* it is a sin to unexpunge a message.  unexpunge.c copies
+            * the data from the old record and appends it with a new
+            * UID, which is righteous in the eyes of the IMAP client */
+            assert(record->internal_flags & FLAG_INTERNAL_EXPUNGED);
+        }
+
+        if (oldrecord.internal_flags & FLAG_INTERNAL_ARCHIVED) {
+            /* it is also a sin to unarchive a message, except in the
+            * the very odd case of a reconstruct.  So let's see about
+            * that */
+            if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
+                xsyslog(LOG_ERR, "IOERROR: bogus removal of archived flag",
+                                "mailbox=<%s> record=<%u>",
+                                mailbox_name(mailbox), record->uid);
+        }
     }
-
-    if (oldrecord.internal_flags & FLAG_INTERNAL_ARCHIVED) {
-        /* it is also a sin to unarchive a message, except in the
-         * the very odd case of a reconstruct.  So let's see about
-         * that */
-        if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
-            xsyslog(LOG_ERR, "IOERROR: bogus removal of archived flag",
-                             "mailbox=<%s> record=<%u>",
-                             mailbox_name(mailbox), record->uid);
-    }
-
+    
     /* handle immediate expunges here... */
     if (immediate && (record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         record->internal_flags |= FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
@@ -4686,7 +4688,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         struct index_record prev;
         r = mailbox_read_index_record(mailbox, mailbox->i.num_records, &prev);
         if (r) return r;
-        assert(prev.uid <= mailbox->i.last_uid);
+        if (imaply_strict) assert(prev.uid <= mailbox->i.last_uid);
         if (message_guid_equal(&prev.guid, &record->guid)) {
             syslog(LOG_INFO, "%s: same message appears twice %u %u",
                    mailbox_name(mailbox), prev.uid, record->uid);

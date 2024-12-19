@@ -426,6 +426,46 @@ sub test_reconstruct_splitconv
 }
 
 #
+# test clearing the modseq
+#
+sub test_clearmodseq
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($talk->capability()->{xconversations});
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setquota('user.cassandane', ['STORAGE', 500000]);
+
+    for (1..20) {
+      $self->make_message("Message A$_");
+    }
+
+    my $precounters = $self->{store}->get_counters();
+    # we've made a bunch of changes, this should be more than 10!
+    $self->assert($precounters->{highestmodseq} > 10, "$precounters->{highestmodseq} > 10");
+
+    # zero out the modseqs
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-M', 'cassandane');
+
+    my $midcounters = $self->{store}->get_counters();
+    # we haven't made any changes, should actually be zero!
+    $self->assert($midcounters->{highestmodseq} < 10, "$midcounters->{highestmodseq} < 10");
+
+    $self->make_message("Message B1");
+    $self->make_message("Message B2");
+
+    my $postcounters = $self->{store}->get_counters();
+    # we've only created two more emails, it shouldn't have bounced higher
+    $self->assert($postcounters->{highestmodseq} < 10, "$postcounters->{highestmodseq} < 10");
+
+}
+
+#
 # Test APPEND of messages to IMAP
 #
 sub _munge_annot_crc

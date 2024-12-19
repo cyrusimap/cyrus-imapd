@@ -184,6 +184,7 @@ extern int charset_flags;
 extern int charset_snippet_flags;
 extern size_t config_search_maxsize;
 extern int haproxy_protocol;
+extern int imaply_strict;
 
 /* Session ID */
 extern void session_new_id(void);

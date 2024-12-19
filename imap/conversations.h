@@ -367,6 +367,7 @@ extern int conversation_id_decode(conversation_id_t *cid, const char *text);
 
 extern int conversations_zero_counts(struct conversations_state *state, int wipe);
 extern int conversations_cleanup_zero(struct conversations_state *state);
+extern int conversations_zero_modseq(struct conversations_state *state);
 
 extern int conversations_rename_folder(struct conversations_state *state,
                                        const char *from_name,

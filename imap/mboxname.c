@@ -3368,6 +3368,31 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
     return val;
 }
 
+EXPORTED void mboxname_zero_counters(const char *mboxname)
+{
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+        return;
+
+    struct mboxname_counters counters;
+    int fd = -1;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    /* XXX error handling */
+    if (mboxname_load_fcounters(fname, &counters, &fd))
+        goto done;
+
+    memset(&counters, 0, sizeof(struct mboxname_counters));
+
+    /* all zeroed out! */
+    mboxname_set_fcounters(fname, &counters, fd);
+
+ done:
+    free(fname);
+    mbname_free(&mbname);
+}
+
 EXPORTED char *mboxname_common_ancestor(const char *mboxname1, const char *mboxname2)
 {
     mbname_t *mbname1 = mbname_from_intname(mboxname1);
