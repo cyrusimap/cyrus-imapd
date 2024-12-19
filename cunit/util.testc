@@ -2,7 +2,7 @@
 #include "util.h"
 #include <malloc.h>
 
-extern char *xsyslog_ev_escape_value(const char *);
+extern const char *__test_xsyslog_ev_escape_value(struct buf *);
 extern char __test_xsyslog_ev_guess_printf_escape(const char *);
 
 static void test_xsyslog_ev_fmt(void)
@@ -97,13 +97,14 @@ static void test_xsyslog_ev_escape_value(void)
      };
 
      unsigned i;
+     struct buf in = BUF_INITIALIZER;
      for (i=0; test[i]; i += 2) {
-         const char *in = test[i];
+         buf_setcstr(&in, test[i]);
          const char *expected = test[i+1];
-         char *actual = __test_xsyslog_ev_escape_value(in);
+         const char *actual = __test_xsyslog_ev_escape_value(&in);
          CU_ASSERT_STRING_EQUAL(actual, expected);
-         free(actual);
      };
+     buf_free(&in);
 }
 
 static void test_xsyslog_ev_guess_printf_escape(void)
@@ -163,9 +164,10 @@ static void test_xsyslog_ev_guess_printf_escape(void)
         const char *in = test[i];
         const char *expected = test[i+1];
         char actual = __test_xsyslog_ev_guess_printf_escape(in);
-        if (actual != *expected) fprintf(stderr, "%s -> %c ? s/b %c \n", in, actual, *expected);
+        if (actual != *expected) fprintf(stderr, "%s -> %c ? s/b %c (%hd) \n", in, actual, *expected, *expected);
         CU_ASSERT_EQUAL(actual, expected[0]);
     }
 }
+
 
 

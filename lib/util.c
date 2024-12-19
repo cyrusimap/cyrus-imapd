@@ -2194,8 +2194,9 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
     errno = saved_errno;
 }
 
-static char *xsyslog_ev_escape_value(struct buf *);
-static void  xsyslog_ev_fmt_skip_va(const char*, va_list);
+static const char *xsyslog_ev_escape_value(struct buf *);
+static void  xsyslog_ev_fmt_skip_va(const char *, va_list);
+static char *xsyslog_ev_fmt_va(const char *, va_list);
 static char  xsyslog_ev_guess_printf_escape(const char *);
 
 /* xsyslog_ev:
@@ -2349,8 +2350,8 @@ static void xsyslog_ev_fmt_skip_va(const char* fmt, va_list ap)
     case 'd': (void) va_arg(ap, int);      break;
     case 'l': (void) va_arg(ap, long);     break;
     case 'f': (void) va_arg(ap, double);   break;
-    case 's': (void) va_arg(ap, (char *)); break;
-    case 'p': (void) va_arg(ap, (void *)); break;
+    case 's': (void) va_arg(ap, char *); break;
+    case 'p': (void) va_arg(ap, void *); break;
     case 0:
         // we could handle this by skipping the va_arg call entirely, which would allow the user to write
         //     xsyslog_ev(..., key, "foo", ...)
@@ -2380,8 +2381,9 @@ static void xsyslog_ev_fmt_skip_va(const char* fmt, va_list ap)
 static char xsyslog_ev_guess_printf_escape(const char *s) {
     unsigned is_long = 0;
  TOP:
-    while (*s++ != '%') ;         // seek past first % sign
-    if (!*s) return 0;
+    while (*s && *s != '%') s++; // seek to first % sign or to end of string
+    if (*s == 0) return 0;       // String has no percent signs at all
+    s++;
     if (*s == '%') { s++; goto TOP; } // it's "%%", skip it and continue
 
     switch (*s) {  // skip optional flag
@@ -2395,7 +2397,7 @@ static char xsyslog_ev_guess_printf_escape(const char *s) {
     if (*s == 'l') { is_long++; s++; }
     switch (*s) {
     case 'd': case 'i': case '0': case 'u':
-    case 'x': case 'X': case 'c':
+    case 'x': case 'X': case 'c': case 'o':
         return is_long ? 'l' : 'd';
 
     case 'e': case 'E': case 'f': case 'F':
@@ -2507,4 +2509,9 @@ static const char *xsyslog_ev_escape_value(struct buf *val)
     }
 
     return buf_cstring(val);
+}
+
+EXPORTED const char *__test_xsyslog_ev_escape_value(struct buf *val)
+{
+    return xsyslog_ev_escape_value(val);
 }
