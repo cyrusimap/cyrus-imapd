@@ -2205,6 +2205,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 /*imapflags*/NULL,
                 cmd.u.v.fcc.create,
                 /*implicit keep target*/0,
+                /*copy*/0,
                 cmd.u.v.fcc.t.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL

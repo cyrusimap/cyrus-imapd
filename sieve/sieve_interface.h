@@ -173,6 +173,7 @@ typedef struct sieve_fileinto_context {
     strarray_t *imapflags;
     unsigned do_create : 1;
     unsigned ikeep_target : 1;
+    unsigned copy : 1;
     const char *mailboxid;
     struct buf *headers;
     char *resolved_mailbox;

@@ -1604,6 +1604,8 @@ static json_t *_fileinto(json_t *args, sieve_fileinto_context_t *fc)
         json_object_set_new(args, "mailboxid", json_string(fc->mailboxid));
     if (fc->do_create)
         json_object_set_new(args, "create", json_true());
+    if (fc->copy)
+        json_object_set_new(args, "copy", json_true());
 
     return _strlist(args, "flags", fc->imapflags);
 }
