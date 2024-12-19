@@ -302,6 +302,7 @@ static int do_zeromodseq(const char *userid)
     }
     quota_free(&q);
     if (r) goto done;
+    quota_commit(&txn);
 
     mboxname_zero_counters(inboxname);
 
