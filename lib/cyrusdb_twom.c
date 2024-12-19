@@ -545,6 +545,9 @@ static int read_onerecord(struct dbengine *db, size_t offset,
         record->ancestor = ntohll(*((uint64_t *)ptr));
         offset += 8;
     }
+    else {
+        record->ancestor = 0;
+    }
 
     if (record->keylen == UINT16_MAX) {
         ptr = base + offset;
@@ -2659,6 +2662,7 @@ static int delete(struct dbengine *db,
 static int myinit(const char *dbdir __attribute__((unused)), int flags __attribute__((unused)))
 {
     const char *checksum_engine = libcyrus_config_getstring(CYRUSOPT_TWOM_CHECKSUM_ENGINE);
+    if (!checksum_engine) return TWOM_CHECKSUM_XXH64;
     if (!strcmp(checksum_engine, "null")) {
         twom_default_checksum_engine = TWOM_CHECKSUM_NULL;
     }
