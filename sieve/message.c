@@ -189,6 +189,7 @@ int do_fileinto(sieve_interp_t *i, void *sc,
     new->u.fil.imapflags = imapflags;
     new->u.fil.do_create = !!(flags & CREATE_MAILBOX);
     new->u.fil.ikeep_target = !!(flags & IMPLICIT_KEEP);
+    new->u.fil.copy = new->cancel_keep ? 0 : 1;
     new->u.fil.mailboxid = mailboxid;
     new->u.fil.headers = headers;
     new->u.fil.resolved_mailbox = NULL;
