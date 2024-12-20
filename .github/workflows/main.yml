@@ -50,14 +50,6 @@ jobs:
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
-    - name: update jmap test suite
-      working-directory: /srv/JMAP-TestSuite.git
-      shell: bash
-      run: |
-        git fetch
-        git checkout origin/master
-        git clean -f -x -d
-        cpanm --installdeps .
     - name: set up cassandane
       working-directory: cassandane
       shell: bash
