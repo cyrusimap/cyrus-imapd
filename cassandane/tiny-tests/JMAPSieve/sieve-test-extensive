@@ -65,6 +65,10 @@ sub add_sieve_tests {
 sub add_sieve_test {
     my ($name, $sieve, $expect, $variables) = @_;
 
+    unless ($name =~ /^[a-zA-Z][a-zA-Z0-9_]+$/) {
+        die "Test name '$name' invalid. Must look like a perl subroutine name (start with a letter, a-zA-Z0-9_ only after that...\n";
+    }
+
     Sub::Install::install_sub({
         code => sub :min_version_3_3 :JMAPExtensions {
             shift->_do_test($sieve, $expect, $variables);
