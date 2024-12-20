@@ -3853,6 +3853,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
     struct mboxlock *oldlock = NULL;
     struct mboxlock *newlock = NULL;
+    int rename_user = 0;
 
     /* make sure we grab these locks in a stable order! */
     if (strcmpsafe(oldmboxname, newmboxname) < 0) {
@@ -3866,17 +3867,47 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     }
 
     r = mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0);
+    if (r) goto done;
 
-    if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                                       uidvalidity, 1, sstate->userid,
-                                       sstate->authstate, NULL,
-                                       (sstate->flags & SYNC_FLAG_LOCALONLY),
-                                       1/*forceuser*/,
-                                       1/*ignorequota*/,
-                                       1/*keep_intermediaries*/,
-                                       0/*move_subscription*/,
-                                       1/*silent*/);
+    if (mboxname_isusermailbox(oldmboxname, 1) &&
+        mboxname_isusermailbox(newmboxname, 1)) {
+        // we can't rename users if the new inbox already exists!
+        mbentry_t *destmbentry = NULL;
+        r = mboxlist_lookup_allow_all(newmboxname, &destmbentry, NULL);
+        if (r != IMAP_MAILBOX_NONEXISTENT) {
+            mboxlist_entry_free(&destmbentry);
+            r = IMAP_MAILBOX_EXISTS;
+            goto done;
+        }
 
+        rename_user = 1;
+
+        /* we need to create a reference for the uniqueid so we find the right
+         * conversations DB */
+        mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
+        free(newmbentry->name);
+        newmbentry->name = xstrdup(newmboxname);
+        newmbentry->mbtype |= MBTYPE_DELETED;
+        r = mboxlist_update_full(newmbentry, /*localonly*/1, /*silent*/1);
+        mboxlist_entry_free(&newmbentry);
+        if (r) goto done;
+    }
+
+    r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
+                               uidvalidity, 1, sstate->userid,
+                               sstate->authstate, NULL,
+                               (sstate->flags & SYNC_FLAG_LOCALONLY),
+                               1/*forceuser*/,
+                               1/*ignorequota*/,
+                               1/*keep_intermediaries*/,
+                               0/*move_subscription*/,
+                               1/*silent*/);
+
+    // undo the entry write if doing a user inbox
+    if (r && rename_user)
+        mboxlist_update_full(mbentry, /*localonly*/1, /*silent*/1);
+
+done:
     mboxlist_entry_free(&mbentry);
     mboxname_release(&oldlock);
     mboxname_release(&newlock);

@@ -7875,6 +7875,25 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
              imapd_userisadmin) {
 
         rename_user = 1;
+
+        // we can't rename users if the new inbox already exists!
+        mbentry_t *destmbentry = NULL;
+        r = mboxlist_lookup_allow_all(newmailboxname, &destmbentry, NULL);
+        if (r != IMAP_MAILBOX_NONEXISTENT) {
+            mboxlist_entry_free(&destmbentry);
+            r = IMAP_MAILBOX_EXISTS;
+            goto respond;
+        }
+
+        /* we need to create a reference for the uniqueid so we find the right
+         * conversations DB */
+        mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
+        free(newmbentry->name);
+        newmbentry->name = xstrdup(newmailboxname);
+        newmbentry->mbtype |= MBTYPE_DELETED;
+        r = mboxlist_update_full(newmbentry, /*localonly*/1, /*silent*/1);
+        mboxlist_entry_free(&newmbentry);
+        if (r) goto respond;
     }
 
     /* if we're renaming something inside of something else,
@@ -8037,6 +8056,8 @@ respond:
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        // ensure the mboxlist entry gets fixed up
+        if (rename_user) mboxlist_update_full(mbentry, /*localonly*/1, /*silent*/1);
     } else {
         if (config_mupdate_server)
             kick_mupdate();
