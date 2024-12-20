@@ -901,5 +901,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
     NULL,
     NULL,
     NULL,
-    &bsearch_ncompare_raw
+    &bsearch_ncompare_raw,
+    NULL
 };
