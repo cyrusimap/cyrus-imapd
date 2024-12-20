@@ -226,7 +226,6 @@ static sqldb_t *caldav_alarm_open()
         return NULL;
     }
 
-    // XXX - config option?
     char *tempname = NULL;
     const char *dbfilename = config_getstring(IMAPOPT_CALDAV_ALARM_DB_PATH);
     if (!dbfilename) {
