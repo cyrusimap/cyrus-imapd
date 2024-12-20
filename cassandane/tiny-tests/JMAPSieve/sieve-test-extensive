@@ -1,0 +1,142 @@
+#!perl
+use Cassandane::Tiny;
+use Sub::Install;
+
+add_sieve_test("fileinto_basic",
+    'fileinto "foo";',
+    [ ['fileinto', {}, ['foo'] ] ],
+);
+
+sub add_sieve_test {
+    my ($name, $sieve, $expect, $variables) = @_;
+
+    Sub::Install::install_sub({
+        code => sub :min_version_3_3 :JMAPExtensions {
+            shift->_do_test($sieve, $expect, $variables);
+        },
+        as => "test_sieve_test_extensive_$name",
+    });
+}
+
+sub _do_test {
+    my ($self, $sieve, $expect, $variables) = @_;
+
+    my $sieve_blob_id = $self->new_sieve_blob($sieve);
+    my $email_blob_id = $self->new_email_blob;
+
+    my $res = $self->run_sieve_test(
+        $sieve_blob_id,
+        $email_blob_id,
+        $variables,
+    );
+
+    eval {
+        $self->assert_deep_equals(
+            $expect,
+            $res->[0][1]{completed}{$email_blob_id},
+        );
+    };
+
+    if ($@) {
+        my $err = $@;
+
+        warn "Wanted: " . Dumper($expect);
+        warn "Got:    " . Dumper($res->[0][1]{completed}{$email_blob_id});
+
+        # Rethrow for Test::Unit's sake
+        die $@;
+    }
+}
+
+sub new_sieve_blob {
+    my ($self, $sieve) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $fullscript = <<EOF;
+require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
+
+$sieve
+EOF
+
+    $fullscript =~ s/\r?\n/\r\n/gs;
+    $fullscript =~ s/\\/\\\\/gs;
+
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => $fullscript}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $script_blob_id = $res->[1][1]{created}{"1"}{blobId};
+    $self->assert_not_null($script_blob_id);
+
+    return $script_blob_id;
+}
+
+sub new_email_blob {
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create email";
+
+    my $res = $jmap->CallMethods(
+        [['Mailbox/get', { properties => ["id"] }, "R1"]]
+    );
+    my $inbox_id = $res->[0][1]{list}[0]{id};
+
+    $self->assert_not_null($inbox_id);
+
+    my $email =  {
+        mailboxIds => { $inbox_id => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Whoa!" }}
+    };
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R2"],
+    ]);
+
+    my $email_blob_id = $res->[0][1]{created}{"1"}{blobId};
+    $self->assert_not_null($email_blob_id);
+
+    return $email_blob_id;
+}
+
+sub run_sieve_test {
+    my ($self, $sieve_blob_id, $email_blob_id, $variables) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "test script";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/test', {
+            scriptBlobId => "$sieve_blob_id",
+            emailBlobIds => [ "$email_blob_id" ],
+            envelope => JSON::null,
+            lastVacationResponse => JSON::null,
+            ( $variables ? (variables => $variables) : () ),
+         }, "R3"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{completed});
+    $self->assert_null($res->[0][1]{notCompleted});
+
+    return $res;
+}
