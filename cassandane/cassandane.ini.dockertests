@@ -60,15 +60,15 @@ cleanup = no
 zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [imaptest]
-basedir = /srv/imaptest.git
+basedir = /srv/imaptest
 # suppress list last reviewed 2023-05-03
 suppress = urlauth2
 
 
 [caldavtester]
 # still buggy, skip for now
-#basedir = /srv/caldavtester.git
+#basedir = /srv/CalDAVTester
 
 [jmaptestsuite]
-basedir = /srv/JMAP-TestSuite.git
+basedir = /srv/JMAP-TestSuite
 suppress =
