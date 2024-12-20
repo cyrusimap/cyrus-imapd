@@ -4633,7 +4633,6 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                                 struct index_record *record)
 {
     int r;
-    struct utimbuf settime;
     uint32_t changeflags = CHANGE_ISAPPEND;
 
     assert(mailbox_index_islocked(mailbox, 1));
@@ -4730,10 +4729,22 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
-        settime.actime = settime.modtime = record->internaldate;
-        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // mabe there is no file in directory.
-            if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
+        struct timespec settime[2] = { { record->internaldate, UTIME_NOW },
+                                       { record->internaldate, UTIME_NOW } };
+        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED))) {  // maybe there is no file in directory.
+            const char *fname = mailbox_record_fname(mailbox, record);
+            int fd = -1;
+            if (fname[0] != '/') {
+                // if fname isn't an absolute path (e.g. cunit tests), assume cwd
+                fd = open(".", O_DIRECTORY, O_RDONLY);
+            }
+            r = utimensat(fd, fname, settime, 0);
+            close(fd);
+            if (r == -1) {
+                syslog(LOG_ERR, "failed to set mtime on %s: %m", fname);
                 return IMAP_IOERROR;
+            }
+        }
 
         /* write the cache record before buffering the message, it
          * will set the cache_offset field. */
