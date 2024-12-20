@@ -13,7 +13,7 @@
 #include "xmalloc.h"
 
 
-HIDDEN int is_identifier(char *s)
+EXPORTED int sieve_is_identifier(char *s)
 {
     /* identifier         = (ALPHA / "_") *(ALPHA / DIGIT / "_") */
 
@@ -90,7 +90,7 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
         /* check if the string is a number */
         is_match_var = is_number(test_str);
         /* if we've found a valid variable, add its value to stringparts */
-        if (is_identifier(test_str) || is_match_var) {
+        if (sieve_is_identifier(test_str) || is_match_var) {
             /* capture the match_var variable number */
             match_var = strtol(test_str, NULL, 10);
             /* NULL-terminate the previous stringpart */
@@ -136,7 +136,7 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
                 char *dot;
                 if ((dot = strchr(test_str, '.'))) {
                     *dot = '\0';
-                    if (is_identifier(test_str)) {
+                    if (sieve_is_identifier(test_str)) {
                         fail = 1;
                     } else {
                         *dot = '.';
