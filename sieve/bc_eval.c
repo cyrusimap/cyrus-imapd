@@ -2578,7 +2578,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                     strarray_appendm(vl->var, buf_release(&cal_ctx.reason));
                 }
 
-                strarray_free(cmd.u.cal.addresses);
+                free(strarray_takevf(cmd.u.cal.addresses));
                 buf_free(&cal_ctx.outcome);
                 buf_free(&cal_ctx.reason);
             }

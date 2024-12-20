@@ -1917,8 +1917,9 @@ static int processcal(void *ac,
     if (cal->updates_only)
         json_object_set_new(args, "updatesonly", json_true());
 
+    /* processimip until this goes away... */
     json_array_append_new(m->actions,
-                          json_pack("[s o []]", "processcal", args));
+                          json_pack("[s o []]", "processimip", args));
 
     return SIEVE_OK;
 }

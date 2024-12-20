@@ -80,6 +80,60 @@ add_sieve_tests(
         [ ['keep', {}, [] ] ],
 );
 
+### processimip
+add_sieve_tests(
+    "processimip_most_fields",
+        'processimip
+            :calendarid "a-b-c"
+            :addresses ["a@b.com", "b@c.com" ]
+            :organizers ":addrbook:Default"
+            :deletecanceled;
+        ',
+        [
+            [
+                'processimip',
+                {
+                    allowpublic    => JSON::true,
+                    deletecanceled => JSON::true,
+                    calendarid     => "a-b-c",
+                    addresses      => ['a@b.com', 'b@c.com'],
+                    organizers     => ':addrbook:Default',
+                },
+                []
+           ],
+           [ 'keep', {}, [] ],
+       ],
+
+    "processimip_invitesonly",
+        'processimip :invitesonly;',
+        [
+            [
+                'processimip',
+                {
+                    allowpublic => JSON::true,
+                    invitesonly => JSON::true,
+                },
+                []
+            ],
+            [ 'keep', {}, [] ],
+        ],
+
+    "processimip_updatesonly",
+        'processimip :updatesonly;',
+        [
+            [
+                'processimip',
+                {
+                    allowpublic => JSON::true,
+                    updatesonly => JSON::true,
+                },
+                []
+            ],
+            [ 'keep', {}, [] ],
+        ],
+);
+
+### someInThreadHaveKeyword
 sub test_sieve_test_extensive_some_in_thread_have_keyword
     :min_version_3_3 :JMAPExtensions
 {
@@ -181,7 +235,7 @@ sub new_sieve_blob {
 
     xlog "create script";
     my $fullscript = <<EOF;
-require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vnd.cyrus.log", "vnd.cyrus.jmapquery"];
+require ["fileinto", "extlists", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vnd.cyrus.log", "vnd.cyrus.jmapquery", "vnd.cyrus.imip"];
 
 $sieve
 EOF
