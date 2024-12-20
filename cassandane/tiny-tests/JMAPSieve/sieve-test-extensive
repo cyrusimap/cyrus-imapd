@@ -2,10 +2,65 @@
 use Cassandane::Tiny;
 use Sub::Install;
 
-add_sieve_test("fileinto_basic",
-    'fileinto "foo";',
-    [ ['fileinto', {}, ['foo'] ] ],
+### fileinto
+add_sieve_tests(
+    "fileinto_basic",
+        'fileinto "foo";',
+        [ ['fileinto', {}, [ 'foo' ] ] ],
+
+    "fileinto_specialuse",
+        'fileinto :specialuse "\\junk" "Trash";',
+        [ ['fileinto', { specialuse => '\\junk' }, [ 'Trash' ] ] ],
+
+    "fileinto_mailboxid",
+        'fileinto :mailboxid "a-b-c-d" "Alphabet";',
+        [ ['fileinto', { mailboxid => 'a-b-c-d' }, [ 'Alphabet' ] ] ],
+
+    "fileinto_create",
+        'fileinto :create "Server";',
+        [ ['fileinto', { create => JSON::true }, [ 'Server' ] ] ],
+
+    "fileinto_copy",
+        'fileinto :copy "Paper";',
+        [
+            ['fileinto', { copy => JSON::true }, [ 'Paper' ] ],
+            ['keep', {}, [] ],
+        ],
+
+    "fileinto_all",
+        # (Can't use mailboxid and specialuse, so I picked one...)
+        'fileinto :mailboxid "mbid" :create :copy "Woah";',
+        [
+            [
+                'fileinto',
+                {
+                    mailboxid  => 'mbid',
+                    create     => JSON::true,
+                    copy       => JSON::true,
+                },
+                [ 'Woah' ],
+            ],
+            ['keep', {}, [] ],
+        ],
 );
+
+sub add_sieve_tests {
+    my (@tests) = @_;
+
+    my $leftover = @tests % 3;
+
+    if ($leftover) {
+        die "We expected multiple sets of 3 test specifications, but after parsing we'd have $leftover extra items... something is wrong!\n";
+    }
+
+    while (@tests) {
+        add_sieve_test(
+            shift @tests,
+            shift @tests,
+            shift @tests,
+        );
+    }
+}
 
 sub add_sieve_test {
     my ($name, $sieve, $expect, $variables) = @_;
