@@ -2,6 +2,31 @@
 use Cassandane::Tiny;
 use Sub::Install;
 
+### basic variable support
+add_sieve_tests(
+    "variables_set_get",
+        'set "foo" "bar"; log "foo: ${foo}";',
+        [
+            [ 'log', {}, [ 'foo: bar' ] ],
+            [ 'keep', {}, [] ],
+        ],
+);
+
+### jmapquery
+add_sieve_tests(
+    "jmapquery_matches",
+        'if jmapquery "{\"from\" : \"sam\"}" {
+            fileinto "Matched";
+        }',
+        [ [ 'fileinto', {}, [ 'Matched' ] ] ],
+
+    "jmapquery_does_not_match",
+        'if jmapquery "{\"from\" : \"bugs\"}" {
+            fileinto "Matched";
+        }',
+        [ [ 'keep', {}, [] ] ],
+);
+
 ### fileinto
 add_sieve_tests(
     "fileinto_basic",
@@ -9,8 +34,8 @@ add_sieve_tests(
         [ ['fileinto', {}, [ 'foo' ] ] ],
 
     "fileinto_specialuse",
-        'fileinto :specialuse "\\junk" "Trash";',
-        [ ['fileinto', { specialuse => '\\junk' }, [ 'Trash' ] ] ],
+        'fileinto :specialuse "\\\\junk" "Trash";',
+        [ ['fileinto', { specialuse => '\junk' }, [ 'Trash' ] ] ],
 
     "fileinto_mailboxid",
         'fileinto :mailboxid "a-b-c-d" "Alphabet";',
@@ -42,6 +67,17 @@ add_sieve_tests(
             ],
             ['keep', {}, [] ],
         ],
+);
+
+### exists
+add_sieve_tests(
+    "exists",
+        'if exists ["From"] { fileinto "FromHeaderFound"; }',
+        [ ['fileinto', {}, [ 'FromHeaderFound' ] ] ],
+
+    "exists_not",
+        'if not exists ["From"] { fileinto "FromHeaderFound"; }',
+        [ ['keep', {}, [] ] ],
 );
 
 sub add_sieve_tests {
@@ -114,13 +150,12 @@ sub new_sieve_blob {
 
     xlog "create script";
     my $fullscript = <<EOF;
-require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
+require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vnd.cyrus.log", "vnd.cyrus.jmapquery"];
 
 $sieve
 EOF
 
     $fullscript =~ s/\r?\n/\r\n/gs;
-    $fullscript =~ s/\\/\\\\/gs;
 
     my $res = $jmap->CallMethods([
         ['Blob/upload', {
