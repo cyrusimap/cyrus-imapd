@@ -5663,7 +5663,7 @@ EXPORTED void mailbox_remove_files_from_object_storage(struct mailbox *mailbox,
 EXPORTED int mailbox_expunge(struct mailbox *mailbox,
                              struct mailbox_iter *iter,
                     mailbox_decideproc_t *decideproc, void *deciderock,
-                    unsigned *nexpunged, int event_type)
+                    unsigned *nexpunged, int event_type, int limit)
 {
     int r = 0;
     int numexpunged = 0;
@@ -5689,11 +5689,15 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+        // already expunged?
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
+
         if (decideproc(mailbox, record, deciderock)) {
             numexpunged++;
 
             struct index_record copyrecord = *record;
             /* mark deleted */
+            copyrecord.system_flags |= FLAG_DELETED;
             copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
             r = mailbox_rewrite_index_record(mailbox, &copyrecord);
@@ -5704,6 +5708,11 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
             }
 
             mboxevent_extract_record(mboxevent, mailbox, &copyrecord);
+
+            if (limit && numexpunged >= limit) {
+                r = IMAP_AGAIN;
+                break;
+            }
         }
     }
 
@@ -5723,13 +5732,13 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
     if (nexpunged) *nexpunged = numexpunged;
 
-    return 0;
+    return r;
 }
 
 EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
                                      struct mailbox_iter *iter,
                                      time_t expunge_mark,
-                                     unsigned *ndeleted)
+                                     unsigned *ndeleted, int limit)
 {
     int dirty = 0;
     unsigned numdeleted = 0;
@@ -5774,6 +5783,11 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
             xsyslog(LOG_ERR, "IOERROR: failed to mark unlinked",
                              "mailbox=<%s> uid=<%u> recno=<%u>",
                              mailbox_name(mailbox), copyrecord.uid, copyrecord.recno);
+            break;
+        }
+
+        if (limit && limit >= (int)numdeleted) {
+            r = IMAP_AGAIN;
             break;
         }
     }

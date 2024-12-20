@@ -485,6 +485,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
     memset(erock->userflags, 0, sizeof(erock->userflags));
 
+restart:
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
         /* mailbox corrupt/nonexistent -- skip it */
@@ -517,7 +518,11 @@ static int expire(const mbentry_t *mbentry, void *rock)
                      ((double)expire_seconds/SECS_IN_A_DAY));
 
             r = mailbox_expunge(mailbox, NULL, expire_cb, erock, NULL,
-                                EVENT_MESSAGE_EXPIRE);
+                                EVENT_MESSAGE_EXPIRE, 4096);
+            if (r == IMAP_AGAIN) {
+                mailbox_close(&mailbox);
+                goto restart;
+            }
             if (r)
                 syslog(LOG_ERR, "failed to expire old messages: %s", mbentry->name);
             did_expunge = 1;
@@ -526,7 +531,7 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
     if (!did_expunge && erock->do_userflags) {
         r = mailbox_expunge(mailbox, NULL, userflag_cb, erock, NULL,
-                            EVENT_MESSAGE_EXPIRE);
+                            EVENT_MESSAGE_EXPIRE, /*limit*/0);
         if (r)
             syslog(LOG_ERR, "failed to scan user flags for %s: %s",
                    mbentry->name, error_message(r));
@@ -539,10 +544,15 @@ static int expire(const mbentry_t *mbentry, void *rock)
 
     verbosep("cleaning up expunged messages in %s", mbentry->name);
 
-    r = mailbox_expunge_cleanup(mailbox, NULL, erock->expunge_mark, &numexpunged);
+    r = mailbox_expunge_cleanup(mailbox, NULL, erock->expunge_mark, &numexpunged, 4096);
 
     erock->messages_expunged += numexpunged;
     erock->mailboxes_seen++;
+
+    if (r == IMAP_AGAIN) {
+        mailbox_close(&mailbox);
+        goto restart;
+    }
 
     if (r) {
         syslog(LOG_WARNING, "failure expiring %s: %s", mbentry->name, error_message(r));
