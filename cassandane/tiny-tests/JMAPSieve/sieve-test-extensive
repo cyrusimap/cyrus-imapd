@@ -80,26 +80,70 @@ add_sieve_tests(
         [ ['keep', {}, [] ] ],
 );
 
+sub test_sieve_test_extensive_some_in_thread_have_keyword
+    :min_version_3_3 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    # Create two messages, where the first is muted and the second is in
+    # the same conversation
+    my $mid = '<cassandane@example.com>';
+
+    my (undef, $email1) = $self->new_email_blob({
+      'keywords'          => { '$muted' => JSON::true },
+      'header:Message-Id' => $mid,
+    });
+
+    my ($email2_blob_id, $email2) = $self->new_email_blob({
+      'header:inReplyTo'  => $mid,
+      'header:references' => $mid,
+    });
+
+    $self->assert_str_equals($email1->{threadId}, $email2->{threadId});
+
+    my $sieve_blob_id = $self->new_sieve_blob(
+        'if jmapquery "{\"someInThreadHaveKeyword\":\"$muted\"}" {
+             fileinto "muted";
+        }',
+    );
+
+    $self->run_sieve_test(
+        $sieve_blob_id,
+        $email2_blob_id,
+        [ ['fileinto', {}, ['muted'] ] ],
+    );
+}
+
 sub add_sieve_tests {
     my (@tests) = @_;
 
-    my $leftover = @tests % 3;
-
-    if ($leftover) {
-        die "We expected multiple sets of 3 test specifications, but after parsing we'd have $leftover extra items... something is wrong!\n";
-    }
-
     while (@tests) {
-        add_sieve_test(
+        my ($name, $sieve, $expect) = (
             shift @tests,
             shift @tests,
             shift @tests,
         );
+
+        if (! $expect) {
+            die "Expected at least 3 arguments, but didn't get it. Bad test spec?! "
+                . Dumper({
+                      name => $name,
+                      sieve => $sieve,
+                  });
+        }
+
+        my $opts;
+
+        if (@tests && ref $tests[0] eq 'HASH') {
+            $opts = shift @tests;
+        }
+
+        add_sieve_test($name, $sieve, $expect, $opts);
     }
 }
 
 sub add_sieve_test {
-    my ($name, $sieve, $expect, $variables) = @_;
+    my ($name, $sieve, $expect, $opts) = @_;
 
     unless ($name =~ /^[a-zA-Z][a-zA-Z0-9_]+$/) {
         die "Test name '$name' invalid. Must look like a perl subroutine name (start with a letter, a-zA-Z0-9_ only after that...\n";
@@ -107,40 +151,27 @@ sub add_sieve_test {
 
     Sub::Install::install_sub({
         code => sub :min_version_3_3 :JMAPExtensions {
-            shift->_do_test($sieve, $expect, $variables);
+            shift->_do_test($sieve, $expect, $opts);
         },
         as => "test_sieve_test_extensive_$name",
     });
 }
 
 sub _do_test {
-    my ($self, $sieve, $expect, $variables) = @_;
+    my ($self, $sieve, $expect, $opts) = @_;
+
+    my $variables = $opts->{variables};
+    my $email_set_params = $opts->{email_set_params};
 
     my $sieve_blob_id = $self->new_sieve_blob($sieve);
-    my $email_blob_id = $self->new_email_blob;
+    my $email_blob_id = $self->new_email_blob($email_set_params);
 
-    my $res = $self->run_sieve_test(
+    $self->run_sieve_test(
         $sieve_blob_id,
         $email_blob_id,
+        $expect,
         $variables,
     );
-
-    eval {
-        $self->assert_deep_equals(
-            $expect,
-            $res->[0][1]{completed}{$email_blob_id},
-        );
-    };
-
-    if ($@) {
-        my $err = $@;
-
-        warn "Wanted: " . Dumper($expect);
-        warn "Got:    " . Dumper($res->[0][1]{completed}{$email_blob_id});
-
-        # Rethrow for Test::Unit's sake
-        die $@;
-    }
 }
 
 sub new_sieve_blob {
@@ -181,7 +212,7 @@ EOF
 }
 
 sub new_email_blob {
-    my ($self) = @_;
+    my ($self, $email_set_params) = @_;
 
     my $jmap = $self->{jmap};
 
@@ -200,7 +231,8 @@ sub new_email_blob {
         to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
         subject => "Memo",
         textBody => [{ partId => '1' }],
-        bodyValues => { '1' => { value => "Whoa!" }}
+        bodyValues => { '1' => { value => "Whoa!" }},
+        ( $email_set_params ? ( %$email_set_params ) : () ),
     };
 
     $res = $jmap->CallMethods([
@@ -210,11 +242,11 @@ sub new_email_blob {
     my $email_blob_id = $res->[0][1]{created}{"1"}{blobId};
     $self->assert_not_null($email_blob_id);
 
-    return $email_blob_id;
+    return wantarray ? ($email_blob_id, $res->[0][1]{created}{"1"}) : $email_blob_id;
 }
 
 sub run_sieve_test {
-    my ($self, $sieve_blob_id, $email_blob_id, $variables) = @_;
+    my ($self, $sieve_blob_id, $email_blob_id, $expect, $variables) = @_;
 
     my $jmap = $self->{jmap};
 
@@ -231,6 +263,23 @@ sub run_sieve_test {
     $self->assert_not_null($res);
     $self->assert_not_null($res->[0][1]{completed});
     $self->assert_null($res->[0][1]{notCompleted});
+
+    eval {
+        $self->assert_deep_equals(
+            $expect,
+            $res->[0][1]{completed}{$email_blob_id},
+        );
+    };
+
+    if ($@) {
+        my $err = $@;
+
+        warn "Wanted: " . Dumper($expect);
+        warn "Got:    " . Dumper($res->[0][1]{completed}{$email_blob_id});
+
+        # Rethrow for Test::Unit's sake
+        die $@;
+    }
 
     return $res;
 }

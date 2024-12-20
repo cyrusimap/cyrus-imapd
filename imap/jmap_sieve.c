@@ -2166,6 +2166,8 @@ static int jmap_sieve_test(struct jmap_req *req)
         goto done;
     }
 
+    interp_ctx.cstate = req->cstate;
+
     /* create interpreter */
     interp = sieve_interp_alloc(&interp_ctx);
     sieve_register_header(interp, getheader);
@@ -2257,7 +2259,6 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
     }
 
-    if (interp_ctx.cstate) conversations_commit(&interp_ctx.cstate);
     if (interp_ctx.carddavdb) carddav_close(interp_ctx.carddavdb);
 
     /* Build response */
