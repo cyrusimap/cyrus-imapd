@@ -227,7 +227,12 @@ static sqldb_t *caldav_alarm_open()
     }
 
     // XXX - config option?
-    char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
+    char *tempname = NULL;
+    const char *dbfilename = config_getstring(IMAPOPT_CALDAV_ALARM_DB_PATH);
+    if (!dbfilename) {
+        tempname = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
+        dbfilename = tempname;
+    }
     my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade,
                             config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
 
@@ -236,7 +241,7 @@ static sqldb_t *caldav_alarm_open()
         mboxname_release(&my_alarmdb_lock);
     }
 
-    free(dbfilename);
+    free(tempname);
     refcount = 1;
     return my_alarmdb;
 }
