@@ -340,15 +340,7 @@ EXPORTED int mboxkey_delete_user(const char *user)
 
     /* erp! */
     r = xunlink(fname);
-    if (r < 0 && errno == ENOENT) {
-        syslog(LOG_DEBUG, "cannot unlink %s: %m", fname);
-        /* but maybe the user just never read anything? */
-        r = 0;
-    }
-    else if (r < 0) {
-        syslog(LOG_ERR, "error unlinking %s: %m", fname);
-        r = IMAP_IOERROR;
-    }
+    if (r) r = IMAP_IOERROR;
     free(fname);
 
     if (lastmboxkey) {
