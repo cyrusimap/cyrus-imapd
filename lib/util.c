@@ -2448,6 +2448,7 @@ static const char *xsyslog_ev_escape_value(struct buf *val)
     const char *p;
 
     escaped_len = orig_len = buf_len(val);
+    if (orig_len == 0) { return "\"\""; } // Make sure the empty string is visible
 
     for (p = buf_cstring(val); *p; p++) {
         switch (*p) {

@@ -93,6 +93,7 @@ static void test_xsyslog_ev_escape_value(void)
          "\r",               "\"\\r\"",
          "\r\n",             "\"\\r\\n\"",
          "-12.345e67",       "-12.345e67",
+         "",                 "\"\"",
          NULL,
      };
 
