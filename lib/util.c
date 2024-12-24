@@ -2358,7 +2358,6 @@ static void xsyslog_ev_fmt_skip_va(const char* fmt, va_list ap)
         // in place of
         //     xsyslog_ev(..., key, "foo", DUMMY, ...)
         // but that seems more likely to be confusing than otherwise
-    case -1:
     default:
         // This seems extreme at first but the alternative is to leave ap pointing to the wrong argument,
         // and that is already undefined behavior, likely a segfault, so this is really the best we can do
