@@ -2357,7 +2357,7 @@ static void xsyslog_ev_fmt_skip_va(const char* fmt, va_list ap)
         //     xsyslog_ev(..., key, "foo", ...)
         // in place of
         //     xsyslog_ev(..., key, "foo", DUMMY, ...)
-        // but that seems morelikely to be confusing than otherwise
+        // but that seems more likely to be confusing than otherwise
     case -1:
     default:
         // This seems extreme at first but the alternative is to leave ap pointing to the wrong argument,
@@ -2380,11 +2380,19 @@ static void xsyslog_ev_fmt_skip_va(const char* fmt, va_list ap)
  */
 static char xsyslog_ev_guess_printf_escape(const char *s) {
     unsigned is_long = 0;
- TOP:
-    while (*s && *s != '%') s++; // seek to first % sign or to end of string
+
+    /* seek to the character just after the first % sign in the string
+     * except: skip over any "%%" that occur along the way */
+    while (*s) {
+        s++;
+        if (s[-1] == '%') {
+            if (*s == '%') { s++; continue; } // skip "%%"
+            else if (*s == 0) { return -1; }  // Trailing single % should not occur
+            else { break; }                   // Found it, probably
+        }
+    }
+
     if (*s == 0) return 0;       // String has no percent signs at all
-    s++;
-    if (*s == '%') { s++; goto TOP; } // it's "%%", skip it and continue
 
     switch (*s) {  // skip optional flag
     case '-': case '+': case ' ': case '0': case '\'': case '#':
