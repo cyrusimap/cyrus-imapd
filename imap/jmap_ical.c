@@ -3053,26 +3053,22 @@ relatedto_from_ical(icalcomponent *comp)
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_RELTYPE_PARAMETER)) {
 
-            switch (icalparameter_get_reltype(param)) {
-                case ICAL_RELTYPE_PARENT:
-                    buf_setcstr(&buf, "parent");
-                    break;
-                case ICAL_RELTYPE_CHILD:
-                    buf_setcstr(&buf, "child");
-                    break;
-                case ICAL_RELTYPE_SIBLING:
-                    buf_setcstr(&buf, "sibling");
+            icalparameter_reltype reltype = icalparameter_get_reltype(param);
+            switch (reltype) {
+                case ICAL_RELTYPE_X:
+                {
+                    const char *v = icalparameter_get_xvalue(param);
+                    if (v) buf_setcstr(&buf, v);
+                }
+                case ICAL_RELTYPE_NONE:
                     break;
                 default:
-                    {
-                        const char *reltypestr = icalparameter_get_xvalue(param);
-                        if (reltypestr) {
-                            buf_setcstr(&buf, reltypestr);
-                            buf_lcase(&buf);
-                            buf_trim(&buf);
-                        }
-                    }
+                    buf_setcstr(&buf, icalparameter_enum_to_string(reltype));
             }
+
+            buf_lcase(&buf);
+            buf_trim(&buf);
+
             if (buf_len(&buf)) {
                 json_object_set_new(relation, buf_cstring(&buf), json_true());
             }
