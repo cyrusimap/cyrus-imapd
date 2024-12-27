@@ -1725,16 +1725,25 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
         AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
         if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
                 PKG_CHECK_MODULES([WSLAY], [libwslay >= 1.1.1], [
-                        AC_DEFINE(HAVE_WSLAY,[],
-                                [Build WebSockets support into httpd?])
                         with_wslay=yes
                 ], [
-                        if test "x$with_wslay" = "xyes"; then
-                                AC_MSG_ERROR([WebSockets explicitly requested, but libwslay was not found])
-                        fi
-                        AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay])
-                        with_wslay=no
+                        AC_SEARCH_LIBS([wslay_event_context_free], [wslay], [
+                            AC_SUBST([WSLAY_LIBS], [-lwslay])
+                            with_wslay=yes
+                        ], [
+                                if test "x$with_wslay" = "xyes"; then
+                                        AC_MSG_ERROR([WebSockets explicitly requested, but libwslay was not found])
+                                fi
+                                with_wslay=no
+                        ])
                 ])
+
+                if test "x$with_wslay" = "xyes"; then
+                        AC_DEFINE(HAVE_WSLAY,[],
+                                [Build WebSockets support into httpd?])
+                else
+                        AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay])
+                fi
         fi
 
         AC_ARG_WITH(brotli, [AS_HELP_STRING([--without-brotli], [disable brotli compression (check)])])
