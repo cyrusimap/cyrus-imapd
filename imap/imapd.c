@@ -8065,17 +8065,20 @@ respond:
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        xsyslog(LOG_NOTICE, "rename failed",
+                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
+                oldmailboxname, newmailboxname, error_message(r));
         // ensure the mboxlist entry gets fixed up or removed
         if (olddestmbentry) {
             int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
             if (r2)
                 xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
-                        "mboxname=<%s>, error=<%s>", olddestmbentry->name, error_message(r));
+                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
         } else if (newdestmbentry) {
             int r2 = mboxlist_delete(newdestmbentry);
             if (r2)
                 xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
-                        "mboxname=<%s>, error=<%s>", newdestmbentry->name, error_message(r));
+                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
         }
     } else {
         if (config_mupdate_server)

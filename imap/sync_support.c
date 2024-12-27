@@ -3912,17 +3912,20 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
 done:
     if (r) {
+        xsyslog(LOG_NOTICE, "rename failed",
+                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
+                oldmboxname, newmboxname, error_message(r));
         // ensure the mboxlist entry gets fixed up or removed
         if (olddestmbentry) {
             int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
             if (r2)
                 xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
-                        "mboxname=<%s>, error=<%s>", olddestmbentry->name, error_message(r));
+                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
         } else if (newdestmbentry) {
             int r2 = mboxlist_delete(newdestmbentry);
             if (r2)
                 xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
-                        "mboxname=<%s>, error=<%s>", newdestmbentry->name, error_message(r));
+                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
         }
     }
     mboxlist_entry_free(&mbentry);
