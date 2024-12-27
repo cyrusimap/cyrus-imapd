@@ -426,7 +426,7 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
             continue; /* no \Deleted flag */
 
         /* if there is a sequence list, check it */
-        if (sequence && !seqset_ismember(seq, im->uid))
+        if (seq && !seqset_ismember(seq, im->uid))
             continue; /* not in the list */
 
         /* load first once we know we have to process this one */
@@ -469,7 +469,7 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
         mboxevent_extract_record(mboxevent, state->mailbox, &record);
     }
 
-    seqset_free(&seq);
+    if (seq != state->searchres) seqset_free(&seq);
 
     mboxevent_extract_mailbox(mboxevent, state->mailbox);
     mboxevent_set_access(mboxevent, NULL, NULL, state->userid, mailbox_name(state->mailbox), 1);
@@ -877,16 +877,16 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
         }
 
         sequence = init->vanished.sequence;
-        if (sequence) seq = _parse_sequence(state, sequence, 1);
+        seq = _parse_sequence(state, sequence, 1);
         for (msgno = 1; msgno <= state->exists; msgno++) {
             im = &state->map[msgno-1];
-            if (sequence && !seqset_ismember(seq, im->uid))
+            if (seq && !seqset_ismember(seq, im->uid))
                 continue;
             if (im->modseq <= init->vanished.modseq)
                 continue;
             index_printflags(state, msgno, TELL_UID);
         }
-        seqset_free(&seq);
+        if (seq != state->searchres) seqset_free(&seq);
     }
 }
 
@@ -972,7 +972,7 @@ seqset_t *index_vanished(struct index_state *state,
             const struct index_record *record = msg_record(msg);
             if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
                 continue;
-            if (!params->sequence || seqset_ismember(seq, record->uid))
+            if (!seq || seqset_ismember(seq, record->uid))
                 seqset_add(outlist, record->uid, 1);
         }
         mailbox_iter_done(&iter);
@@ -1036,7 +1036,7 @@ seqset_t *index_vanished(struct index_state *state,
         }
     }
 
-    seqset_free(&seq);
+    if (seq != state->searchres) seqset_free(&seq);
 
     return outlist;
 }
@@ -1211,11 +1211,11 @@ EXPORTED int index_fetch(struct index_state *state,
     r = index_lock(state, readonly);
     if (r) return r;
 
-    if (!strcmp("$", sequence)) {
-        seq = state->searchres;
+    seq = _parse_sequence(state, sequence, usinguid);
+    if (!strcmpsafe("$", sequence)) {
         usinguid = 1;
 
-        if (!seqset_first(state->searchres)) {
+        if (!seqset_first(seq)) {
             /* RFC 5182: 2.1
              * Note that even if the "$" marker contains the empty list of
              * messages, it must be treated by all commands accepting message
@@ -1226,9 +1226,6 @@ EXPORTED int index_fetch(struct index_state *state,
             *fetchedsomething = 1;  /* force OK response in imapd.c */
             goto done;
         }
-    }
-    else {
-        seq = _parse_sequence(state, sequence, usinguid);
     }
 
     /* set the \Seen flag if necessary - while we still have the lock */
@@ -1365,11 +1362,11 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
 
     mailbox = state->mailbox;
 
+    seq = _parse_sequence(state, sequence, storeargs->usinguid);
     if (!strcmp("$", sequence)) {
-        seq = state->searchres;
         storeargs->usinguid = 1;
 
-        if (!seqset_first(state->searchres)) {
+        if (!seqset_first(seq)) {
             /* RFC 5182: 2.1
              * Note that even if the "$" marker contains the empty list of
              * messages, it must be treated by all commands accepting message
@@ -1377,9 +1374,6 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
              */
             goto done;
         }
-    }
-    else {
-        seq = _parse_sequence(state, sequence, storeargs->usinguid);
     }
 
     for (i = 0; i < flags->count ; i++) {
@@ -1615,7 +1609,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
     }
 
 out:
-    seqset_free(&seq);
+    if (seq != state->searchres) seqset_free(&seq);
 
     if (msgrec) msgrecord_unref(&msgrec);
     if (!r) {
@@ -3147,7 +3141,9 @@ EXPORTED int index_copy(struct index_state *state,
 
     srcmailbox = state->mailbox;
 
-    if (!strcmp("$", sequence)) {
+    seq = _parse_sequence(state, sequence, usinguid);
+    if (!strcmpsafe("$", sequence)) {
+        usinguid = 1;
         if (!seqset_first(state->searchres)) {
             /* RFC 5182: 2.1
              * Note that even if the "$" marker contains the empty list of
@@ -3156,12 +3152,6 @@ EXPORTED int index_copy(struct index_state *state,
              */
             return 0;
         }
-
-        seq = state->searchres;
-        usinguid = 1;
-    }
-    else {
-        seq = _parse_sequence(state, sequence, usinguid);
     }
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
@@ -3369,7 +3359,7 @@ EXPORTED int index_copy_remote(struct index_state *state, const char *sequence,
         index_appendremote(state, msgno, pout);
     }
 
-    seqset_free(&seq);
+    if (seq != state->searchres) seqset_free(&seq);
 
     return 0;
 }
@@ -8248,6 +8238,13 @@ static seqset_t *_parse_sequence(struct index_state *state,
                                  const char *sequence, int usinguid)
 {
     unsigned maxval;
+
+    // handle no sequence
+    if (!sequence) return NULL;
+
+    // handle saved sequences
+    if (!strcmpsafe("$", sequence))
+        return state->searchres;
 
     /* Per RFC 3501, seq-number ABNF:
        "*" represents the largest number in use.
