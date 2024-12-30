@@ -1,7 +1,9 @@
 #include <stdlib.h>
+#include <time.h>
 
 #include "cunit/cyrunit.h"
 #include "charset.h"
+#include "byteorder.h"
 
 extern int charset_debug;
 
@@ -1332,6 +1334,14 @@ static void test_charset_decode(void)
     TESTCASE("vu_A3g", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
     TESTCASE("vu_A3g==", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
 
+    /* Base64 JMAPID encoding */
+    TESTCASE("-----------", 11,
+             "\x00\x00\x00\x00\x00\x00\x00\x00", 8, ENCODING_BASE64JMAPID);
+    TESTCASE("zzzzzzzzzzw", 11,
+             "\xff\xff\xff\xff\xff\xff\xff\xff", 8, ENCODING_BASE64JMAPID);
+    TESTCASE("012-abc_TUV", 11,
+             "\x04\x20\xc0\x9a\x7a\x25\x79\xf8", 8, ENCODING_BASE64JMAPID);
+
 #undef TESTCASE
 
     struct buf buf = BUF_INITIALIZER;
@@ -1351,6 +1361,11 @@ static void test_charset_decode(void)
 
     /* Base64url with invalid characters */
     r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64URL);
+    CU_ASSERT_EQUAL(-1, r);
+    buf_reset(&buf);
+
+    /* Base64jmapid with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64JMAPID);
     CU_ASSERT_EQUAL(-1, r);
     buf_reset(&buf);
 
@@ -1643,6 +1658,27 @@ static void test_unicode_casemap(void)
     TESTCASE("junk\xFF", "junk\xFF");
 
 #undef TESTCASE
+}
+
+static void test_jmap_email_id(void)
+{
+    struct timespec now;
+    uint64_t u64;
+    struct buf id = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+
+    clock_gettime(CLOCK_REALTIME, &now);
+    u64 = htonll(UINT64_MAX - (now.tv_sec * 1000000000 + now.tv_nsec));
+    charset_encode(&id, (const char *) &u64, sizeof(u64), ENCODING_BASE64JMAPID);
+
+    charset_decode(&buf, buf_cstring(&id), buf_len(&id), ENCODING_BASE64JMAPID);
+    u64 = ntohll(UINT64_MAX - *(uint64_t *) buf_base(&buf));
+
+    CU_ASSERT_EQUAL(u64 / 1000000000, now.tv_sec);
+    CU_ASSERT_EQUAL(u64 % 1000000000, now.tv_nsec);
+
+    buf_free(&id);
+    buf_free(&buf);
 }
 
 /* vim: set ft=c: */
