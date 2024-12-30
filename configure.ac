@@ -1529,16 +1529,45 @@ dnl
 dnl Check for cld2 library
 dnl
 AC_ARG_WITH([cld2],
-	[AS_HELP_STRING([--without-cld2], [ignore presence of cld2 library and disable it])],
+    [
+        AS_HELP_STRING([--without-cld2], [ignore presence of cld2 library and disable it])
+    ],
     [],
     [with_cld2=yes])
 AS_IF([test "x$with_cld2" = "xyes"],
-	[ PKG_CHECK_MODULES([CLD2], [cld2],
-		[ AC_DEFINE(HAVE_CLD2, [], [Build with cld2 library support])
-		  with_cld2=yes ],
-          with_cld2=no)])
-AC_SUBST([CLD2_LIBS])
-AC_SUBST([CLD2_CFLAGS])
+    [ PKG_CHECK_MODULES([CLD2], [cld2],
+        [
+            AC_SUBST([CLD2_LIBS])
+            AC_SUBST([CLD2_CFLAGS])
+            AC_DEFINE([HAVE_CLD2], [], [Use CLD2])
+            with_cld2=yes
+        ],
+        [
+          AC_LANG_PUSH([C++])
+          NOCLD2_LIBS=$LIBS
+          LIBS="-lcld2 $LIBS"
+          AC_LINK_IFELSE([
+            AC_LANG_PROGRAM(
+                [[
+                    #include <cstdio>
+                    #include <cld2/public/compact_lang_det.h>
+                ]],
+                [[ CLD2::isDataDynamic(); ]]
+            )],
+            [
+                AC_SUBST([CLD2_LIBS], [-lcld2])
+                AC_SUBST([CLD2_CFLAGS])
+                AC_DEFINE([HAVE_CLD2], [], [Use CLD2])
+                with_cld2=yes
+            ],
+            [
+                with_cld2=no
+            ]
+          )
+          AC_LANG_POP([C++])
+          LIBS=$NOCLD2_LIBS
+        ])
+    ])
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
