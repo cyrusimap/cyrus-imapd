@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 #
 sub test_private_global_annot_replication
     :Replication :SyncLog :AnnotationAllowUndefined
-    :needs_component_replication
 {
     my ($self) = @_;
 
