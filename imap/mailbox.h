@@ -652,10 +652,10 @@ extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);
 extern int mailbox_index_islocked(struct mailbox *mailbox, int write);
 
 extern int mailbox_expunge_cleanup(struct mailbox *mailbox, struct mailbox_iter *iter,
-                                   time_t expunge_mark, unsigned *ndeleted);
+                                   time_t expunge_mark, unsigned *ndeleted, int limit);
 extern int mailbox_expunge(struct mailbox *mailbox, struct mailbox_iter *iter,
                            mailbox_decideproc_t *decideproc, void *deciderock,
-                           unsigned *nexpunged, int event_type);
+                           unsigned *nexpunged, int event_type, int limit);
 extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
                             mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
