@@ -4168,11 +4168,6 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    /* Did any of the mailbox metadata change? */
-    if (mbentry->foldermodseq > data->since_modseq) {
-        *(data->only_counts_changed) = 0;
-    }
-
     /* Determine where to report that update. Note that we even report
      * hidden mailboxes in order to allow clients remove unshared and
      * deleted mailboxes */
@@ -4184,7 +4179,19 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         }
         else dest = data->updated;
     }
-    else dest = data->created;
+    else {
+        if ((mbentry->mbtype & MBTYPE_DELETED) ||
+                !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+            // we can't see it and we didn't see it before, ignore
+            return 0;
+        }
+        else dest = data->created;
+    }
+
+    /* Did any of the mailbox metadata change? */
+    if (mbentry->foldermodseq > data->since_modseq) {
+        *(data->only_counts_changed) = 0;
+    }
 
     /* Is this a more recent update for an id that we have already seen?
      * (check all three) */
