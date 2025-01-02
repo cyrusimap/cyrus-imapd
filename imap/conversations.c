@@ -2280,7 +2280,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
             buf_appendbit64(&val, (bit64)internaldate);
-            buf_appendbit64(&val, basecid);
+            buf_appendbit64(&val, basecid == cid ? 0 : basecid);
         }
 
         r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),

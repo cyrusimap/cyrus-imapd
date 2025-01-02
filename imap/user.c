@@ -198,7 +198,7 @@ EXPORTED const char *user_sieve_path(const char *inuser)
         char *inboxname = mboxname_user_mbox(user, NULL);
         mbentry_t *mbentry = NULL;
 
-        int r = mboxlist_lookup(inboxname, &mbentry, NULL);
+        int r = mboxlist_lookup_allow_all(inboxname, &mbentry, NULL);
         free(inboxname);
 
         if (r || (mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
@@ -633,7 +633,7 @@ EXPORTED char *user_hash_xapian(const char *userid, const char *root)
     char *basedir = NULL;
     int r;
 
-    r = mboxlist_lookup(inboxname, &mbentry, NULL);
+    r = mboxlist_lookup_allow_all(inboxname, &mbentry, NULL);
     if (r) goto out;
 
     mbname = mbname_from_intname(mbentry->name);

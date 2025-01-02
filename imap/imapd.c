@@ -7605,6 +7605,8 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
     int rename_user = 0;
     int mbtype = 0;
     mbentry_t *mbentry = NULL;
+    mbentry_t *olddestmbentry = NULL;
+    mbentry_t *newdestmbentry = NULL;
     struct renrock rock = {0};
     const char *orig_oldname = oldname;
     const char *orig_newname = newname;
@@ -7875,6 +7877,32 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
              imapd_userisadmin) {
 
         rename_user = 1;
+
+        // we can't rename users if the new inbox already exists!
+        r = mboxlist_lookup_allow_all(newmailboxname, &olddestmbentry, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            // all good, there's nothing here
+        } else if (r) {
+            // any other error, abort - something bad with mailboxesdb
+            goto respond;
+        } else if (olddestmbentry->mbtype & MBTYPE_DELETED) {
+            // this is OK, we're replacing a tombstone - hold on to the old entry in case we need to recreate it
+        }
+        else {
+            // can't rename over an existing mailbox - abort
+            mboxlist_entry_free(&olddestmbentry);
+            r = IMAP_MAILBOX_EXISTS;
+            goto respond;
+        }
+
+        /* we need to create a reference for the uniqueid so we find the right
+         * conversations DB */
+        newdestmbentry = mboxlist_entry_copy(mbentry);
+        free(newdestmbentry->name);
+        newdestmbentry->name = xstrdup(newmailboxname);
+        newdestmbentry->mbtype |= MBTYPE_DELETED;
+        r = mboxlist_update_full(newdestmbentry, /*localonly*/1, /*silent*/1);
+        if (r) goto respond;
     }
 
     /* if we're renaming something inside of something else,
@@ -7919,7 +7947,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         rock.newuser = newuser;
         rock.partition = location;
         rock.rename_user = rename_user;
-	rock.noisy = noisy;
+	    rock.noisy = noisy;
 
         /* Check mboxnames to ensure we can write them all BEFORE we start */
         r = mboxlist_allmbox(ombn, checkmboxname, &rock, 0);
@@ -7993,12 +8021,12 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-	if (noisy) {
+	    if (noisy) {
             prot_printf(imapd_out,
                         "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
                         tag, oldextname, newextname);
             prot_flush(imapd_out);
-	}
+	    }
 
 submboxes:
         strcat(oldmailboxname, ".");
@@ -8037,6 +8065,21 @@ respond:
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        xsyslog(LOG_NOTICE, "rename failed",
+                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
+                oldmailboxname, newmailboxname, error_message(r));
+        // ensure the mboxlist entry gets fixed up or removed
+        if (olddestmbentry) {
+            int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
+            if (r2)
+                xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
+                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
+        } else if (newdestmbentry) {
+            int r2 = mboxlist_delete(newdestmbentry);
+            if (r2)
+                xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
+                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
+        }
     } else {
         if (config_mupdate_server)
             kick_mupdate();
@@ -8071,6 +8114,8 @@ done:
     if (!r && rename_user)
         user_sharee_renameacls(&imapd_namespace, olduser, newuser);
     mboxlist_entry_free(&mbentry);
+    mboxlist_entry_free(&olddestmbentry);
+    mboxlist_entry_free(&newdestmbentry);
     if (oldname != orig_oldname) free(oldname);
     if (newname != orig_newname) free(newname);
     strarray_fini(&listargs.pat);

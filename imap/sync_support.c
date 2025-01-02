@@ -3853,6 +3853,8 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
     struct mboxlock *oldlock = NULL;
     struct mboxlock *newlock = NULL;
+    mbentry_t *olddestmbentry = NULL;
+    mbentry_t *newdestmbentry = NULL;
 
     /* make sure we grab these locks in a stable order! */
     if (strcmpsafe(oldmboxname, newmboxname) < 0) {
@@ -3866,18 +3868,69 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     }
 
     r = mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0);
+    if (r) goto done;
 
-    if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                                       uidvalidity, 1, sstate->userid,
-                                       sstate->authstate, NULL,
-                                       (sstate->flags & SYNC_FLAG_LOCALONLY),
-                                       1/*forceuser*/,
-                                       1/*ignorequota*/,
-                                       1/*keep_intermediaries*/,
-                                       0/*move_subscription*/,
-                                       1/*silent*/);
+    if (mboxname_isusermailbox(oldmboxname, 1) &&
+        mboxname_isusermailbox(newmboxname, 1)) {
+        // we can't rename users if the new inbox already exists!
+        r = mboxlist_lookup_allow_all(newmboxname, &olddestmbentry, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            // all good, there's nothing here
+        } else if (r) {
+            // any other error, abort - something bad with mailboxesdb
+            goto done;
+        } else if (olddestmbentry->mbtype & MBTYPE_DELETED) {
+            // this is OK, we're replacing a tombstone - hold on to the old entry in case we need to recreate it
+        }
+        else {
+            // can't rename over an existing mailbox - abort
+            mboxlist_entry_free(&olddestmbentry);
+            r = IMAP_MAILBOX_EXISTS;
+            goto done;
+        }
 
+        /* we need to create a reference for the uniqueid so we find the right
+         * conversations DB */
+        newdestmbentry = mboxlist_entry_copy(mbentry);
+        free(newdestmbentry->name);
+        newdestmbentry->name = xstrdup(newmboxname);
+        newdestmbentry->mbtype |= MBTYPE_DELETED;
+        r = mboxlist_update_full(newdestmbentry, /*localonly*/1, /*silent*/1);
+        if (r) goto done;
+    }
+
+    r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
+                               uidvalidity, 1, sstate->userid,
+                               sstate->authstate, NULL,
+                               (sstate->flags & SYNC_FLAG_LOCALONLY),
+                               1/*forceuser*/,
+                               1/*ignorequota*/,
+                               1/*keep_intermediaries*/,
+                               0/*move_subscription*/,
+                               1/*silent*/);
+
+
+done:
+    if (r) {
+        xsyslog(LOG_NOTICE, "rename failed",
+                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
+                oldmboxname, newmboxname, error_message(r));
+        // ensure the mboxlist entry gets fixed up or removed
+        if (olddestmbentry) {
+            int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
+            if (r2)
+                xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
+                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
+        } else if (newdestmbentry) {
+            int r2 = mboxlist_delete(newdestmbentry);
+            if (r2)
+                xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
+                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
+        }
+    }
     mboxlist_entry_free(&mbentry);
+    mboxlist_entry_free(&olddestmbentry);
+    mboxlist_entry_free(&newdestmbentry);
     mboxname_release(&oldlock);
     mboxname_release(&newlock);
 
