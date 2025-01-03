@@ -526,8 +526,8 @@ rst_prolog += """
 # XXX handlers here, except that these urls require expanding the version string
 # XXX twice, and the sphinx extlinks thingy currently only supports a single %s
 extlinks = {
-        'draft':('https://tools.ietf.org/html/%s', ''),
-        'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
+        'draft':('https://tools.ietf.org/html/%s', '%s'),
+        'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #%s'),
         'cyrus-2.5':('https://www.cyrusimap.org/2.5%s',None),
         'cyrus-3.0':('https://www.cyrusimap.org/3.0%s',None),
         'cyrus-3.2':('https://www.cyrusimap.org/3.2%s',None),
@@ -539,7 +539,7 @@ extlinks = {
         'cyrus-stable': ('https://www.cyrusimap.org%s',None),
         'github-release':
             ('https://github.com/cyrusimap/cyrus-imapd/releases/tag/cyrus-imapd-%s',
-             'cyrus-imapd-'),
+             'cyrus-imapd-%s'),
     }
 
 # Change this to whatever your output root is
