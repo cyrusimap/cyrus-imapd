@@ -3,3 +3,4 @@ reports.old
 cass.errs
 cassandane.ini
 .cassandane.ini
+.cassandane-syntax-check

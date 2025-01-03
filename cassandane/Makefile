@@ -63,18 +63,11 @@ ifndef NOCYRUS
     CYRUS_PERL_PATHS := $(shell $(PERL) utils/cyrus-perl-paths.pl)
 endif
 
-SYNTAX_rules =
+syntax: .cassandane-syntax-check
 
-define SYNTAX_template
- $(1)_syntax: $(1)
-	@$(PERL) $(CYRUS_PERL_PATHS) -c $(1)
- SYNTAX_rules += $(1)_syntax
-endef
+.cassandane-syntax-check: $(SCRIPTS) $(MODULES)
+	rm -f .cassandane-syntax-check
+	$(foreach path,$?,$(PERL) $(CYRUS_PERL_PATHS) -c $(path) || exit;)
+	touch .cassandane-syntax-check
 
-$(foreach s,$(SCRIPTS),$(eval $(call SYNTAX_template,$(s))))
-
-$(foreach m,$(MODULES),$(eval $(call SYNTAX_template,$(m))))
-
-syntax: $(SYNTAX_rules)
-
-.PHONY: all syntax $(SYNTAX_rules)
+.PHONY: syntax
