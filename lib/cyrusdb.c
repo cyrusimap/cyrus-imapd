@@ -71,6 +71,7 @@ extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
 extern struct cyrusdb_backend cyrusdb_sql;
+extern struct cyrusdb_backend cyrusdb_twom;
 extern struct cyrusdb_backend cyrusdb_twoskip;
 extern struct cyrusdb_backend cyrusdb_zeroskip;
 
@@ -81,6 +82,7 @@ static struct cyrusdb_backend *_backends[] = {
 #if defined USE_CYRUSDB_SQL
     &cyrusdb_sql,
 #endif
+    &cyrusdb_twom,
     &cyrusdb_twoskip,
 #if defined HAVE_ZEROSKIP
     &cyrusdb_zeroskip,
@@ -621,6 +623,9 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 
     if (!strncmp(buf, "\241\002\213\015twoskip file\0\0\0\0", 16))
         return "twoskip";
+
+    if (!strncmp(buf, "\241\002\213\015twomfile", 12))
+        return "twom";
 
     /* unable to detect SQLite databases or flat files explicitly here */
     return NULL;
