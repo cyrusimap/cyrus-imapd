@@ -1,0 +1,102 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_test_variables_validation
+    :min_version_3_3 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $script = <<'EOF';
+require ["variables", "vnd.cyrus.log"];
+
+log "not used, just here so we can test SieveScript/set";
+EOF
+    $script =~ s/\r?\n/\r\n/gs;
+    $script =~ s/\\/\\\\/gs;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => $script}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $scriptid = $res->[1][1]{created}{"1"}{blobId};
+
+    xlog "create email";
+    $res = $jmap->CallMethods([['Mailbox/get', { properties => ["id"] }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Whoa!" }}
+    };
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R2"],
+    ]);
+
+    my $emailid = $res->[0][1]{created}{"1"}{blobId};
+
+    xlog "test bad variables form";
+    for my $val ([], "string", 1, JSON::true) {
+        $res = $jmap->CallMethods([
+            ['SieveScript/test', {
+                scriptBlobId => "$scriptid",
+                emailBlobIds => [ "$emailid" ],
+                envelope => JSON::null,
+                lastVacationResponse => JSON::null,
+                variables => $val,
+             }, "R3"]
+        ]);
+
+        $self->assert_str_equals("error", $res->[0][0]);
+        $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+        $self->assert_deep_equals([ "variables" ], $res->[0][1]{'arguments'});
+    }
+
+    xlog "bad entries in variables";
+    $res = $jmap->CallMethods([
+        ['SieveScript/test', {
+            scriptBlobId => "$scriptid",
+            emailBlobIds => [ "$emailid" ],
+            envelope => JSON::null,
+            lastVacationResponse => JSON::null,
+            variables => {
+              null     => JSON::null,
+              object   => {},
+              array    => [],
+              num      => 32,
+              bool     => JSON::true,
+              good     => "this value is okay",
+              ''       => "invalid, empty",
+              '@@foo'  => 'invalid, used by internal things',
+              'no way' => 'invalid characters',
+            },
+         }, "R3"]
+    ]);
+
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+    $self->assert_deep_equals(
+        [ sort map { "variables/$_" } qw(null object array num bool), '', '@@foo', 'no way' ],
+        [ sort @{ $res->[0][1]{'arguments'} } ],
+    );
+}
