@@ -1,8 +1,0 @@
-Description:
-
-Remove Kerberos 4 support
-
-Config changes:
-
-In imapd.conf srvtab is not valid anymore.
-./configure does not accept --enable-krb5afspts , ptclient/afskrb.c works now only with KRB5.
