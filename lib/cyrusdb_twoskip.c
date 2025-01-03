@@ -2011,6 +2011,7 @@ static int mycheckpoint(struct dbengine *db)
 
     /* OK, we're committed now - clean up */
     unlock(db);
+    free(db->current_txn);
 
     /* gotta clean it all up */
     mappedfile_close(&db->mf);
