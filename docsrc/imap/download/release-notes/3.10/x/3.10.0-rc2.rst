@@ -76,7 +76,7 @@ Major changes since the 3.8 series
   rather than `localhost`
 * Deprecates the experimental Cyrus Backups feature
 
-.. _relnotes_3.10.0-beta2_storage_changes:
+.. _relnotes_3.10.0-rc2_storage_changes:
 
 Storage changes
 ===============
