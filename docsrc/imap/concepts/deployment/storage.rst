@@ -971,9 +971,5 @@ chunks, which may not be what you require at that moment.
 .. _Kolab Systems AG: https://kolabsys.com
 
 .. glossary::
-        MTBF
-            Mean Time Between Failures
-
-.. glossary::
         HBA
             Host Bus Adapter - connects a host system (computer) to other network and storage devices
