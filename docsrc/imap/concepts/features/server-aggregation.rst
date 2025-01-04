@@ -387,13 +387,3 @@ Back to :ref:`imap-features`
 
     Including but not limited to ``SELECT``, ``UID MOVE``, ``RENAME``,
     etc.
-
-.. glossary::
-
-    frontend
-	  the user interface
-
-.. glossary::
-
-	backend
-	  the server components
