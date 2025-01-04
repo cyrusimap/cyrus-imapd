@@ -76,7 +76,7 @@ In development
 --------------
 
 * JMAP for Calendars (:draft:`draft-ietf-jmap-calendars`)
-* JMAP for Contacts (:rfc:`draft-ietf-jmap-contacts`)
+* JMAP for Contacts (:draft:`draft-ietf-jmap-contacts`)
 * JMAP Sharing (:draft:`draft-ietf-jmap-sharing`)
 * Handling MDN with JMAP (:rfc:`9007`)
 

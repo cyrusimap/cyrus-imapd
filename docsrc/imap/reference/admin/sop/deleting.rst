@@ -13,56 +13,44 @@ expunge and expire in different contexts, used throughout this chapter.
 Message context
 ---------------
 
-.. glossary::
+Delete
 
-    Delete
+    sets the ``\Deleted`` flag on the message using
+    ``STORE +Flags \Deleted`` via IMAP client
 
-        sets the ``\Deleted`` flag on the message using
-        ``STORE +Flags \Deleted`` via IMAP client
+Expunge
 
-.. glossary::
+    delete messages from the cyrus folder index that have the
+    ``\Deleted`` flag set using EXPUNGE via IMAP client. With
+    ``expunge_mode: delayed``, this doesn't delete the file from
+    the filesystem.
 
-    Expunge
+Unexpunge
 
-        delete messages from the cyrus folder index that have the
-        ``\Deleted`` flag set using EXPUNGE via IMAP client. With
-        ``expunge_mode: delayed``, this doesn't delete the file from
-        the filesystem.
+    recover messages into the cyrus folder index based on filesystem
+    content (only possible with ``expunge_mode: delayed``)
 
-.. glossary::
+Undelete
 
-    Unexpunge
-
-        recover messages into the cyrus folder index based on filesystem
-        content (only possible with ``expunge_mode: delayed``)
-
-.. glossary::
-
-    Undelete
-
-        remove the ``\Deleted`` flag on the message using
-        ``STORE -Flags \Deleted`` via IMAP client.
+    remove the ``\Deleted`` flag on the message using
+    ``STORE -Flags \Deleted`` via IMAP client.
 
 Folder context
 --------------
 
-.. glossary::
+Delete
 
-    Delete
+    deletes the folder and all messages inside it using ``DELETE``
+    via IMAP client. If using ``delete_mode: delayed``, this renames
+    the folder, rather than deletes the folder, as discussed below.
 
-        deletes the folder and all messages inside it using ``DELETE``
-        via IMAP client. If using ``delete_mode: delayed``, this renames
-        the folder, rather than deletes the folder, as discussed below.
+    Otherwise, the folder and messages are removed from the mailbox
+    list and the filesystem.
 
-        Otherwise, the folder and messages are removed from the mailbox
-        list and the filesystem.
+Undelete
 
-.. glossary::
-
-    Undelete
-
-        rename the deleted folder back to the original location using
-        ``renamemailbox`` in ``cyradm``.
+    rename the deleted folder back to the original location using
+    ``renamemailbox`` in ``cyradm``.
 
 Expiring Deleted Messages and Folders
 =====================================
