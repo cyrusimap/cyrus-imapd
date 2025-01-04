@@ -8,7 +8,6 @@ Cyrus IMAP 3.2 Releases
     :maxdepth: 1
     :glob:
 
-    x/?.?.*-beta*
-    x/?.?.*-rc*
-    x/?.?.?
-    x/?.?.??
+    x/*-beta*
+    x/*-rc*
+    x/*
