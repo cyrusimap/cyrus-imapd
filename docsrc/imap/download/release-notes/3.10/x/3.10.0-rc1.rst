@@ -73,7 +73,7 @@ Major changes since the 3.8 series
 * IMAP ``RENAME`` command no longer emits non-standard per-folder updates.  Use
   the new ``XRENAME`` command if you need this behaviour
 
-.. _relnotes_3.10.0-beta2_storage_changes:
+.. _relnotes_3.10.0-rc1_storage_changes:
 
 Storage changes
 ===============
