@@ -15,5 +15,4 @@ Cyrus IMAP 3.3 Tags
     :maxdepth: 1
     :glob:
 
-    x/?.?.?
-    x/?.?.??
+    x/*
