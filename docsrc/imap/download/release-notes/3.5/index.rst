@@ -12,9 +12,3 @@ Cyrus IMAP 3.5 Tags
     there will generally be **large breaking changes** occurring between
     releases in this series.
 
-.. toctree::
-    :maxdepth: 1
-    :glob:
-
-    x/?.?.?
-    x/?.?.??
