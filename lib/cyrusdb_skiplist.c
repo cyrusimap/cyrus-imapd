@@ -830,7 +830,7 @@ static int dispose_db(struct dbengine *db)
  * the individual characters.  This is a pretty bogus sort order,
  * but for backwards compatibility reasons we're stuck with it
  * for skiplist files at least */
-static int compare_signed(const char *s1, int l1, const char *s2, int l2)
+static int compare_signed(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int cmp = 0;
