@@ -6551,14 +6551,13 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
         sync_send_apply(kl, sync_cs->backend->out);
         r = sync_parse_response("MAILBOX", sync_cs->backend->in, NULL);
 
-        // on error, clear cache - otherwise cache this state
-        if (r) sync_uncache(sync_cs, mbentry->name);
-        else r = sync_cache(sync_cs, mbentry->name, kl);
-
         dlist_free(&kl);
         mboxlist_entry_free(&mbentry);
 
-        return 0;
+        // we never want to cache intermediate records
+        sync_uncache(sync_cs, mbentry->name);
+
+        return r;
     }
 
     mboxlist_entry_free(&mbentry);
