@@ -177,7 +177,7 @@ HIDDEN int bsearch_mem_mbox(const char *word,
     return p - base + 1;
 }
 
-HIDDEN int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
+HIDDEN int bsearch_ncompare_mbox(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int cmp = 0;
@@ -254,7 +254,7 @@ EXPORTED int cmpstringp_mbox(const void *p1, const void *p2)
     return TOCOMPARE(*s1) - TOCOMPARE(*s2);
 }
 
-HIDDEN int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
+HIDDEN int bsearch_ncompare_raw(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int r = memcmp(s1, s2, min);

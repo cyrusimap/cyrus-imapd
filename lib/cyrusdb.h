@@ -220,7 +220,7 @@ struct cyrusdb_backend {
     int (*dump)(struct dbengine *db, int detail);
     int (*consistent)(struct dbengine *db);
     int (*repack)(struct dbengine *db);
-    int (*compar)(const char *s1, int l1, const char *s2, int l2);
+    int (*compar)(const char *s1, size_t l1, const char *s2, size_t l2);
 };
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
@@ -294,8 +294,8 @@ extern int cyrusdb_dump(struct db *db, int detail);
 extern int cyrusdb_consistent(struct db *db);
 extern int cyrusdb_repack(struct db *db);
 extern int cyrusdb_compar(struct db *db,
-                          const char *a, int alen,
-                          const char *b, int blen);
+                          const char *a, size_t alen,
+                          const char *b, size_t blen);
 
 /* somewhat special case, because they don't take a DB */
 

@@ -381,8 +381,8 @@ EXPORTED int cyrusdb_repack(struct db *db)
 }
 
 EXPORTED int cyrusdb_compar(struct db *db,
-                   const char *a, int alen,
-                   const char *b, int blen)
+                   const char *a, size_t alen,
+                   const char *b, size_t blen)
 {
     return db->backend->compar(a, alen, b, blen);
 }
