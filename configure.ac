@@ -2271,7 +2271,7 @@ AS_IF(
         [Do we have support for optimize __attribute__?])]
 )
 
-dnl documentation generation (sphinx, perl2rst, gitpython)
+dnl documentation generation (sphinx, sphinx_rtd_theme, perl2rst, gitpython)
 AC_DEFUN([WARN_DOCDEPS], [
     AM_COND_IF([ENABLE_RELEASE_CHECKS],
                [AC_MSG_ERROR([No $1, cannot regenerate docs])],
@@ -2307,8 +2307,28 @@ AS_CASE([$HAVE_PYMOD_GIT],
             [*],    [WARN_DOCDEPS([GitPython])])
 ])
 
+# XXX icky and slightly bogus* to have to duplicate this python2/python3 mess,
+# XXX but i think it's not worth generalising now when we'll surely drop
+# XXX python2 support sooner or later anyway
+# XXX (* this check inherits the successful PYTHON from the check above, and
+# XXX doesn't actually check both despite looking like it will.  that's fine...
+# XXX it only works if both modules are installed for the same python anyway!)
+AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python2])
+AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
+        [yes],  [],
+        [*],    [
+    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
+    AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python3])
+    AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
+            [yes],  [],
+            [*],    [WARN_DOCDEPS([sphinx_rtd_theme])])
+])
+
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
-    [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes -a x"$HAVE_PYMOD_GIT" = xyes])
+    [ test -n "$SPHINX_BUILD" \
+           -a x"$have_ppvr" = xyes \
+           -a x"$HAVE_PYMOD_GIT" = xyes \
+           -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
 
 AH_TOP([
 /*
@@ -2584,6 +2604,7 @@ Search engine:
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
+   sphinx_rtd_theme:   $HAVE_PYMOD_SPHINX_RTD_THEME
    Pod::POM::View::Restructured:  $have_ppvr
    GitPython:          $HAVE_PYMOD_GIT
 
