@@ -1963,8 +1963,11 @@ static int mycheckpoint(struct dbengine *db)
     clock_t start = sclock();
     struct copy_rock cr;
     int r = 0;
+    struct txn *localtid = NULL;
+    struct txn **tidptr = &db->current_txn;
+    if (!*tidptr) tidptr = &localtid;
 
-    r = myconsistent(db, db->current_txn);
+    r = myconsistent(db, *tidptr);
     if (r) {
         syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
                FNAME(db));
@@ -1984,7 +1987,7 @@ static int mycheckpoint(struct dbengine *db)
     // set up the pointers so copy_cb logic can work
     relocate(cr.db);
 
-    r = myforeach(db, NULL, 0, NULL, copy_cb, &cr, &db->current_txn);
+    r = myforeach(db, NULL, 0, NULL, copy_cb, &cr, tidptr);
     if (r) goto err;
 
     r = myconsistent(cr.db, cr.tid);
@@ -2011,6 +2014,7 @@ static int mycheckpoint(struct dbengine *db)
 
     /* OK, we're committed now - clean up */
     unlock(db);
+    if (localtid) free(localtid);
 
     /* gotta clean it all up */
     mappedfile_close(&db->mf);
