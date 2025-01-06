@@ -146,7 +146,7 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 
-html_theme = 'cyrus'
+html_theme = 'sphinx_rtd_theme'
 
 html_context = {
   "display_github": True, # Add 'Edit on Github' link instead of 'View page source'
@@ -163,7 +163,7 @@ html_context = {
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-html_theme_options = { 'github_version': 'master'}
+html_theme_options = { }
 
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -527,8 +527,8 @@ rst_prolog += """
 # XXX handlers here, except that these urls require expanding the version string
 # XXX twice, and the sphinx extlinks thingy currently only supports a single %s
 extlinks = {
-        'draft':('https://tools.ietf.org/html/%s', ''),
-        'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #'),
+        'draft':('https://tools.ietf.org/html/%s', '%s'),
+        'issue':('https://github.com/cyrusimap/cyrus-imapd/issues/%s', 'Issue #%s'),
         'cyrus-2.5':('https://www.cyrusimap.org/2.5%s',None),
         'cyrus-3.0':('https://www.cyrusimap.org/3.0%s',None),
         'cyrus-3.2':('https://www.cyrusimap.org/3.2%s',None),
@@ -541,7 +541,7 @@ extlinks = {
         'cyrus-stable': ('https://www.cyrusimap.org%s',None),
         'github-release':
             ('https://github.com/cyrusimap/cyrus-imapd/releases/tag/cyrus-imapd-%s',
-             'cyrus-imapd-'),
+             'cyrus-imapd-%s'),
     }
 
 # Change this to whatever your output root is
