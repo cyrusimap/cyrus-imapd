@@ -1,6 +1,7 @@
 name: Cyrus IMAP CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -15,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-        image: cyrusimapdocker/cyrus-buster:latest
+        image: ghcr.io/cyrusimap/cyrus-docker:bookworm-libs56
         options: --sysctl net.ipv6.conf.all.disable_ipv6=0 --init
     steps:
     - uses: actions/checkout@v4
@@ -24,9 +25,6 @@ jobs:
     - name: install missing or frequently-updated deps
       shell: bash
       run: |
-        cpanm IO::File::fcntl
-        cpanm Digest::CRC
-        cpanm XML::Simple # XXX could be grabbed from apt by docker image
         cpanm Mail::IMAPTalk # in image, but fetch latest!
     - name: setup git safe directory
       shell: bash
@@ -52,14 +50,6 @@ jobs:
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
-    - name: update jmap test suite
-      working-directory: /srv/JMAP-TestSuite.git
-      shell: bash
-      run: |
-        git fetch
-        git checkout origin/master
-        git clean -f -x -d
-        cpanm --installdeps .
     - name: set up cassandane
       working-directory: cassandane
       shell: bash
