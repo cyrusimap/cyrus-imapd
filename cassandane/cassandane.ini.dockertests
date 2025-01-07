@@ -59,7 +59,7 @@ suppress = Rename.rename_inbox JMAPBackup Sieve.snooze_tzid MboxEvent.tls_login_
 zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
 
 [imaptest]
-basedir = /srv/imaptest.git
+basedir = /srv/imaptest
 suppress = urlauth urlauth2
 
 
@@ -68,5 +68,5 @@ suppress = urlauth urlauth2
 #basedir = /srv/caldavtester.git
 
 [jmaptestsuite]
-basedir = /srv/JMAP-TestSuite.git
+basedir = /srv/JMAP-TestSuite
 suppress =
