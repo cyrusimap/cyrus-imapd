@@ -185,7 +185,7 @@ are listed with ``<none>''.
 /* Defaults to enabled.  If disabled, disallows the use of the SETACL
    command at all via IMAP. */
 
-{ "allowspecialusesubfolder", 0, SWITCH, "UNRELEASED" }
+{ "allowspecialusesubfolder", 0, SWITCH, "3.12.0" }
 /* If enabled, allows special-use folders to be moved into subfolders
 .PP
   By default, cyrus does not allow a special-use folder to be moved or
@@ -372,7 +372,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    file or mailboxes list entry?  It's noisy so disabled by default, but
    can be very useful for tracking down what happened if things look strange. */
 
-{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb5", "mboxgroups"), "UNRELEASED" }
+{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb5", "mboxgroups"), "3.12.0" }
 /* The authorization mechanism to use. */
 
 { "autocreateinboxfolders", NULL, STRING, "2.5.0", "2.5.0", "autocreate_inbox_folders" }
@@ -528,34 +528,34 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 # Commented out - there's no such thing as "backuppartition-name",
 # but we need this for the man page
-# { "backuppartition-name", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+# { "backuppartition-name", NULL, STRING, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_compact_minsize", "0", BYTESIZE, "UNRELEASED", "UNRELEASED" }
+{ "backup_compact_minsize", "0", BYTESIZE, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_compact_maxsize", "0", BYTESIZE, "UNRELEASED", "UNRELEASED" }
+{ "backup_compact_maxsize", "0", BYTESIZE, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_compact_work_threshold", 1, INT, "UNRELEASED", "UNRELEASED" }
+{ "backup_compact_work_threshold", 1, INT, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_staging_path", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+{ "backup_staging_path", NULL, STRING, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_retention_days", NULL, DURATION, "UNRELEASED", "UNRELEASED" }
+{ "backup_retention_days", NULL, DURATION, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_retention", "7d", DURATION, "UNRELEASED", "UNRELEASED" }
+{ "backup_retention", "7d", DURATION, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "UNRELEASED", "UNRELEASED" }
+{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_db_path", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+{ "backup_db_path", NULL, STRING, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
-{ "backup_keep_previous", 0, SWITCH, "UNRELEASED", "UNRELEASED" }
+{ "backup_keep_previous", 0, SWITCH, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
 { "boundary_limit", 1000, INT, "2.5.0" }
@@ -568,15 +568,15 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15)
   rather than rejecting them as errors. */
 
-{ "caldav_alarm_db_path", NULL, STRING, "UNRELEASED" }
+{ "caldav_alarm_db_path", NULL, STRING, "3.12.0" }
 /* Path to the caldav_alarm database file - defaults to
    $confdir/caldav_alarm.sqlite3 if not set */
 
-{ "caldav_alarm_support_components", "VEVENT VTODO", BITFIELD("VEVENT", "VTODO"), "UNRELEASED" }
+{ "caldav_alarm_support_components", "VEVENT VTODO", BITFIELD("VEVENT", "VTODO"), "3.12.0" }
 /* Space-separated list of iCalendar component types for which
    calalarmd generates alarms. */
 
-{ "caldav_alarm_suppress_file", NULL, STRING, "UNRELEASED" }
+{ "caldav_alarm_suppress_file", NULL, STRING, "3.12.0" }
 /* If this file exists, calalarmd will not process events */
 
 { "caldav_allowattach", 1, SWITCH, "3.0.0" }
@@ -653,7 +653,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Primarily used to suppress alarms for MINUTELY and SECONDLY recurrences.
    The minimum value is 0, which will allow all alarms. */
 
-{ "calendar_suppress_duplicate_alarms", 1, SWITCH, "UNRELEASED" }
+{ "calendar_suppress_duplicate_alarms", 1, SWITCH, "3.12.0" }
 /* Suppress duplicate calendar alarms in calalarmd. If this is set,
    then at most one alarm notification is sent for any given alarm
    action, point in time and calendar event. */
@@ -797,7 +797,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "debug", 0, SWITCH, "UNRELEASED" }
+{ "debug", 0, SWITCH, "3.12.0" }
 /* If enabled, allow syslog() to pass LOG_DEBUG messages.
 .PP
    This can be toggled for a running process by sending it SIGUSR1.
@@ -814,7 +814,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, replication will log which partition it chose for staging.
    This is mainly useful for regression testing the sync_client -a switch. */
 
-{ "debug_slowio", 0, SWITCH, "UNRELEASED" }
+{ "debug_slowio", 0, SWITCH, "3.12.0" }
 /* If enabled, I/O operations will be artificially slowed down.  This option
    has no effect unless Cyrus was compiled with the --enable-debug-slowio
    configure argument.  This is mainly useful for testing certain edge case
@@ -951,7 +951,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Don't send event notification for folder with given special-use attributes.
    Set ALL for any folder. */
 
-{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid", "vnd.cmu.visibleUsers"), "UNRELEASED" }
+{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid", "vnd.cmu.visibleUsers"), "3.12.0" }
 /* Space-separated list of extra parameters to add to any appropriated event. */
 
 { "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar", "applepushservice", "jmap" ), "3.8.0" }
@@ -984,7 +984,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "fatals_abort", 0, SWITCH, "UNRELEASED" }
+{ "fatals_abort", 0, SWITCH, "3.12.0" }
 /* If enabled, when fatal errors are detected, Cyrus will call abort()
    to produce a core dump, unless the error was due to a misbehaving
    client.  This is useful if you have the ability to debug a core dump.
@@ -1005,7 +1005,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    the ability to use the <host shortname>_mechs option to set preferred
    mechanisms for a specific host. */
 
-{ "global_lock", 1, SWITCH, "UNRELEASED" }
+{ "global_lock", 1, SWITCH, "3.12.0" }
 /* Use a global shared lock for ALL writes, allowing the global lock
    wrapper tool to freeze the world */
 
@@ -1203,7 +1203,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Using userid+ (with an empty namespace) will list only subscribed
    mailboxes. */
 
-{ "imap_inprogress_interval", "10s", DURATION, "UNRELEASED" }
+{ "imap_inprogress_interval", "10s", DURATION, "3.12.0" }
 /* The interval after which the server will send an "INPROGRESS"
    response code to the client during a long-running imap command
    (e.g. search, copy).
@@ -1224,10 +1224,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    configuration.  If the path to the file is not absolute, CYRUS_PATH
    is prepended. */
 
-{ "improved_mboxlist_sort", 0, SWITCH, "UNRELEASED", "UNRELEASED" }
+{ "improved_mboxlist_sort", 0, SWITCH, "3.12.0", "3.12.0" }
 /* Not used anymore. */
 
-{ "jmapaccess_url", NULL, STRING, "UNRELEASED" }
+{ "jmapaccess_url", NULL, STRING, "3.12.0" }
 /* The JMAP Session URL to advertise to sucessfully authenticated IMAP clients,
    if the same credentials can be used to authenticate via JMAP
    (see draft-ietf-extra-jmapaccess). */
@@ -1454,7 +1454,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_group_base", "", STRING, "2.3.17" }
 /* LDAP base dn for ldap_group_filter. */
 
-{ "ldap_groupmember_attribute", "member", STRING, "UNRELEASED" }
+{ "ldap_groupmember_attribute", "member", STRING, "3.12.0" }
 /* Specify a field within groups with a list of members. */
 
 { "ldap_group_filter", "(cn=%u)", STRING, "2.3.17" }
@@ -1751,7 +1751,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit. */
 
-{ "maxargssize", "0", BYTESIZE, "UNRELEASED" }
+{ "maxargssize", "0", BYTESIZE, "3.12.0" }
 /* Maximum total size of arguments to an IMAP command that will be
    accepted by Cyrus.
    Commands with arguments that exceed this limit will be rejected. 
@@ -1769,7 +1769,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "maxliteral", "128K", BYTESIZE, "UNRELEASED" }
+{ "maxliteral", "128K", BYTESIZE, "3.12.0" }
 /* Maximum size of a single literal allowed by the IMAP parser.
 .PP
    If set to 0, a large internally-defined limit will be applied.
@@ -2148,24 +2148,24 @@ If all partitions are over that limit, this feature is not used anymore.
 { "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin"), "3.1.2" }
 /* Authentication level required to fetch Prometheus metrics. */
 
-{ "prometheus_update_freq", "10s", DURATION, "3.1.8", "UNRELEASED", "prometheus_service_update_freq" }
+{ "prometheus_update_freq", "10s", DURATION, "3.1.8", "3.12.0", "prometheus_service_update_freq" }
 /* Deprecated in favour of \fIprometheus_service_update_freq\fR,
    \fIprometheus_master_update_freq\fR, and
    \fIprometheus_usage_update_freq\fR. */
 
-{ "prometheus_service_update_freq", "10s", DURATION, "UNRELEASED" }
+{ "prometheus_service_update_freq", "10s", DURATION, "3.12.0" }
 /* Frequency in at which promstatsd should re-collate its service
    statistics report.  The minimum value is 1 second.
 .PP
    If no unit is specified, seconds is assumed. */
 
-{ "prometheus_master_update_freq", NULL, DURATION, "UNRELEASED" }
+{ "prometheus_master_update_freq", NULL, DURATION, "3.12.0" }
 /* Frequency in at which master should re-collate its statistics report.
    If not set, \fIprometheus_service_update_freq\fR is used.
 .PP
    If no unit is specified, seconds is assumed. */
 
-{ "prometheus_usage_update_freq", NULL, DURATION, "UNRELEASED" }
+{ "prometheus_usage_update_freq", NULL, DURATION, "3.12.0" }
 /* Frequency in at which promstatsd should re-collate its usage
    statistics report.  Note that this report is relatively expensive to
    produce.  If not set, usage statistics are not reported.
@@ -2297,7 +2297,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* If enabled, all IMAP, POP and JMAP connections are read-only,
  * no writes allowed. */
 
-{ "replicaonly", 0, SWITCH, "UNRELEASED" }
+{ "replicaonly", 0, SWITCH, "3.12.0" }
 /* If enabled, nothing is allowed to increase modseq or uidvalidity,
  * no writes allowed at all. */
 
@@ -2671,7 +2671,7 @@ product version in the capabilities
    assumed. */
 */
 
-{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "processcalendar=vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "UNRELEASED" }
+{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "processcalendar=vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "3.12.0" }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts, enforced at submission by timsieved(8).  Any
    previously installed script will be unaffected by this option and
@@ -2698,7 +2698,7 @@ product version in the capabilities
    \fIfileinto\fR action in scripts to use UTF8 encoding.  Otherwise,
    modified UTF7 encoding should be used. */
 
-{ "sieve_sasl_send_unsolicited_capability", 1, SWITCH, "UNRELEASED", "UNRELEASED" }
+{ "sieve_sasl_send_unsolicited_capability", 1, SWITCH, "3.12.0", "3.12.0" }
 /* Deprecated: this option does nothing. */
 
 { "sieve_use_lmtp_reject", 1, SWITCH, "3.1.1" }
@@ -2868,7 +2868,7 @@ product version in the capabilities
 { "srs_separator", NULL, STRING, "3.1.2" }
 /* The separator to appear immediately after SRS[01] in rewritten addresses. */
 
-{ "srvtab", "", STRING, "UNRELEASED", "UNRELEASED" }
+{ "srvtab", "", STRING, "3.12.0", "3.12.0" }
 /* Deprecated: This option does nothing. */
 
 { "submitservers", NULL, STRING, "2.3.17" }
@@ -3278,7 +3278,7 @@ of the incoming network interface, or if no record is found, the
    For backward compatibility, if no unit is specified, kibibytes is
    assumed. */
 
-{ "xbackup_enabled", 0, SWITCH, "UNRELEASED", "UNRELEASED" }
+{ "xbackup_enabled", 0, SWITCH, "3.12.0", "3.12.0" }
 /* Deprecated. No longer used. */
 
 # Commented out - there's no such thing as "xlist-flag", but we need
