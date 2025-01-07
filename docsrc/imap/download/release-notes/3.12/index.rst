@@ -9,3 +9,4 @@ Cyrus IMAP 3.12 Releases
     :glob:
 
     x/*-alpha*
+    x/*-beta*

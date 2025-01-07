@@ -211,7 +211,11 @@ The **-L** feature, local updates only, was added in version 3.0.
 Files
 =====
 
-/etc/imapd.conf
+* /etc/imapd.conf
+* <configdirectory>/sync/skipuser-<user> - if file exists, user will not be
+  replicated
+* <configdirectory>/sync/<channel>/skipuser-<user> - if file exists, user will
+  not be replicated for channel
 
 See Also
 ========

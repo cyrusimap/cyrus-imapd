@@ -1743,12 +1743,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    the lines in the header will be skipped.  This is to avoid malformed
    messages causing giant cache records. */
 
-{ "maxlogins_per_host", 0, INT, "2.5.0" }
-/* Maximum number of logged in sessions allowed per host,
+{ "maxlogins_per_host", 0, INT, "3.12.0" }
+/* Maximum number of logged in sessions allowed per service per host,
    zero means no limit. */
 
-{ "maxlogins_per_user", 0, INT, "2.5.0" }
-/* Maximum number of logged in sessions allowed per user,
+{ "maxlogins_per_user", 0, INT, "3.12.0" }
+/* Maximum number of logged in sessions allowed per service per user,
    zero means no limit. */
 
 { "maxargssize", "0", BYTESIZE, "3.10.0" }
@@ -2298,8 +2298,10 @@ If all partitions are over that limit, this feature is not used anymore.
  * no writes allowed. */
 
 { "replicaonly", 0, SWITCH, "3.12.0" }
-/* If enabled, nothing is allowed to increase modseq or uidvalidity,
- * no writes allowed at all. */
+/* If enabled, marks the server as only being a replica.  This will
+ * stop calalarmd from doing anything, and also deny any non-silent
+ * writes (nothing is allowed to increase modseq or uidvalidity).
+ */
 
 { "reject8bit", 0, SWITCH, "2.3.17" }
 /* If enabled, lmtpd rejects messages with 8-bit characters in the

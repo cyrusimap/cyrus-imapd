@@ -42,6 +42,19 @@ may find you need to install additional or different libraries to support 3.12.
 JMAP/CalDAV changes
 ###################
 
+.. _upgrade_email_query_reindex:
+
+New JMAP Email/query filter conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+3.12 adds the JMAP Email/query filter conditions ``messageId``, ``references``,
+and ``inReplyTo``.
+
+It is recommended to rebuild the Xapian index with :cyrusman:`squatter(8)` to
+make use of these filter conditions. Otherwise, email queries having these
+filters fall back to reading the MIME headers from disk, resulting in slower
+search.
+
 .. _upgrade_pcre2_support:
 
 PCRE2 support
