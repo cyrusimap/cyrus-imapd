@@ -5009,12 +5009,14 @@ static void cmd_close(char *tag, char *cmd)
     }
 
     /* local mailbox */
-    if (cmd[0] == 'C') {
-        index_expunge(imapd_index, NULL, 1);
-        /* don't tell changes here */
-    }
-    else {
-        maybe_autoexpunge();
+    if (index_hasrights(imapd_index, ACL_EXPUNGE)) {
+        if (cmd[0] == 'C') {
+            // always expunge for close (as opposed to unselect)
+            index_expunge(imapd_index, NULL, 1);
+        }
+        else {
+            maybe_autoexpunge();
+        }
     }
 
     index_close(&imapd_index);
