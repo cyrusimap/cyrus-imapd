@@ -326,7 +326,7 @@ static int do_examine(struct findall_data *data, void *rock)
         }
 
         if (mailbox->i.minor_version >= 13) {
-            printf("  THRID: %llx", record->cid);
+            printf("  THRID: " CONV_FMT, record->cid);
         }
 
         printf("\n");

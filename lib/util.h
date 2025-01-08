@@ -94,20 +94,25 @@ extern const char CYRUS_VERSION[];
 #endif
 
 #define BIT32_MAX 4294967295U
+#define BIT64_MAX 18446744073709551615UL
 
-#if UINT_MAX == BIT32_MAX
-typedef unsigned int bit32;
-#elif ULONG_MAX == BIT32_MAX
-typedef unsigned long bit32;
-#elif USHRT_MAX == BIT32_MAX
-typedef unsigned short bit32;
+#if ULONG_MAX == BIT64_MAX
+#define BIT64_FMT          "%016lx"
+#define UINT64_FMT         "%lu"
+#define UINT64_NANOSEC_FMT ".%.9lu"
+#elif ULLONG_MAX == BIT64_MAX
+#define BIT64_FMT          "%016lx"
+#define UINT64_FMT         "%llu"
+#define UINT64_NANOSEC_FMT ".%.9llu"
 #else
-#error dont know what to use for bit32
+#error dont know what to use for bit64
 #endif
 
-typedef unsigned long long int bit64;
-typedef unsigned long long int modseq_t;
-#define MODSEQ_FMT "%llu"
+typedef uint32_t bit32;
+typedef uint64_t bit64;
+typedef uint64_t modseq_t;
+
+#define MODSEQ_FMT UINT64_FMT
 #define atomodseq_t(s) strtoull(s, NULL, 10)
 char *modseqtoa(modseq_t modseq);
 

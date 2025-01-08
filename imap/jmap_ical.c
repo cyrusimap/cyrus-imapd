@@ -1299,7 +1299,7 @@ static void format_datetime(const struct jmapical_datetime *dt, struct buf *dst)
     buf_printf(dst, "%04d-%02d-%02dT%02d:%02d:%02d",
             dt->year, dt->month, dt->day, dt->hour, dt->minute, dt->second);
     if (dt->nano) {
-        buf_printf(dst, ".%.9llu", dt->nano);
+        buf_printf(dst, UINT64_NANOSEC_FMT, dt->nano);
         int n = buf_len(dst);
         const char *b = buf_base(dst);
         while (b[n-1] == '0') n--;
@@ -1516,7 +1516,7 @@ HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, str
         else {
             buf_putc(buf, '0');
         }
-        buf_printf(buf, ".%.9llu", dur->nanos);
+        buf_printf(buf, UINT64_NANOSEC_FMT, dur->nanos);
         /* Truncate trailing zeros */
         b = buf_base(buf);
         n = buf_len(buf);
