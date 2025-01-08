@@ -76,5 +76,5 @@ sub test_contactgroup_query
     ]);
     $self->assert_str_equals("ContactGroup/query", $res->[0][0]);
     my %gotIds =  map { $_ => 1 } @{$res->[0][1]{ids}};
-    $self->assert_deep_equals({ $contactGroupUid2 => 1, $contactGroupUid3 => 1, }, \%gotIds);
+    $self->assert_deep_equals({ $contactGroupId2 => 1, $contactGroupId3 => 1, }, \%gotIds);
 }

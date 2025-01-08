@@ -22,12 +22,12 @@ sub test_card_get_v4
     # Sample card from RFC 6350
     # Second N suffix removed due to vparse bug
     # PROP-IDs added so we can easily compare the results
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
-UID;VALUE=TEXT:$id
+UID;VALUE=TEXT:$uid
 KIND:individual
 FN:Simon Perreault
 N:Perreault;Simon;;;ing. jr
@@ -74,8 +74,7 @@ EOF
         version => '1.0',
         addressBookId => 'Default',
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        id => $id,
-        uid => $id,
+        uid => $uid,
         kind => 'individual',
         updated => '2023-04-22T19:46:39Z',
         vCardProps => [
@@ -214,6 +213,7 @@ EOF
     $self->assert_not_null($s_blobid);
 
     # Delete generated fields
+    delete $have_jscard->{id};
     delete $have_jscard->{blobId};
     delete $have_jscard->{media}{P1}{blobId};
     delete $have_jscard->{media}{S1}{blobId};

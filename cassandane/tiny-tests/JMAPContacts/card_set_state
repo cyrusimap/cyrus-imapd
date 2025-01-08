@@ -10,7 +10,7 @@ sub test_card_set_state
 
     xlog $self, "create contact";
     my $name = 'Mr. John Q. Public, Esq.';
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
 
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {
@@ -18,7 +18,7 @@ sub test_card_set_state
                 "1" => {
                     '@type' => 'Card',
                     version => '1.0',
-                    uid => $id,
+                    uid => $uid,
                     name => { full => $name }
                 }
             }
@@ -27,7 +27,7 @@ sub test_card_set_state
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
-    $id = $res->[0][1]{created}{"1"}{id};
+    my $id = $res->[0][1]{created}{"1"}{id};
     my $state = $res->[0][1]{newState};
 
     xlog $self, "get contact $id";

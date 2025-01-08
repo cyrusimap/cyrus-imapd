@@ -1916,6 +1916,8 @@ static void _email_search_contactgroup(search_expr_t *parent,
 {
     if (!contactgroups || !contactgroups->size) return;
 
+    if (*groupid) groupid = contactid_to_uid(groupid);
+
     strarray_t *members = hash_lookup(groupid, contactgroups);
     if (!members || !strarray_size(members)) {
         search_expr_new(parent, SEOP_FALSE);
