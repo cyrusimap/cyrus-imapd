@@ -66,7 +66,7 @@
     (!mbentry ? NULL : (state->folders_byname ? mbentry->name : mbentry->uniqueid))
 
 typedef bit64   conversation_id_t;
-#define CONV_FMT "%016llx"
+#define CONV_FMT BIT64_FMT
 #define NULLCONVERSATION        (0ULL)
 
 struct index_record;
