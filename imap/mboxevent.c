@@ -1757,7 +1757,13 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         struct buf value = BUF_INITIALIZER;
 
         int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
-        if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
+        if (!r) buf_printf(&value, "%u "  MODSEQ_FMT " "
+                           MODSEQ_FMT " " MODSEQ_FMT " "
+                           MODSEQ_FMT " " MODSEQ_FMT " "
+                           MODSEQ_FMT " " MODSEQ_FMT " "
+                           MODSEQ_FMT " " MODSEQ_FMT " "
+                           MODSEQ_FMT " " MODSEQ_FMT " "
+                           "%u",
                            counters.version, counters.highestmodseq,
                            counters.mailmodseq, counters.caldavmodseq,
                            counters.carddavmodseq, counters.notesmodseq,
