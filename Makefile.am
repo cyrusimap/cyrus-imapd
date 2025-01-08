@@ -805,6 +805,7 @@ include_HEADERS = \
     lib/stristr.h \
     lib/times.h \
     lib/tok.h \
+    lib/twom.h \
     lib/wildmat.h \
     lib/xmalloc.h \
     lib/xsha1.h \
@@ -1495,6 +1496,7 @@ lib_libcyrus_la_SOURCES = \
     lib/signals.c \
     lib/stristr.c \
     lib/times.c \
+    lib/twom.c \
     lib/wildmat.c
 if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
