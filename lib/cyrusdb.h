@@ -66,12 +66,9 @@ enum cyrusdb_initflags {
     CYRUSDB_RECOVER = 0x01
 };
 
-enum cyrusdb_dbflags {
-    CYRUSDB_NOSYNC = 0x01       /* durability not a concern */
-};
-
 enum cyrusdb_openflags {
     CYRUSDB_CREATE    = 0x01,    /* Create the database if not existant */
+    CYRUSDB_NOSYNC    = 0x02,    /* durability not a concern */
     CYRUSDB_CONVERT   = 0x04,    /* Convert to the named format if not already */
     CYRUSDB_NOCOMPACT = 0x08,    /* Don't run any database compaction routines */
     CYRUSDB_SHARED    = 0x10,    /* Open in shared lock mode */

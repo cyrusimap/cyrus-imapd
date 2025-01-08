@@ -275,13 +275,16 @@ int main(int argc, char *argv[])
     struct txn **tidp = NULL;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:Tcnt";
+    static const char short_options[] = "C:NRSTcnt";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "use-transaction", no_argument, NULL, 'T' },
-        { "convert", no_argument, NULL, 'c' }, /* XXX undocumented */
+        { "convert", no_argument, NULL, 'c' },
+        { "no-checksum", no_argument, NULL, 'N' },
         { "create", no_argument, NULL, 'n' },
+        { "readonly", no_argument, NULL, 'R' },
+        { "no-sync", no_argument, NULL, 'S' },
+        { "use-transaction", no_argument, NULL, 'T' },
         { "no-transaction", no_argument, NULL, 't' },
         { 0, 0, 0, 0 },
     };
@@ -296,14 +299,23 @@ int main(int argc, char *argv[])
         case 'c':
             db_flags |= CYRUSDB_CONVERT;
             break;
+        case 'N':
+            db_flags |= CYRUSDB_NOCRC;
+            break;
         case 'n': /* create new */
             db_flags |= CYRUSDB_CREATE;
             break;
-        case 't': /* legacy - now the default, but don't break existing users */
-            tidp = NULL;
+        case 'R':
+            db_flags |= CYRUSDB_SHARED;
+            break;
+        case 'S':
+            db_flags |= CYRUSDB_NOSYNC;
             break;
         case 'T':
             tidp = &tid;
+            break;
+        case 't': /* legacy - now the default, but don't break existing users */
+            tidp = NULL;
             break;
         }
     }
@@ -325,8 +337,13 @@ int main(int argc, char *argv[])
         fprintf(stderr, "\n");
         fprintf(stderr, "Options:\n");
         fprintf(stderr, "  -c     convert database to named backend if not already\n");
-        fprintf(stderr, "  -M     use \"improved_mboxlist_sort\" order\n");
+        fprintf(stderr, "  -N     minimise use of checksums (don't check on read, create nochecksum if supported)\n");
         fprintf(stderr, "  -n     create the database if it doesn't exist\n");
+        fprintf(stderr, "  -R     open the database readonly (won't create a new DB)\n");
+        fprintf(stderr, "  -n     create the database if it doesn't exist\n");
+        fprintf(stderr, "  -S     don't fsync writes (dangerous)\n");
+        fprintf(stderr, "  -T     use a single transaction for the action\n");
+        fprintf(stderr, "  -t     don't use a transaction (default)\n");
         fprintf(stderr, "\n");
         fprintf(stderr, "Actions:\n");
         fprintf(stderr, "* show [<prefix>]\n");
@@ -334,7 +351,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "* set <key> <value>\n");
         fprintf(stderr, "* delete <key>\n");
         fprintf(stderr, "* dump - internal format dump\n");
-        fprintf(stderr, "* consistent - check consistency\n");
+        fprintf(stderr, "* consistent - check consistency (if supported)\n");
         fprintf(stderr, "* repack - repack/checkpoint the DB (if supported)\n");
         fprintf(stderr, "* damage - start a commit then die during\n");
         fprintf(stderr, "* batch - read from stdin and execute commands\n");
