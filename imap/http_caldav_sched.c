@@ -720,27 +720,40 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
 
     /* Don't send a bogus message - check late to not allocate our own copy */
     const char *ical_str = icalcomponent_as_ical_string(sched_data->itip);
-    if (!ical_str) goto done;
+    if (!ical_str) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     const char *imip_method = icalproperty_method_to_string(
                                   icalcomponent_get_method(sched_data->itip));
 
-    json_t *val = json_pack("{s:s s:s s:s s:s s:o s:s s:o s:o s:b s:s}",
-                            "calendarOwner", cal_ownerid,
-                            "recipient", buf_cstring(&recipient),
-                            "sender", sender,
-                            "method", imip_method,
-                            "id", id,
-                            "ical", ical_str,
-                            "jsevent", jsevent,
-                            "patch", patch,
-                            "is_update", SCHED_IS_UPDATE(sched_data),
-                            "schedulingMechanism",
-                            sched_mechanisms[sched_data->mech]);
-    char *serial = json_dumps(val, JSON_COMPACT);
-    notify(notifier, "IMIP", NULL, sched_userid, NULL, 0, NULL, serial, NULL);
-    free(serial);
-    json_decref(val);
+    json_error_t jerr;
+    json_t *val = json_pack_ex(&jerr, 0,
+                               "{s:s s:s s:s s:s s:o s:s s:o s:o s:b s:s}",
+                               "calendarOwner", cal_ownerid,
+                               "recipient", buf_cstring(&recipient),
+                               "sender", sender,
+                               "method", imip_method,
+                               "id", id,
+                               "ical", ical_str,
+                               "jsevent", jsevent,
+                               "patch", patch,
+                               "is_update", SCHED_IS_UPDATE(sched_data),
+                               "schedulingMechanism",
+                               sched_mechanisms[sched_data->mech]);
+    if (!val) {
+        xsyslog(LOG_ERR, "failed to create iMIP notification message",
+                "ownerid=<%s> sender=<%s> recipient=<%s> err=<%s>",
+                cal_ownerid, sender, buf_cstring(&recipient), jerr.text);
+        r = IMAP_INTERNAL;
+    }
+    else {
+        char *serial = json_dumps(val, JSON_COMPACT);
+        notify(notifier, "IMIP", NULL, sched_userid, NULL, 0, NULL, serial, NULL);
+        free(serial);
+        json_decref(val);
+    }
 
 done:
     buf_free(&recipient);
@@ -2507,6 +2520,13 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
         return;
     }
 
+    /* The organizer string that we get passed as an argument gets
+       randomly stomped by this function and/or its sub-functions,
+       possibly due to libical memory buffers/management.
+       So, we make a copy for ourselves.
+    */
+    char *myorganizer = xstrdup(organizer);
+
     /* Rewrite CalDAV managed attachments */
     caldav_rewrite_attachments(sched_userid, caldav_attachments_to_binary,
             oldical, newical, &myoldical, &mynewical);
@@ -2530,8 +2550,8 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
     hash_table attendees = HASH_TABLE_INITIALIZER;
     construct_hash_table(&attendees,
             count_attendees(oldical) + count_attendees(newical) + 1, 0);
-    add_attendees(oldical, organizer, hide_attendees, &attendees);
-    add_attendees(newical, organizer, hide_attendees, &attendees);
+    add_attendees(oldical, myorganizer, hide_attendees, &attendees);
+    add_attendees(newical, myorganizer, hide_attendees, &attendees);
 
     icaltimetype h_cutoff = caldav_get_historical_cutoff();
 
@@ -2550,9 +2570,9 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
         }
 
         syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
-               organizer, attendee);
+               myorganizer, attendee);
         schedule_one_attendee(cal_ownerid, sched_userid, schedule_addresses,
-                              organizer, attendee,
+                              myorganizer, attendee,
                               h_cutoff, oldical, newical, mech);
 
         if (hide_attendees) {
@@ -2571,6 +2591,7 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
     if (myoldical) icalcomponent_free(myoldical);
     if (mynewical) icalcomponent_free(mynewical);
     free_hash_table(&attendees, NULL);
+    free(myorganizer);
 }
 
 /*******************************************************************/
