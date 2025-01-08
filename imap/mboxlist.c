@@ -1321,7 +1321,8 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
             xsyslog(LOG_NOTICE, "auditlog: acl",
                                 "sessionid=<%s> "
                                 "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
-                                "oldacl=<%s> acl=<%s> foldermodseq=<%llu>",
+                                "oldacl=<%s> acl=<%s> "
+                                "foldermodseq=<" MODSEQ_FMT ">",
                     session_id(),
                     name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
                     old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);

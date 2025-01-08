@@ -3656,7 +3656,7 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
                 conversation_t conv = CONVERSATION_INIT;
                 int flags = e->v.convflag.include_trash ? CONV_WITHFOLDERS : 0;
                 if (conversation_load_advanced(cstate, match->cid, &conv, flags)) {
-                    syslog(LOG_ERR, "%s: can't load cid %llx",
+                    syslog(LOG_ERR, "%s: can't load cid " CONV_FMT,
                             __func__, match->cid);
                     return 1;
                 }

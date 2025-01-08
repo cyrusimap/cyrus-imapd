@@ -696,7 +696,8 @@ static void do_undump_legacy(void)
         line++;
 
         sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
-               " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+               " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
+               &newmbentry->name, &newmbentry->mbtype,
                &newmbentry->partition, &newmbentry->acl, &newmbentry->uniqueid,
                &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
                &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
@@ -713,7 +714,8 @@ static void do_undump_legacy(void)
             mboxlist_entry_free(&newmbentry);
             newmbentry = mboxlist_entry_create();
             sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
-                   " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+                   " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
+                   &newmbentry->name, &newmbentry->mbtype,
                    &newmbentry->partition, &newmbentry->uniqueid,
                    &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
                    &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
