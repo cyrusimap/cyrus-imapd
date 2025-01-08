@@ -220,6 +220,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         cyrus_init_run = RUNNING;
     }
 
+    srand(time(NULL) * getpid());
+
     cyrus_init_nodb = (flags & CYRUSINIT_NODB);
 #ifdef LOG_PERROR
     if ((flags & CYRUSINIT_PERROR))

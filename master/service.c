@@ -389,8 +389,6 @@ int main(int argc, char **argv, char **envp)
     }
     id = atoi(p);
 
-    srand(time(NULL) * getpid());
-
     /* if timeout is enabled, pick a random timeout between reuse_timeout
      * and 2*reuse_timeout to avoid massive IO overload if the network
      * connection goes away */
