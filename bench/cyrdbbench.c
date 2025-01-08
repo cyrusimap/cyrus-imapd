@@ -368,12 +368,12 @@ static size_t do_write(int txnmode, int insmode)
     return bytes;
 }
 
-static int parse_options(int argc, char **argv, const struct option *options)
+static int parse_options(int argc, char **argv, const struct option *options __attribute__((unused)))
 {
     int option;
     int option_index;
 
-    while ((option = getopt_long(argc, argv, "d:b:t:h?",
+    while ((option = getopt_long(argc, argv, "d:b:n:t:h?",
                                  long_options, &option_index)) != -1) {
         switch (option) {
             case 'b':
@@ -480,11 +480,12 @@ int main(int argc, char *argv[])
         goto done;
     }
 
-    if (strncmp(BACKEND, "twoskip", strlen("twoskip")) == 0) {
+    if (strncmp(BACKEND, "twoskip", strlen("twoskip")) == 0 ||
+        strncmp(BACKEND, "twom", strlen("twom")) == 0) {
         fprintf(stderr, "Running benchmarks for `%s` backend\n", BACKEND);
     } else {
         fprintf(stderr, "%s is not a valid CyrusDB backend. ", BACKEND);
-        fprintf(stderr, "Only `twoskip` is supported.\n");
+        fprintf(stderr, "Choose between `twom` or `zeroskip`.\n");
         ret = EXIT_FAILURE;
         goto done;
     }
