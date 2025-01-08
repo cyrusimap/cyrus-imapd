@@ -963,6 +963,10 @@ draft-ietf-jmap-sharing
 
     JMAP Sharing
 
+draft-eggert-uidbatches
+
+   IMAP UIDBATCHES Extension
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas
