@@ -12,6 +12,10 @@ on:
       - master
       - main
       - 'cyrus-imapd-*'
+
+env:
+  CYRUS_CLONE_ROOT: ${{ github.workspace }}
+
 jobs:
   build:
     name: Cassandane
@@ -32,15 +36,11 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: install missing or frequently-updated deps
-      shell: bash
-      run: |
-        cpanm Mail::IMAPTalk # in image, but fetch latest!
     - name: setup git safe directory
       shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
     - name: fetch upstream release tags
-      if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
+      # if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
       shell: bash
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
@@ -54,9 +54,7 @@ jobs:
         CYRUS_SAN_FLAGS: "${{ matrix.san }}"
         UBSAN_OPTIONS: "${{ matrix.ubsan_options }}"
       shell: bash
-      run: |
-        echo "building cyrus version" $(./tools/git-version.sh)
-        ./tools/build-with-cyruslibs.sh
+      run: cyd build
     - name: report version information
       shell: bash
       run: |
@@ -64,22 +62,14 @@ jobs:
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
-    - name: set up cassandane
-      working-directory: cassandane
-      shell: bash
-      run: |
-        cp -af cassandane.ini.dockertests cassandane.ini
-        chown cyrus:mail cassandane.ini
-        make -j8
     - name: run cassandane quietly
       id: cass1
       continue-on-error: true
-      working-directory: cassandane
-      run: setpriv --reuid=cyrus --regid=mail --clear-groups --inh-caps='-chown,-dac_override,-dac_read_search,-fowner,-fsetid,-kill,-setgid,-setuid,-setpcap,-linux_immutable,-net_bind_service,-net_broadcast,-net_admin,-net_raw,-ipc_lock,-ipc_owner,-sys_module,-sys_rawio,-sys_chroot,-sys_ptrace,-sys_pacct,-sys_admin,-sys_boot,-sys_nice,-sys_resource,-sys_time,-sys_tty_config,-mknod,-lease,-audit_write,-audit_control,-setfcap,-mac_override,-mac_admin,-syslog,-wake_alarm,-block_suspend,-audit_read,-cap_38,-cap_39,-cap_40' ./testrunner.pl --slow -f prettier -j 8 !Test::Core
+      # We haven't figured out how to make Test::Core work in actions yet.
+      run: cyd test "!Test::Core"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
-      working-directory: cassandane
-      run: setpriv --reuid=cyrus --regid=mail --clear-groups --inh-caps='-chown,-dac_override,-dac_read_search,-fowner,-fsetid,-kill,-setgid,-setuid,-setpcap,-linux_immutable,-net_bind_service,-net_broadcast,-net_admin,-net_raw,-ipc_lock,-ipc_owner,-sys_module,-sys_rawio,-sys_chroot,-sys_ptrace,-sys_pacct,-sys_admin,-sys_boot,-sys_nice,-sys_resource,-sys_time,-sys_tty_config,-mknod,-lease,-audit_write,-audit_control,-setfcap,-mac_override,-mac_admin,-syslog,-wake_alarm,-block_suspend,-audit_read,-cap_38,-cap_39,-cap_40' ./testrunner.pl -f pretty -j 8 --rerun
+      run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
       if: always()
       run: cat /tmp/cass/*/conf/log/syslog
