@@ -539,19 +539,18 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
 
     if (body->filesize != body->header_size + body->content_size) {
         if (efname)
-            /* XXX IOERROR but only LOG_NOTICE?? */
-            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
-                                "guid=<%s> filename=<%s> "
-                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
-                                message_guid_encode(&body->guid), efname,
-                                body->filesize,
-                                body->header_size + body->content_size);
+            xsyslog(LOG_ERR, "IOERROR: size mismatch on parse",
+                             "guid=<%s> filename=<%s>"
+                             " filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
+                             message_guid_encode(&body->guid), efname,
+                             body->filesize,
+                             body->header_size + body->content_size);
         else
-            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
-                                "guid=<%s> "
-                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
-                                message_guid_encode(&body->guid), body->filesize,
-                                body->header_size + body->content_size);
+            xsyslog(LOG_ERR, "IOERROR: size mismatch on parse",
+                             "guid=<%s>"
+                             " filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
+                             message_guid_encode(&body->guid), body->filesize,
+                             body->header_size + body->content_size);
     }
 
 done:
