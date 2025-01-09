@@ -39,7 +39,7 @@ The release engineer is:
 * ellie timoney
 
 IV. Development Process
-----------------------
+-----------------------
 
 Significant new features or changes to existing code should be discussed on the cyrus-dev mailing list prior to beginning development to allow feedback from other developers. Once a solution has been proposed and accepted by rough consensus of the developers, coding should proceed. All patches must be submitted through the bug tracking system. Once submitted to the tracking system, a member of the core developers group must review the code. If there are no objections to the patch by the core developers, the core developer should then commit the code to the source repository. The submitter of the code is responsible for ensuring that the code gets reviewed by the core developers. Submitters may inquire as to the status of their patches to either the Release Engineer or CORE no more than once per week. Accepted patches will be included in the next appropriate release.
 
