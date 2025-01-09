@@ -516,7 +516,11 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
     entry->icaliter = icaliter;
     entry->next = icalrecur_iterator_next(entry->icaliter);
     entry->recur = recur;
+#ifdef HAVE_RECUR_BY_REF
+    icalrecurrencetype_ref(recur);
+#else /* !HAVE_RECUR_BY_REF */
     entry->recur->rscale = xstrdupnull(recur->rscale);
+#endif /* HAVE_RECUR_BY_REF */
 }
 
 static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
@@ -574,9 +578,14 @@ multirrule_iterator_for_range(icalcomponent *comp,
         if (!span_compare_range(&recur_span, &range_span)) {
             multirrule_iterator_add(&iter, recur, dtstart, range.start);
         }
+
+#ifdef HAVE_RECUR_BY_REF
+        icalrecurrencetype_unref(recur);
+#else /* !HAVE_RECUR_BY_REF */
         else {
             icalrecurrencetype_unref(recur);
         }
+#endif
     }
 
     return iter;
