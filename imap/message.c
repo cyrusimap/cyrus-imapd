@@ -111,11 +111,12 @@ static int message_parse_body(struct msg *msg,
                               const char *defaultContentType,
                               strarray_t *boundaries,
                               const char *efname);
-static int message_parse_headers(struct msg *msg,
-                                 struct body *body,
-                                 const char *defaultContentType,
-                                 strarray_t *boundaries,
-                                 const char *efname);
+static void message_parse_headers(struct msg *msg,
+                                  struct body *body,
+                                  const char *defaultContentType,
+                                  strarray_t *boundaries,
+                                  const char *efname,
+                                  int *sawboundaryp);
 
 static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
@@ -777,7 +778,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
                               const char *efname)
 {
     strarray_t newboundaries = STRARRAY_INITIALIZER;
-    int sawboundary;
+    int sawboundary = 0;
 
     memset(body, 0, sizeof(struct body));
 
@@ -788,9 +789,8 @@ static int message_parse_body(struct msg *msg, struct body *body,
         buf_ensure(&body->cacheheaders, 1024);
     }
 
-
-    sawboundary = message_parse_headers(msg, body, defaultContentType,
-                                        boundaries, efname);
+    message_parse_headers(msg, body, defaultContentType, boundaries,
+                          efname, &sawboundary);
 
     /* Charset id and encoding id are stored in the binary
      * bodystructure, but we don't have that one here. */
@@ -855,15 +855,16 @@ static int message_parse_body(struct msg *msg, struct body *body,
 /*
  * Parse the headers of a body-part
  */
-static int message_parse_headers(struct msg *msg, struct body *body,
-                                 const char *defaultContentType,
-                                 strarray_t *boundaries,
-                                 const char *efname)
+static void message_parse_headers(struct msg *msg, struct body *body,
+                                  const char *defaultContentType,
+                                  strarray_t *boundaries,
+                                  const char *efname,
+                                  int *sawboundaryp)
 {
     struct buf headers = BUF_INITIALIZER;
     char *next;
     int len;
-    int sawboundary = 0;
+    if (sawboundaryp) *sawboundaryp = 0;
     uint32_t maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
     int have_max = 0;
     const char *value;
@@ -891,7 +892,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
             else {
                 *next = '\0';
             }
-            sawboundary = 1;
+            if (sawboundaryp) *sawboundaryp = 1;
             break;
         }
     }
@@ -1039,7 +1040,6 @@ static int message_parse_headers(struct msg *msg, struct body *body,
         message_parse_bodytype(defaultContentType, body);
     }
     buf_free(&headers);
-    return sawboundary;
 }
 
 /*
@@ -4956,7 +4956,8 @@ static int body_foreach_section(struct body *body, struct message *message,
             msg.len = body->header_size;
             msg.offset = 0;
             msg.encode = 0;
-            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries, NULL);
+            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries,
+                                  NULL, NULL);
 
             disposition = tmpbody->disposition;
             disposition_params = tmpbody->disposition_params;
