@@ -309,7 +309,7 @@ static int do_examine(struct findall_data *data, void *rock)
         printf("%06u> UID:%08u"
                "   INT_DATE:" TIME_T_FMT " SENTDATE:" TIME_T_FMT
                " SAVEDATE:" TIME_T_FMT " SIZE: " UINT64_LALIGN_FMT "\n",
-               msgno, record->uid, record->internaldate,
+               msgno, record->uid, record->internaldate.tv_sec,
                record->sentdate, record->savedate, 6, record->size);
         printf("      > HDRSIZE:%-6u LASTUPD :" TIME_T_FMT " SYSFLAGS:%08X",
                record->header_size, record->last_updated,
