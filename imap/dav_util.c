@@ -92,7 +92,7 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
         }
 
         if (etag) *etag = message_guid_encode(&record->guid);
-        if (lastmod) *lastmod = record->internaldate;
+        if (lastmod) *lastmod = record->internaldate.tv_sec;
     }
     else {
         /* Unmapped URL (empty resource) */
