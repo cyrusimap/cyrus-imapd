@@ -249,7 +249,7 @@ static void test_unique_record_offsets(void)
         OFFSET(OFFSET_CREATEDMODSEQ,    sizeof(r.createdmodseq)),
         OFFSET(OFFSET_GMTIME,           sizeof(r.gmtime)),
         OFFSET(OFFSET_HEADER_SIZE,      sizeof(r.header_size)),
-        OFFSET(OFFSET_INTERNALDATE,     sizeof(r.internaldate)),
+        OFFSET(OFFSET_INTERNALDATE,     sizeof(r.internaldate.tv_sec)),
         OFFSET(OFFSET_LAST_UPDATED,     sizeof(r.last_updated)),
         OFFSET(OFFSET_MESSAGE_GUID,     MESSAGE_GUID_SIZE),
         OFFSET(OFFSET_MODSEQ,           sizeof(r.modseq)),

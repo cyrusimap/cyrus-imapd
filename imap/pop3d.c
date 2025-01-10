@@ -1814,7 +1814,7 @@ int openinbox(void)
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             if (popd_mailbox->i.pop3_show_after &&
-                record->internaldate <= popd_mailbox->i.pop3_show_after) {
+                record->internaldate.tv_sec <= popd_mailbox->i.pop3_show_after) {
                 /* Ignore messages older than the "show after" date */
                 continue;
             }

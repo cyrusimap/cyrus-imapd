@@ -205,17 +205,17 @@ static int do_timestamp(const mbname_t *mbname)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
-        if (llabs(record->internaldate - record->gmtime) < 86400)
+        if (llabs(record->internaldate.tv_sec - record->gmtime) < 86400)
             continue;
 
         struct index_record copyrecord = *record;
 
-        time_to_rfc5322(copyrecord.internaldate, olddate, sizeof(olddate));
+        time_to_rfc5322(copyrecord.internaldate.tv_sec, olddate, sizeof(olddate));
         time_to_rfc5322(copyrecord.gmtime, newdate, sizeof(newdate));
         printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
 
         /* switch internaldate */
-        copyrecord.internaldate = copyrecord.gmtime;
+        copyrecord.internaldate.tv_sec = copyrecord.gmtime;
 
         r = mailbox_rewrite_index_record(mailbox, &copyrecord);
         if (r) goto done;
