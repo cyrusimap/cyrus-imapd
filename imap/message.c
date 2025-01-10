@@ -115,7 +115,8 @@ static int message_parse_headers(struct msg *msg,
                                  struct body *body,
                                  const char *defaultContentType,
                                  strarray_t *boundaries,
-                                 const char *efname);
+                                 const char *efname,
+                                 int *sawboundaryp);
 
 static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
@@ -522,13 +523,15 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
                                   struct body *body, const char *efname)
 {
     struct msg msg;
+    int r = 0;
 
     msg.base = msg_base;
     msg.len = msg_len;
     msg.offset = 0;
     msg.encode = 0;
 
-    message_parse_body(&msg, body, DEFAULT_CONTENT_TYPE, NULL, efname);
+    r = message_parse_body(&msg, body, DEFAULT_CONTENT_TYPE, NULL, efname);
+    if (r) goto done;
 
     body->filesize = msg_len;
 
@@ -536,22 +539,22 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
 
     if (body->filesize != body->header_size + body->content_size) {
         if (efname)
-            /* XXX IOERROR but only LOG_NOTICE?? */
-            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
-                                "guid=<%s> filename=<%s> "
-                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
-                                message_guid_encode(&body->guid), efname,
-                                body->filesize,
-                                body->header_size + body->content_size);
+            xsyslog(LOG_ERR, "IOERROR: size mismatch on parse",
+                             "guid=<%s> filename=<%s>"
+                             " filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
+                             message_guid_encode(&body->guid), efname,
+                             body->filesize,
+                             body->header_size + body->content_size);
         else
-            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
-                                "guid=<%s> "
-                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
-                                message_guid_encode(&body->guid), body->filesize,
-                                body->header_size + body->content_size);
+            xsyslog(LOG_ERR, "IOERROR: size mismatch on parse",
+                             "guid=<%s>"
+                             " filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
+                             message_guid_encode(&body->guid), body->filesize,
+                             body->header_size + body->content_size);
     }
 
-    return 0;
+done:
+    return r;
 }
 
 /*
@@ -777,7 +780,8 @@ static int message_parse_body(struct msg *msg, struct body *body,
                               const char *efname)
 {
     strarray_t newboundaries = STRARRAY_INITIALIZER;
-    int sawboundary;
+    int sawboundary = 0;
+    int r = 0;
 
     memset(body, 0, sizeof(struct body));
 
@@ -788,9 +792,9 @@ static int message_parse_body(struct msg *msg, struct body *body,
         buf_ensure(&body->cacheheaders, 1024);
     }
 
-
-    sawboundary = message_parse_headers(msg, body, defaultContentType,
-                                        boundaries, efname);
+    r = message_parse_headers(msg, body, defaultContentType, boundaries,
+                              efname, &sawboundary);
+    if (r) goto done;
 
     /* Charset id and encoding id are stored in the binary
      * bodystructure, but we don't have that one here. */
@@ -846,10 +850,10 @@ static int message_parse_body(struct msg *msg, struct body *body,
         }
     }
 
+done:
     /* Free up boundary storage if necessary */
     strarray_fini(&newboundaries);
-
-    return 0;
+    return r;
 }
 
 /*
@@ -858,15 +862,17 @@ static int message_parse_body(struct msg *msg, struct body *body,
 static int message_parse_headers(struct msg *msg, struct body *body,
                                  const char *defaultContentType,
                                  strarray_t *boundaries,
-                                 const char *efname)
+                                 const char *efname,
+                                 int *sawboundaryp)
 {
     struct buf headers = BUF_INITIALIZER;
     char *next;
-    int len;
-    int sawboundary = 0;
+    size_t len;
+    if (sawboundaryp) *sawboundaryp = 0;
     uint32_t maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
     int have_max = 0;
     const char *value;
+    int r = 0;
 
     body->header_offset = msg->offset;
 
@@ -877,7 +883,12 @@ static int message_parse_headers(struct msg *msg, struct body *body,
            (next[-1] != '\n' ||
             (*next != '\r' || next[1] != '\n'))) {
 
-        len = strlen(next);
+        len = buf_len(&headers) - (next - buf_base(&headers));
+        if (len != strlen(next)) {
+            // NUL in the MIME headers is a fatal error
+            r = IMAP_MESSAGE_CONTAINSNULL;
+            goto done;
+        }
 
         if (next[-1] == '\n' && *next == '-' &&
             message_pendingboundary(next, len, boundaries)) {
@@ -891,7 +902,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
             else {
                 *next = '\0';
             }
-            sawboundary = 1;
+            if (sawboundaryp) *sawboundaryp = 1;
             break;
         }
     }
@@ -1038,8 +1049,10 @@ static int message_parse_headers(struct msg *msg, struct body *body,
     if (!body->type) {
         message_parse_bodytype(defaultContentType, body);
     }
+
+done:
     buf_free(&headers);
-    return sawboundary;
+    return r;
 }
 
 /*
@@ -4956,7 +4969,8 @@ static int body_foreach_section(struct body *body, struct message *message,
             msg.len = body->header_size;
             msg.offset = 0;
             msg.encode = 0;
-            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries, NULL);
+            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries,
+                                  NULL, NULL);
 
             disposition = tmpbody->disposition;
             disposition_params = tmpbody->disposition_params;
