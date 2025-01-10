@@ -619,7 +619,7 @@ sub test_downgrade_upgrade
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    for my $version (12, 14, 16, 'max') {
+    for my $version (12, 14, 16, 19, 'max') {
         xlog $self, "Set to version $version";
         $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
 
