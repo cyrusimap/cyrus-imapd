@@ -1632,6 +1632,7 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
                                       const char *searchstr)
 {
     std::string prefix(get_term_prefix(partnum));
+    bool is_phrase_query = false;
 
     unsigned queryflags =
         Xapian::QueryParser::FLAG_PHRASE | Xapian::QueryParser::FLAG_WILDCARD;
@@ -1641,6 +1642,14 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
 
     std::string str = Xapian::Unicode::tolower(searchstr);
+    // Remove enclosing phrase search quotes, if any.
+    if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
+        str.erase(str.end() - 1);
+        str.erase(str.begin());
+        if (str.empty()) return NULL;
+        is_phrase_query = true;
+    }
+
     size_t atsign_pos = str.find('@');
 
     if (atsign_pos == std::string::npos || atsign_pos == str.length() - 1) {
@@ -1660,7 +1669,8 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
         email.append(str, 0, atsign_pos);
     }
 
-    if (!email.empty() && email[email.length() - 1] == '*') {
+    if (!is_phrase_query &&
+            !email.empty() && email[email.length() - 1] == '*') {
         wildcard_localpart = true;
         email.erase(email.length() - 1, 1);
     }
@@ -1682,7 +1692,7 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     bool subdomain_only = false;
     std::string domain(str, atsign_pos + 1);
 
-    if (domain.length() && domain[0] == '*') {
+    if (!is_phrase_query && domain.length() && domain[0] == '*') {
         wildcard_domain = true;
         domain.erase(0, 1);
         if (domain.length() && domain[0] == '.') {
