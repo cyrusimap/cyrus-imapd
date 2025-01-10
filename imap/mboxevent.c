@@ -1491,7 +1491,8 @@ void mboxevent_extract_content(struct mboxevent *event,
 {
     const char *base = NULL;
     size_t offset, size, len = 0;
-    int64_t truncate;
+    int64_t config_truncate;
+    uint64_t truncate;
 
     if (!event)
         return;
@@ -1499,8 +1500,8 @@ void mboxevent_extract_content(struct mboxevent *event,
     if (!mboxevent_expected_param(event->type, EVENT_MESSAGE_CONTENT))
         return;
 
-    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
-    if (truncate < 0) truncate = 0;
+    config_truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    truncate = (config_truncate < 0) ? 0 : config_truncate;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
     /*  include message up to 'truncate' in size with the notification */

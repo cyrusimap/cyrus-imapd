@@ -307,9 +307,10 @@ static int do_examine(struct findall_data *data, void *rock)
         }
 
         printf("%06u> UID:%08u"
-               "   INT_DATE:" TIME_T_FMT " SENTDATE:" TIME_T_FMT " SAVEDATE:" TIME_T_FMT " SIZE:%-6u\n",
+               "   INT_DATE:" TIME_T_FMT " SENTDATE:" TIME_T_FMT
+               " SAVEDATE:" TIME_T_FMT " SIZE: " UINT64_LALIGN_FMT "\n",
                msgno, record->uid, record->internaldate,
-               record->sentdate, record->savedate, record->size);
+               record->sentdate, record->savedate, 6, record->size);
         printf("      > HDRSIZE:%-6u LASTUPD :" TIME_T_FMT " SYSFLAGS:%08X",
                record->header_size, record->last_updated,
                record->system_flags);
@@ -582,11 +583,11 @@ static int do_compare(struct findall_data *data, void *rock)
             printf("\n");
 
             printf("   Size: ");
-            if (record) printf("%-50u", record->size);
+            if (record) printf(UINT64_LALIGN_FMT, 50, record->size);
             else printf("%-50s", "");
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid))
-                printf("\t%-50u", fs_record.size);
+                printf(UINT64_LALIGN_FMT, 50, fs_record.size);
             printf("\n");
 
             if (record) time_to_rfc5322(record->sentdate, sent, sizeof(sent));

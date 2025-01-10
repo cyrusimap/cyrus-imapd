@@ -1339,8 +1339,12 @@ EXPORTED int backend_version(struct backend *be)
             return MAILBOX_MINOR_VERSION;
         }
         else if (major == 3) {
-            if (minor >= 10) {
-                /* all versions since 3.10 have been 19 so far */
+            if (minor >= 13) {
+                /* all versions since 3.13 have been 20 so far */
+                return 20;
+            }
+            else if (minor >= 10) {
+                /* version 3.10 - 3.12 were 19 */
                 return 19;
             }
             else if (minor >= 3) {
