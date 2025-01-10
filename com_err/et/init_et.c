@@ -52,10 +52,9 @@
 
 extern struct et_list * _et_list;
 
-int init_error_table(msgs, base, count)
-    const char * const * msgs;
-    int base;
-    int count;
+int init_error_table(const char * const * msgs,
+                     int base,
+                     int count)
 {
     struct et_list *etl;
     struct error_table *et;

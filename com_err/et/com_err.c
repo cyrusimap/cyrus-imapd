@@ -133,11 +133,10 @@ errf com_err_hook = default_com_err_proc;
 
 void
 __attribute__((format(printf, 3, 0)))
-com_err_va (whoami, code, fmt, args)
-    const char *whoami;
-    long code;
-    const char *fmt;
-    va_list args;
+com_err_va (const char *whoami,
+            long code,
+            const char *fmt,
+            va_list args)
 {
     (*com_err_hook) (whoami, code, fmt, args);
 }
@@ -172,8 +171,7 @@ EXPORTED void INTERFACE_C com_err (va_alist)
     va_end(pvar);
 }
 
-errf set_com_err_hook (new_proc)
-    errf new_proc;
+errf set_com_err_hook (errf new_proc)
 {
     errf x = com_err_hook;
 
