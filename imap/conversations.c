@@ -2396,11 +2396,11 @@ static int conversations_set_guid(struct conversations_state *state,
                                    base, record->cid, record->basecid,
                                    record->system_flags,
                                    record->internal_flags,
-                                   record->internaldate,
+                                   record->internaldate.tv_sec,
                                    add);
     if (!r) r = _guid_addbody(state, record->cid, record->basecid,
                               record->system_flags, record->internal_flags,
-                              record->internaldate, body, base, add);
+                              record->internaldate.tv_sec, body, base, add);
 
     message_free_body(body);
     free(body);
@@ -2553,7 +2553,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (new) {
         if (!old || old->system_flags != new->system_flags ||
                     old->internal_flags != new->internal_flags ||
-                    old->internaldate != new->internaldate) {
+                    old->internaldate.tv_sec != new->internaldate.tv_sec) {
             r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
             if (r) goto done;
         }
@@ -2669,7 +2669,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     conversation_update_thread(conv,
                                &record->guid,
-                               record->internaldate,
+                               record->internaldate.tv_sec,
                                record->createdmodseq,
                                delta_exists);
 
