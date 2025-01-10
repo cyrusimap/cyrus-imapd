@@ -1784,7 +1784,7 @@ static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kr, "FLAGS", &fl))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate))
+    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate.tv_sec))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum64(kr, "SIZE", &record->size))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2126,7 +2126,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum64(il, "MODSEQ", mymodseq);
             dlist_setdate(il, "LAST_UPDATED", record->last_updated);
             sync_print_flags(il, mailbox, record);
-            dlist_setdate(il, "INTERNALDATE", record->internaldate);
+            dlist_setdate(il, "INTERNALDATE", record->internaldate.tv_sec);
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
@@ -2652,7 +2652,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.basecid = mrecord.basecid;
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
-            copy.internaldate = mrecord.internaldate;
+            copy.internaldate.tv_sec = mrecord.internaldate.tv_sec;
             copy.savedate = mrecord.savedate;
             copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;
@@ -5825,7 +5825,7 @@ static void log_record(const char *name, struct mailbox *mailbox,
     syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
           "last_updated:" TIME_T_FMT " internaldate:" TIME_T_FMT " flags:(%s) cid:" CONV_FMT,
            name, record->uid, record->modseq,
-           record->last_updated, record->internaldate,
+           record->last_updated, record->internaldate.tv_sec,
            make_flags(mailbox, record), record->cid);
 }
 
@@ -5896,7 +5896,7 @@ static int compare_one_record(struct sync_client_state *sync_cs,
         goto diff;
     if (mp->last_updated != rp->last_updated)
         goto diff;
-    if (mp->internaldate != rp->internaldate)
+    if (mp->internaldate.tv_sec != rp->internaldate.tv_sec)
         goto diff;
     if (mp->system_flags != rp->system_flags)
         goto diff;
