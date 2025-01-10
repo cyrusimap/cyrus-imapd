@@ -2588,7 +2588,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                    check if conditional matches previous ETag */
 
                 if (check_precond(txn, cdata->sched_tag,
-                                  record->internaldate) == HTTP_NOT_MODIFIED) {
+                                  record->internaldate.tv_sec) == HTTP_NOT_MODIFIED) {
                     /* Fill in previous ETag and don't return Last-Modified */
                     txn->resp_body.etag = cdata->sched_tag;
                     txn->resp_body.lastmod = 0;
@@ -2634,7 +2634,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
             /* Fill in new ETag and Last-Modified */
             txn->resp_body.etag = message_guid_encode(&record->guid);
-            txn->resp_body.lastmod = record->internaldate;
+            txn->resp_body.lastmod = record->internaldate.tv_sec;
 
             caldav_close(caldavdb);
         }
@@ -2904,7 +2904,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
     etag = message_guid_encode(&record.guid);
-    lastmod = record.internaldate;
+    lastmod = record.internaldate.tv_sec;
 
     /* Load and parse message containing the resource */
     ical = record_to_ical(calendar, &record, &schedule_addresses);
