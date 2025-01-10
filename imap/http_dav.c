@@ -1950,7 +1950,7 @@ int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
 
     if (fctx->record) {
-        buf_printf(&fctx->buf, "%u",
+        buf_printf(&fctx->buf, UINT64_FMT,
                    fctx->record->size - fctx->record->header_size);
     }
 
@@ -2978,7 +2978,7 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     }
     else if (fctx->record) {
         /* Bytes used by resource */
-        buf_printf(&fctx->buf, "%u", fctx->record->size);
+        buf_printf(&fctx->buf, UINT64_FMT, fctx->record->size);
     }
     else if (fctx->mailbox) {
         /* Bytes used by calendar collection */

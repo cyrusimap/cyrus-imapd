@@ -3674,7 +3674,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-        prot_printf(state->out, "%cRFC822.SIZE %u",
+        prot_printf(state->out, "%cRFC822.SIZE " UINT64_FMT,
                     sepchar, record.size);
         sepchar = ' ';
     }
