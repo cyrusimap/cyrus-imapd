@@ -99,10 +99,12 @@ extern const char CYRUS_VERSION[];
 #if ULONG_MAX == BIT64_MAX
 #define BIT64_FMT          "%016lx"
 #define UINT64_FMT         "%lu"
+#define UINT64_LALIGN_FMT  "%-*lu"
 #define UINT64_NANOSEC_FMT ".%.9lu"
 #elif ULLONG_MAX == BIT64_MAX
 #define BIT64_FMT          "%016lx"
 #define UINT64_FMT         "%llu"
+#define UINT64_LALIGN_FMT  "%-*llu"
 #define UINT64_NANOSEC_FMT ".%.9llu"
 #else
 #error dont know what to use for bit64
