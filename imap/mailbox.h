@@ -150,7 +150,7 @@ struct statusdata {
 
 struct index_record {
     uint32_t uid;
-    time_t internaldate;
+    struct timespec internaldate;
     time_t sentdate;
     uint64_t size;
     uint32_t header_size;
