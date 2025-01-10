@@ -957,7 +957,7 @@ static void test_deprecated_string(void)
 static void test_deprecated_stringlist(void)
 {
     /* { "tlscache_db", "twoskip",
-     *   STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"),
+     *   STRINGLIST("skiplist", "sql", "twoskip"),
      *   "2.5.0", "tls_sessions_db" }
      */
     const char *val;
@@ -1000,14 +1000,14 @@ static void test_deprecated_stringlist(void)
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
         "tlscache_db: sql\n"
-        "tls_sessions_db: zeroskip\n"
+        "tls_sessions_db: twoskip\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should read new value at the new name */
     val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
     CU_ASSERT_PTR_NOT_NULL(val);
-    CU_ASSERT_STRING_EQUAL(val, "zeroskip");
+    CU_ASSERT_STRING_EQUAL(val, "twoskip");
 }
 
 static void test_deprecated_duration(void)

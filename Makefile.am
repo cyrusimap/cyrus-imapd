@@ -1512,13 +1512,6 @@ endif
 lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS) $(LIBM)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
-if USE_ZEROSKIP
-lib_libcyrus_la_SOURCES += lib/cyrusdb_zeroskip.c
-lib_libcyrus_la_LIBADD += $(ZEROSKIP_LIBS)
-lib_libcyrus_la_CFLAGS += $(ZEROSKIP_CFLAGS)
-AM_CPPFLAGS += $(ZEROSKIP_CFLAGS)
-endif
-
 noinst_LTLIBRARIES += libcrc32.la
 libcrc32_la_SOURCES = lib/crc32.c
 libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)

@@ -1419,11 +1419,7 @@ static int set_up(void)
     );
 
     cyrusdb_init();
-#ifdef HAVE_ZEROSKIP
-    config_conversations_db = "zeroskip";
-#else
     config_conversations_db = "twoskip";
-#endif
 
     return 0;
 }
