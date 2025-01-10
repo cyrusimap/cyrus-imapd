@@ -1109,7 +1109,8 @@ HIDDEN int caldav_alarm_add_record(struct mailbox *mailbox,
 
     if (has_alarms(data, mailbox, record->uid, &num_rcpts)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
-        update_alarmdb(mailbox_name(mailbox), record->uid, record->internaldate,
+        update_alarmdb(mailbox_name(mailbox), record->uid,
+                       record->internaldate.tv_sec,
                        atype, num_rcpts, 0, 0, NULL);
     }
 
@@ -1346,7 +1347,7 @@ static int process_valarms(struct mailbox *mailbox,
 
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
-        data.lastrun = record->internaldate;
+        data.lastrun = record->internaldate.tv_sec;
 
     /* Process VALARMs in iCalendar resource */
     char *userid = mboxname_to_userid(mboxname);
@@ -1521,7 +1522,7 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     if (r) goto done;
 
     /* Append the message to the mailbox */
-    r = append_fromstage_full(&as, &body, stage, record->internaldate,
+    r = append_fromstage_full(&as, &body, stage, record->internaldate.tv_sec,
                               savedate, 0, flags, 0, &annots);
     if (r) {
         append_abort(&as);
@@ -2063,8 +2064,8 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     }
 #ifdef WITH_JMAP
     case ALARM_SEND:
-        if (record.internaldate > runtime || dryrun) {
-            caldav_alarm_bump_nextcheck(data, record.internaldate, 0, NULL);
+        if (record.internaldate.tv_sec > runtime || dryrun) {
+            caldav_alarm_bump_nextcheck(data, record.internaldate.tv_sec, 0, NULL);
             goto done;
         }
         r = process_futurerelease(data, mailbox, &record, runtime);
