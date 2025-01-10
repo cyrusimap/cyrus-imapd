@@ -1838,6 +1838,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     case 17:
     case 18:
     case 19:
+    case 20:
         headerlen = 160;
         break;
     default:
@@ -2034,91 +2035,122 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
 static int mailbox_buf_to_index_record(const char *buf, int version,
                                        struct index_record *record, int dirty)
 {
-    uint32_t crc;
     uint32_t stored_system_flags = 0;
-    int n;
+    uint64_t cache_offset_field;
+    uint64_t cache_version_field;
+    uint32_t offset_cache_crc;
+    uint32_t offset_record_crc;
+    int n, r = 0;
 
     /* tracking fields - initialise */
     memset(record, 0, sizeof(struct index_record));
 
     /* parse the shared bits first */
     record->uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
-    record->internaldate = ntohl(*((bit32 *)(buf+OFFSET_INTERNALDATE)));
-    record->sentdate = ntohl(*((bit32 *)(buf+OFFSET_SENTDATE)));
-    record->size = ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
-    record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
-    record->gmtime = ntohl(*((bit32 *)(buf+OFFSET_GMTIME)));
-    uint64_t cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
-    record->last_updated = ntohl(*((bit32 *)(buf+OFFSET_LAST_UPDATED)));
-    stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
-    /* de-serialise system flags and internal flags */
-    record->system_flags = stored_system_flags & 0x0000ffff;
-    record->internal_flags = stored_system_flags & 0xffff0000;
+    /* v20 grew the of size and time fields to 64-bits
+       and rearranged fields so that these would fall on 8-byte boundaries */
+    if (version < 20) {
+        record->internaldate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)));
+        record->sentdate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SENTDATE)));
+        record->size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SIZE)));
+        record->header_size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)));
+        record->gmtime = ntohl(*((bit32 *)(buf+PRE20_OFFSET_GMTIME)));
+        cache_offset_field = ntohl(*((bit32 *)(buf+PRE20_OFFSET_CACHE_OFFSET)));
+        record->last_updated = ntohl(*((bit32 *)(buf+PRE20_OFFSET_LAST_UPDATED)));
+        stored_system_flags = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SYSTEM_FLAGS)));
+
+        for (n = 0; n < MAX_USER_FLAGS/32; n++) {
+            record->user_flags[n] =
+                ntohl(*((bit32 *)(buf+PRE20_OFFSET_USER_FLAGS+4*n)));
+        }
+        cache_version_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+
+        if (version < 8)
+            goto done;
+
+        if (version < 10) {
+            /* modseq was at 72 before the GUID move */
+            record->modseq = ntohll(*((bit64 *)(buf+PRE10_OFFSET_MODSEQ)));
+            goto done;
+        }
+
+        message_guid_import(&record->guid, buf+OFFSET_MESSAGE_GUID);
+        record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
+        if (version < 12)
+            goto done;
+
+        /* THRID got inserted before cache_crc32 in version 12 */
+        if (version < 13) {
+            offset_cache_crc  = PRE13_OFFSET_CACHE_CRC;
+            offset_record_crc = PRE13_OFFSET_RECORD_CRC;
+            goto crc;
+        }
+
+        record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
+        if (version > 14) {
+            record->savedate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)));
+        }
+
+        /* createdmodseq was added in version 16, pushing the CRCs down */
+        if (version < 16) {
+            offset_cache_crc  = PRE16_OFFSET_CACHE_CRC;
+            offset_record_crc = PRE16_OFFSET_RECORD_CRC;
+            goto crc;
+        }
+
+        record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
+
+        offset_cache_crc  = PRE20_OFFSET_CACHE_CRC;
+        offset_record_crc = PRE20_OFFSET_RECORD_CRC;
+        goto crc;
+    }
+
+    cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
+    record->internaldate = ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE)));
+    record->sentdate = ntohll(*((bit64 *)(buf+OFFSET_SENTDATE)));
+    record->size = ntohll(*((bit64 *)(buf+OFFSET_SIZE)));
+    record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
+    stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
 
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
-    uint64_t cache_version_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+
+    cache_version_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
+    message_guid_import(&record->guid, buf+OFFSET_MESSAGE_GUID);
+    record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
+    record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
+    record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
+    record->gmtime = ntohll(*((bit64 *)(buf+OFFSET_GMTIME)));
+    record->last_updated = ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED)));
+    record->savedate = ntohll(*((bit64 *)(buf+OFFSET_SAVEDATE)));
+
+    offset_cache_crc  = OFFSET_CACHE_CRC;
+    offset_record_crc = OFFSET_RECORD_CRC;
+    
+  crc:
+    record->cache_crc = ntohl(*((bit32 *)(buf+offset_cache_crc)));
+
+    if (!dirty) {
+        /* check CRC32 */
+        uint32_t crc = crc32_map(buf, offset_record_crc);
+        if (crc != ntohl(*((bit32 *)(buf+offset_record_crc))))
+            r = IMAP_MAILBOX_CHECKSUM;
+    }
+
+  done:
+    /* de-serialise system flags and internal flags */
+    record->system_flags = stored_system_flags & 0x0000ffff;
+    record->internal_flags = stored_system_flags & 0xffff0000;
 
     /* keep the low bits of the version field for the version */
     record->cache_version = cache_version_field & 0xffff;
     /* use the high bits of the version field to extend the cache offset */
-    record->cache_offset = cache_offset_field | ((cache_version_field & 0xffff0000) << 16);
+    record->cache_offset =
+        cache_offset_field | ((cache_version_field & 0xffff0000) << 16);
 
-    if (version < 8)
-        return 0;
-
-    if (version < 10) {
-        /* modseq was at 72 before the GUID move */
-        record->modseq = ntohll(*((bit64 *)(buf+72)));
-        return 0;
-    }
-
-    message_guid_import(&record->guid, buf+OFFSET_MESSAGE_GUID);
-    record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
-    if (version < 12)
-        return 0;
-
-    /* THRID got inserted before cache_crc32 in version 12 */
-    if (version < 13) {
-        record->cache_crc = ntohl(*((bit32 *)(buf+88)));
-
-        if (dirty) return 0;
-        /* check CRC32 */
-        crc = crc32_map(buf, 92);
-        if (crc != ntohl(*((bit32 *)(buf+92))))
-            return IMAP_MAILBOX_CHECKSUM;
-        return 0;
-    }
-
-    record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
-    if (version > 14) {
-        record->savedate = ntohl(*((bit32 *)(buf+OFFSET_SAVEDATE)));
-    }
-
-    /* createdmodseq was added in version 16, pushing the CRCs down */
-    if (version < 16) {
-        record->cache_crc = ntohl(*((bit32 *)(buf+96)));
-
-        if (dirty) return 0;
-        /* check CRC32 */
-        crc = crc32_map(buf, 100);
-        if (crc != ntohl(*((bit32 *)(buf+100))))
-            return IMAP_MAILBOX_CHECKSUM;
-        return 0;
-    }
-
-    record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
-    record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
-
-    if (dirty) return 0;
-    /* check CRC32 */
-    crc = crc32_map(buf, OFFSET_RECORD_CRC);
-    if (crc != ntohl(*((bit32 *)(buf+OFFSET_RECORD_CRC))))
-        return IMAP_MAILBOX_CHECKSUM;
-
-    return 0;
+    return r;
 }
 
 static struct index_change *_find_change(struct mailbox *mailbox, uint32_t recno)
@@ -2228,7 +2260,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
             /* note: messageid doesn't have <> wrappers because it already includes them */
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
-                   "sysflags=<%s> guid=<%s> cid=<%s> messageid=%s size=<%u>",
+                   "sysflags=<%s> guid=<%s> cid=<%s> messageid=%s size=<" UINT64_FMT">",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid), conversation_id_encode(record->cid),
@@ -2237,7 +2269,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
-                   "sysflags=<%s> guid=<%s> cid=<%s> size=<%u>",
+                   "sysflags=<%s> guid=<%s> cid=<%s> size=<" UINT64_FMT ">",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid), conversation_id_encode(record->cid),
@@ -3184,91 +3216,126 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
 /*
  * Put an index record into a buffer suitable for writing to a file.
  */
-static bit32 mailbox_index_record_to_buf(struct index_record *record, int version,
-                                  unsigned char *buf)
+static bit32 mailbox_index_record_to_buf(struct index_record *record,
+                                         int version,
+                                         unsigned char *buf)
 {
     int n;
     bit32 crc;
     uint32_t system_flags = 0;
+    uint32_t offset_cache_crc;
+    uint32_t offset_record_crc;
 
     memset(buf, 0, INDEX_RECORD_SIZE);
 
     /* keep the low bits of the offset in the offset field */
     uint32_t cache_offset_field = record->cache_offset & 0xffffffff;
     /* mix in the high bits of the offset to the top half of the version field */
-    uint32_t cache_version_field = (uint32_t)record->cache_version | (record->cache_offset & 0xffff00000000) >> 16;
-
-    *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
-    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
-    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
-    *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
-    *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
-    if (version >= 12) {
-        *((bit32 *)(buf+OFFSET_GMTIME)) = htonl(record->gmtime);
-    }
-    else {
-        /* content_offset was always the same */
-        *((bit32 *)(buf+OFFSET_GMTIME)) = htonl(record->header_size);
-    }
-    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
-    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+    uint32_t cache_version_field =
+        (uint32_t)record->cache_version | (record->cache_offset & 0xffff00000000) >> 16;
 
     /* serialise system flags and internal flags */
     system_flags = record->system_flags | record->internal_flags;
+
+    *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
+
+    /* v20 grew the of size and time fields to 64-bits
+       and rearranged fields so that these would fall on 8-byte boundaries */
+    if (version < 20) {
+        *((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)) = htonl(record->internaldate);
+        *((bit32 *)(buf+PRE20_OFFSET_SENTDATE)) = htonl(record->sentdate);
+        *((bit32 *)(buf+PRE20_OFFSET_SIZE)) = htonl(record->size);
+        *((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)) = htonl(record->header_size);
+        if (version >= 12) {
+            *((bit32 *)(buf+PRE20_OFFSET_GMTIME)) = htonl(record->gmtime);
+        }
+        else {
+            /* content_offset was always the same */
+            *((bit32 *)(buf+PRE20_OFFSET_GMTIME)) = htonl(record->header_size);
+        }
+        *((bit32 *)(buf+PRE20_OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
+        *((bit32 *)(buf+PRE20_OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+        *((bit32 *)(buf+PRE20_OFFSET_SYSTEM_FLAGS)) = htonl(system_flags);
+
+        for (n = 0; n < MAX_USER_FLAGS/32; n++) {
+            *((bit32 *)(buf+PRE20_OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
+        }
+        if (version > 14) {
+            *((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)) = htonl(record->savedate);
+        }
+        else {
+            *((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)) = 0; // blank out old content_lines
+        }
+        *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(cache_version_field);
+
+        /* versions less than 8 had no modseq */
+        if (version < 8) {
+            return 0;
+        }
+
+        /* versions 8 and 9 only had a smaller UUID, which we will ignore,
+         * but the modseq existed and was at offset 72 and 76 */
+        if (version < 10) {
+            *((bit64 *)(buf+PRE10_OFFSET_MODSEQ)) = htonll(record->modseq);
+            return 0;
+        }
+
+        /* otherwise we have the GUID and MODSEQ in their current place */
+        message_guid_export(&record->guid, (char *)buf+OFFSET_MESSAGE_GUID);
+        *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
+
+        /* version 12 added the CACHE_CRC and RECORD_CRC, but at a lower point */
+        if (version < 13) {
+            offset_cache_crc  = PRE13_OFFSET_CACHE_CRC;
+            offset_record_crc = PRE13_OFFSET_RECORD_CRC;
+            goto crc;
+        }
+
+        *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->cid);
+
+        /* version 16 added createdmodseq, pushing the CRCs down */
+        if (version < 16) {
+            offset_cache_crc  = PRE16_OFFSET_CACHE_CRC;
+            offset_record_crc = PRE16_OFFSET_RECORD_CRC;
+            goto crc;
+        }
+
+        *((bit64 *)(buf+OFFSET_CREATEDMODSEQ)) = htonll(record->createdmodseq);
+
+        offset_cache_crc  = PRE20_OFFSET_CACHE_CRC;
+        offset_record_crc = PRE20_OFFSET_RECORD_CRC;
+        goto crc;
+    }
+
+    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
+    *((bit64 *)(buf+OFFSET_INTERNALDATE)) = htonll(record->internaldate);
+    *((bit64 *)(buf+OFFSET_SENTDATE)) = htonll(record->sentdate);
+    *((bit64 *)(buf+OFFSET_SIZE)) = htonll(record->size);
+    *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
     *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(system_flags);
 
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
     }
-    if (version > 14) {
-        *((bit32 *)(buf+OFFSET_SAVEDATE)) = htonl(record->savedate);
-    }
-    else {
-        *((bit32 *)(buf+OFFSET_SAVEDATE)) = 0; // blank out old content_lines
-    }
+
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(cache_version_field);
-
-    /* versions less than 8 had no modseq */
-    if (version < 8) {
-        return 0;
-    }
-
-    /* versions 8 and 9 only had a smaller UUID, which we will ignore,
-     * but the modseq existed and was at offset 72 and 76 */
-    if (version < 10) {
-        *((bit64 *)(buf+72)) = htonll(record->modseq);
-        return 0;
-    }
-
-    /* otherwise we have the GUID and MODSEQ in their current place */
     message_guid_export(&record->guid, (char *)buf+OFFSET_MESSAGE_GUID);
     *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
-
-    /* version 12 added the CACHE_CRC and RECORD_CRC, but at a lower point */
-    if (version < 13) {
-        *((bit32 *)(buf+88)) = htonl(record->cache_crc);
-        /* calculate the checksum */
-        crc = crc32_map((char *)buf, 92);
-        *((bit32 *)(buf+92)) = htonl(crc);
-        return crc;
-    }
-
     *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->cid);
-
-    /* version 16 added createdmodseq, pushing the CRCs down */
-    if (version < 16) {
-        *((bit32 *)(buf+96)) = htonl(record->cache_crc);
-        crc = crc32_map((char *)buf, 100);
-        *((bit32 *)(buf+100)) = htonl(crc);
-        return crc;
-    }
-
     *((bit64 *)(buf+OFFSET_CREATEDMODSEQ)) = htonll(record->createdmodseq);
-    *((bit32 *)(buf+OFFSET_CACHE_CRC)) = htonl(record->cache_crc);
+    *((bit64 *)(buf+OFFSET_GMTIME)) = htonll(record->gmtime);
+    *((bit64 *)(buf+OFFSET_LAST_UPDATED)) = htonll(record->last_updated);
+    *((bit64 *)(buf+OFFSET_SAVEDATE)) = htonll(record->savedate);
+
+    offset_cache_crc  = OFFSET_CACHE_CRC;
+    offset_record_crc = OFFSET_RECORD_CRC;
+
+ crc:
+    *((bit32 *)(buf+offset_cache_crc)) = htonl(record->cache_crc);
 
     /* calculate the checksum */
-    crc = crc32_map((char *)buf, OFFSET_RECORD_CRC);
-    *((bit32 *)(buf+OFFSET_RECORD_CRC)) = htonl(crc);
+    crc = crc32_map((char *)buf, offset_record_crc);
+    *((bit32 *)(buf+offset_record_crc)) = htonl(crc);
 
     return crc;
 }
@@ -3291,7 +3358,7 @@ static void mailbox_quota_dirty(struct mailbox *mailbox)
 #define UPDATE_QUOTA_USED(quota_used, size, is_add) do {                \
     if (is_add) quota_used += size;                                     \
     /* corruption prevention - check we don't go negative */            \
-    else if (quota_used > size) quota_used -= size;                     \
+    else if ((uint64_t) quota_used > size) quota_used -= size;          \
     else quota_used = 0;                                                \
 } while (0)
 
@@ -5001,6 +5068,11 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     case 19:
         repack->newmailbox.i.start_offset = 160;
         repack->newmailbox.i.record_size = 112;
+        break;
+    case 20:
+        repack->newmailbox.i.start_offset = 160;
+        /* version 20 grew size and time fields to 64-bits */
+        repack->newmailbox.i.record_size = 136;
         break;
     default:
         fatal("index version not supported", EX_SOFTWARE);
