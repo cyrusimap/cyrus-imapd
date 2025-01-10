@@ -153,7 +153,7 @@ static void list_expunged(const char *mboxname,
     for (i = 0; i < num; i++) {
         const struct index_record *record = &records[i];
         printf("UID: %u\n", record->uid);
-        printf("\tSize: %u\n", record->size);
+        printf("\tSize: " UINT64_FMT "\n", record->size);
         printf("\tSent: %s", ctime(&record->sentdate));
         printf("\tRecv: %s", ctime(&record->internaldate));
         printf("\tExpg: %s", ctime(&record->last_updated));
