@@ -123,15 +123,15 @@ static void test_aligned_record_offsets(void)
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_OFFSET  % alignof(XXX_CACHE32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_VERSION % alignof(XXX_CACHE32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_CREATEDMODSEQ % alignof(r.createdmodseq));
-    CU_ASSERT_EQUAL(0, OFFSET_GMTIME        % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_GMTIME        % alignof(r.gmtime));
     CU_ASSERT_EQUAL(0, OFFSET_HEADER_SIZE   % alignof(r.header_size));
-    CU_ASSERT_EQUAL(0, OFFSET_INTERNALDATE  % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_LAST_UPDATED  % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_INTERNALDATE  % alignof(r.internaldate));
+    CU_ASSERT_EQUAL(0, OFFSET_LAST_UPDATED  % alignof(r.last_updated));
     CU_ASSERT_EQUAL(0, OFFSET_MESSAGE_GUID  % alignof(char)); /* r/w uses memcpy */
     CU_ASSERT_EQUAL(0, OFFSET_MODSEQ        % alignof(r.modseq));
     CU_ASSERT_EQUAL(0, OFFSET_RECORD_CRC    % alignof(uint32_t)); /* not in struct */
-    CU_ASSERT_EQUAL(0, OFFSET_SAVEDATE      % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_SENTDATE      % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_SAVEDATE      % alignof(r.savedate));
+    CU_ASSERT_EQUAL(0, OFFSET_SENTDATE      % alignof(r.sentdate));
     CU_ASSERT_EQUAL(0, OFFSET_SIZE          % alignof(r.size));
     CU_ASSERT_EQUAL(0, OFFSET_SYSTEM_FLAGS  % alignof(r.system_flags));
     CU_ASSERT_EQUAL(0, OFFSET_THRID         % alignof(r.cid));
@@ -247,15 +247,15 @@ static void test_unique_record_offsets(void)
         OFFSET(OFFSET_CACHE_OFFSET,     sizeof(XXX_CACHE32_TYPE)),
         OFFSET(OFFSET_CACHE_VERSION,    sizeof(XXX_CACHE32_TYPE)),
         OFFSET(OFFSET_CREATEDMODSEQ,    sizeof(r.createdmodseq)),
-        OFFSET(OFFSET_GMTIME,           sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_GMTIME,           sizeof(r.gmtime)),
         OFFSET(OFFSET_HEADER_SIZE,      sizeof(r.header_size)),
-        OFFSET(OFFSET_INTERNALDATE,     sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_LAST_UPDATED,     sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_INTERNALDATE,     sizeof(r.internaldate)),
+        OFFSET(OFFSET_LAST_UPDATED,     sizeof(r.last_updated)),
         OFFSET(OFFSET_MESSAGE_GUID,     MESSAGE_GUID_SIZE),
         OFFSET(OFFSET_MODSEQ,           sizeof(r.modseq)),
         OFFSET(OFFSET_RECORD_CRC,       sizeof(uint32_t)), /* not in struct */
-        OFFSET(OFFSET_SAVEDATE,         sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_SENTDATE,         sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_SAVEDATE,         sizeof(r.savedate)),
+        OFFSET(OFFSET_SENTDATE,         sizeof(r.sentdate)),
         OFFSET(OFFSET_SIZE,             sizeof(r.size)),
         OFFSET(OFFSET_SYSTEM_FLAGS,     sizeof(r.system_flags)),
         OFFSET(OFFSET_THRID,            sizeof(r.cid)),
