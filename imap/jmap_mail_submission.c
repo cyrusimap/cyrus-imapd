@@ -1011,7 +1011,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
                 else if (!strcmp(arg, "sendAt")) {
                     time_t t = 0;
                     if (time_from_iso8601(strval, &t) == (int) strlen(strval) &&
-                        t == record->internaldate) {
+                        t == record->internaldate.tv_sec) {
                         continue;
                     }
                 }
@@ -1933,10 +1933,10 @@ static int submission_filter_match(void *vf, void *rock)
     const struct index_record *record = msg_record(sfrock->msg);
 
     /* before */
-    if (record->internaldate >= f->before) return 0;
+    if (record->internaldate.tv_sec >= f->before) return 0;
 
     /* after */
-    if (record->internaldate < f->after) return 0;
+    if (record->internaldate.tv_sec < f->after) return 0;
 
     /* createdBefore */
     if (record->savedate >= f->createdBefore) return 0;
@@ -2189,7 +2189,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         sprintf(match->id, "S%u", record->uid);
         match->uid = record->uid;
         match->created = record->savedate;
-        match->sentAt = record->internaldate;
+        match->sentAt = record->internaldate.tv_sec;
         match->emailId = sfrock.emailId;
         match->threadId = sfrock.threadId;
         match->submission = sfrock.submission;
