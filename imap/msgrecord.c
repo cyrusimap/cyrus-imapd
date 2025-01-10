@@ -291,7 +291,7 @@ EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    *t = mr->record.internaldate;
+    *t = mr->record.internaldate.tv_sec;
     return 0;
 }
 
@@ -304,7 +304,7 @@ EXPORTED int msgrecord_get_savedate(msgrecord_t *mr, time_t *t)
     if (mr->record.savedate)
         *t = mr->record.savedate;
     else
-        *t = mr->record.internaldate;
+        *t = mr->record.internaldate.tv_sec;
     return 0;
 }
 
@@ -683,7 +683,7 @@ EXPORTED int msgrecord_set_internaldate(msgrecord_t *mr, time_t internaldate)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    mr->record.internaldate = internaldate;
+    mr->record.internaldate.tv_sec  = internaldate;
     return 0;
 }
 

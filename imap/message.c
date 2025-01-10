@@ -5285,7 +5285,7 @@ EXPORTED int message_get_savedate(message_t *m, time_t *datep)
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *datep = m->record.savedate;
-    if (!*datep) *datep = m->record.internaldate;
+    if (!*datep) *datep = m->record.internaldate.tv_sec;
     return 0;
 }
 
@@ -5317,7 +5317,7 @@ EXPORTED int message_get_internaldate(message_t *m, time_t *datep)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    *datep = m->record.internaldate;
+    *datep = m->record.internaldate.tv_sec;
     return 0;
 }
 
