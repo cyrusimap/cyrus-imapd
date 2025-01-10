@@ -2512,7 +2512,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     }
 
     /* add internal date */
-    time_to_rfc3501(record.internaldate, datebuf, sizeof(datebuf));
+    time_to_rfc3501(record.internaldate.tv_sec, datebuf, sizeof(datebuf));
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
@@ -3647,7 +3647,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
 
     if (fetchitems & FETCH_INTERNALDATE) {
-        time_t msgdate = record.internaldate;
+        time_t msgdate = record.internaldate.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
@@ -3761,7 +3761,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         // handle internaldate
-        if (!msgdate) msgdate = record.internaldate;
+        if (!msgdate) msgdate = record.internaldate.tv_sec;
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
 
@@ -5527,7 +5527,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->sentdate = record.gmtime;
                 /* fall through */
             case SORT_ARRIVAL:
-                cur->internaldate = record.internaldate;
+                cur->internaldate = record.internaldate.tv_sec;
                 break;
             case SORT_FROM:
                 cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
@@ -5570,7 +5570,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate;
+                    cur->internaldate = record.internaldate.tv_sec;
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
@@ -5596,7 +5596,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 #endif
                 if (!cur->savedate) {
                     /* If not snoozed in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate;
+                    cur->internaldate = record.internaldate.tv_sec;
                 }
                 break;
             case LOAD_IDS:
