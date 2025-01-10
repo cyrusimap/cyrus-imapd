@@ -566,7 +566,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         strarray_add(flags, "$restored");
 
         /* append the message to the mailbox. */
-        r = append_fromstage(&as, &body, stage, record->internaldate,
+        r = append_fromstage(&as, &body, stage, record->internaldate.tv_sec,
                              is_update ? record->createdmodseq : 0,
                              flags, /*nolink*/0, &annots);
 
@@ -1646,7 +1646,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                " intdate: " TIME_T_FMT ", updated: " TIME_T_FMT,
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                (record->system_flags & FLAG_DRAFT),
-               record->internaldate, record->last_updated);
+               record->internaldate.tv_sec, record->last_updated);
 
         /* Suppress fetching of Message-ID if not restoring drafts */
         if (rrock->jrestore->mode & UNDO_DRAFTS) {

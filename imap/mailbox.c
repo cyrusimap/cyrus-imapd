@@ -2051,7 +2051,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     /* v20 grew the of size and time fields to 64-bits
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (version < 20) {
-        record->internaldate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)));
+        record->internaldate.tv_sec  = ntohl(*((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)));
         record->sentdate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SENTDATE)));
         record->size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SIZE)));
         record->header_size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)));
@@ -2107,7 +2107,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     }
 
     cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
-    record->internaldate = ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE)));
+    record->internaldate.tv_sec  = ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE)));
     record->sentdate = ntohll(*((bit64 *)(buf+OFFSET_SENTDATE)));
     record->size = ntohll(*((bit64 *)(buf+OFFSET_SIZE)));
     record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
@@ -3242,7 +3242,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     /* v20 grew the of size and time fields to 64-bits
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (version < 20) {
-        *((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)) = htonl(record->internaldate);
+        *((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)) = htonl(record->internaldate.tv_sec);
         *((bit32 *)(buf+PRE20_OFFSET_SENTDATE)) = htonl(record->sentdate);
         *((bit32 *)(buf+PRE20_OFFSET_SIZE)) = htonl(record->size);
         *((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)) = htonl(record->header_size);
@@ -3308,7 +3308,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     }
 
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
-    *((bit64 *)(buf+OFFSET_INTERNALDATE)) = htonll(record->internaldate);
+    *((bit64 *)(buf+OFFSET_INTERNALDATE)) = htonll(record->internaldate.tv_sec);
     *((bit64 *)(buf+OFFSET_SENTDATE)) = htonll(record->sentdate);
     *((bit64 *)(buf+OFFSET_SIZE)) = htonll(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
@@ -3447,7 +3447,7 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
     snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " " TIME_T_FMT " (%u) " TIME_T_FMT " %s",
             record->uid, record->modseq, record->last_updated,
             flagcrc,
-            record->internaldate,
+            record->internaldate.tv_sec,
             message_guid_encode(&record->guid));
 
     return crc32_cstring(buf);
@@ -3775,7 +3775,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
 
         if (!cdata->dav.creationdate)
-            cdata->dav.creationdate = new->internaldate;
+            cdata->dav.creationdate = new->internaldate.tv_sec;
 
         /* Load message containing the resource and parse vcard data */
 #ifdef HAVE_LIBICALVCARD
@@ -3918,7 +3918,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
             if (r) goto alarmdone;
         }
 
-        cdata->dav.creationdate = new->internaldate;
+        cdata->dav.creationdate = new->internaldate.tv_sec;
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
         cdata->dav.createdmodseq = new->createdmodseq;
@@ -4019,7 +4019,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
                               buf_len(&msg_buf) - new->header_size);
         buf_free(&msg_buf);
 
-        wdata->dav.creationdate = new->internaldate;
+        wdata->dav.creationdate = new->internaldate.tv_sec;
         wdata->dav.imap_uid = new->uid;
         wdata->dav.modseq = new->modseq;
         wdata->dav.createdmodseq = new->createdmodseq;
@@ -4356,7 +4356,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
             }
         }
 
-        sdata->lastupdated = new->internaldate;
+        sdata->lastupdated = new->internaldate.tv_sec;
         sdata->mailbox = mailbox_uniqueid(mailbox);
         sdata->imap_uid = new->uid;
         sdata->modseq = new->modseq;
@@ -4368,7 +4368,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         sdata->contentid = message_guid_encode(&body->content_guid);
 
         if (!sdata->creationdate)
-            sdata->creationdate = new->internaldate;
+            sdata->creationdate = new->internaldate.tv_sec;
 
         r = sievedb_write(sievedb, sdata);
     }
@@ -4790,12 +4790,12 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         }
     }
 
-    if (!record->internaldate)
-        record->internaldate = time(NULL);
+    if (!record->internaldate.tv_sec)
+        record->internaldate.tv_sec = time(NULL);
     if (!record->gmtime)
-        record->gmtime = record->internaldate;
+        record->gmtime = record->internaldate.tv_sec;
     if (!record->sentdate) {
-        struct tm *tm = localtime(&record->internaldate);
+        struct tm *tm = localtime(&record->internaldate.tv_sec);
         /* truncate to the day */
         tm->tm_sec = 0;
         tm->tm_min = 0;
@@ -4826,7 +4826,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
-        settime.actime = settime.modtime = record->internaldate;
+        settime.actime = settime.modtime = record->internaldate.tv_sec;
         if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // mabe there is no file in directory.
             if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
                 return IMAP_IOERROR;
@@ -5559,7 +5559,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
         return 0;
 
     /* archive all other old messages */
-    if (record->internaldate <= cutoff)
+    if (record->internaldate.tv_sec <= cutoff)
         return 1;
 
     /* and don't archive anything else! */
@@ -7278,7 +7278,7 @@ static int records_match(const char *mboxname,
     int match = 1;
     int userflags_dirty = 0;
 
-    if (old->internaldate != new->internaldate) {
+    if (old->internaldate.tv_sec != new->internaldate.tv_sec) {
         printf("%s uid %u mismatch: internaldate\n",
                mboxname, new->uid);
         match = 0;
@@ -7432,21 +7432,21 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     /* copy once the cache record is read in... */
     copy = *record;
 
-    if (!record->internaldate) {
+    if (!record->internaldate.tv_sec) {
         re_parse = 1;
     }
 
     /* re-calculate all the "derived" fields by parsing the file on disk */
     if (re_parse) {
         /* set NULL in case parse finds a new value */
-        record->internaldate = 0;
+        record->internaldate.tv_sec = 0;
 
         r = message_parse(fname, record);
         if (r) goto out;
 
         /* unchanged, keep the old value */
-        if (!record->internaldate)
-            record->internaldate = copy.internaldate;
+        if (!record->internaldate.tv_sec)
+            record->internaldate.tv_sec  = copy.internaldate.tv_sec;
 
         /* it's not the same message! */
         if (!message_guid_equal(&record->guid, &copy.guid)) {
@@ -7526,16 +7526,16 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     }
 
     /* get internaldate from the file if not set */
-    if (!record->internaldate) {
+    if (!record->internaldate.tv_sec) {
         if (did_stat || stat(fname, &sbuf) != -1)
-            record->internaldate = sbuf.st_mtime;
+            record->internaldate.tv_sec  = sbuf.st_mtim.tv_sec;
         else
-            record->internaldate = time(NULL);
+            record->internaldate.tv_sec  = time(NULL);
     }
     if (!record->gmtime)
-        record->gmtime = record->internaldate;
+        record->gmtime = record->internaldate.tv_sec;
     if (!record->sentdate) {
-        struct tm *tm = localtime(&record->internaldate);
+        struct tm *tm = localtime(&record->internaldate.tv_sec);
         /* truncate to the day */
         tm->tm_sec = 0;
         tm->tm_min = 0;
@@ -7699,8 +7699,8 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
         record.internal_flags |= FLAG_INTERNAL_SNOOZED;
 
     /* copy the timestamp from the file if not calculated */
-    if (!record.internaldate)
-        record.internaldate = sbuf.st_mtime;
+    if (!record.internaldate.tv_sec)
+        record.internaldate.tv_sec  = sbuf.st_mtim.tv_sec;
 
     if (uid > mailbox->i.last_uid) {
         printf("%s uid %u found - adding\n", mailbox_name(mailbox), uid);

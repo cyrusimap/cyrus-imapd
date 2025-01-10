@@ -9928,7 +9928,7 @@ static void notifsearch_run(const char *userid,
             entry.is_tombstone = (!seenuids && (record->system_flags & FLAG_SEEN)) ||
                 (seenuids && seqset_ismember(seenuids, record->uid));
         }
-        entry.created = record->internaldate;
+        entry.created = record->internaldate.tv_sec;
         message_guid_copy(&entry.guid, &record->guid);
         entry.modseq = record->modseq;
 
