@@ -78,7 +78,7 @@
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
  * changes to backend_version() in backend.c.
  */
-#define MAILBOX_MINOR_VERSION       (19) /* read comment above! */
+#define MAILBOX_MINOR_VERSION       (20) /* read comment above! */
 #define MAILBOX_CACHE_MINOR_VERSION (13)
 
 #define FNAME_HEADER "/cyrus.header"
@@ -152,7 +152,7 @@ struct index_record {
     uint32_t uid;
     time_t internaldate;
     time_t sentdate;
-    uint32_t size;
+    uint64_t size;
     uint32_t header_size;
     time_t gmtime;
     size_t cache_offset;
@@ -397,24 +397,45 @@ struct mailbox_iter;
  * add new fields to the record, don't forget to add them to the tests
  * too!
  */
-#define OFFSET_UID 0
-#define OFFSET_INTERNALDATE 4
-#define OFFSET_SENTDATE 8
-#define OFFSET_SIZE 12
-#define OFFSET_HEADER_SIZE 16
-#define OFFSET_GMTIME 20
-#define OFFSET_CACHE_OFFSET 24
-#define OFFSET_LAST_UPDATED 28
-#define OFFSET_SYSTEM_FLAGS 32
-#define OFFSET_USER_FLAGS 36
-#define OFFSET_SAVEDATE 52 /* added in v15 */
-#define OFFSET_CACHE_VERSION 56
-#define OFFSET_MESSAGE_GUID 60
-#define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_THRID 88       /* conversation id, added in v13 */
-#define OFFSET_CREATEDMODSEQ 96 /* modseq of creation time, added in v16 */
-#define OFFSET_CACHE_CRC 104 /* CRC32 of cache record */
-#define OFFSET_RECORD_CRC 108
+#define OFFSET_UID              0
+#define OFFSET_CACHE_OFFSET     4
+#define OFFSET_INTERNALDATE     8 /* grew to 64-bit in v20 */
+#define OFFSET_SENTDATE        16 /* grew to 64-bit in v20 */
+#define OFFSET_SIZE            24 /* grew to 64-bit in v20 */
+#define OFFSET_HEADER_SIZE     32
+#define OFFSET_SYSTEM_FLAGS    36
+#define OFFSET_USER_FLAGS      40
+#define OFFSET_CACHE_VERSION   56
+#define OFFSET_MESSAGE_GUID    60
+#define OFFSET_MODSEQ          80 /* CONDSTORE (64-bit modseq) */
+#define OFFSET_THRID           88 /* conversation id, added in v13 */
+#define OFFSET_CREATEDMODSEQ   96 /* modseq of creation time, added in v16 */
+#define OFFSET_GMTIME         104 /* grew to 64-bit in v20 */
+#define OFFSET_LAST_UPDATED   112 /* grew to 64-bit in v20 */
+#define OFFSET_SAVEDATE       120 /* added in v15 */
+#define OFFSET_CACHE_CRC      128 /* CRC32 of cache record */
+#define OFFSET_RECORD_CRC     132
+
+#define PRE20_OFFSET_INTERNALDATE    4
+#define PRE20_OFFSET_SENTDATE        8
+#define PRE20_OFFSET_SIZE           12
+#define PRE20_OFFSET_HEADER_SIZE    16
+#define PRE20_OFFSET_GMTIME         20
+#define PRE20_OFFSET_CACHE_OFFSET   24
+#define PRE20_OFFSET_LAST_UPDATED   28
+#define PRE20_OFFSET_SYSTEM_FLAGS   32
+#define PRE20_OFFSET_USER_FLAGS     36
+#define PRE20_OFFSET_SAVEDATE       52
+#define PRE20_OFFSET_CACHE_CRC     104
+#define PRE20_OFFSET_RECORD_CRC    108
+
+#define PRE16_OFFSET_CACHE_CRC      96
+#define PRE16_OFFSET_RECORD_CRC    100
+
+#define PRE13_OFFSET_CACHE_CRC      88
+#define PRE13_OFFSET_RECORD_CRC     92
+
+#define PRE10_OFFSET_MODSEQ         72
 
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)
