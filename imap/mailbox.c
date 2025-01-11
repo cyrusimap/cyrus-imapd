@@ -6176,6 +6176,9 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
         if (!record->cid)
             continue;
 
+        r = mailbox_read_basecid(mailbox, record);
+        if (r) break;
+
         struct index_record copyrecord = *record;
         copyrecord.silentupdate = silent;
         r = conversations_update_record(cstate, mailbox, NULL, &copyrecord, 1,
