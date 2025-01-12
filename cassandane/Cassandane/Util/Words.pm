@@ -45,7 +45,8 @@ use Exporter ();
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
     &random_word
-    );
+    &random_words
+);
 
 my @words;
 my @remaining;
@@ -82,6 +83,18 @@ sub random_word
         if (!scalar @words);
     @remaining = @words unless scalar @remaining;
     return $remaining[int(rand(scalar @remaining))];
+}
+
+sub random_words
+{
+    my ($count) = @_;
+    my @random_words;
+
+    while ($count-- > 0) {
+        push @random_words, random_word();
+    }
+
+    return wantarray ? @random_words : "@random_words";
 }
 
 1;
