@@ -4661,6 +4661,49 @@ EXPORTED int charset_decode_percent(struct buf *dst, const char *val)
 }
 
 // clang-format: off
+const unsigned char IS_PERCENT_ENCODE_SAFE_CHAR[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+const char NIBBLE_TO_HEX_CHAR[16] = {
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+};
+
+EXPORTED void charset_encode_percent(struct buf *dst, const char *val)
+{
+    buf_reset(dst);
+
+    const unsigned char *p = (const unsigned char*)val;
+    for ( ; *p; p++) {
+        if (IS_PERCENT_ENCODE_SAFE_CHAR[*p]) {
+            buf_putc(dst, (char) *p);
+        }
+        else {
+            buf_putc(dst, '%');
+            buf_putc(dst, NIBBLE_TO_HEX_CHAR[*p >> 4]);
+            buf_putc(dst, NIBBLE_TO_HEX_CHAR[*p & 0xf]);
+        }
+    }
+
+    buf_cstring(dst);
+}
+
 const char QSTRINGCHAR[256] = {
 /* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
  * are not permitted, all other control characters obsolete */
