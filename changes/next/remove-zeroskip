@@ -1,0 +1,14 @@
+Description:
+
+Remove experimental zeroskip database backend.
+
+
+Config changes:
+
+Remove any use of zeroskip as database backend. This backend was experimental
+and is broken.
+
+
+Upgrade instructions:
+
+Reconstruct all databases that used the zeroskip backend.

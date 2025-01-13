@@ -1492,22 +1492,6 @@ AC_SUBST([ICU_LIBS])
 AC_SUBST([ICU_CFLAGS])
 
 dnl
-dnl Check for zeroskip library, needed for zeroskip support
-dnl
-AC_ARG_WITH([zeroskip],
-	[AS_HELP_STRING([--without-zeroskip], [ignore presence of Zeroskip and disable it])],
-    [],
-    [with_zeroskip=yes])
-AS_IF([test "x$with_zeroskip" = "xyes"],
-	[ PKG_CHECK_MODULES([ZEROSKIP], [libzeroskip],
-		[ AC_DEFINE(HAVE_ZEROSKIP, [], [Do we have Zeroskip?])
-		  with_zeroskip=yes ],
-		with_zeroskip=no)])
-AC_SUBST([ZEROSKIP_LIBS])
-AC_SUBST([ZEROSKIP_CFLAGS])
-AM_CONDITIONAL([USE_ZEROSKIP], [test "x$with_zeroskip" = xyes])
-
-dnl
 dnl Check for chardet library, needed for charset detection support
 dnl
 AC_ARG_WITH([chardet],
@@ -2652,7 +2636,6 @@ Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite
-   zeroskip:           $with_zeroskip
 
 Search engine:
    squat:              $enable_squat

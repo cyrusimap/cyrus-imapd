@@ -247,7 +247,7 @@ static void usage(const char *progname)
     printf("  -d, --db             the db to run the benchmarks on\n");
     printf("                       (if not provided, will create a new db)\n");
     printf("  -t, --backend        type of the db backend to run benchmarks on\n");
-    printf("                       Available Cyrus DB's: twoskip, zeroskip\n");
+    printf("                       Available Cyrus DB's: twoskip\n");
     printf("  -n, --numrecs        number of records to write[default: 1000]\n");
     printf("  -h, --help           display this help and exit\n");
 }
@@ -480,12 +480,11 @@ int main(int argc, char *argv[])
         goto done;
     }
 
-    if (strncmp(BACKEND, "twoskip", strlen("twoskip")) == 0 ||
-        strncmp(BACKEND, "zeroskip", strlen("zeroskip")) == 0) {
+    if (strncmp(BACKEND, "twoskip", strlen("twoskip")) == 0) {
         fprintf(stderr, "Running benchmarks for `%s` backend\n", BACKEND);
     } else {
         fprintf(stderr, "%s is not a valid CyrusDB backend. ", BACKEND);
-        fprintf(stderr, "Choose between `twoskip` or `zeroskip`.\n");
+        fprintf(stderr, "Only `twoskip` is supported.\n");
         ret = EXIT_FAILURE;
         goto done;
     }
