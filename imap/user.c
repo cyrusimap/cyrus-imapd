@@ -201,7 +201,7 @@ EXPORTED const char *user_sieve_path(const char *inuser)
         int r = mboxlist_lookup_allow_all(inboxname, &mbentry, NULL);
         free(inboxname);
 
-        if (r || (mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+        if (r || (mbentry->mbtype & MBTYPE_LEGACY_DIRS) || !mbentry->uniqueid) {
             legacy = 1;
         }
         else {
@@ -274,7 +274,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 
     assert(user_isnamespacelocked(userid));
 
-    if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
+    if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS) && mbentry->uniqueid) {
         for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
             strarray_appendm(&paths,
                              mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
@@ -639,7 +639,7 @@ EXPORTED char *user_hash_xapian(const char *userid, const char *root)
     mbname = mbname_from_intname(mbentry->name);
     if (!mbname_userid(mbname)) goto out;
 
-    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS || !mbentry->uniqueid) {
         basedir = user_hash_xapian_byname(mbname, root);
     }
     else {
