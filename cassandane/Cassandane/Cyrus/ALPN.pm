@@ -254,6 +254,8 @@ sub do_https_request
 {
     my ($self, $service, $alpn_map) = @_;
 
+    local $IO::Socket::SSL::DEBUG = get_verbose();
+
     my $ca_file = abs_path("data/certs/cacert.pem");
 
     my $client = HTTP::Tiny->new(verify_SSL => 1,
