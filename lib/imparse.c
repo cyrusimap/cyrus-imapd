@@ -43,6 +43,7 @@
 #include <config.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "imparse.h"
 #include "util.h"
@@ -156,7 +157,7 @@ EXPORTED int imparse_isnatom(const char *s, int len)
     for (; len || *s; s++) {
         count++;
         if (len && count > len) break;
-        if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
+        if (*s & 0x80 || *s <= 0x1f || *s == 0x7f ||
             *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
             *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
     }
@@ -213,6 +214,92 @@ EXPORTED int imparse_isnumber(const char *s)
     for (; *s; s++) {
         if (!Uisdigit(*s)) return 0;
     }
+    return 1;
+}
+
+static int reject_http_method_tag(const char *s)
+{
+    /* Don't like tags that match HTTP methods that accept a request body!
+     * Keep this up to date with http_methods[] in httpd.c
+     * and test_istag() in imparse.testc
+     */
+    switch (s[0]) {
+    case 'A':
+        if (0 == strcmp(s, "ACL"))
+            return 1;
+        break;
+    case 'B':
+        if (0 == strcmp(s, "BIND"))
+            return 1;
+        break;
+    case 'L':
+        if (0 == strcmp(s, "LOCK"))
+            return 1;
+        break;
+    case 'M':
+        if (0 == strcmp(s, "MKCALENDAR"))
+            return 1;
+        else if (0 == strcmp(s, "MKCOL"))
+            return 1;
+        break;
+    case 'P':
+        if (0 == strcmp(s, "PATCH"))
+            return 1;
+        else if (0 == strcmp(s, "POST"))
+            return 1;
+        else if (0 == strcmp(s, "PROPFIND"))
+            return 1;
+        else if (0 == strcmp(s, "PROPPATCH"))
+            return 1;
+        else if (0 == strcmp(s, "PUT"))
+            return 1;
+        break;
+    case 'R':
+        if (0 == strcmp(s, "REPORT"))
+            return 1;
+        break;
+    case 'S':
+        if (0 == strcmp(s, "SEARCH"))
+            return 1;
+        break;
+    case 'U':
+        if (0 == strcmp(s, "UNBIND"))
+            return 1;
+        break;
+    }
+
+    return 0;
+}
+
+/*
+ * Return nonzero if we like 's' as an IMAP tag
+ */
+EXPORTED int imparse_istag(const char *s, unsigned command_count)
+{
+    static const char reject[] = {
+    /*       0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    /* 0_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    /* 1_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    /* 2_ */ 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
+    /* 3_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0,
+    /* 4_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 5_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+    /* 6_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    /* 7_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
+    };
+    const unsigned char *p;
+
+    if (!s || !*s)
+        return 0;
+
+    for (p = (const unsigned char *) s; p && *p; p++) {
+        if ((*p & 0x80) || reject[*p])
+            return 0;
+    }
+
+    if (command_count == 0 && reject_http_method_tag(s))
+        return 0;
+
     return 1;
 }
 

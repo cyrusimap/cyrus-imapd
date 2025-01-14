@@ -1491,6 +1491,9 @@ static void cmdloop(void)
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
     struct applepushserviceargs applepushserviceargs;
     int readonly = config_getswitch(IMAPOPT_READONLY);
+    int syntax_errors = 0;
+    const int syntax_errors_limit = 10; /* XXX make this configurable? */
+    unsigned command_count = 0;
 
     prot_printf(imapd_out, "* OK [CAPABILITY");
     capa_response(CAPA_PREAUTH);
@@ -1579,6 +1582,14 @@ static void cmdloop(void)
             }
         }
 
+        /* too many consecutive syntax errors? probably not speaking IMAP, see
+         * ya! reduces surface area for cross-protocol attacks such as ALPACA
+         */
+        if (syntax_errors >= syntax_errors_limit) {
+            prot_printf(imapd_out, "* BYE This is an IMAP server\r\n");
+            goto done;
+        }
+
         /* Parse tag */
         c = getword(imapd_in, &tag);
         if (c == EOF) {
@@ -1589,15 +1600,24 @@ static void cmdloop(void)
             }
             goto done;
         }
-        if (c != ' ' || !imparse_isatom(tag.s) || (tag.s[0] == '*' && !tag.s[1])) {
-            prot_printf(imapd_out, "* BAD Invalid tag\r\n");
-            eatline(imapd_in, c);
-            continue;
+        if (c != ' ' || !imparse_istag(tag.s, command_count)) {
+            if (command_count) {
+                syntax_errors ++;
+                prot_printf(imapd_out, "* BAD Invalid tag\r\n");
+                eatline(imapd_in, c);
+                continue;
+            }
+            else {
+                /* bad tag on very first command? probably not speaking IMAP */
+                prot_printf(imapd_out, "* BYE This is an IMAP server\r\n");
+                goto done;
+            }
         }
 
         /* Parse command name */
         c = getword(imapd_in, &cmd);
         if (!cmd.s[0]) {
+            syntax_errors ++;
             prot_printf(imapd_out, "%s BAD Null command\r\n", tag.s);
             eatline(imapd_in, c);
             continue;
@@ -1605,6 +1625,10 @@ static void cmdloop(void)
         lcase(cmd.s);
         xstrncpy(cmdname, cmd.s, 99);
         cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+
+        /* that looks like a command, count it (but saturate, not overflow) */
+        if (command_count != UINT_MAX)
+            command_count ++;
 
         if (config_getswitch(IMAPOPT_CHATTY))
             syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
@@ -1628,9 +1652,9 @@ static void cmdloop(void)
             plaintextloginalert = NULL;
         }
 
-        /* Only Authenticate/Enable/Login/Logout/Noop/Capability/Id/Starttls
+        /* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
            allowed when not logged in */
-        if (!imapd_userid && !strchr("AELNCIS", cmd.s[0])) goto nologin;
+        if (!imapd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
 
         /* Set limit on the total number of bytes allowed for arguments */
         maxargssize_mark = prot_bytes_in(imapd_in) + maxargssize;
@@ -2300,6 +2324,9 @@ static void cmdloop(void)
                 }
                 cmd_starttls(tag.s, 0);
 
+                /* reset command count, the real imap session starts here */
+                command_count = 0;
+
                 prometheus_increment(CYRUS_IMAP_STARTTLS_TOTAL);
                 continue;
             }
@@ -2771,8 +2798,10 @@ static void cmdloop(void)
 
         default:
         badcmd:
+            syntax_errors ++;
             prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag.s);
             eatline(imapd_in, c);
+            continue;
         }
 
         /* End command timer - don't log "idle" commands */
@@ -2792,6 +2821,9 @@ static void cmdloop(void)
                                     cmdtime, nettime, cmdtime + nettime);
             }
         }
+
+        /* basic syntax validated okay, reset consecutive error counter */
+        syntax_errors = 0;
         continue;
 
     nologin:
@@ -9414,7 +9446,7 @@ static void cmd_starttls(char *tag, int imaps)
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
     if (imapd_tls_comp) imapd_compress_allowed = 0;
-#endif
+#endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 }
 #else
 void cmd_starttls(char *tag __attribute__((unused)),
@@ -9423,7 +9455,7 @@ void cmd_starttls(char *tag __attribute__((unused)),
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
           EX_SOFTWARE);
 }
-#endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#endif // HAVE_SSL
 
 static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
 {
