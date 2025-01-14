@@ -463,7 +463,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                 case ICAL_RRULE_PROPERTY: {
                     struct icalrecurrencetype *rrule =
                         icalproperty_get_recurrence(prop);
-                    ptrarray_append(&rrules, rrule);
+                    if (rrule) ptrarray_append(&rrules, rrule);
                     break;
                 }
 
