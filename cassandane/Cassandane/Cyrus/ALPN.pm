@@ -262,6 +262,11 @@ sub do_https_request
                                     SSL_verifycn_scheme => 'none',
                                     SSL_alpn_protocols => $alpn_map,
                                  });
+    my ($can_ssl, $ssl_errors) = $client->can_ssl();
+    if (!$can_ssl) {
+        xlog "HTTP::Tiny can't do SSL: $ssl_errors";
+        $self->error("HTTP::Tiny can't do SSL (see log for details");
+    }
 
     my $url = sprintf("https://%s:%s@%s:%s/dav/calendars",
                       'cassandane', 'secret',
