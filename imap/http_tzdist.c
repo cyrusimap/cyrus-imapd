@@ -1809,12 +1809,13 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 {
     icalproperty *prop;
     icaltimetype at;
-    struct icalrecurrencetype *rrule;
+    struct icalrecurrencetype *rrule = NULL;
     unsigned ver = '2';
     int hour;
 
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    rrule = icalproperty_get_recurrence(prop);
+    if (prop) rrule = icalproperty_get_recurrence(prop);
+    if (!rrule) return 0;
 
 #ifdef HAVE_RSCALE
     if (rrule->rscale && strcasecmp(rrule->rscale, "GREGORIAN")) {

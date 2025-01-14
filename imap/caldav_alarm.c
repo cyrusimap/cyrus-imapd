@@ -897,6 +897,8 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 
                 struct icalrecurrencetype *rrule =
                     icalproperty_get_recurrence(prop);
+                if (!rrule) continue;
+
                 int recur_interval = rrule->interval;
                 const char *bypart = "";
                 int disable = 0;

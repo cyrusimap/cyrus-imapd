@@ -567,6 +567,7 @@ multirrule_iterator_for_range(icalcomponent *comp,
          rrule = icalcomponent_get_next_property(comp, kind)) {
 
         struct icalrecurrencetype *recur = icalproperty_get_recurrence(rrule);
+        if (!recur) continue;
 
         /* check if span of RRULE overlaps range */
         icaltime_span recur_span = {
@@ -1502,40 +1503,40 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             /* Recurring - find widest time range that includes events */
             unsigned expand = recurring = 1;
 
-            if (rrule) {
-                do {
-                    struct icalrecurrencetype *recur =
-                        icalproperty_get_recurrence(rrule);
-                    if (!icaltime_is_null_time(recur->until)) {
-                        /* Recurrence ends - calculate dtend of last recurrence */
-                        struct icaldurationtype duration;
-                        icaltimezone *utc = icaltimezone_get_utc_timezone();
+            for (; expand && rrule;
+                 rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+                struct icalrecurrencetype *recur =
+                    icalproperty_get_recurrence(rrule);
+                if (!recur) continue;
 
-                        duration = icaltime_subtract(period.end, period.start);
-                        icaltimetype end =
-                            icaltime_add(icaltime_convert_to_zone(recur->until, utc),
-                                    duration);
+                if (!icaltime_is_null_time(recur->until)) {
+                    /* Recurrence ends - calculate dtend of last recurrence */
+                    struct icaldurationtype duration;
+                    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-                        if (icaltime_compare(period.end, end) < 0)
-                            period.end = end;
+                    duration = icaltime_subtract(period.end, period.start);
+                    icaltimetype end =
+                        icaltime_add(icaltime_convert_to_zone(recur->until, utc),
+                                     duration);
 
-                        /* Do RDATE expansion only */
-                        /* Temporarily remove RRULE to allow for expansion of
-                         * remaining recurrences. */
-                        icalcomponent_remove_property(comp, rrule);
-                        ptrarray_append(&detached_rrules, rrule);
-                    }
-                    else if (!recur->count) {
-                        /* Recurrence never ends - set end of span to eternity */
-                        period.end =
-                            icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+                    if (icaltime_compare(period.end, end) < 0)
+                        period.end = end;
 
-                        /* Skip RRULE & RDATE expansion */
-                        expand = 0;
-                    }
-                    icalrecurrencetype_unref(recur);
-                    rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
-                } while (expand && rrule);
+                    /* Do RDATE expansion only */
+                    /* Temporarily remove RRULE to allow for expansion of
+                     * remaining recurrences. */
+                    icalcomponent_remove_property(comp, rrule);
+                    ptrarray_append(&detached_rrules, rrule);
+                }
+                else if (!recur->count) {
+                    /* Recurrence never ends - set end of span to eternity */
+                    period.end =
+                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+
+                    /* Skip RRULE & RDATE expansion */
+                    expand = 0;
+                }
+                icalrecurrencetype_unref(recur);
             }
 
             /* Expand (remaining) recurrences */
@@ -2712,9 +2713,8 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             }
         }
 
-        if (rrule_prop) {
-            struct icalrecurrencetype *rrule =
-                icalproperty_get_recurrence(rrule_prop);
+        struct icalrecurrencetype *rrule = NULL;
+        if (rrule_prop && (rrule = icalproperty_get_recurrence(rrule_prop))) {
             icalrecur_iterator *ritr = NULL;
             unsigned eternal = icaltime_is_null_time(rrule->until);
             unsigned trunc_until = 0;
@@ -3287,7 +3287,7 @@ EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
 {
     icalrecurrencetype_t *rt = icalvalue_get_recur(val);
 
-    icalrecurrencetype_ref(rt);
+    if (rt) icalrecurrencetype_ref(rt);
 
     return rt;
 }

@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_freebusy_empty_rrule
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $uid = '39FCA8FE-1D4D-4BB6-8188-3AE90FD66324';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Flexibits Inc./Fantastical for iOS 3.7.21//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:00001229T190358
+DTEND:00001229T190359
+UID:$uid
+TRANSP:OPAQUE
+CREATED:20230907T165713Z
+SEQUENCE:0
+X-APPLE-TRAVEL-ADVISORY-BEHAVIOR:AUTOMATIC
+RRULE:
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my %Headers = (
+      'Content-Type' => 'text/calendar',
+      'Authorization' => $CalDAV->auth_header(),
+    );
+
+    xlog $self, "PUT vCard v3 with text UID";
+    my $href = "Default/$uid.ics";
+    my $res = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
+        content => $ical,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(201, $res->{status});
+
+    my ($data, $errors) = $CalDAV->GetFreeBusy('Default');
+
+    $self->assert_num_equals(0, scalar @$data);
+}
