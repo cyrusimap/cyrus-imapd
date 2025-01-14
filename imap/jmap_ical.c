@@ -1754,7 +1754,7 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
     json_t *recur;
 
     struct icalrecurrencetype *rrule = icalproperty_get_recurrence(prop);
-    if (rrule->freq == ICAL_NO_RECURRENCE) {
+    if (!rrule || rrule->freq == ICAL_NO_RECURRENCE) {
         recur = json_null();
         goto done;
     }
