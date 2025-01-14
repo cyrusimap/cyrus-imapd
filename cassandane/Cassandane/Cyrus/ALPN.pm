@@ -259,6 +259,7 @@ sub do_https_request
     my $client = HTTP::Tiny->new(verify_SSL => 1,
                                  SSL_options => {
                                     SSL_ca_file => $ca_file,
+                                    SSL_hostname => '', # disable SNI
                                     SSL_verifycn_scheme => 'none',
                                     SSL_alpn_protocols => $alpn_map,
                                  });
