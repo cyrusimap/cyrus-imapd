@@ -1057,6 +1057,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
             }
         }
 
+        // don't do lookups if the port number is zero
+        if (!strcmp(service, "0")) goto error;
+
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
