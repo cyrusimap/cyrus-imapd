@@ -808,6 +808,13 @@ sub _setup_http_service_objects
         scheme => ($service->is_ssl() ? 'https' : 'http'),
     );
 
+    # XXX HTTP::Tiny 0.8.3 and later have SSL_verify enabled by default, but
+    # XXX Net::DAVTalk doesn't provide any way for us to supply our CA file,
+    # XXX making setup fail with certificate verify errors.
+    # XXX HTTP::Tiny 0.86 and later lets us set this environment variable
+    # XXX to restore the old default
+    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} = 1;
+
     if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
         require Net::CardDAVTalk;
         $self->{carddav} = Net::CardDAVTalk->new(
