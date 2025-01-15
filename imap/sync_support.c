@@ -1760,6 +1760,7 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 {
     struct dlist *fl;
     struct message_guid *tmpguid;
+    bit64 nano_internaldate;
     int r;
 
     memset(record, 0, sizeof(struct index_record));
@@ -1772,13 +1773,14 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kr, "FLAGS", &fl))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate.tv_sec))
+    if (!dlist_getnum64(kr, "INTERNALDATE", &nano_internaldate))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum64(kr, "SIZE", &record->size))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getguid(kr, "GUID", &tmpguid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    TIMESPEC_FROM_NANOSEC(&record->internaldate, nano_internaldate);
     record->guid = *tmpguid;
 
     /* parse the flags */
@@ -2126,7 +2128,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum64(il, "MODSEQ", mymodseq);
             dlist_setdate(il, "LAST_UPDATED", record->last_updated);
             sync_print_flags(il, mailbox, record);
-            dlist_setdate(il, "INTERNALDATE", record->internaldate.tv_sec);
+            dlist_setnum64(il, "INTERNALDATE",
+                           TIMESPEC_TO_NANOSEC(&record->internaldate));
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
@@ -2651,6 +2654,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
             copy.internaldate.tv_sec = mrecord.internaldate.tv_sec;
+            copy.internaldate.tv_nsec = mrecord.internaldate.tv_nsec;
             copy.savedate = mrecord.savedate;
             copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;
@@ -5807,10 +5811,12 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 static void log_record(const char *name, struct mailbox *mailbox,
                        struct index_record *record)
 {
-    syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
-          "last_updated:" TIME_T_FMT " internaldate:" TIME_T_FMT " flags:(%s) cid:" CONV_FMT,
-           name, record->uid, record->modseq,
-           record->last_updated, record->internaldate.tv_sec,
+    syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT
+           " last_updated:" TIME_T_FMT
+           " internaldate:" TIME_T_FMT UINT64_NANOSEC_FMT
+           " flags:(%s) cid:" CONV_FMT,
+           name, record->uid, record->modseq, record->last_updated,
+           record->internaldate.tv_sec, record->internaldate.tv_nsec,
            make_flags(mailbox, record), record->cid);
 }
 
@@ -5882,6 +5888,8 @@ static int compare_one_record(struct sync_client_state *sync_cs,
     if (mp->last_updated != rp->last_updated)
         goto diff;
     if (mp->internaldate.tv_sec != rp->internaldate.tv_sec)
+        goto diff;
+    if (mp->internaldate.tv_nsec != rp->internaldate.tv_nsec)
         goto diff;
     if (mp->system_flags != rp->system_flags)
         goto diff;

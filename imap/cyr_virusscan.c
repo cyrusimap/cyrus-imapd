@@ -717,7 +717,7 @@ static void append_notifications(const struct buf *template)
         if (i_mbox->msgs) {
             FILE *f = NULL;
             struct infected_msg *msg;
-            time_t t;
+            struct timespec now;
             struct protstream *pout;
             struct appendstate as;
             struct body *body = NULL;
@@ -739,8 +739,8 @@ static void append_notifications(const struct buf *template)
                 goto user_done;
             }
 
-            t = time(NULL);
-            put_notification_headers(f, outgoing_count++, t, owner);
+            clock_gettime(CLOCK_REALTIME, &now);
+            put_notification_headers(f, outgoing_count++, now.tv_sec, owner);
 
             first = 1;
             while ((msg = i_mbox->msgs)) {
@@ -804,7 +804,7 @@ static void append_notifications(const struct buf *template)
             if (!r) {
                 pout = prot_new(fd, 0);
                 prot_rewind(pout);
-                r = append_fromstream(&as, &body, pout, msgsize, t, NULL);
+                r = append_fromstream(&as, &body, pout, msgsize, &now, NULL);
                 /* n.b. append_fromstream calls append_abort itself if it fails */
                 if (!r) r = append_commit(&as);
 
