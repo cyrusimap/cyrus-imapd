@@ -2267,7 +2267,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
     if (add) {
         struct buf val = BUF_INITIALIZER;
         if (state->folders_byname) {
-            buf_putc(&val, 0x80 | CONV_GUIDREC_BYNAME_VERSION);
+            buf_putc(&val, (char) (0x80 | CONV_GUIDREC_BYNAME_VERSION));
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
@@ -2275,7 +2275,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
         }
         /* When bumping the G value version, make sure to update _guid_cb */
         else {
-            buf_putc(&val, 0x80 | CONV_GUIDREC_VERSION);
+            buf_putc(&val, (char) (0x80 | CONV_GUIDREC_VERSION));
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
