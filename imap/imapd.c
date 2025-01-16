@@ -659,6 +659,8 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
 
+void shut_down(int code) __attribute__((noreturn));
+
 static int imapd_canon_user(sasl_conn_t *conn, void *context,
                             const char *user, unsigned ulen,
                             unsigned flags, const char *user_realm,
@@ -1314,7 +1316,6 @@ out:
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     int i;
