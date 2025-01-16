@@ -50,23 +50,63 @@ const char *icalproperty_value_kind_as_string(icalproperty *prop)
         kind = icalproperty_kind_to_value_kind(icalproperty_isa(prop));
     }
 
+    // do NOT add a default label here
     switch (kind) {
+
+    case ICAL_ANY_VALUE:
+    case ICAL_NO_VALUE:
     case ICAL_X_VALUE:
+    case ICAL_XLICCLASS_VALUE:
         return "unknown";
 
     case ICAL_ACTION_VALUE:
+    case ICAL_BUSYTYPE_VALUE:
     case ICAL_CARLEVEL_VALUE:
     case ICAL_CLASS_VALUE:
     case ICAL_CMD_VALUE:
     case ICAL_METHOD_VALUE:
+    case ICAL_PARTICIPANTTYPE_VALUE:
+    case ICAL_POLLCOMPLETION_VALUE:
+    case ICAL_POLLMODE_VALUE:
+    case ICAL_PROXIMITY_VALUE:
+    case ICAL_REQUESTSTATUS_VALUE:
     case ICAL_QUERYLEVEL_VALUE:
+    case ICAL_RELATEDTO_VALUE:
+    case ICAL_RESOURCETYPE_VALUE:
     case ICAL_STATUS_VALUE:
+    case ICAL_STRING_VALUE:
+    case ICAL_TASKMODE_VALUE:
     case ICAL_TRANSP_VALUE:
         return "text";
 
-    default:
+    case ICAL_QUERY_VALUE:
+        return "cal-query";
+
+    case ICAL_ATTACH_VALUE:
+    case ICAL_BINARY_VALUE:
+    case ICAL_BOOLEAN_VALUE:
+    case ICAL_CALADDRESS_VALUE:
+    case ICAL_DATE_VALUE:
+    case ICAL_DATETIME_VALUE:
+    case ICAL_DATETIMEDATE_VALUE:
+    case ICAL_DATETIMEPERIOD_VALUE:
+    case ICAL_DURATION_VALUE:
+    case ICAL_FLOAT_VALUE:
+    case ICAL_GEO_VALUE:
+    case ICAL_INTEGER_VALUE:
+    case ICAL_LINK_VALUE:
+    case ICAL_PERIOD_VALUE:
+    case ICAL_RECUR_VALUE:
+    case ICAL_TEXT_VALUE:
+    case ICAL_TRIGGER_VALUE:
+    case ICAL_UID_VALUE:
+    case ICAL_URI_VALUE:
+    case ICAL_UTCOFFSET_VALUE:
+    case ICAL_XMLREFERENCE_VALUE:
         return icalvalue_kind_to_string(kind);
     }
+
+    return "unknown";
 }
 
 
