@@ -1474,6 +1474,7 @@ lib_libcyrus_la_SOURCES = \
     lib/cyrusdb_quotalegacy.c \
     lib/cyrusdb_skiplist.c \
     lib/cyrusdb_twoskip.c \
+    lib/cyrusdb_twom.c \
     lib/glob.c \
     lib/htmlchar.c \
     lib/htmlchar.h \

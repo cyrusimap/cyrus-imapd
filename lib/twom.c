@@ -505,7 +505,7 @@ static inline int tm_ensure(struct twom_db *db, size_t offset)
     // unmap first
     if (file->size) munmap(file->base, file->size);
 
-    // extend (could also use fseek and write a NULL byte, or 
+    // extend (could also use fseek and write a NULL byte, or
     if (ftruncate(file->fd, offset)) {
         db->error("twom failed to extend file during tm_ensure",
                    "filename=<%s> size=<%08llX> newsize=<%08llX>",
@@ -890,7 +890,7 @@ static int relocate(struct twom_txn *txn, struct tm_loc *loc)
     // correct offset for the same key from above
     int r = locate(txn, loc, key, len);
     if (r) return r;
-   
+
     // finally the old loc may now be un-referenced.  If so, we can clean it up now because
     // we have successfully used the old offset to find the key and relocated the loc pointer
     // into the new correct location for that key.
@@ -1196,7 +1196,7 @@ static int db_is_clean(struct twom_db *db, struct tm_file *file)
 }
 
 /* run recovery on this file.
- * always called with a write lock.  This goes through and zeros out any 
+ * always called with a write lock.  This goes through and zeros out any
  * level0 pointers past the end, plus re-stitches any higher level pointers
  * to their matching next location */
 static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
@@ -2798,7 +2798,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
             if (len > 79) len = 79;
             if (key) strncpy(scratch, key, len);
             scratch[len] = 0;
-            for (i = 0; i < len; i++) 
+            for (i = 0; i < len; i++)
                 if (!scratch[i]) scratch[i] = '-';
             printf("%s kl=%llu dl=%llu lvl=%d (%s)\n",
                    typestr[type],
