@@ -203,11 +203,12 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
 /*
  * Add an iCalendar parameter to an existing JSON object.
  */
-static void icalparameter_as_json_object_member(icalparameter *param,
-                                                json_t *jparams)
+EXPORTED void icalparameter_to_jcal_parameter(icalparameter *param,
+                                              json_t *jparams)
 {
     icalparameter_kind kind;
     const char *kind_string, *value_string;
+    if (!jparams) jparams = json_null();
 
     kind = icalparameter_isa(param);
 
@@ -290,7 +291,7 @@ EXPORTED json_t *icalproperty_as_jcal_array(icalproperty *prop)
 
         if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) continue;
 
-        icalparameter_as_json_object_member(param, jparams);
+        icalparameter_to_jcal_parameter(param, jparams);
     }
     json_array_append_new(jprop, jparams);
 
