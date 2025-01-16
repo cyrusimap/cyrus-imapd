@@ -5527,7 +5527,8 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->sentdate = record.gmtime;
                 /* fall through */
             case SORT_ARRIVAL:
-                cur->internaldate = record.internaldate.tv_sec;
+                cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 break;
             case SORT_FROM:
                 cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
@@ -5570,7 +5571,8 @@ MsgData **index_msgdata_load(struct index_state *state,
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate.tv_sec;
+                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
@@ -5596,7 +5598,8 @@ MsgData **index_msgdata_load(struct index_state *state,
 #endif
                 if (!cur->savedate) {
                     /* If not snoozed in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate.tv_sec;
+                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 }
                 break;
             case LOAD_IDS:
@@ -5962,21 +5965,21 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(md1->msgno, md2->msgno);
             break;
         case SORT_ARRIVAL:
-            ret = numcmp(md1->internaldate, md2->internaldate);
+            ret = numcmp(md1->internaldate.tv_sec, md2->internaldate.tv_sec);
             break;
         case SORT_CC:
             ret = strcmpsafe(md1->cc, md2->cc);
             break;
         case SORT_DATE: {
-            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate;
-            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate;
+            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate.tv_sec;
+            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate.tv_sec;
             ret = numcmp(d1, d2);
             break;
         }
         case SORT_SNOOZEDUNTIL:
         case SORT_SAVEDATE: {
-            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate;
-            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate;
+            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate.tv_sec;
+            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate.tv_sec;
             ret = numcmp(d1, d2);
             break;
         }
@@ -6176,7 +6179,7 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md1->internaldate - md2->internaldate;
+    ret = md1->internaldate.tv_sec - md2->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md1->createdmodseq - md2->createdmodseq;
@@ -6198,7 +6201,7 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md2->internaldate - md1->internaldate;
+    ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md2->createdmodseq - md1->createdmodseq;
@@ -6223,7 +6226,7 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     ret = md2->hasflag - md1->hasflag;
     if (ret) return ret;
 
-    ret = md2->internaldate - md1->internaldate;
+    ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md2->createdmodseq - md1->createdmodseq;
@@ -7132,8 +7135,8 @@ static void find_most_recent(Thread *thread, MsgData *recent)
     Thread *child;
 
     /* test the head node */
-    if (thread->msgdata->internaldate > recent->internaldate)
-        recent->internaldate = thread->msgdata->internaldate;
+    if (thread->msgdata->internaldate.tv_sec > recent->internaldate.tv_sec)
+        recent->internaldate.tv_sec = thread->msgdata->internaldate.tv_sec;
 
     /* test the children recursively */
     child = thread->child;
