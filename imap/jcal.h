@@ -21,4 +21,6 @@ extern icalcomponent *jcal_array_as_icalcomponent(json_t *);
 extern json_t *icalproperty_as_jcal_array(icalproperty *prop);
 extern icalproperty *jcal_array_as_icalproperty(json_t *);
 
+extern void icalparameter_to_jcal_parameter(icalparameter *param,
+                                            json_t *jparams);
 #endif
