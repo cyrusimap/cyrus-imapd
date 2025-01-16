@@ -52,21 +52,19 @@
 /* we want to use little endian numbers, most users are on little endian machines */
 
 /* record types */
-#define DUMMY 0
-#define COMMIT 1
+#define DUMMY 1
 #define ADD 2
 #define FATADD 3
 #define REPLACE 4
 #define FATREPLACE 5
 #define DELETE 6
-#define FATDELETE 7
-static const char *typestr[] = { "DUMMY", "COMMIT", "ADD", "FATADD",
-                          "REPLACE", "FATREPLACE", "DELETE", "FATDELETE" };
-static uint8_t ptroffset[8]      = { 8,  8,  8, 24, 16, 32, 16, 32 };
-static uint8_t ancestoroffset[8] = { 0,  0,  0,  0,  8, 24,  8, 24 };
-static uint8_t fatrecord[8]      = { 0,  0,  0,  1,  0,  1,  0,  1 };
-static uint8_t haskey[8]         = { 0,  0,  1,  1,  1,  1,  1,  1 };
-static uint8_t hasval[8]         = { 0,  0,  1,  1,  1,  1,  0,  0 };
+#define COMMIT 7
+static const char *typestr[] = { NULL, "DUMMY", "ADD", "FATADD",
+                          "REPLACE", "FATREPLACE", "DELETE", "COMMIT" };
+static uint8_t ptroffset[8]      = { 0,  8,  8, 24, 16, 32,  8,  8 };
+static uint8_t ancestoroffset[8] = { 0,  0,  0,  0,  8, 24,  8,  0 };
+static uint8_t fatrecord[8]      = { 0,  0,  0,  1,  0,  1,  0,  0 };
+static uint8_t hastail[8]        = { 0,  0,  1,  1,  1,  1,  0,  0 };
 
 #define SETUP_FLAGS (TWOM_CSUM_NULL|TWOM_CSUM_XXH64|TWOM_CSUM_EXTERNAL)
 
@@ -119,7 +117,8 @@ struct tm_loc {
     size_t end;               // pointers are only valid when end matches file end
     size_t offset;            // current position
     unsigned is_exactmatch:1; // key was passed in; did we match it?
-    size_t backloc[MAXLEVEL+1];
+    size_t deleted_offset;    // was there a deletion in front of the current record?
+    size_t backloc[MAXLEVEL+1]; // previous record at every level
 };
 
 #define DIRTY (1<<0)
@@ -228,11 +227,11 @@ static inline void *twom_zmalloc(size_t bytes)
 #define HLCALC(type, level) (ptroffset[type] + (8 * (1 + level)))
 #define HEADLEN(ptr) HLCALC(TYPE(ptr), LEVEL(ptr))
 #define HEADCSUM(ptr) le32toh(*((uint32_t *)(ptr + HEADLEN(ptr))))
-#define TLCALC(type, keylen, vallen) (haskey[type] ? PAD8(keylen + 1 + (hasval[type] ? (vallen + 1) : 0)) : 0)
+#define TLCALC(type, keylen, vallen) (hastail[type] ? PAD8(keylen + vallen + 2) : 0)
 #define TAILLEN(ptr) TLCALC(TYPE(ptr), KEYLEN(ptr), VALLEN(ptr))
 #define TAILCSUM(ptr) le32toh(*((uint32_t *)(ptr + HEADLEN(ptr) + 4)))
-#define KEYLEN(ptr) (haskey[TYPE(ptr)] ? (fatrecord[TYPE(ptr)] ? KLFAT(ptr) : KLSKINNY(ptr)) : 0)
-#define KEYPTR(ptr) (haskey[TYPE(ptr)] ? (ptr + HEADLEN(ptr) + 8) : NULL)
+#define KEYLEN(ptr) (hastail[TYPE(ptr)] ? (fatrecord[TYPE(ptr)] ? KLFAT(ptr) : KLSKINNY(ptr)) : 0)
+#define KEYPTR(ptr) (hastail[TYPE(ptr)] ? (ptr + HEADLEN(ptr) + 8) : NULL)
 #define VALLEN(ptr) (fatrecord[TYPE(ptr)] ? VLFAT(ptr) : VLSKINNY(ptr))
 #define VALPTR(ptr) (ptr + HEADLEN(ptr) + 8 + KEYLEN(ptr) + 1)
 #define ANCESTOR(ptr) (ancestoroffset[TYPE(ptr)] ? le64toh(*((uint64_t *)(ptr+(ancestoroffset[TYPE(ptr)])))) : 0)
@@ -240,7 +239,6 @@ static inline void *twom_zmalloc(size_t bytes)
 #define NEXTNPTR(ptr, lvl) (ptr + ptroffset[TYPE(ptr)] + 8 * (1 + lvl))
 #define NEXT0(ptr, alt) le64toh(*((uint64_t *)NEXT0PTR(ptr, alt)))
 #define NEXTN(ptr, lvl) le64toh(*((uint64_t *)NEXTNPTR(ptr, lvl)))
-#define ADVANCE(ptr, level) (level ? NEXTN(ptr, level) : advance0(ptr))
 
 #ifdef HAVE_DECLARE_OPTIMIZE
 static size_t reclen_dummy(const char *ptr);
@@ -249,15 +247,6 @@ static size_t reclen_dummy(const char *ptr);
 static size_t reclen_dummy(const char *ptr __attribute__((unused)))
 {
     return 24 + (8 * MAXLEVEL);
-}
-
-#ifdef HAVE_DECLARE_OPTIMIZE
-static size_t reclen_commit(const char *ptr);
-    __attribute__((optimize("-O3")));
-#endif
-static size_t reclen_commit(const char *ptr __attribute__((unused)))
-{
-    return 24;
 }
 
 #ifdef HAVE_DECLARE_OPTIMIZE
@@ -304,25 +293,23 @@ static size_t reclen_fatreplace(const char *ptr)
 static size_t reclen_delete(const char *ptr);
     __attribute__((optimize("-O3")));
 #endif
-static size_t reclen_delete(const char *ptr)
+static size_t reclen_delete(const char *ptr __attribute__((unused)))
 {
-    uint8_t level = LEVEL(ptr);
-    return 32 + (8 * level) + PAD8(KLSKINNY(ptr) + 1);
+    return 24;
 }
 
 #ifdef HAVE_DECLARE_OPTIMIZE
-static size_t reclen_fatdelete(const char *ptr);
+static size_t reclen_commit(const char *ptr);
     __attribute__((optimize("-O3")));
 #endif
-static size_t reclen_fatdelete(const char *ptr)
+static size_t reclen_commit(const char *ptr __attribute__((unused)))
 {
-    uint8_t level = LEVEL(ptr);
-    return 48 + (8 * level) + PAD8(KLFAT(ptr) + 1);
+    return 24;
 }
 
 static size_t(*reclenfn[])(const char *) = {
-    reclen_dummy, reclen_commit, reclen_add, reclen_fatadd,
-    reclen_replace, reclen_fatreplace, reclen_delete, reclen_fatdelete
+    NULL, reclen_dummy, reclen_add, reclen_fatadd,
+    reclen_replace, reclen_fatreplace, reclen_delete, reclen_commit
 };
 
 #define RECLEN(ptr) (reclenfn[TYPE(ptr)](ptr))
@@ -338,6 +325,7 @@ static inline const char *safeptr(struct tm_loc *loc, size_t offset)
     if (!offset) return NULL;
     if (loc->end < offset + 24) return NULL;  // need space for the head info
     const char *base = loc->file->base + offset;
+    if (!*base) return NULL; // no type
     if (*base & ~7) return NULL; // invalid type
     if (loc->end < offset + RECLEN(base)) return NULL; // no space for entire record
     return base;
@@ -360,7 +348,7 @@ static inline uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 {
     uint32_t v = random();
     uint8_t i;
-    for(i = lvl-1; i < maxlvl; i++)
+    for(i = lvl-1; i < maxlvl-1; i++)
         if (v & (1<<i)) break;
     return i+1;
 }
@@ -760,15 +748,15 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
 static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, size_t keylen)
 {
     size_t offset = 0;
-    uint8_t level = MAXLEVEL;
+    uint8_t level = MAXLEVEL-1;
     int cmp = -1; /* never found a thing! */
     const char *ptr = NULL;
     struct tm_file *file = loc->file;
 
     // Set the location to the beginning of the file
     loc->offset = DUMMY_OFFSET;
-    loc->backloc[level] = DUMMY_OFFSET;
     loc->is_exactmatch = 0;
+    loc->deleted_offset = 0;
 
     /* if we don't even have space for the DUMMY record in our mapped file,
      * we can't locate anything */
@@ -779,50 +767,75 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
      * - there's no need to compare records, shortcircuit here */
     if (!keylen) {
         while (level) {
-            loc->backloc[level-1] = DUMMY_OFFSET;
+            loc->backloc[level] = DUMMY_OFFSET;
             level--;
         }
+        loc->backloc[0] = DUMMY_OFFSET;
         return 0;
     }
 
-    /* at every level, walk the pointers at this level until we either hit a record
-     * at or past the one we're looking for.  Note that level is unsigned, so using
-     * level-1 to avoid underrunning. */
+    /* at every level except zero, walk the pointers at this level until we either hit a record
+     * at or past the one we're looking for. */
     while (level) {
-        size_t next = ADVANCE(locptr, level - 1);
+        loc->backloc[level] = loc->offset;
 
-        loc->backloc[level-1] = loc->offset;
+        /* optimisation: if the next address is the same on levels N and N-1,
+         * we don't need to compar the key again */
+        size_t next = NEXTN(locptr, level);
+        if (next && next != offset) {
+            offset = next;
+            ptr = safeptr(loc, offset);
+            if (!ptr) return TWOM_IOERROR;
 
-        if (next) {
-            /* optimisation: if the next address is the same on levels N and N-1,
-             * we don't need to compar the key again */
-            if (next != offset) {
-                offset = next;
-                ptr = safeptr(loc, offset);
-                if (!ptr) return TWOM_IOERROR;
-                assert(LEVEL(ptr) >= level);
+            cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
+                               key, keylen);
 
-                cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
-                                   key, keylen);
-
-                /* not there?  stay at this level */
-                if (cmp < 0) {
-                    loc->offset = offset;
-                    locptr = ptr;
-                    continue;
-                }
-                /* NOTE: if we match exactly, we still need to make sure all the back
-                 * pointers at the lower levels are correct, so we still drop down to
-                 * the next level and repeat the algorithm */
+            /* not there?  stay at this level */
+            if (cmp < 0) {
+                loc->offset = offset;
+                locptr = ptr;
+                continue;
             }
+            /* NOTE: if we match exactly, we still need to make sure all the back
+             * pointers at the lower levels are correct, so we still drop down to
+             * the next level and repeat the algorithm */
         }
 
         level--;
     }
 
+    while (loc->offset) {
+        loc->backloc[0] = loc->offset;
+        size_t next = advance0(locptr);
+        if (!next) break; // reached the end
+
+        offset = next;
+        ptr = safeptr(loc, offset);
+        if (!ptr) return TWOM_IOERROR;
+        if (TYPE(ptr) == DELETE) {
+            loc->deleted_offset = offset;
+            offset = ANCESTOR(ptr);
+            ptr = safeptr(loc, offset);
+            if (!ptr) return TWOM_IOERROR;
+        }
+        else {
+            loc->deleted_offset = 0;
+        }
+
+        cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
+                           key, keylen);
+
+        if (cmp >= 0)
+            break;
+        // if we match exactly or see into the future, we're there!
+
+        loc->offset = offset;
+        locptr = ptr;
+    }
+
     /* now that we've finished looping through every level, the backloc array points to
      * the immediately previous record at every level, and offset points to either the
-     * exact match record, or the record immediately afterwards, aka ADVANCE(backloc[0]).
+     * exact match record, or the record immediately afterwards.
      */
 
     // found an exact match?  Great
@@ -938,6 +951,15 @@ static int advance_loc(struct twom_txn *txn, struct tm_loc *loc)
 
     ptr = safeptr(loc, offset);
     if (!ptr) return TWOM_IOERROR;
+    if (TYPE(ptr) == DELETE) {
+        loc->deleted_offset = offset;
+        offset = ANCESTOR(ptr);
+        ptr = safeptr(loc, offset);
+        if (!ptr) return TWOM_IOERROR;
+    }
+    else {
+        loc->deleted_offset = 0;
+    }
 
     /* make sure this record is complete */
     loc->offset = offset;
@@ -982,6 +1004,15 @@ static int find_loc(struct twom_txn *txn, struct tm_loc *loc, const char *key, s
         }
         const char *ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
+        if (TYPE(ptr) == DELETE) {
+            loc->deleted_offset = offset;
+            offset = ANCESTOR(ptr);
+            ptr = safeptr(loc, offset);
+            if (!ptr) return TWOM_IOERROR;
+        }
+        else {
+            loc->deleted_offset = 0;
+        }
         cmp = loc->file->compar(KEYPTR(ptr), KEYLEN(ptr), key, keylen);
         if (cmp > 0) {
             // it's in the gap
@@ -1002,6 +1033,54 @@ static int find_loc(struct twom_txn *txn, struct tm_loc *loc, const char *key, s
 
     // not immediately here or next, locate from scratch
     return locate(txn, loc, key, keylen);
+}
+
+static int delete_here(struct twom_txn *txn, struct tm_loc *loc)
+{
+    struct twom_db *db = txn->db;
+    struct tm_file *file = loc->file;
+    size_t offset = file->written_size;
+    struct tm_header *header = &file->header;
+
+    size_t headlen = 16;
+    size_t reclen = 24;
+
+    int r = tm_ensure(db, offset + reclen);
+    if (r) return r;
+
+    // loca may have refreshed
+    char *base = file->base + offset;
+    memset(base, 0, reclen);
+
+    char *addr = base;
+
+    *((uint8_t *)(addr)) = DELETE;
+    addr += 8;
+
+    char *backptr = file->base + loc->backloc[0];
+    char *prevptr = backptr;
+    *((uint64_t *)(addr)) = htole64(loc->offset);
+    _setloc(file, backptr, 0, offset);
+    addr += 8;
+
+    // update the old checksum
+    _recsum(file, prevptr);
+
+    *((uint32_t *)(addr)) = htole32(file->csum(base, headlen));
+
+    /* update header to know details of new record */
+    header->dirty_size += reclen;
+
+    // track that we've added the record
+    loc->deleted_offset = offset;
+    file->written_size += reclen;
+    txn->end = file->written_size;
+    loc->end = file->written_size;
+
+    // file definitely needs to be flushed now
+    file->dirty = 1;
+
+    return 0;
 }
 
 /* overall "store" function - update the value in the current loc.
@@ -1041,17 +1120,23 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     }
 
     if (loc->is_exactmatch) {
-        ancestor = loc->offset;
-        // if it's not already a delete
-        if (hasval[TYPE(locptr)]) {
+        // if was a delete we'll point back to that
+        if (loc->deleted_offset) {
+            assert(val); // can't replace a delete with another delete!
+            ancestor = loc->deleted_offset;
+        }
+        // if it's not already a delete, we replace it
+        else {
+            ancestor = loc->offset;
             header->num_records--;
             header->dirty_size += RECLEN(locptr);
         }
-        else assert(val); // can't replace a delete with another delete!
         // new type
         type = val ? REPLACE : DELETE;
     }
     else assert(val); // can't start with a delete
+
+    if (type == DELETE) return delete_here(txn, loc);
 
     if (keylen > UINT16_MAX || vallen > UINT32_MAX)
         type++; // the FAT versions are all one more than the non-FAT versions
@@ -1155,7 +1240,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         if (keyoffset) key = file->base + keyoffset;
         memcpy(addr + 8, key, keylen);
         addr[8+keylen] = 0;
-        if (hasval[type]) {
+        if (hastail[type]) {
             if (valoffset) val = file->base + valoffset;
             memcpy(addr + 8 + keylen + 1, val, vallen);
             addr[8+keylen+1+vallen] = 0;
@@ -1164,7 +1249,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     }
 
     /* update header to know details of new record */
-    if (hasval[type]) header->num_records++;
+    if (hastail[type]) header->num_records++;
     else header->dirty_size += reclen;
 
     /* track the highest level in this DB */
@@ -1248,6 +1333,7 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
     }
 
     while (next[0]) {
+        size_t deleted_offset = 0;
         const char *nextptr = safeptr(loc, next[0]);
         if (!nextptr) {
             db->error("failed to read next record for recovery",
@@ -1255,6 +1341,13 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
                       db->fname, (int)KEYLEN(ptr), KEYPTR(ptr),
                       (LLU)next[0]);
             return TWOM_IOERROR;
+        }
+        if (TYPE(nextptr) == DELETE) {
+            deleted_offset = next[0];
+            dirty_size += 24;
+            next[0] = ANCESTOR(nextptr);
+            nextptr = safeptr(loc, next[0]);
+            if (!nextptr) return TWOM_IOERROR;
         }
 
         cmp = file->compar(KEYPTR(nextptr), KEYLEN(nextptr),
@@ -1279,6 +1372,12 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
                           (LLU)ancestor);
                 return TWOM_IOERROR;
             }
+            if (TYPE(aptr) == DELETE) {
+                dirty_size += 24;
+                ancestor = ANCESTOR(aptr);
+                aptr = safeptr(loc, ancestor);
+                if (!aptr) return TWOM_IOERROR;
+            }
             cmp = file->compar(KEYPTR(aptr), KEYLEN(aptr),
                                KEYPTR(nextptr), KEYLEN(nextptr));
             if (cmp) {
@@ -1294,7 +1393,6 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
         }
 
         /* check for old offsets needing fixing */
-        uint8_t type = TYPE(nextptr);
         uint8_t level = LEVEL(nextptr);
 
         for (i = 1; i < level; i++) {
@@ -1324,8 +1422,8 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
             }
         }
 
-        if (hasval[type]) num_records++;
-        else dirty_size += RECLEN(nextptr);
+        if (deleted_offset) dirty_size += RECLEN(nextptr);
+        else num_records++;
 
         ptr = nextptr;
     }
@@ -1893,7 +1991,7 @@ static int commit_locked(struct twom_txn **txnp)
     *((uint64_t *)(base+8)) = htole64(header->current_size);
     *((uint32_t *)(base+16)) = htole32(file->csum(base, headlen));
 
-    file->written_size += reclen;
+    file->written_size +=reclen;
     txn->end = file->written_size;
     loc->end = file->written_size;
     file->dirty = 1;
@@ -1953,7 +2051,15 @@ static int myreplay(struct twom_txn *txn,
              return TWOM_IOERROR;
 
         // skip over commits, but replay all ADD, REPLACE or DELETE
-        if (haskey[TYPE(ptr)]) {
+        if (TYPE(ptr) == COMMIT) {
+            // skip over
+        }
+        else if (TYPE(ptr) == DELETE) {
+            const char *aptr = file->base + ANCESTOR(ptr);
+            r = cb(rock, KEYPTR(aptr), KEYLEN(aptr), NULL, 0);
+            if (r) return r;
+        }
+        else {
             r = cb(rock, KEYPTR(ptr), KEYLEN(ptr), VALPTR(ptr), VALLEN(ptr));
             if (r) return r;
         }
@@ -1988,7 +2094,7 @@ static int skipwrite(struct twom_txn *txn,
 
     const char *ptr = LOCPTR(loc);
     /* could be a delete or a replace */
-    if (loc->is_exactmatch && hasval[TYPE(ptr)]) {
+    if (loc->is_exactmatch && !loc->deleted_offset) {
         // replacing existing record
         if (flags & TWOM_IFNOTEXIST) return TWOM_EXISTS;
         if (!data) return store_here(txn, key, keylen, NULL, 0);
@@ -2126,11 +2232,19 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
 
     while (next[0]) {
         const char *nextptr = safeptr(loc, next[0]);
+        size_t deleted_offset = 0;
         if (!nextptr) {
             db->error("failed to read next record for consistent",
                       "fname=<%s> prev_key=<%.*s> offset=<%08llX>",
                     db->fname, (int)KEYLEN(ptr), KEYPTR(ptr), (LLU)next[0]);
             return TWOM_IOERROR;
+        }
+        if (TYPE(nextptr) == DELETE) {
+            deleted_offset = next[0];
+            dirty_size += 24;
+            next[0] = ANCESTOR(nextptr);
+            nextptr = safeptr(loc, next[0]);
+            if (!nextptr) return TWOM_IOERROR;
         }
 
         cmp = file->compar(KEYPTR(nextptr), KEYLEN(nextptr),
@@ -2153,6 +2267,12 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
                           (LLU)ancestor);
                 return TWOM_IOERROR;
             }
+            if (TYPE(aptr) == DELETE) {
+                dirty_size += 24;
+                ancestor = ANCESTOR(aptr);
+                aptr = safeptr(loc, ancestor);
+                if (!aptr) return TWOM_IOERROR;
+            }
             cmp = file->compar(KEYPTR(aptr), KEYLEN(aptr),
                                KEYPTR(nextptr), KEYLEN(nextptr));
             if (cmp) {
@@ -2167,7 +2287,6 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
             ancestor = ANCESTOR(aptr);
         }
 
-        uint8_t type = TYPE(nextptr);
         uint8_t level = LEVEL(nextptr);
         for (i = 1; i < level; i++) {
             /* check the old pointer was to here */
@@ -2184,8 +2303,8 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
         next[0] = advance0(nextptr);
 
         // count if record or tombstone
-        if (hasval[type]) num_records++;
-        else dirty_size += RECLEN(nextptr);
+        if (deleted_offset) dirty_size += RECLEN(nextptr);
+        else num_records++;
 
         ptr = nextptr;
     }
@@ -2406,15 +2525,17 @@ int twom_txn_fetch(struct twom_txn *txn,
 
     const char *ptr = LOCPTR(loc);
     size_t offset = loc->offset;
+    size_t deleted = loc->deleted_offset;
     while (offset >= txn->end) {
         offset = ANCESTOR(ptr);
         if (!offset) return TWOM_NOTFOUND;
         ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
+        deleted = (TYPE(ptr) == DELETE) ? offset : 0;
     }
 
     /* active ancestor must have been a delete */
-    if (!hasval[TYPE(ptr)]) return TWOM_NOTFOUND;
+    if (deleted) return TWOM_NOTFOUND;
 
     r = check_tailcsum(txn, loc->file, ptr, offset);
     if (r) return r;
@@ -2499,15 +2620,17 @@ again:
     // ancestor?
     const char *ptr = LOCPTR(loc);
     size_t offset = loc->offset;
+    size_t deleted = loc->deleted_offset;
     while (offset >= txn->end) {
         offset = ANCESTOR(ptr);
         if (!offset) goto again;
         ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
+        deleted = (TYPE(ptr) == DELETE) ? offset : 0;
     }
 
     // latest is a delete?  move along
-    if (!hasval[TYPE(ptr)]) goto again;
+    if (deleted) goto again;
 
     // we have a returnable value!
     r = check_tailcsum(txn, loc->file, ptr, offset);
@@ -2541,7 +2664,7 @@ int twom_cursor_replace(struct twom_cursor *cur,
     const char *key = KEYPTR(ptr);
     size_t keylen = KEYLEN(ptr);
     /* could be a delete or a replace */
-    if (hasval[TYPE(ptr)]) {
+    if (hastail[TYPE(ptr)]) {
         // replacing existing record
         if (flags & TWOM_IFNOTEXIST) return TWOM_EXISTS;
         if (!data) return store_here(cur->txn, key, keylen, NULL, 0);
@@ -2791,6 +2914,9 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
         uint8_t type = TYPE(ptr);
         if (type == COMMIT) {
             printf("COMMIT start=%08llX\n", (LLU)NEXT0(ptr, 0));
+        }
+        else if (type == DELETE) {
+            printf("DELETE ancestor=%08llX\n", (LLU)NEXT0(ptr, 0));
         }
         else {
             const char *key = KEYPTR(ptr);
