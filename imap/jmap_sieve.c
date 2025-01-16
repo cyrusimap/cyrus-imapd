@@ -1604,6 +1604,8 @@ static json_t *_fileinto(json_t *args, sieve_fileinto_context_t *fc)
         json_object_set_new(args, "mailboxid", json_string(fc->mailboxid));
     if (fc->do_create)
         json_object_set_new(args, "create", json_true());
+    if (fc->copy)
+        json_object_set_new(args, "copy", json_true());
 
     return _strlist(args, "flags", fc->imapflags);
 }
@@ -1884,6 +1886,45 @@ static void sieve_log(void *sc __attribute__((unused)),
     json_array_append_new(m->actions, json_pack("[s {} [s]]", "log", text));
 }
 
+static int processcal(void *ac,
+                      void *ic __attribute__((unused)),
+                      void *sc __attribute__((unused)),
+                      void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    sieve_cal_context_t *cal = (sieve_cal_context_t *) ac;
+    message_data_t *m = (message_data_t *) mc;
+    json_t *args = json_object();
+
+    if (cal->calendarid)
+        json_object_set_new(args, "calendarid", json_string(cal->calendarid));
+
+    if (cal->addresses)
+        _strlist(args, "addresses", cal->addresses);
+
+    if (cal->organizers)
+        json_object_set_new(args, "organizers", json_string(cal->organizers));
+
+    if (cal->allow_public)
+        json_object_set_new(args, "allowpublic", json_true());
+
+    if (cal->invites_only)
+        json_object_set_new(args, "invitesonly", json_true());
+
+    if (cal->delete_cancelled)
+        json_object_set_new(args, "deletecanceled", json_true());
+
+    if (cal->updates_only)
+        json_object_set_new(args, "updatesonly", json_true());
+
+    /* processimip until this goes away... */
+    json_array_append_new(m->actions,
+                          json_pack("[s o []]", "processimip", args));
+
+    return SIEVE_OK;
+}
+
+
 static int getinclude(void *sc __attribute__((unused)),
                       const char *script,
                       int isglobal __attribute__((unused)),
@@ -1933,7 +1974,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     const char *key, *scriptid = NULL;
     const char *bcname = NULL, *tmpname = NULL;
-    json_t *arg, *emailids = NULL, *envelope = NULL, *err = NULL;
+    json_t *arg, *emailids = NULL, *envelope = NULL, *variables = NULL, *err = NULL;
     strarray_t env_from = STRARRAY_INITIALIZER;
     strarray_t env_to = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -1944,6 +1985,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_execute_t *exe = NULL;
     time_t last_vaca_resp = 0;
     int r;
+    hash_table vars = HASH_TABLE_INITIALIZER;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -1961,6 +2003,10 @@ static int jmap_sieve_test(struct jmap_req *req)
 
         else if (!strcmp(key, "envelope")) {
             envelope = arg;
+        }
+
+        else if (!strcmp(key, "variables")) {
+            variables = arg;
         }
 
         else if (!strcmp(key, "lastVacationResponse")) {
@@ -2019,6 +2065,26 @@ static int jmap_sieve_test(struct jmap_req *req)
         envelope = NULL;
     }
 
+    /* variables */
+    if (JNOTNULL(variables) && json_is_object(variables)) {
+        jmap_parser_push(&parser, "variables");
+
+        construct_hash_table(&vars, 16, 0);
+
+        const char *key;
+        json_t *value;
+
+        json_object_foreach(variables, key, value) {
+            if (strlen(key) && sieve_is_identifier((char *)key) && json_is_string(value)) {
+                hash_insert(key, xstrdup(json_string_value(value)), &vars);
+            } else {
+                jmap_parser_invalid(&parser, key);
+            }
+        }
+    } else if JNOTNULL(variables) {
+        jmap_parser_invalid(&parser, "variables");
+    }
+
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s s:O}", "type", "invalidArguments",
                         "arguments", parser.invalid);
@@ -2053,7 +2119,7 @@ static int jmap_sieve_test(struct jmap_req *req)
         if (err) goto done;
 
         /* Generate temporary bytecode file */
-        static char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
+        char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *errors = NULL;
@@ -2073,6 +2139,9 @@ static int jmap_sieve_test(struct jmap_req *req)
                             "description", "unable to generate bytecode");
         }
         else if ((fd = mkstemp(template)) < 0) {
+            xsyslog(LOG_WARNING,
+                    "failed to create template", "template=<%s>", template);
+
             err = json_pack("{s:s s:s}", "type", "serverFail",
                             "description", "unable to open temporary file");
         }
@@ -2098,6 +2167,8 @@ static int jmap_sieve_test(struct jmap_req *req)
         goto done;
     }
 
+    interp_ctx.cstate = req->cstate;
+
     /* create interpreter */
     interp = sieve_interp_alloc(&interp_ctx);
     sieve_register_header(interp, getheader);
@@ -2122,7 +2193,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_notify(interp, notify, NULL);
     sieve_register_snooze(interp, snooze);
     sieve_register_logger(interp, sieve_log);
-        
+    sieve_register_processcal(interp, processcal);
     sieve_register_include(interp, getinclude);
     sieve_register_execute_error(interp, execute_error);
 
@@ -2166,7 +2237,9 @@ static int jmap_sieve_test(struct jmap_req *req)
             jmap_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
             err = NULL;
             m.actions = json_array();
-            sieve_execute_bytecode(exe, interp, &sd, &m);
+
+            sieve_execute_bytecode(exe, interp, &sd, &m, &vars);
+
             jmap_namespace.isutf8 = 0;
 
             if (err) {
@@ -2187,7 +2260,6 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
     }
 
-    if (interp_ctx.cstate) conversations_commit(&interp_ctx.cstate);
     if (interp_ctx.carddavdb) carddav_close(interp_ctx.carddavdb);
 
     /* Build response */
@@ -2213,6 +2285,7 @@ done:
     strarray_fini(&env_from);
     strarray_fini(&env_to);
     buf_free(&buf);
+    free_hash_table(&vars, free);
     if (tmpname) {
         /* Remove temp bytecode file */
         xunlink(tmpname);

@@ -941,14 +941,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_ptr, sieve_interp_t *i,
                   duptrack_list_t *duptrack_list, const char **errmsg);
 
 EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
-                           void *script_context, void *message_context)
+                           void *script_context, void *message_context, hash_table *prevars)
 {
     action_list_t *actions = NULL;
     notify_list_t *notify_list = NULL;
     duptrack_list_t *duptrack_list = NULL;
     /*   notify_action_t *notify_action;*/
     action_t lastaction = -1;
-    int ret;
+    int ret = SIEVE_OK;
+
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
     strarray_t imapflags = STRARRAY_INITIALIZER;
@@ -992,21 +993,56 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
         varlist_extend(&variables)->name = xstrdup(VL_MATCH_VARS);
         varlist_extend(&variables)->name = xstrdup(VL_PARSED_STRINGS);
 
-        ret = sieve_eval_bc(exe, 0, interp,
-                            script_context, message_context, &variables,
-                            actions, notify_list, duptrack_list, &errmsg);
+        /* copy any provided variables in */
+        if (prevars) {
+            hash_iter *iter = hash_table_iter(prevars);
 
-        if (ret < 0) {
-            ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
-                                 script_context, message_context, &imapflags,
-                                 actions, notify_list, lastaction, 0,
-                                 actions_string, errmsg);
+            while (hash_iter_next(iter)) {
+                const char *key = hash_iter_key(iter);
+                const char *val = hash_iter_val(iter);
+
+                if (!strlen(key) || !sieve_is_identifier((char *)key)) {
+                    struct buf err = BUF_INITIALIZER;
+
+                    buf_appendcstr(&err, "prevars: Invalid sieve identifier: ");
+                    buf_appendcstr(&err, key);
+
+                    ret = do_sieve_error(SIEVE_PARSE_ERROR, interp,
+                                         script_context, message_context, &imapflags,
+                                         actions, notify_list, lastaction, 0,
+                                         actions_string, buf_cstring(&err));
+
+                    buf_free(&err);
+
+                    break;
+                }
+
+                variable_list_t *next = varlist_extend(&variables);
+
+                next->name = xstrdup(key);
+                strarray_add(next->var, val);
+            }
+
+            hash_iter_free(&iter);
         }
-        else {
-            ret = do_action_list(interp,
-                                 script_context, message_context,
-                                 &imapflags, actions, notify_list,
-                                 actions_string, errmsg);
+
+        if (ret == SIEVE_OK) {
+            ret = sieve_eval_bc(exe, 0, interp,
+                                script_context, message_context, &variables,
+                                actions, notify_list, duptrack_list, &errmsg);
+
+            if (ret < 0) {
+                ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
+                                     script_context, message_context, &imapflags,
+                                     actions, notify_list, lastaction, 0,
+                                     actions_string, errmsg);
+            }
+            else {
+                ret = do_action_list(interp,
+                                     script_context, message_context,
+                                     &imapflags, actions, notify_list,
+                                     actions_string, errmsg);
+            }
         }
 
         varlist_fini(&variables);

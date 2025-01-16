@@ -2205,6 +2205,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 /*imapflags*/NULL,
                 cmd.u.v.fcc.create,
                 /*implicit keep target*/0,
+                /*copy*/0,
                 cmd.u.v.fcc.t.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL
@@ -2577,11 +2578,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                     strarray_appendm(vl->var, buf_release(&cal_ctx.reason));
                 }
 
-                strarray_free(cmd.u.cal.addresses);
+                free(strarray_takevf(cmd.u.cal.addresses));
                 buf_free(&cal_ctx.outcome);
                 buf_free(&cal_ctx.reason);
             }
             else {
+                *errmsg = "No processcal handler";
                 return SIEVE_RUN_ERROR;
             }
             break;

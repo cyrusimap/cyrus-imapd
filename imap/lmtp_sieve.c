@@ -2443,7 +2443,7 @@ int run_sieve(const mbname_t *mbname, sieve_interp_t *interp, deliver_data_t *ms
     }
 
     r = sieve_execute_bytecode(bc, interp,
-                               (void *) &sdata, (void *) msgdata);
+                               (void *) &sdata, (void *) msgdata, NULL);
 
     if ((r == SIEVE_OK) && (msgdata->m->id)) {
         const char *sdb = make_sieve_db(mbname_recipient(mbname, sdata.ns));

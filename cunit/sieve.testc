@@ -15,6 +15,7 @@
 #include "imap/message.h"
 #include "prot.h"
 #include "retry.h"
+#include "hash.h"
 #include "imap/spool.h"
 #include "map.h"
 #include "util.h"
@@ -769,7 +770,7 @@ static void run_message(sieve_test_context_t *ctx,
     msg = sieve_test_message_new(text, strlen(text));
     CU_ASSERT_PTR_NOT_NULL(msg);
 
-    r = sieve_execute_bytecode(ctx->exe, ctx->interp, ctx, msg);
+    r = sieve_execute_bytecode(ctx->exe, ctx->interp, ctx, msg, NULL);
     CU_ASSERT_EQUAL(r, SIEVE_OK);
 
     message_free(msg);
@@ -1584,6 +1585,38 @@ static void test_imap4flags_setflag(void)
     context_cleanup(&ctx);
 
     /* Test #2 */
+}
+
+static void test_prevars_bad(void)
+{
+    sieve_test_context_t ctx;
+    sieve_test_message_t *msg;
+    hash_table prevars = HASH_TABLE_INITIALIZER;
+    int r;
+
+    context_setup(&ctx, "");
+
+    msg = sieve_test_message_new("hello", strlen("hello"));
+    CU_ASSERT_PTR_NOT_NULL(msg);
+
+    construct_hash_table(&prevars, 16, 0);
+    hash_insert("@@ bad", (char *)"some value", &prevars);
+
+    r = sieve_execute_bytecode(ctx.exe, ctx.interp, &ctx, msg, &prevars);
+
+    free_hash_table(&prevars, NULL);
+
+    CU_ASSERT_EQUAL(r, SIEVE_PARSE_ERROR);
+
+    message_free(msg);
+
+    CU_ASSERT_EQUAL(ctx.stats.errors, 1);
+    CU_ASSERT_EQUAL(ctx.run_errors->count, 1);
+
+    CU_ASSERT_STRING_EQUAL(ctx.run_errors->data[0],
+                           "prevars: Invalid sieve identifier: @@ bad");
+
+    context_cleanup(&ctx);
 }
 
 // TODO: test
