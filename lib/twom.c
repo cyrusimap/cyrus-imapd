@@ -97,7 +97,8 @@ struct tm_file {
     size_t committed_size;  // the end of committed data
     size_t written_size;    // the end of written data (pointers will match)
     int refcount;
-    uint8_t has_lock;
+    uint8_t has_headlock;
+    uint8_t has_datalock;
     unsigned dirty:1;
     // tracking
     struct tm_file *next;
@@ -195,6 +196,7 @@ enum {
 
 #define HEADER_SIZE 96
 #define DUMMY_OFFSET HEADER_SIZE
+#define DUMMY_SIZE (24 + (8 * MAXLEVEL))
 
 static struct twom_db *open_twom = NULL;
 
@@ -246,7 +248,7 @@ static size_t reclen_dummy(const char *ptr);
 #endif
 static size_t reclen_dummy(const char *ptr __attribute__((unused)))
 {
-    return 24 + (8 * MAXLEVEL);
+    return DUMMY_SIZE;
 }
 
 #ifdef HAVE_DECLARE_OPTIMIZE
@@ -473,7 +475,7 @@ static inline int tm_commit(struct twom_db *db, size_t len)
 {
     assert(db->openfile);
     if (!db->openfile->dirty) return 0;
-    assert(db->openfile->has_lock == 2);
+    assert(db->openfile->has_datalock == 2);
     db->openfile->dirty = 0;
     if (db->nosync) return 0;
     if (db->write_txn && db->write_txn->nosync) return 0;
@@ -486,7 +488,7 @@ static inline int tm_ensure(struct twom_db *db, size_t offset)
     if (offset <= file->size) return 0;
 
     assert(file);
-    assert(file->has_lock == 2);
+    assert(file->has_datalock == 2);
 
     offset = tm_roundup(offset);
 
@@ -530,7 +532,8 @@ static void _remove_file(struct tm_file **ptr)
     struct tm_file *cur = *ptr;
     struct tm_file *next = (*ptr)->next;
     assert(!cur->refcount);
-    assert(!cur->has_lock);
+    assert(!cur->has_datalock);
+    assert(!cur->has_headlock);
     if (cur->base) munmap(cur->base, cur->size);
     if (cur->fd != -1) close(cur->fd);
     free(cur);
@@ -1299,7 +1302,7 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
     if (db_is_clean(db, db->openfile))
         return 0;
 
-    assert(db->openfile->has_lock == 2);
+    assert(db->openfile->has_datalock == 2);
     assert(loc->file == db->openfile);
     struct tm_file *file = loc->file;
 
@@ -1496,7 +1499,7 @@ static struct twom_txn *_newtxn_write(struct twom_db *db)
 {
     assert(!db->write_txn);
     assert(db->openfile);
-    assert(db->openfile->has_lock == 2);
+    assert(db->openfile->has_datalock == 2);
 
     /* create the transaction */
     struct twom_txn *txn = (struct twom_txn *)twom_zmalloc(sizeof(struct twom_txn));
@@ -1510,12 +1513,11 @@ static struct twom_txn *_newtxn_write(struct twom_db *db)
     return txn;
 }
 
-// read transaction doesn't need to have a map open, just a file
-// that we can grab a reference to and hence keep open and keep
-// reading from until the end!
 static struct twom_txn *_newtxn_read(struct twom_db *db)
 {
+    // it's OK to have a write transaction as well, we'll just use the same file
     assert(db->openfile);
+    assert(db->openfile->has_datalock);
 
     /* create the transaction */
     struct twom_txn *txn = (struct twom_txn *)twom_zmalloc(sizeof(struct twom_txn));
@@ -1534,23 +1536,33 @@ static struct twom_txn *_newtxn_read(struct twom_db *db)
 static int unlock(struct twom_db *db, struct tm_file *file)
 {
     if (!file) file = db->openfile;
-    if (!file->has_lock) return 0;
+    if (!file->has_headlock && !file->has_datalock) return 0;
     if (file == db->openfile) assert(!db->write_txn);
 
     struct flock fl;
-    for (;;) {
-        fl.l_type= F_UNLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = 0;
+    fl.l_type= F_UNLCK;
+    fl.l_whence = SEEK_SET;
+
+    fl.l_start = 0;
+    fl.l_len = HEADER_MAGIC_SIZE;
+    for (;file->has_headlock;) {
         if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
             if (errno == EINTR) continue;
             return -1;
         }
-        break;
+        file->has_headlock = 0;
     }
 
-    file->has_lock = 0;
+    fl.l_start = DUMMY_OFFSET;
+    fl.l_len = DUMMY_SIZE;
+    for (;file->has_datalock;) {
+        if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
+            if (errno == EINTR) continue;
+            return -1;
+        }
+        file->has_datalock = 0;
+    }
+
     return 0;
 }
 
@@ -1562,41 +1574,26 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     struct stat sbuf, sbuffile;
     struct flock fl;
     int r = 0;
-    int newfd;
-
     int cmd = (flags & TWOM_NONBLOCKING) ? F_SETLK : F_SETLKW;
-
     struct tm_file *file = forcefile ? forcefile : db->openfile;
 
-    // already locked?  Nice
-    if (file->has_lock == 2) {
-        if (fstat(file->fd, &sbuf) == -1) {
-            db->error("write_lock fstat failed",
-                      "filename=<%s>", db->fname);
-            r = TWOM_IOERROR;
-            goto done;
-        }
-        goto locked;
-    }
+    if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
-    // read locked?  release
-    if (file->has_lock) unlock(db, file);
-
+    fl.l_type = F_WRLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = HEADER_MAGIC_SIZE;
     for (;;) {
-        fl.l_type = F_WRLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = 0;
         if (fcntl(file->fd, cmd, &fl) < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN && cmd == F_SETLK)
                 return TWOM_LOCKED;
-            db->error("write_lock fcntl failed",
+            db->error("write_lock headlock fcntl failed",
                       "filename=<%s>", db->fname);
             return TWOM_IOERROR;
         }
 
-        file->has_lock = 2;
+        file->has_headlock = 2;
 
         if (fstat(file->fd, &sbuf) == -1) {
             db->error("write_lock fstat failed",
@@ -1616,16 +1613,13 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
         if (sbuf.st_ino == sbuffile.st_ino) break;
 
-        newfd = open(db->fname, O_RDWR, 0644);
+        int newfd = open(db->fname, O_RDWR, 0644);
         if (newfd == -1) {
             db->error("write_lock open failed",
                       "filename=<%s>", db->fname);
             r = TWOM_IOERROR;
             goto done;
         }
-
-        // unlock the old file
-        if (file) unlock(db, file);
 
         // new file, create a new mapping
         file = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
@@ -1634,7 +1628,39 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         db->openfile = file;
     }
 
- locked:
+    // lock the data section
+    fl.l_start = DUMMY_OFFSET;
+    fl.l_len = DUMMY_SIZE;
+    for (;!file->has_datalock;) {
+        if (fcntl(file->fd, cmd, &fl) < 0) {
+            if (errno == EAGAIN && cmd == F_SETLK) {
+                r = TWOM_LOCKED;
+                goto done;
+            }
+            if (errno == EINTR) continue;
+            db->error("read_lock datalock fcntl failed",
+                      "filename=<%s>", db->fname);
+            r = TWOM_IOERROR;
+            goto done;
+        }
+        file->has_datalock = 2;
+    }
+
+    // release the head section (so readers don't starve)
+    fl.l_type= F_UNLCK;
+    fl.l_start = 0;
+    fl.l_len = HEADER_MAGIC_SIZE;
+    for (;file->has_headlock;) {
+        if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
+            if (errno == EINTR) continue;
+            db->error("read_lock headunlock fcntl failed",
+                      "filename=<%s>", db->fname);
+            r = TWOM_IOERROR;
+            goto done;
+        }
+        file->has_headlock = 0;
+    }
+
     // opening a new file, create the header
     if (!sbuf.st_size) {
         struct tm_header header;
@@ -1712,25 +1738,16 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     struct flock fl;
     struct tm_file *file = forcefile ? forcefile : db->openfile;
     int cmd = (flags & TWOM_NONBLOCKING) ? F_SETLK : F_SETLKW;
-    int newfd;
 
-    // already locked?  Nice
-    if (file->has_lock) {
-        if (fstat(db->openfile->fd, &sbuf) == -1) {
-            db->error("read_lock fstat failed",
-                      "filename=<%s>", db->fname);
-            r = TWOM_IOERROR;
-            goto done;
-        }
-        goto locked;
-    }
+    if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
+
+    fl.l_type = F_RDLCK;
+    fl.l_whence = SEEK_SET;
 
 restart:
-    for (;;) {
-        fl.l_type = F_RDLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = 0;
+    fl.l_start = 0;
+    fl.l_len = HEADER_MAGIC_SIZE;
+    for (;!file->has_headlock;) {
         if (fcntl(file->fd, cmd, &fl) < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN && cmd == F_SETLK)
@@ -1740,7 +1757,7 @@ restart:
             return TWOM_IOERROR;
         }
 
-        file->has_lock = 1;
+        file->has_headlock = 1;
 
         if (fstat(file->fd, &sbuf) == -1) {
             db->error("read_lock fstat failed",
@@ -1761,18 +1778,19 @@ restart:
             r = TWOM_IOERROR;
             goto done;
         }
-        if (sbuf.st_ino == sbuffile.st_ino) break;
 
-        newfd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
-        if (newfd == -1) {
-            db->error("read_lock open failed",
-                      "filename=<%s>", db->fname);
-            unlock(db, NULL);
-            return TWOM_IOERROR;
-        }
+        // file is unchanged, we have successfully locked
+        if (sbuf.st_ino == sbuffile.st_ino) break;
 
         // unlock the old file
         unlock(db, file);
+
+        int newfd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
+        if (newfd == -1) {
+            db->error("read_lock open failed",
+                      "filename=<%s>", db->fname);
+            return TWOM_IOERROR;
+        }
 
         // new file
         file = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
@@ -1781,7 +1799,39 @@ restart:
         db->openfile = file;
     }
 
- locked:
+    // lock the data section
+    fl.l_start = DUMMY_OFFSET;
+    fl.l_len = DUMMY_SIZE;
+    for (;!file->has_datalock;) {
+        if (fcntl(file->fd, cmd, &fl) < 0) {
+            if (errno == EAGAIN && cmd == F_SETLK) {
+                r = TWOM_LOCKED;
+                goto done;
+            }
+            if (errno == EINTR) continue;
+            db->error("read_lock datalock fcntl failed",
+                      "filename=<%s>", db->fname);
+            r = TWOM_IOERROR;
+            goto done;
+        }
+        file->has_datalock = 1;
+    }
+
+    // release the head section (so writers don't starve)
+    fl.l_type= F_UNLCK;
+    fl.l_start = 0;
+    fl.l_len = HEADER_MAGIC_SIZE;
+    for (;file->has_headlock;) {
+        if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
+            if (errno == EINTR) continue;
+            db->error("read_lock headunlock fcntl failed",
+                      "filename=<%s>", db->fname);
+            r = TWOM_IOERROR;
+            goto done;
+        }
+        file->has_headlock = 0;
+    }
+
     // if the existing map it too small, replace it
     if (file->size < (size_t)sbuf.st_size) {
         /* map the new space (note: we map READ|WRITE even for readonly locks,
@@ -1826,15 +1876,14 @@ badfile:
 
     if (txnp) {
         if (!*txnp) *txnp = _newtxn_read(db);
-        else {
+        else if (!(*txnp)->mvcc) {
             // if we're not on this file, change file
             if ((*txnp)->file != file) {
                 (*txnp)->file->refcount--;
                 (*txnp)->file = file;
                 (*txnp)->file->refcount++;
             }
-            if (!(*txnp)->mvcc)
-                (*txnp)->end = file->written_size;
+            (*txnp)->end = file->written_size;
         }
 
         return 0;
@@ -1975,7 +2024,7 @@ static int commit_locked(struct twom_txn **txnp)
     /* if we're committing we have a location */
     struct tm_loc *loc = &db->loc;
     assert(file == txn->file);
-    assert(file->has_lock == 2);
+    assert(file->has_datalock == 2);
 
     size_t headlen = 16;
     size_t reclen = 24;
@@ -2407,7 +2456,7 @@ int twom_db_yield(struct twom_db *db)
     if (!db->readonly) return TWOM_LOCKED;
     struct tm_file *file;
     for (file = db->openfile; file; file = file->next)
-        if (file->has_lock == 1) unlock(db, file);
+        if (file->has_datalock == 1) unlock(db, file);
     return 0;
 }
 
@@ -2419,7 +2468,7 @@ int twom_txn_yield(struct twom_txn *txn)
 {
     if (!txn) return 0;
     if (!txn->readonly) return TWOM_LOCKED;
-    if (txn->file->has_lock == 1) unlock(txn->db, txn->file);
+    if (txn->file->has_datalock == 1) unlock(txn->db, txn->file);
     return 0;
 }
 
@@ -2432,16 +2481,16 @@ int twom_db_begin_txn(struct twom_db *db, int flags, struct twom_txn **txnp)
     // the read_lock if yield or another action has released it meanwhile
     if (txn) {
         assert (txn->file);
-        if (txn->file->has_lock == 2) return 0;
+        if (txn->file->has_datalock == 2) return 0;
         if (!txn->readonly) return TWOM_LOCKED;
-        if (txn->file->has_lock) return 0;
+        if (txn->file->has_datalock) return 0;
         return read_lock(db, txnp, txn->file, flags);
     }
 
     // you can have multiple read-only transactions on a single database
     if (flags & TWOM_SHARED) {
         /* if we're already in a lock, that's fine! */
-        if (db->openfile->has_lock) {
+        if (db->openfile->has_datalock) {
             *txnp = _newtxn_read(db);
         }
         else {
@@ -2452,13 +2501,13 @@ int twom_db_begin_txn(struct twom_db *db, int flags, struct twom_txn **txnp)
     else {
         // you can't start another writable transaction if the file is
         // already locked for writing!
-        if (db->openfile->has_lock == 2) return TWOM_LOCKED;
+        if (db->openfile->has_datalock == 2) return TWOM_LOCKED;
 
         // if it's already read-locked, then we're fine to release that
         // lock, the caller will notice and refresh on next read if the
         // file has changed or extended; and it's fine to read from a
         // exclusively locked file.
-        if (db->openfile->has_lock == 1) unlock(db, db->openfile);
+        if (db->openfile->has_datalock == 1) unlock(db, db->openfile);
 
         int r = write_lock(db, txnp, NULL, flags);
         if (r) return r;
@@ -2585,7 +2634,7 @@ again:
             if (r) return r;
         }
 
-        if (!txn->file->has_lock) {
+        if (!txn->file->has_datalock) {
             r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, /*flags*/0);
             if (r) return r;
             txn->counter = 0;
@@ -3080,26 +3129,48 @@ int twom_db_should_repack(struct twom_db *db)
 int twom_db_repack(struct twom_db *db)
 {
     char newfname[1024];
-
     struct twom_txn *txn = NULL;
     struct twom_txn *newtxn = NULL;
+    int oldfd = db->openfile->fd;
+    int newfd = -1;
+
+    // lock exclusively against another process repacking
+    struct flock fl;
+    fl.l_type= F_WRLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = OFFSET_GENERATION;
+    fl.l_len = 8;
+    for (;;) {
+        if (fcntl(oldfd, F_SETLK, &fl) < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN) return TWOM_LOCKED;
+            return TWOM_IOERROR;
+        }
+        break;
+    }
 
     int r = twom_db_begin_txn(db, TWOM_SHARED|TWOM_MVCC, &txn);
     if (r) return r;
+
+    if (txn->file->fd != oldfd) {
+        // we lost a race here! When the transaction locked the file,
+        // it got a new inode, so another process has repacked meanwhile.
+        r = TWOM_LOCKED;
+        goto badfile;
+    }
 
     // don't make things worse with a broken file
     r = twom_txn_consistent(txn);
     if (r) {
         db->error("inconsistent pre-repack",
                   "filename=<%s>", db->fname);
-        twom_txn_abort(&txn);
-        return r;
+        goto badfile;
     }
 
     /* open fname.NEW */
     snprintf(newfname, sizeof(newfname), "%s.NEW", db->fname);
 
-    int flags = TWOM_NONBLOCKING; // if another file has already locked it, we lost a race
+    int flags = TWOM_NONBLOCKING; // if another file has already locked it, something is broken
     if (db->external_csum)
         flags |= TWOM_CSUM_EXTERNAL;
     else if (db->nocsum)
@@ -3113,13 +3184,16 @@ int twom_db_repack(struct twom_db *db)
 
     /* we hand-open the new file and make it the first openfile, so it has
      * the write_txn against it and all the sanity checks make sense */
-    struct tm_file *oldfile = db->openfile;
-    int fd = open(newfname, O_RDWR|O_CREAT, 0644);
-    if (fd < 0) {
-        return TWOM_IOERROR;
+    unlink(newfname);
+    newfd = open(newfname, O_RDWR|O_CREAT, 0644);
+    if (newfd < 0) {
+        r = TWOM_IOERROR;
+        goto badfile;
     }
+
+    struct tm_file *oldfile = db->openfile;
     db->openfile = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
-    db->openfile->fd = fd;
+    db->openfile->fd = newfd;
     db->openfile->next = oldfile;
 
     // we're just doing small copies, release less frequently
@@ -3128,20 +3202,7 @@ int twom_db_repack(struct twom_db *db)
     // write lock will create a new header if the file is zero sized.
     // It will have a different UUID, no records, and be generation 1
     r = write_lock(db, &newtxn, db->openfile, flags);
-    if (r) {
-        // we mustn't remove the file!
-        if (r == TWOM_LOCKED) r = 0;  // locked is OK, we're non-blocking
-        goto cancel;
-    }
-
-    // has it already repacked?  If the above doesn't hold, we lost a
-    // race.
-    if (db->openfile->header.num_records ||
-        db->openfile->header.generation > 1 ||
-        !memcmp(db->openfile->header.uuid, oldfile->header.uuid, 16)) {
-        // we mustn't remove the file!
-        goto cancel;
-    }
+    if (r) goto fail;
 
     // we'll likely need about enough space for the current
     // database, minus the dirty bytes, minus 24 bytes per
@@ -3153,11 +3214,11 @@ int twom_db_repack(struct twom_db *db)
 
     // initialise the writer location on the new file
     r = find_loc(newtxn, &db->loc, NULL, 0);
-    if (r) goto done;
+    if (r) goto fail;
 
     // mvcc process all the existing records
     r = twom_txn_foreach(txn, NULL, 0, NULL, copy_cb, newtxn, /*flags*/0);
-    if (r) goto done;
+    if (r) goto fail;
 
     /* remember the repack size at this point, because that's everything
      * which is in order!  The remaing replayed items might be deletes or
@@ -3171,7 +3232,7 @@ int twom_db_repack(struct twom_db *db)
     // we still need a read-lock at this point.  This is the critical
     // section; we must either abort, or hold the lock until the rename
     // is completed
-    assert(oldfile->has_lock);
+    assert(oldfile->has_datalock);
 
     /* same uuid */
     memcpy(newtxn->file->header.uuid, oldfile->header.uuid, 16);
@@ -3180,15 +3241,22 @@ int twom_db_repack(struct twom_db *db)
     newtxn->file->header.generation = oldfile->header.generation + 1;
 
     r = commit_locked(&newtxn);
-    if (r) goto done;
+    if (r) goto fail;
 
     /* move new file to original file name */
     r = tm_rename(db, oldfile, newfname);
-    if (r) goto done;
+    if (r) goto fail;
 
     // rename is done, we can now safely unlock the old file
     unlock(db, oldfile);
     abort_locked(&txn);
+
+    fl.l_type= F_UNLCK;
+    for (;;) {
+        if (fcntl(oldfd, F_SETLKW, &fl) < 0)
+            if (errno == EINTR) continue;
+        break;
+    }
 
     // and unlock the new file too - this is the point that new
     // processes will start work
@@ -3198,24 +3266,29 @@ int twom_db_repack(struct twom_db *db)
 
     return 0;
 
-done:
+fail:
     // unwind the new file and new txn.  This is for if we abort AFTER
     // we start writing to the new file.  In this case, the new file
     // contains rubish so we'll unlink it before unlocking.
     if (db->loc.file) db->loc.file->refcount--;
     memset(&db->loc, 0, sizeof(struct tm_loc));
     unlink(newfname);
-cancel:
-    // we either fall through, or we aborted after discovering we lost the
-    // race.  We do NOT write here (abort will have a non-dirty header)
     abort_locked(&newtxn);
-    close(fd);
     // we patch out the new file again, so db contains the oldfile again
     // (read locked) before we clean it up.  Caller will still have oldfile
     // open for its next operation, but unlocked.
+    close(newfd);
     free(db->openfile);
     db->openfile = oldfile;
+
+badfile:
+    fl.l_type= F_UNLCK;
+    for (;;) {
+        if (fcntl(oldfd, F_SETLKW, &fl) < 0)
+            if (errno == EINTR) continue;
+        break;
+    }
     db->foreach_lock_release /= 64; // don't leave things weird!
     twom_txn_abort(&txn);
-    return TWOM_IOERROR;
+    return r;
 }
