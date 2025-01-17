@@ -1708,7 +1708,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit */
 
-{ "maxargssize", "0", BYTESIZE, "UNRELEASED" }
+{ "maxargssize", "0", BYTESIZE, "3.8.3" }
 /* Maximum total size of arguments to an IMAP command that will be
    accepted by Cyrus.
    Commands with arguments that exceed this limit will be rejected. 
@@ -1726,7 +1726,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "maxliteral", "128K", BYTESIZE, "UNRELEASED" }
+{ "maxliteral", "128K", BYTESIZE, "3.8.3" }
 /* Maximum size of a single literal allowed by the IMAP parser.
 .PP
    If set to 0, a large internally-defined limit will be applied.
