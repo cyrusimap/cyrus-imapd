@@ -238,9 +238,6 @@ struct caldav_jscal_filter {
 
     enum caldav_jscal_filterop op;
     ptrarray_t subfilters;
-
-    int _have_after : 1;
-    int _have_before: 1;
 };
 
 #define CALDAV_JSCAL_FILTER_INITIALIZER { \

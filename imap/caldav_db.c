@@ -1523,11 +1523,9 @@ EXPORTED void caldav_jscal_filter_by_before(struct caldav_jscal_filter* f,
 {
     if (before) {
         f->before = *before;
-        f->_have_before = 1;
     }
     else {
         f->before = 0;
-        f->_have_before = 0;
     }
 }
 
@@ -1536,11 +1534,9 @@ EXPORTED void caldav_jscal_filter_by_after(struct caldav_jscal_filter* f,
 {
     if (after) {
         f->after = *after;
-        f->_have_after = 1;
     }
     else {
         f->after = 0;
-        f->_have_after = 0;
     }
 }
 
