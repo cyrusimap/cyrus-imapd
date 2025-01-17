@@ -5229,6 +5229,18 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
     if (mbentry && mbentry->acl) {
         rights = cyrus_acl_myrights(authstate, mbentry->acl);
 
+        /* Add in implicit rights */
+        if (httpd_userisadmin) {
+            rights |= ACL_LOOKUP|ACL_ADMIN;
+        }
+        else if (mboxname_isscheduledmailbox(mbentry->name, MBTYPE_EMAIL)) {
+            /* This seems maybe not *quite* right, but: do not apply implicit
+             * owner ACL to \Scheduled, because it is weird. */
+        }
+        else if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
+            rights |= config_implicitrights;
+        }
+
         if (mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR &&
             (rights & DACL_READ) == DACL_READ) {
             rights |= DACL_READFB;
