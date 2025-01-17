@@ -1,0 +1,20 @@
+Description:
+
+Sieve notifications no longer include the "actions string".
+
+
+Config changes:
+
+None required.
+
+
+Upgrade instructions:
+
+Generally, none required.  In the unlikely event that you required
+notifications sent by Sieve to include the list of exact actions taken so far,
+you may need to update that the expectations of downstream software.
+
+
+GitHub issue:
+
+None.
