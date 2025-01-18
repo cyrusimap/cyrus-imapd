@@ -3352,4 +3352,33 @@ EXPORTED int conversations_zero_modseq(struct conversations_state *state)
     return r;
 }
 
+EXPORTED int conversations_lookup_jmapid(struct conversations_state *state,
+                                         const char *jidrep, char guidrep[])
+{
+    char key[CONV_JMAPID_SIZE+2] = "J";
+    size_t datalen = 0;
+    const char *data, *p;
+    int r;
+
+    if (strlen(jidrep) != CONV_JMAPID_SIZE)
+        return CYRUSDB_NOTFOUND;
+
+    strcat(key, jidrep);
+
+    r = cyrusdb_fetch(state->db, key, CONV_JMAPID_SIZE+1,
+                      &data, &datalen, &state->txn);
+    if (r) return r;
+
+    if (datalen < 2 + 2*MESSAGE_GUID_SIZE || !(p = strchr(data, ':')))
+        return CYRUSDB_NOTFOUND;
+
+    /* skip over ref_count */
+    datalen -= (++p - data);
+               
+    strncpy(guidrep, p, datalen);
+    guidrep[datalen] = '\0';
+
+    return 0;
+}
+
 #undef DB
