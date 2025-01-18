@@ -92,7 +92,7 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
         }
 
         if (etag) *etag = message_guid_encode(&record->guid);
-        if (lastmod) *lastmod = record->internaldate;
+        if (lastmod) *lastmod = record->internaldate.tv_sec;
     }
     else {
         /* Unmapped URL (empty resource) */
@@ -257,7 +257,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         }
 
         /* Append the message to the mailbox */
-        if ((r = append_fromstage(&as, &body, stage, now,
+        if ((r = append_fromstage(&as, &body, stage, NULL,
                                   createdmodseq, flaglist, 0, &annots))) {
             syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                    mailbox_name(mailbox), error_message(r));

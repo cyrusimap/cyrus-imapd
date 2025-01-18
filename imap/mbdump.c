@@ -154,7 +154,7 @@ static void downgrade_record(const struct index_record *record, char *buf,
         UP_modseqbase = OFFSET_MESSAGE_GUID+12;
 
     *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
-    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
+    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate.tv_sec);
     *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
     *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
@@ -1312,7 +1312,7 @@ EXPORTED int undump_mailbox(const char *mbname,
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             fname = mailbox_record_fname(mailbox, record);
-            settime.actime = settime.modtime = record->internaldate;
+            settime.actime = settime.modtime = record->internaldate.tv_sec;
             if (utime(fname, &settime) == -1) {
                 r = IMAP_IOERROR;
                 mailbox_iter_done(&iter);

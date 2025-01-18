@@ -372,13 +372,15 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     size_t msglen = buf_len(msg);
     FILE *f = NULL;
     int r;
-    time_t now = time(0);
-    time_t internaldate = holduntil;
+    struct timespec now, internaldate;
+
+    clock_gettime(CLOCK_REALTIME, &now);
+    internaldate.tv_nsec = now.tv_nsec;
 
     if (!holduntil) {
         /* Already sent */
         msglen = 0;
-        internaldate = now;
+        internaldate.tv_sec = now.tv_sec;
         strarray_append(&flags, "\\Answered");
         if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
             /* delete the EmailSubmission object immediately */
@@ -387,16 +389,19 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
             strarray_append(&flags, "\\Expunged");
         }
     }
+    else {
+        internaldate.tv_sec = holduntil;
+    }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+    if (!(f = append_newstage(mailbox_name(mailbox), internaldate.tv_sec, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
 
     /* Stage the message to send as message/rfc822 */
-    time_to_rfc5322(now, datestr, sizeof(datestr));
+    time_to_rfc5322(now.tv_sec, datestr, sizeof(datestr));
 
     if (strchr(httpd_userid, '@')) {
         /* XXX  This needs to be done via an LDAP/DB lookup */
@@ -449,7 +454,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     }
 
     /* Append the message to the mailbox */
-    r = append_fromstage_full(&as, &body, stage, internaldate, now,
+    r = append_fromstage_full(&as, &body, stage, &internaldate, now.tv_sec,
                               /*cmodseq*/0, &flags, /*nolink*/0, /*annots*/NULL);
 
     if (r) {
@@ -471,7 +476,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     sprintf(sub_id, "S%u", mailbox->i.last_uid);
 
     char sendat[RFC3339_DATETIME_MAX];
-    time_to_rfc3339(internaldate, sendat, RFC3339_DATETIME_MAX);
+    time_to_rfc3339(internaldate.tv_sec, sendat, RFC3339_DATETIME_MAX);
 
     // XXX: we should include all the other fields from the spec
     *new_submission = json_pack("{s:s, s:s, s:s}",
@@ -482,7 +487,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
 
     if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         char created[RFC3339_DATETIME_MAX];
-        time_to_rfc3339(now, created, RFC3339_DATETIME_MAX);
+        time_to_rfc3339(now.tv_sec, created, RFC3339_DATETIME_MAX);
 
         json_object_set_new(*new_submission, "created", json_string(created));
     }
@@ -1007,7 +1012,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
                 else if (!strcmp(arg, "sendAt")) {
                     time_t t = 0;
                     if (time_from_iso8601(strval, &t) == (int) strlen(strval) &&
-                        t == record->internaldate) {
+                        t == record->internaldate.tv_sec) {
                         continue;
                     }
                 }
@@ -1927,10 +1932,10 @@ static int submission_filter_match(void *vf, void *rock)
     const struct index_record *record = msg_record(sfrock->msg);
 
     /* before */
-    if (record->internaldate >= f->before) return 0;
+    if (record->internaldate.tv_sec >= f->before) return 0;
 
     /* after */
-    if (record->internaldate < f->after) return 0;
+    if (record->internaldate.tv_sec < f->after) return 0;
 
     /* createdBefore */
     if (record->savedate >= f->createdBefore) return 0;
@@ -2183,7 +2188,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         sprintf(match->id, "S%u", record->uid);
         match->uid = record->uid;
         match->created = record->savedate;
-        match->sentAt = record->internaldate;
+        match->sentAt = record->internaldate.tv_sec;
         match->emailId = sfrock.emailId;
         match->threadId = sfrock.threadId;
         match->submission = sfrock.submission;
