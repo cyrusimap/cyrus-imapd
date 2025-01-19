@@ -1655,7 +1655,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit */
 
-{ "maxargssize", 0, INT, "UNRELEASED" }
+{ "maxargssize", 0, INT, "3.6.5" }
 /* Maximum total size of arguments to an IMAP command that will be
    accepted by Cyrus.
    Commands with arguments that exceed this limit will be rejected. 
@@ -1665,7 +1665,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this
    will allow messages of any size (the default). */
 
-{ "maxliteral", 131072, INT, "UNRELEASED" }
+{ "maxliteral", 131072, INT, "3.6.5" }
 /* Maximum size in bytes of a single literal allowed by the IMAP parser.
 .PP
    Literals used for message [part] data in APPEND are only limited by
