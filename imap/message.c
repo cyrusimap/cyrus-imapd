@@ -657,9 +657,9 @@ static void message_find_part(struct body *body, const char *section,
             int encoding;
             charset_t charset = CHARSET_UNKNOWN_CHARSET;
             message_parse_charset(body, &encoding, &charset);
-            if (!strcasecmp(body->type, "text") &&
-                (!strcasecmp(body->subtype, "calendar") ||
-                 !strcasecmp(body->subtype, "vcard"))) {
+            if (!strcasecmpsafe(body->type, "text") &&
+                (!strcasecmpsafe(body->subtype, "calendar") ||
+                 !strcasecmpsafe(body->subtype, "vcard"))) {
                 /* override charset for text/calendar and text/vcard */
                 charset_free(&charset);
                 charset = charset_lookupname("utf-8");
@@ -681,7 +681,7 @@ static void message_find_part(struct body *body, const char *section,
         (*parts)[*n]->decoded_body = body->decoded_body;
         (*parts)[++(*n)] = NULL;
     }
-    else if (!strcmp(body->type, "MULTIPART")) {
+    else if (!strcmpsafe(body->type, "MULTIPART")) {
         int i;
 
         for (i = 0; i < body->numparts; i++) {
@@ -800,7 +800,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
      * bodystructure, but we don't have that one here. */
     body->charset_id = NULL;
     if (body->params) {
-        charset_t cs = !strcmp(body->type, "TEXT") ?
+        charset_t cs = !strcmpsafe(body->type, "TEXT") ?
             charset_lookupname("us-ascii") : CHARSET_UNKNOWN_CHARSET;
         message_parse_charset_params(body->params, &cs);
         if (cs != CHARSET_UNKNOWN_CHARSET) {
@@ -813,7 +813,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
     body->charset_enc = encoding_lookupname(body->encoding);
 
     /* Recurse according to type */
-    if (strcmp(body->type, "MULTIPART") == 0) {
+    if (strcmpsafe(body->type, "MULTIPART") == 0) {
         if (!sawboundary) {
             message_parse_multipart(msg, body, boundaries, efname);
         }
@@ -1125,7 +1125,7 @@ EXPORTED void message_parse_charset_params(const struct param *params,
 {
     const struct param *param;
     for (param = params; param; param = param->next) {
-        if (!strcasecmp(param->attribute, "charset")) {
+        if (!strcasecmpsafe(param->attribute, "charset")) {
             if (param->value && *param->value) {
                 charset_t cs = charset_lookupname(param->value);
                 if (cs == CHARSET_UNKNOWN_CHARSET) {
@@ -1182,9 +1182,9 @@ static void message_parse_charset(const struct body *body,
     if (!body->type || !strcmp(body->type, "TEXT")) {
         message_parse_charset_params(body->params, &charset);
     }
-    else if (!strcmp(body->type, "MESSAGE")) {
-        if (!strcmp(body->subtype, "RFC822") ||
-            !strcmp(body->subtype, "GLOBAL")) {
+    else if (!strcmpsafe(body->type, "MESSAGE")) {
+        if (!strcmpsafe(body->subtype, "RFC822") ||
+            !strcmpsafe(body->subtype, "GLOBAL")) {
             charset_free(&charset);
             charset = CHARSET_UNKNOWN_CHARSET;
         }
@@ -1840,15 +1840,15 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     memset(&preamble, 0, sizeof(struct body));
     memset(&epilogue, 0, sizeof(struct body));
-    if (strcmp(body->subtype, "DIGEST") == 0) {
+    if (strcmpsafe(body->subtype, "DIGEST") == 0) {
         defaultContentType = "MESSAGE/RFC822";
     }
 
     /* Find boundary id */
     boundary = body->params;
     while (boundary &&
-           strcmp(boundary->attribute, "BOUNDARY") != 0 &&
-           strcmp(boundary->attribute, "BOUNDARY*") != 0) {
+           strcmpsafe(boundary->attribute, "BOUNDARY") != 0 &&
+           strcmpsafe(boundary->attribute, "BOUNDARY*") != 0) {
         boundary = boundary->next;
     }
 
@@ -1962,8 +1962,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
     int len;
 
     /* Should we encode a binary part? */
-    encode = msg->encode &&
-        body->encoding && !strcasecmp(body->encoding, "binary");
+    encode = msg->encode && !strcasecmpsafe(body->encoding, "binary");
 
     while (msg->offset < msg->len) {
         line = msg->base + msg->offset;
@@ -2245,7 +2244,7 @@ EXPORTED void message_write_body(struct buf *buf, const struct body *body,
 {
     struct param *param;
 
-    if (strcmp(body->type, "MULTIPART") == 0) {
+    if (strcmpsafe(body->type, "MULTIPART") == 0) {
         int i;
 
         /* 0-part multiparts are illegal--convert to 0-len text parts */
@@ -2354,7 +2353,7 @@ EXPORTED void message_write_body(struct buf *buf, const struct body *body,
     buf_putc(buf, ' ');
     buf_printf(buf, "%u", body->content_size);
 
-    if (strcmp(body->type, "TEXT") == 0) {
+    if (strcmpsafe(body->type, "TEXT") == 0) {
         /* Text types get a line count */
         buf_putc(buf, ' ');
         buf_printf(buf, "%u", body->content_lines);
@@ -2566,7 +2565,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
                 buf_appendbit32(buf, body->subpart->subpart[part].header_size);
                 buf_appendbit32(buf, body->subpart->subpart[part].content_offset);
                 if (body->subpart->subpart[part].numparts == 0 &&
-                    strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
+                    strcmpsafe(body->subpart->subpart[part].type, "MULTIPART") == 0) {
                     /* Treat 0-part multipart as 0-length text */
                     buf_appendbit32(buf, 0);
                 }
@@ -2594,7 +2593,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart->header_offset);
             buf_appendbit32(buf, body->subpart->header_size);
             buf_appendbit32(buf, body->subpart->content_offset);
-            if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+            if (strcmpsafe(body->subpart->type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
                 message_write_nocharset(buf, NULL);
@@ -2622,7 +2621,7 @@ static void message_write_section(struct buf *buf, const struct body *body)
             buf_appendbit32(buf, body->subpart[part].header_size);
             buf_appendbit32(buf, body->subpart[part].content_offset);
             if (body->subpart[part].numparts == 0 &&
-                strcmp(body->subpart[part].type, "MULTIPART") == 0) {
+                strcmpsafe(body->subpart[part].type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 buf_appendbit32(buf, 0);
                 message_write_nocharset(buf, &body->subpart[part]);
@@ -3254,15 +3253,15 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
         c = getuint32(strm, &body->content_size);
         if (c == EOF) goto done;
 
-        if (!strcmp(body->type, "TEXT")) {
+        if (!strcmpsafe(body->type, "TEXT")) {
             /* body lines */
             c = getuint32(strm, &body->content_lines);
             if (c == EOF) goto done;
         }
         else if ((body_is_rfc822(body) && cache_version >= 13) ||
                  // Cache versions < 13 only handled message/rfc822.
-                 (!strcmp(body->type, "MESSAGE") &&
-                  !strcmp(body->subtype, "RFC822"))) {
+                 (!strcmpsafe(body->type, "MESSAGE") &&
+                  !strcmpsafe(body->subtype, "RFC822"))) {
             body->subpart = (struct body *) xzmalloc(sizeof(struct body));
 
             /* envelope structure */
@@ -4518,7 +4517,7 @@ badformat:
     c = parse_mime_params(prot, &body->params);
     if (c != ' ') goto badformat;
 
-    if (strcmp(body->type, "MULTIPART")) {
+    if (strcmpsafe(body->type, "MULTIPART")) {
         /* msgid */
         c = getnstring(prot, NULL, &buf);
         if (c != ' ') goto badformat;
@@ -4548,8 +4547,8 @@ badformat:
 
         else if ((body_is_rfc822(body) && cache_version >= 13) ||
                 // Cache versions < 13 only handled message/rfc822.
-                 (!strcasecmp(body->type, "MESSAGE") &&
-                  !strcasecmp(body->subtype, "RFC822"))) {
+                 (!strcasecmpsafe(body->type, "MESSAGE") &&
+                  !strcasecmpsafe(body->subtype, "RFC822"))) {
 
             body->numparts = 1;
             body->subpart = xzmalloc(sizeof(struct body));
@@ -4625,10 +4624,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
     if ((body_is_rfc822(body) && cache_version >= 13) ||
             // Cache versions < 13 only handled message/rfc822.
-            (!strcasecmp(body->type, "MESSAGE") &&
-             !strcasecmp(body->subtype, "RFC822"))) {
+            (!strcasecmpsafe(body->type, "MESSAGE") &&
+             !strcasecmpsafe(body->subtype, "RFC822"))) {
 
-        if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+        if (strcmpsafe(body->subpart->type, "MULTIPART") == 0) {
 
             /*
              * Part 0 of a message/rfc822 is the message header/text.
@@ -4732,7 +4731,7 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 *cachestrp += 1*4;
             *cachestrp += 4*4;
 
-            if (strcmp(body->subpart->type, "MULTIPART") == 0) {
+            if (strcmpsafe(body->subpart->type, "MULTIPART") == 0) {
                 /* Treat 0-part multipart as 0-length text */
                 *cachestrp += 1*4;
             }
