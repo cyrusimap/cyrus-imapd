@@ -46,7 +46,9 @@
 
 #include <config.h>
 
+#ifdef HAVE_ICAL
 #include <libical/ical.h>
+#endif
 
 #include "acl.h"
 #include "parseaddr.h"
@@ -78,6 +80,7 @@ enum sched_mechanism {
 
 extern const char *sched_mechanisms[];
 
+#ifdef HAVE_ICAL
 struct sched_data {
     enum sched_mechanism mech;
     unsigned flags;
@@ -179,5 +182,7 @@ extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       struct auth_state *authstate,
                                                       const char **attendeep,
                                                       icalcomponent **icalp);
+
+#endif /* HAVE_ICAL */
 
 #endif /* ITIP_SUPPORT_H */
