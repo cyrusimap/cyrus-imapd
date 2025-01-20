@@ -199,7 +199,7 @@ static void myfreestate(struct auth_state *auth_state)
 
 static strarray_t *mygroups(const struct auth_state *auth_state __attribute__((unused)))
 {
-    syslog(LOG_WARNING, "Authentication mechanism (krb) does not support groups");
+    syslog(LOG_WARNING, "Authentication mechanism (krb5) does not support groups");
     return NULL;
 }
 
