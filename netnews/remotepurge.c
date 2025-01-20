@@ -87,9 +87,7 @@
 typedef struct mbox_stats_s {
 
     int total;         /* total including those deleted */
-    int total_bytes;
     int deleted;
-    int deleted_bytes;
 
 } mbox_stats_t;
 
