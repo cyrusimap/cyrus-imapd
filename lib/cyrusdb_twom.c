@@ -58,6 +58,7 @@
 #define LLU long long unsigned int
 
 static void _twom_error_callback(const char *msg, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)))
 {
     int saved_errno = errno;
 
