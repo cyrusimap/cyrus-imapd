@@ -2088,7 +2088,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
             goto crc;
         }
 
-        record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
+        record->cid = ntohll(*(bit64 *)(buf+OFFSET_CID));
         if (version > 14) {
             record->savedate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)));
         }
@@ -2122,7 +2122,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     cache_version_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
     message_guid_import(&record->guid, buf+OFFSET_MESSAGE_GUID);
     record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
-    record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
+    record->cid = ntohll(*(bit64 *)(buf+OFFSET_CID));
     record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
     record->gmtime = ntohll(*((bit64 *)(buf+OFFSET_GMTIME)));
     record->last_updated = ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED)));
@@ -3293,7 +3293,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
             goto crc;
         }
 
-        *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->cid);
+        *((bit64 *)(buf+OFFSET_CID)) = htonll(record->cid);
 
         /* version 16 added createdmodseq, pushing the CRCs down */
         if (version < 16) {
@@ -3324,7 +3324,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(cache_version_field);
     message_guid_export(&record->guid, (char *)buf+OFFSET_MESSAGE_GUID);
     *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
-    *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->cid);
+    *((bit64 *)(buf+OFFSET_CID)) = htonll(record->cid);
     *((bit64 *)(buf+OFFSET_CREATEDMODSEQ)) = htonll(record->createdmodseq);
     *((bit64 *)(buf+OFFSET_GMTIME)) = htonll(record->gmtime);
     *((bit64 *)(buf+OFFSET_LAST_UPDATED)) = htonll(record->last_updated);
