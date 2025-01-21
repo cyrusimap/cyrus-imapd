@@ -122,6 +122,7 @@ static void test_aligned_record_offsets(void)
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_CRC     % alignof(r.cache_crc));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_OFFSET  % alignof(XXX_CACHE32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_VERSION % alignof(XXX_CACHE32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_CID           % alignof(r.cid));
     CU_ASSERT_EQUAL(0, OFFSET_CREATEDMODSEQ % alignof(r.createdmodseq));
     CU_ASSERT_EQUAL(0, OFFSET_GMTIME        % alignof(r.gmtime));
     CU_ASSERT_EQUAL(0, OFFSET_HEADER_SIZE   % alignof(r.header_size));
@@ -134,7 +135,6 @@ static void test_aligned_record_offsets(void)
     CU_ASSERT_EQUAL(0, OFFSET_SENTDATE      % alignof(r.sentdate));
     CU_ASSERT_EQUAL(0, OFFSET_SIZE          % alignof(r.size));
     CU_ASSERT_EQUAL(0, OFFSET_SYSTEM_FLAGS  % alignof(r.system_flags));
-    CU_ASSERT_EQUAL(0, OFFSET_THRID         % alignof(r.cid));
     CU_ASSERT_EQUAL(0, OFFSET_UID           % alignof(r.uid));
     CU_ASSERT_EQUAL(0, OFFSET_USER_FLAGS    % alignof(r.user_flags));
     /* this list is sorted alphabetically, don't just append */
@@ -246,6 +246,7 @@ static void test_unique_record_offsets(void)
         OFFSET(OFFSET_CACHE_CRC,        sizeof(r.cache_crc)),
         OFFSET(OFFSET_CACHE_OFFSET,     sizeof(XXX_CACHE32_TYPE)),
         OFFSET(OFFSET_CACHE_VERSION,    sizeof(XXX_CACHE32_TYPE)),
+        OFFSET(OFFSET_CID,              sizeof(r.cid)),
         OFFSET(OFFSET_CREATEDMODSEQ,    sizeof(r.createdmodseq)),
         OFFSET(OFFSET_GMTIME,           sizeof(r.gmtime)),
         OFFSET(OFFSET_HEADER_SIZE,      sizeof(r.header_size)),
@@ -258,7 +259,6 @@ static void test_unique_record_offsets(void)
         OFFSET(OFFSET_SENTDATE,         sizeof(r.sentdate)),
         OFFSET(OFFSET_SIZE,             sizeof(r.size)),
         OFFSET(OFFSET_SYSTEM_FLAGS,     sizeof(r.system_flags)),
-        OFFSET(OFFSET_THRID,            sizeof(r.cid)),
         OFFSET(OFFSET_UID,              sizeof(r.uid)),
         OFFSET(OFFSET_USER_FLAGS,       sizeof(r.user_flags)),
         /* this list is sorted alphabetically, don't just append */
