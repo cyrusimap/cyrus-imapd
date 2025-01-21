@@ -408,7 +408,7 @@ struct mailbox_iter;
 #define OFFSET_CACHE_VERSION   56
 #define OFFSET_MESSAGE_GUID    60
 #define OFFSET_MODSEQ          80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_THRID           88 /* conversation id, added in v13 */
+#define OFFSET_CID             88 /* conversation id, added in v13 */
 #define OFFSET_CREATEDMODSEQ   96 /* modseq of creation time, added in v16 */
 #define OFFSET_GMTIME         104 /* grew to 64-bit in v20 */
 #define OFFSET_LAST_UPDATED   112 /* grew to 64-bit in v20 */
