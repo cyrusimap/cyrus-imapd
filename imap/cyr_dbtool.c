@@ -340,7 +340,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "  -N     minimise use of checksums (don't check on read, create nochecksum if supported)\n");
         fprintf(stderr, "  -n     create the database if it doesn't exist\n");
         fprintf(stderr, "  -R     open the database readonly (won't create a new DB)\n");
-        fprintf(stderr, "  -n     create the database if it doesn't exist\n");
         fprintf(stderr, "  -S     don't fsync writes (dangerous)\n");
         fprintf(stderr, "  -T     use a single transaction for the action\n");
         fprintf(stderr, "  -t     don't use a transaction (default)\n");
