@@ -161,6 +161,10 @@ static struct cyrusopt_s cyrus_options[] = {
       CFGVAL(long, 0),
       CYRUS_OPT_SWITCH },
 
+    { CYRUSOPT_CYRUSDB_AUTOCONVERT,
+      CFGVAL(long, 0),
+      CYRUS_OPT_SWITCH },
+
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };
 

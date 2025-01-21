@@ -762,6 +762,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* only show the domain for users in other domains than your own (for
    backwards compatibility if you're already sharing. */
 
+{ "cyrusdb_autoconvert", 0, SWITCH, "UNRELEASED" }
+/* automatically convert any existing db to the configured engine for that
+   database if possible. */
+
 { "cyrus_group", NULL, STRING, "3.1.7" }
 /* The name of the group Cyrus services will run as.  If not configured, the
    primary group of cyrus_user will be used. Can be further overridden by
