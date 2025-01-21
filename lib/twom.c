@@ -1897,6 +1897,8 @@ done:
 /***********************  OPEN AND CLOSE *************************************/
 
 static void errors_to_stderr(const char *msg, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+static void errors_to_stderr(const char *msg, const char *fmt, ...)
 {
     va_list args;
 
