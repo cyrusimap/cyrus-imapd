@@ -763,7 +763,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    backwards compatibility if you're already sharing. */
 
 { "cyrusdb_autoconvert", 0, SWITCH, "UNRELEASED" }
-/* automatically convert any existing db to the configured engine for that
+/* Automatically convert any existing db to the configured engine for that
    database if possible. */
 
 { "cyrus_group", NULL, STRING, "3.1.7" }
