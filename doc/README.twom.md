@@ -106,7 +106,7 @@ Structures named `twom_` are public, `tm_` are entirely internal.
 
 ## Locking
 
-Twom uses a two-phase locking system, as described in [a stackoverflow post](https://stackoverflow.com/questions/27625597/how-to-implement-a-writer-preferring-read-write-lock-for-nix-processes).
+Twom uses fcntl for locking, specifically a two-phase locking system, as described in [a stackoverflow post](https://stackoverflow.com/questions/27625597/how-to-implement-a-writer-preferring-read-write-lock-for-nix-processes).
 
 Copying the key parts here:
 
