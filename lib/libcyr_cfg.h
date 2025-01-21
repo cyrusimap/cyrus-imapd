@@ -107,6 +107,8 @@ enum cyrus_opt {
     CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
     /* ACL override */
     CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
+    /* cyrusdb autoconvert */
+    CYRUSOPT_CYRUSDB_AUTOCONVERT,
 
     CYRUSOPT_LAST
 
