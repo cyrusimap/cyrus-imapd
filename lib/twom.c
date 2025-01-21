@@ -81,7 +81,7 @@ struct tm_header {
     size_t dirty_size;
     size_t repack_size;
     size_t current_size;
-    uint32_t maxlevel;
+    uint8_t maxlevel;
 };
 
 struct tm_file {
@@ -1185,7 +1185,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     addr += 8;
 
     // store all the backwards and forwards locations
-    size_t oldlevel = LEVEL(locptr);
+    uint8_t oldlevel = LEVEL(locptr);
     uint8_t i;
 
     // if it wasn't an exact match, we'll be adding the new record afterwards,
