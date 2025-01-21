@@ -92,6 +92,8 @@ struct db {
     struct cyrusdb_backend *backend;
 };
 
+int cyrusdb_convertlock_fd;
+
 static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
 {
     for (int i = 0; _backends[i]; i++) {
@@ -137,6 +139,7 @@ static int _myopen(const char *backend, const char *fname,
      *    in the transaction.  Best, but lots of work.
      * b) rename and hope... unreliable
      * c) global lock around this block of code.  Safest and least efficient.
+     *    We do that.
      */
 
     /* check if it opens normally.  Horray */
@@ -416,6 +419,9 @@ EXPORTED void cyrusdb_init(void)
                              _backends[i]->name);
         }
     }
+
+    // we create this on-demand if we need to convert a DB
+    cyrusdb_convertlock_fd = -1;
 }
 
 EXPORTED void cyrusdb_done(void)
@@ -424,6 +430,11 @@ EXPORTED void cyrusdb_done(void)
 
     for(i=0; _backends[i]; i++) {
         (_backends[i])->done();
+    }
+
+    if (cyrusdb_convertlock_fd >= 0) {
+        close(cyrusdb_convertlock_fd);
+        cyrusdb_convertlock_fd = -1;
     }
 }
 
@@ -538,13 +549,28 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     struct txn *totid = NULL;
     int r;
 
+    // make sure we have a lock file fd
+    if (cyrusdb_convertlock_fd < 0) {
+        struct buf namebuf = BUF_INITIALIZER;
+        buf_printf(&namebuf, "%s/lock/cyrusdb_convert.lock", config_dir);
+        const char *fname = buf_cstring(&namebuf);
+        cyrusdb_convertlock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
+        if (cyrusdb_convertlock_fd < 0) {
+            if (!cyrus_mkdir(fname, 0755))
+                cyrusdb_convertlock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
+            }
+        }
+        buf_free(&namebuf);
+    }
+    if (cyrusdb_convertlock_fd < 0)
+        return CYRUSDB_IOERROR;
+
+    // lock the lock file
+    if (lock_setlock(cyrusdb_convertlock_fd, LOCK_EXCLUSIVE, 0, "cyrusdb_convert.lock"))
+        return CYRUSDB_IOERROR;
+
     /* open source database */
     r = cyrusdb_open(frombackend, fromfname, 0, &fromdb);
-    if (r) goto err;
-
-    /* use a bogus fetch to lock source DB before touching the destination */
-    r = cyrusdb_fetch(fromdb, "_", 1, NULL, NULL, &fromtid);
-    if (r == CYRUSDB_NOTFOUND) r = 0;
     if (r) goto err;
 
     /* same file?  Create with a new name */
@@ -584,6 +610,8 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
 
     free(newfname);
 
+    lock_unlock(cyrusdb_convertlock_fd, "cyrusdb_convert.lock");
+
     return 0;
 
 err:
@@ -594,6 +622,8 @@ err:
 
     xunlink(tofname);
     free(newfname);
+
+    lock_unlock(cyrusdb_convertlock_fd, "cyrusdb_convert.lock");
 
     return r;
 }
