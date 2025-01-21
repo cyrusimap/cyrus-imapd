@@ -657,7 +657,7 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
     if (!strncmp(buf, "\241\002\213\015twoskip file\0\0\0\0", 16))
         return "twoskip";
 
-    if (!strncmp(buf, "\241\002\213\015twomfile", 12))
+    if (!strncmp(buf, "\241\002\213\015twomfile\0\0\0\0", 16))
         return "twom";
 
     /* unable to detect SQLite databases or flat files explicitly here */
