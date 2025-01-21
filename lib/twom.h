@@ -126,7 +126,7 @@ extern int twom_cursor_abort(struct twom_cursor **curp);
 extern int twom_txn_begin_cursor(struct twom_txn *txn,
                                  const char *key, size_t keylen,
                                  struct twom_cursor **curp, int flags);
-extern int twom_cursor_fini(struct twom_cursor **curp);
+extern void twom_cursor_fini(struct twom_cursor **curp);
 
 // transactional operations
 

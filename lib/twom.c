@@ -2778,7 +2778,7 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
         cur->started = 1;
 
 done:
-    if (r) free(cur);
+    if (r) twom_cursor_fini(&cur);
     else *curp = cur;
 
     return r;
@@ -2786,16 +2786,17 @@ done:
 
 // useful for when you started with an external transaction that you're
 // not finished with, just clean up the cursor
-int twom_cursor_fini(struct twom_cursor **curp)
+void twom_cursor_fini(struct twom_cursor **curp)
 {
     struct twom_cursor *cur = *curp;
+    if (!cur) return;
     if (cur->loc.file) {
         cur->loc.file->refcount--;
         cur->loc.file = NULL;
     }
     free(cur);
     *curp = NULL;
-    return 0;
+    return;
 }
 
 /* foreach allows for subsidiary operations in 'cb',
