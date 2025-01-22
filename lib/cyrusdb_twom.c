@@ -135,7 +135,7 @@ static void _delayed_checkpoint(void *rock)
 {
     struct dcrock *drock = rock;
     struct twom_db *db = NULL;
-    twom_init init = TWOM_INIT;
+    struct twom_open_data init = TWOM_OPEN_DATA_INITIALIZER;
     init.error = _twom_error_callback;
     init.flags = drock->flags;
     int r = _errormap(twom_db_open(drock->fname, &init, &db, NULL));
@@ -174,7 +174,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
 {
     struct twom_db *tmdb = NULL;
     struct twom_txn *tmtxn = NULL;
-    twom_init init = TWOM_INIT;
+    struct twom_open_data init = TWOM_OPEN_DATA_INITIALIZER;
     init.error = _twom_error_callback;
     init.flags = 0;
     if (flags & CYRUSDB_NOSYNC)

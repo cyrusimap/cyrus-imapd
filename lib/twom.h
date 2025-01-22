@@ -71,8 +71,7 @@ struct twom_open_data {
     void (*error)(const char *msg, const char *fmt, ...);
 };
 
-typedef struct twom_open_data twom_init;
-#define TWOM_INIT { 0, NULL, NULL, NULL }
+#define TWOM_OPEN_DATA_INITIALIZER { 0, NULL, NULL, NULL }
 
 // database operations
 extern int twom_db_open(const char *fname, struct twom_open_data *setup,
