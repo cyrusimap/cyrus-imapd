@@ -119,6 +119,7 @@ static void test_aligned_record_offsets(void)
      * not need to care about that.  Instead, keep this list sorted
      * alphabetically by the OFFSET_... name, for ease of maintenance.
      */
+    CU_ASSERT_EQUAL(0, OFFSET_BASECID       % alignof(r.basecid));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_CRC     % alignof(r.cache_crc));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_OFFSET  % alignof(XXX_CACHE32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_VERSION % alignof(XXX_CACHE32_TYPE));
@@ -243,6 +244,7 @@ static void test_unique_record_offsets(void)
         /* Keep this sorted alphabetically by the OFFSET_... name, for ease of
          * maintenance.  We'll qsort it into the order the test needs shortly.
          */
+        OFFSET(OFFSET_BASECID,          sizeof(r.basecid)),
         OFFSET(OFFSET_CACHE_CRC,        sizeof(r.cache_crc)),
         OFFSET(OFFSET_CACHE_OFFSET,     sizeof(XXX_CACHE32_TYPE)),
         OFFSET(OFFSET_CACHE_VERSION,    sizeof(XXX_CACHE32_TYPE)),

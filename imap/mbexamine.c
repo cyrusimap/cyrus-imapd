@@ -332,7 +332,10 @@ static int do_examine(struct findall_data *data, void *rock)
                     printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
 
                     if (mailbox->i.minor_version >= 13) {
-                        printf("  THRID: " CONV_FMT, record->cid);
+                        printf("  CID: " CONV_FMT, record->cid);
+
+                        if (mailbox->i.minor_version >= 20)
+                            printf("  BASECID: " CONV_FMT, record->basecid);
                     }
                 }
             }
