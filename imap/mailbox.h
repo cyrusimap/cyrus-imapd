@@ -164,15 +164,15 @@ struct index_record {
     uint16_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
-    bit64 cid;
     modseq_t createdmodseq;
+    bit64 cid;
+    bit64 basecid;
     bit32 cache_crc;
 
     /* metadata */
     uint32_t recno;
     unsigned silentupdate:1;
     unsigned ignorelimits:1;
-    bit64 basecid;
     struct cacherecord crec;
 };
 
@@ -413,8 +413,9 @@ struct mailbox_iter;
 #define OFFSET_GMTIME         104 /* grew to 64-bit in v20 */
 #define OFFSET_LAST_UPDATED   112 /* grew to 64-bit in v20 */
 #define OFFSET_SAVEDATE       120 /* added in v15 */
-#define OFFSET_CACHE_CRC      128 /* CRC32 of cache record */
-#define OFFSET_RECORD_CRC     132
+#define OFFSET_BASECID        128 /* base conversation id, added in v20 */
+#define OFFSET_CACHE_CRC      136 /* CRC32 of cache record */
+#define OFFSET_RECORD_CRC     140
 
 #define PRE20_OFFSET_INTERNALDATE    4
 #define PRE20_OFFSET_SENTDATE        8
