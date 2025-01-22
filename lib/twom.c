@@ -3294,3 +3294,18 @@ badfile:
     twom_txn_abort(&txn);
     return r;
 }
+
+const char *twom_strerror(int r)
+{
+    switch (r) {
+    case TWOM_OK: return "OK";
+    case TWOM_DONE: return "Done";
+    case TWOM_IOERROR: return "IO Error";
+    case TWOM_EXISTS: return "Exists";
+    case TWOM_INTERNAL: return "Internal Error";
+    case TWOM_NOTFOUND: return "Not Found";
+    case TWOM_LOCKED: return "Database is locked";
+    case TWOM_READONLY: return "Database is read-only";
+    default: return "Unknown error";
+    }
+}
