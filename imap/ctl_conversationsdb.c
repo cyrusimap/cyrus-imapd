@@ -285,7 +285,6 @@ static int do_zeromodseq(const char *userid)
 
     int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
-    char *inboxname = mboxname_user_mbox(userid, NULL);
 
     r = mboxlist_usermboxtree(userid, NULL, zero_modseq_cb, NULL, 0);
     if (r) goto done;
@@ -293,6 +292,7 @@ static int do_zeromodseq(const char *userid)
     r = conversations_zero_modseq(state);
     if (r) goto done;
 
+    char *inboxname = mboxname_user_mbox(userid, NULL);
     quota_init(&q, inboxname);
     r = quota_read(&q, &txn, 1);
     if (!r) {
@@ -300,14 +300,15 @@ static int do_zeromodseq(const char *userid)
         r = quota_write(&q, /*silent*/1, &txn);
     }
     quota_free(&q);
-    if (r) goto done;
-    quota_commit(&txn);
+    if (!r) {
+        quota_commit(&txn);
 
-    mboxname_zero_counters(inboxname);
+        mboxname_zero_counters(inboxname);
+    }
+    free(inboxname);
 
   done:
     conversations_commit(&state);
-    free(inboxname);
     return r;
 }
 
