@@ -138,7 +138,7 @@ static void _delayed_checkpoint(void *rock)
     twom_init init = TWOM_INIT;
     init.error = _twom_error_callback;
     init.flags = drock->flags;
-    int r = _errormap(twom_fname_open_db(drock->fname, &init, &db, NULL));
+    int r = _errormap(twom_db_open(drock->fname, &init, &db, NULL));
     if (r == CYRUSDB_NOTFOUND) {
         syslog(LOG_INFO, "twom: no file to delayed checkpoint for %s",
                drock->fname);
@@ -185,7 +185,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     }
     if (flags & CYRUSDB_CREATE)
         init.flags |= TWOM_CREATE;
-    int tmr = twom_fname_open_db(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
+    int tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
     if (tmr == TWOM_NOTFOUND && (flags & CYRUSDB_CREATE)) {
         int r = cyrus_mkdir(fname, 0755);
         if (r < 0) {
@@ -193,7 +193,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
                              "filename=<%s>", fname);
             return r;
         }
-        tmr = twom_fname_open_db(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
+        tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
     }
     if (!tmr) {
         *ret = (struct dbengine *)tmdb;

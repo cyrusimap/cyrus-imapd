@@ -75,9 +75,9 @@ typedef struct twom_open_data twom_init;
 #define TWOM_INIT { 0, NULL, NULL, NULL }
 
 // database operations
-extern int twom_fname_open_db(const char *fname, struct twom_open_data *setup,
-                              struct twom_db **dbptr,
-                              struct twom_txn **tidptr);
+extern int twom_db_open(const char *fname, struct twom_open_data *setup,
+                        struct twom_db **dbptr,
+                        struct twom_txn **tidptr);
 extern int twom_db_close(struct twom_db **dbptr);
 
 // non-transactional operations
