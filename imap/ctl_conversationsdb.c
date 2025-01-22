@@ -279,14 +279,13 @@ static int zero_modseq_cb(const mbentry_t *mbentry,
 static int do_zeromodseq(const char *userid)
 {
     imaply_strict = 0;
-    char *inboxname = mboxname_user_mbox(userid, NULL);
     struct conversations_state *state = NULL;
     struct quota q;
     struct txn *txn = NULL;
-    int r = 0;
 
-    r = conversations_open_user(userid, 0/*shared*/, &state);
+    int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
+    char *inboxname = mboxname_user_mbox(userid, NULL);
 
     r = mboxlist_usermboxtree(userid, NULL, zero_modseq_cb, NULL, 0);
     if (r) goto done;
