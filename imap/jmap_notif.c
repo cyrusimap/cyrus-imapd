@@ -140,7 +140,7 @@ static int append_eventnotif(const char *from,
                              const struct auth_state *authstate,
                              struct mailbox *notifmbox,
                              const char *calmboxname,
-                             time_t created,
+                             struct timespec *created,
                              json_t *jnotif)
 {
     struct stagemsg *stage = NULL;
@@ -206,7 +206,7 @@ static int append_eventnotif(const char *from,
     buf_reset(&buf);
 
     // Append new notification.
-    FILE *fp = append_newstage(mailbox_name(notifmbox), created,
+    FILE *fp = append_newstage(mailbox_name(notifmbox), created->tv_sec,
             strhash(ical_uid), &stage);
     if (!fp) {
         xsyslog(LOG_ERR, "append_newstage failed", "name=%s", mailbox_name(notifmbox));
@@ -221,18 +221,18 @@ static int append_eventnotif(const char *from,
     fputs("Subject: " JMAP_NOTIF_CALENDAREVENT "\r\n", fp);
 
     char date5322[RFC5322_DATETIME_MAX+1];
-    time_to_rfc5322(created, date5322, RFC5322_DATETIME_MAX);
+    time_to_rfc5322(created->tv_sec, date5322, RFC5322_DATETIME_MAX);
     fputs("Date: ", fp);
     fputs(date5322, fp);
     fputs("\r\n", fp);
 
     fprintf(fp, "Message-ID: <%s-" TIME_T_FMT "@%s>\r\n",
-                makeuuid(), created, config_servername);
+                makeuuid(), created->tv_sec, config_servername);
     fputs("Content-Type: application/json; charset=utf-8\r\n", fp);
     fputs("Content-Transfer-Encoding: 8bit\r\n", fp);
 
     struct dlist *dl = dlist_newkvlist(NULL, "N");
-    dlist_setdate(dl, "S", created);
+    dlist_setdate(dl, "S", created->tv_sec);
     dlist_setatom(dl, "T", JMAP_NOTIF_CALENDAREVENT);
     dlist_setatom(dl, "ID", ical_uid);
     dlist_setatom(dl, "NT", type);
@@ -354,7 +354,8 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
         return 0;
     }
 
-    time_t now = time(NULL);
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
 
     const char *byemail = schedule_addresses ?
         strarray_nth(schedule_addresses, 0) : NULL;
@@ -365,13 +366,13 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
     annotatemore_lookupmask(calhomename, annotname, userid, &byname);
     free(calhomename);
 
-    json_t *jnotif = build_eventnotif(type, now, userid,
+    json_t *jnotif = build_eventnotif(type, now.tv_sec, userid,
             buf_cstring(&byname), byemail, ical_uid, comment,
             is_draft, jevent, jpatch);
 
     char *from = jmap_caleventnotif_format_fromheader(userid);
     int r = append_eventnotif(from, userid, authstate, notifmbox,
-            calmboxname, now, jnotif);
+            calmboxname, &now, jnotif);
     free(from);
 
     json_decref(jnotif);
@@ -393,7 +394,7 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     const char *accountid = mbname_userid(mbname);
     struct mailbox *notifmbox = NULL;
     mbentry_t *notifmb = NULL;
-    time_t now = time(NULL);
+    struct timespec now;
     json_t *jevent = NULL;
     json_t *jpatch = NULL;
     int r = 0;
@@ -470,12 +471,13 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
         byemail = strarray_nth(schedule_addresses, 0);
     }
 
-    json_t *jnotif = build_eventnotif(type, now,
+    clock_gettime(CLOCK_REALTIME, &now);
+    json_t *jnotif = build_eventnotif(type, now.tv_sec,
             byprincipal, buf_cstring(&byname), byemail,
             ical_uid, NULL, is_draft, jevent, jpatch);
 
     r = append_eventnotif(from, userid, authstate, notifmbox,
-                          calmboxname, now, jnotif);
+                          calmboxname, &now, jnotif);
 
     json_decref(jnotif);
     buf_free(&byname);

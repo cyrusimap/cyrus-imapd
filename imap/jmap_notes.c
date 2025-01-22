@@ -572,12 +572,14 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
     char datestr[80], *from, *title, *body;
     FILE *f = NULL;
     int r = 0, isFlagged = 0, isHTML = 0, qpencode = 0;
-    time_t now = time(0);
+    struct timespec now;
     json_t *prop;
     const char *uid = NULL, *created = NULL;
 
+    clock_gettime(CLOCK_REALTIME, &now);
+
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+    if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         r = IMAP_IOERROR;
         goto done;
@@ -592,10 +594,10 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
         json_object_set_new(*new_note, "id", json_string(uid));
     }
 
-    time_to_rfc3339(now, datestr, sizeof(datestr));
+    time_to_rfc3339(now.tv_sec, datestr, sizeof(datestr));
     json_object_set_new(*new_note, "lastSaved", json_string(datestr));
 
-    time_to_rfc5322(now, datestr, sizeof(datestr));
+    time_to_rfc5322(now.tv_sec, datestr, sizeof(datestr));
 
     prop = json_object_get(note, "created");
     if (prop) created = json_string_value(prop);
@@ -685,7 +687,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
 
     /* Append the message to the mailbox */
     if (isFlagged) strarray_append(&flags, "\\Flagged");
-    r = append_fromstage(&as, &bodypart, stage, now, 0,
+    r = append_fromstage(&as, &bodypart, stage, &now, 0,
                          &flags, 0, /*annots*/NULL);
 
     if (r) {

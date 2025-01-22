@@ -8991,7 +8991,7 @@ struct email_append_detail {
 static void _email_append(jmap_req_t *req,
                           json_t *mailboxids,
                           strarray_t *keywords,
-                          time_t internaldate,
+                          struct timespec *internaldate,
                           json_t *snoozed,
                           int has_attachment,
                           const char *sourcefile,
@@ -9013,6 +9013,7 @@ static void _email_append(jmap_req_t *req,
     size_t len;
     int r = 0;
     time_t savedate = 0;
+    struct timespec now;
 
     if (json_object_size(mailboxids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
         *err = json_pack("{s:s}", "type", "tooManyMailboxes");
@@ -9023,7 +9024,8 @@ static void _email_append(jmap_req_t *req,
         goto done;
     }
 
-    if (!internaldate) internaldate = time(NULL);
+    clock_gettime(CLOCK_REALTIME, &now);
+    if (!internaldate) internaldate = &now;
 
     /* Pick the mailbox to create the message in, prefer \Snoozed then \Drafts */
     mailboxes = json_object(); /* maps mailbox ids to mboxnames */
@@ -9098,7 +9100,7 @@ static void _email_append(jmap_req_t *req,
     if (r) goto done;
 
     if (sourcefile) {
-        if (!(f = append_newstage_full(mailbox_name(mbox), internaldate, 0, &stage, sourcefile))) {
+        if (!(f = append_newstage_full(mailbox_name(mbox), internaldate->tv_sec, 0, &stage, sourcefile))) {
             syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mbox));
             r = HTTP_SERVER_ERROR;
             goto done;
@@ -9106,7 +9108,7 @@ static void _email_append(jmap_req_t *req,
     }
     else {
         /* Write the message to the filesystem */
-        if (!(f = append_newstage(mailbox_name(mbox), internaldate, 0, &stage))) {
+        if (!(f = append_newstage(mailbox_name(mbox), internaldate->tv_sec, 0, &stage))) {
             syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mbox));
             r = HTTP_SERVER_ERROR;
             goto done;
@@ -9326,7 +9328,7 @@ struct email {
     struct headers headers; /* parsed headers */
     json_t *jemail;               /* original Email JSON object */
     struct emailpart *body;       /* top-level MIME part */
-    time_t internaldate;          /* RFC 3501 internaldate aka receivedAt */
+    struct timespec internaldate; /* RFC 3501 internaldate aka receivedAt */
     int has_attachment;           /* set the HasAttachment flag */
     json_t *snoozed;              /* set snoozed annotation */
 };
@@ -10565,9 +10567,10 @@ static void _parse_email(jmap_req_t *req,
         jmap_parser_invalid(parser, "sentAt");
     }
     /* receivedAt */
+    clock_gettime(CLOCK_REALTIME, &email->internaldate);
     prop = json_object_get(jemail, "receivedAt");
     if (json_is_utcdate(prop)) {
-        time_from_iso8601(json_string_value(prop), &email->internaldate);
+        time_from_iso8601(json_string_value(prop), &email->internaldate.tv_sec);
     }
     else if (JNOTNULL(prop)) {
         jmap_parser_invalid(parser, "receivedAt");
@@ -11320,7 +11323,7 @@ static void _email_create(jmap_req_t *req,
 
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0, NULL };
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL };
     _parse_email(req, jemail, &parser, &email);
 
     /* Validate mailboxIds */
@@ -11356,7 +11359,7 @@ static void _email_create(jmap_req_t *req,
 
     /* Append MIME-encoded Email to mailboxes and write keywords */
 
-    _email_append(req, jmailboxids, &keywords, email.internaldate, email.snoozed,
+    _email_append(req, jmailboxids, &keywords, &email.internaldate, email.snoozed,
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                   email.has_attachment : 0, NULL, _email_to_mime, &email,
                   &detail, set_err);
@@ -13926,24 +13929,28 @@ gotrecord:
     }
 
     /* set receivedAt property */
-    time_t internaldate = 0;
+    struct timespec now, internaldate;
     const char *received_at =
         json_string_value(json_object_get(jemail_import, "receivedAt"));
+
+    clock_gettime(CLOCK_REALTIME, &now);
+    internaldate.tv_nsec = now.tv_nsec;
+
     if (received_at) {
-        time_from_iso8601(received_at, &internaldate);
+        time_from_iso8601(received_at, &internaldate.tv_sec);
     }
     else {
-        internaldate = _email_import_parse_received_at(buf_base(&content),
-                                                       buf_len(&content));
+        internaldate.tv_sec = _email_import_parse_received_at(buf_base(&content),
+                                                              buf_len(&content));
     }
-    if (!internaldate)
-        internaldate = time(NULL);
+    if (!internaldate.tv_sec)
+        internaldate.tv_sec = now.tv_sec;
 
     // mailbox will be readonly, drop the lock so it can be make writable
     if (mbox) mailbox_unlock_index(mbox, NULL);
 
     /* Write the message to the file system */
-    _email_append(req, jmailbox_ids, &keywords, internaldate, snoozed,
+    _email_append(req, jmailbox_ids, &keywords, &internaldate, snoozed,
             has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
 
     msgrecord_unref(&mr);

@@ -121,7 +121,7 @@ extern FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage_full(struct appendstate *mailbox, struct body **body,
                                  struct stagemsg *stage,
-                                 time_t internaldate, time_t savedate,
+                                 struct timespec *internaldate, time_t savedate,
                                  modseq_t createdmodseq,
                                  const strarray_t *flags, int nolink,
                                  struct entryattlist **annotations);
@@ -133,7 +133,7 @@ extern int append_removestage(struct stagemsg *stage);
 
 extern int append_fromstream(struct appendstate *as, struct body **body,
                              struct protstream *messagefile,
-                             unsigned long size, time_t internaldate,
+                             unsigned long size, struct timespec *internaldate,
                              const strarray_t *flags);
 
 extern int append_copy(struct mailbox *mailbox,
