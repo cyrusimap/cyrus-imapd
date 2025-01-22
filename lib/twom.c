@@ -66,8 +66,6 @@ static uint8_t ancestoroffset[8] = { 0,  0,  0,  0,  8, 24,  8,  0 };
 static uint8_t fatrecord[8]      = { 0,  0,  0,  1,  0,  1,  0,  0 };
 static uint8_t hastail[8]        = { 0,  0,  1,  1,  1,  1,  0,  0 };
 
-#define SETUP_FLAGS (TWOM_CSUM_NULL|TWOM_CSUM_XXH64|TWOM_CSUM_EXTERNAL)
-
 /********** DATA STRUCTURES *************/
 
 struct tm_header {
