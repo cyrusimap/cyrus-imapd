@@ -2395,7 +2395,8 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
 // the same process, we don't have flock shenanigans, because flock state
 // is process-wise, not file-descriptor specific, so it's not safe to just
 // open the file in separate objects and lock it separately.
-int twom_fname_open_db(const char *fname, struct twom_open_data *setup, struct twom_db **ret, struct twom_txn **txnp)
+int twom_db_open(const char *fname, struct twom_open_data *setup,
+                 struct twom_db **ret, struct twom_txn **txnp)
 {
     struct twom_db *mydb;
     int r = 0;
