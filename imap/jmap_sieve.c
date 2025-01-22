@@ -1948,6 +1948,32 @@ static int execute_error(const char *msg,
     return SIEVE_OK;
 }
 
+static int sieve_duplicate_check(void *dc __attribute__((unused)),
+                                 void *ic __attribute__((unused)),
+                                 void *sc __attribute__((unused)),
+                                 void *mc __attribute__((unused)),
+                                 const char **errmsg __attribute__((unused)))
+{
+    /* no active tracking records in this test mode */
+    return 0;
+}
+
+static int sieve_duplicate_track(void *dc __attribute__((unused)),
+                                 void *ic __attribute__((unused)),
+                                 void *sc __attribute__((unused)),
+                                 void *mc __attribute__((unused)),
+                                 const char **errmsg __attribute__((unused)))
+{
+    return SIEVE_OK;
+}
+
+/* duplicate support */
+static sieve_duplicate_t duplicate = {
+    0, /* max expiration */
+    &sieve_duplicate_check,
+    &sieve_duplicate_track,
+};
+
 static const char *_envelope_address_parse(json_t *addr,
                                            struct jmap_parser *parser)
 {
@@ -2196,6 +2222,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_processcal(interp, processcal);
     sieve_register_include(interp, getinclude);
     sieve_register_execute_error(interp, execute_error);
+    sieve_register_duplicate(interp, &duplicate);
 
     /* test against each email */
     size_t i;

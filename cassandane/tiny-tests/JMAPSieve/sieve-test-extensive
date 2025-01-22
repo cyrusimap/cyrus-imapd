@@ -133,6 +133,15 @@ add_sieve_tests(
         ],
 );
 
+### duplicate
+add_sieve_tests(
+    "duplicate",
+        'if duplicate { discard; }',
+        [
+            [ 'keep', {}, [] ],
+        ],
+);
+
 ### someInThreadHaveKeyword
 sub test_sieve_test_extensive_some_in_thread_have_keyword
     :min_version_3_3 :JMAPExtensions
@@ -235,7 +244,7 @@ sub new_sieve_blob {
 
     xlog "create script";
     my $fullscript = <<EOF;
-require ["fileinto", "extlists", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vnd.cyrus.log", "vnd.cyrus.jmapquery", "vnd.cyrus.imip"];
+require ["fileinto", "extlists", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vnd.cyrus.log", "vnd.cyrus.jmapquery", "vnd.cyrus.imip", "duplicate"];
 
 $sieve
 EOF
