@@ -41,12 +41,13 @@ package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
 use attributes;
+use Cwd qw(abs_path);
 use Data::Dumper;
-use Scalar::Util qw(refaddr);
-use List::Util qw(uniq);
 use Digest::file qw(digest_file_hex);
-use File::Temp qw(tempfile);
 use File::Path qw(rmtree);
+use File::Temp qw(tempfile);
+use List::Util qw(uniq);
+use Scalar::Util qw(refaddr);
 
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
@@ -800,20 +801,19 @@ sub _setup_http_service_objects
     $service ||= $self->{instance}->get_service("https");
     return if !$service;
 
+    my $ca_file = abs_path("data/certs/cacert.pem");
+
     my %common_args = (
         user => 'cassandane',
         password => 'pass',
         host => $service->host(),
         port => $service->port(),
         scheme => ($service->is_ssl() ? 'https' : 'http'),
+        SSL_options => {
+            SSL_ca_file => $ca_file,
+            SSL_verifycn_scheme => 'none',
+        },
     );
-
-    # XXX HTTP::Tiny 0.8.3 and later have SSL_verify enabled by default, but
-    # XXX Net::DAVTalk doesn't provide any way for us to supply our CA file,
-    # XXX making setup fail with certificate verify errors.
-    # XXX HTTP::Tiny 0.86 and later lets us set this environment variable
-    # XXX to restore the old default
-    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} = 1;
 
     if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
         require Net::CardDAVTalk;
@@ -834,6 +834,8 @@ sub _setup_http_service_objects
                                           "cassandane\@example.com");
     }
     if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
+        # XXX would be nice if Mail::JMAPTalk would pass through SSL_options
+        # XXX to its HTTP::Tiny constructor too...
         require Mail::JMAPTalk;
         $ENV{DEBUGJMAP} = 1;
         $self->{jmap} = Mail::JMAPTalk->new(
