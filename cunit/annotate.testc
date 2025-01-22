@@ -2002,12 +2002,14 @@ static int create_messages(struct mailbox *mailbox, int count)
         struct appendstate as;
         quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
         FILE *fp;
-        time_t internaldate = time(NULL);
+        struct timespec internaldate;
         struct body *body = NULL;
         struct buf buf = BUF_INITIALIZER;
 
+        clock_gettime(CLOCK_REALTIME, &internaldate);
+
         /* Write the message to the filesystem */
-        if (!(fp = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+        if (!(fp = append_newstage(mailbox_name(mailbox), internaldate.tv_sec, 0, &stage))) {
             fprintf(stderr, "append_newstage(%s) failed", mailbox_name(mailbox));
             return IMAP_IOERROR;
         }
@@ -2028,7 +2030,7 @@ static int create_messages(struct mailbox *mailbox, int count)
                     strerror(errno));
             return r;
         }
-        r = append_fromstage(&as, &body, stage, internaldate, 0, NULL, 0, NULL);
+        r = append_fromstage(&as, &body, stage, &internaldate, 0, NULL, 0, NULL);
         if (r) {
             fprintf(stderr, "append_fromstage(%s) failed: %s", mailbox_name(mailbox),
                     error_message(r));
