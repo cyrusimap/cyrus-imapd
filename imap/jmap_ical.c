@@ -7920,7 +7920,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     }
 
     jprop = json_object_get(event, "priority");
-    if (json_integer_value(jprop) >= 0 || json_integer_value(jprop) <= 9) {
+    if (json_is_integer(jprop)) {
         remove_icalprop(comp, ICAL_PRIORITY_PROPERTY);
         icalproperty *prop = icalproperty_new_priority(json_integer_value(jprop));
         icalcomponent_add_property(comp, prop);
