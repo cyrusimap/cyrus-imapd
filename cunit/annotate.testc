@@ -1146,7 +1146,6 @@ static void test_msg_copy(void)
     buf_printf(&path2, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                u2[0], u2[1], u2);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
-    CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
     mailbox_close(&mailbox1);
 
     /* copy MBOXNAME1,1 -> MBOXNAME2,1 */

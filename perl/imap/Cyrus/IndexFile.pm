@@ -651,6 +651,7 @@ SKIPPED VERSION 11 - Fastmail internal only
  13: GmTime                time_t 8
  14: LastUpdated           time_t 8
  15: SaveDate              time_t 8
+ 11: BaseCID               hex    8
  16: CacheCRC              int32  4
  17: RecordCRC             int32  4
 
@@ -1307,7 +1308,7 @@ QuotaExpungedUsed     int64  8
 ChangesEpoch          int32  4
 HeaderCrc             int32  4
 EOF
-    RecordSize => 136, # defined in file too, check it!
+    RecordSize => 144, # defined in file too, check it!
     _make_fields('Record', <<EOF),
 Uid                   int32  4
 CacheOffset           int32  4
@@ -1325,6 +1326,7 @@ CreatedModseq         int64  8
 GmTime                time64 8
 LastUpdated           time64 8
 SaveDate              time64 8
+BaseCID               hex    8
 CacheCrc              int32  4
 RecordCrc             int32  4
 EOF
