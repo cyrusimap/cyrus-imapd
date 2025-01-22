@@ -2127,6 +2127,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     record->gmtime = ntohll(*((bit64 *)(buf+OFFSET_GMTIME)));
     record->last_updated = ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED)));
     record->savedate = ntohll(*((bit64 *)(buf+OFFSET_SAVEDATE)));
+    record->basecid = ntohll(*(bit64 *)(buf+OFFSET_BASECID));
 
     offset_cache_crc  = OFFSET_CACHE_CRC;
     offset_record_crc = OFFSET_RECORD_CRC;
@@ -2209,18 +2210,20 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
         free(c_env);
     }
 
-    annotate_state_t *astate = NULL;
-    int r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
-    if (r) return r;
+    if (mailbox->i.minor_version < 20) {
+        annotate_state_t *astate = NULL;
+        int r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
+        if (r) return r;
 
-    struct buf annotval = BUF_INITIALIZER;
-    if (record->cid && record->basecid && record->basecid != record->cid)
-        buf_printf(&annotval, CONV_FMT, record->basecid);
+        struct buf annotval = BUF_INITIALIZER;
+        if (record->cid && record->basecid && record->basecid != record->cid)
+            buf_printf(&annotval, CONV_FMT, record->basecid);
 
-    r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
-    buf_free(&annotval);
+        r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
+        buf_free(&annotval);
 
-    if (r) return r;
+        if (r) return r;
+    }
 
     return 0;
 }
@@ -3329,6 +3332,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit64 *)(buf+OFFSET_GMTIME)) = htonll(record->gmtime);
     *((bit64 *)(buf+OFFSET_LAST_UPDATED)) = htonll(record->last_updated);
     *((bit64 *)(buf+OFFSET_SAVEDATE)) = htonll(record->savedate);
+    *((bit64 *)(buf+OFFSET_BASECID)) = htonll(record->basecid);
 
     offset_cache_crc  = OFFSET_CACHE_CRC;
     offset_record_crc = OFFSET_RECORD_CRC;
@@ -3480,6 +3484,9 @@ static int mailbox_is_virtannot(struct mailbox *mailbox, const char *entry)
         // internaldate.nsec was introduced in v20
         if (!strcmp(entry, IMAP_ANNOT_NS "internaldate.nsec")) return 1;
 
+        // basethrid was introduced as virtual in v20
+        else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid")) return 1;
+
         GCC_FALLTHROUGH
 
     case 19:
@@ -3526,6 +3533,12 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
         if (record->internaldate.tv_nsec != UTIME_OMIT) {
             buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
             crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+            buf_reset(&buf);
+        }
+
+        if (record->basecid) {
+            buf_printf(&buf, CONV_FMT, record->basecid);
+            crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "basethrid", "", &buf);
             buf_reset(&buf);
         }
 
@@ -5122,8 +5135,8 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         break;
     case 20:
         repack->newmailbox.i.start_offset = 160;
-        /* version 20 grew size and time fields to 64-bits */
-        repack->newmailbox.i.record_size = 136;
+        /* version 20 grew size and time fields to 64-bits, and added basecid */
+        repack->newmailbox.i.record_size = 144;
         break;
     default:
         fatal("index version not supported", EX_SOFTWARE);
@@ -5544,12 +5557,30 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
             buf_reset(&buf);
             r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
             if (r) goto done;
+
+            /* extract BaseCID */
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "basethrid", "", &buf);
+            if (buf.len == 16) {
+                const char *p = buf_cstring(&buf);
+                parsehex(p, &p, 16, &copyrecord.basecid);
+            }
+            buf_reset(&buf);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "basethrid", "", &buf);
+            if (r) goto done;
         }
         if (mailbox->i.minor_version >= 20 && repack->newmailbox.i.minor_version < 20) {
             if (record->internaldate.tv_nsec != UTIME_OMIT) {
                 buf_reset(&buf);
                 buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+                if (r) goto done;
+            }
+
+            if (record->basecid) {
+                buf_reset(&buf);
+                buf_printf(&buf, CONV_FMT, record->basecid);
+                r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "basethrid", "", &buf);
                 if (r) goto done;
             }
         }
@@ -8306,6 +8337,19 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
                 printf("removing stale createdmodseq for %u\n", record.uid);
                 buf_reset(&buf);
                 r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+                if (r) goto close;
+            }
+        }
+
+        if (mailbox->i.minor_version >= 20) {
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "basethrid", "", &buf);
+            if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "basethrid", NULL, &buf);
+            if (buf.len) {
+                syslog(LOG_NOTICE, "removing stale basethrid for %u", record.uid);
+                printf("removing stale basethrid for %u\n", record.uid);
+                buf_reset(&buf);
+                r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "basethrid", "", &buf);
                 if (r) goto close;
             }
         }
