@@ -174,6 +174,8 @@ struct twom_db {
     struct twom_db *next;
 };
 
+#define TWOM_VERSION 1
+
 #define HEADER_MAGIC ("\241\002\213\015twomfile\0\0\0\0")
 #define HEADER_MAGIC_SIZE (16)
 

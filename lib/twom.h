@@ -16,6 +16,7 @@
 #ifndef INCLUDED_TWOM_H
 #define INCLUDED_TWOM_H
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -26,38 +27,36 @@ struct twom_cursor;
 enum twom_ret {
     TWOM_OK = 0,
     TWOM_DONE = 1,
-    TWOM_IOERROR = -1,
-    TWOM_AGAIN = -2,
-    TWOM_EXISTS = -3,
-    TWOM_INTERNAL = -4,
+    TWOM_EXISTS = -1,
+    TWOM_IOERROR = -2,
+    TWOM_INTERNAL = -3,
+    TWOM_LOCKED = -4,
     TWOM_NOTFOUND = -5,
-    TWOM_LOCKED = -6,
-    TWOM_READONLY = -9,
+    TWOM_READONLY = -6,
 };
 
-// we don't reuse flags, there's 32 bits of space, and we spread through them
+// we don't reuse flags for different operations (e.g. open, fetch, foreach), as
+// there's 32 bits of space available - though not all flags have meaning in all contexts.
 enum twom_flagspec {
     TWOM_CREATE          = 1<<0,    /* Create the database if not existant */
     TWOM_SHARED          = 1<<1,    /* Open in shared lock mode */
     TWOM_NOCSUM          = 1<<2,    /* Don't check checksums on read */
     TWOM_NOSYNC          = 1<<3,    /* Don't msync/fsync on write */
+    TWOM_NONBLOCKING     = 1<<4,    /* When taking a lock, return immediately if the file is already locked */
 
-    TWOM_ALWAYSYIELD     = 1<<9,
-    TWOM_NOYIELD         = 1<<10,
-    TWOM_IFNOTEXIST      = 1<<11,
-    TWOM_IFEXIST         = 1<<12,
-    TWOM_FETCHNEXT       = 1<<13,
-    TWOM_SKIPROOT        = 1<<14,
-    TWOM_MVCC            = 1<<15,
-    TWOM_NONBLOCKING     = 1<<16,
+    TWOM_ALWAYSYIELD     = 1<<9,    /* Yield foreach before every callback */
+    TWOM_NOYIELD         = 1<<10,   /* Never yield a read transaction lock */
+    TWOM_IFNOTEXIST      = 1<<11,   /* Only store if the record doesn't exist */
+    TWOM_IFEXIST         = 1<<12,   /* Only store if the record already exists (e.g. when deleting) */
+    TWOM_FETCHNEXT       = 1<<13,   /* Return the record AFTER the given key */
+    TWOM_SKIPROOT        = 1<<14,   /* For foreach or cursor, skip the first record if it matches exactly */
+    TWOM_MVCC            = 1<<15,   /* For cursor or transaction, operate in serializable isolation (MVCC) mode */
 
-    TWOM_CSUM_NULL       = 1<<27,
-    TWOM_CSUM_XXH64      = 1<<28,
-    TWOM_CSUM_EXTERNAL   = 1<<29,
-    TWOM_COMPAR_EXTERNAL = 1<<30
+    TWOM_CSUM_NULL       = 1<<27,   /* use the NULL checksum when creating or repacking database */
+    TWOM_CSUM_XXH64      = 1<<28,   /* use the XXH64 checksum algorithm when creating or repacking */
+    TWOM_CSUM_EXTERNAL   = 1<<29,   /* use an external checksum algorithm (must be passed in init) */
+    TWOM_COMPAR_EXTERNAL = 1<<30    /* use an external comparison function (must be passed in init) */
 };
-
-#define TWOM_VERSION 1
 
 typedef int twom_cb(void *rock,
                     const char *key, size_t keylen,
@@ -97,10 +96,10 @@ extern int twom_db_store(struct twom_db *db,
                          int flags);
 
 // utility
-extern int twom_db_consistent(struct twom_db *db);
 extern int twom_db_dump(struct twom_db *, int detail);
 extern int twom_db_repack(struct twom_db *db);
 extern int twom_db_should_repack(struct twom_db *db); // returns 1 for true
+extern int twom_db_consistent(struct twom_db *db);
 
 // release any read lock if doing something else for a while
 

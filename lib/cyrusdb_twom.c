@@ -87,12 +87,11 @@ static int _errormap(int r) {
     switch(r) {
     case TWOM_OK: return CYRUSDB_OK;
     case TWOM_DONE: return CYRUSDB_DONE;
-    case TWOM_IOERROR: return CYRUSDB_IOERROR;
-    case TWOM_AGAIN: return CYRUSDB_AGAIN;
     case TWOM_EXISTS: return CYRUSDB_EXISTS;
+    case TWOM_IOERROR: return CYRUSDB_IOERROR;
     case TWOM_INTERNAL: return CYRUSDB_INTERNAL;
-    case TWOM_NOTFOUND: return CYRUSDB_NOTFOUND;
     case TWOM_LOCKED: return CYRUSDB_LOCKED;
+    case TWOM_NOTFOUND: return CYRUSDB_NOTFOUND;
     case TWOM_READONLY: return CYRUSDB_READONLY;
     // must be a foreach result
     default: return r;
