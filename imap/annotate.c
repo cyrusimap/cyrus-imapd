@@ -2071,6 +2071,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
     },
     {
         /* we use 'basethrid' to support split threads */
+        /* prior to version 20, there was no storage for basethrid, so it became an annotation */
         IMAP_ANNOT_NS "basethrid",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
