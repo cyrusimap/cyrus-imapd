@@ -1,0 +1,46 @@
+:tocdepth: 3
+
+==============================
+Cyrus IMAP 3.8.5 Release Notes
+==============================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.5/cyrus-imapd-3.8.5.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.5/cyrus-imapd-3.8.5.tar.gz.sig
+
+.. _relnotes-3.8.5-changes:
+
+Changes since 3.8.4
+===================
+
+Build changes
+-------------
+
+* Fixed :issue:`5029`: check for unexpected extra tiny-tests directories
+* Fixed :issue:`5148`: added ``--enable-release-checks`` configure option
+  for use when building releases
+
+Documentation build changes
+---------------------------
+
+The documentation build now uses the theme from Read the Docs, rather than
+an old custom one.  This resolves incompatibilities between the old custom
+CSS and newer versions of Sphinx.
+
+If you wish to (re)build the documentation, you will need to have the python
+module "sphinx_rtd_theme" available.  On Debian, this is in the
+python3-sphinx-rtd-theme package.
+
+Bug fixes
+---------
+
+* Fixed :issue:`4489`: calendar-color "changes" namespace (thanks Дилян
+  Палаузов)
+* Fixed :issue:`5009`: various portability warnings and nits
+* Fixed :issue:`5050`: iTIP line endings (thanks Дилян Палаузов)
+* Fixed :issue:`5052`: iMIP line endings (thanks Дилян Палаузов)
+* Fixed :issue:`5072`: http_cgi use after free (thanks Дилян Палаузов)
+* Fixed :issue:`5094`: httpd crash when PROPFIND url is /dav/calendars
+* Fixed :issue:`5118`: broken language checks for "zr-hant" and "sr-me"
+* Fixed :issue:`5047`: proxying UID SEARCH
