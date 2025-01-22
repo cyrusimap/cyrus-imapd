@@ -4038,6 +4038,10 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     /* mark that it's split so basecid gets saved */
     if (record->basecid != record->cid)
         record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
+    else {
+        /* otherwise, we DO NOT want/expect basecid to be set */
+        record->basecid = NULLCONVERSATION;
+    }
 
 out:
     message_unref(&msg);
