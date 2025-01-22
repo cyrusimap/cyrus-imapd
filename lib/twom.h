@@ -97,9 +97,9 @@ extern int twom_db_store(struct twom_db *db,
 
 // utility
 extern int twom_db_dump(struct twom_db *, int detail);
+extern int twom_db_check_consistency(struct twom_db *db);
 extern int twom_db_repack(struct twom_db *db);
-extern int twom_db_should_repack(struct twom_db *db); // returns 1 for true
-extern int twom_db_consistent(struct twom_db *db);
+extern bool twom_db_should_repack(struct twom_db *db); // returns 1 for true
 
 // release any read lock if doing something else for a while
 
