@@ -3083,7 +3083,7 @@ int twom_db_dump(struct twom_db *db, int detail)
     return r;
 }
 
-int twom_db_consistent(struct twom_db *db)
+int twom_db_check_consistency(struct twom_db *db)
 {
     struct twom_txn *txn = NULL;
     int r = twom_db_begin_txn(db, TWOM_SHARED, &txn);
@@ -3093,7 +3093,7 @@ int twom_db_consistent(struct twom_db *db)
     return r;
 }
 
-int twom_db_should_repack(struct twom_db *db)
+bool twom_db_should_repack(struct twom_db *db)
 {
     struct tm_file *file = db->openfile;
     struct tm_header *header = &file->header;

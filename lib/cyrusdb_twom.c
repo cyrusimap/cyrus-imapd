@@ -295,7 +295,7 @@ static int mydump(struct dbengine *db, int detail)
 static int myconsistent(struct dbengine *db)
 {
     struct twom_db *tmdb = (struct twom_db *)db;
-    int tmr = twom_db_consistent(tmdb);
+    int tmr = twom_db_check_consistency(tmdb);
     return _errormap(tmr);
 }
 
