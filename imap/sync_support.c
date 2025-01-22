@@ -1474,6 +1474,16 @@ static void encode_annotations(struct dlist *parent,
             dlist_setnum64(aa, "VALUE", record->internaldate.tv_nsec);
         }
 
+        if (record->basecid) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "basethrid");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_sethex64(aa, "VALUE", record->basecid);
+        }
+
         GCC_FALLTHROUGH
 
     case 19:
@@ -1609,6 +1619,8 @@ static int decode_annotations(/*const*/struct dlist *annots,
                  * a comparison against new values from the replica later! */
                 parsehex(p, &p, 16, &record->basecid);
                 /* XXX - check on p? */
+
+                if (mailbox->i.minor_version >= 20) break;
 
                 /* "basethrid" is special, since it is written during mailbox
                  * appends and rewrites, using whatever modseq the index_record
