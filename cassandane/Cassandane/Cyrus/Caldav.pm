@@ -117,11 +117,15 @@ sub new
     $config->set(event_extra_params => 'vnd.cmu.davFilename vnd.cmu.davUid');
     $config->set(event_groups => 'calendar');
     $config->set(imipnotifier => 'imip');
-    return $class->SUPER::new({
+
+    my $self = $class->SUPER::new({
         config => $config,
         adminstore => 1,
         services => ['imap', 'http'],
     }, @_);
+
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up
@@ -136,21 +140,6 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
-}
-
-sub skip_check
-{
-    my ($self) = @_;
-
-    # XXX skip tests that would hang in verbose mode for now -- see
-    # XXX detailed comment at MaxMessages::put_submission
-    if (get_verbose()
-        && $self->{_name} eq 'test_imip_quote_cn')
-    {
-        return 'test would hang in verbose mode';
-    }
-
-    return undef;
 }
 
 sub _all_keys_match

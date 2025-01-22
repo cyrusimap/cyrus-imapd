@@ -1928,7 +1928,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             const char *bymode = cmd.u.r.bymode;
             const char *dsn_notify = cmd.u.r.dsn_notify;
             const char *dsn_ret = cmd.u.r.dsn_ret;
-            const char *deliverby = NULL;
+            char *deliverby = NULL;
             struct buf *headers = NULL;
 
             if (requires & BFE_VARIABLES) {
@@ -1972,10 +1972,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                   by-mode  = "N" / "R"           ; "Notify" or "Return"
                   by-trace = "T"                 ; "Trace"
                 */
-                static char by_value[14];
-                snprintf(by_value, sizeof(by_value), "%+ld;%c%s",
-                         sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
-                deliverby = by_value;
+                struct buf by_value = BUF_INITIALIZER;
+                buf_printf(&by_value, "%+ld;%c%s",
+                           sec, toupper(bymode[0]), cmd.u.r.bytrace ? "T" : "");
+                deliverby = buf_release(&by_value);
             }
 
             if (i->edited_headers) i->getheadersection(m, &headers);
@@ -2119,7 +2119,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 /* Parse/split the method URI */
                 if (!strncasecmp(method, "mailto:", 7)) {
                     strarray_insertm(cmd.u.n.options, 0, method+7);
-                    method = "mailto";
+                    method = (char *) "mailto";
                 }
                 else if (!strncasecmp(method,
                                       "https://cyrusimap.org/notifiers/", 32)) {
@@ -2205,6 +2205,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 /*imapflags*/NULL,
                 cmd.u.v.fcc.create,
                 /*implicit keep target*/0,
+                /*copy*/0,
                 cmd.u.v.fcc.t.mailboxid,
                 /*headers*/NULL,
                 /*resolved_mailbox*/NULL
@@ -2537,46 +2538,52 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             }
             break;
 
+        case B_PROCESSCAL:
         case B_PROCESSIMIP:
-            if (i->imip) {
-                sieve_imip_context_t imip_ctx = {
-                    !!cmd.u.imip.invites_only,
-                    !!cmd.u.imip.updates_only,
-                    !!cmd.u.imip.delete_canceled,
-                    cmd.u.imip.calendarid,
+            if (i->processcal) {
+                sieve_cal_context_t cal_ctx = {
+                    !!cmd.u.cal.allow_public,
+                    !!cmd.u.cal.invites_only,
+                    !!cmd.u.cal.updates_only,
+                    !!cmd.u.cal.delete_cancelled,
+                    cmd.u.cal.addresses,
+                    cmd.u.cal.organizers,
+                    cmd.u.cal.calendarid,
                     BUF_INITIALIZER,  // outcome
-                    BUF_INITIALIZER   // errstr
+                    BUF_INITIALIZER,  // reason
                 };
                 variable_list_t *vl;
 
-                res = i->imip(&imip_ctx, i->interp_context, sc, m, errmsg);
+                res = i->processcal(&cal_ctx, i->interp_context, sc, m, errmsg);
 
-                if (cmd.u.imip.outcome_var) {
-                    vl = varlist_select(variables, cmd.u.imip.outcome_var);
-
-                    if (!vl) {
-                        vl = varlist_extend(variables);
-                        vl->name = xstrdup(cmd.u.imip.outcome_var);
-                    }
-                    strarray_fini(vl->var);
-                    strarray_appendm(vl->var, buf_release(&imip_ctx.outcome));
-                }
-
-                if (cmd.u.imip.errstr_var) {
-                    vl = varlist_select(variables, cmd.u.imip.errstr_var);
+                if (cmd.u.cal.outcome_var) {
+                    vl = varlist_select(variables, cmd.u.cal.outcome_var);
 
                     if (!vl) {
                         vl = varlist_extend(variables);
-                        vl->name = xstrdup(cmd.u.imip.errstr_var);
+                        vl->name = xstrdup(cmd.u.cal.outcome_var);
                     }
                     strarray_fini(vl->var);
-                    strarray_appendm(vl->var, buf_release(&imip_ctx.errstr));
+                    strarray_appendm(vl->var, buf_release(&cal_ctx.outcome));
                 }
 
-                buf_free(&imip_ctx.outcome);
-                buf_free(&imip_ctx.errstr);
+                if (cmd.u.cal.reason_var) {
+                    vl = varlist_select(variables, cmd.u.cal.reason_var);
+
+                    if (!vl) {
+                        vl = varlist_extend(variables);
+                        vl->name = xstrdup(cmd.u.cal.reason_var);
+                    }
+                    strarray_fini(vl->var);
+                    strarray_appendm(vl->var, buf_release(&cal_ctx.reason));
+                }
+
+                free(strarray_takevf(cmd.u.cal.addresses));
+                buf_free(&cal_ctx.outcome);
+                buf_free(&cal_ctx.reason);
             }
             else {
+                *errmsg = "No processcal handler";
                 return SIEVE_RUN_ERROR;
             }
             break;

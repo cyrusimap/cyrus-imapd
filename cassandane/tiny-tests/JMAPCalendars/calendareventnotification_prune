@@ -2,13 +2,13 @@
 use Cassandane::Tiny;
 
 sub test_calendareventnotification_prune
-    :min_version_3_9 :needs_component_jmap :JmapMaxCalendarEventNotifs
+    :min_version_3_9 :JmapMaxCalendarEventNotifs
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    my $jmap_max_calendareventnotifs = $self->{instance}->{
-            config}->get('jmap_max_calendareventnotifs');
+    my $jmap_max_calendareventnotifs = $self->{instance}->{config}
+                                         ->get('jmap_max_calendareventnotifs');
     $self->assert_not_null($jmap_max_calendareventnotifs);
 
     my ($manJmap) = $self->create_user('manifold');
@@ -40,7 +40,7 @@ sub test_calendareventnotification_prune
     $self->assert(exists $res->[0][1]{updated}{Default});
 
     xlog $self, "Create event notification";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
                 event1 => {
@@ -98,7 +98,7 @@ sub test_calendareventnotification_prune
     $self->assert_equals(1, scalar grep { $_->{id} eq $notif1Id } @{$res->[0][1]{list}});
 
     xlog $self, "Create one more event notification";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
                 eventX => {

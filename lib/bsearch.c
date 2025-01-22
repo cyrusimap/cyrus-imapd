@@ -177,47 +177,9 @@ HIDDEN int bsearch_mem_mbox(const char *word,
     return p - base + 1;
 }
 
-EXPORTED int bsearch_compare_mbox(const char *s1, const char *s2)
-{
-    int cmp;
-    char c2;
-
-    for (;;) {
-        if ((c2 = *s2) == 0) {
-            return (unsigned char)*s1;
-        }
-        cmp = TOCOMPARE(*s1) - TOCOMPARE(c2);
-        if (cmp) return cmp;
-        if (TOCOMPARE(c2) == TOCOMPARE('\t')) {
-            return 0;
-        }
-        s1++;
-        s2++;
-    }
-}
-
-HIDDEN int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
+HIDDEN int bsearch_ncompare_mbox(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
-    int cmp = 0;
-
-    while (min-- > 0 && (cmp = TOCOMPARE(*s1) - TOCOMPARE(*s2)) == 0) {
-        s1++;
-        s2++;
-    }
-    if (min >= 0) {
-        return cmp;
-    } else {
-        if (l2 > l1) return -1;
-        else if (l1 > l2) return 1;
-        else return 0;
-    }
-}
-
-HIDDEN int bsearch_uncompare_mbox(const unsigned char *s1, size_t l1,
-                                  const unsigned char *s2, size_t l2)
-{
-    ssize_t min = l1 < l2 ? l1 : l2;
     int cmp = 0;
 
     while (min-- > 0 && (cmp = TOCOMPARE(*s1) - TOCOMPARE(*s2)) == 0) {
@@ -292,7 +254,7 @@ EXPORTED int cmpstringp_mbox(const void *p1, const void *p2)
     return TOCOMPARE(*s1) - TOCOMPARE(*s2);
 }
 
-HIDDEN int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
+HIDDEN int bsearch_ncompare_raw(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int r = memcmp(s1, s2, min);

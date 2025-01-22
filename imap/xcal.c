@@ -374,10 +374,11 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
         return;
 
     case ICAL_RECUR_VALUE: {
-        struct icalrecurrencetype recur = icalvalue_get_recur(value);
+        struct icalrecurrencetype *recur = icalvalue_get_recurrence(value);
 
-        icalrecurrencetype_add_as_xxx(&recur, xtype, NULL,
+        icalrecurrencetype_add_as_xxx(recur, xtype, NULL,
                                       &icalrecur_add_string_as_xml_element);
+        icalrecurrencetype_unref(recur);
         return;
     }
 
@@ -724,8 +725,8 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
     case ICAL_RECUR_VALUE: {
         struct buf rrule = BUF_INITIALIZER;
         struct hash_table byrules;
-        struct icalrecurrencetype rt;
-        char *sep = "";
+        struct icalrecurrencetype *rt;
+        const char *sep = "";
 
         construct_hash_table(&byrules, 10, 1);
 
@@ -769,10 +770,11 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         free_hash_table(&byrules, NULL);
 
         /* parse our iCal RRULE string */
-        rt = icalrecurrencetype_from_string(buf_cstring(&rrule));
+        rt = icalrecurrencetype_new_from_string(buf_cstring(&rrule));
         buf_free(&rrule);
 
-        if (rt.freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recur(rt);
+        if (rt->freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recurrence(rt);
+        icalrecurrencetype_unref(rt);
 
         break;
     }

@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 use Data::UUID;
 
 sub test_calendar_set_defaultalerts_shared
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9
 {
     my ($self) = @_;
 
@@ -12,11 +12,14 @@ sub test_calendar_set_defaultalerts_shared
     my $ownerJmap = $t->{owner}{jmap};
     my $shareeJmap = $t->{sharee}{jmap};
 
-    $self->assert_shared_defaultalerts($t);
+    # Using a string here will fail matching if we were to attempt to match,
+    # which we shouldn't, since there's no default alarms yet!
+    $self->assert_shared_defaultalerts($t, 'no alarm!', 'no alarm!');
 
     xlog $self, "Owner sets default alarms";
 
     my $alertWithTimeOwnerId = '4c08cb1d-60e0-46e0-9cc1-9622b7a820ed';
+
     $t->{owner}->{defaultAlertsWithTime} = {
         $alertWithTimeOwnerId => {
             '@type' => 'Alert',
@@ -55,7 +58,7 @@ sub test_calendar_set_defaultalerts_shared
         }, 'R1'],
     ]);
 
-    $self->assert_shared_defaultalerts($t);
+    $self->assert_shared_defaultalerts($t, $alertWithTimeOwnerId, 'no alarm!');
 
     xlog $self, 'Sharee sets default alarms';
     my $alertWithTimeShareeId = 'b61e5b53-8ea2-46f4-949d-7b49734ba4d3';
@@ -96,7 +99,7 @@ sub test_calendar_set_defaultalerts_shared
         }, 'R1'],
     ]);
 
-    $self->assert_shared_defaultalerts($t);
+    $self->assert_shared_defaultalerts($t, $alertWithTimeOwnerId, $alertWithTimeShareeId);
 
     xlog $self, 'Owner removes default alarms';
     $t->{owner}->{defaultAlertsWithTime} = undef;
@@ -115,7 +118,7 @@ sub test_calendar_set_defaultalerts_shared
         }, 'R1'],
     ]);
 
-    $self->assert_shared_defaultalerts($t);
+    $self->assert_shared_defaultalerts($t, 'no alarm!', $alertWithTimeShareeId);
 
     xlog $self, 'Sharee removes default alarms';
     $t->{sharee}->{defaultAlertsWithTime} = undef;
@@ -134,10 +137,10 @@ sub test_calendar_set_defaultalerts_shared
         }, 'R1'],
     ]);
 
-    $self->assert_shared_defaultalerts($t);
+    $self->assert_shared_defaultalerts($t, 'no alarm!', 'no alarm!');
 }
 
-sub _can_match {
+sub _can_match_b {
     my $event = shift;
     my $want = shift;
 
@@ -174,7 +177,7 @@ sub assert_alarm_notifs {
         my $found = 0;
         my @newwant;
         foreach my $data (@want) {
-            if (not $found and _can_match($event, $data)) {
+            if (not $found and _can_match_b($event, $data)) {
                 $found = 1;
             }
             else {
@@ -198,10 +201,12 @@ sub assert_alarm_notifs {
 
 sub assert_shared_defaultalerts
 {
-    my ($self, $t) = @_;
+    my ($self, $t, $owneralarmid, $shareealarmid) = @_;
 
     for my $who (qw/owner sharee/) {
         my $jmap = $t->{$who}->{jmap};
+
+        my $alarmid = $who eq 'owner' ? $owneralarmid : $shareealarmid;
 
         xlog $self, "Assert alarms for $who";
         my $res = $jmap->CallMethods([
@@ -242,8 +247,7 @@ sub assert_shared_defaultalerts
         $res = $caldav->Request('GET', $xhref);
         if ($defaultAlertsWithTime) {
             $self->assert_matches(qr/BEGIN:VALARM/, $res->{content});
-            my $uid = (values %{$defaultAlertsWithTime})->{uid};
-            $self->assert_matches(qr/UID:$uid/, $res->{content});
+            $self->assert_matches(qr/UID:$alarmid/, $res->{content});
         } else {
             $self->assert(not $res->{content} =~ qr/BEGIN:VALARM/);
         }
@@ -335,7 +339,7 @@ sub create_test
     $self->assert(exists $res->[1][1]{updated}{Default});
 
     xlog $self, 'Sharee sets useDefaultAlerts=true';
-    my $res = $shareeJmap->CallMethods([
+    $res = $shareeJmap->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'owner',
             update => {

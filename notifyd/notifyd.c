@@ -67,6 +67,7 @@
 #include "xmalloc.h"
 #include "strarray.h"
 
+#include "master/service.h"
 
 /* global state */
 const int config_need_data = 0;
@@ -214,19 +215,21 @@ EXPORTED void fatal(const char *s, int code)
 
     syslog(LOG_ERR, "Fatal error: %s", s);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
 static void usage(void)
 {
-    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>]");
+    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] [-D] [-X] [-m method].  method defaults to null");
     exit(EX_USAGE);
 }
 
 EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unused)))
 {
     int opt;
-    char *method = "null";
+    const char *method = "null";
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 

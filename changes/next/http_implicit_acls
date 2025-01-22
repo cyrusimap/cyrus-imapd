@@ -1,0 +1,21 @@
+Description:
+
+The `implicit_owner_rights` ACLs were previously ignored when considering ACLs
+on resources accessed over HTTP, including over JMAP.  This led to inconsistent
+reporting of access control based by protocol, and has been fixed.  The
+implicit rights are now respected on HTTP protocools.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None required.
+
+
+GitHub issue:
+
+None.

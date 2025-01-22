@@ -65,11 +65,14 @@ sub new
     $config->set(singleinstancestore => 'no');
     $config->set(imap_inprogress_interval => '1s');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         adminstore => 1,
         config => $config,
         services => ['imap'],
     }, @_);
+
+    $self->needs('component', 'slowio');
+    return $self;
 }
 
 sub set_up
@@ -85,7 +88,7 @@ sub tear_down
 }
 
 sub test_xrename
-    :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -123,7 +126,7 @@ sub test_xrename
 }
 
 sub test_copy
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -159,7 +162,7 @@ sub test_copy
 }
 
 sub test_search
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -190,7 +193,7 @@ sub test_search
 }
 
 sub test_esearch_selected
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -222,7 +225,7 @@ sub test_esearch_selected
 }
 
 sub test_esearch_multiple
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -268,7 +271,7 @@ sub test_esearch_multiple
 }
 
 sub test_sort
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -300,7 +303,7 @@ sub test_sort
 }
 
 sub test_thread
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -332,7 +335,7 @@ sub test_thread
 }
 
 sub test_rename
-    :SlowIO :needs_component_slowio :NoAltNameSpace
+    :SlowIO :NoAltNameSpace
 {
     my ($self) = @_;
 

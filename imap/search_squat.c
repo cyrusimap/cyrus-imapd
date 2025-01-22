@@ -320,7 +320,7 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     opstack_pop(bb);
 }
 
-static void match(search_builder_t *bx, int part, const char *str)
+static void match(search_builder_t *bx, enum search_part part, const char *str)
 {
     SquatBuilderData *bb = (SquatBuilderData *)bx;
     struct opstack *parent = opstack_top(bb);
@@ -423,10 +423,9 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
 static int add_unindexed(SquatBuilderData *bb)
 {
-    struct opstack *top = opstack_top(bb);
     int r = 0;
+    struct opstack *top = opstack_push(bb, /*doesn't matter*/0);
 
-    top = opstack_push(bb, /*doesn't matter*/0);
     bv_setall(&top->msg_vector);
     bv_clear(&top->msg_vector, 0);  /* UID 0 is not valid */
     bb->part_types = "tfcbsmh";
@@ -620,7 +619,7 @@ static int begin_bodypart(search_text_receiver_t *rx __attribute__((unused)),
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part)
+static void begin_part(search_text_receiver_t *rx, enum search_part part)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     char part_char = 0;
@@ -703,8 +702,7 @@ static int append_text(search_text_receiver_t *rx,
     return r;
 }
 
-static void end_part(search_text_receiver_t *rx,
-                     int part __attribute__((unused)))
+static void end_part(search_text_receiver_t *rx)
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     int s = 0;      /* SQUAT error */
@@ -1050,7 +1048,7 @@ static int end_update(search_text_receiver_t *rx)
     return 0;
 }
 
-static int can_match(enum search_op matchop, int partnum)
+static int can_match(enum search_op matchop, enum search_part partnum)
 {
     return (matchop == SEOP_MATCH || matchop == SEOP_FUZZYMATCH) &&
         doctypes_by_part[partnum];

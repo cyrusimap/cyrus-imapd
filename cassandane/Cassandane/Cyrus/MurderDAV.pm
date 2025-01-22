@@ -58,12 +58,16 @@ sub new
     $config->set('conversations' => 'yes');
     $config->set_bits('httpmodules', 'caldav', 'carddav');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         httpmurder => 1,
         jmap => 1,
         adminstore => 1
-   }, @args);
+    }, @args);
+
+    $self->needs('component', 'murder');
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up
@@ -79,7 +83,6 @@ sub tear_down
 }
 
 sub test_aaa_setup
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -91,7 +94,6 @@ sub test_aaa_setup
 # XXX at once, but renaming out the "bogus" and running it, and it failing,
 # XXX proves the infrastructure to prevent requesting both works.
 sub bogustest_aaa_imapdav_setup
-    :needs_component_murder
     :IMAPMurder
 {
     my ($self) = @_;
@@ -101,7 +103,7 @@ sub bogustest_aaa_imapdav_setup
 }
 
 sub test_frontend_commands
-    :needs_component_murder :needs_component_httpd :min_version_3_5
+    :min_version_3_5
 {
     my ($self) = @_;
     my $result;

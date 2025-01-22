@@ -240,6 +240,7 @@ struct searchargs {
     /* used only during parsing */
     int fuzzy_depth;
     uint64_t maxargssize_mark;
+    unsigned did_objectid : 1;
 
     /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
@@ -394,7 +395,7 @@ enum {
     LIST_RET_SPECIALUSE =       (1<<2),  /* RFC 6154 */
     LIST_RET_STATUS =           (1<<3),  /* RFC 5819 */
     LIST_RET_MYRIGHTS =         (1<<4),  /* RFC 8440 */
-    LIST_RET_METADATA =         (1<<5)   /* draft-murchison-imap-list-metadata */
+    LIST_RET_METADATA =         (1<<5)   /* RFC 9590 */
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 
@@ -433,7 +434,7 @@ enum {
     CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
     CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
     CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
-    CAPA_UIDONLY =      (1<<3),  /* draft-ietf-extra-imap-uidonly */
+    CAPA_UIDONLY =      (1<<3),  /* RFC 9586 */
     CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
 };
 
@@ -447,7 +448,8 @@ enum {
 extern struct protstream *imapd_out, *imapd_in;
 
 struct client_behavior_registry {
-    uint32_t did_annotate     : 1;   /* used SETANNOTATION or FETCH-ed ANNOTATION */
+    uint32_t did_annotate     : 1;   /* used SETANNOTATION or
+                                        FETCH-ed ANNOTATION */
     uint32_t did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
     uint32_t did_catenate     : 1;   /* used CATENATE on APPEND  */
     uint32_t did_condstore    : 1;   /* gave CONDSTORE on SELECT */
@@ -458,6 +460,8 @@ struct client_behavior_registry {
     uint32_t did_multisearch  : 1;   /* called ESEARCH */
     uint32_t did_move         : 1;   /* used MOVE */
     uint32_t did_notify       : 1;   /* used NOTIFY */
+    uint32_t did_objectid     : 1;   /* used STATUS MAILBOXID or
+                                        SEARCH/FETCH EMAILID/THREADID */
     uint32_t did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
     uint32_t did_preview      : 1;   /* fetched PREVIEW */
     uint32_t did_qresync      : 1;   /* gave QRESYNC on SELECT */
@@ -465,6 +469,7 @@ struct client_behavior_registry {
     uint32_t did_searchres    : 1;   /* used SAVE on SEARCH */
     uint32_t did_replace      : 1;   /* used REPLACE */
     uint32_t did_uidonly      : 1;   /* used ENABLE UIDONLY  */
+    uint32_t did_unselect     : 1;   /* used UNSELECT */
     uint32_t did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
 
     /* non-standard - track for possible deprecation */

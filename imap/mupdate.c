@@ -92,6 +92,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 /* Sent to clients that we can't accept a connection for. */
 static const char SERVER_UNABLE_STRING[] = "* BYE \"Server Unable\"\r\n";
 
@@ -216,7 +218,7 @@ static void cmd_starttls(struct conn *C, const char *tag);
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg);
 #endif
-void shut_down(int code);
+static void shut_down(int code) __attribute__((noreturn));
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
 static void sendupdates(struct conn *C, int flushnow);
@@ -617,10 +619,10 @@ EXPORTED void fatal(const char *s, int code)
     else recurse_code = code;
 
     syslog(LOG_ERR, "%s", s);
-    shut_down(code);
 
-    /* NOTREACHED */
-    exit(code); /* shut up GCC */
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    shut_down(code);
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
@@ -1991,21 +1993,20 @@ static void cmd_starttls(struct conn *C, const char *tag)
                                C->pout->fd, /* write */
                                180, /* 3 minutes */
                                &C->saslprops,
+                               NULL, /* no ALPN id for mupdate */
                                &C->tlsconn);
 
     /* if error */
     if (result==-1) {
-        prot_printf(C->pout, "%s NO Starttls negotiation failed\r\n",
-                    tag);
-        syslog(LOG_NOTICE, "STARTTLS negotiation failed: %s",
-               C->clienthost);
-        return;
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", C->clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&C->saslprops, C->saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -2072,8 +2073,7 @@ void cmd_compress(struct conn *C __attribute__((unused)),
 }
 #endif /* HAVE_ZLIB */
 
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
+static void shut_down(int code)
 {
     in_shutdown = 1;
 

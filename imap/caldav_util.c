@@ -172,7 +172,7 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
         struct dlist *dl;
 
         /* Parse the userdata and fetch the validators */
-        dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+        dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
 
         if (etag) {
             struct message_guid *userdata_guid;
@@ -326,9 +326,8 @@ static int validate_mayinvite(icalproperty *prop,
     if (allow_propupdates == propupdate_all)
         return 0;
 
-    const char *uri = icalproperty_get_attendee(prop);
-    if (uri &&!strncasecmp(uri, "mailto:", 7) && sched_addrs &&
-            strarray_contains(sched_addrs, uri + 7)) {
+    const char *uri = icalproperty_get_decoded_calendaraddress(prop);
+    if (uri && sched_addrs && strarray_contains(sched_addrs, uri)) {
         /* User adds their own ATTENDEE */
         if (!(allow_propupdates & propupdate_inviteself))
             return HTTP_FORBIDDEN;
@@ -439,9 +438,8 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
 
             case ICAL_ATTENDEE_PROPERTY:
                 {
-                    const char *uri = icalproperty_get_attendee(prop);
-                    if (uri && !strncasecmp(uri, "mailto:", 7) && sched_addrs &&
-                            strarray_contains(sched_addrs, uri + 7)) {
+                    const char *uri = icalproperty_get_decoded_calendaraddress(prop);
+                    if (uri && sched_addrs && strarray_contains(sched_addrs, uri)) {
                         /* User updates their own ATTENDEE */
                         if (!(allow_propupdates & propupdate_rsvp))
                             return HTTP_FORBIDDEN;
@@ -692,9 +690,8 @@ static int includes_attendee(icalcomponent *ical, const strarray_t *sched_addrs)
              prop;
              prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
-            const char *uri = icalproperty_get_attendee(prop);
-            if (uri && !strncasecmp(uri, "mailto:", 7) &&
-                    strarray_contains(sched_addrs, uri + 7))
+            const char *uri = icalproperty_get_decoded_calendaraddress(prop);
+            if (uri && strarray_contains(sched_addrs, uri))
                 return 1;
         }
     }
@@ -1167,9 +1164,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     /* Create and cache RFC 5322 header fields for resource */
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (prop) {
-        organizer = icalproperty_get_organizer(prop);
+        organizer = icalproperty_get_decoded_calendaraddress(prop);
         if (organizer) {
-            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
             assert(!buf_len(&txn->buf));
             buf_printf(&txn->buf, "<%s>", organizer);
             mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
@@ -1241,7 +1237,7 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
     ret = dav_store_resource(txn, icalcomponent_as_ical_string(store_ical), 0,
@@ -1427,7 +1423,7 @@ EXPORTED unsigned long config_types_to_caldav_types(void)
         types |= CAL_COMP_VFREEBUSY;
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VAVAILABILITY)
         types |= CAL_COMP_VAVAILABILITY;
-#ifdef VPOLL
+#if defined (WANT_VPOLL) && defined (HAVE_VPOLL_SUPPORT)
     if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VPOLL)
         types |= CAL_COMP_VPOLL;
 #endif
@@ -1619,7 +1615,7 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
                                       httpd_userid, &userdata);
             if (buf_len(&userdata)) {
                 /* Parse the userdata and fetch the validators */
-                dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+                dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
                 if (caldav_get_usedefaultalerts(dl, mailbox, record, NULL)) {
                     bv_set(&data.bump, record->uid);
                 }

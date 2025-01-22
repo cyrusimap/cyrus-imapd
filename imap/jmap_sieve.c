@@ -89,6 +89,30 @@ static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
 
 static jmap_method_t jmap_sieve_methods_standard[] = {
+    {
+        "SieveScript/get",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_get,
+        /*flags*/0
+    },
+    {
+        "SieveScript/set",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_set,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
+    {
+        "SieveScript/query",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_query,
+        /*flags*/0
+    },
+    {
+        "SieveScript/validate",
+        JMAP_URN_SIEVE,
+        &jmap_sieve_validate,
+        JMAP_NEED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 
@@ -141,18 +165,19 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
         return;
     }
 
-    jmap_method_t *mp;
-    for (mp = jmap_sieve_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_sieve_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
-            JMAP_SIEVE_EXTENSION, json_object());
+                        JMAP_URN_SIEVE,
+                        json_pack("{s:s+}",
+                                  "implementation",
+                                  "Cyrus JMAP ", CYRUS_VERSION));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_sieve_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        json_object_set_new(settings->server_capabilities,
+                            JMAP_SIEVE_EXTENSION, json_object());
+
+        jmap_add_methods(jmap_sieve_methods_nonstandard, settings);
     }
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
@@ -167,10 +192,10 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
         sieve_interp_t *interp = sieve_build_nonexec_interp();
         const strarray_t *ext = NULL;
 
-        sieve_capabilities = json_pack("{s:b s:n s:i s:I}",
-                                       "supportsTest", 1,
+        sieve_capabilities = json_pack("{s:n s:i s:i s:I}",
                                        "maxRedirects",
                                        "maxNumberScripts", maxscripts,
+                                       "maxSizeScriptName", SIEVEDIR_MAX_NAME_LEN,
                                        "maxSizeScript", maxscriptsize);
 
         if (interp && (ext = sieve_listextensions(interp))) {
@@ -200,7 +225,12 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
         if (interp) sieve_interp_free(&interp);
     }
 
-    json_object_set(account_capabilities, JMAP_SIEVE_EXTENSION, sieve_capabilities);
+    json_object_set(account_capabilities, JMAP_URN_SIEVE, sieve_capabilities);
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set(account_capabilities,
+                        JMAP_SIEVE_EXTENSION, sieve_capabilities);
+    }
 }
 
 static const jmap_property_t sieve_props[] = {
@@ -723,7 +753,8 @@ static void set_activate(const char *id,
 }
 
 struct sieve_set_args {
-    json_t *onSuccessActivate;
+    const char *onSuccessActivate;
+    int onSuccessDeactivate;
 };
 
 static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
@@ -736,9 +767,17 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
     int r = 1;
 
     if (!strcmp(key, "onSuccessActivateScript")) {
-        if (json_is_string(arg) || json_is_null(arg))
-            set->onSuccessActivate = arg;
+        if (json_is_string(arg))
+            set->onSuccessActivate = json_string_value(arg);
+        else if (json_is_null(arg) &&
+                 jmap_is_using(req, JMAP_SIEVE_EXTENSION))
+            set->onSuccessDeactivate = 1;
         else r = 0;
+    }
+
+    else if (json_is_boolean(arg) &&
+             !strcmp(key, "onSuccessDeactivatescript")) {
+        set->onSuccessDeactivate = json_boolean_value(arg);
     }
 
     else r = 0;
@@ -750,7 +789,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
-    struct sieve_set_args sub_args = { NULL };
+    struct sieve_set_args sub_args = { NULL, 0 };
     json_t *jerr = NULL;
     struct mailbox *mailbox = NULL;
     struct sieve_db *db = NULL;
@@ -769,8 +808,8 @@ static int jmap_sieve_set(struct jmap_req *req)
     }
 
     /* Validate scriptId in onSuccessActivateScript */
-    if (JNOTNULL(sub_args.onSuccessActivate)) {
-        const char *id = json_string_value(sub_args.onSuccessActivate);
+    if (sub_args.onSuccessActivate) {
+        const char *id = sub_args.onSuccessActivate;
         int found;
 
         jmap_parser_push(&parser, "onSuccessActivateScript");
@@ -859,13 +898,14 @@ static int jmap_sieve_set(struct jmap_req *req)
         set_destroy(script_id, mailbox, db, &set);
     }
 
-    if (sub_args.onSuccessActivate &&
-        !json_object_size(set.not_created) &&
+    if (!json_object_size(set.not_created) &&
         !json_object_size(set.not_updated) &&
         !json_array_size(set.not_destroyed)) {
 
-        id = json_string_value(sub_args.onSuccessActivate);
-        set_activate(id, mailbox, db, &set);
+        if (sub_args.onSuccessActivate)
+            set_activate(sub_args.onSuccessActivate, mailbox, db, &set);
+        else if (sub_args.onSuccessDeactivate)
+            set_activate(NULL, mailbox, db, &set);
     }
 
     /* Build response */
@@ -1290,8 +1330,6 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
 
-    *body = NULL;
-
     if (!m->cache_full) fill_cache(m);
 
     *body = spool_getheader(m->cache, phead);
@@ -1566,6 +1604,8 @@ static json_t *_fileinto(json_t *args, sieve_fileinto_context_t *fc)
         json_object_set_new(args, "mailboxid", json_string(fc->mailboxid));
     if (fc->do_create)
         json_object_set_new(args, "create", json_true());
+    if (fc->copy)
+        json_object_set_new(args, "copy", json_true());
 
     return _strlist(args, "flags", fc->imapflags);
 }
@@ -1733,14 +1773,14 @@ static int deleteheader(void *mc, const char *head, int index)
     json_t *args = json_object();
 
     if (index) {
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
 
         json_object_set_new(args, "index", json_integer(abs(index)));
         if (index < 0)
             json_object_set_new(args, "last", json_true());
     }
     else {
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
 
     json_array_append_new(m->actions,
@@ -1827,7 +1867,7 @@ static int snooze(void *ac,
         uint64_t t = arrayu64_nth(sn->times, i);
 
         buf_reset(sd->buf);
-        buf_printf(sd->buf, "%02lu:%02lu:%02lu",
+        buf_printf(sd->buf, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64,
                    t / 3600, (t % 3600) / 60, t % 60);
         json_array_append_new(jtimes, json_string(buf_cstring(sd->buf)));
     }
@@ -1845,6 +1885,45 @@ static void sieve_log(void *sc __attribute__((unused)),
 
     json_array_append_new(m->actions, json_pack("[s {} [s]]", "log", text));
 }
+
+static int processcal(void *ac,
+                      void *ic __attribute__((unused)),
+                      void *sc __attribute__((unused)),
+                      void *mc,
+                      const char **errmsg __attribute__((unused)))
+{
+    sieve_cal_context_t *cal = (sieve_cal_context_t *) ac;
+    message_data_t *m = (message_data_t *) mc;
+    json_t *args = json_object();
+
+    if (cal->calendarid)
+        json_object_set_new(args, "calendarid", json_string(cal->calendarid));
+
+    if (cal->addresses)
+        _strlist(args, "addresses", cal->addresses);
+
+    if (cal->organizers)
+        json_object_set_new(args, "organizers", json_string(cal->organizers));
+
+    if (cal->allow_public)
+        json_object_set_new(args, "allowpublic", json_true());
+
+    if (cal->invites_only)
+        json_object_set_new(args, "invitesonly", json_true());
+
+    if (cal->delete_cancelled)
+        json_object_set_new(args, "deletecanceled", json_true());
+
+    if (cal->updates_only)
+        json_object_set_new(args, "updatesonly", json_true());
+
+    /* processimip until this goes away... */
+    json_array_append_new(m->actions,
+                          json_pack("[s o []]", "processimip", args));
+
+    return SIEVE_OK;
+}
+
 
 static int getinclude(void *sc __attribute__((unused)),
                       const char *script,
@@ -1895,7 +1974,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     const char *key, *scriptid = NULL;
     const char *bcname = NULL, *tmpname = NULL;
-    json_t *arg, *emailids = NULL, *envelope = NULL, *err = NULL;
+    json_t *arg, *emailids = NULL, *envelope = NULL, *variables = NULL, *err = NULL;
     strarray_t env_from = STRARRAY_INITIALIZER;
     strarray_t env_to = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -1906,6 +1985,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_execute_t *exe = NULL;
     time_t last_vaca_resp = 0;
     int r;
+    hash_table vars = HASH_TABLE_INITIALIZER;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -1923,6 +2003,10 @@ static int jmap_sieve_test(struct jmap_req *req)
 
         else if (!strcmp(key, "envelope")) {
             envelope = arg;
+        }
+
+        else if (!strcmp(key, "variables")) {
+            variables = arg;
         }
 
         else if (!strcmp(key, "lastVacationResponse")) {
@@ -1981,6 +2065,26 @@ static int jmap_sieve_test(struct jmap_req *req)
         envelope = NULL;
     }
 
+    /* variables */
+    if (JNOTNULL(variables) && json_is_object(variables)) {
+        jmap_parser_push(&parser, "variables");
+
+        construct_hash_table(&vars, 16, 0);
+
+        const char *key;
+        json_t *value;
+
+        json_object_foreach(variables, key, value) {
+            if (strlen(key) && sieve_is_identifier((char *)key) && json_is_string(value)) {
+                hash_insert(key, xstrdup(json_string_value(value)), &vars);
+            } else {
+                jmap_parser_invalid(&parser, key);
+            }
+        }
+    } else if JNOTNULL(variables) {
+        jmap_parser_invalid(&parser, "variables");
+    }
+
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s s:O}", "type", "invalidArguments",
                         "arguments", parser.invalid);
@@ -2015,7 +2119,7 @@ static int jmap_sieve_test(struct jmap_req *req)
         if (err) goto done;
 
         /* Generate temporary bytecode file */
-        static char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
+        char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
         sieve_script_t *s = NULL;
         bytecode_info_t *bc = NULL;
         char *errors = NULL;
@@ -2035,6 +2139,9 @@ static int jmap_sieve_test(struct jmap_req *req)
                             "description", "unable to generate bytecode");
         }
         else if ((fd = mkstemp(template)) < 0) {
+            xsyslog(LOG_WARNING,
+                    "failed to create template", "template=<%s>", template);
+
             err = json_pack("{s:s s:s}", "type", "serverFail",
                             "description", "unable to open temporary file");
         }
@@ -2060,6 +2167,8 @@ static int jmap_sieve_test(struct jmap_req *req)
         goto done;
     }
 
+    interp_ctx.cstate = req->cstate;
+
     /* create interpreter */
     interp = sieve_interp_alloc(&interp_ctx);
     sieve_register_header(interp, getheader);
@@ -2084,7 +2193,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_notify(interp, notify, NULL);
     sieve_register_snooze(interp, snooze);
     sieve_register_logger(interp, sieve_log);
-        
+    sieve_register_processcal(interp, processcal);
     sieve_register_include(interp, getinclude);
     sieve_register_execute_error(interp, execute_error);
 
@@ -2128,7 +2237,9 @@ static int jmap_sieve_test(struct jmap_req *req)
             jmap_namespace.isutf8 = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO);
             err = NULL;
             m.actions = json_array();
-            sieve_execute_bytecode(exe, interp, &sd, &m);
+
+            sieve_execute_bytecode(exe, interp, &sd, &m, &vars);
+
             jmap_namespace.isutf8 = 0;
 
             if (err) {
@@ -2149,7 +2260,6 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
     }
 
-    if (interp_ctx.cstate) conversations_commit(&interp_ctx.cstate);
     if (interp_ctx.carddavdb) carddav_close(interp_ctx.carddavdb);
 
     /* Build response */
@@ -2175,6 +2285,7 @@ done:
     strarray_fini(&env_from);
     strarray_fini(&env_to);
     buf_free(&buf);
+    free_hash_table(&vars, free);
     if (tmpname) {
         /* Remove temp bytecode file */
         xunlink(tmpname);

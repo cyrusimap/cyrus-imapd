@@ -77,33 +77,26 @@ static int newsrc_dbopen = 0;
 /* must be called after cyrus_init */
 static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 {
-    char buf[1024];
-    int r = 0;
+    int r;
+    char *tofree = NULL;
 
-    if (r != 0)
-        syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
-               cyrusdb_strerror(r));
-    else {
-        char *tofree = NULL;
+    if (!fname)
+        fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
 
-        if (!fname)
-            fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
-
-        /* create db file name */
-        if (!fname) {
-            tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
-            fname = tofree;
-        }
-
-        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
-        if (r != 0)
-            syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-                   cyrusdb_strerror(r));
-        else
-            newsrc_dbopen = 1;
-
-        free(tofree);
+    /* create db file name */
+    if (!fname) {
+        tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
+        fname = tofree;
     }
+
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
+    if (r != 0)
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+               cyrusdb_strerror(r));
+    else
+        newsrc_dbopen = 1;
+
+    free(tofree);
 
     return r;
 }
@@ -132,7 +125,7 @@ static void usage(void)
     exit(-1);
 }
 
-int init_net(const char *host, char *port,
+int init_net(const char *host, const char *port,
              struct protstream **in, struct protstream **out)
 {
     int sock = -1;
@@ -253,11 +246,11 @@ static int fetch(char *msgid, int bymsgid,
 int main(int argc, char *argv[])
 {
     int opt;
-    char *alt_config = NULL, *port = "119";
+    const char *alt_config = NULL, *port = "119";
     const char *peer = NULL, *server = "localhost", *wildmat = "*";
     char *authname = NULL, *password = NULL;
     int psock = -1, ssock = -1;
-    struct protstream *pin, *pout, *sin, *sout;
+    struct protstream *pin, *pout, *sin = NULL, *sout = NULL;
     char buf[BUFFERSIZE];
     char sfile[1024] = "";
     int fd = -1, i, offered, rejected, accepted, failed;
@@ -284,6 +277,8 @@ int main(int argc, char *argv[])
     while (-1 != (opt = getopt_long(argc, argv,
                                     short_options, long_options, NULL)))
     {
+        char *colon;
+
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -291,8 +286,10 @@ int main(int argc, char *argv[])
 
         case 's': /* server */
             server = xstrdup(optarg);
-            if ((port = strchr(server, ':')))
-                *port++ = '\0';
+            if ((colon = strchr(server, ':'))) {
+                *colon = '\0';
+                port = colon + 1;
+            }
             else
                 port = "119";
             break;

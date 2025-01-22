@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_card_parse
-    :min_version_3_9 :needs_component_jmap :needs_dependency_icalvcard
+    :min_version_3_9 :needs_dependency_icalvcard
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -41,7 +41,7 @@ EOF
     my $res = $jmap->Upload($card, "text/vcard");
     my $blobId = $res->{blobId};
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/parse', {
             blobIds => [ $blobId ],
             properties => [ "\@type", "uid", "name", "media", "vCardProps" ]

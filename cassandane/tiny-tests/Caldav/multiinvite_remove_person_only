@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_multiinvite_remove_person_only
-    :needs_component_httpd
 {
     my ($self) = @_;
 

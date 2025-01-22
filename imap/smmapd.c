@@ -101,7 +101,9 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-const char *BB;
+#include "master/service.h"
+
+static const char *BB;
 static int forcedowncase;
 
 extern int optind, opterr;
@@ -166,7 +168,8 @@ EXPORTED void fatal(const char* s, int code)
     }
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
-    abort();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
     shut_down(code);
 }

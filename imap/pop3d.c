@@ -93,6 +93,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 #include "statuscache.h"
 
 #include "iostat.h"
@@ -160,10 +162,15 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 static struct namespace popd_namespace;
 
 /* PROXY stuff */
-struct backend *backend = NULL;
+static struct backend *backend = NULL;
+
+static const struct tls_alpn_t pop3_alpn_map[] = {
+    { "pop3", NULL, NULL },
+    { "",     NULL, NULL }
+};
 
 static struct protocol_t pop3_protocol =
-{ "pop3", "pop", TYPE_STD,
+{ "pop3", "pop", pop3_alpn_map, TYPE_STD,
   { { { 0, "+OK " },
       { "CAPA", NULL, ".", NULL,
         CAPAF_ONE_PER_LINE,
@@ -187,7 +194,7 @@ static void cmd_auth(char *arg);
 static void cmd_capa(void);
 static void cmd_pass(char *pass);
 static void cmd_user(char *user);
-static void cmd_starttls(int pop3s);
+static void cmd_stls(int pop3s);
 static int blat(int msg, int lines);
 static int openinbox(void);
 static void cmdloop(void);
@@ -519,7 +526,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on pop3s port so we should do
        TLS negotiation immediatly */
-    if (pop3s == 1) cmd_starttls(1);
+    if (pop3s == 1) cmd_stls(1);
 
     /* Create APOP challenge for banner */
     *popd_apop_chal = 0;
@@ -674,6 +681,9 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(popd_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
@@ -924,7 +934,7 @@ done:
                     /* XXX  discard any input pipelined after STLS */
                     prot_flush(popd_in);
 
-                    cmd_starttls(0);
+                    cmd_stls(0);
                 }
             }
             else {
@@ -1145,7 +1155,7 @@ void uidl_msg(uint32_t msgno)
 }
 
 #ifdef HAVE_SSL
-static void cmd_starttls(int pop3s)
+static void cmd_stls(int pop3s)
 {
     int result;
     char *localip, *remoteip;
@@ -1157,10 +1167,11 @@ static void cmd_starttls(int pop3s)
         return;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("pop3",
                                  5,        /* depth to verify */
                                  !pop3s,   /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -1192,6 +1203,7 @@ static void cmd_starttls(int pop3s)
                                1, /* write */
                                pop3s ? 180 : popd_timeout,
                                &saslprops,
+                               pop3_alpn_map,
                                &tls_conn);
 
     /* put the iplocalport and ipremoteport back */
@@ -1200,25 +1212,15 @@ static void cmd_starttls(int pop3s)
 
     /* if error */
     if (result==-1) {
-        if (pop3s == 0) {
-            prot_printf(popd_out, "-ERR [SYS/PERM] Starttls failed\r\n");
-            syslog(LOG_NOTICE, "[pop3d] STARTTLS failed: %s", popd_clienthost);
-        } else {
-            syslog(LOG_NOTICE, "pop3s failed: %s", popd_clienthost);
-            shut_down(0);
-        }
-        return;
+        syslog(LOG_NOTICE, "TLS negiation failed: %s", popd_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, popd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (pop3s == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
-        } else {
-            shut_down(0);
-        }
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_stls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -1229,9 +1231,9 @@ static void cmd_starttls(int pop3s)
     popd_tls_required = 0;
 }
 #else
-static void cmd_starttls(int pop3s __attribute__((unused)))
+static void cmd_stls(int pop3s __attribute__((unused)))
 {
-    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
+    fatal("cmd_stls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 
@@ -1836,7 +1838,7 @@ int openinbox(void)
         mailbox_unlock_index(popd_mailbox, NULL);
     }
 
-    limits.procname = "pop3d";
+    limits.servicename = config_ident;
     limits.clienthost = popd_clienthost;
     limits.userid = popd_userid;
     if (proc_checklimits(&limits)) {

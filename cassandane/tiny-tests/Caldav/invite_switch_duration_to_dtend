@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_invite_switch_duration_to_dtend
-    :VirtDomains :min_version_3_7 :needs_component_httpd
+    :VirtDomains :min_version_3_7
 {
     my ($self) = @_;
 

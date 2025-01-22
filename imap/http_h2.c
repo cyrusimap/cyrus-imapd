@@ -721,9 +721,6 @@ static int resp_body_chunk(struct transaction_t *txn,
     static unsigned char md5[MD5_DIGEST_LENGTH];
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
-    uint8_t flags = NGHTTP2_FLAG_END_STREAM;
-    nghttp2_data_provider prd;
-    int r;
 
     syslog(LOG_DEBUG, "http2_resp_data_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
@@ -749,15 +746,13 @@ static int resp_body_chunk(struct transaction_t *txn,
 
     /* NOTE: The protstream that we use as the data source MUST remain
        available until the data source read callback has retrieved all data.
-       Also note that we need to make a copy of the data because data frames
-       may not be sent prior to the original pointer becoming invalid.
     */
-    struct protstream *s = prot_readmap(xmemdup(data, datalen), datalen);
-    s->buf = s->ptr;  /* So prot_free() will free the copy of the data */
+    nghttp2_data_provider prd = {
+        .source.ptr    = prot_readmap(data, datalen),
+        .read_callback = data_source_read_cb
+    };
 
-    prd.source.ptr = s;
-    prd.read_callback = data_source_read_cb;
-
+    uint8_t flags = NGHTTP2_FLAG_END_STREAM;
     if (txn->flags.te) {
         if (!last_chunk) {
             flags = NGHTTP2_FLAG_NONE;
@@ -774,9 +769,10 @@ static int resp_body_chunk(struct transaction_t *txn,
     syslog(LOG_DEBUG, "nghttp2_submit_data(id=%d, datalen=%d, flags=%#x)",
            strm->id, datalen, flags);
 
-    r = nghttp2_submit_data(ctx->session, flags, strm->id, &prd);
+    int r = nghttp2_submit_data(ctx->session, flags, strm->id, &prd);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_data: %s", nghttp2_strerror(r));
+        prot_free(prd.source.ptr);
         return HTTP_SERVER_ERROR;
     }
     else {

@@ -7,7 +7,6 @@ use Clone 'clone';
 use Data::UUID;
 
 sub test_email_set_create_encoding
-    :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -147,14 +146,14 @@ sub test_email_set_create_encoding
         wantContentType => 'text/plain; charset=utf-8',
     }, {
         desc => 'text/plain with multi-byte UTF-8 and no charset',
-        blob => "$ to \xc2\xa3",
+        blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
         },
         wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/plain with multi-byte UTF-8 and us-ascii charset',
-        blob => "$ to \xc2\xa3",
+        blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
             charset => 'us-ascii',
@@ -162,7 +161,7 @@ sub test_email_set_create_encoding
         wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/plain with multi-byte UTF-8 as attachment',
-        blob => "$ to \xc2\xa3",
+        blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
             disposition => 'attachment',
@@ -171,7 +170,7 @@ sub test_email_set_create_encoding
         wantContentType => 'text/plain',
     }, {
         desc => 'text/plain with multi-byte UTF-8 and utf-8 charset',
-        blob => "$ to \xc2\xa3",
+        blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
             charset => 'utf-8',
@@ -636,7 +635,6 @@ sub test_email_set_create_encoding
 
         if ($writeEmail2MimeTests) {
             # Make this email as reproducible as possible.
-            $email->{'header:X-Mailer'} = 'email2MimeTest';
             $email->{'header:Date'} = 'Thu, 20 Jun 2024 13:28:51 +0200';
             $email->{messageId} = [$uuidgen->create_str() . '@local'];
         }
@@ -691,8 +689,9 @@ sub test_email_set_create_encoding
                 }, $jmapResponses{createEmail}{notCreated}{$emailCreationId});
         } else {
             my $jres = $jmapResponses{createEmail};
-            $self->assert_not_null($jmapResponses{createEmail}{
-                created}{$emailCreationId});
+            $self->assert_not_null(
+              $jmapResponses{createEmail}{created}{$emailCreationId}
+            );
 
             xlog $self, "Assert expected encoding and content type";
             my $gotBodyPart = $jmapResponses{getEmail}{list}[0]{bodyStructure};
@@ -733,8 +732,8 @@ sub test_email_set_create_encoding
                     invalidProperties => clone($tc->{wantInvalidProperties}),
                 };
             } else {
-                my $emailBlobId = $jmapResponses{createEmail}{
-                    created}{$emailCreationId}{blobId};
+                my $emailBlobId = $jmapResponses{createEmail}
+                                   {created}{$emailCreationId}{blobId};
                 my $res = $jmap->Download('cassandane', $emailBlobId);
                 $mimeTest->{want} = {
                     mimeMessage => encode_base64($res->{content}, "")

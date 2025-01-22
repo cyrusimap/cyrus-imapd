@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_deliver_fileinto_autocreate_newuser
-    :needs_component_sieve :NoStartInstances :NoAltNameSpace
+    :NoStartInstances :NoAltNameSpace
 {
     my ($self) = @_;
 

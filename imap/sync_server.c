@@ -105,6 +105,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 #include "message_guid.h"
 #include "sync_support.h"
 /*#include "cdb.h"*/
@@ -465,6 +467,7 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(sync_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
     shut_down(code);
 }
 
@@ -850,19 +853,20 @@ static void cmd_starttls(void)
                                1, /* write */
                                180, /* 3 minutes */
                                &saslprops,
+                               NULL, /* no ALPN id for csync */
                                &tls_conn);
 
     /* if error */
     if (result==-1) {
-        prot_printf(sync_out, "NO Starttls failed\r\n");
-        syslog(LOG_NOTICE, "STARTTLS failed: %s", sync_clienthost);
-        return;
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", sync_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, sync_saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */

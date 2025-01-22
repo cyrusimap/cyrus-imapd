@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_query_punct_no_text
-    :needs_component_sieve :needs_component_jmap :JMAPExtensions
+    :needs_component_sieve :JMAPExtensions
 {
     my ($self) = @_;
     my $imap = $self->{store}->get_client();

@@ -71,15 +71,15 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ };
 
 static int verbose = 0;
 
-int mode = UNKNOWN;
+static int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
-int recalc_silent = 1;
-hashu64_table *zerocids = NULL;
+static int recalc_silent = 1;
+static hashu64_table *zerocids = NULL;
 
 static int do_dump(const char *fname, const char *userid)
 {
@@ -227,6 +227,91 @@ done:
     conversations_commit(&state);
     return r;
 }
+
+static int zero_modseq_cb(const mbentry_t *mbentry,
+                          void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    if (r) {
+        fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
+        return 0;
+    }
+
+    mailbox_modseq_dirty(mailbox);
+    // update the header values
+    mailbox->i.createdmodseq = 1;
+    mailbox->i.highestmodseq = 1;
+    mailbox->i.deletedmodseq = 0;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+
+        if (record->modseq > 1) {
+            struct index_record oldrecord = *record;
+            oldrecord.modseq = 1;
+            oldrecord.silentupdate = 1; // avoid bumping the highestmodseq!
+            r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+            if (r) break;
+        }
+    }
+
+    mailbox_iter_done(&iter);
+    mailbox_close(&mailbox);
+
+    if (r) return r;
+
+    if (mbentry->createdmodseq > 1 || mbentry->foldermodseq > 1) {
+        mbentry_t *copy = mboxlist_entry_copy(mbentry);
+        copy->createdmodseq = 1;
+        copy->foldermodseq = 1;
+        r = mboxlist_update_full(copy, /*localonly*/1, /*silent*/1);
+        mboxlist_entry_free(&copy);
+    }
+
+    return r;
+}
+
+static int do_zeromodseq(const char *userid)
+{
+    imaply_strict = 0;
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct conversations_state *state = NULL;
+    struct quota q;
+    struct txn *txn = NULL;
+    int r = 0;
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) return r;
+
+    r = mboxlist_usermboxtree(userid, NULL, zero_modseq_cb, NULL, 0);
+    if (r) goto done;
+
+    r = conversations_zero_modseq(state);
+    if (r) goto done;
+
+    quota_init(&q, inboxname);
+    r = quota_read(&q, &txn, 1);
+    if (!r) {
+        q.modseq = 1;
+        r = quota_write(&q, /*silent*/1, &txn);
+    }
+    quota_free(&q);
+    if (r) goto done;
+    quota_commit(&txn);
+
+    mboxname_zero_counters(inboxname);
+
+  done:
+    conversations_commit(&state);
+    free(inboxname);
+    return r;
+}
+
 
 static int build_cid_cb(const mbentry_t *mbentry,
                         void *rock __attribute__((unused)))
@@ -823,6 +908,11 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
             r = EX_NOINPUT;
         break;
 
+    case ZEROMODSEQ:
+        if (do_zeromodseq(userid))
+            r = EX_NOINPUT;
+        break;
+
     case BUILD:
         if (do_build(userid))
             r = EX_NOINPUT;
@@ -872,12 +962,13 @@ int main(int argc, char **argv)
     int recursive = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FRST:bdruvzZ:";
+    static const char short_options[] = "AC:FMRST:bdruvzZ:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
         /* n.b. no long option for -C */
         { "check-folders", no_argument, NULL, 'F' },
+        { "clearmodseq", no_argument, NULL, 'M' },
         { "update-counts", no_argument, NULL, 'R' },
         { "split", no_argument, NULL, 'S' },
         { "audit-temp-directory", required_argument, NULL, 'T' },
@@ -935,6 +1026,12 @@ int main(int argc, char **argv)
                     hashu64_insert(cid, (void*)1, zerocids);
             }
             strarray_free(ids);
+            break;
+
+        case 'M':
+            if (mode != UNKNOWN && mode != ZEROMODSEQ)
+                usage(argv[0]);
+            mode = ZEROMODSEQ;
             break;
 
         case 'b':
@@ -1038,6 +1135,8 @@ EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "ctl_conversationsdb: %s\n", s);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
-

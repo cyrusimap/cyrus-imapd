@@ -142,20 +142,15 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
 /* XXX - these two functions should be out in append.c or reserve.c
  * or something more general */
-EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isbackup,
+EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
                                         const struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
     const char *base = NULL;
 
     /* part must be a configured partition name on this server */
-    if (isbackup) {
-        base = config_backupstagingpath();
-    }
-    else {
-        if (isarchive) base = config_archivepartitiondir(part);
-        if (!base) base = config_partitiondir(part);
-    }
+    if (isarchive) base = config_archivepartitiondir(part);
+    if (!base) base = config_partitiondir(part);
 
     /* we expect to have a base at this point, so let's assert that */
     assert(base != NULL);
@@ -183,7 +178,7 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive, int isb
 
 static int reservefile(struct protstream *in, const char *part,
                        struct message_guid *guid, unsigned long size,
-                       int isarchive, int isbackup, const char **fname)
+                       int isarchive, const char **fname)
 {
     static struct message_guid debug_writefail_guid = MESSAGE_GUID_INITIALIZER;
     FILE *file;
@@ -205,7 +200,7 @@ static int reservefile(struct protstream *in, const char *part,
     }
 
     /* XXX - write to a temporary file then move in to place! */
-    *fname = dlist_reserve_path(part, isarchive, isbackup, guid);
+    *fname = dlist_reserve_path(part, isarchive, guid);
 
     /* remove any duplicates if they're still here */
     xunlink(*fname);
@@ -1112,7 +1107,7 @@ static char next_nonspace(struct protstream *in, char c)
 /* XXX accumulating a lot of flag arguments here, perhaps we should
  * XXX consolidate them into a single flags argument with defined bits
  */
-EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive, int isbackup,
+EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
                           struct protstream *in)
 {
     struct dlist *dl = NULL;
@@ -1140,7 +1135,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive, int is
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, 0, isarchive, isbackup, in);
+            c = dlist_parse(&di, 0, isarchive, in);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -1156,7 +1151,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive, int is
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, 1, isarchive, isbackup, in);
+                c = dlist_parse(&di, 1, isarchive, in);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -1177,7 +1172,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive, int is
             if (c == '\r') c = prot_getc(in);
             if (c != '\n') goto fail;
             if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
-            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, isbackup, &fname)) goto fail;
+            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, &fname)) goto fail;
             dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
             /* file literal */
         }
@@ -1216,7 +1211,7 @@ fail:
 EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in)
 {
-    int c = dlist_parse(dlp, parsekey, 0, 0, in);
+    int c = dlist_parse(dlp, parsekey, 0, in);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1228,7 +1223,7 @@ EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
     return c;
 }
 
-EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey, int isbackup,
+EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
                    const char *base, unsigned len)
 {
     struct protstream *stream;
@@ -1240,7 +1235,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey, int isbackup,
     /* Allow LITERAL+ - this is silly, but required to parse personal CALDATA */
     prot_setisclient(stream, 1);
 
-    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, isbackup, stream);
+    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, stream);
     prot_free(stream);
 
     if (c != EOF) {
@@ -1732,7 +1727,7 @@ EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
     struct buf buf = BUF_INITIALIZER;
     struct dlist *new = NULL;
     dlist_printbuf(dl, 1, &buf);
-    dlist_parsemap(&new, 1, 0, buf_base(&buf), buf_len(&buf));
+    dlist_parsemap(&new, 1, buf_base(&buf), buf_len(&buf));
     buf_free(&buf);
     return new;
 }

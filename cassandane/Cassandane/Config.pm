@@ -103,6 +103,7 @@ sub default
             configdirectory => '@basedir@/conf',
             syslog_prefix => '@name@',
             sievedir => '@basedir@/conf/sieve',
+            master_ready_file => '@basedir@/master.ready',
             defaultpartition => 'default',
             defaultdomain => 'defdomain',
             'partition-default' => '@basedir@/data',
@@ -110,8 +111,6 @@ sub default
             allowplaintext => 'yes',
             # for debugging - see cassandane.ini.example
             debug_command => '@prefix@/utils/gdbtramp %s %d',
-            # everyone should be running this
-            improved_mboxlist_sort => 'yes',
             # default changed, we want to be explicit about it
             unixhierarchysep => 'no',
             # let's hear all about it
@@ -119,6 +118,17 @@ sub default
             chatty => 'yes',
             debug => 'yes',
             httpprettytelemetry => 'yes',
+
+            # smtpclient_open should fail by default!
+            #
+            # If your test fails and writes something like
+            #     smptclient_open: can't connect to host: bogus:0/noauth
+            # in syslog, then Cyrus is calling smtpclient_open(), and you
+            # will need to arrange for fakesmtpd to be listening.  To do
+            # this add :want_smtpdaemon to the test attributes, or enable
+            # smtpdaemon in the suite constructor.
+            smtp_backend => 'host',
+            smtp_host => 'bogus:0',
         );
         my $defs = Cassandane::Cassini->instance()->get_section('config');
         $default->set(%$defs);

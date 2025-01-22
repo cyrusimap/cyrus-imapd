@@ -909,23 +909,12 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
     return finish_txn(db, tid, 0);
 }
 
-/* SQL databases have all sorts of evil collations - we can't
- * make any assumptions though, so just assume raw */
-static int mycompar(struct dbengine *db __attribute__((unused)),
-                    const char *a, int alen,
-                    const char *b, int blen)
-{
-    (void)db;
-    return bsearch_ncompare_raw(a, alen, b, blen);
-}
-
 HIDDEN struct cyrusdb_backend cyrusdb_sql =
 {
     "sql",                      /* name */
 
     &init,
     &done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_noarchive,
     NULL,
 
@@ -941,11 +930,14 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 
     NULL,
     NULL,
     NULL,
-    &mycompar
+    /* SQL databases have all sorts of evil collations - we can't
+     * make any assumptions though, so just assume raw */
+    &bsearch_ncompare_raw
 };

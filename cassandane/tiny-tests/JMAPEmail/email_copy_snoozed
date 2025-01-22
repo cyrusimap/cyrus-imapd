@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_copy_snoozed
-    :min_version_3_9 :needs_component_jmap :JMAPExtensions
+    :min_version_3_9 :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -43,7 +43,7 @@ sub test_email_copy_snoozed
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
 
     xlog $self, "create snoozed email";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Email/set', {
             create => {
                 1 => {

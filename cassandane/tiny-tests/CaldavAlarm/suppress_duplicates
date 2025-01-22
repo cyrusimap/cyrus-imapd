@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_suppress_duplicates
-    :needs_component_calalarmd
 {
     my ($self) = @_;
     my $caldav = $self->{caldav};

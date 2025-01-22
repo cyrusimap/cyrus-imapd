@@ -52,6 +52,7 @@ extern int proc_register(struct proc_handle **handlep,
                          const char *mailbox,
                          const char *cmd);
 extern void proc_cleanup(struct proc_handle **handlep);
+extern void proc_force_cleanup(pid_t pid);
 
 typedef int procdata_t(pid_t pid,
                        const char *servicename, const char *clienthost,
@@ -60,7 +61,7 @@ typedef int procdata_t(pid_t pid,
 extern int proc_foreach(procdata_t *func, void *rock);
 
 struct proc_limits {
-    const char *procname;
+    const char *servicename;
     const char *clienthost;
     const char *userid;
     int user;

@@ -91,28 +91,28 @@ sub test_uri
     $self->assert(ref $ms eq 'Cassandane::MaildirMessageStore');
     $self->assert($ms->{directory} eq '/foo/bar');
 
-    $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://victoria:secret@foo.com:9143/inbox.foo');
+    $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://victoria:secret@foo.com:29143/inbox.foo');
     $self->assert(ref $ms eq 'Cassandane::IMAPMessageStore');
     $self->assert($ms->{username} eq 'victoria');
     $self->assert($ms->{password} eq 'secret');
     $self->assert($ms->{host} eq 'foo.com');
-    $self->assert($ms->{port} == 9143);
+    $self->assert($ms->{port} == 29143);
     $self->assert($ms->{folder} eq 'inbox.foo');
 
-    $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://victoria@foo.com:9143/inbox.foo');
+    $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://victoria@foo.com:29143/inbox.foo');
     $self->assert(ref $ms eq 'Cassandane::IMAPMessageStore');
     $self->assert($ms->{username} eq 'victoria');
     $self->assert(!defined $ms->{password});
     $self->assert($ms->{host} eq 'foo.com');
-    $self->assert($ms->{port} == 9143);
+    $self->assert($ms->{port} == 29143);
     $self->assert($ms->{folder} eq 'inbox.foo');
 
-    $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://foo.com:9143/inbox.foo');
+    $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://foo.com:29143/inbox.foo');
     $self->assert(ref $ms eq 'Cassandane::IMAPMessageStore');
     $self->assert(!defined $ms->{username});
     $self->assert(!defined $ms->{password});
     $self->assert($ms->{host} eq 'foo.com');
-    $self->assert($ms->{port} == 9143);
+    $self->assert($ms->{port} == 29143);
     $self->assert($ms->{folder} eq 'inbox.foo');
 
     $ms = Cassandane::MessageStoreFactory->create(uri => 'imap://foo.com/inbox.foo');

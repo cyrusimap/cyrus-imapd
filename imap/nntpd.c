@@ -114,6 +114,8 @@
 #include "imap/imap_err.h"
 #include "imap/nntp_err.h"
 
+#include "master/service.h"
+
 extern int optind;
 extern char *optarg;
 extern int opterr;
@@ -123,10 +125,10 @@ extern int opterr;
    currently piping */
 
 /* the current server most commands go to */
-struct backend *backend_current = NULL;
+static struct backend *backend_current = NULL;
 
 /* our cached connections */
-ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
+static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 #ifdef HAVE_SSL
 static SSL *tls_conn;
@@ -259,8 +261,13 @@ static char *nntp_parsesuccess(char *str, const char **status)
     return success;
 }
 
+static const struct tls_alpn_t nntp_alpn_map[] = {
+    { "nntp", NULL, NULL },
+    { "",     NULL, NULL }
+};
+
 static struct protocol_t nntp_protocol =
-{ "nntp", "nntp", TYPE_STD,
+{ "nntp", "nntp", nntp_alpn_map, TYPE_STD,
   { { { 0, "20" },
       { "CAPABILITIES", NULL, ".", NULL,
         CAPAF_ONE_PER_LINE,
@@ -646,6 +653,9 @@ EXPORTED void fatal(const char* s, int code)
     }
     if (stage) append_removestage(stage);
     syslog(LOG_ERR, "Fatal error: %s", s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
@@ -716,7 +726,7 @@ static void cmdloop(void)
     static struct buf cmd, arg1, arg2, arg3, arg4;
     char *p, *result, buf[1024];
     const char *err;
-    uint32_t uid, last;
+    uint32_t uid = 0, last = 0;
     struct backend *be;
     char curgroup[MAX_MAILBOX_BUFFER] = "";
 
@@ -2045,7 +2055,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     int r, sasl_result;
     char *success_data;
     sasl_ssf_t ssf;
-    char *ssfmsg = NULL;
+    const char *ssfmsg = NULL;
     const void *val;
     int failedloginpause;
     struct proc_limits limits;
@@ -2207,7 +2217,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         }
     }
 
-    limits.procname = "nntpd";
+    limits.servicename = config_ident;
     limits.clienthost = nntp_clienthost;
     limits.userid = nntp_userid;
     if (proc_checklimits(&limits)) {
@@ -2566,7 +2576,7 @@ static int newsgroups_cb(const char *mailbox,
 static void cmd_list(char *arg1, char *arg2)
 {
     if (!arg1)
-        arg1 = "active";
+        arg1 = (char *) "active";
     else
         lcase(arg1);
 
@@ -2574,7 +2584,7 @@ static void cmd_list(char *arg1, char *arg2)
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = "*";
+        if (!arg2) arg2 = (char *) "*";
 
         erock.cmd = "ACTIVE";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -2631,7 +2641,7 @@ static void cmd_list(char *arg1, char *arg2)
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = "*";
+        if (!arg2) arg2 = (char *) "*";
 
         erock.cmd = "NEWSGROUPS";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -3632,7 +3642,7 @@ static void feedpeer(char *peer, message_data_t *msg)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if (!port || !*port) port = "119";
+    if (!port || !*port) port = (char *) "119";
     if (getaddrinfo(host, port, &hints, &res0) != 0) {
         syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
         return;
@@ -4009,10 +4019,11 @@ static void cmd_starttls(int nntps)
         return;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("nntp",
                                  5,        /* depth to verify */
                                  !nntps,   /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -4037,29 +4048,20 @@ static void cmd_starttls(int nntps)
                                1, /* write */
                                nntps ? 180 : nntp_timeout,
                                &saslprops,
+                               nntp_alpn_map,
                                &tls_conn);
 
     /* if error */
     if (result == -1) {
-        if (nntps == 0) {
-            prot_printf(nntp_out, "580 Starttls failed\r\n");
-            syslog(LOG_NOTICE, "[nntpd] STARTTLS failed: %s", nntp_clienthost);
-            return;
-        } else {
-            syslog(LOG_NOTICE, "nntps failed: %s", nntp_clienthost);
-            shut_down(0);
-        }
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", nntp_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, nntp_saslconn);
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
-        if (nntps == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
-        } else {
-            shut_down(0);
-        }
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */

@@ -72,7 +72,6 @@ extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
 extern struct cyrusdb_backend cyrusdb_sql;
 extern struct cyrusdb_backend cyrusdb_twoskip;
-extern struct cyrusdb_backend cyrusdb_zeroskip;
 
 static struct cyrusdb_backend *_backends[] = {
     &cyrusdb_flat,
@@ -82,9 +81,6 @@ static struct cyrusdb_backend *_backends[] = {
     &cyrusdb_sql,
 #endif
     &cyrusdb_twoskip,
-#if defined HAVE_ZEROSKIP
-    &cyrusdb_zeroskip,
-#endif
     NULL };
 
 #define DEFAULT_BACKEND "twoskip"
@@ -335,6 +331,17 @@ EXPORTED int cyrusdb_delete(struct db *db,
     return db->backend->delete_(db->engine, key, keylen, tid, force);
 }
 
+EXPORTED int cyrusdb_lock(struct db *db, struct txn **tid, int flags)
+{
+    if (!db->backend->lock)
+        return CYRUSDB_NOTIMPLEMENTED;
+#ifdef DEBUGDB
+    syslog(LOG_NOTICE, "DEBUGDB lock(%llx, %d)\n", (long long unsigned)db->engine, flags);
+#endif
+    return db->backend->lock(db->engine, tid, flags);
+
+}
+
 EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)
 {
     if (!db->backend->commit)
@@ -374,12 +381,10 @@ EXPORTED int cyrusdb_repack(struct db *db)
 }
 
 EXPORTED int cyrusdb_compar(struct db *db,
-                   const char *a, int alen,
-                   const char *b, int blen)
+                   const char *a, size_t alen,
+                   const char *b, size_t blen)
 {
-    if (!db->backend->compar)
-        return bsearch_ncompare_raw(a, alen, b, blen);
-    return db->backend->compar(db->engine, a, alen, b, blen);
+    return db->backend->compar(a, alen, b, blen);
 }
 
 /**********************************************/
@@ -617,12 +622,6 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
     return NULL;
 }
 
-EXPORTED int cyrusdb_sync(const char *backend)
-{
-    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
-    return db->sync();
-}
-
 EXPORTED int cyrusdb_unlink(const char *backend, const char *fname, int flags)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
@@ -665,11 +664,6 @@ HIDDEN int cyrusdb_generic_init(const char *dbdir __attribute__((unused)),
 }
 
 HIDDEN int cyrusdb_generic_done(void)
-{
-    return 0;
-}
-
-HIDDEN int cyrusdb_generic_sync(void)
 {
     return 0;
 }

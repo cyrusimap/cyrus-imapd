@@ -80,7 +80,11 @@ my %custom_header = (
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ adminstore => 1 }, @_);
+
+    my $self = $class->SUPER::new({ adminstore => 1 }, @_);
+
+    $self->needs('dependency', 'clamav');
+    return $self;
 }
 
 sub set_up
@@ -96,7 +100,6 @@ sub tear_down
 }
 
 sub test_aaasetup
-    :needs_dependency_clamav
 {
     my ($self) = @_;
 
@@ -106,7 +109,7 @@ sub test_aaasetup
 
 # This test uses the AV engine, which can be very slow to initialise.
 sub test_remove_infected_slow
-    :needs_dependency_clamav :NoAltNamespace
+    :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -184,7 +187,6 @@ sub test_remove_infected_slow
 # than waiting for the AV engine to load when we just care about whether
 # the notification gets sent
 sub test_notify_deleted
-    :needs_dependency_clamav
 {
     my ($self) = @_;
 
@@ -245,7 +247,7 @@ sub test_notify_deleted
 # XXX https://github.com/cyrusimap/cyrus-imapd/issues/2516 might be
 # XXX backported to 3.0 if anyone volunteers to test it
 sub test_custom_notify_deleted
-    :needs_dependency_clamav :NoStartInstances
+    :NoStartInstances
     :min_version_3_1
 {
     my ($self) = @_;

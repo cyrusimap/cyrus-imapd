@@ -2,16 +2,16 @@
 use Cassandane::Tiny;
 
 sub test_email_copy
-    :min_version_3_1 :needs_component_sieve :needs_component_jmap
+    :min_version_3_1 :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog $self, "Create user and share mailbox";
+    xlog $self, "Create user and share mailbox read-only";
     $self->{instance}->create_user("other");
-    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+    $admintalk->setacl("user.other", "cassandane", "lrs") or die;
 
     my $srcInboxId = $self->getinbox()->{id};
     $self->assert_not_null($srcInboxId);
@@ -59,6 +59,32 @@ sub test_email_copy
     # Safeguard receivedAt asserts.
     sleep 1;
 
+    xlog $self, "attempt to move email - fail to copy and no /set sub-request";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'bar' => JSON::true,
+                    },
+                },
+            },
+            onSuccessDestroyOriginal => JSON::true,
+        }, 'R1'],
+    ]);
+
+    $self->assert_num_equals(1, scalar @{$res});
+    $self->assert_not_null($res->[0][1]->{notCreated}{1});
+
+    xlog $self, "share mailbox read-write";
+    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+
     xlog $self, "move email";
     $res = $jmap->CallMethods([
         ['Email/copy', {
@@ -97,6 +123,7 @@ sub test_email_copy
     $self->assert_str_equals($receivedAt, $res->[0][1]{list}[0]{receivedAt});
 
     xlog $self, "copy email back";
+    $receivedAt = '2020-02-01T00:00:00Z';
     $res = $jmap->CallMethods([
         ['Email/copy', {
             accountId => 'cassandane',
@@ -110,12 +137,26 @@ sub test_email_copy
                     keywords => {
                         'bar' => JSON::true,
                     },
+                    receivedAt => $receivedAt
                 },
             },
         }, 'R1'],
     ]);
 
     $self->assert_str_equals($copiedEmailId, $res->[0][1]->{created}{1}{id});
+
+    xlog $self, "get copied email";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            accountId => 'cassandane',
+            ids => [$copiedEmailId],
+            properties => ['keywords', 'receivedAt'],
+        }, 'R1']
+    ]);
+
+    $wantKeywords = { 'bar' => JSON::true };
+    $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+    $self->assert_str_equals($receivedAt, $res->[0][1]{list}[0]{receivedAt});
 
     xlog $self, "copy email back (again)";
     $res = $jmap->CallMethods([

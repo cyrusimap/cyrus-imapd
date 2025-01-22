@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_plus_address_mark_read
-    :needs_component_sieve :NoAltNameSpace
+    :NoAltNameSpace
 {
     my ($self) = @_;
 

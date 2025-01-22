@@ -59,13 +59,18 @@ sub new
     $config->set(prometheus_enabled => "yes");
     $config->set(httpmodules => "prometheus");
     $config->set(prometheus_need_auth => "none");
-    $config->set(prometheus_update_freq => 2);
+    $config->set(prometheus_service_update_freq => 2);
+    $config->set(prometheus_master_update_freq => 2);
+    $config->set(prometheus_usage_update_freq => 2);
 
-    return $class->SUPER::new(
+    my $self = $class->SUPER::new(
         { adminstore => 1,
           config => $config,
           services => ['imap', 'http'] },
         @_);
+
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up
@@ -125,7 +130,7 @@ sub parse_report
 }
 
 sub test_aaasetup
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -133,8 +138,8 @@ sub test_aaasetup
     $self->assert(1);
 }
 
-sub test_reportfile_exists
-    :min_version_3_1 :needs_component_httpd
+sub test_service_reportfile_exists
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -144,18 +149,18 @@ sub test_reportfile_exists
     # and wait for a fresh report
     sleep 3;
 
-    my $reportfile_name = "$self->{instance}->{basedir}/conf/stats/report.txt";
+    my $fname = "$self->{instance}->{basedir}/conf/stats/service.txt";
 
-    $self->assert_file_test($reportfile_name, '-f');
+    $self->assert_file_test($fname, '-f');
 
-    my $report = parse_report(scalar read_file $reportfile_name);
+    my $report = parse_report(scalar read_file $fname);
 
     $self->assert(scalar keys %{$report});
     $self->assert(exists $report->{cyrus_imap_connections_total});
 }
 
 sub test_httpreport
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -177,7 +182,7 @@ sub test_httpreport
 }
 
 sub test_disabled
-    :min_version_3_1 :needs_component_httpd :NoStartInstances
+    :min_version_3_1 :NoStartInstances
 {
     my ($self) = @_;
 
@@ -198,7 +203,7 @@ sub test_disabled
 
 # tests for pathological quotaroot/partition subdivisions
 sub test_quota_commitments
-    :min_version_3_1 :needs_component_httpd :Partition2
+    :min_version_3_1 :Partition2
 {
     my ($self) = @_;
 
@@ -257,72 +262,8 @@ sub test_quota_commitments
     $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment'}->{'partition="p2",resource="STORAGE"'}->{value});
 }
 
-# tests for pathological quotaroot/partition subdivisions
-sub test_quota_commitments_no_improved_mboxlist_sort
-    :min_version_3_1 :needs_component_httpd :Partition2 :NoStartInstances
-{
-    my ($self) = @_;
-
-    $self->{instance}->{config}->set('improved_mboxlist_sort', 'no');
-    $self->_start_instances();
-
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $inbox = 'user.cassandane';  # allocate top level quota here
-    my $child = "$inbox.child";
-    my $gchild1 = "$child.cat"; # we'll stick this one on a sep part
-    my $gchild2 = "$child.dog"; # give this one its own quota
-    my $gchild3 = "$child.sheep"; # normal, but sorts after weird ones
-    my $ggchild1 = "$gchild1.manx"; # and give this one its own quota
-    my $ggchild2 = "$gchild1.siamese"; # and this one back on def part
-    my $interm = "$inbox.foo.bar.baz"; # contains intermediate folders
-    my $inbox2 = 'user.cassandane-child'; # hyphen! own quota
-
-    # make some folders
-    foreach my $f ($child, $gchild1, $gchild2, $gchild3, $ggchild1,
-                   $ggchild2, $interm, $inbox2) {
-        $admintalk->create($f);
-        $self->assert_str_equals('ok',
-                                 $admintalk->get_last_completion_response());
-    }
-
-    # stick one of them on a different partition
-    $admintalk->rename($gchild1, $gchild1, 'p2');
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-
-    # but not one of its children
-    $admintalk->rename($ggchild2, $ggchild2, 'default');
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-
-    # create a mess of quotas
-    $admintalk->setquota($inbox, '(STORAGE 8000)');
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $admintalk->setquota($gchild2, '(STORAGE 4000)');
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $admintalk->setquota($ggchild1, '(STORAGE 2000)');
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $admintalk->setquota($inbox2, '(STORAGE 1000)');
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-
-    $admintalk->logout();
-
-    sleep 3;
-
-    my $response = $self->http_report();
-    $self->assert($response->{success});
-
-    my $report = parse_report($response->{content});
-    $self->assert(scalar keys %{$report});
-
-    # now we expect default partition to have 8000 + 4000 +1000 committed
-    $self->assert_equals(13000, $report->{'cyrus_usage_quota_commitment'}->{'partition="default",resource="STORAGE"'}->{value});
-
-    # and p2 partition to have 8000 + 2000 committed
-    $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment'}->{'partition="p2",resource="STORAGE"'}->{value});
-}
-
 sub test_shared_mailbox_namespaces
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -359,7 +300,7 @@ sub test_shared_mailbox_namespaces
 }
 
 sub slowtest_50000_users
-    :min_version_3_1 :needs_component_httpd
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -412,7 +353,7 @@ sub slowtest_50000_users
 }
 
 sub test_connection_setup_failure_imapd
-    :min_version_3_2 :needs_component_httpd :TLS
+    :min_version_3_2 :TLS
 {
     my ($self) = @_;
 
@@ -433,7 +374,7 @@ sub test_connection_setup_failure_imapd
             $store->get_client();
         };
         my $error = $@;
-        $self->assert_matches(qr{Connection closed by other end}, $error);
+        $self->assert_not_null($error);
     }
 
     # wait a bit for the prometheus report to refresh
@@ -471,11 +412,10 @@ sub test_connection_setup_failure_imapd
     # should not have had any successful connections to imaps
     $self->assert(not exists $total->{$service_label});
 
-    # should be $badconn shutdowns counted (imapd treats this condition
-    # as an ok shutdown, not an error)
+    # should be $badconns error shutdowns counted
     $self->assert_num_equals(
         $badconns,
-        $shutdown->{"$service_label,status=\"ok\""}->{value}
+        $shutdown->{"$service_label,status=\"error\""}->{value}
     );
 
     # XXX someday: expect to find $badconns setup failures counted

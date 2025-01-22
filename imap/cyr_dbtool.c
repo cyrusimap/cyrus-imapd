@@ -72,7 +72,7 @@
 #define STACKSIZE 64000
 static char stack[STACKSIZE+1];
 
-int outfd;
+static int outfd;
 
 static struct db *db = NULL;
 
@@ -115,13 +115,13 @@ static int printer_cb(void *rock __attribute__((unused)),
     const char *data, size_t datalen)
 {
     struct iovec io[4];
-    io[0].iov_base = (char *)key;
+    io[0].iov_base = (char *) key;
     io[0].iov_len = keylen;
-    io[1].iov_base = "\t";
+    io[1].iov_base = (char *) "\t";
     io[1].iov_len = 1;
-    io[2].iov_base = (char *)data;
+    io[2].iov_base = (char *) data;
     io[2].iov_len = datalen;
-    io[3].iov_base = "\n";
+    io[3].iov_base = (char *) "\n";
     io[3].iov_len = 1;
     retry_writev(outfd, io, 4);
     return 0;
@@ -275,11 +275,10 @@ int main(int argc, char *argv[])
     struct txn **tidp = NULL;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:MTcnt";
+    static const char short_options[] = "C:Tcnt";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "improved-mboxlist-sort", no_argument, NULL, 'M' },
         { "use-transaction", no_argument, NULL, 'T' },
         { "convert", no_argument, NULL, 'c' }, /* XXX undocumented */
         { "create", no_argument, NULL, 'n' },
@@ -296,9 +295,6 @@ int main(int argc, char *argv[])
             break;
         case 'c':
             db_flags |= CYRUSDB_CONVERT;
-            break;
-        case 'M': /* use "improved_mboxlist_sort" */
-            db_flags |= CYRUSDB_MBOXSORT;
             break;
         case 'n': /* create new */
             db_flags |= CYRUSDB_CREATE;
@@ -326,6 +322,11 @@ int main(int argc, char *argv[])
         strarray_free(backends);
 
         fprintf(stderr, "\n");
+        fprintf(stderr, "\n");
+        fprintf(stderr, "Options:\n");
+        fprintf(stderr, "  -c     convert database to named backend if not already\n");
+        fprintf(stderr, "  -M     use \"improved_mboxlist_sort\" order\n");
+        fprintf(stderr, "  -n     create the database if it doesn't exist\n");
         fprintf(stderr, "\n");
         fprintf(stderr, "Actions:\n");
         fprintf(stderr, "* show [<prefix>]\n");

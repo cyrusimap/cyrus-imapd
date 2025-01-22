@@ -201,6 +201,13 @@ so that it ignores the partial installation.
 Please note that on Debian-based systems, PCRE (the old one, no longer
 maintained) is called "pcre3".  Yes, this is confusing.
 
+Cyrus Backups feature is deprecated as of 3.10
+##############################################
+
+Deployments that rely on the experimental Cyrus Backup feature should
+start planning for an alternative backup solution, as this feature will
+be removed in the future.
+
 How are you planning on upgrading?
 ##################################
 

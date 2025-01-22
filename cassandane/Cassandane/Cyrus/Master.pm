@@ -192,6 +192,12 @@ sub lemming_service
     return $self->{instance}->add_service(_lemming_args(%params));
 }
 
+sub lemming_daemon
+{
+    my ($self, %params) = @_;
+    return $self->{instance}->add_daemon(_lemming_args(%params));
+}
+
 sub lemming_start
 {
     my ($self, %params) = @_;
@@ -531,6 +537,13 @@ sub test_service_exit_during_start
     $self->assert_null($lemm);
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "check that the error was syslogged";
+        my @lines = $self->{instance}->getsyslog(qr/too many failures for service/);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/disabling until next SIGHUP/, $lines[0]);
+    }
 }
 
 sub test_startup
@@ -1321,11 +1334,11 @@ sub test_sighup_reloading_proto
         $self->lemming_census());
 }
 
-sub test_ready_file_new
+sub test_ready_file
 {
     my ($self) = @_;
 
-    my $ready_file = $self->{instance}->get_basedir() . '/conf/master.ready';
+    my $ready_file = $self->{instance}->get_basedir() . '/master.ready';
     my $pid_file = $self->{instance}->_pid_file();
 
     # pid file should not already exist
@@ -1344,62 +1357,46 @@ sub test_ready_file_new
     $self->assert_not_null($pid_sb);
 
     # ready file should exist soon...
-    timed_wait(sub { $ready_sb = stat($ready_file) },
-               description => "$ready_file to exist");
+    $ready_sb = stat($ready_file);
     $self->assert_not_null($ready_sb);
 
     # ready file should be newer than pid file
     $self->assert_num_gte($pid_sb->mtime, $ready_sb->mtime);
 }
 
-sub test_ready_file_exists
+sub test_daemon_exits
 {
     my ($self) = @_;
 
-    # force basedir to be computed
-    $self->{instance}->get_basedir();
+    my $lemming_delay = 500; #ms
+    my $test_delay = 10; #s
 
-    # cannot be under basedir because it'll be blown away at startup
-    my $ready_file = "/tmp/cassandane-$$-master.ready";
-    $self->{instance}->{config}->set('master_ready_file', $ready_file);
+    xlog $self, "Test a program in the DAEMON section which fails";
+    $self->lemming_daemon(tag => 'A', delay => $lemming_delay, mode => 'exit');
+    # This service won't be used
+    my $srv = $self->lemming_service(tag => 'C');
 
-    # must be after the get_basedir() call above
-    my $pid_file = $self->{instance}->_pid_file();
+    $self->{instance}->start();
 
-    system("touch", $ready_file) == 0 or die "touch $ready_file: $?";
-    sleep 3;
+    # make sure it runs long enough for the child janitor to wake up
+    sleep $test_delay;
 
-    # pid file should not already exist
-    my $pid_sb = stat($pid_file);
-    $self->assert_null($pid_sb);
+    # master had better still be running!
+    $self->assert($self->{instance}->is_running(),
+                  "master is no longer running");
 
-    # ready file should already exist
-    my $ready_sb = stat($ready_file);
-    $self->assert_not_null($ready_sb);
-    my $orig_mtime = $ready_sb->mtime;
+    # make sure those lemmings did actually die
+    my $census = $self->lemming_census();
+    # XXX upper limit on this should be MAX_READY_FAILS if we run for less
+    # XXX than MAX_READY_FAIL_INTERVAL seconds, but the delayed restart of
+    # XXX failed daemons doesn't seem to be actually delayed???
+    $self->assert_num_gte(1, $census->{A}->{dead});
 
-    # start cyrus
-    $self->start();
-
-    # pid file should exist now
-    $pid_sb = stat($pid_file);
-    $self->assert_not_null($pid_sb);
-
-    # ready file should be touched soon
-    timed_wait(sub {
-                    $ready_sb = stat($ready_file);
-                    return 1 if $ready_sb->mtime >= $pid_sb->mtime;
-                    return undef;
-               },
-               description => "$ready_file to be newer than $pid_file");
-    $self->assert_not_null($ready_sb);
-
-    # ready file should be newer than pid file
-    $self->assert_num_gte($pid_sb->mtime, $ready_sb->mtime);
-    $self->assert_num_gt($orig_mtime, $ready_sb->mtime);
-
-    # don't pollute /tmp
-    unlink $ready_file;
+    # there'll be syslog errors as long as this is running, so stop it early
+    $self->{instance}->stop(no_check_syslog => 1);
+    # then consume and check them
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{too many failures for});
 }
 
 1;

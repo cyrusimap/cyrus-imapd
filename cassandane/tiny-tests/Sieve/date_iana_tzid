@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_date_iana_tzid
-    :needs_component_sieve :min_version_3_7
+    :min_version_3_7
     :needs_dependency_ical
 {
     my ($self) = @_;

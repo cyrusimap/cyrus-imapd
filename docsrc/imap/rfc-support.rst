@@ -308,7 +308,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`4550`
 
     Internet Email to Support Diverse Service Environments (Lemonade)
-    Profile
+    Profile, obsoleted by :rfc:`5550`.
 
 :rfc:`4551`
 
@@ -541,7 +541,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     .. NOTE::
 
         The URL-PARTIAL capability is implemented.  The CONTEXT=SEARCH,
-        CONTEXT=SORT, CONVERT, I18NLEVEL=1, and NOTIFY capabilities
+        CONTEXT=SORT, CONVERT, and I18NLEVEL=1 capabilities
         are not implemented.
 
 :rfc:`5593`
@@ -608,8 +608,8 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. NOTE::
 
-        The LIST and LSUB commands return the special-use flags, unless the
-	``specialusealways`` configuration variable is explicitly turned off.
+        The unextended LIST and LSUB commands return the special-use flags, unless
+        the ``specialusealways`` configuration variable is explicitly turned off.
 
 :rfc:`6203`
 
@@ -808,6 +808,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Bootstrapping WebSockets with HTTP/2
 
+:rfc:`8457`
+
+    IMAP "$Important" Keyword and "\Important" Special-Use Attribute
+
 :rfc:`8474`
 
     IMAP Extension for Object Identifiers
@@ -835,6 +839,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`8620`
 
     The JSON Meta Application Protocol (JMAP)
+
+    .. NOTE::
+
+        The PushSubscription object and its methods are not yet supported.
 
 :rfc:`8621`
 
@@ -884,16 +892,48 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP PARTIAL Extension for Paged SEARCH and FETCH
 
-IETF RFC Drafts
-===============
+:rfc:`9404`
 
-draft-ietf-extra-imap-list-metadata
+    JSON Meta Application Protocol (JMAP) Blob Management Extension
+
+:rfc:`9425`
+
+    JSON Meta Application Protocol (JMAP) for Quotas
+
+:rfc:`9553`
+
+    JSContact: A JSON Representation of Contact Data
+
+:rfc:`9554`
+
+    vCard Format Extensions for JSContact
+
+:rfc:`9555`
+
+    JSContact: Converting from and to vCard
+
+:rfc:`9585`
+
+    IMAP4 Response Code for Command Progress Notifications
+
+:rfc:`9586`
+
+    IMAP Extension for Using and Returning Unique Identifiers (UIDs) Only
+
+:rfc:`9590`
 
     IMAP4 Extension for Returning Mailbox METADATA in Extended LIST
 
-draft-ietf-extra-imap-inprogress
+:rfc:`9661`
 
-   IMAP4 Response Code for Command Progress Notifications
+    The JSON Meta Application Protocol (JMAP) for Sieve Scripts
+
+:rfc:`9671`
+
+    Sieve Email Filtering: Extension for Processing Calendar Attachments
+
+IETF RFC Drafts
+===============
 
 draft-ietf-extra-jmapaccess
 
@@ -903,29 +943,29 @@ draft-ietf-extra-sieve-snooze
 
     Sieve Email Filtering: Snooze Extension
 
-draft-ietf-extra-imap-uidonly
+draft-ietf-sieve-regex
 
-    IMAP Extension for only using and returning UIDs
+    Sieve Email Filtering -- Regular Expression Extension
+
+draft-ietf-calext-vpoll
+
+    VPOLL: Consensus Scheduling Component for iCalendar
 
 draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
-draft-ietf-jmap-sieve
+draft-ietf-jmap-contacts
 
-    JMAP for Sieve Scripts
+    JMAP for Contacts
+
+draft-ietf-jmap-sharing
+
+    JMAP Sharing
 
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas
-
-draft-ietf-sieve-regex
-
-    Sieve Email Filtering -- Regular Expression Extension
-
-draft-york-vpoll
-
-    VPOLL: Consensus Scheduling Component for iCalendar
 
 draft-desruisseaux-ischedule
 

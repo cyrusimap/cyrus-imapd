@@ -65,6 +65,8 @@
 #include "xmalloc.h"
 #include "ptloader.h"
 
+#include "master/service.h"
+
 struct pts_module *pts_modules[] = {
     &pts_http,
 #ifdef HAVE_LDAP
@@ -227,7 +229,7 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
 const int config_need_data = 0;
 
 static char ptclient_debug = 0;
-struct db *ptsdb = NULL;
+static struct db *ptsdb = NULL;
 
 int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 {
@@ -371,6 +373,8 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 EXPORTED void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
+
+    if (exitcode != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(exitcode);
 }
-

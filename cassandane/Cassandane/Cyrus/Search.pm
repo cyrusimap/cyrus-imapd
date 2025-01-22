@@ -319,8 +319,14 @@ EOF
         },
     );
 
-    xlog $self, "Search the (un)selected mailbox (should fail)";
+    xlog $self, "Unselected Esearch with empty source opts (should fail)";
     my $res = $imaptalk->_imap_cmd('ESEARCH', 0, 'esearch',
+                                   'IN', '()',
+                                   'subject', 'test');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Search the (un)selected mailbox (should fail)";
+    $res = $imaptalk->_imap_cmd('ESEARCH', 0, 'esearch',
                                    'IN', '(SELECTED)',
                                    'subject', 'test');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());

@@ -89,18 +89,13 @@ static jmap_method_t jmap_mdn_methods_nonstandard[] = {
 
 HIDDEN void jmap_mdn_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_mdn_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_mdn_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_MDN, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_mdn_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_mdn_methods_nonstandard, settings);
     }
 
 }

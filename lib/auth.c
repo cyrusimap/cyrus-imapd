@@ -52,9 +52,6 @@ struct auth_mech *auth_mechs[] = {
     &auth_unix,
     &auth_pts,
     &auth_mboxgroups,
-#ifdef HAVE_KRB
-    &auth_krb,
-#endif
 #ifdef HAVE_GSSAPI_H
     &auth_krb5,
 #endif

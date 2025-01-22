@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 use Data::UUID;
 
 sub test_itip_ignore_invalid_timezone
-    :min_version_3_9 :needs_component_jmap :needs_component_sieve
+    :min_version_3_9 :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

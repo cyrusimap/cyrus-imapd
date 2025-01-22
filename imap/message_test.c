@@ -70,7 +70,7 @@
 static int usage(const char *name);
 
 static int verbose = 0;
-enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
+static enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
@@ -259,17 +259,15 @@ int main(int argc, char **argv)
         mailbox_close(&mailbox);
     }
     else if (filename) {
-        message_t *message = NULL;
+        message_t *message = message_new_from_filename(filename);
 
-        message = message_new_from_filename(filename);
         r = dump_message(message);
+        message_unref(&message);
         if (r) {
             fprintf(stderr, "Error dumping message: %s\n",
                     error_message(r));
             return 1;
         }
-
-        message_unref(&message);
     }
     else {
         message_t *message = NULL;
@@ -311,6 +309,9 @@ EXPORTED void fatal(const char* s, int code)
 {
     fprintf(stderr, "message_test: %s\n", s);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

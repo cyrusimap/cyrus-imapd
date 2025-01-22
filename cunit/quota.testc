@@ -16,7 +16,7 @@
 #define QUOTAROOT               "user.smurf"
 #define QUOTAROOT_NONEXISTENT   "no-such-quotaroot"
 
-static char *backend = CUNIT_PARAM("quotalegacy,skiplist");
+static const char *backend = CUNIT_PARAM("quotalegacy,skiplist");
 
 static void test_names(void)
 {
@@ -59,7 +59,7 @@ static void test_read_no_root(void)
     r = quota_read(&q, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    q.root = "";
+    q.root = (char *) "";
     r = quota_read(&q, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
@@ -69,12 +69,12 @@ static void test_read_no_root(void)
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
     CU_ASSERT_PTR_NULL(txn);
 
-    q.root = "";
+    q.root = (char *) "";
     r = quota_read(&q, &txn, 1);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
     CU_ASSERT_PTR_NULL(txn);
 
-    q.root = QUOTAROOT_NONEXISTENT;
+    q.root = (char *) QUOTAROOT_NONEXISTENT;
     r = quota_read(&q, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 }
@@ -89,7 +89,7 @@ static void test_write_no_root(void)
     r = quota_write(&q, 0, NULL);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    q.root = "";
+    q.root = (char *) "";
     r = quota_write(&q, 0, NULL);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
@@ -99,7 +99,7 @@ static void test_write_no_root(void)
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
     CU_ASSERT_PTR_NULL(txn);
 
-    q.root = "";
+    q.root = (char *) "";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
     CU_ASSERT_PTR_NULL(txn);
@@ -116,7 +116,7 @@ static void test_read_write(void)
     int r;
 
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
 
     r = quota_read(&q, &txn, 1);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
@@ -138,7 +138,7 @@ static void test_read_write(void)
 
     /* reading in the same txn gets the new values */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
@@ -152,7 +152,7 @@ static void test_read_write(void)
 
     /* reading in a new txn gets the new values */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(txn);
@@ -174,7 +174,7 @@ static void test_abort(void)
     int r;
 
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
 
     r = quota_read(&q, &txn, 1);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
@@ -192,7 +192,7 @@ static void test_abort(void)
 
     /* reading in the same txn gets the new values */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
@@ -204,7 +204,7 @@ static void test_abort(void)
 
     /* reading in a new txn gets no result */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
     CU_ASSERT_PTR_NOT_NULL(txn);
@@ -222,7 +222,7 @@ static void test_abort2(void)
     int r;
 
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
 
     r = quota_read(&q, &txn, 1);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
@@ -249,7 +249,7 @@ static void test_abort2(void)
 
     /* reading in the same txn gets the new values */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
@@ -261,7 +261,7 @@ static void test_abort2(void)
 
     /* reading in a new txn gets old values */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(txn);
@@ -279,7 +279,7 @@ static void test_check_use(void)
     int r;
 
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.limits[QUOTA_STORAGE] = 100;
 
     for (i = 1 ; i <= 63 ; i++)
@@ -310,7 +310,7 @@ static void test_check_use(void)
 
     /* test the zero limit */
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.limits[QUOTA_STORAGE] = 0;
 
     r = quota_check(&q, QUOTA_STORAGE, 15*1024);
@@ -323,7 +323,7 @@ static void test_check_use(void)
 
     /* test the special limit QUOTA_UNLIMITED */
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.limits[QUOTA_STORAGE] = QUOTA_UNLIMITED;
 
     for (i = 1 ; i <= 63 ; i++)
@@ -336,7 +336,7 @@ static void test_check_use(void)
 
     /* test negative diffs in quota_check */
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.useds[QUOTA_STORAGE] = 80*1024;   /* used 80 KiB */
     q.limits[QUOTA_STORAGE] = 100;      /* limit 100 KiB */
 
@@ -358,7 +358,7 @@ static void test_check_use(void)
 
     /* test negative diffs in quota_use */
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.useds[QUOTA_STORAGE] = 80*1024;   /* used 80 KiB */
     q.limits[QUOTA_STORAGE] = 100;      /* limit 100 KiB */
 
@@ -386,7 +386,7 @@ static void test_check_overquota(void)
     struct quota q;
 
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.limits[QUOTA_STORAGE] = 100;
     q.limits[QUOTA_MESSAGE] = 2;
 
@@ -425,7 +425,7 @@ static void test_update_useds(void)
     int r;
 
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     memset(quota_diff, 0, sizeof(quota_diff));
 
     /* updating a NULL or empty or non-existant root returns the error */
@@ -457,7 +457,7 @@ static void test_update_useds(void)
     r = quota_update_useds(QUOTAROOT, diff, NULL, 0); \
     CU_ASSERT_EQUAL(r, 0); \
     memset(&q2, 0, sizeof(q2)); \
-    q2.root = QUOTAROOT; \
+    q2.root = (char *) QUOTAROOT; \
     r = quota_read(&q2, NULL, 0); \
     CU_ASSERT_EQUAL(r, 0); \
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) { \
@@ -525,7 +525,7 @@ static void test_delete(void)
 
     /* add a record to the db and check it's there */
     memset(&q, 0, sizeof(q));
-    q.root = QUOTAROOT;
+    q.root = (char *) QUOTAROOT;
     q.useds[QUOTA_STORAGE] = 12345;
     q.limits[QUOTA_STORAGE] = 678;
 
@@ -537,7 +537,7 @@ static void test_delete(void)
     CU_ASSERT_PTR_NULL(txn);
 
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, NULL, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
@@ -558,7 +558,7 @@ static void test_delete(void)
 
     /* record should now be gone */
     memset(&q2, 0, sizeof(q2));
-    q2.root = QUOTAROOT;
+    q2.root = (char *) QUOTAROOT;
     r = quota_read(&q2, NULL, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 }
@@ -734,8 +734,7 @@ static void notest_foreach(void)
 #endif
 
 /*
- * TODO: should test for quota_foreach() iteration order,
- *  with and without IMAPOPT_IMPROVED_MBOXLIST_SORT set.
+ * TODO: should test for quota_foreach() iteration order.
  *  There is code that depends on it, e.g. for quota -f.
  */
 
@@ -782,11 +781,11 @@ static void test_findroot(void)
     TESTCASE("user.farnarkle", NULL);
 
     /* add some db entries, but not the "user." */
-    q.root = "user.foo";
+    q.root = (char *) "user.foo";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
-    q.root = "user.smeg";
+    q.root = (char *) "user.smeg";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
@@ -814,7 +813,7 @@ static void test_findroot(void)
     TESTCASE("user.farnarkle", NULL);
 
     /* add a catch-all "user" record */
-    q.root = "user";
+    q.root = (char *) "user";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
@@ -879,11 +878,11 @@ static void test_findroot_virtdomains(void)
 
     /* add some db entries for bloggs.com, but not fnarp.org,
      * not the default domain, and not the "user." */
-    q.root = "bloggs.com!user.foo";
+    q.root = (char *) "bloggs.com!user.foo";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
-    q.root = "bloggs.com!user.smeg";
+    q.root = (char *) "bloggs.com!user.smeg";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
@@ -923,7 +922,7 @@ static void test_findroot_virtdomains(void)
     TESTCASE("user.farnarkle", NULL);
 
     /* add a catch-all "bloggs.com" record */
-    q.root = "bloggs.com!";
+    q.root = (char *) "bloggs.com!";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
@@ -962,7 +961,7 @@ static void test_findroot_virtdomains(void)
     TESTCASE("user.farnarkle", NULL);
 
     /* add a catch-all "fnarp.org!user" record */
-    q.root = "fnarp.org!user";
+    q.root = (char *) "fnarp.org!user";
     r = quota_write(&q, 0, &txn);
     CU_ASSERT_EQUAL(r, 0);
 
@@ -1034,7 +1033,7 @@ static int set_up(void)
     cyrusdb_init();
     config_quota_db = "skiplist";
 
-    quotadb_init(0);
+    quotadb_init();
     quotadb_open(NULL);
 
     return 0;

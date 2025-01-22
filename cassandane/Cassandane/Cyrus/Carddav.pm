@@ -62,11 +62,15 @@ sub new
     $config->set(httpmodules => 'carddav caldav');
     $config->set(httpallowcompress => 'no');
     $config->set(vcard_max_size => 100000);
-    return $class->SUPER::new({
+
+    my $self = $class->SUPER::new({
         adminstore => 1,
         config => $config,
         services => ['imap', 'http'],
     }, @_);
+
+    $self->needs('component', 'httpd');
+    return $self;
 }
 
 sub set_up

@@ -82,8 +82,13 @@ static int ping(struct backend *s, const char *userid);
 static int logout(struct backend *s __attribute__((unused)));
 
 
+static const struct tls_alpn_t http_alpn_map[] = {
+    { "http/1.1", NULL, NULL },
+    { "",         NULL, NULL },
+};
+
 HIDDEN struct protocol_t http_protocol =
-{ "http", "HTTP", TYPE_SPEC,
+{ "http", "HTTP", http_alpn_map, TYPE_SPEC,
   { .spec = { &login, &ping, &logout } }
 };
 
@@ -134,7 +139,7 @@ static int login(struct backend *s, const char *userid,
         { 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     const char *mech_conf, *pass, *clientout = NULL;
     struct auth_scheme_t *scheme = NULL;
-    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen;
+    unsigned need_tls = 0, tls_done = 0, auth_done = 0, clientoutlen = 0;
     hdrcache_t hdrs = NULL;
     char *sid = NULL;
 
@@ -652,7 +657,7 @@ static void send_response(struct transaction_t *txn, long code,
     spool_enum_hdrcache(hdrs, &write_cachehdr, txn);
 
     if (!body || !(len = buf_len(body))) {
-        /* Empty body -- use  payload headers from response, if any */
+        /* Empty body -- use payload headers from response, if any */
         const char **hdr;
 
         if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
@@ -669,7 +674,7 @@ static void send_response(struct transaction_t *txn, long code,
         else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
             txn->resp_body.len = strtoul(hdr[0], NULL, 10);
 
-            if (txn->flags.ver != VER_2) {
+            if (txn->flags.ver < VER_2) {
                 simple_hdr(txn, "Content-Length", "%s", hdr[0]);
             }
         }
@@ -680,7 +685,7 @@ static void send_response(struct transaction_t *txn, long code,
         /* Body is buffered, so send using "identity" TE */
         txn->resp_body.len = len;
 
-        if (txn->flags.ver != VER_2) {
+        if (txn->flags.ver < VER_2) {
             simple_hdr(txn, "Content-Length", "%lu", len);
         }
         txn->conn->end_resp_headers(txn, code);

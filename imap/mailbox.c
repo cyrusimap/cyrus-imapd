@@ -2675,19 +2675,21 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
         abort();
     }
 
+    // we always write if given new statusdata, or if we changed the mailbox
+    int write_status = !!sdata;
     if (mailbox->has_changed) {
         sync_log_mailbox(mailbox_name(mailbox));
 
-        if (!sdata) {
+        if (!sdata && !(mailbox->i.options & OPT_MAILBOX_DELETED) && !strcmpsafe(mailbox_name(mailbox), mailbox->h.name)) {
             status_fill_mailbox(mailbox, &mysdata);
             sdata = &mysdata;
         }
 
         mailbox->has_changed = 0;
+        write_status = 1;
     }
 
-    // we always write if given new statusdata, or if we changed the mailbox
-    if (sdata)
+    if (write_status)
         statuscache_invalidate(mailbox_name(mailbox), sdata);
 
     if (mailbox->index_locktype) {
@@ -4415,9 +4417,6 @@ EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
     conv_status_t status = CONV_STATUS_INIT;
     int r;
 
-    if (modseqp)
-        *modseqp = 0;
-
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     if (!cstate) return 0;
 
@@ -4544,26 +4543,28 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     /* the UID has to match, of course, for it to be the same
      * record.  XXX - test fields like "internaldate", etc here
      * too?  Maybe replication should be more strict about it */
-    assert(record->uid == oldrecord.uid);
-    assert(message_guid_equal(&oldrecord.guid, &record->guid));
+    if (imaply_strict) {
+        assert(record->uid == oldrecord.uid);
+        assert(message_guid_equal(&oldrecord.guid, &record->guid));
 
-    if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        /* it is a sin to unexpunge a message.  unexpunge.c copies
-         * the data from the old record and appends it with a new
-         * UID, which is righteous in the eyes of the IMAP client */
-        assert(record->internal_flags & FLAG_INTERNAL_EXPUNGED);
+        if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            /* it is a sin to unexpunge a message.  unexpunge.c copies
+            * the data from the old record and appends it with a new
+            * UID, which is righteous in the eyes of the IMAP client */
+            assert(record->internal_flags & FLAG_INTERNAL_EXPUNGED);
+        }
+
+        if (oldrecord.internal_flags & FLAG_INTERNAL_ARCHIVED) {
+            /* it is also a sin to unarchive a message, except in the
+            * the very odd case of a reconstruct.  So let's see about
+            * that */
+            if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
+                xsyslog(LOG_ERR, "IOERROR: bogus removal of archived flag",
+                                "mailbox=<%s> record=<%u>",
+                                mailbox_name(mailbox), record->uid);
+        }
     }
-
-    if (oldrecord.internal_flags & FLAG_INTERNAL_ARCHIVED) {
-        /* it is also a sin to unarchive a message, except in the
-         * the very odd case of a reconstruct.  So let's see about
-         * that */
-        if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
-            xsyslog(LOG_ERR, "IOERROR: bogus removal of archived flag",
-                             "mailbox=<%s> record=<%u>",
-                             mailbox_name(mailbox), record->uid);
-    }
-
+    
     /* handle immediate expunges here... */
     if (immediate && (record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         record->internal_flags |= FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
@@ -4687,7 +4688,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         struct index_record prev;
         r = mailbox_read_index_record(mailbox, mailbox->i.num_records, &prev);
         if (r) return r;
-        assert(prev.uid <= mailbox->i.last_uid);
+        if (imaply_strict) assert(prev.uid <= mailbox->i.last_uid);
         if (message_guid_equal(&prev.guid, &record->guid)) {
             syslog(LOG_INFO, "%s: same message appears twice %u %u",
                    mailbox_name(mailbox), prev.uid, record->uid);
@@ -5664,7 +5665,7 @@ EXPORTED void mailbox_remove_files_from_object_storage(struct mailbox *mailbox,
 EXPORTED int mailbox_expunge(struct mailbox *mailbox,
                              struct mailbox_iter *iter,
                     mailbox_decideproc_t *decideproc, void *deciderock,
-                    unsigned *nexpunged, int event_type)
+                    unsigned *nexpunged, int event_type, int limit)
 {
     int r = 0;
     int numexpunged = 0;
@@ -5690,11 +5691,15 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+        // already expunged?
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
+
         if (decideproc(mailbox, record, deciderock)) {
             numexpunged++;
 
             struct index_record copyrecord = *record;
             /* mark deleted */
+            copyrecord.system_flags |= FLAG_DELETED;
             copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
             r = mailbox_rewrite_index_record(mailbox, &copyrecord);
@@ -5705,6 +5710,11 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
             }
 
             mboxevent_extract_record(mboxevent, mailbox, &copyrecord);
+
+            if (limit && numexpunged >= limit) {
+                r = IMAP_AGAIN;
+                break;
+            }
         }
     }
 
@@ -5724,13 +5734,13 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
     if (nexpunged) *nexpunged = numexpunged;
 
-    return 0;
+    return r;
 }
 
 EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
                                      struct mailbox_iter *iter,
                                      time_t expunge_mark,
-                                     unsigned *ndeleted)
+                                     unsigned *ndeleted, int limit)
 {
     int dirty = 0;
     unsigned numdeleted = 0;
@@ -5775,6 +5785,11 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
             xsyslog(LOG_ERR, "IOERROR: failed to mark unlinked",
                              "mailbox=<%s> uid=<%u> recno=<%u>",
                              mailbox_name(mailbox), copyrecord.uid, copyrecord.recno);
+            break;
+        }
+
+        if (limit && limit >= (int)numdeleted) {
+            r = IMAP_AGAIN;
             break;
         }
     }
@@ -6160,6 +6175,9 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
         /* not assigned, skip */
         if (!record->cid)
             continue;
+
+        r = mailbox_read_basecid(mailbox, record);
+        if (r) break;
 
         struct index_record copyrecord = *record;
         copyrecord.silentupdate = silent;
@@ -8364,44 +8382,6 @@ EXPORTED int mailbox_annotation_lookupmask(struct mailbox *mailbox, uint32_t uid
                                            struct buf *value)
 {
     return annotatemore_msg_lookupmask(mailbox, uid, entry, userid, value);
-}
-
-
-int mailbox_cid_rename(struct mailbox *mailbox,
-                       conversation_id_t from_cid,
-                       conversation_id_t to_cid)
-{
-    const message_t *msg;
-    int r = 0;
-
-    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return 0;
-
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-        if (record->cid != from_cid)
-            continue;
-
-        /*
-         * Just rename the CID in place - injecting a copy at the end
-         * messes with clients that just use UID ordering, like Apple's
-         * IOS email client */
-
-        struct index_record copyrecord = *record;
-        copyrecord.cid = to_cid;
-        r = mailbox_rewrite_index_record(mailbox, &copyrecord);
-
-        if (r) {
-            syslog(LOG_ERR, "mailbox_cid_rename: error "
-                            "rewriting record %u, mailbox %s: %s from %llu to %llu",
-                            record->recno, mailbox_name(mailbox), error_message(r), from_cid, to_cid);
-            break;
-        }
-    }
-    mailbox_iter_done(&iter);
-
-    return r;
 }
 
 EXPORTED void mailbox_set_wait_cb(void (*cb)(void *), void *rock)

@@ -57,8 +57,7 @@ static const char char_set[] =
 
 static char buf[6];
 
-const char * error_table_name (num)
-    long num;
+const char * error_table_name (long num)
 {
     long ch;
     int i;

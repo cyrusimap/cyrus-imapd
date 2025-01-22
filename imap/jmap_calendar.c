@@ -325,11 +325,7 @@ jmap_method_t jmap_calendar_methods_nonstandard[] = {
 
 HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-
-    for (mp = jmap_calendar_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_calendar_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CALENDARS, json_object());
@@ -345,9 +341,7 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_CALENDARS_EXTENSION, json_pack("{s:b}", "isRFC", 1));
 
-        for (mp = jmap_calendar_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_calendar_methods_nonstandard, settings);
     }
 
     ptrarray_append(&settings->getblob_handlers, jmap_calendarevent_getblob);
@@ -2334,7 +2328,7 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
     /* Parse the value and fetch the patch */
     struct dlist *dl;
     const char *vpatchstr = NULL;
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     dlist_getatom(dl, "VPATCH", &vpatchstr);
     if (vpatchstr) {
         /* Write VPATCH blob */
@@ -4031,15 +4025,12 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
             struct jmap_caleventid *eid = jmap_caleventid_decode(id);
-            if (eid) {
-                ptrarray_t *eventids = hash_lookup(eid->ical_uid, &eventids_by_uid);
-                if (!eventids) {
-                    eventids = ptrarray_new();
-                    hash_insert(eid->ical_uid, eventids, &eventids_by_uid);
-                }
-                ptrarray_append(eventids, eid);
+            ptrarray_t *eventids = hash_lookup(eid->ical_uid, &eventids_by_uid);
+            if (!eventids) {
+                eventids = ptrarray_new();
+                hash_insert(eid->ical_uid, eventids, &eventids_by_uid);
             }
-            else json_array_append(get.not_found, jval);
+            ptrarray_append(eventids, eid);
         }
 
         /* Lookup events by UID */
@@ -4154,9 +4145,8 @@ static int setcalendarevents_schedule(const char *sched_userid,
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     if (!prop) goto done;
 
-    const char *organizer = icalproperty_get_organizer(prop);
+    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
     if (!organizer) goto done;
-    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
 
@@ -4172,9 +4162,8 @@ static int setcalendarevents_schedule(const char *sched_userid,
                 for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
                      prop;
                      prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-                    const char *addr = icalproperty_get_attendee(prop);
-                    if (!addr || strncasecmp(addr, "mailto:", 7) ||
-                            strcasecmp(strarray_nth(schedule_addresses, 0), addr+7))
+                    const char *addr = icalproperty_get_decoded_calendaraddress(prop);
+                    if (strcasecmpsafe(strarray_nth(schedule_addresses, 0), addr))
                         continue;
                     icalparameter *param =
                         icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
@@ -5880,7 +5869,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct caldav_db *db,
                                      int send_scheduling_messages)
 {
-    int r;
+    int r = 0;
 
     struct caldav_data *cdata = NULL;
     struct mailbox *mbox = NULL;
@@ -6700,7 +6689,12 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
         if (!rock->mailbox || strcmp(mailbox_name(rock->mailbox), mbentry->name)) {
             mailbox_close(&rock->mailbox);
             r = mailbox_open_irl(mbentry->name, &rock->mailbox);
-            if (r) goto done;
+            if (r) {
+                syslog(LOG_ERR, "%s: can't open mailbox %s",
+                       __func__, mbentry->name);
+                eventquery_match_free(&match);
+                goto done;
+            }
         }
         match->ical = caldav_record_to_ical(rock->mailbox, &jscal->cdata, req->userid, NULL);
         if (!match->ical) {
@@ -7588,6 +7582,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     struct jmap_caleventid *eid = jmap_caleventid_decode(src_id);
     struct caldav_data *cdata = NULL;
     r = caldav_lookup_uid(src_db, eid->ical_uid, &cdata);
+    jmap_caleventid_free(&eid);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s", src_id, error_message(r));
         goto done;
@@ -7597,7 +7592,6 @@ static void _calendarevent_copy(jmap_req_t *req,
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
-    jmap_caleventid_free(&eid);
 
     /* Check privacy */
     if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
@@ -7975,8 +7969,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
     jprop = json_object_get(req->args, "participantEmail");
     if (json_is_string(jprop)) {
-        part_email = json_string_value(jprop);
-        strarray_append(&schedule_addr, part_email);
+        const char *uri = json_string_value(jprop);
+        if (!strncasecmp(uri, "mailto:", 7)) uri += 7;
+
+        char *addr = xmlURIUnescapeString(uri, strlen(uri), NULL);
+        strarray_appendm(&schedule_addr, addr);
+        part_email = addr;
     }
     else {
         jmap_parser_invalid(&parser, "participantEmail");
@@ -8214,8 +8212,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         }
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-        organizer = icalproperty_get_organizer(prop);
-        if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
+        organizer = icalproperty_get_decoded_calendaraddress(prop);
 
         icalparameter *param = icalproperty_get_schedulestatus_parameter(prop);
         sched_stat = icalparameter_get_schedulestatus(param);
@@ -10432,7 +10429,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
                 uid, error_message(r));
         goto done;
     }
-    r = dlist_parsemap(&dl, 1, 0, body->description, strlen(body->description));
+    r = dlist_parsemap(&dl, 1, body->description, strlen(body->description));
     if (r) {
         xsyslog(LOG_ERR, "can't parse description", "uid=%d error=%s",
                 uid, error_message(r));
@@ -10803,7 +10800,7 @@ static int sharenotif_match(message_t *msg, struct notifsearch_entry *entry, voi
         if (r) return 0;
 
         struct dlist *dl;
-        r = dlist_parsemap(&dl, 1, 0, body->description, strlen(body->description));
+        r = dlist_parsemap(&dl, 1, body->description, strlen(body->description));
         if (r) return 0;
 
         int matches = 0;
@@ -11059,7 +11056,7 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
         const struct body *body;
         if (!message_get_cachebody(msg, &body)) {
             struct dlist *dl = NULL;
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
+            if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 const char *mboxname;
                 if (dlist_getatom(dl, "M", &mboxname)) {
@@ -11250,7 +11247,7 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
         struct dlist *dl = NULL;
         const struct body *body;
         if (!message_get_cachebody(msg, &body)) {
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
+            if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 dlist_getatom(dl, "M", &mboxname);
                 dlist_getatom(dl, "ID", &ical_uid);

@@ -680,11 +680,11 @@ static void test_delete(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     memset(&mbentry, 0, sizeof(mbentry));
-    mbentry.name = MBOXNAME1_INT;
+    mbentry.name = (char *) MBOXNAME1_INT;
     mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
-    mbentry.partition = PARTITION;
-    mbentry.acl = ACL;
+    mbentry.partition = (char *) PARTITION;
+    mbentry.acl = (char *) ACL;
 
     /* set some values */
 
@@ -2205,10 +2205,10 @@ static int set_up(void)
     isadmin = 0;
     auth_state = auth_newstate(userid);
 
-    quotadb_init(0);
+    quotadb_init();
     quotadb_open(NULL);
 
-    mboxlist_init(0);
+    mboxlist_init();
     mboxlist_open(NULL);
 
     struct mboxlock *namespacelock = mboxname_usernamespacelock(MBOXNAME1_INT);
@@ -2224,11 +2224,11 @@ static int set_up(void)
         return r;
 
     memset(&mbentry, 0, sizeof(mbentry));
-    mbentry.name = MBOXNAME1_INT;
+    mbentry.name = (char *) MBOXNAME1_INT;
     mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
-    mbentry.partition = PARTITION;
-    mbentry.acl = ACL;
+    mbentry.partition = (char *) PARTITION;
+    mbentry.acl = (char *) ACL;
     r = mboxlist_updatelock(&mbentry, /*localonly*/1);
     if (r)
         return r;
@@ -2251,11 +2251,11 @@ static int set_up(void)
         return r;
 
     memset(&mbentry, 0, sizeof(mbentry));
-    mbentry.name = MBOXNAME2_INT;
+    mbentry.name = (char *) MBOXNAME2_INT;
     mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
-    mbentry.partition = PARTITION;
-    mbentry.acl = ACL;
+    mbentry.partition = (char *) PARTITION;
+    mbentry.acl = (char *) ACL;
     r = mboxlist_updatelock(&mbentry, /*localonly*/1);
     if (r)
         return r;
@@ -2278,11 +2278,11 @@ static int set_up(void)
         return r;
 
     memset(&mbentry, 0, sizeof(mbentry));
-    mbentry.name = MBOXNAME3_INT;
+    mbentry.name = (char *) MBOXNAME3_INT;
     mbentry.uniqueid = (char *)mailbox_uniqueid(mailbox);
     mbentry.mbtype = 0;
-    mbentry.partition = PARTITION;
-    mbentry.acl = ACL;
+    mbentry.partition = (char *) PARTITION;
+    mbentry.acl = (char *) ACL;
     r = mboxlist_updatelock(&mbentry, /*localonly*/1);
     if (r)
         return r;

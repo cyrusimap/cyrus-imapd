@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_guesstz_etc_gmt
-    :min_version_3_7 :needs_component_jmap
+    :min_version_3_7
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -51,5 +51,5 @@ EOF
             properties => ['timeZone'],
         }, 'R1']
     ]);
-    $self->assert_str_equals('Etc/GMT-10', $res->[0][1]{list}[0]{timeZone});
+    $self->assert_str_equals('Etc/GMT+10', $res->[0][1]{list}[0]{timeZone});
 }

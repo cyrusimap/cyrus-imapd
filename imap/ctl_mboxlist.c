@@ -1370,7 +1370,7 @@ int main(int argc, char *argv[])
     switch (op) {
     case M_POPULATE:
         syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         do_pop_mupdate();
@@ -1382,7 +1382,7 @@ int main(int argc, char *argv[])
         break;
 
     case DUMP:
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         do_dump(partition, dopurge, dointermediary);
@@ -1393,7 +1393,7 @@ int main(int argc, char *argv[])
         break;
 
     case UNDUMP:
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         if (undump_legacy) {
@@ -1408,7 +1408,7 @@ int main(int argc, char *argv[])
         break;
 
     case VERIFY:
-        mboxlist_init(0);
+        mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
         do_verify();

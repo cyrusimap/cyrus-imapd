@@ -121,7 +121,7 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
     ssize_t n;
     size_t written = 0;
     size_t len = 0;
-    struct iovec *iov, *baseiov = NULL;
+    struct iovec *iov = NULL, *baseiov = NULL;
     static int iov_max =
 #ifdef MAXIOV
         MAXIOV

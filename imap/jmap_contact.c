@@ -254,10 +254,7 @@ static char *_prodid = NULL;
 
 HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_contact_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_contact_methods_standard, settings);
 
 #ifdef HAVE_LIBICALVCARD
     json_object_set_new(settings->server_capabilities,
@@ -268,9 +265,7 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_CONTACTS_EXTENSION, json_object());
 
-        for (mp = jmap_contact_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_contact_methods_nonstandard, settings);
     }
 
     ptrarray_append(&settings->getblob_handlers, jmap_contact_getblob);
@@ -627,26 +622,6 @@ static const jmap_property_t contact_props[] = {
     },
     {
         "notes",
-        NULL,
-        0
-    },
-    {
-        "phoneticFirstName",
-        NULL,
-        0
-    },
-    {
-        "phoneticMiddleName",
-        NULL,
-        0
-    },
-    {
-        "phoneticLastName",
-        NULL,
-        0
-    },
-    {
-        "phoneticCompany",
         NULL,
         0
     },
@@ -1841,30 +1816,6 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             if (label) json_object_set_new(item, "label", json_string(label));
             json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
-        }
-        else if (!strncasecmp(entry->name, "x-phonetic-", 11)) {
-            /* Apple supports phonetic properties for names and company */
-            const char *pname = entry->name + 11;
-            if (!strcasecmp(pname, "first-name")) {
-                json_object_set_new(obj, "phoneticFirstName",
-                        jmap_utf8string(entry->v.value));
-            }
-            if (!strcasecmp(pname, "middle-name")) {
-                json_object_set_new(obj, "phoneticMiddleName",
-                        jmap_utf8string(entry->v.value));
-            }
-            else if (!strcasecmp(pname, "last-name")) {
-                json_object_set_new(obj, "phoneticLastName",
-                        jmap_utf8string(entry->v.value));
-            }
-            else if (!strcasecmp(pname, "org")) {
-                // Apple Contacts.app only supports setting
-                // a phonetic company, not a department.
-                // So despite this being an ORG property
-                // it is single-valued in practice.
-                json_object_set_new(obj, "phoneticCompany",
-                        jmap_utf8string(entry->v.value));
-            }
         }
         else if (!strncasecmp(entry->name, "x-", 2)) {
             // Preserve unknown x-properties as RFC 7095 jCard.
@@ -4084,29 +4035,6 @@ static int _json_to_card(struct jmap_req *req,
             }
             record_is_dirty = 1;
         }
-        else if (!strncmp(key, "phonetic", 8)) {
-            const char *pname = NULL;
-            if (!strcmp(key + 8, "FirstName"))
-                pname = "X-PHONETIC-FIRST-NAME";
-            else if (!strcmp(key + 8, "MiddleName"))
-                pname = "X-PHONETIC-MIDDLE-NAME";
-            else if (!strcmp(key + 8, "LastName"))
-                pname = "X-PHONETIC-LAST-NAME";
-            else if (!strcmp(key + 8, "Company"))
-                pname = "X-PHONETIC-ORG";
-
-            if (json_is_string(jval) && pname) {
-                vparse_delete_entries(card, NULL, pname);
-                buf_setcstr(&buf, json_string_value(jval));
-                buf_trim(&buf);
-                if (buf_len(&buf)) {
-                    vparse_add_entry(card, NULL, pname, buf_cstring(&buf));
-                }
-            }
-            else if (!pname || JNOTNULL(jval)) {
-                json_array_append_new(invalid, json_string(key));
-            }
-        }
         else if (!strcmp(key, "vCardProps")) {
             if (json_is_array(jval)) {
                 size_t i;
@@ -6093,7 +6021,7 @@ static const struct comp_kind n_comp_kinds[] = {
     { VCARD_N_ADDITIONAL,      "given2",        0,          0                  },
     { VCARD_N_PREFIX,          "title",         0,          0                  },
     { VCARD_N_SUFFIX,          "credential",    FIELD_EXT,  VCARD_N_GENERATION },
-    /* Extended fields (draft-ietf-calext-vcard-jscontact-extensions) */
+    /* Extended fields (RFC 9554) */
     { VCARD_N_SECONDARY,       "surname2",      FIELD_BWD,  VCARD_N_FAMILY     },
     { VCARD_N_GENERATION,      "generation",    FIELD_BWD,  VCARD_N_SUFFIX     },
     { 0,                       NULL,            0,          0                  }
@@ -6108,7 +6036,7 @@ static const struct comp_kind adr_comp_kinds[] = {
     { VCARD_ADR_REGION,        "region",        0,          0                  },
     { VCARD_ADR_POSTAL_CODE,   "postcode",      0,          0                  },
     { VCARD_ADR_COUNTRY,       "country",       0,          0                  },
-    /* Extended fields (draft-ietf-calext-vcard-jscontact-extensions) */
+    /* Extended fields (RFC 9554) */
     { VCARD_ADR_ROOM,          "room",          FIELD_BWD,  VCARD_ADR_EXTENDED },
     { VCARD_ADR_APARTMENT,     "apartment",     FIELD_BWD,  VCARD_ADR_EXTENDED },
     { VCARD_ADR_FLOOR,         "floor",         FIELD_BWD,  VCARD_ADR_EXTENDED },

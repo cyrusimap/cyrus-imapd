@@ -64,10 +64,13 @@ extern void config_read_string(const char *s);
  * XXX like it currently gets very confused by the layers of macros
  * XXX and produces bogus warnings. :(
  */
-extern CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue, unsigned int uiLine,
-                                             char strFile[], char strFunction[],
+extern CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue,
+                                             unsigned int uiLine,
+                                             const char strFile[],
+                                             const char strFunction[],
                                              CU_BOOL bFatal,
-                                             char strConditionFormat[], ...);
+                                             const char strConditionFormat[],
+                                             ...);
 extern void __cunit_wrap_test(const char *name, void (*fn)(void));
 extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
 
@@ -268,7 +271,7 @@ struct cunit_param
 {
     /* initialisation state */
     const char *name;
-    char **variable;
+    const char **variable;
     /* iteration state */
     int nvalues;
     char **values;

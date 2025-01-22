@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_discard_match_on_body_text
-    :needs_component_sieve
 {
     my ($self) = @_;
 

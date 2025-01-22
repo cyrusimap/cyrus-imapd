@@ -210,7 +210,7 @@ static int load_legacy_alarms(const char *mboxname,
     const char *guidrep = NULL;
 
     struct dlist *dl = NULL;
-    if (!dlist_parsemap(&dl, 1, 0, buf_base(buf), buf_len(buf))) {
+    if (!dlist_parsemap(&dl, 1, buf_base(buf), buf_len(buf))) {
         if (!dlist_getatom(dl, "CONTENT", &content))
             return CYRUSDB_IOERROR;
 
@@ -257,7 +257,7 @@ static int load_alarms(const char *mboxname,
     int r = annotatemore_lookup(mboxname, annot, userid, &buf);
     if (!r && buf_len(&buf)) {
         struct dlist *root;
-        if (!dlist_parsemap(&root, 1, 0, buf_base(&buf), buf_len(&buf))) {
+        if (!dlist_parsemap(&root, 1, buf_base(&buf), buf_len(&buf))) {
             if (!get_alarms_dl(root, "WITH_TIME", &defalarms->with_time) ||
                 !get_alarms_dl(root, "WITH_DATE", &defalarms->with_date)) {
 

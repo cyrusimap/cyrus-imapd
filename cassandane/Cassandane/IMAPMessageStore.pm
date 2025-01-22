@@ -97,6 +97,10 @@ sub connect
 
     if ($self->{ssl}) {
         my $ca_file = abs_path("data/certs/cacert.pem");
+        my $alpn_map = exists $params{OverrideALPN}
+                     ? delete $params{OverrideALPN}
+                     : [ 'imap' ];
+
         # XXX https://github.com/noxxi/p5-io-socket-ssl/issues/121
         # XXX With newer IO::Socket::SSL, hostname verification fails
         # XXX because our hostname is an IP address and the certificate
@@ -111,6 +115,7 @@ sub connect
                       UseSSL => $self->{ssl},
                       SSL_ca_file => $ca_file,
                       SSL_verifycn_scheme => 'none',
+                      SSL_alpn_protocols => $alpn_map,
                       UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
@@ -139,8 +144,10 @@ sub connect
         if $self->{verbose};
 
     my $banner = $client->get_response_code('remainder');
-    $client->login($self->{username}, $self->{password})
-        or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
+    if (not $params{NoLogin}) {
+        $client->login($self->{username}, $self->{password})
+            or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
+    }
 
     # Make Mail::IMAPTalk just stfu
     $client->set_unicode_folders(1);
@@ -160,7 +167,8 @@ sub disconnect
     {
         local $SIG{__DIE__};
         $self->{client}->logout()
-            if defined $self->{client};
+            if defined $self->{client}
+               && $self->{client}->state() > 0;
     };
     $self->{client} = undef;
 }

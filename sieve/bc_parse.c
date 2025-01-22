@@ -49,7 +49,7 @@
 #include "strarray.h"
 #include "arrayu64.h"
 
-#define MAX_ARGS  10  /* vacation currently uses 9 */
+#define MAX_ARGS  15  /* processcalendar currently uses 13 */
 
 struct args_t {
     unsigned type;
@@ -282,17 +282,28 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.v.fcc)
       } },
     { B_PROCESSIMIP,             "B3sss",                                /* 46 */
-      { offsetof(struct Commandlist, u.imip.updates_only),    IMIP_UPDATESONLY,
-        offsetof(struct Commandlist, u.imip.invites_only),    IMIP_INVITESONLY,
-        offsetof(struct Commandlist, u.imip.delete_canceled), IMIP_DELETECANCELED,
-        offsetof(struct Commandlist, u.imip.calendarid),
-        offsetof(struct Commandlist, u.imip.outcome_var),
-        offsetof(struct Commandlist, u.imip.errstr_var)
+      { offsetof(struct Commandlist, u.cal.updates_only),     CAL_UPDATESONLY,
+        offsetof(struct Commandlist, u.cal.invites_only),     CAL_INVITESONLY,
+        offsetof(struct Commandlist, u.cal.delete_cancelled), CAL_DELETECANCELLED,
+        offsetof(struct Commandlist, u.cal.calendarid),
+        offsetof(struct Commandlist, u.cal.outcome_var),
+        offsetof(struct Commandlist, u.cal.reason_var)
       } },
     { B_IKEEP_TARGET,            "sss",                                  /* 47 */
       { offsetof(struct Commandlist, u.ikt.mailboxid),
         offsetof(struct Commandlist, u.ikt.specialuse),
         offsetof(struct Commandlist, u.ikt.folder)
+      } },
+    { B_PROCESSCAL,              "B4Sssss",                              /* 48 */
+      { offsetof(struct Commandlist, u.cal.allow_public),     CAL_ALLOWPUBLIC,
+        offsetof(struct Commandlist, u.cal.updates_only),     CAL_UPDATESONLY,
+        offsetof(struct Commandlist, u.cal.invites_only),     CAL_INVITESONLY,
+        offsetof(struct Commandlist, u.cal.delete_cancelled), CAL_DELETECANCELLED,
+        offsetof(struct Commandlist, u.cal.addresses),
+        offsetof(struct Commandlist, u.cal.organizers),
+        offsetof(struct Commandlist, u.cal.calendarid),
+        offsetof(struct Commandlist, u.cal.outcome_var),
+        offsetof(struct Commandlist, u.cal.reason_var)
       } },
 };
 

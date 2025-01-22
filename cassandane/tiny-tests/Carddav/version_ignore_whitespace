@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_version_ignore_whitespace
-    :min_version_3_3 :needs_component_httpd
+    :min_version_3_3
 {
     my ($self) = @_;
 

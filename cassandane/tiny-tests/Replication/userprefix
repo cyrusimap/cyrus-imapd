@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # wasn't correctly looking only for children of that name, so it would try
 # to delete the wrong user's mailbox.
 sub test_userprefix
-    :DelayedDelete :needs_component_replication
+    :DelayedDelete
 {
     my ($self) = @_;
     $self->{instance}->create_user("ua");

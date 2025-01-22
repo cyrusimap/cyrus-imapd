@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_bad_script
+    :min_version_3_3 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create bad script";
+    my $res = $jmap->Upload("keepme;", "application/sieve");
+    my $blobid = $res->{blobId};
+
+    $res = $jmap->CallMethods([
+         ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => $blobid
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals('invalidScript', $res->[0][1]{notCreated}{1}{type});
+
+    xlog "update bad script";
+    $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => "keep;"}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                }
+            },
+            update => {
+                "#1" => {
+                    blobId => $blobid
+                }
+            },
+            destroy => [ "#1" ]
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $id = $res->[1][1]{created}{"1"}{id};
+
+    $self->assert_null($res->[1][1]{updated});
+    $self->assert_str_equals('invalidScript', $res->[1][1]{notUpdated}{$id}{type});
+    $self->assert_not_null($res->[1][1]{destroyed});
+    $self->assert_str_equals($id, $res->[1][1]{destroyed}[0]);
+    $self->assert_null($res->[1][1]{notDestroyed});
+}

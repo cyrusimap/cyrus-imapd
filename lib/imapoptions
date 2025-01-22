@@ -185,6 +185,14 @@ are listed with ``<none>''.
 /* Defaults to enabled.  If disabled, disallows the use of the SETACL
    command at all via IMAP. */
 
+{ "allowspecialusesubfolder", 0, SWITCH, "3.12.0" }
+/* If enabled, allows special-use folders to be moved into subfolders
+.PP
+  By default, cyrus does not allow a special-use folder to be moved or
+  renamed if the new folder is not a direct folder of the users INBOX.
+  This was implemented to prevent clients renaming Sent to Trash/Sent, 
+  which would confused other clients. */
+
 { "allowusermoves", 0, SWITCH, "2.3.17" }
 /* Allow moving user accounts (with associated meta-data) via RENAME
    or XFER.
@@ -209,7 +217,7 @@ are listed with ``<none>''.
 /* Alternative INBOX spellings that can't be accessed in altnamespace
    otherwise go under here. */
 
-{ "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "annotation_db", "twoskip", STRINGLIST("skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for mailbox annotations. */
 
 { "annotation_db_path", NULL, STRING, "2.5.0" }
@@ -364,7 +372,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    file or mailboxes list entry?  It's noisy so disabled by default, but
    can be very useful for tracking down what happened if things look strange. */
 
-{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5", "mboxgroups"), "UNRELEASED" }
+{ "auth_mech", "unix", STRINGLIST("unix", "pts", "krb5", "mboxgroups"), "3.12.0" }
 /* The authorization mechanism to use. */
 
 { "autocreateinboxfolders", NULL, STRING, "2.5.0", "2.5.0", "autocreate_inbox_folders" }
@@ -520,65 +528,35 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 # Commented out - there's no such thing as "backuppartition-name",
 # but we need this for the man page
-# { "backuppartition-name", NULL, STRING, "3.0.0" }
-/* The pathname of the backup partition \fIname\fR.  At least one backup
-   partition pathname MUST be specified if backups are in use.  Note that
-   there is no relationship between spool partitions and backup partitions. */
+# { "backuppartition-name", NULL, STRING, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_compact_minsize", "0", BYTESIZE, "3.8.0" }
-/* The minimum size of chunks in each backup.  The compact tool
-   will try to combine adjacent chunks that are smaller than this.
-.PP
-   Setting this value to zero or negative disables combining of chunks.
-.PP
-   For backward compatibility, if no unit is specified, kibibytes is
-   assumed. */
+{ "backup_compact_minsize", "0", BYTESIZE, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_compact_maxsize", "0", BYTESIZE, "3.8.0" }
-/* The maximum size of chunks in each backup.  The compact tool
-   will try to split chunks larger than this into smaller chunks.
-.PP
-   Setting this value to zero or negative disables splitting of chunks.
-.PP
-   For backward compatibility, if no unit is specified, kibibytes is
-   assumed. */
+{ "backup_compact_maxsize", "0", BYTESIZE, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_compact_work_threshold", 1, INT, "3.0.0" }
-/* The number of chunks that must obviously need compaction before the compact
-   tool will go ahead with the compaction.  If set to less than one, the value
-   is treated as being one. */
+{ "backup_compact_work_threshold", 1, INT, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_staging_path", NULL, STRING, "3.0.0" }
-/* The absolute path of the backup staging area.  If not specified,
-   will be temp_path/backup */
+{ "backup_staging_path", NULL, STRING, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_retention_days", NULL, DURATION, "3.1.8", "3.1.8", "backup_retention" }
-/* Deprecated in favor of \fIbackup_retention\fR. */
+{ "backup_retention_days", NULL, DURATION, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_retention", "7d", DURATION, "3.1.0" }
-/* How long to keep content in backup after it has been deleted
-   from the source.  If set to a negative value or zero, deleted content
-   will be kept indefinitely.
-.PP
-   For backward compatibility, if no unit is specified, days is
-   assumed. */
+{ "backup_retention", "7d", DURATION, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
-/* The cyrusdb backend to use for the backup locations database. */
+{ "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_db_path", NULL, STRING, "3.0.0" }
-/* The absolute path to the backup db file.  If not specified,
-   will be configdirectory/backups.db */
+{ "backup_db_path", NULL, STRING, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
-{ "backup_keep_previous", 0, SWITCH, "3.0.0" }
-/* Whether the \fBctl_backups compact\fR and \fBctl_backups reindex\fR
-   commands should preserve the original file.  The original file will
-   be named with a timestamped suffix.  This is mostly useful for
-   debugging.
-.PP
-   Note that with this enabled, compacting a backup will actually
-   increase the disk used by it (because there will now be an extra
-   copy: the original version, and the compacted version). */
+{ "backup_keep_previous", 0, SWITCH, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
 { "boundary_limit", 1000, INT, "2.5.0" }
 /* messages are parsed recursively and a deep enough MIME structure
@@ -590,7 +568,15 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15)
   rather than rejecting them as errors. */
 
-{ "caldav_alarm_suppress_file", NULL, STRING, "UNRELEASED" }
+{ "caldav_alarm_db_path", NULL, STRING, "3.12.0" }
+/* Path to the caldav_alarm database file - defaults to
+   $confdir/caldav_alarm.sqlite3 if not set */
+
+{ "caldav_alarm_support_components", "VEVENT VTODO", BITFIELD("VEVENT", "VTODO"), "3.12.0" }
+/* Space-separated list of iCalendar component types for which
+   calalarmd generates alarms. */
+
+{ "caldav_alarm_suppress_file", NULL, STRING, "3.12.0" }
 /* If this file exists, calalarmd will not process events */
 
 { "caldav_allowattach", 1, SWITCH, "3.0.0" }
@@ -653,7 +639,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "calendar_user_address_set", NULL, STRING, "2.5.0" }
 /* Space-separated list of domains corresponding to calendar user
    addresses for which the server is responsible.  If not set (the
-   default), the value of the "servername" option will be used. */
+   default), the value of the "defaultdomain" option will be used. */
 
 { "calendar_component_set", "VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL", BITFIELD("VEVENT", "VTODO", "VJOURNAL", "VFREEBUSY", "VAVAILABILITY", "VPOLL"), "3.1.7" }
 /* Space-separated list of iCalendar component types that calendar
@@ -667,7 +653,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Primarily used to suppress alarms for MINUTELY and SECONDLY recurrences.
    The minimum value is 0, which will allow all alarms. */
 
-{ "calendar_suppress_duplicate_alarms", 1, SWITCH, "UNRELEASED" }
+{ "calendar_suppress_duplicate_alarms", 1, SWITCH, "3.12.0" }
 /* Suppress duplicate calendar alarms in calalarmd. If this is set,
    then at most one alarm notification is sent for any given alarm
    action, point in time and calendar event. */
@@ -734,7 +720,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    database with ctl_conversationsdb if you change this option on a
    running server, or the counts will be wrong. */
 
-{ "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
+{ "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the per-user conversations database. */
 
 { "conversations_expire_days", NULL, DURATION, "3.1.8", "3.1.8", "conversations_expire_after" }
@@ -811,7 +797,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
-{ "debug", 0, SWITCH, "UNRELEASED" }
+{ "debug", 0, SWITCH, "3.12.0" }
 /* If enabled, allow syslog() to pass LOG_DEBUG messages.
 .PP
    This can be toggled for a running process by sending it SIGUSR1.
@@ -828,7 +814,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, replication will log which partition it chose for staging.
    This is mainly useful for regression testing the sync_client -a switch. */
 
-{ "debug_slowio", 0, SWITCH, "UNRELEASED" }
+{ "debug_slowio", 0, SWITCH, "3.12.0" }
 /* If enabled, I/O operations will be artificially slowed down.  This option
    has no effect unless Cyrus was compiled with the --enable-debug-slowio
    configure argument.  This is mainly useful for testing certain edge case
@@ -929,7 +915,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    specifies the actual key used for iSchedule DKIM signing within the
    domain. */
 
-{ "duplicate_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
+{ "duplicate_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -965,7 +951,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Don't send event notification for folder with given special-use attributes.
    Set ALL for any folder. */
 
-{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid", "vnd.cmu.visibleUsers"), "UNRELEASED" }
+{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.unseenMessages", "vnd.cmu.envelope", "vnd.cmu.sessionId", "vnd.cmu.mailboxACL", "vnd.cmu.mbtype", "vnd.cmu.davFilename", "vnd.cmu.davUid", "vnd.fastmail.clientId", "vnd.fastmail.sessionId", "vnd.fastmail.convExists", "vnd.fastmail.convUnseen", "vnd.fastmail.cid", "vnd.fastmail.counters", "vnd.fastmail.jmapEmail", "vnd.fastmail.jmapStates", "vnd.cmu.emailid", "vnd.cmu.threadid", "vnd.cmu.visibleUsers"), "3.12.0" }
 /* Space-separated list of extra parameters to add to any appropriated event. */
 
 { "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox", "subscription", "calendar", "applepushservice", "jmap" ), "3.8.0" }
@@ -998,6 +984,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
+{ "fatals_abort", 0, SWITCH, "3.12.0" }
+/* If enabled, when fatal errors are detected, Cyrus will call abort()
+   to produce a core dump, unless the error was due to a misbehaving
+   client.  This is useful if you have the ability to debug a core dump.
+.PP
+   If not enabled (the default), the process will exit normally with
+   an error code. */
+
 { "flushseenstate", 1, SWITCH, "2.5.0", "2.5.0" }
 /* Deprecated. No longer used. */
 
@@ -1011,7 +1005,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    the ability to use the <host shortname>_mechs option to set preferred
    mechanisms for a specific host. */
 
-{ "global_lock", 1, SWITCH, "UNRELEASED" }
+{ "global_lock", 1, SWITCH, "3.12.0" }
 /* Use a global shared lock for ALL writes, allowing the global lock
    wrapper tool to freeze the world */
 
@@ -1209,7 +1203,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    Using userid+ (with an empty namespace) will list only subscribed
    mailboxes. */
 
-{ "imap_inprogress_interval", "10s", DURATION, "UNRELEASED" }
+{ "imap_inprogress_interval", "10s", DURATION, "3.12.0" }
 /* The interval after which the server will send an "INPROGRESS"
    response code to the client during a long-running imap command
    (e.g. search, copy).
@@ -1230,18 +1224,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    configuration.  If the path to the file is not absolute, CYRUS_PATH
    is prepended. */
 
-{ "improved_mboxlist_sort", 0, SWITCH, "2.3.17" }
-/* If enabled, a special comparator will be used which will correctly
-   sort mailbox names that contain characters such as ' ' and '-'.
-.PP
-   Note that this option SHOULD NOT be changed on a live system.  The
-   mailboxes database should be dumped (ctl_mboxlist) before the
-   option is changed, removed, and then undumped after changing the
-   option.  When not using flat files for the subscriptions databases
-   the same has to be done (cyr_dbtool) for each subscription database
-   See improved_mboxlist_sort.html.*/
+{ "improved_mboxlist_sort", 0, SWITCH, "3.12.0", "3.12.0" }
+/* Not used anymore. */
 
-{ "jmapaccess_url", NULL, STRING, "UNRELEASED" }
+{ "jmapaccess_url", NULL, STRING, "3.12.0" }
 /* The JMAP Session URL to advertise to sucessfully authenticated IMAP clients,
    if the same credentials can be used to authenticate via JMAP
    (see draft-ietf-extra-jmapaccess). */
@@ -1303,7 +1289,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "jmap_max_catenate_items", 100, INT, "3.6.0" }
 /* The maximum number of items that can be catenated together by
-   a JMAP Blob/set action.  Returned as the maxCatenateItems property
+   a JMAP Blob/upload action.  Returned as the maxDataSources property
    value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
    Default value is 100. */
 
@@ -1316,9 +1302,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    */
 
 { "jmap_max_size_blob_set", "4M", BYTESIZE, "3.8.0" }
-/* The maximum size that the JMAP API accepts for Blob/set. Returned as the
+/* The maximum size that the JMAP API accepts for Blob/upload. Returned as the
    maxSizeBlobSet property value of the JMAP
-   \"https://cyrusimap.org/ns/jmap/blob\" capabilities object.
+   \"urn:ietf:params:jmap:blob\" capabilities object.
 .PP
    For backward compatibility, if no unit is specified, kibibytes is assumed.
    */
@@ -1468,7 +1454,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_group_base", "", STRING, "2.3.17" }
 /* LDAP base dn for ldap_group_filter. */
 
-{ "ldap_groupmember_attribute", "member", STRING, "UNRELEASED" }
+{ "ldap_groupmember_attribute", "member", STRING, "3.12.0" }
 /* Specify a field within groups with a list of members. */
 
 { "ldap_group_filter", "(cn=%u)", STRING, "2.3.17" }
@@ -1672,7 +1658,8 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "lock_debugtime", NULL, STRING, "3.1.4" }
 /* A floating point number of seconds.  If set, time how long we wait for
    any lock, and syslog the filename and time if it's longer than this
-   value.  The default of NULL means not to time locks. */
+   value.  The default of NULL means not to time locks.  This is
+   implemented for fcntl(2) locks and has no effect on flock(2) locks. */
 
 # xxx how does this tie into virtual domains?
 { "loginrealms", "", STRING, "2.3.17" }
@@ -1764,7 +1751,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of logged in sessions allowed per user,
    zero means no limit. */
 
-{ "maxargssize", "0", BYTESIZE, "UNRELEASED" }
+{ "maxargssize", "0", BYTESIZE, "3.10.0" }
 /* Maximum total size of arguments to an IMAP command that will be
    accepted by Cyrus.
    Commands with arguments that exceed this limit will be rejected. 
@@ -1782,7 +1769,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "maxliteral", "128K", BYTESIZE, "UNRELEASED" }
+{ "maxliteral", "128K", BYTESIZE, "3.10.0" }
 /* Maximum size of a single literal allowed by the IMAP parser.
 .PP
    If set to 0, a large internally-defined limit will be applied.
@@ -1810,10 +1797,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 .PP
    If no unit is specified, bytes is assumed. */
 
-{ "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "mboxkey_db", "twoskip", STRINGLIST("skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for mailbox keys. */
 
-{ "mboxlist_db", "twoskip", STRINGLIST("flat", "skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
+{ "mboxlist_db", "twoskip", STRINGLIST("flat", "skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the mailbox list. */
 
 { "mboxlist_db_path", NULL, STRING, "2.5.0" }
@@ -2156,17 +2143,36 @@ If all partitions are over that limit, this feature is not used anymore.
    used. */
 
 { "prometheus_enabled", 0, SWITCH, "3.1.2" }
-/* Whether tracking of service metrics for Prometheus is enabled. */
+/* Whether tracking of metrics for Prometheus is enabled. */
 
 { "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin"), "3.1.2" }
 /* Authentication level required to fetch Prometheus metrics. */
 
-{ "prometheus_update_freq", "10s", DURATION, "3.1.8" }
-/* Frequency in at which promstatsd should re-collate its statistics
-   report.  The minimum value is 1 second.
+{ "prometheus_update_freq", "10s", DURATION, "3.1.8", "3.12.0", "prometheus_service_update_freq" }
+/* Deprecated in favour of \fIprometheus_service_update_freq\fR,
+   \fIprometheus_master_update_freq\fR, and
+   \fIprometheus_usage_update_freq\fR. */
+
+{ "prometheus_service_update_freq", "10s", DURATION, "3.12.0" }
+/* Frequency in at which promstatsd should re-collate its service
+   statistics report.  The minimum value is 1 second.
 .PP
-   For backward compatibility, if no unit is specified, seconds is
-   assumed. */
+   If no unit is specified, seconds is assumed. */
+
+{ "prometheus_master_update_freq", NULL, DURATION, "3.12.0" }
+/* Frequency in at which master should re-collate its statistics report.
+   If not set, \fIprometheus_service_update_freq\fR is used.
+.PP
+   If no unit is specified, seconds is assumed. */
+
+{ "prometheus_usage_update_freq", NULL, DURATION, "3.12.0" }
+/* Frequency in at which promstatsd should re-collate its usage
+   statistics report.  Note that this report is relatively expensive to
+   produce.  If not set, usage statistics are not reported.
+.PP
+   Best to make this a multiple of \fIprometheus_service_update_freq\fR.
+.PP
+   If no unit is specified, seconds is assumed. */
 
 { "prometheus_stats_dir", NULL, STRING, "3.1.2" }
 /* Directory to use for gathering prometheus statistics.  If specified,
@@ -2220,7 +2226,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdirectory/ptclient/ptsock). */
 
-{ "ptscache_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "ptscache_db", "twoskip", STRINGLIST("skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_db_path", NULL, STRING, "2.5.0" }
@@ -2248,7 +2254,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* This specifies the Class Selector or Differentiated Services Code Point
    designation on IP headers (in the ToS field). */
 
-{ "quota_db", "quotalegacy", STRINGLIST("flat", "skiplist", "sql", "quotalegacy", "twoskip", "zeroskip"), "3.1.6" }
+{ "quota_db", "quotalegacy", STRINGLIST("flat", "skiplist", "sql", "quotalegacy", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for quotas. */
 
 { "quota_db_path", NULL, STRING, "2.5.0" }
@@ -2291,7 +2297,7 @@ If all partitions are over that limit, this feature is not used anymore.
 /* If enabled, all IMAP, POP and JMAP connections are read-only,
  * no writes allowed. */
 
-{ "replicaonly", 0, SWITCH, "UNRELEASED" }
+{ "replicaonly", 0, SWITCH, "3.12.0" }
 /* If enabled, nothing is allowed to increase modseq or uidvalidity,
  * no writes allowed at all. */
 
@@ -2508,7 +2514,7 @@ If all partitions are over that limit, this feature is not used anymore.
    headers can still be searched, the searches will just be slower.
  */
 
-{ "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "search_indexed_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the search latest indexed uid state.  Xapian only. */
 
 { "search_maxtime", NULL, STRING, "3.0.0" }
@@ -2573,7 +2579,7 @@ If all partitions are over that limit, this feature is not used anymore.
 .PP
    This option MUST be specified for xapian search. */
 
-{ "seenstate_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "seenstate_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the seen state. */
 
 { "sendmail", "/usr/lib/sendmail", STRING, "2.3.17" }
@@ -2665,7 +2671,7 @@ product version in the capabilities
    assumed. */
 */
 
-{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery vnd.cyrus.imip snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "3.10.0" }
+{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "processcalendar=vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "3.12.0" }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts, enforced at submission by timsieved(8).  Any
    previously installed script will be unaffected by this option and
@@ -2687,30 +2693,37 @@ product version in the capabilities
 /* Maximum number of sieve scripts any user may have, enforced at
    submission by timsieved(8). */
 
+{ "sieve_mdn_original_recipient_header", "original-recipient", STRING, "UNRELEASED" }
+/* The name of the header field in which the Sieve "reject" action can find the
+   original recipient of the message. */
+
+{ "sieve_mdn_private", 0, SWITCH, "UNRELEASED" }
+/* If true, the Final-Recipient header in the MDN generated by Sieve's "reject"
+   action will be replaced with something that does not publicly identify the
+   user. */
+
 { "sieve_utf8fileinto", 0, SWITCH, "2.3.17" }
 /* If enabled, the sieve engine expects folder names for the
    \fIfileinto\fR action in scripts to use UTF8 encoding.  Otherwise,
    modified UTF7 encoding should be used. */
 
-{ "sieve_sasl_send_unsolicited_capability", 0, SWITCH, "2.3.17" }
-/* If enabled, timsieved will emit a capability response after a successful
-   SASL authentication, per draft-martin-managesieve-12.txt . */
+{ "sieve_sasl_send_unsolicited_capability", 1, SWITCH, "3.12.0", "3.12.0" }
+/* Deprecated: this option does nothing. */
 
 { "sieve_use_lmtp_reject", 1, SWITCH, "3.1.1" }
 /* Enabled by default.  If reject can be done via LMTP, then return a 550
    rather than generating the bounce message in Cyrus. */
 
 { "sieve_vacation_min_response", "3d", DURATION, "3.1.8" }
-/* Minimum time interval between consecutive vacation responses, per
-   draft-ietf-vacation-seconds.txt.  The default is 3 days.
+/* Minimum time interval between consecutive vacation responses, per RFC 6131.
+   The default is 3 days.
 .PP
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
 
 { "sieve_vacation_max_response", "90d", DURATION, "3.1.8" }
-/* Maximum time interval between consecutive vacation responses, per
-   draft-ietf-vacation-seconds.txt.  The default is 90 days.  The
-   minimum is 7 days.
+/* Maximum time interval between consecutive vacation responses, per RFC 6131.
+   The default is 90 days.  The minimum is 7 days.
 .PP
    For backward compatibility, if no unit is specified, seconds is
    assumed. */
@@ -2802,7 +2815,7 @@ product version in the capabilities
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
-{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for caching sort results (currently only
    used for xconvmultisort). */
 
@@ -2826,8 +2839,8 @@ product version in the capabilities
    or renamed to have a different parent. Default is the built-in list*/
 
 { "specialusealways", 1, SWITCH, "3.1.1" }
-/* If enabled, this option causes LIST and LSUB output to always include
-   the XLIST "special-use" flags. */
+/* If enabled, this option causes unextended LIST and LSUB output to
+   include the "special-use" flags. */
 
 { "sql_database", NULL, STRING, "2.3.17" }
 /* Name of the database which contains the cyrusdb table(s). */
@@ -2864,10 +2877,8 @@ product version in the capabilities
 { "srs_separator", NULL, STRING, "3.1.2" }
 /* The separator to appear immediately after SRS[01] in rewritten addresses. */
 
-{ "srvtab", "", STRING, "2.3.17" }
-/* The pathname of \fIsrvtab\fR file containing the server's private
-   key.  This option is passed to the SASL library and overrides its
-   default setting. */
+{ "srvtab", "", STRING, "3.12.0", "3.12.0" }
+/* Deprecated: This option does nothing. */
 
 { "submitservers", NULL, STRING, "2.3.17" }
 /* A list of users and groups that are allowed to resolve "urlauth=submit+"
@@ -2875,7 +2886,7 @@ product version in the capabilities
    allowed to fetch the contents of any valid "urlauth=submit+" IMAP URL:
    use with caution. */
 
-{ "subscription_db", "flat", STRINGLIST("flat", "skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "subscription_db", "flat", STRINGLIST("flat", "skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the subscriptions list. */
 
 { "suppress_capabilities", NULL, STRING, "3.0.0" }
@@ -2888,7 +2899,7 @@ product version in the capabilities
 { "statuscache", 0, SWITCH, "2.3.17" }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
+{ "statuscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "statuscache_db_path", NULL, STRING, "2.5.0" }
@@ -2904,7 +2915,7 @@ product version in the capabilities
    Default is 8192.  If there are more than this many messages appended
    to the mailbox, generate a synthetic partial state and send that. */
 
-{ "sync_cache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.3.1" }
+{ "sync_cache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the replication cache. */
 
 { "sync_cache_db_path", NULL, STRING, "3.3.1" }
@@ -3065,7 +3076,7 @@ product version in the capabilities
 { "tls_ca_path", NULL, STRING, "2.5.0", "2.5.0", "tls_client_ca_dir" }
 /* Deprecated in favor of \fItls_client_ca_dir\fR. */
 
-{ "tlscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "2.5.0", "2.5.0", "tls_sessions_db" }
+{ "tlscache_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED", "2.5.0", "tls_sessions_db" }
 /* Deprecated in favor of \fItls_sessions_db\fR. */
 
 { "tlscache_db_path", NULL, STRING, "2.5.0", "2.5.0", "tls_sessions_db_path" }
@@ -3149,7 +3160,7 @@ product version in the capabilities
    public key.  Two files with keys can be set, if two certificates are used, in
    which case the files must be separated with comma without spaces. */
 
-{ "tls_sessions_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
+{ "tls_sessions_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_sessions_db_path", NULL, STRING, "2.5.0" }
@@ -3179,7 +3190,7 @@ product version in the capabilities
 { "umask", "077", STRING, "2.3.17" }
 /* The umask value used by various Cyrus IMAP programs. */
 
-{ "userdeny_db", "flat", STRINGLIST("flat", "skiplist", "sql", "twoskip", "zeroskip"), "3.1.6" }
+{ "userdeny_db", "flat", STRINGLIST("flat", "skiplist", "sql", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for the user access list. */
 
 { "userdeny_db_path", NULL, STRING, "2.5.0" }
@@ -3276,10 +3287,8 @@ of the incoming network interface, or if no record is found, the
    For backward compatibility, if no unit is specified, kibibytes is
    assumed. */
 
-{ "xbackup_enabled", 0, SWITCH, "3.0.0" }
-/* Enable support for the XBACKUP command in imapd.  If enabled, admin
-   users can use this command to provoke a replication of specified users
-   to the named backup channel. */
+{ "xbackup_enabled", 0, SWITCH, "3.12.0", "3.12.0" }
+/* Deprecated. No longer used. */
 
 # Commented out - there's no such thing as "xlist-flag", but we need
 # this for the man page
@@ -3298,7 +3307,7 @@ of the incoming network interface, or if no record is found, the
    this user.  NOTE: This must be an existing local user name with an
    INBOX, NOT an email address! */
 
-{ "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip", "zeroskip"), "3.1.6" }
+{ "zoneinfo_db", "twoskip", STRINGLIST("flat", "skiplist", "twoskip"), "UNRELEASED" }
 /* The cyrusdb backend to use for zoneinfo.  This database is used by the
    "tzdist" \fIhttpmodules\fR, and is managed by \fBctl_zoneinfo(8)\fR.*/
 

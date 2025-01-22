@@ -78,8 +78,8 @@
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
  * changes to backend_version() in backend.c.
  */
-#define MAILBOX_MINOR_VERSION   19
-#define MAILBOX_CACHE_MINOR_VERSION 13
+#define MAILBOX_MINOR_VERSION       (19) /* read comment above! */
+#define MAILBOX_CACHE_MINOR_VERSION (13)
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -652,10 +652,10 @@ extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);
 extern int mailbox_index_islocked(struct mailbox *mailbox, int write);
 
 extern int mailbox_expunge_cleanup(struct mailbox *mailbox, struct mailbox_iter *iter,
-                                   time_t expunge_mark, unsigned *ndeleted);
+                                   time_t expunge_mark, unsigned *ndeleted, int limit);
 extern int mailbox_expunge(struct mailbox *mailbox, struct mailbox_iter *iter,
                            mailbox_decideproc_t *decideproc, void *deciderock,
-                           unsigned *nexpunged, int event_type);
+                           unsigned *nexpunged, int event_type, int limit);
 extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
                             mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
@@ -753,11 +753,8 @@ extern int mailbox_delete_dav(struct mailbox *mailbox);
 extern int mailbox_add_sieve(struct mailbox *mailbox);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox);
 
-/* Rename a CID.  Note - this is just one mailbox! */
-extern int mailbox_cid_rename(struct mailbox *mailbox,
-                              conversation_id_t from_cid,
-                              conversation_id_t to_cid);
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
+__attribute__((nonnull))
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
 #define mailbox_has_conversations(m) mailbox_has_conversations_full(m, 0)

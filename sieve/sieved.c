@@ -60,9 +60,11 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include <sysexits.h>
 
 #include <string.h>
 
+#include "libconfig.h"
 #include "map.h"
 #include "times.h"
 
@@ -74,7 +76,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    exit(1);
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
+    exit(code);
 }
 
 static int load(int fd, bytecode_input_t ** d)
@@ -104,13 +108,15 @@ int main(int argc, char * argv[])
     bytecode_input_t *bc = NULL;
     int script_fd;
     int opt, usage_error = 0, gen_script = 0;
+    char *alt_config = NULL;
 
     unsigned long len;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "s";
+    static const char short_options[] = "C:s";
 
     static const struct option long_options[] = {
+        /* n.b. no long option for -C */
         { "as-sieve", no_argument, NULL, 's' },
 
         { 0, 0, 0, 0 },
@@ -120,6 +126,9 @@ int main(int argc, char * argv[])
                                     short_options, long_options, NULL)))
     {
         switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
         case 's':
             gen_script = 1;
             break;
@@ -142,6 +151,9 @@ int main(int argc, char * argv[])
         fprintf(stderr, "can not open script '%s'\n", argv[1]);
         exit(1);
     }
+
+    /* Load configuration file. */
+    config_read(alt_config, 0);
 
     len=load(script_fd,&bc);
     close(script_fd);
@@ -854,11 +866,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
         case B_PROCESSIMIP:
             printf("PROCESSIMIP INVITESONLY(%d)"
                    " UPDATESONLY(%d) DELETECANCELED(%d)",
-                   !!cmd.u.imip.invites_only,
-                   !!cmd.u.imip.updates_only, !!cmd.u.imip.delete_canceled);
-            print_string(" CALENDARID", cmd.u.imip.calendarid);
-            print_string(" OUTCOME", cmd.u.imip.outcome_var);
-            print_string(" ERRSTR", cmd.u.imip.errstr_var);
+                   !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+            print_string(" CALENDARID", cmd.u.cal.calendarid);
+            print_string(" OUTCOME", cmd.u.cal.outcome_var);
+            print_string(" ERRSTR", cmd.u.cal.reason_var);
             break;
 
 
@@ -867,6 +879,19 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" MAILBOXID", cmd.u.ikt.mailboxid);
             print_string(" SPECIALUSE", cmd.u.ikt.specialuse);
             print_string(" FOLDER", cmd.u.ikt.folder);
+            break;
+
+
+        case B_PROCESSCAL:
+            printf("PROCESSCALENDAR ALLOWPUBLIC(%d) INVITESONLY(%d)"
+                   " UPDATESONLY(%d) DELETECANCELLED(%d)",
+                   !!cmd.u.cal.allow_public, !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+            print_stringlist(" ADDRESSES", cmd.u.cal.addresses);
+            print_string(" ORGANIZERS", cmd.u.cal.organizers);
+            print_string(" CALENDARID", cmd.u.cal.calendarid);
+            print_string(" OUTCOME", cmd.u.cal.outcome_var);
+            print_string(" REASON", cmd.u.cal.reason_var);
             break;
 
 
@@ -1680,14 +1705,14 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_PROCESSIMIP:
-            *requires |= SIEVE_CAPA_IMIP;
+            *requires |= SIEVE_CAPA_PROCESSCAL;
             generate_token("processimip", 0, buf);
-            generate_switch(":invitesonly", cmd.u.imip.invites_only, buf);
-            generate_switch(":updatesonly", cmd.u.imip.updates_only, buf);
-            generate_switch(":deletecanceled", cmd.u.imip.delete_canceled, buf);
-            generate_string(":calendarid", cmd.u.imip.calendarid, buf);
-            generate_string(":outcome", cmd.u.imip.outcome_var, buf);
-            generate_string(":errstr", cmd.u.imip.errstr_var, buf);
+            generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
+            generate_switch(":deletecanceled", cmd.u.cal.delete_cancelled, buf);
+            generate_string(":calendarid", cmd.u.cal.calendarid, buf);
+            generate_string(":outcome", cmd.u.cal.outcome_var, buf);
+            generate_string(":errstr", cmd.u.cal.reason_var, buf);
             break;
 
         case B_IKEEP_TARGET:
@@ -1698,6 +1723,20 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_string_capa(":specialuse", cmd.u.ikt.specialuse,
                                  SIEVE_CAPA_SPECIAL_USE, requires, buf);
             generate_string(NULL, cmd.u.ikt.folder, buf);
+            break;
+
+        case B_PROCESSCAL:
+            *requires |= SIEVE_CAPA_PROCESSCAL;
+            generate_token("processcalendar", 0, buf);
+            generate_switch(":allowpublic", cmd.u.cal.allow_public, buf);
+            generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
+            generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
+            generate_switch(":deletecancelled", cmd.u.cal.delete_cancelled, buf);
+            generate_stringlist(":addresses", cmd.u.cal.addresses, buf);
+            generate_string(":organizers", cmd.u.cal.organizers, buf);
+            generate_string(":calendarid", cmd.u.cal.calendarid, buf);
+            generate_string(":outcome", cmd.u.cal.outcome_var, buf);
+            generate_string(":reason", cmd.u.cal.reason_var, buf);
             break;
 
         default:
@@ -1731,7 +1770,7 @@ static void generate_script(bytecode_input_t *d, int bc_len)
 
     if (requires) {
         unsigned long long capa;
-        char *sep = "";
+        const char *sep = "";
         int n;
 
         printf("require [");

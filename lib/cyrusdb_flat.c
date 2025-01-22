@@ -241,7 +241,6 @@ static struct txn *new_txn(void)
 
 static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 {
-    int r = 0;
     struct stat sbuf;
 
     assert(db);
@@ -250,9 +249,7 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
         const char *lockfailaction;
 
         /* start txn; grab lock */
-
-        r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
-        if (r < 0) {
+        if (lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction) < 0) {
             xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
                              "action=<%s> fname=<%s>",
                              lockfailaction, db->fname);
@@ -441,22 +438,6 @@ static int myfetch(struct dbengine *db,
     return r;
 }
 
-static int fetch(struct dbengine *mydb,
-                 const char *key, size_t keylen,
-                 const char **data, size_t *datalen,
-                 struct txn **mytid)
-{
-    return myfetch(mydb, key, keylen, data, datalen, mytid);
-}
-
-static int fetchlock(struct dbengine *db,
-                     const char *key, size_t keylen,
-                     const char **data, size_t *datalen,
-                     struct txn **mytid)
-{
-    return myfetch(db, key, keylen, data, datalen, mytid);
-}
-
 static int getentry(struct dbengine *db, const char *p,
                     struct buf *keybuf, const char **dataendp)
 {
@@ -502,7 +483,7 @@ static int foreach(struct dbengine *db,
     int offset;
     unsigned long len;
     const char *p, *pend;
-    const char *dataend;
+    const char *dataend = NULL;
 
     /* for use inside the loop, but we need the values to be retained
      * from loop to loop */
@@ -852,29 +833,20 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
     return r;
 }
 
-/* flat database is always mbox sort order */
-static int mycompar(struct dbengine *db __attribute__((unused)),
-                    const char *a, int alen,
-                    const char *b, int blen)
-{
-    return bsearch_ncompare_mbox(a, alen, b, blen);
-}
-
 EXPORTED struct cyrusdb_backend cyrusdb_flat =
 {
     "flat",                     /* name */
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
     &myopen,
     &myclose,
 
-    &fetch,
-    &fetchlock,
+    &myfetch,
+    &myfetch,
     NULL,
 
     &foreach,
@@ -882,11 +854,12 @@ EXPORTED struct cyrusdb_backend cyrusdb_flat =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 
     NULL,
     NULL,
     NULL,
-    &mycompar
+    &bsearch_ncompare_mbox
 };

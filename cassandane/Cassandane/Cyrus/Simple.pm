@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Simple;
 use strict;
 use warnings;
+use Cwd qw(getcwd realpath);
 use Data::Dumper;
 use DateTime;
 
@@ -300,6 +301,94 @@ EOF
     $imap->select('INBOX');
     my $res = $imap->fetch('1', '(BINARY[1])');
     $self->assert_str_equals("test\r\n", $res->{1}{binary});
+}
+
+sub test_fatals_abort_enabled
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set(
+        'fatals_abort' => 'yes',
+        'prometheus_enabled' => 'no',
+    );
+    $self->_start_instances();
+
+    my $basedir = $self->{instance}->get_basedir();
+
+    # run `promstatsd -1` without having set up for prometheus, which should
+    # produce a "Prometheus metrics are not being tracked..." fatal error
+    eval {
+        $self->{instance}->run_command({ cyrus => 1 }, 'promstatsd', '-1');
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{promstatsd pid \d+\) terminated by signal 6},
+                          $e->{'-text'});
+
+    my @cores = $self->{instance}->find_cores();
+    if (@cores) {
+        # if we dumped core, there'd better only be one core file
+        $self->assert_num_equals(1, scalar @cores);
+
+        # don't barf on it existing during shutdown
+        unlink $cores[0];
+    }
+}
+
+sub test_fatals_abort_disabled
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set(
+        'fatals_abort' => 'no',
+        'prometheus_enabled' => 'no',
+    );
+    $self->_start_instances();
+
+    my $basedir = $self->{instance}->get_basedir();
+
+    # run `promstatsd -1` without having set up for prometheus, which should
+    # produce a "Prometheus metrics are not being tracked..." fatal error
+    eval {
+        $self->{instance}->run_command({ cyrus => 1 }, 'promstatsd', '-1');
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{promstatsd pid \d+\) exited with code 78},
+                          $e->{'-text'});
+
+    # post-test sanity checks will complain for us if a core was left behind
+}
+
+sub test_fork_noexec
+{
+    my ($self) = @_;
+
+    # need some not-executable file to test with, crash.c will do
+    my $noexec_file = realpath('utils/crash.c');
+    # it had better exist, and not be executable
+    $self->assert_file_test($noexec_file, '-e');
+    $self->assert_not_file_test($noexec_file, '-x');
+
+    my $expect_pid = $$;
+    my $expect_cwd = getcwd();
+
+    # try to run it... the exec in the forked child process will fail
+    eval {
+        $self->{instance}->run_command({ cyrus => 0, }, $noexec_file);
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    # the child process had better exit!
+    $self->assert_matches(qr{exited with code 71}, $e->get_message());
+
+    # this test had better still be running in the same process!
+    $self->assert_num_equals($expect_pid, $$);
+
+    # cwd better not have changed!
+    $self->assert_str_equals($expect_cwd, getcwd());
 }
 
 1;

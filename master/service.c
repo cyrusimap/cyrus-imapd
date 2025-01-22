@@ -293,7 +293,7 @@ int main(int argc, char **argv, char **envp)
     int debug_stdio = 0;
     int max_use = MAX_USE;
     int reuse_timeout = REUSE_TIMEOUT;
-    int soctype;
+    int soctype = 0;
     socklen_t typelen = sizeof(soctype);
     struct sockaddr socname;
     socklen_t addrlen = sizeof(struct sockaddr);
@@ -388,8 +388,6 @@ int main(int argc, char **argv, char **envp)
         exit(EX_SOFTWARE);
     }
     id = atoi(p);
-
-    srand(time(NULL) * getpid());
 
     /* if timeout is enabled, pick a random timeout between reuse_timeout
      * and 2*reuse_timeout to avoid massive IO overload if the network

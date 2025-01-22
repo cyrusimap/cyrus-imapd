@@ -57,7 +57,7 @@ enum {
 extern int service_init(int argc, char **argv, char **envp);
 extern int service_main(int argc, char **argv, char **envp);
 extern int service_main_fd(int fd, int argc, char **argv, char **envp);
-extern void service_abort(int error);
+extern void service_abort(int error) __attribute__((noreturn));
 
 enum {
     MAX_USE = 250,

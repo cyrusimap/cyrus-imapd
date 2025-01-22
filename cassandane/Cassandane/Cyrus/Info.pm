@@ -43,6 +43,7 @@ use warnings;
 use Cwd qw(realpath);
 use Data::Dumper;
 use Date::Format qw(time2str);
+use Time::HiRes qw(usleep);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -230,19 +231,16 @@ sub test_lint_partitions
     $self->config_set(
         # metapartition-, archivepartition- and searchpartition- must
         # correspond with an extant partition-
-        #
-        # backuppartition- is independent
         'partition-good' => '/tmp/pgood',
         'metapartition-good' => '/tmp/mgood',
         'archivepartition-good' => '/tmp/agood',
         'foosearchpartition-good' => '/tmp/sgood',
-        'backuppartition-good' => '/tmp/bgood',
 
         'metapartition-bad' => '/tmp/mbad',
         'archivepartition-bad' => '/tmp/abad',
         'foosearchpartition-bad' => '/tmp/sbad',
 
-        # not actually bad
+        # backuppartition- was deprecated
         'backuppartition-bad' => '/tmp/bbad',
     );
 
@@ -255,6 +253,7 @@ sub test_lint_partitions
     $self->assert_deep_equals(
         [ sort(
             "archivepartition-bad: /tmp/abad\n",
+            "backuppartition-bad: /tmp/bbad\n",
             "foosearchpartition-bad: /tmp/sbad\n",
             "metapartition-bad: /tmp/mbad\n",
         ) ],
@@ -298,8 +297,65 @@ sub test_proc_services
     }
 }
 
+sub test_proc_crashed_services
+{
+    my ($self) = @_;
+
+    # no clients => no service daemons => no processes
+    my @output = $self->{instance}->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+
+    # master spawns service processes when clients connect to them
+    my $imap_svc = $self->{instance}->get_service('imap');
+    my @clients;
+    foreach (1..5) {
+        # five concurrent connections for a single user is normal,
+        # e.g. thunderbird does this
+        my $store = $imap_svc->create_store(username => 'cassandane');
+        my $imaptalk = $store->get_client();
+        push @clients, $imaptalk if $imaptalk;
+    }
+
+    # better have got some clients from that!
+    $self->assert_num_gte(1, scalar @clients);
+
+    # five clients => five service daemons => five processes
+    @output = $self->{instance}->run_cyr_info('proc');
+    $self->assert_num_equals(scalar @clients, scalar @output);
+
+    my @pids = sort map { (split /\s+/, $_, 2)[0] } @output;
+    $self->assert_num_equals(scalar @clients, scalar @pids);
+
+    # crash service processes one at a time, expect proc count to decrease
+    while (scalar @pids) {
+        my $pid = shift @pids;
+        kill 'SEGV', $pid;
+        usleep 250_000;
+
+        my @cores = $self->{instance}->find_cores();
+        if (@cores) {
+            # if we dumped core, there'd better only be one core file
+            $self->assert_num_equals(1, scalar @cores);
+
+            # don't barf on it existing during shutdown
+            unlink $cores[0];
+        }
+
+        @output = $self->{instance}->run_cyr_info('proc');
+        $self->assert_num_equals(scalar @pids, scalar @output);
+    }
+
+    # prevent a lot of "Connection closed by other end" noise by claiming
+    # and discarding the client's socket before its DESTROY is called
+    while (scalar @clients) {
+        my $old = shift @clients;
+
+        $old->release_socket(1);
+    }
+}
+
 sub test_proc_starts
-    :NoStartInstances
+    :NoStartInstances :needs_component_idled
 {
     my ($self) = @_;
 

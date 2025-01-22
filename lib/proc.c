@@ -225,6 +225,16 @@ EXPORTED void proc_cleanup(struct proc_handle **handlep)
     }
 }
 
+/* used by master to remove proc files after service processes crash */
+EXPORTED void proc_force_cleanup(pid_t pid)
+{
+    char *fname = proc_getpath(pid, /*isnew*/0);
+
+    if (fname)
+        xunlink(fname);
+    free(fname);
+}
+
 static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 {
     int r = 0;
@@ -330,7 +340,7 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
 }
 
 static int procusage_cb(pid_t pid __attribute__((unused)),
-                        const char *servicename __attribute__((unused)),
+                        const char *servicename,
                         const char *clienthost,
                         const char *userid,
                         const char *mboxname __attribute__((unused)),
@@ -341,6 +351,10 @@ static int procusage_cb(pid_t pid __attribute__((unused)),
 
     /* we only count logged in sessions */
     if (!userid) return 0;
+
+    /* only check for logins to the particular protocol */
+    if (limitsp->servicename && strcmp(servicename, limitsp->servicename))
+        return 0;
 
     if (limitsp->clienthost && !strcmp(clienthost, limitsp->clienthost))
         limitsp->host++;

@@ -58,9 +58,12 @@ sub new
 
     $config->set(conversations => 'yes');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         imapmurder => 1, adminstore => 1, deliver => 1,
     }, @_);
+
+    $self->needs('component', 'murder');
+    return $self;
 }
 
 sub set_up
@@ -76,7 +79,6 @@ sub tear_down
 }
 
 sub test_aaasetup
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -85,7 +87,6 @@ sub test_aaasetup
 }
 
 sub test_frontend_commands
-    :needs_component_murder
 {
     my ($self) = @_;
     my $result;
@@ -142,7 +143,6 @@ sub test_frontend_commands
 }
 
 sub test_list_specialuse
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -210,7 +210,6 @@ sub test_list_specialuse
 }
 
 sub test_xlist
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -280,7 +279,6 @@ sub test_xlist
 }
 
 sub test_move_to_backend_nonexistent
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -330,7 +328,6 @@ sub test_move_to_backend_nonexistent
 }
 
 sub test_move_to_nonexistent
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -372,7 +369,7 @@ sub test_move_to_nonexistent
 }
 
 sub test_rename_with_location
-    :needs_component_murder :AllowMoves
+    :AllowMoves
 {
     my ($self) = @_;
 
@@ -402,7 +399,7 @@ sub test_rename_with_location
 }
 
 sub test_xfer_nonexistent_unixhs
-    :needs_component_murder :UnixHierarchySep
+    :UnixHierarchySep
 {
     my ($self) = @_;
 
@@ -440,7 +437,7 @@ sub test_xfer_nonexistent_unixhs
 
 sub test_xfer_user_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -543,7 +540,7 @@ sub test_xfer_user_altns_unixhs
 
 sub test_xfer_user_noaltns_nounixhs
     :AllowMoves :NoAltNamespace
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -646,7 +643,7 @@ sub test_xfer_user_noaltns_nounixhs
 
 sub test_xfer_user_verify_cleanup
     :AllowMoves :NoAltNamespace :Conversations
-    :needs_component_murder :min_version_3_9
+    :min_version_3_9
 {
     my ($self) = @_;
 
@@ -705,7 +702,7 @@ EOF
 
 sub test_xfer_user_altns_unixhs_virtdom
     :AllowMoves :AltNamespace :UnixHierarchySep :VirtDomains
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -821,7 +818,7 @@ sub test_xfer_user_altns_unixhs_virtdom
 
 sub test_xfer_user_noaltns_nounixhs_virtdom
     :AllowMoves :NoAltNamespace :VirtDomains
-    :needs_component_murder :min_version_3_2
+    :min_version_3_2
 {
     my ($self) = @_;
 
@@ -937,7 +934,7 @@ sub test_xfer_user_noaltns_nounixhs_virtdom
 
 sub test_xfer_mailbox_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :needs_component_murder :min_version_3_2 :max_version_3_4
+    :min_version_3_2 :max_version_3_4
 {
     my ($self) = @_;
 
@@ -1070,7 +1067,7 @@ sub test_xfer_mailbox_altns_unixhs
 
 sub test_xfer_no_user_intermediates
     :AllowMoves :AltNamespace :UnixHierarchySep
-    :needs_component_murder :min_version_3_5
+    :min_version_3_5
 {
     my ($self) = @_;
 
@@ -1111,7 +1108,7 @@ sub test_xfer_no_user_intermediates
 # XXX shared mailboxes!
 
 sub test_copy_across_backends
-    :needs_component_murder :NoAltNamespace
+    :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -1151,7 +1148,7 @@ sub test_copy_across_backends
 }
 
 sub test_replace_same_backend
-    :needs_component_murder :NoAltNamespace :min_version_3_9
+    :NoAltNamespace :min_version_3_9
 {
     # :min_version_3_9 checks backend1 version.  The test below checks frontend
     my ($maj, $min) = Cassandane::Instance->get_version('murder');
@@ -1178,7 +1175,7 @@ sub test_replace_same_backend
 }
 
 sub test_replace_across_backends
-    :needs_component_murder :NoAltNamespace :min_version_3_9
+    :NoAltNamespace :min_version_3_9
 {
     # :min_version_3_9 checks backend1 version.  The test below checks frontend
     my ($maj, $min) = Cassandane::Instance->get_version('murder');
@@ -1222,6 +1219,72 @@ sub test_replace_across_backends
 
     $self->{frontend_store}->set_folder($shared);
     $self->check_messages(\%exp, store => $self->{frontend_store});
+}
+
+sub test_proxy_search
+{
+    my ($self) = @_;
+    my $result;
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "EXPUNGE the 1st, 6th, and 10th";
+    $imaptalk->store('1,6,10', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $imaptalk->expunge();
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $frontend = $self->{frontend_store}->get_client();
+    $frontend->examine('INBOX');
+
+    xlog $self, "SEARCH ALL";
+    my $res = $frontend->search('all');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_str_equals($res->[0], "1");
+    $self->assert_str_equals($res->[1], "2");
+    $self->assert_str_equals($res->[2], "3");
+    $self->assert_str_equals($res->[3], "4");
+    $self->assert_str_equals($res->[4], "5");
+    $self->assert_str_equals($res->[5], "6");
+    $self->assert_str_equals($res->[6], "7");
+
+    xlog $self, "UID SEARCH ALL";
+    $frontend->uid(1);
+    $res = $frontend->search('all');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_str_equals($res->[0], "2");
+    $self->assert_str_equals($res->[1], "3");
+    $self->assert_str_equals($res->[2], "4");
+    $self->assert_str_equals($res->[3], "5");
+    $self->assert_str_equals($res->[4], "7");
+    $self->assert_str_equals($res->[5], "8");
+    $self->assert_str_equals($res->[6], "9");
+
+    xlog $self, "ESEARCH ALL";
+    my @results = ();
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    $res = $frontend->_imap_cmd('ESEARCH', 0, \%handlers, 'ALL');
+    $self->assert_str_equals('ok', $res);
+    $self->assert_str_equals($results[0][3], "2:5,7:9");
 }
 
 1;

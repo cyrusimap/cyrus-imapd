@@ -637,7 +637,7 @@ get_icalxparam_value(icalproperty *prop, const char *name)
 
 static void unescape_ical_text(struct buf *buf, const char *s)
 {
-    for (; *s; s++) {
+    for (; s && *s; s++) {
         if (*s == '\\') {
             switch (*++s) {
                 case 'n':
@@ -1098,10 +1098,13 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
          vtz;
          vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
 
+        buf_reset(&idbuf);
+
         /* Ignore standard timezones */
         prop = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
         if (!prop) continue;
         const char *tzid = icalproperty_get_tzid(prop);
+
         if (!tzid || !*tzid || get_cyrus_timezone_from_tzid(tzid, jstzones->no_guess)) {
             continue;
         }
@@ -1146,7 +1149,7 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
                             h--;
 
                         // Lookup "Etc/GMT+X" timezone
-                        buf_printf(&idbuf, "Etc/GMT%+d", h);
+                        buf_printf(&idbuf, "Etc/GMT%+d", -h);
                         if (!get_cyrus_timezone_from_tzid(buf_cstring(&idbuf), 0))
                             buf_reset(&idbuf);
                     }
@@ -1373,11 +1376,13 @@ HIDDEN int jmapical_utcdatetime_from_string(const char *val, struct jmapical_dat
 
 HIDDEN int jmapical_datetime_from_icalprop(icalproperty *prop, struct jmapical_datetime *dt)
 {
-    icaltimetype icaldt = icalvalue_get_datetimedate(icalproperty_get_value(prop));
-    if (!icaltime_is_valid_time(icaldt)) return -1;
+    icalvalue *val = icalproperty_get_value(prop);
+    if (!(icalvalue_isa(val) == ICAL_DATETIME_VALUE) &&
+        !(icalvalue_isa(val) == ICAL_DATE_VALUE)) {
+        return -1;
+    }
 
-    jmapical_datetime_from_icaltime(icaldt, dt);
-
+    jmapical_datetime_from_icaltime(icalvalue_get_datetimedate(val), dt);
     return 0;
 }
 
@@ -1545,8 +1550,8 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess,
         } else if (tz) return icaltimezone_get_location(tz);
     } else {
         icalvalue *val = icalproperty_get_value(prop);
-        icaltimetype dt = icalvalue_get_datetime(val);
-        if (icaltime_is_valid_time(dt) && icaltime_is_utc(dt)) {
+        if (icalvalue_isa(val) == ICAL_DATETIME_VALUE &&
+            (icaltime_is_utc(icalvalue_get_datetime(val)))) {
             tzid = "Etc/UTC";
         }
     }
@@ -1727,7 +1732,7 @@ static json_t* recurrence_byX_fromical(short byX[], size_t nmemb, int (*conv)(in
 
     size_t i;
     int tmp[nmemb];
-    for (i = 0; i < nmemb && byX[i] != ICAL_RECURRENCE_ARRAY_MAX; i++) {
+    for (i = 0; i < nmemb; i++) {
         tmp[i] = conv(byX[i]);
     }
 
@@ -1745,26 +1750,28 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 {
     char *s = NULL;
     struct buf buf = BUF_INITIALIZER;
-    size_t i;
+    short i;
+    json_t *recur;
 
-    struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
-    if (rrule.freq == ICAL_NO_RECURRENCE) {
-        return json_null();
+    struct icalrecurrencetype *rrule = icalproperty_get_recurrence(prop);
+    if (!rrule || rrule->freq == ICAL_NO_RECURRENCE) {
+        recur = json_null();
+        goto done;
     }
 
-    json_t *recur = json_pack("{s:s}", "@type", "RecurrenceRule");
+    recur = json_pack("{s:s}", "@type", "RecurrenceRule");
 
     /* frequency */
-    s = lcase(xstrdup(icalrecur_freq_to_string(rrule.freq)));
+    s = lcase(xstrdup(icalrecur_freq_to_string(rrule->freq)));
     json_object_set_new(recur, "frequency", json_string(s));
     free(s);
 
-    json_object_set_new(recur, "interval", json_integer(rrule.interval));
+    json_object_set_new(recur, "interval", json_integer(rrule->interval));
 
 #ifdef HAVE_RSCALE
     /* rscale */
-    if (rrule.rscale) {
-        s = xstrdup(rrule.rscale);
+    if (rrule->rscale) {
+        s = xstrdup(rrule->rscale);
         s = lcase(s);
         json_object_set_new(recur, "rscale", json_string(s));
         free(s);
@@ -1772,7 +1779,7 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 
     /* skip */
     const char *skip = NULL;
-    switch (rrule.skip) {
+    switch (rrule->skip) {
         case ICAL_SKIP_BACKWARD:
             skip = "backward";
             break;
@@ -1788,31 +1795,29 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 #endif
 
     /* firstDayOfWeek */
-    s = xstrdup(icalrecur_weekday_to_string(rrule.week_start));
+    s = xstrdup(icalrecur_weekday_to_string(rrule->week_start));
     s = lcase(s);
     json_object_set_new(recur, "firstDayOfWeek", json_string(s));
     free(s);
 
     /* byDay */
     json_t *jbd = json_array();
-    for (i = 0; i < ICAL_BY_DAY_SIZE; i++) {
+    short *by_day = icalrecur_byrule_data(rrule, ICAL_BY_DAY);
+    short size = icalrecur_byrule_size(rrule, ICAL_BY_DAY);
+    for (i = 0; i < size; i++) {
         json_t *jday;
         icalrecurrencetype_weekday weekday;
         int pos;
 
-        if (rrule.by_day[i] == ICAL_RECURRENCE_ARRAY_MAX) {
-            break;
-        }
-
         jday = json_object();
-        weekday = icalrecurrencetype_day_day_of_week(rrule.by_day[i]);
+        weekday = icalrecurrencetype_day_day_of_week(by_day[i]);
 
         s = xstrdup(icalrecur_weekday_to_string(weekday));
         s = lcase(s);
         json_object_set_new(jday, "day", json_string(s));
         free(s);
 
-        pos = icalrecurrencetype_day_position(rrule.by_day[i]);
+        pos = icalrecurrencetype_day_position(by_day[i]);
         if (pos) {
             json_object_set_new(jday, "nthOfPeriod", json_integer(pos));
         }
@@ -1832,14 +1837,11 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 
     /* byMonth */
     json_t *jbm = json_array();
-    for (i = 0; i < ICAL_BY_MONTH_SIZE; i++) {
-        short bymonth;
+    short *by_month = icalrecur_byrule_data(rrule, ICAL_BY_MONTH);
+    size = icalrecur_byrule_size(rrule, ICAL_BY_MONTH);
+    for (i = 0; i < size; i++) {
+        short bymonth = by_month[i];
 
-        if (rrule.by_month[i] == ICAL_RECURRENCE_ARRAY_MAX) {
-            break;
-        }
-
-        bymonth = rrule.by_month[i];
         buf_printf(&buf, "%d", icalrecurrencetype_month_month(bymonth));
         if (icalrecurrencetype_month_is_leap(bymonth)) {
             buf_appendcstr(&buf, "L");
@@ -1854,56 +1856,63 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
         json_decref(jbm);
     }
 
-    if (rrule.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_MONTH_DAY))) {
         json_object_set_new(recur, "byMonthDay",
-                recurrence_byX_fromical(rrule.by_month_day,
-                    ICAL_BY_MONTHDAY_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_MONTH_DAY),
+                                size, &identity_int));
     }
-    if (rrule.by_year_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_YEAR_DAY))) {
         json_object_set_new(recur, "byYearDay",
-                recurrence_byX_fromical(rrule.by_year_day,
-                    ICAL_BY_YEARDAY_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_YEAR_DAY),
+                                size, &identity_int));
     }
-    if (rrule.by_week_no[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_WEEK_NO))) {
         json_object_set_new(recur, "byWeekNo",
-                recurrence_byX_fromical(rrule.by_week_no,
-                    ICAL_BY_WEEKNO_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_WEEK_NO),
+                                size, &identity_int));
     }
-    if (rrule.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_HOUR))) {
         json_object_set_new(recur, "byHour",
-                recurrence_byX_fromical(rrule.by_hour,
-                    ICAL_BY_HOUR_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_HOUR),
+                                size, &identity_int));
     }
-    if (rrule.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_MINUTE))) {
         json_object_set_new(recur, "byMinute",
-                recurrence_byX_fromical(rrule.by_minute,
-                    ICAL_BY_MINUTE_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_MINUTE),
+                                size, &identity_int));
     }
-    if (rrule.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_SECOND))) {
         json_object_set_new(recur, "bySecond",
-                recurrence_byX_fromical(rrule.by_second,
-                    ICAL_BY_SECOND_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_SECOND),
+                                size, &identity_int));
     }
-    if (rrule.by_set_pos[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if ((size = icalrecur_byrule_size(rrule, ICAL_BY_SET_POS))) {
         json_object_set_new(recur, "bySetPosition",
-                recurrence_byX_fromical(rrule.by_set_pos,
-                    ICAL_BY_SETPOS_SIZE, &identity_int));
+                            recurrence_byX_fromical(
+                                icalrecur_byrule_data(rrule, ICAL_BY_SET_POS),
+                                size, &identity_int));
     }
 
-    if (rrule.count != 0) {
+    if (rrule->count != 0) {
         /* Recur count takes precedence over until. */
-        json_object_set_new(recur, "count", json_integer(rrule.count));
-    } else if (!icaltime_is_null_time(rrule.until)) {
+        json_object_set_new(recur, "count", json_integer(rrule->count));
+    } else if (!icaltime_is_null_time(rrule->until)) {
         icaltimetype dtuntil;
-        if (rrule.until.is_date) {
-            dtuntil = rrule.until;
+        if (rrule->until.is_date) {
+            dtuntil = rrule->until;
             dtuntil.hour = 23;
             dtuntil.minute = 59;
             dtuntil.second = 59;
             dtuntil.is_date = 0;
         }
         else {
-            dtuntil = icaltime_convert_to_zone(rrule.until, untiltz);
+            dtuntil = icaltime_convert_to_zone(rrule->until, untiltz);
         }
         struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
         jmapical_datetime_from_icaltime(dtuntil, &until);
@@ -1918,6 +1927,8 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
         recur = json_null();
     }
 
+  done:
+    icalrecurrencetype_unref(rrule);
     buf_free(&buf);
     return recur;
 }
@@ -2423,8 +2434,8 @@ static json_t *participant_from_ical(icalproperty *prop,
     struct buf buf = BUF_INITIALIZER;
     icalproperty_kind kind = icalproperty_isa(prop);
 
-    int is_orga = !strcasecmpsafe(icalproperty_get_organizer(orga),
-                                  icalproperty_get_attendee(prop));
+    int is_orga = !strcasecmpsafe(icalproperty_get_decoded_calendaraddress(orga),
+                                  icalproperty_get_decoded_calendaraddress(prop));
 
     /* sendTo */
     json_t *sendTo = rsvpto_from_ical(prop);
@@ -3042,26 +3053,22 @@ relatedto_from_ical(icalcomponent *comp)
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_RELTYPE_PARAMETER)) {
 
-            switch (icalparameter_get_reltype(param)) {
-                case ICAL_RELTYPE_PARENT:
-                    buf_setcstr(&buf, "parent");
-                    break;
-                case ICAL_RELTYPE_CHILD:
-                    buf_setcstr(&buf, "child");
-                    break;
-                case ICAL_RELTYPE_SIBLING:
-                    buf_setcstr(&buf, "sibling");
+            icalparameter_reltype reltype = icalparameter_get_reltype(param);
+            switch (reltype) {
+                case ICAL_RELTYPE_X:
+                {
+                    const char *v = icalparameter_get_xvalue(param);
+                    if (v) buf_setcstr(&buf, v);
+                }
+                case ICAL_RELTYPE_NONE:
                     break;
                 default:
-                    {
-                        const char *reltypestr = icalparameter_get_xvalue(param);
-                        if (reltypestr) {
-                            buf_setcstr(&buf, reltypestr);
-                            buf_lcase(&buf);
-                            buf_trim(&buf);
-                        }
-                    }
+                    buf_setcstr(&buf, icalparameter_enum_to_string(reltype));
             }
+
+            buf_lcase(&buf);
+            buf_trim(&buf);
+
             if (buf_len(&buf)) {
                 json_object_set_new(relation, buf_cstring(&buf), json_true());
             }
@@ -3186,7 +3193,9 @@ static json_t *coordinates_from_ical(icalproperty *prop)
 }
 
 static json_t*
-locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
+locations_from_ical(icalcomponent *comp,
+                    icalcomponent *maincomp,
+                    json_t *linksbyloc,
                     jstimezones_t *jstzones)
 {
     icalproperty* prop;
@@ -3198,11 +3207,15 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
     const char *tzidstart = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY, jstzones);
     const char *tzidend = tzid_from_ical(comp, ICAL_DTEND_PROPERTY, jstzones);
     if (tzidstart && tzidend && strcmp(tzidstart, tzidend)) {
-        prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-        char *id = xjmapid_from_ical(prop);
+        // Generate the location id from the DTEND property.
+        char *id = xjmapid_from_ical(icalcomponent_get_first_property(
+            maincomp ? maincomp : comp, ICAL_DTEND_PROPERTY));
         const char *jstzid = jstimezones_get_jstzid(jstzones, tzidend);
         if (jstzid) {
-            loc = json_pack("{s:s s:s}", "timeZone", jstzid, "relativeTo", "end");
+            loc = json_pack("{s:s s:s s:s}",
+                    "@type", "Location",
+                    "timeZone", jstzid,
+                    "relativeTo", "end");
             json_object_set_new(locations, id, loc);
         }
         free(id);
@@ -3241,7 +3254,7 @@ locations_from_ical(icalcomponent *comp, json_t *linksbyloc,
             const char *uri = icalvalue_as_ical_string(icalproperty_get_value(prop));
             struct buf sanitized_geouri = BUF_INITIALIZER;
 
-            if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+            if (uri && geouri_sanitize(uri, &sanitized_geouri) == 0) {
                 uri = buf_cstring(&sanitized_geouri);
                 struct buf title = BUF_INITIALIZER;
                 const char *s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE);
@@ -3540,16 +3553,26 @@ static void read_custom_jstzids(json_t *jsevent, strarray_t *tzids)
         }
     }
 
-    /* Find all all timeZone property values */
+    /* Find all timeZone property values */
     json_t *jpatch;
     while ((jpatch = ptrarray_pop(&work))) {
         json_object_foreach(jpatch, pname, jval) {
+            if (!strcmp(pname, "locations")) {
+                const char *loc_id;
+                json_t *jloc;
+                json_object_foreach(jval, loc_id, jloc) {
+                    const char *tzid =
+                        json_string_value(json_object_get(jloc, "timeZone"));
+                    if (tzid && *tzid == '/') {
+                        strarray_add(tzids, tzid);
+                    }
+                }
+                continue;
+            }
+
             const char *tzid = NULL;
             if (!strcmp(pname, "timeZone")) {
                 tzid = json_string_value(jval);
-            }
-            else if (!strcmp(pname, "location")) {
-                tzid = json_string_value(json_object_get(jval, "timeZone"));
             }
             else if (!strncmp(pname, "locations/", 10)) {
                 pname += 10;
@@ -3571,9 +3594,9 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
 {
     if (!jstzones || !jstzones->entries.count) return NULL;
 
-    strarray_t want_tzids = STRARRAY_INITIALIZER;
-    read_custom_jstzids(jsevent, &want_tzids);
-    if (!strarray_size(&want_tzids)) return NULL;
+    strarray_t want_jstzids = STRARRAY_INITIALIZER;
+    read_custom_jstzids(jsevent, &want_jstzids);
+    if (!strarray_size(&want_jstzids)) return NULL;
 
     json_t *jtimezones = json_object();
     struct buf buf = BUF_INITIALIZER;
@@ -3587,7 +3610,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         if (!jstz->is_custom) continue;
 
         /* Skip orphaned timezones */
-        if (!strarray_contains(&want_tzids, jstzid)) {
+        if (!strarray_contains(&want_jstzids, jstzid)) {
             continue;
         }
 
@@ -3687,7 +3710,7 @@ static json_t *timezones_from_ical(json_t *jsevent, jstimezones_t *jstzones)
         jtimezones = NULL;
     }
     buf_free(&buf);
-    strarray_fini(&want_tzids);
+    strarray_fini(&want_jstzids);
 
     return jtimezones;
 }
@@ -3980,7 +4003,7 @@ calendarevent_from_ical(icalcomponent *comp,
         /* locations */
         if (jmap_wantprop(props, "locations")) {
             json_object_set_new(event, "locations",
-                    locations_from_ical(comp,
+                    locations_from_ical(comp, maincomp,
                         json_object_get(linksbyprop, "locations"), jstzones));
         }
         /* participants */
@@ -6569,27 +6592,19 @@ recurrencerule_to_ical(icalcomponent *comp, struct jmap_parser *parser,
 
     if (!json_array_size(parser->invalid)) {
         /* Add RRULE to component */
-        struct icalrecurrencetype rt =
-            icalrecurrencetype_from_string(buf_ucase(&buf));
-        if (rt.freq != ICAL_NO_RECURRENCE) {
-            icalproperty *prop = NULL;
-            if (kind == ICAL_RRULE_PROPERTY) {
-                prop = icalproperty_new_rrule(rt);
+        struct icalrecurrencetype *rt =
+            icalrecurrencetype_new_from_string(buf_ucase(&buf));
+        if (rt->freq != ICAL_NO_RECURRENCE) {
+            icalproperty *prop = icalproperty_new(kind);
+            if (prop) {
+                icalproperty_set_recurrence(prop, rt);
+                icalcomponent_add_property(comp, prop);
             }
-            else if (kind == ICAL_EXRULE_PROPERTY) {
-                prop = icalproperty_new_exrule(rt);
-            }
-            if (prop) icalcomponent_add_property(comp, prop);
         } else {
             syslog(LOG_ERR, "jmap_ical: generated bogus RRULE: %s", buf_cstring(&buf));
             jmap_parser_invalid(parser, NULL);
         }
-        // XXX this should go to libical
-        if (rt.rscale) {
-            free(rt.rscale);
-            rt.rscale = NULL;
-        }
-        icalrecurrencetype_clear(&rt);
+        icalrecurrencetype_unref(rt);
     }
 
     buf_free(&buf);
@@ -6951,7 +6966,7 @@ const char *locations_to_ical_keep_old_main(json_t *locations,
 
     const char *uri = icalproperty_get_value_as_string(prop);
     struct buf sanitized_geouri = BUF_INITIALIZER;
-    if (geouri_sanitize(uri, &sanitized_geouri) == 0) {
+    if (uri && geouri_sanitize(uri, &sanitized_geouri) == 0) {
         if (!strcmpsafe(mainloc_name, buf_cstring(&title)) &&
                 !strcmpsafe(mainloc_coords, buf_cstring(&sanitized_geouri))) {
             // Previous X-APPLE-STRUCTURED-LOCATION still matches
@@ -7071,7 +7086,7 @@ locations_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     /* Write any remaining locations as X-JMAP-LOCATION */
     jmap_parser_push(parser, "locations");
     json_object_foreach(locations, id, jloc) {
-        if (strcmpsafe(mainlocid, id)) {
+        if (strcmpsafe(mainlocid, id) && !location_is_endtimezone(jloc)) {
             location_to_ical(comp, parser, ICAL_X_PROPERTY,
                     "locations", id, jloc, jstzones, jmapctx);
         }

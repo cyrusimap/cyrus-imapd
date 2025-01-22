@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_fuzzyalways_annot
-    :min_version_3_3 :needs_search_xapian :SearchFuzzyAlways
+    :min_version_3_3 :SearchFuzzyAlways
 {
     my ($self) = @_;
     my $imap = $self->{store}->get_client();

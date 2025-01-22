@@ -113,6 +113,9 @@ static const struct dav_namespace_t {
     { XML_NS_SYSFLAG, "SF" },
 };
 
+#define NUM_KNOWN_NAMESPACES                                    \
+    (sizeof(known_namespaces) / sizeof(struct dav_namespace_t))
+
 static const struct match_type_t dav_match_types[] = {
     { "contains", MATCH_TYPE_CONTAINS },
     { "equals", MATCH_TYPE_EQUALS },
@@ -258,10 +261,10 @@ static const struct prop_entry principal_props[] = {
     /* CalDAV Scheduling (RFC 6638) properties */
     { "schedule-inbox-URL", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_INBOX },
+      propfind_calurl, NULL, (void *) SCHED_INBOX },
     { "schedule-outbox-URL", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_calurl, NULL, SCHED_OUTBOX },
+      propfind_calurl, NULL, (void *) SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CALDAV,
       PROP_COLLECTION,
       propfind_caluseraddr, proppatch_caluseraddr, NULL },
@@ -412,7 +415,7 @@ static const struct precond_t {
     /* Time Zones by Reference (RFC 7809) preconditions */
     { "valid-timezone", NS_CALDAV },
 
-    /* Managed Attachments (draft-ietf-calext-caldav-attachments) preconditions */
+    /* Managed Attachments (RFC 8607) preconditions */
     { "valid-managed-id", NS_CALDAV },
 
     /* Bulk Change (draft-daboo-calendarserver-bulk-change) preconditions */
@@ -1340,8 +1343,14 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                     ensure_ns(respNs, NS_JMAPCAL, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
-                else
-                    xmlNewNs(root, nsDef->href, nsDef->prefix);
+                else if (!xmlNewNs(root, nsDef->href, nsDef->prefix)) {
+                    /* namespace prefix already in use */
+                    char myprefix[20];
+                    snprintf(myprefix, sizeof(myprefix), "X%X", strhash((const char *) nsDef->href) & 0xffff);
+                    xmlFree((char *) nsDef->prefix);
+                    nsDef->prefix = xmlStrdup(BAD_CAST myprefix);
+                    xmlNewNs(root, nsDef->href, BAD_CAST myprefix); // could again return NULL
+		}
             }
         }
 
@@ -1871,7 +1880,7 @@ HIDDEN void dav_get_principalname(const char *userid, struct buf *buf)
     buf_reset(buf);
 
     if (userid) {
-        const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        static const char annotname[] = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         char *mailboxname = caldav_mboxname(userid, NULL);
         int r = annotatemore_lookupmask(mailboxname, annotname, userid, buf);
 
@@ -3696,6 +3705,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                          entry++);
 
                     if (entry->name) {
+                        prop->ns = pctx->ns[entry->ns];
                         int rights = httpd_myrights(httpd_authstate,
                                                     pctx->txn->req_tgt.mbentry);
                         if (!entry->put) {
@@ -3732,7 +3742,14 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                     }
                     else if (pctx->txn->req_tgt.namespace->id != URL_NS_PRINCIPAL) {
                         /* Write "dead" property */
-                        proppatch_todb(prop, set, pctx, propstat, NULL);
+                        for (size_t i = 0; i < NUM_KNOWN_NAMESPACES; i++) {
+                            if (!strcmp((const char *) prop->ns->href,
+                                        known_namespaces[i].href)) {
+                                prop->ns = pctx->ns[i];
+                                break;
+                            }
+                        }
+                        proppatch_todb_internal(prop, set, pctx, propstat, NULL, 1);
                     }
                 }
             }
@@ -7981,7 +7998,8 @@ static int principal_search(const char *userid, void *rock)
 
         for (prop = search_crit->props; prop; prop = prop->next) {
             if (!strcmp(prop->s, "displayname")) {
-                if (!xmlStrcasestr(BAD_CAST userid,
+                dav_get_principalname(userid, &fctx->buf);
+                if (!xmlStrcasestr(BAD_CAST buf_cstring(&fctx->buf),
                                    search_crit->match)) return 0;
             }
             else if (!strcmp(prop->s, "calendar-user-address-set")) {
@@ -8040,7 +8058,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
     fctx->filter_crit = NULL;
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "property-search")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "property-search") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_DAV)) {
                 xmlNodePtr search;
 
                 search_crit = xzmalloc(sizeof(struct search_crit));
@@ -8049,7 +8068,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
                 for (search = node->children; search; search = search->next) {
                     if (search->type == XML_ELEMENT_NODE) {
-                        if (!xmlStrcmp(search->name, BAD_CAST "prop")) {
+                        if (!xmlStrcmp(search->name, BAD_CAST "prop") &&
+                            !xmlStrcmp(search->ns->href, BAD_CAST XML_NS_DAV)) {
                             xmlNodePtr prop;
 
                             for (prop = search->children;
@@ -8078,7 +8098,8 @@ static int report_prin_prop_search(struct transaction_t *txn,
                                 }
                             }
                         }
-                        else if (!xmlStrcmp(search->name, BAD_CAST "match")) {
+                        else if (!xmlStrcmp(search->name, BAD_CAST "match") &&
+                                 !xmlStrcmp(search->ns->href, BAD_CAST XML_NS_DAV)) {
                             if (search_crit->match) {
                                 txn->error.desc =
                                     "Too many DAV:match XML elements";

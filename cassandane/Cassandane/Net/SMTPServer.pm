@@ -5,7 +5,7 @@ use warnings;
 use Data::Dumper;
 use File::Spec::Functions qw(catfile);
 use File::Temp qw(mkstemps);
-use Net::Server::PreForkSimple;
+use Net::Server::PreFork;
 
 use lib ".";
 use Net::XmtpServer;
@@ -13,7 +13,7 @@ use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use JSON;
 
-use base qw(Net::XmtpServer Net::Server::PreForkSimple);
+use base qw(Net::XmtpServer Net::Server::PreFork);
 
 sub new {
     my ($class, $params, @args) = @_;
@@ -23,6 +23,7 @@ sub new {
     my $Self = $class->SUPER::new($params, @args);
     $Self->{messages_dir} = $messages_dir;
     $Self->{message_fh} = undef;
+    $Self->{_rcpt_to_count} = 0;
     return $Self;
 }
 
@@ -64,6 +65,7 @@ sub helo {
 sub mail_from {
     my ($Self, $From, @FromExtra) = @_;
     $Self->mylog("SMTP: MAIL FROM $From @FromExtra");
+    $Self->{_rcpt_to_count} = 0;
     return if $Self->override('from');
     # don't just quietly accept garbage!
     if ($From =~ m/[<>]/ || grep { m/[<>]/ } @FromExtra) {
@@ -133,6 +135,7 @@ sub end_data {
 sub rset {
     my ($Self) = @_;
     $Self->mylog("SMTP: RSET");
+    $Self->{_rcpt_to_count} = 0;
     return if $Self->override('rset');
     $Self->send_client_resp(250, "ok");
     return 0;

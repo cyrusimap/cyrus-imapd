@@ -2,8 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_imip_add
-    :needs_component_sieve :needs_component_httpd :min_version_3_7
-    :want_service_http
+    :needs_component_httpd :want_service_http
 {
     my ($self) = @_;
 
@@ -19,9 +18,9 @@ sub test_imip_add
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "variables", "imap4flags", "processcalendar"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :outcome "outcome";
+    processcalendar :outcome "outcome";
     if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }

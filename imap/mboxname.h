@@ -400,5 +400,6 @@ modseq_t mboxname_setquotamodseq(const char *mboxname, modseq_t val);
 modseq_t mboxname_readraclmodseq(const char *mboxname);
 modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last);
 modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t val);
+void mboxname_zero_counters(const char *mboxname);
 
 #endif

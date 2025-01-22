@@ -613,7 +613,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
     fprintf(f, "Message-ID: <%s@%s>\r\n", sdata->contentid, config_servername);
 
     fprintf(f, "Content-Type: application/sieve; charset=utf-8\r\n");
-    fprintf(f, "Content-Length: %lu\r\n", datalen);
+    fprintf(f, "Content-Length: " SIZE_T_FMT "\r\n", datalen);
     fprintf(f, "Content-Disposition: attachment;\r\n\tfilename=\"%s%s\"\r\n",
             sdata->id ? sdata->id : makeuuid(), SIEVE_EXTENSION);
     fputs("MIME-Version: 1.0\r\n", f);

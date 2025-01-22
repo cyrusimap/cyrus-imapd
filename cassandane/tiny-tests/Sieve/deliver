@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_deliver
-    :needs_component_sieve
 {
     my ($self) = @_;
 

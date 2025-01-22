@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_parse_repair_broken_ical
-    :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -187,9 +186,8 @@ EOF
 
     for my $tc (@testCases) {
         $tc->{ical} =~ s/\r?\n/\r\n/gs;
-
         my @properties = keys %{$tc->{wantParsed}};
-        push(@properties, @{$tc->{wantAlsoProperties}});
+        push(@properties, @{$tc->{wantAlsoProperties} || []});
 
         xlog $self, "Running test case: $tc->{desc}";
 

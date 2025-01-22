@@ -92,9 +92,8 @@ HIDDEN icalproperty *find_attendee(icalcomponent *comp, const char *match)
     icalproperty *prop = icalcomponent_get_first_invitee(comp);
 
     for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
-        const char *attendee = icalproperty_get_invitee(prop);
+        const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
         if (!attendee) continue;
-        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         /* Skip where not the server's responsibility */
         icalparameter *param = icalproperty_get_scheduleagent_parameter(prop);
@@ -115,9 +114,8 @@ HIDDEN const char *get_organizer(icalcomponent *comp)
     if (!comp) return NULL;
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    const char *organizer = icalproperty_get_organizer(prop);
+    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
     if (!organizer) return NULL;
-    if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
     icalparameter *param = icalproperty_get_scheduleagent_parameter(prop);
     /* check if we're supposed to send replies to the organizer */
     if (param &&
@@ -248,6 +246,7 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
     return collname;
 }
 
+#ifdef HAVE_VPOLL_SUPPORT
 /*
  * deliver_merge_reply() helper function
  *
@@ -255,29 +254,30 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
  */
 static void deliver_merge_vpoll_reply(icalcomponent *ical, icalcomponent *reply)
 {
-    icalcomponent *new_ballot, *vvoter;
-    icalproperty *voterp;
+    icalcomponent *new_ballot, *part;
+    icalproperty *caladdr;
     const char *voter;
 
     /* Get VOTER from reply */
     new_ballot =
-        icalcomponent_get_first_component(reply, ICAL_VVOTER_COMPONENT);
-    voterp = icalcomponent_get_first_property(new_ballot, ICAL_VOTER_PROPERTY);
-    voter = icalproperty_get_voter(voterp);
+        icalcomponent_get_first_component(reply, ICAL_PARTICIPANT_COMPONENT);
+    caladdr = icalcomponent_get_first_property(new_ballot,
+                                               ICAL_CALENDARADDRESS_PROPERTY);
+    voter = icalproperty_get_calendaraddress(caladdr);
 
     /* Locate VOTER in existing VPOLL */
-    for (vvoter =
-           icalcomponent_get_first_component(ical, ICAL_VVOTER_COMPONENT);
-         vvoter;
-         vvoter =
-             icalcomponent_get_next_component(ical, ICAL_VVOTER_COMPONENT)) {
+    for (part =
+             icalcomponent_get_first_component(ical, ICAL_PARTICIPANT_COMPONENT);
+         part;
+         part =
+             icalcomponent_get_next_component(ical, ICAL_PARTICIPANT_COMPONENT)) {
 
-        voterp =
-            icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+        caladdr =
+            icalcomponent_get_first_property(part, ICAL_CALENDARADDRESS_PROPERTY);
 
-        if (!strcmp(voter, icalproperty_get_voter(voterp))) {
-            icalcomponent_remove_component(ical, vvoter);
-            icalcomponent_free(vvoter);
+        if (!strcmp(voter, icalproperty_get_calendaraddress(caladdr))) {
+            icalcomponent_remove_component(ical, part);
+            icalcomponent_free(part);
             break;
         }
     }
@@ -290,35 +290,37 @@ static void deliver_merge_vpoll_reply(icalcomponent *ical, icalcomponent *reply)
 static int deliver_merge_pollstatus(icalcomponent *ical, icalcomponent *request)
 {
     int deliver_inbox = 0;
-    icalcomponent *oldpoll, *newpoll, *vvoter, *next;
+    icalcomponent *oldpoll, *newpoll, *part, *next;
 
-    /* Remove each VVOTER from old object */
+    /* Remove each PARTICIPANT from old object */
     oldpoll =
         icalcomponent_get_first_component(ical, ICAL_VPOLL_COMPONENT);
-    for (vvoter =
-             icalcomponent_get_first_component(oldpoll, ICAL_VVOTER_COMPONENT);
-         vvoter;
-         vvoter = next) {
+    for (part = icalcomponent_get_first_component(oldpoll,
+                                                  ICAL_PARTICIPANT_COMPONENT);
+         part;
+         part = next) {
 
-        next = icalcomponent_get_next_component(oldpoll, ICAL_VVOTER_COMPONENT);
+        next = icalcomponent_get_next_component(oldpoll,
+                                                ICAL_PARTICIPANT_COMPONENT);
 
-        icalcomponent_remove_component(oldpoll, vvoter);
-        icalcomponent_free(vvoter);
+        icalcomponent_remove_component(oldpoll, part);
+        icalcomponent_free(part);
     }
 
-    /* Add each VVOTER in the iTIP request to old object */
+    /* Add each PARTICIPANT in the iTIP request to old object */
     newpoll = icalcomponent_get_first_component(request, ICAL_VPOLL_COMPONENT);
-    for (vvoter =
-             icalcomponent_get_first_component(newpoll, ICAL_VVOTER_COMPONENT);
-         vvoter;
-         vvoter =
-             icalcomponent_get_next_component(newpoll, ICAL_VVOTER_COMPONENT)) {
+    for (part = icalcomponent_get_first_component(newpoll,
+                                                  ICAL_PARTICIPANT_COMPONENT);
+         part;
+         part = icalcomponent_get_next_component(newpoll,
+                                                 ICAL_PARTICIPANT_COMPONENT)) {
 
-        icalcomponent_add_component(oldpoll, icalcomponent_clone(vvoter));
+        icalcomponent_add_component(oldpoll, icalcomponent_clone(part));
     }
 
     return deliver_inbox;
 }
+#endif /* HAVE_VPOLL_SUPPORT */
 
 /* annoying copypaste from libical because it's not exposed */
 static struct icaltimetype _get_datetime(icalcomponent *comp, icalproperty *prop)
@@ -426,7 +428,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
     icalparameter_partstat partstat = ICAL_PARTSTAT_NONE;
     const char *attendee = NULL, *cn = NULL;
     icaltimezone *startzone = NULL;
-    icaltimetype dtstart;
+    icaltimetype dtstart = icaltime_null_time();
     ptrarray_t rrules = PTRARRAY_INITIALIZER;
     struct hash_table rdate_table = HASH_TABLE_INITIALIZER;
 
@@ -459,9 +461,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                     break;
 
                 case ICAL_RRULE_PROPERTY: {
-                    struct icalrecurrencetype rrule =
-                        icalproperty_get_rrule(prop);
-                    ptrarray_append(&rrules, &rrule);
+                    struct icalrecurrencetype *rrule =
+                        icalproperty_get_recurrence(prop);
+                    if (rrule) ptrarray_append(&rrules, rrule);
                     break;
                 }
 
@@ -524,7 +526,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                 for (i = 0; !valid && i < size; i++) {
                     struct icalrecurrencetype *rrule = ptrarray_nth(&rrules, i);
                     icalrecur_iterator *ritr =
-                        icalrecur_iterator_new(*rrule, dtstart);
+                        icalrecurrence_iterator_new(rrule, dtstart);
 
                     for (this = icalrecur_iterator_next(ritr);
                          !icaltime_is_null_time(this);
@@ -546,7 +548,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             /* Create a new override from the master component
                and add it to the current object */
             icalproperty *recuridp = icalproperty_new_recurrenceid(recurid);
-            const char *tzid = icaltimezone_get_location(startzone);
+            const char *tzid = icaltimezone_get_location_tzid(startzone);
             if (tzid) {
                 icalproperty_set_parameter(recuridp, icalparameter_new_tzid(tzid));
             }
@@ -570,7 +572,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 
         /* Get the sending attendee */
         att = icalcomponent_get_first_invitee(itip);
-        attendee = icalproperty_get_invitee(att);
+        attendee = icalproperty_get_decoded_calendaraddress(att);
         param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
         if (param) partstat = icalparameter_get_partstat(param);
         param = icalproperty_get_first_parameter(att, ICAL_CN_PARAMETER);
@@ -578,11 +580,12 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 
         /* Find matching attendee in existing object */
         for (prop = icalcomponent_get_first_invitee(comp);
-             prop && strcmpnull(attendee, icalproperty_get_invitee(prop));
+             prop && strcmpnull(attendee,
+                                icalproperty_get_decoded_calendaraddress(prop));
              prop = icalcomponent_get_next_invitee(comp));
         if (!prop) {
             /* Attendee added themselves to this recurrence */
-            assert(icalproperty_isa(prop) != ICAL_VOTER_PROPERTY);
+            assert(icalproperty_isa(att) == ICAL_ATTENDEE_PROPERTY);
             prop = icalproperty_clone(att);
             icalcomponent_add_property(comp, prop);
         }
@@ -610,13 +613,18 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
         /* Remove RSVP and SCHEDULE-STATUS */
         icalproperty_remove_parameter_by_kind(prop, ICAL_RSVP_PARAMETER);
         icalproperty_remove_parameter_by_kind(prop, ICAL_SCHEDULESTATUS_PARAMETER);
-
+#ifdef HAVE_VPOLL_SUPPORT
         /* Handle VPOLL reply */
         if (kind == ICAL_VPOLL_COMPONENT) deliver_merge_vpoll_reply(comp, itip);
+#endif
     }
 
     free_hash_table(&override_table, NULL);
     free_hash_table(&rdate_table, NULL);
+
+    for (int i = 0; i < ptrarray_size(&rrules); i++) {
+        icalrecurrencetype_unref(ptrarray_nth(&rrules, i));
+    }
     ptrarray_fini(&rrules);
 
     return attendee;
@@ -827,7 +835,8 @@ static int deliver_merge_request(const char *attendee,
             for (prop =
                      icalcomponent_get_first_property(new_comp,
                                                       ICAL_ATTENDEE_PROPERTY);
-                 prop && strcmp(icalproperty_get_attendee(prop), attendee);
+                 prop && strcmp(attendee,
+                                icalproperty_get_decoded_calendaraddress(prop));
                  prop =
                      icalcomponent_get_next_property(new_comp,
                                                      ICAL_ATTENDEE_PROPERTY));
@@ -1167,6 +1176,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(itip);
+    if (method == ICAL_METHOD_NONE && SCHED_ALLOW_PUBLIC(sched_data)) {
+        method = ICAL_METHOD_PUBLISH;
+    }
 
     comp = icalcomponent_get_first_real_component(itip);
     kind = icalcomponent_isa(comp);
@@ -1317,9 +1329,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             case ICAL_VAVAILABILITY_COMPONENT:
                 if (cdata->comp_type != CAL_COMP_VAVAILABILITY) reject = 1;
                 break;
+#ifdef HAVE_VPOLL_SUPPORT
             case ICAL_VPOLL_COMPONENT:
                 if (cdata->comp_type != CAL_COMP_VPOLL) reject = 1;
                 break;
+#endif
             default:
                 break;
             }
@@ -1330,9 +1344,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     icalcomponent_get_first_property(comp,
                                                      ICAL_ORGANIZER_PROPERTY);
                 if (prop) {
-                    const char *organizer = icalproperty_get_organizer(prop);
+                    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
                     if (organizer) {
-                        if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
                         if (strcasecmp(cdata->organizer, organizer)) reject = 1;
                     }
                 }
@@ -1349,7 +1362,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     case ICAL_METHOD_CANCEL: {
         int all_instances = deliver_merge_cancel(ical, itip);
 
-        if (all_instances && SCHED_DELETE_CANCELED(sched_data)) {
+        if (all_instances && SCHED_DELETE_CANCELLED(sched_data)) {
             /* Expunge the resource */
             struct index_record record;
             int r;
@@ -1420,11 +1433,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         r = deliver_merge_add(ical, itip);
         if (r) goto inbox;
         break;
-
+#ifdef HAVE_VPOLL_SUPPORT
     case ICAL_METHOD_POLLSTATUS:
         deliver_inbox = deliver_merge_pollstatus(ical, itip);
         break;
-
+#endif
     default:
         /* Unknown METHOD -- ignore it */
         syslog(LOG_ERR, "Unknown iTIP method: %s",

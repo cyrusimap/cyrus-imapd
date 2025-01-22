@@ -212,6 +212,7 @@ EXPORTED void fatal(const char *msg, int code)
 {
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
     exit(code);
 }
 
@@ -1372,7 +1373,14 @@ static void reap_child(void)
     struct service *wd;
     int failed;
 
-    while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
+    while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > -1) {
+        if (pid == 0) {
+            if (errno == EINTR) {
+                errno = 0;
+                continue;
+            }
+            break;
+        }
 
         /* account for the child */
         c = centry_find(pid);
@@ -1417,12 +1425,21 @@ static void reap_child(void)
                         }
                         s->lastreadyfail = now;
                         if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
-                            syslog(LOG_ERR, "too many failures for "
-                                   "service %s/%s, disabling until next SIGHUP",
-                                   SERVICEPARAM(s->name),
-                                   SERVICEPARAM(s->familyname));
-                            service_forget_exec(s);
-                            xclose(s->socket);
+                            if (s->babysit) {
+                                syslog(LOG_ERR, "ERROR: too many failures for "
+                                       "service %s/%s, disabling for %d seconds",
+                                       SERVICEPARAM(s->name),
+                                       SERVICEPARAM(s->familyname),
+                                       MAX_READY_FAIL_INTERVAL);
+                            }
+                            else {
+                                syslog(LOG_ERR, "ERROR: too many failures for "
+                                       "service %s/%s, disabling until next SIGHUP",
+                                       SERVICEPARAM(s->name),
+                                       SERVICEPARAM(s->familyname));
+                                service_forget_exec(s);
+                                xclose(s->socket);
+                            }
                         }
                     }
                     break;
@@ -1508,7 +1525,17 @@ static void reap_child(void)
                 }
             }
 
-            proc_cleanup(&c->proc_handle);
+            if (c->proc_handle) {
+                proc_cleanup(&c->proc_handle);
+            }
+            else if (s && !in_shutdown && failed) {
+                /* we don't have a proc_handle for service processes because
+                 * they manage it themselves, but if one crashed it won't have
+                 * cleaned it up
+                 */
+                proc_force_cleanup(pid);
+            }
+
             centry_set_state(c, SERVICE_STATE_DEAD);
         } else {
             /* Are we multithreaded now? we don't know this child */
@@ -2479,7 +2506,9 @@ static void init_prom_report(struct timeval now)
     const char *tmp;
 
     prom_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
-    prom_frequency = config_getduration(IMAPOPT_PROMETHEUS_UPDATE_FREQ, 's');
+    prom_frequency = config_getduration(IMAPOPT_PROMETHEUS_MASTER_UPDATE_FREQ, 's');
+    if (!prom_frequency)
+        prom_frequency = config_getduration(IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 's');
 
     if (prom_frequency < 1) prom_enabled = 0;
     if (!prom_enabled) return;
@@ -2828,6 +2857,18 @@ static void check_undermanned(struct service *s, int si, int wdi)
     } else if (s->exec
                 && s->babysit
                 && s->nactive == 0) {
+        if (s->nreadyfails >= MAX_READY_FAILS) {
+            // if not yet timed out, just wait
+            time_t now = time(NULL);
+            if (now - s->lastreadyfail <= MAX_READY_FAIL_INTERVAL)
+                return;
+            // otherwise, start but if we die again within the next
+            // MAX_READY_FAIL_INTERVAL, only try once more.  If we
+            // last more than that time without dying, the reap_child
+            // loop will zero out the fail counter.
+            s->nreadyfails--;
+            s->lastreadyfail = now;
+        }
         syslog(LOG_ERR,
                "lost all children for service: %s/%s.  " \
                "Applying babysitter.",
@@ -2856,7 +2897,7 @@ static void check_undermanned(struct service *s, int si, int wdi)
     }
 }
 
-static void master_ready(const char *ready_file)
+static void master_ready(const char *ready_file, int ready)
 {
     int fd;
 
@@ -2864,6 +2905,12 @@ static void master_ready(const char *ready_file)
 
     if (!ready_file) ready_file = config_getstring(IMAPOPT_MASTER_READY_FILE);
     if (!ready_file) return;
+
+    if (!ready) {
+        /* remove file to say we're no longer ready! */
+        xunlink(ready_file);
+        return;
+    }
 
     if (cyrus_mkdir(ready_file, 0755 /* ignored */)) return;
 
@@ -2876,10 +2923,8 @@ static void master_ready(const char *ready_file)
         xsyslog(LOG_ERR, "unable to create ready file",
                          "fname=<%s>",
                          ready_file);
+        exit(EX_OSERR);
     }
-
-    /* we did our best */
-    errno = 0;
 }
 
 int main(int argc, char **argv)
@@ -3205,7 +3250,7 @@ int main(int argc, char **argv)
     }
 
     /* ok, we're going to start spawning like mad now */
-    master_ready(ready_file); /* ready for work */
+    master_ready(ready_file, 1); /* ready for work */
 
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
@@ -3434,6 +3479,9 @@ finished:
             }
         }
     }
+
+    /* tell caller we're done */
+    master_ready(ready_file, 0);
 
     /* XXX paranoia: burn through child table, complain if anything there? */
 

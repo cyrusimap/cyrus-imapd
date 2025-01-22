@@ -73,6 +73,7 @@
 #include "imap/proxy.h"
 #include "imap/sync_log.h"
 #include "lib/assert.h"
+#include "master/service.h"
 #include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
@@ -93,8 +94,8 @@ sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static struct auth_state *sieved_authstate = 0;
 
 int sieved_timeout;
-struct protstream *sieved_out;
-struct protstream *sieved_in;
+static struct protstream *sieved_out;
+static struct protstream *sieved_in;
 
 int sieved_logfd = -1;
 
@@ -197,6 +198,8 @@ EXPORTED void fatal(const char *s, int code)
 
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
     shut_down(EX_TEMPFAIL);
 }

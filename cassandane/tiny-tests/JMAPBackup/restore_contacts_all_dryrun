@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_restore_contacts_all_dryrun
-    :min_version_3_3 :needs_component_jmap
+    :min_version_3_3
 {
     my ($self) = @_;
 
@@ -63,8 +63,8 @@ sub test_restore_contacts_all_dryrun
     my $contactE = $res->[0][1]{created}{"e"}{id};
     my $state = $res->[0][1]{newState};
 
-    $diff = time() - $mark;
-    $period = "PT" . $diff . "S";
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
 
     xlog "restore contacts prior to most recent changes";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {

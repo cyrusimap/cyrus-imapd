@@ -112,6 +112,23 @@ AC_SUBST(GCOV_CXXFLAGS)
 AC_SUBST(GCOV_LDFLAGS)
 AC_SUBST(GCOV_LIBS)
 
+dnl enable stricter checks for preparing releases (disabled by default)
+AC_ARG_ENABLE([release-checks],
+              [AS_HELP_STRING([--enable-release-checks],
+                              [enable release checks])],
+              [],
+              [enable_release_checks=no]
+)
+AM_CONDITIONAL([ENABLE_RELEASE_CHECKS],
+               [test "x$enable_release_checks" = "xyes"])
+AM_COND_IF([ENABLE_RELEASE_CHECKS], [
+    AC_MSG_CHECKING([for changes files hanging around])
+    extra_changes_files=$(ls $srcdir/changes/next | grep -cv '0000-TEMPLATE')
+    AC_MSG_RESULT([$extra_changes_files])
+    AS_IF([test $extra_changes_files -ne 0],
+          [AC_MSG_ERROR([found changes files hanging around])])
+])
+
 AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
@@ -671,10 +688,10 @@ if test "x$enable_xapian" != xno ; then
                 [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_WORD_BREAKS | Xapian::QueryParser::FLAG_WORD_BREAKS | Xapian::MSet::SNIPPET_WORD_BREAKS; (void) cjk_flags; ]])],
             [xapian_cjkwords="yes"],
             [xapian_cjkwords="no"])
-        AC_MSG_RESULT($xapian_cjkwords)
         if test $xapian_cjkwords = yes; then
             AC_DEFINE([USE_XAPIAN_WORD_BREAKS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
             xapian_cjk_tokens=words
+            AC_MSG_RESULT($xapian_cjkwords)
         else
             dnl Xapian upstream version 1.5 used different flag names to enable
             dnl word break tokenization until March 2023.
@@ -1095,16 +1112,8 @@ AC_ARG_WITH(ldap,
         [AS_HELP_STRING([--with-ldap=DIR], [use LDAP (in DIR) (experimental) [/usr/local]])],
         with_ldap="${withval}", with_ldap="no")
 
-dnl select mode of afspts
-AC_ARG_ENABLE(krb5afspts,
-        [AS_HELP_STRING([--enable-krb5afspts], [compile afskrb PTS module with krb5 support])])
-
 if test "x$enable_afs" = "xyes"; then
 # krb5afspts is only valid if AFS is enabled, so check inside here.
-    AS_IF([test "x$enable_krb5afspts" = "xyes"], [SASL_SET_GSSAPI_LIBS
-      AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])
-    ])
-
     SAVE_CFLAGS="$CFLAGS"
     CFLAGS="${CFLAGS} -I${with_afs_incdir}"
     AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libafscom_err.a -lresolv"
@@ -1228,18 +1237,6 @@ AM_CONDITIONAL([SERVER], [test "$enable_server" != "no"])
 
 dnl this is the new simple check for kerberos; since the person had to
 dnl compile SASL, we might as well use the same checks.
-AC_ARG_WITH(krb,
-        [AS_HELP_STRING([--with-krb=DIR], [use Kerberos from DIR])],
-        with_krb="$withval", with_krb="no")
-
-AC_ARG_WITH(krbimpl,
-        [AS_HELP_STRING([--with-krbimpl=kth|mit], [assume Kerberos 4 from KTH or MIT])],
-        with_krbimpl="$withval", with_krbimpl="kth")
-
-AC_ARG_ENABLE(statickrb,
-        [AS_HELP_STRING([--enable-statickrb], [link Kerberos statically])],
-        with_statickrb="yes", with_statickrb="no")
-
 AC_ARG_WITH(krb5-config,
         [AS_HELP_STRING([--with-krb5-config=PATH], [use krb5-config from PATH])],
         with_krb5config="$withval", with_krb5config="no")
@@ -1260,77 +1257,6 @@ if test "$with_krb5config" != "no"; then
     LDFLAGS="$KRB5_LDFLAGS $LDFLAGS"
     CFLAGS="$KRB5_CFLAGS $CFLAGS"
 fi
-
-dnl In order to compile kerberos4, we need libkrb and libdes.
-
-dnl we might need -lresolv for kerberos
-AC_CHECK_LIB(resolv,res_search)
-
-if test "$with_statickrb" = "yes" -a ! -d "$with_krb"; then
-      AC_MSG_ERROR([--enable-statickrb specified but --with-krb did not specify a valid directory])
-fi
-
-if test "$with_krb" != "no"; then
-dnl Do we need DES for kerberos?
-AC_ARG_WITH(krbdes,
-        [AS_HELP_STRING([--without-krbdes], [disable Kerberos DES implementation])],, with_krbdes="yes")
-if test "$with_krbdes" = "yes"; then
-  AC_CHECK_LIB(des,des_ecb_encrypt,
-      if test "$with_statickrb" = "yes"; then
-          KRB_LIBS="$with_krb/lib/libdes.a"
-      else
-          KRB_LIBS="-ldes"
-      fi,
-  AC_MSG_ERROR([The Kerberos DES library is required for Kerberos support.]))
-fi
-fi
-
-dnl if we were ambitious, we'd look more aggressively for the
-dnl krb4 install
-if test -d ${with_krb}; then
-   AC_CACHE_CHECK(for Kerberos includes, cyrus_cv_krbinclude, [
-     for krbhloc in include/kerberosIV include
-     do
-       if test -f ${with_krb}/${krbhloc}/krb.h ; then
-         cyrus_cv_krbinclude=${with_krb}/${krbhloc}
-         break
-       fi
-     done
-     ])
-
-   if test -n "${cyrus_cv_krbinclude}"; then
-     CPPFLAGS="$CPPFLAGS -I${cyrus_cv_krbinclude}"
-   fi
-   CMU_ADD_LIBPATH(${with_krb}/lib)
-fi
-
-if test "$with_krbimpl" != "kth"; then
-  KRBLIB="krb4"
-else
-  KRBLIB="krb"
-fi
-
-if test "$with_des" != no; then
-  AC_CHECK_HEADER(krb.h,
-    AC_CHECK_LIB(${KRBLIB}, krb_mk_priv,
-      if test "$with_statickrb" = "yes"; then
-          KRB_LIBS="$KRB_LIBS $with_krb/lib/lib${KRBLIB}.a"
-      else
-          KRB_LIBS="$KRB_LIBS -l${KRBLIB}"
-      fi,
-                 AC_WARN(No Kerberos V4 found); krb4=no,
-           $KRB_LIBS),
-    krb4=no)
-else
-  AC_WARN(No DES library found for Kerberos V4 support)
-  krb4=no
-fi
-
-if test "${krb4}" != no; then
-  AC_DEFINE(HAVE_KRB,[],[Support for Kerberos?])
-fi
-
-LIBS="$KRB_LIBS $LIBS"
 
 SASL_SET_GSSAPI_LIBS
 
@@ -1423,11 +1349,6 @@ if test "$with_ssl" != "no"; then
     SSL_CPPFLAGS="$ssl_cppflags"
     SSL_LIBS="$ssl_ldflags $ssl_libs"
     AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
-    if test "${krb4}" != no; then
-       AC_DEFINE(OPENSSL_ENABLE_OLD_DES_SUPPORT,[],[Configure OpenSSL to provide legacy des apis])
-       AC_DEFINE(OPENSSL_DES_LIBDES_COMPATIBILITY,[],[Configure OpenSSL to provide krb4-compatible legacy des apis])
-    fi
-
     AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
        AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?]))
 fi
@@ -1571,22 +1492,6 @@ AC_SUBST([ICU_LIBS])
 AC_SUBST([ICU_CFLAGS])
 
 dnl
-dnl Check for zeroskip library, needed for zeroskip support
-dnl
-AC_ARG_WITH([zeroskip],
-	[AS_HELP_STRING([--without-zeroskip], [ignore presence of Zeroskip and disable it])],
-    [],
-    [with_zeroskip=yes])
-AS_IF([test "x$with_zeroskip" = "xyes"],
-	[ PKG_CHECK_MODULES([ZEROSKIP], [libzeroskip],
-		[ AC_DEFINE(HAVE_ZEROSKIP, [], [Do we have Zeroskip?])
-		  with_zeroskip=yes ],
-		with_zeroskip=no)])
-AC_SUBST([ZEROSKIP_LIBS])
-AC_SUBST([ZEROSKIP_CFLAGS])
-AM_CONDITIONAL([USE_ZEROSKIP], [test "x$with_zeroskip" = xyes])
-
-dnl
 dnl Check for chardet library, needed for charset detection support
 dnl
 AC_ARG_WITH([chardet],
@@ -1608,16 +1513,45 @@ dnl
 dnl Check for cld2 library
 dnl
 AC_ARG_WITH([cld2],
-	[AS_HELP_STRING([--without-cld2], [ignore presence of cld2 library and disable it])],
+    [
+        AS_HELP_STRING([--without-cld2], [ignore presence of cld2 library and disable it])
+    ],
     [],
     [with_cld2=yes])
 AS_IF([test "x$with_cld2" = "xyes"],
-	[ PKG_CHECK_MODULES([CLD2], [cld2],
-		[ AC_DEFINE(HAVE_CLD2, [], [Build with cld2 library support])
-		  with_cld2=yes ],
-          with_cld2=no)])
-AC_SUBST([CLD2_LIBS])
-AC_SUBST([CLD2_CFLAGS])
+    [ PKG_CHECK_MODULES([CLD2], [cld2],
+        [
+            AC_SUBST([CLD2_LIBS])
+            AC_SUBST([CLD2_CFLAGS])
+            AC_DEFINE([HAVE_CLD2], [], [Use CLD2])
+            with_cld2=yes
+        ],
+        [
+          AC_LANG_PUSH([C++])
+          NOCLD2_LIBS=$LIBS
+          LIBS="-lcld2 $LIBS"
+          AC_LINK_IFELSE([
+            AC_LANG_PROGRAM(
+                [[
+                    #include <cstdio>
+                    #include <cld2/public/compact_lang_det.h>
+                ]],
+                [[ CLD2::isDataDynamic(); ]]
+            )],
+            [
+                AC_SUBST([CLD2_LIBS], [-lcld2])
+                AC_SUBST([CLD2_CFLAGS])
+                AC_DEFINE([HAVE_CLD2], [], [Use CLD2])
+                with_cld2=yes
+            ],
+            [
+                with_cld2=no
+            ]
+          )
+          AC_LANG_POP([C++])
+          LIBS=$NOCLD2_LIBS
+        ])
+    ])
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
@@ -1758,6 +1692,17 @@ dnl
             ],
             have_ical_ctrl=no)
 
+        dnl Check if libical supports PARTICIPANT-TYPE=VOTER
+        AC_CHECK_DECL([ICAL_PARTICIPANTTYPE_VOTER],
+                AC_DEFINE(HAVE_PARTTYPE_VOTER,[],
+                        [Do we have support for PARTICIPANT-TYPE=VOTER?]),
+                [], [[#include <libical/ical.h>]])
+
+        dnl icalrecurrencetype_new will be new in libical 4.0
+        AC_CHECK_LIB(ical, icalrecurrencetype_new,
+                AC_DEFINE(HAVE_RECUR_BY_REF,[],
+                        [Do we have support for icalrecurrencetype by reference?]))
+
         dnl Check for libicalvcard
         AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
                  AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])
@@ -1793,16 +1738,25 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
         AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
         if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
                 PKG_CHECK_MODULES([WSLAY], [libwslay >= 1.1.1], [
-                        AC_DEFINE(HAVE_WSLAY,[],
-                                [Build WebSockets support into httpd?])
                         with_wslay=yes
                 ], [
-                        if test "x$with_wslay" = "xyes"; then
-                                AC_MSG_ERROR([WebSockets explicitly requested, but libwslay was not found])
-                        fi
-                        AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay])
-                        with_wslay=no
+                        AC_SEARCH_LIBS([wslay_event_context_free], [wslay], [
+                            AC_SUBST([WSLAY_LIBS], [-lwslay])
+                            with_wslay=yes
+                        ], [
+                                if test "x$with_wslay" = "xyes"; then
+                                        AC_MSG_ERROR([WebSockets explicitly requested, but libwslay was not found])
+                                fi
+                                with_wslay=no
+                        ])
                 ])
+
+                if test "x$with_wslay" = "xyes"; then
+                        AC_DEFINE(HAVE_WSLAY,[],
+                                [Build WebSockets support into httpd?])
+                else
+                        AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay])
+                fi
         fi
 
         AC_ARG_WITH(brotli, [AS_HELP_STRING([--without-brotli], [disable brotli compression (check)])])
@@ -1897,26 +1851,6 @@ AC_ARG_ENABLE(replication,
 AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != no])
 if test "x$enable_replication" = "xyes"; then
         AC_DEFINE(USE_REPLICATION,[],[Build with replication functionality])
-fi
-
-dnl
-dnl see if we're compiling backup support programs
-dnl
-AC_ARG_ENABLE(backup,
-        [AS_HELP_STRING([--enable-backup], [enable backup support (experimental)])],,[enable_backup="no";])
-AM_CONDITIONAL([BACKUP], [test "$enable_backup" != no])
-
-if test "x$enable_backup" != xno; then
-    if test "x$HAVE_SQLITE" != x1; then
-        AC_MSG_ERROR([Need sqlite3 for backups])
-    else
-        use_sqlite="yes"
-    fi
-    if test "x$HAVE_ZLIB" != x1; then
-        AC_MSG_ERROR([Need zlib for backups])
-    fi
-
-    AC_DEFINE([ENABLE_BACKUP],[],[Build with backup support])
 fi
 
 dnl
@@ -2378,7 +2312,12 @@ AS_IF(
     )]
 )
 
-dnl documentation generation (sphinx, perl2rst, gitpython)
+dnl documentation generation (sphinx, sphinx_rtd_theme, perl2rst, gitpython)
+AC_DEFUN([WARN_DOCDEPS], [
+    AM_COND_IF([ENABLE_RELEASE_CHECKS],
+               [AC_MSG_ERROR([No $1, cannot regenerate docs])],
+               [AC_MSG_WARN([No $1, won't be able to regenerate docs])])
+])
 AC_ARG_VAR(SPHINX_BUILD, [Location of sphinx-build])
 AC_ARG_WITH([sphinx-build],
             AS_HELP_STRING([--with-sphinx-build=(yes|no|PATH)], [Look for sphinx-build in PATH]),
@@ -2389,12 +2328,12 @@ AS_CASE([$with_sphinx_build],
         [no],   [SPHINX_BUILD=''],
         [*],    [AC_PATH_PROG(SPHINX_BUILD, sphinx-build, [], [$with_sphinx_build])])
 AS_IF([test -z "$SPHINX_BUILD"],
-      [AC_MSG_WARN([No sphinx-build, won't be able to regenerate docs])])
+      [WARN_DOCDEPS([sphinx-build])])
 AC_SUBST([SPHINX_BUILD])
 
 AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                      [have_ppvr=yes],
-                     [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])
+                     [WARN_DOCDEPS([Pod::POM::View::Restructured])
                        have_ppvr=no
                      ])
 
@@ -2406,12 +2345,31 @@ AS_CASE([$HAVE_PYMOD_GIT],
     AX_PYTHON_MODULE([git], [], [python3])
     AS_CASE([$HAVE_PYMOD_GIT],
             [yes],  [],
-            [*],    [
-         AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
+            [*],    [WARN_DOCDEPS([GitPython])])
+])
+
+# XXX icky and slightly bogus* to have to duplicate this python2/python3 mess,
+# XXX but i think it's not worth generalising now when we'll surely drop
+# XXX python2 support sooner or later anyway
+# XXX (* this check inherits the successful PYTHON from the check above, and
+# XXX doesn't actually check both despite looking like it will.  that's fine...
+# XXX it only works if both modules are installed for the same python anyway!)
+AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python2])
+AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
+        [yes],  [],
+        [*],    [
+    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
+    AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python3])
+    AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
+            [yes],  [],
+            [*],    [WARN_DOCDEPS([sphinx_rtd_theme])])
 ])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
-    [ test -n "$SPHINX_BUILD" -a x"$have_ppvr" = xyes -a x"$HAVE_PYMOD_GIT" = xyes])
+    [ test -n "$SPHINX_BUILD" \
+           -a x"$have_ppvr" = xyes \
+           -a x"$HAVE_PYMOD_GIT" = xyes \
+           -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
 
 AH_TOP([
 /*
@@ -2639,7 +2597,6 @@ Cyrus Server configured components
    autocreate:         $enable_autocreate
    idled:              $enable_idled
    httpd:              $enable_http
-   kerberos V4:        $krb4
    murder:             $enable_murder
    nntpd:              $enable_nntp
    replication:        $enable_replication
@@ -2648,7 +2605,6 @@ Cyrus Server configured components
    calalarmd:          $enable_calalarmd
    jmap:               $enable_jmap
    objectstore:        $enable_objectstore
-   backup:             $enable_backup
    com_err:            $with_com_err
 
 External dependencies:
@@ -2680,7 +2636,6 @@ Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite
-   zeroskip:           $with_zeroskip
 
 Search engine:
    squat:              $enable_squat
@@ -2692,6 +2647,7 @@ iCalendar features:
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
+   sphinx_rtd_theme:   $HAVE_PYMOD_SPHINX_RTD_THEME
    Pod::POM::View::Restructured:  $have_ppvr
    GitPython:          $HAVE_PYMOD_GIT
 
@@ -2709,4 +2665,5 @@ Build info:
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
    xxd:                $XXD
+   release checks:     $enable_release_checks
 "

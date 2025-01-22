@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test replication of messages APPENDed to the master
 #
 sub test_shared_folder
-    :Replication :SyncLog :needs_component_replication :NoAltNamespace
+    :Replication :SyncLog :NoAltNamespace
 {
     my ($self) = @_;
 

@@ -90,10 +90,7 @@ HIDDEN void jmap_admin_init(jmap_settings_t *settings)
             JMAP_ADMIN_EXTENSION, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        jmap_method_t *mp;
-        for (mp = jmap_admin_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_admin_methods_nonstandard, settings);
     }
 }
 

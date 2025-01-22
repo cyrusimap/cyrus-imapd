@@ -69,6 +69,7 @@ void strarray_free(strarray_t *);
 
 int strarray_append(strarray_t *, const char *);
 int strarray_add(strarray_t *, const char *);
+int strarray_addm(strarray_t *sa, char *s);
 int strarray_add_case(strarray_t *, const char *);
 int strarray_appendm(strarray_t *, char *);
 void strarray_set(strarray_t *, int idx, const char *);

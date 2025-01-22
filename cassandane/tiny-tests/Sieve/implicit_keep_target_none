@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_implicit_keep_target_none
-    :min_version_3_9 :needs_component_sieve :NoAltNameSpace
+    :min_version_3_9 :NoAltNameSpace
 {
     my ($self) = @_;
 
@@ -15,7 +15,7 @@ sub test_implicit_keep_target_none
 
     xlog $self, "Allow plus address delivery";
     $imaptalk->setacl($folder, 'anyone' => 'p');
-    my $imaptalk = $self->{store}->get_client();
+    $imaptalk = $self->{store}->get_client();
 
     xlog $self, "Install a script";
     $self->{instance}->install_sieve_script(<<EOF

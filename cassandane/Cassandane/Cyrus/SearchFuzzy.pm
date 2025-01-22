@@ -62,11 +62,14 @@ sub new
         httpallowcompress => 'no',
         httpmodules => 'jmap',
     );
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         services => [ 'imap', 'http' ]
     }, @args);
+
+    $self->needs('search', 'xapian');
+    return $self;
 }
 
 sub set_up
@@ -195,7 +198,8 @@ sub get_snippets
     };
 }
 
-sub run_delve {
+sub run_delve
+{
     my ($self, $dir, @args) = @_;
     my $basedir = $self->{instance}->{basedir};
     my @myargs = ('xapian-delve');
@@ -210,6 +214,7 @@ sub run_delve {
 sub delve_docs
 {
     my ($self, $dir) = @_;
+    return ([], []) unless -e "$dir/iamglass";
     my $delveout = $self->run_delve($dir, '-V0');
     $delveout =~ s/^Value 0 for each document: //;
     my @docs = split ' ', $delveout;

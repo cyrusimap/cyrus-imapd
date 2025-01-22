@@ -83,7 +83,7 @@ static struct protstream *deliver_out, *deliver_in;
 static const char *sockaddr;
 
 static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp", TYPE_STD,
+{ "lmtp", "lmtp", NULL, TYPE_STD,
   { { { 0, "220 " },
       { "LHLO", "deliver", "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
@@ -127,6 +127,9 @@ EXPORTED void fatal(const char* s, int code)
     prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     cyrus_done();
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(code);
 }
 

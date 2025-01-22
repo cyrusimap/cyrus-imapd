@@ -83,7 +83,7 @@
 ##maxworkers = 1
 # Base port number to use.  All Cyrus instances run by Cassandane
 # will listen at ports starting from this number.
-##base_port = 9100
+##base_port = 29100
 # A list of tests or suites which will be suppressed.  These tests
 # will still run if requested on the command line, but will not be
 # run by default.
@@ -159,7 +159,6 @@
 ##sync_server = yes
 ##lmtpd = yes
 ##timsieved = yes
-##backupd = yes
 
 # This section describes the common configuration parameters to set
 # for each test. This overrides the bare hardcoded configuration, and is
@@ -217,3 +216,11 @@
 ## basedir =
 # A list of tests which will be suppressed
 ## suppress =
+
+# This section describes where certain system tools are installed.  The
+# defaults are probably usually fine, but here's where to override them
+# if not
+[paths]
+## make = /usr/bin/make
+## pkg-config = /usr/bin/pkg-config
+## findmnt = /usr/bin/findmnt

@@ -78,7 +78,7 @@ sub new
     }
     $config->set(sievenotifier => 'mailto');
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => ['caldav', 'jmap']);
+    $config->set(httpmodules => ['caldav', 'carddav', 'jmap']);
     $config->set(calendar_user_address_set => 'example.com');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
@@ -87,13 +87,16 @@ sub new
     $config->set(jmap_nonstandard_extensions => 'yes');
     $config->set(conversations => 'yes');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
             config => $config,
             deliver => 1,
             jmap => 1,
             services => [ 'imap', 'sieve' ],
             adminstore => 1,
     }, @_);
+
+    $self->needs('component', 'sieve');
+    return $self;
 }
 
 sub set_up

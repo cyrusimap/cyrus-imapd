@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_subscriptions
-    :needs_component_replication
 {
     my ($self) = @_;
 

@@ -57,12 +57,16 @@ sub new
     $config->set('conversations' => 'yes');
     $config->set_bits('httpmodules', 'jmap');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         httpmurder => 1,
         jmap => 1,
         adminstore => 1
     }, @args);
+
+    $self->needs('component', 'murder');
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up
@@ -78,7 +82,6 @@ sub tear_down
 }
 
 sub test_aaa_setup
-    :needs_component_murder
 {
     my ($self) = @_;
 
@@ -90,7 +93,6 @@ sub test_aaa_setup
 # XXX at once, but renaming out the "bogus" and running it, and it failing,
 # XXX proves the infrastructure to prevent requesting both works.
 sub bogustest_aaa_imapjmap_setup
-    :needs_component_murder
     :IMAPMurder
 {
     my ($self) = @_;
@@ -100,7 +102,7 @@ sub bogustest_aaa_imapjmap_setup
 }
 
 sub test_frontend_commands
-    :needs_component_murder :needs_component_jmap :min_version_3_5
+    :min_version_3_5
 {
     my ($self) = @_;
     my $result;
@@ -145,7 +147,7 @@ sub test_frontend_commands
 }
 
 sub test_backend1_commands
-    :needs_component_murder :needs_component_jmap :min_version_3_5
+    :min_version_3_5
 {
     my ($self) = @_;
     my $result;
@@ -184,7 +186,7 @@ sub test_backend1_commands
 }
 
 sub test_backend2_commands
-    :needs_component_murder :needs_component_jmap :min_version_3_5
+    :min_version_3_5
 {
     my ($self) = @_;
     my $result;

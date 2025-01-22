@@ -23,7 +23,6 @@ Management
     admin/access-control
     admin/quotas
     admin/sieve
-    admin/backups
     admin/nntp
     admin/protlayer
     admin/sop
@@ -31,7 +30,6 @@ Management
     admin/monitoring
     admin/config-mailboxdistribution
     admin/murder/murder
-    admin/nginx-proxy
     admin/tweaking
 
 .. :todo:

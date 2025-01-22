@@ -393,9 +393,7 @@ struct dbengine {
     int txn_num;
     struct txn *current_txn;
 
-    /* comparator function to use for sorting */
     int open_flags;
-    int (*compar) (const char *s1, int l1, const char *s2, int l2);
 };
 
 struct db_list {
@@ -963,7 +961,7 @@ static int relocate(struct dbengine *db)
             if (newrecord.offset) {
                 assert(newrecord.level >= level);
 
-                cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
+                cmp = bsearch_ncompare_raw(KEY(db, &newrecord), newrecord.keylen,
                                  loc->keybuf.s, loc->keybuf.len);
 
                 /* not there?  stay at this level */
@@ -1010,7 +1008,7 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
     /* can we special case advance? */
     if (keylen && loc->end == db->end
                && loc->generation == db->header.generation) {
-        cmp = db->compar(KEY(db, &loc->record), loc->record.keylen,
+        cmp = bsearch_ncompare_raw(KEY(db, &loc->record), loc->record.keylen,
                          loc->keybuf.s, loc->keybuf.len);
         /* same place, and was exact.  Otherwise we're going back,
          * and the reverse pointers are no longer valid... */
@@ -1034,7 +1032,7 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
             }
 
             /* now where is THIS record? */
-            cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
+            cmp = bsearch_ncompare_raw(KEY(db, &newrecord), newrecord.keylen,
                              loc->keybuf.s, loc->keybuf.len);
 
             /* exact match? */
@@ -1341,6 +1339,11 @@ static void dispose_db(struct dbengine *db)
 
 /************************************************************/
 
+static int mylock(struct dbengine *db, struct txn **mytid, int flags)
+{
+    return newtxn(db, flags & CYRUSDB_SHARED, mytid);
+}
+
 static int opendb(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
 {
     struct dbengine *db;
@@ -1356,8 +1359,6 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
         mappedfile_flags |= MAPPEDFILE_CREATE;
 
     db->open_flags = flags & ~CYRUSDB_CREATE;
-    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox
-                                            : bsearch_ncompare_raw;
 
     r = mappedfile_open(&db->mf, fname, mappedfile_flags);
     if (r) {
@@ -1451,7 +1452,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     unlock(db);
 
     if (mytid) {
-        r = newtxn(db, flags & CYRUSDB_SHARED, mytid);
+        r = mylock(db, mytid, flags);
         if (r) goto done;
     }
 
@@ -1649,7 +1650,7 @@ static int myforeach(struct dbengine *db,
         /* does it match prefix? */
         if (prefixlen) {
             if (db->loc.record.keylen < prefixlen) break;
-            if (db->compar(KEY(db, &db->loc.record), prefixlen, prefix, prefixlen)) break;
+            if (bsearch_ncompare_raw(KEY(db, &db->loc.record), prefixlen, prefix, prefixlen)) break;
         }
 
         val = VAL(db, &db->loc.record);
@@ -1744,7 +1745,7 @@ static int skipwrite(struct dbengine *db,
         if (!data) return delete_here(db);
         if (!force) return CYRUSDB_EXISTS;
         /* unchanged?  Save the IO */
-        if (!db->compar(data, datalen,
+        if (!bsearch_ncompare_raw(data, datalen,
                         VAL(db, &db->loc.record),
                         db->loc.record.vallen))
             return 0;
@@ -1962,8 +1963,11 @@ static int mycheckpoint(struct dbengine *db)
     clock_t start = sclock();
     struct copy_rock cr;
     int r = 0;
+    struct txn *localtid = NULL;
+    struct txn **tidptr = &db->current_txn;
+    if (!*tidptr) tidptr = &localtid;
 
-    r = myconsistent(db, db->current_txn);
+    r = myconsistent(db, *tidptr);
     if (r) {
         syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
                FNAME(db));
@@ -1983,7 +1987,7 @@ static int mycheckpoint(struct dbengine *db)
     // set up the pointers so copy_cb logic can work
     relocate(cr.db);
 
-    r = myforeach(db, NULL, 0, NULL, copy_cb, &cr, &db->current_txn);
+    r = myforeach(db, NULL, 0, NULL, copy_cb, &cr, tidptr);
     if (r) goto err;
 
     r = myconsistent(cr.db, cr.tid);
@@ -2010,6 +2014,7 @@ static int mycheckpoint(struct dbengine *db)
 
     /* OK, we're committed now - clean up */
     unlock(db);
+    if (localtid) free(localtid);
 
     /* gotta clean it all up */
     mappedfile_close(&db->mf);
@@ -2172,7 +2177,7 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
             continue;
         }
 
-        cmp = db->compar(KEY(db, &record), record.keylen,
+        cmp = bsearch_ncompare_raw(KEY(db, &record), record.keylen,
                          KEY(db, &prevrecord), prevrecord.keylen);
         if (cmp <= 0) {
             xsyslog(LOG_ERR, "DBERROR: twoskip out of order",
@@ -2426,7 +2431,7 @@ static int recovery1(struct dbengine *db, int *count)
             continue;
         }
 
-        cmp = db->compar(KEY(db, &record), record.keylen,
+        cmp = bsearch_ncompare_raw(KEY(db, &record), record.keylen,
                          KEY(db, &prevrecord), prevrecord.keylen);
         if (cmp <= 0) {
             xsyslog(LOG_ERR, "DBERROR: twoskip out of order",
@@ -2587,20 +2592,12 @@ static int delete(struct dbengine *db,
     return mystore(db, key, keylen, NULL, 0, tid, force);
 }
 
-/* twoskip compar function is set at open */
-static int mycompar(struct dbengine *db, const char *a, int alen,
-                    const char *b, int blen)
-{
-    return db->compar(a, alen, b, blen);
-}
-
 HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
 {
     "twoskip",                  /* name */
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
@@ -2616,11 +2613,12 @@ HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
     &store,
     &delete,
 
+    &mylock,
     &mycommit,
     &myabort,
 
     &dump,
     &consistent,
     &mycheckpoint,
-    &mycompar
+    &bsearch_ncompare_raw
 };

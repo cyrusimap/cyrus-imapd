@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_dup_keep_keep
-    :needs_component_sieve
 {
     my ($self) = @_;
 

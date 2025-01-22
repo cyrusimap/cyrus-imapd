@@ -50,7 +50,6 @@
 /* Supported HTTP version */
 #define HTTP2_VERSION    "HTTP/2"
 #define HTTP_VERSION     "HTTP/1.1"
-#define HTTP_VERSION_LEN 8
 
 /* Context for reading request/response body */
 struct body_t {

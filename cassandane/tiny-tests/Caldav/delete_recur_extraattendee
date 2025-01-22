@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_delete_recur_extraattendee
-    :needs_component_httpd
 {
     my ($self) = @_;
     my $CalDAV = $self->{caldav};

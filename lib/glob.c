@@ -51,6 +51,12 @@
 #include "glob.h"
 #include "xmalloc.h"
 
+/* "compiled" glob structure: may change
+ */
+typedef struct glob {
+    regex_t regex;
+} glob;
+
 /* initialize globbing structure
  *  This makes the following changes to the input string:
  *   1) '*' eats all '*'s and '%'s connected by any wildcard

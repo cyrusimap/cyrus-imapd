@@ -536,6 +536,7 @@ EXPORTED int backend_starttls(  struct backend *s,
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &s->ext_ssf;
     r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
+                            s->prot ? s->prot->alpn_map : NULL,
                             &s->tlsconn, &s->tlssess);
     if (r == -1) return -1;
 
@@ -1056,6 +1057,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
             }
         }
 
+        // don't do lookups if the port number is zero
+        if (!strcmp(service, "0")) goto error;
+
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
@@ -1335,8 +1339,12 @@ EXPORTED int backend_version(struct backend *be)
             return MAILBOX_MINOR_VERSION;
         }
         else if (major == 3) {
-            if (minor >= 3) {
-                /* all versions since 3.3 have been 17 so far */
+            if (minor >= 10) {
+                /* all versions since 3.10 have been 19 so far */
+                return 19;
+            }
+            else if (minor >= 3) {
+                /* versions 3.3 - 3.9 were at least 17 */
                 return 17;
             }
             else if (minor == 2) {

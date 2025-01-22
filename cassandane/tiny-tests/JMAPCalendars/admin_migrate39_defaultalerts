@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 use Data::ICal;
 
 sub test_admin_migrate39_defaultalerts
-    :needs_component_jmap :min_version_3_9 :ReverseACLs :MagicPlus
+    :min_version_3_9 :ReverseACLs :MagicPlus
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -92,7 +92,7 @@ EOF
 
     xlog $self, "Assert calendar default alerts";
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Calendar/get', {
             properties => [
                 'defaultAlertsWithTime',
@@ -102,21 +102,22 @@ EOF
     ]);
     my %calendars = map { $_->{id} => $_ } @{$res->[0][1]{list}};
 
-    $self->assert_null($calendars{
-        Default}{defaultAlertsWithTime});
-    $self->assert_null($calendars{
-        Default}{defaultAlertsWithoutTime});
+    $self->assert_null($calendars{Default}{defaultAlertsWithTime});
+    $self->assert_null($calendars{Default}{defaultAlertsWithoutTime});
 
-    my $calendarADefaultAlerts = $calendars{$state->{
-        calendarA}{id}}{defaultAlertsWithTime};
+    my $calendarADefaultAlerts = $calendars{$state->{calendarA}{id}}
+                                           {defaultAlertsWithTime};
     $self->assert_num_equals(1, scalar keys %$calendarADefaultAlerts);
-    $self->assert_null($calendars{$state->{
-        calendarA}{id}}{defaultAlertsWithoutTime});
+    $self->assert_null(
+      $calendars{$state->{calendarA}{id}}{defaultAlertsWithoutTime}
+    );
 
-    $self->assert_null($calendars{$state->{
-        calendarB}{id}}{defaultAlertsWithTime});
-    $self->assert_null($calendars{$state->{
-        calendarB}{id}}{defaultAlertsWithoutTime});
+    $self->assert_null(
+      $calendars{$state->{calendarB}{id}}{defaultAlertsWithTime}
+    );
+    $self->assert_null(
+      $calendars{$state->{calendarB}{id}}{defaultAlertsWithoutTime}
+    );
 
     if (not $state->{did_migrate}) {
         $state->{calendarA}{defaultAlert} = (values %$calendarADefaultAlerts)[0];
@@ -287,7 +288,7 @@ EOF
         );
 
         xlog $self, "Create sharee per-user prop in calendar A";
-        my $ical = <<EOF;
+        $ical = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN

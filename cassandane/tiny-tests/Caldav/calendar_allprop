@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_calendar_allprop
-    :needs_component_httpd
 {
     my ($self) = @_;
 

@@ -1809,16 +1809,18 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 {
     icalproperty *prop;
     icaltimetype at;
-    struct icalrecurrencetype rrule;
+    struct icalrecurrencetype *rrule = NULL;
     unsigned ver = '2';
     int hour;
 
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    rrule = icalproperty_get_rrule(prop);
+    if (prop) rrule = icalproperty_get_recurrence(prop);
+    if (!rrule) return 0;
 
 #ifdef HAVE_RSCALE
-    if (rrule.rscale && strcasecmp(rrule.rscale, "GREGORIAN")) {
+    if (rrule->rscale && strcasecmp(rrule->rscale, "GREGORIAN")) {
         /* POSIX rules are based on Gregorian calendar only */
+        icalrecurrencetype_unref(rrule);
         return 0;
     }
 #endif
@@ -1827,16 +1829,18 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     at = icalproperty_get_dtstart(prop);
     hour = at.hour;
 
-    if (rrule.by_day[0] == ICAL_RECURRENCE_ARRAY_MAX) {
+    if (icalrecur_byrule_size(rrule, ICAL_BY_DAY) == 0) {
         /* date - Julian yday */
         buf_printf(buf, ",J%u", month_doy_offsets[0][at.month - 1] + at.day);
     }
     else {
         /* BYDAY */
         unsigned month;
-        int week = icalrecurrencetype_day_position(rrule.by_day[0]);
-        int wday = icalrecurrencetype_day_day_of_week(rrule.by_day[0]);
-        int yday = rrule.by_year_day[0];
+        short *by_day = icalrecur_byrule_data(rrule, ICAL_BY_DAY);
+        short *by_year_day = icalrecur_byrule_data(rrule, ICAL_BY_YEAR_DAY);
+        int week = icalrecurrencetype_day_position(by_day[0]);
+        int wday = icalrecurrencetype_day_day_of_week(by_day[0]);
+        int yday = by_year_day[0];
 
         if (yday != ICAL_RECURRENCE_ARRAY_MAX) {
             /* BYYEARDAY */
@@ -1859,9 +1863,11 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
         }
         else {
             /* BYMONTH */
-            int mday = rrule.by_month_day[0];
+            short *by_month = icalrecur_byrule_data(rrule, ICAL_BY_MONTH);
+            short *by_month_day = icalrecur_byrule_data(rrule, ICAL_BY_MONTH_DAY);
+            int mday = by_month_day[0];
 
-            month = rrule.by_month[0];
+            month = by_month[0];
 
             if (mday != ICAL_RECURRENCE_ARRAY_MAX) {
                 /* MONTHDAY:  wday >= mday */
@@ -1900,10 +1906,12 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
         if (at.second) buf_printf(buf, ":%02u", at.second);
     }
 
+    icalrecurrencetype_unref(rrule);
+
     return ver;
 }
 
-/* Convert VTIMEZONE into tzif format (draft-murchison-tzdist-tzif) */
+/* Convert VTIMEZONE into tzif format (RFC 9636) */
 static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                                          icaltimetype *startp, icaltimetype *endp)
 {

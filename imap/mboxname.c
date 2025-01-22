@@ -903,7 +903,7 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
                 strarray_free(subs);
 
                 /* If we end up at a magic user.foo.INBOX, revert to user.foo */
-                if (mbname_userid(mbname) != NULL &&
+                if (mbname && mbname_userid(mbname) != NULL &&
                     strarray_size(mbname_boxes(mbname)) == 1 &&
                     !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
                     free(mbname_pop_boxes(mbname));
@@ -3366,6 +3366,31 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
     mbname_free(&mbname);
 
     return val;
+}
+
+EXPORTED void mboxname_zero_counters(const char *mboxname)
+{
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+        return;
+
+    struct mboxname_counters counters;
+    int fd = -1;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    mboxname_assert_canadd(mbname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
+
+    /* XXX error handling */
+    if (mboxname_load_fcounters(fname, &counters, &fd))
+        goto done;
+
+    memset(&counters, 0, sizeof(struct mboxname_counters));
+
+    /* all zeroed out! */
+    mboxname_set_fcounters(fname, &counters, fd);
+
+ done:
+    free(fname);
+    mbname_free(&mbname);
 }
 
 EXPORTED char *mboxname_common_ancestor(const char *mboxname1, const char *mboxname2)

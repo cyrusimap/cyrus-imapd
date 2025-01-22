@@ -74,6 +74,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+#include "master/service.h"
+
 #define REQ_OK          0
 #define REQ_DENY        1
 #define REQ_UNK         2
@@ -481,6 +483,7 @@ EXPORTED void fatal(const char* s, int code)
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
-

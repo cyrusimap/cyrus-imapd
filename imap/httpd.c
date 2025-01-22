@@ -106,6 +106,8 @@
 #include "imap/imap_err.h"
 #include "imap/http_err.h"
 
+#include "master/service.h"
+
 #ifdef WITH_DAV
 #include "http_dav.h"
 #endif
@@ -419,7 +421,7 @@ int httpd_userisadmin = 0;
 int httpd_userisproxyadmin = 0;
 int httpd_userisanonymous = 1;
 const char *httpd_localip = NULL, *httpd_remoteip = NULL;
-struct protstream *httpd_out = NULL;
+static struct protstream *httpd_out;
 struct protstream *httpd_in = NULL;
 strarray_t *httpd_log_headers = NULL;
 char *httpd_altsvc = NULL;
@@ -481,8 +483,8 @@ ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static int tls_init(int client_auth, struct buf *serverinfo);
 static void starttls(struct http_connection *conn, int timeout);
-void usage(void);
-void shut_down(int code) __attribute__ ((noreturn));
+void usage(void) __attribute__((noreturn));
+void shut_down(int code) __attribute__((noreturn));
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -508,7 +510,11 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-/* Array of HTTP methods known by our server. */
+/* Array of HTTP methods known by our server.
+ * Keep this up to date with reject_http_method_tag() in imparse.c
+ * XXX Would be nice if this table were in libcyrus somewhere rather than
+ * XXX directly in httpd, so that imparse could use it directly.
+ */
 const struct known_meth_t http_methods[] = {
     { "ACL",           0,                          CYRUS_HTTP_ACL_TOTAL },
     { "BIND",          0,                          CYRUS_HTTP_BIND_TOTAL },
@@ -1043,14 +1049,22 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on https port so we should do
        TLS negotiation immediately */
+    int do_h2 = 0;
     if (https == 1) {
         starttls(&http_conn, 180 /* timeout */);
+
+        /* Check negotiated protocol */
+        char *alpn = tls_get_alpn_protocol(http_conn.tls_ctx);
+        do_h2 = !strcmpsafe(alpn, "h2");
+        free(alpn);
     }
-    else if (http2_preface(&http_conn)) {
+    else {
         /* HTTP/2 client connection preface */
-        if (http2_start_session(NULL, &http_conn) != 0)
-            fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+        do_h2 = http2_preface(&http_conn);
     }
+
+    if (do_h2 && http2_start_session(NULL, &http_conn) != 0)
+        fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
 
     /* Setup the signal handler for keepalive heartbeat */
     httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE, 's');
@@ -1235,21 +1249,26 @@ EXPORTED void fatal(const char* s, int code)
     }
 
     syslog(LOG_ERR, "%s%s", fatal, s);
+
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(code);
 }
 
 
 #ifdef HAVE_SSL
 
-static unsigned h2_is_available(void *http_conn)
+static unsigned h2_is_available(void *rock __attribute__((unused)))
 {
-    return (http2_enabled && http2_start_session(NULL, http_conn) == 0);
+    return http2_enabled;
 }
 
 static const struct tls_alpn_t http_alpn_map[] = {
-    { "h2",       &h2_is_available, &http_conn },
+    { "h2",       &h2_is_available, NULL },
     { "http/1.1", NULL,             NULL },
-    { NULL,       NULL,             NULL }
+    { "http/1.0", NULL,             NULL },
+    { "http/0.9", NULL,             NULL },
+    { "",         NULL,             NULL },
 };
 
 static void _reset_tls(struct http_connection *conn)
@@ -1288,11 +1307,6 @@ static int tls_init(int client_auth, struct buf *serverinfo)
         return HTTP_SERVER_ERROR;
     }
 
-#ifdef HAVE_TLS_ALPN
-    /* enable TLS ALPN extension */
-    SSL_CTX_set_alpn_select_cb(ctx, tls_alpn_select, (void *) http_alpn_map);
-#endif
-
     httpd_tls_enabled = 1;
 
     return 0;
@@ -1301,17 +1315,21 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 static void starttls(struct http_connection *conn, int timeout)
 {
     int result = tls_start_servertls(conn->pin->fd, conn->pout->fd,
-                                     timeout, &saslprops, (SSL **) &conn->tls_ctx);
+                                     timeout, &saslprops,
+                                     http_alpn_map,
+                                     (SSL **) &conn->tls_ctx);
 
     /* if error */
     if (result == -1) {
-        fatal("Error negotiating TLS", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "Error negotiating TLS");
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, httpd_saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -1377,6 +1395,14 @@ static int reset_saslconn(sasl_conn_t **conn)
 }
 
 
+static const char* const http_versions[] = {
+    "HTTP/0.9", "HTTP/1.0", HTTP_VERSION, HTTP2_VERSION
+};
+
+static const size_t n_http_versions =
+    sizeof(http_versions) / sizeof(http_versions[0]);
+
+
 static int parse_request_line(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
@@ -1408,8 +1434,21 @@ static int parse_request_line(struct transaction_t *txn)
         txn->error.desc = buf_cstring(&txn->buf);
     }
     else if (!(req_line->ver = tok_next(&tok))) {
-        ret = HTTP_BAD_REQUEST;
-        txn->error.desc = "Missing HTTP-version in request-line";
+        /* Check for a HTTP/0.9 request: GET SP request-target CRLF <EOF>
+           (see https://www.w3.org/Protocols/HTTP/AsImplemented.html) */
+        prot_NONBLOCK(httpd_in);
+        if (!strcmp(req_line->meth, "GET") && prot_peek(httpd_in) == EOF) {
+            txn->flags.ver = VER_0_9;
+
+            /* Fake an empty header block */
+            prot_ungetc('\n', httpd_in);
+            prot_ungetc('\r', httpd_in);
+        }
+        else {
+            ret = HTTP_BAD_REQUEST;
+            txn->error.desc = "Missing HTTP-version in request-line";
+        }
+        prot_BLOCK(httpd_in);
     }
     else if (tok_next(&tok)) {
         ret = HTTP_BAD_REQUEST;
@@ -1417,18 +1456,15 @@ static int parse_request_line(struct transaction_t *txn)
     }
 
     /* Check HTTP-Version - MUST be HTTP/1.x */
-    else if (strlen(req_line->ver) != HTTP_VERSION_LEN
-             || strncmp(req_line->ver, HTTP_VERSION, HTTP_VERSION_LEN-1)
-             || !isdigit(req_line->ver[HTTP_VERSION_LEN-1])) {
-        ret = HTTP_BAD_VERSION;
-        buf_printf(&txn->buf,
-                   "This server only speaks %.*sx",
-                   HTTP_VERSION_LEN-1, HTTP_VERSION);
-        txn->error.desc = buf_cstring(&txn->buf);
-    }
-    else if (req_line->ver[HTTP_VERSION_LEN-1] == '0') {
+    else if (!strcmp(req_line->ver, http_versions[VER_1_0])) {
         /* HTTP/1.0 connection */
         txn->flags.ver = VER_1_0;
+    }
+    else if (strcmp(req_line->ver, HTTP_VERSION)) {
+        ret = HTTP_BAD_VERSION;
+        buf_printf(&txn->buf,
+                   "This server only speaks %s or earlier", HTTP_VERSION);
+        txn->error.desc = buf_cstring(&txn->buf);
     }
     tok_fini(&tok);
 
@@ -1523,7 +1559,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
 
     if (txn->flags.redirect) return 0;
 
-    /* Check for mandatory Host header (HTTP/1.1+ only) */
+    /* Check for Host header (mandatory for HTTP/1.1) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Host"))) {
         if (hdr[1]) {
             txn->error.desc = "Too many Host headers";
@@ -1536,15 +1572,18 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     }
     else {
         switch (txn->flags.ver) {
+        case VER_1_1:
+            txn->error.desc = "Missing Host header";
+            return HTTP_BAD_REQUEST;
+
         case VER_2:
-            /* HTTP/2 - check for :authority pseudo header */
+            /* Check for :authority pseudo header */
             if (spool_getheader(txn->req_hdrs, ":authority")) break;
 
-            /* Fall through and create an :authority pseudo header */
             GCC_FALLTHROUGH
 
-        case VER_1_0:
-            /* HTTP/1.0 - create an :authority pseudo header from URI */
+        default:
+            /* Create an :authority pseudo header from URI */
             if (txn->req_uri->server) {
                 buf_setcstr(&txn->buf, txn->req_uri->server);
                 if (txn->req_uri->port)
@@ -1555,11 +1594,6 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             spool_cache_header(xstrdup(":authority"),
                                buf_release(&txn->buf), txn->req_hdrs);
             break;
-
-        case VER_1_1:
-        default:
-            txn->error.desc = "Missing Host header";
-            return HTTP_BAD_REQUEST;
         }
     }
 
@@ -2418,7 +2452,7 @@ static int parse_connection(struct transaction_t *txn)
     const char **conn = spool_getheader(txn->req_hdrs, "Connection");
     int i;
 
-    if (!httpd_timeout || txn->flags.ver == VER_1_0) {
+    if (!httpd_timeout || txn->flags.ver < VER_1_1) {
         /* Non-persistent connection by default */
         txn->flags.conn |= CONN_CLOSE;
     }
@@ -2439,7 +2473,7 @@ static int parse_connection(struct transaction_t *txn)
             switch (txn->flags.ver) {
             case VER_1_1:
                 if (!(txn->flags.conn & CONN_CLOSE)) {
-                    /* Only persistent connections can uitilize these options */
+                    /* Only persistent connections can utilize these options */
                     if (!strcasecmp(token, "upgrade")) {
                         /* Client wants to upgrade */
                         parse_upgrade(txn);
@@ -2547,15 +2581,21 @@ void parse_query_params(struct transaction_t *txn, const char *query)
     tok_init(&tok, query, "&", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
     while ((param = tok_next(&tok))) {
         struct strlist *vals;
-        char *key, *value;
+        char *key, *eq;
+        const char *value;
         size_t len;
 
         /* Split param into key and optional value */
         key = param;
-        value = strchr(param, '=');
+        eq = strchr(param, '=');
 
-        if (!value) value = "";
-        else *value++ = '\0';
+        if (eq) {
+            *eq = '\0';
+            value = eq + 1;
+        }
+        else {
+            value = "";
+        }
         len = strlen(value);
         buf_ensure(&txn->buf, len+1);
 
@@ -2573,7 +2613,7 @@ void parse_query_params(struct transaction_t *txn, const char *query)
 
 
 /* Create HTTP-date ('buf' must be at least 30 characters) */
-EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
+EXPORTED void httpdate_gen(char *buf, size_t len, time_t t)
 {
     struct tm *tm = gmtime(&t);
 
@@ -2581,8 +2621,6 @@ EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
              wday[tm->tm_wday],
              tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
              tm->tm_hour, tm->tm_min, tm->tm_sec);
-
-    return buf;
 }
 
 
@@ -2591,12 +2629,8 @@ EXPORTED const char *http_statusline(unsigned ver, long code)
 {
     static struct buf statline = BUF_INITIALIZER;
 
-    if (ver == VER_2) buf_setcstr(&statline, HTTP2_VERSION);
-    else {
-        buf_setmap(&statline, HTTP_VERSION, HTTP_VERSION_LEN-1);
-        buf_putc(&statline, ver + '0');
-    }
-
+    assert(ver < n_http_versions);
+    buf_setcstr(&statline, http_versions[ver]);
     buf_putc(&statline, ' ');
     buf_appendcstr(&statline, error_message(code));
     return buf_cstring(&statline);
@@ -3050,10 +3084,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     txn->conn->begin_resp_headers(txn, code);
 
 
+    now = time(0);
     switch (code) {
     default:
         /* Final response */
-        now = time(0);
         httpdate_gen(datestr, sizeof(datestr), now);
         simple_hdr(txn, "Date", "%s", datestr);
 
@@ -3321,9 +3355,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         simple_hdr(txn, "Content-Type", "%s", resp_body->type);
         if (resp_body->dispo.fname) {
             /* Construct Content-Disposition header */
-            const unsigned char *p = (const unsigned char *)resp_body->dispo.fname;
             char *encfname = NULL;
-            for (p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
+            for (const unsigned char *p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
                 if (*p >= 0x80) {
                     encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
                     break;
@@ -3590,6 +3623,14 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
     syslog(LOG_DEBUG, "write_body(code = %ld, flags.te = %#x, len = %u)",
            code, txn->flags.te, len);
+
+    if (txn->flags.ver == VER_0_9) {
+        /* A HTTP/0.9 response has no status-line or headers
+           (see https://www.w3.org/Protocols/HTTP/AsImplemented.html) */
+        prot_write(txn->conn->pout, buf, len);
+        log_request(code, txn);
+        return;
+    }
 
     if (txn->flags.te & TE_CHUNKED) last_chunk = !(code || len);
     else {
@@ -3896,15 +3937,23 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
     }
 
     if (txn->error.desc) {
-        const char **hdr, *host = config_servername;
-        char *port = NULL;
+        const char **hdr;
+        const char *host = config_servername, *port = NULL;
+        char *freeme = NULL;
         unsigned level = 0;
 
         if (txn->req_hdrs &&
             (hdr = spool_getheader(txn->req_hdrs, ":authority")) &&
-            hdr[0] && *hdr[0]) {
-            host = (char *) hdr[0];
-            if ((port = strchr(host, ':'))) *port++ = '\0';
+            hdr[0] && *hdr[0])
+        {
+            char *colon;
+
+            host = freeme = xstrdup(hdr[0]);
+            colon = strchr(freeme, ':');
+            if (colon) {
+                *colon = '\0';
+                port = colon + 1;
+            }
         }
 
         if (!port) {
@@ -3933,6 +3982,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         buf_printf_markup(html, --level, "</html>");
 
         txn->resp_body.type = "text/html; charset=utf-8";
+        free(freeme);
     }
 
     write_body(code, txn, buf_cstring(html), buf_len(html));
@@ -4784,7 +4834,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
     int ret;
 
     /* Bootstrap WebSockets over HTTP/2, if requested */
-    if ((txn->flags.ver != VER_2) || !ws_enabled || !cparams) {
+    if ((txn->flags.ver < VER_2) || !ws_enabled || !cparams) {
         return HTTP_NOT_IMPLEMENTED;
     }
 
@@ -5178,6 +5228,18 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
 
     if (mbentry && mbentry->acl) {
         rights = cyrus_acl_myrights(authstate, mbentry->acl);
+
+        /* Add in implicit rights */
+        if (httpd_userisadmin) {
+            rights |= ACL_LOOKUP|ACL_ADMIN;
+        }
+        else if (mboxname_isscheduledmailbox(mbentry->name, MBTYPE_EMAIL)) {
+            /* This seems maybe not *quite* right, but: do not apply implicit
+             * owner ACL to \Scheduled, because it is weird. */
+        }
+        else if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
+            rights |= config_implicitrights;
+        }
 
         if (mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR &&
             (rights & DACL_READ) == DACL_READ) {

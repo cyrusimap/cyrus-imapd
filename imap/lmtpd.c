@@ -88,6 +88,7 @@
 #include "mupdate.h"
 #include "notify.h"
 #include "prometheus.h"
+#include "proc.h"
 #include "prot.h"
 #include "proxy.h"
 #include "slowio.h"
@@ -107,6 +108,8 @@
 #include "imap/imap_err.h"
 #include "imap/lmtp_err.h"
 
+#include "master/service.h"
+
 #include "lmtpd.h"
 #include "lmtpengine.h"
 #ifdef USE_SIEVE
@@ -123,7 +126,7 @@ static int verify_user(const mbname_t *mbname,
                        struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
-void shut_down(int code);
+static void shut_down(int code) __attribute__((noreturn));
 
 static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
@@ -151,6 +154,8 @@ static int dupelim = 1;         /* eliminate duplicate messages with
 static int singleinstance = 1;  /* attempt single instance store */
 static int isproxy = 0;
 static strarray_t *excluded_specialuse = NULL;
+static const char *lmtpd_clienthost = "[local]";
+static struct proc_handle *proc_handle = NULL;
 
 static struct stagemsg *stage = NULL;
 
@@ -159,10 +164,10 @@ static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* our cached connections */
-ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
+static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp", TYPE_STD,
+{ "lmtp", "lmtp", NULL, TYPE_STD,
   { { { 0, "220 " },
       { "LHLO", "lmtpproxyd", "250 ", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
@@ -256,6 +261,7 @@ int service_init(int argc __attribute__((unused)),
 int service_main(int argc, char **argv,
                  char **envp __attribute__((unused)))
 {
+    const char *localip, *remoteip;
     int opt;
 
     struct io_count *io_count_start = NULL;
@@ -275,6 +281,9 @@ int service_main(int argc, char **argv,
     deliver_out = prot_new(1, 1);
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 360);
+
+    lmtpd_clienthost = get_clienthost(0, &localip, &remoteip);
+    proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
 
     while ((opt = getopt(argc, argv, "Ha")) != EOF) {
         switch(opt) {
@@ -326,6 +335,9 @@ int service_main(int argc, char **argv,
     }
 
     prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
+
+    proc_cleanup(&proc_handle);
+    lmtpd_clienthost = "[local]";
 
     slowio_reset();
 
@@ -883,11 +895,25 @@ int deliver(message_data_t *msgdata, char *authuser,
             strarray_t flags = STRARRAY_INITIALIZER;
             struct imap4flags imap4flags = { &flags, authstate };
 
+            const char *userid = mbname_userid(mbname);
+            struct proc_limits limits;
+            limits.servicename = config_ident;
+            limits.clienthost = lmtpd_clienthost;
+            limits.userid = userid;
+            if (proc_checklimits(&limits)) {
+                if (limits.maxhost && limits.maxhost <= limits.host) r = IMAP_LIMIT_HOST;
+                else if (limits.maxuser && limits.maxuser <= limits.user) r = IMAP_LIMIT_USER;
+                else r = IMAP_SERVER_UNAVAILABLE;
+                goto setstatus;
+            }
+
+            proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, userid, NULL, NULL);
+
             // lock conversations for the duration of delivery, so nothing else can read
             // the state of any mailbox while the delivery is half done
             struct conversations_state *state = NULL;
-            if (mbname_userid(mbname)) {
-                r = conversations_open_user(mbname_userid(mbname), 0/*shared*/, &state);
+            if (userid) {
+                r = conversations_open_user(userid, 0/*shared*/, &state);
                 if (r) goto setstatus;
             }
 
@@ -919,6 +945,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             }
             strarray_fini(&flags);
             conversations_commit(&state);
+            proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
         }
 
         telemetry_rusage(mbname_userid(mbname));
@@ -1034,17 +1061,16 @@ EXPORTED void fatal(const char* s, int code)
 
     syslog(LOG_ERR, "FATAL: %s", s);
 
+    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+
     /* shouldn't return */
     shut_down(code);
-
-    exit(code);
 }
 
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__((noreturn));
-void shut_down(int code)
+static void shut_down(int code)
 {
     int i;
 

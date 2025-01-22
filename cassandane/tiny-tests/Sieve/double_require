@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_double_require
-    :needs_component_sieve
 {
     my ($self) = @_;
 

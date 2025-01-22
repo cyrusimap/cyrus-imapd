@@ -61,9 +61,8 @@ sub alloc
         die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
             if (defined($workerid) && $workerid eq 'invalid');
         my $cassini = Cassandane::Cassini->instance();
-        my $cassini_base_port = $cassini->val('cassandane', 'base_port') // 0;
-        $base_port = 0 + $cassini_base_port || 9100;
-        $base_port += $max_ports * ($workerid-1);
+        my $cassandane_base_port = 0 + $cassini->val('cassandane', 'base_port', '29100');
+        $base_port = $cassandane_base_port + $max_ports * ($workerid-1);
     }
     for (my $i = 0 ; $i < $max_ports ; $i++)
     {
@@ -89,6 +88,16 @@ sub port_is_free
         LocalPort => $port,
         Proto     => 'tcp',
         ReuseAddr => 1,
+
+        # There's something odd going on with IO::Socket::IP's use of
+        # getaddrinfo, such that if you provide "::1" as the local address, and
+        # the loopback interface has inet6, but another (say, eth0) interface
+        # does not, the behavior of AI_ADDRCONFIG will be to act as if the
+        # system has no inet6 support, and so inet6 bindings should not be
+        # offered.  Something seems amiss, but I'm not sure where.  Using 0
+        # will allow ports on ::1 to seem available, though.
+        # -- rjbs, 2024-12-14
+        GetAddrInfoFlags => 0,
     );
 
     unless ($socket) {

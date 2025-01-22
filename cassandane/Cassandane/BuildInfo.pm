@@ -38,6 +38,8 @@
 #
 
 package Cassandane::BuildInfo;
+use strict;
+use warnings;
 use JSON;
 
 use lib '.';

@@ -202,12 +202,13 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
         break;
 
     case ICAL_RECUR_VALUE: {
-        struct icalrecurrencetype recur = icalvalue_get_recur(value);
+        struct icalrecurrencetype *recur = icalvalue_get_recurrence(value);
 
         obj = json_object();
-        icalrecurrencetype_add_as_xxx(&recur, obj,
+        icalrecurrencetype_add_as_xxx(recur, obj,
                                       &icalrecur_add_int_to_json_object,
                                       &icalrecur_add_string_to_json_object);
+        icalrecurrencetype_unref(recur);
         return obj;
     }
 
@@ -558,7 +559,7 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
     case ICAL_RECUR_VALUE:
         if (json_is_object(jvalue)) {
             struct buf rrule = BUF_INITIALIZER;
-            struct icalrecurrencetype rt;
+            struct icalrecurrencetype *rt;
             const char *key, *sep = "";
             json_t *val;
 
@@ -572,10 +573,11 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             }
 
             /* parse our iCal RRULE string */
-            rt = icalrecurrencetype_from_string(buf_cstring(&rrule));
+            rt = icalrecurrencetype_new_from_string(buf_cstring(&rrule));
             buf_free(&rrule);
 
-            if (rt.freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recur(rt);
+            if (rt->freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recurrence(rt);
+            icalrecurrencetype_unref(rt);
         }
         else
             syslog(LOG_WARNING, "jCal object object expected");

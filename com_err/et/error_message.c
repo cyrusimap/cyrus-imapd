@@ -62,8 +62,7 @@ static char buffer[25];
 
 extern struct et_list * _et_list;
 
-EXPORTED const char * INTERFACE error_message (code)
-long code;
+EXPORTED const char * INTERFACE error_message (long code)
 {
     int offset;
     long l_offset;

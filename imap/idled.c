@@ -113,6 +113,8 @@ EXPORTED void fatal(const char *msg, int err)
 
     cyrus_done();
 
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(err);
 }
 
@@ -338,7 +340,7 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         if (arrayu64_size(&failed_pids)) {
             /* remove clients that have stopped listening to us */
             struct buf buf = BUF_INITIALIZER;
-            char *sep = "";
+            const char *sep = "";
             size_t i;
             
             for (i = 0; i < arrayu64_size(&failed_pids); i++) {

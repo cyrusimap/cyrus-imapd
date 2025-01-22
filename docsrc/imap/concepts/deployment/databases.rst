@@ -34,7 +34,6 @@ One per system:
 * `PTS cache (ptscache.db)`_
 * `STATUS cache (statuscache.db)`_
 * `User Access (user_deny.db)`_
-* `Backups (backups.db)`_
 * `News database (fetchnews.db)`_
 * `Zoneinfo db (zoneinfo.db)`_
 
@@ -209,17 +208,6 @@ record is as follows::
 
 File type can be: `flat`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
 
-.. _imap-concepts-deployment-db-backups:
-
-Backups (backups.db)
---------------------
-
-This database maps userids to the location of their backup files.  It only
-exists on Cyrus Backup servers (compiled with the `--enable-backup` configure
-option).
-
-File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
-
 .. _imap-concepts-deployment-db-conversations:
 
 Conversations (<userid>.conversations)
@@ -262,7 +250,7 @@ This is either cyrus.squat in each folder, or if you're using Xapian a single
 <userid>.xapianactive file listing active databases with tier name and number.
 
 cyrus.indexed.db is used by the Xapian search engine.  Its file type
-can be: `twoskip`_ (default), `flat`_, `skiplist`_, or ``zeroskip`` and is
+can be: `twoskip`_ (default), `flat`_, or `skiplist`_ and is
 determined by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
 
 The xapianactive file contains a space separated list of tiers and databases within

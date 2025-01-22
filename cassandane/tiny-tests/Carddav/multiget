@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_multiget
-    :needs_component_httpd :min_version_3_7
+    :min_version_3_7
 {
     my ($self) = @_;
 

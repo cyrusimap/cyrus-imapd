@@ -189,6 +189,7 @@ int do_fileinto(sieve_interp_t *i, void *sc,
     new->u.fil.imapflags = imapflags;
     new->u.fil.do_create = !!(flags & CREATE_MAILBOX);
     new->u.fil.ikeep_target = !!(flags & IMPLICIT_KEEP);
+    new->u.fil.copy = new->cancel_keep ? 0 : 1;
     new->u.fil.mailboxid = mailboxid;
     new->u.fil.headers = headers;
     new->u.fil.resolved_mailbox = NULL;
@@ -243,7 +244,7 @@ int do_fileinto(sieve_interp_t *i, void *sc,
  *
  * incompatible with: [e]reject
  */
-int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
+int do_redirect(action_list_t *a, const char *addr, char *deliverby,
                 const char *dsn_notify, const char *dsn_ret,
                 int is_ext_list, int cancel_keep, struct buf *headers)
 {
@@ -620,6 +621,7 @@ void free_action_list(action_list_t *a)
 
         case ACTION_REDIRECT:
             buf_destroy(a->u.red.headers);
+            free(a->u.red.deliverby);
             break;
 
         default:

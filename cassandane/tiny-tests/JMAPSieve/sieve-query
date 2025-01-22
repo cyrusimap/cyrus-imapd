@@ -1,0 +1,160 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_query
+    :min_version_3_3 :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => "keep;"}] },
+               "B" => { data => [{'data:asText' => "discard;"}] },
+               "C" => { data => [{'data:asText' => "redirect \"test\@example.com\";"}] },
+               "D" => { data => [{'data:asText' => "stop;"}] },
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                },
+                "2" => {
+                    name => "bar",
+                    blobId => "#B"
+                },
+                "3" => {
+                    name => "pooh",
+                    blobId => "#C"
+                },
+                "4" => {
+                    name => "abc",
+                    blobId => "#D"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+    ]);
+    $self->assert_not_null($res);
+    my $id1 = $res->[1][1]{created}{"1"}{id};
+    my $id2 = $res->[1][1]{created}{"2"}{id};
+    my $id3 = $res->[1][1]{created}{"3"}{id};
+    my $id4 = $res->[1][1]{created}{"4"}{id};
+
+    xlog $self, "get unfiltered list";
+    $res = $jmap->CallMethods([ ['SieveScript/query', { }, "R1"] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
+
+    xlog $self, "sort by name";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    sort => [{
+                        property => 'name',
+                    }]
+                }, "R1"] ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[3]);
+
+    xlog $self, "filter by isActive";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        isActive => JSON::true,
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by not isActive";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        isActive => JSON::false,
+                    }
+                }, "R1"] ]);
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    my %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id2});
+    $self->assert_not_null($scriptIds{$id3});
+    $self->assert_not_null($scriptIds{$id4});
+
+    xlog $self, "filter by name containing 'oo', sorted descending";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        name => 'oo',
+                    },
+                    sort => [{
+                        property => 'name',
+                        isAscending => JSON::false,
+                    }]
+                }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[1]);
+
+    xlog $self, "filter by name not containing 'oo'";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        operator => 'NOT',
+                        conditions => [{
+                            name => 'oo',
+                        }]
+                    },
+                }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id2});
+    $self->assert_not_null($scriptIds{$id4});
+
+    xlog $self, "filter by name containing 'oo' and inactive";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        operator => 'AND',
+                        conditions => [{
+                            name => 'oo',
+                            isActive => JSON::false,
+                        }]
+                    },
+                }, "R1"] ]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
+
+    xlog $self, "filter by name not containing 'oo' or active";
+    $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    filter => {
+                        operator => 'OR',
+                        conditions => [
+                        {
+                            operator => 'NOT',
+                            conditions => [{
+                                name => 'oo',
+                            }]
+                        },
+                        {
+                            isActive => JSON::true,
+                        }]
+                    },
+                    sort => [{
+                        property => 'name',
+                        isAscending => JSON::true,
+                    }]
+                }, "R1"] ]);
+    $self->assert_num_equals(3, $res->[0][1]{total});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    %scriptIds = map { $_ => 1 } @{$res->[0][1]{ids}};
+    $self->assert_not_null($scriptIds{$id1});
+    $self->assert_not_null($scriptIds{$id2});
+    $self->assert_not_null($scriptIds{$id4});
+}

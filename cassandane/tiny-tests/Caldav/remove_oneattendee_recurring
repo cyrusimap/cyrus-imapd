@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_remove_oneattendee_recurring
-    :needs_component_httpd
 {
     my ($self) = @_;
     my $CalDAV = $self->{caldav};

@@ -1631,6 +1631,7 @@ static int mboxlist_create_namecheck(const char *mboxname,
             if (!mbname_isdeleted(mbname) && mbname_userid(mbname) && strarray_size(mbname_boxes(mbname))) {
                 /* Disallow creating user.X.* when no user.X */
                 r = IMAP_PERMISSION_DENIED;
+                mbname_free(&mbname);
                 goto done;
             }
             mbname_free(&mbname);
@@ -2550,8 +2551,8 @@ static int _rename_check_specialuse(const char *oldname, const char *newname)
         strarray_t *check = strarray_split(protect, NULL, STRARRAY_TRIM);
         strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
         if (strarray_intersect_case(uses, check)) {
-            /* then target must be a single-depth mailbox too */
-            if (strarray_size(mbname_boxes(new)) != 1)
+            /* then if allowspecialusesubfolders is not enabled the target must be a single-depth mailbox too */
+            if (!config_getswitch(IMAPOPT_ALLOWSPECIALUSESUBFOLDER) && strarray_size(mbname_boxes(new)) != 1)
                 r = IMAP_MAILBOX_SPECIALUSE;
             /* and have a userid as well */
             if (!mbname_userid(new))
@@ -4881,7 +4882,7 @@ static void done_cb(void*rock __attribute__((unused)))
 static void init_internal()
 {
     if (!mboxlist_initialized) {
-        mboxlist_init(0);
+        mboxlist_init();
     }
     if (!mboxlist_dbopen) {
         mboxlist_open(NULL);
@@ -4889,11 +4890,8 @@ static void init_internal()
 }
 
 /* must be called after cyrus_init */
-EXPORTED void mboxlist_init(int myflags)
+EXPORTED void mboxlist_init(void)
 {
-    if (myflags & MBOXLIST_SYNC) {
-        cyrusdb_sync(DB);
-    }
     cyrus_modules_add(done_cb, NULL);
     mboxlist_initialized = 1;
 }
@@ -4918,7 +4916,7 @@ EXPORTED void mboxlist_open(const char *fname)
         fname = tofree;
     }
 
-    mboxlist_init(0);
+    mboxlist_init();
 
     flags = CYRUSDB_CREATE;
 

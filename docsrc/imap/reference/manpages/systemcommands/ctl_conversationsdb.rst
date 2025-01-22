@@ -93,6 +93,11 @@ Options
     The information can all be recalculated (eventually) from message
     headers, using the **-b** option.
 
+.. option:: -M, --clearmodseq
+
+    Reset the modseqs for all messages and conversation highwatermarks
+    for user *userid*, and from the user's counters file.
+
 .. option:: -b, --rebuild
 
     Rebuild all conversation information in the conversations database

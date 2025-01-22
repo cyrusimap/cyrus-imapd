@@ -481,6 +481,7 @@ sub add_pass
 }
 
 package Cassandane::Unit::TestPlan;
+use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
@@ -690,6 +691,87 @@ sub schedule
     }
 }
 
+sub check_sanity
+{
+    my ($self) = @_;
+
+    # collect tiny-tests directories that are used by test modules
+    my %used_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            return if not -f $fname;
+            return if $fname !~ m/\.pm$/;
+
+            open my $fh, '<', $fname or die "open $fname: $!";
+            while (<$fh>) {
+                if (m{^\s*use\s+Cassandane::Tiny::Loader\s*
+                      (['"])
+                      (.*?)
+                      \1
+                      \s*;\s*$
+                    }x)
+                {
+                    push @{$used_tt_dirs{$2}}, $fname;
+                }
+            }
+            close $fh;
+        },
+    }, @test_roots);
+
+    # collect tiny-tests directories that exist on disk
+    my %real_tt_dirs;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $fname = $File::Find::name;
+
+            my ($tt, $suite, $test) = split q{/}, $fname, 3;
+            return if not $suite;
+
+            if (not $test) {
+                # explicit initialisation to detect directories with no files
+                $real_tt_dirs{"$tt/$suite"} //= 0;
+                return;
+            }
+
+            $real_tt_dirs{"$tt/$suite"} ++;
+        },
+    }, 'tiny-tests') if -d 'tiny-tests';
+
+    # whinge about bad test modules
+    while (my ($tt, $modules) = each %used_tt_dirs) {
+        # XXX this one might not be an error if we start doing this
+        # XXX intentionally, perhaps to run the same group of tests under
+        # XXX different setups or configurations
+        die "@{$modules} share tiny-tests directory $tt"
+            if scalar @{$modules} > 1;
+
+        die "$modules->[0] uses nonexistent tiny-tests directory $tt"
+            if not exists $real_tt_dirs{$tt};
+    }
+
+    # whinge about orphaned directories
+    while (my ($tt, $ntests) = each %real_tt_dirs) {
+        die "$tt directory is not used by any tests"
+            if not $used_tt_dirs{$tt};
+
+        die "$tt directory contains no tests"
+            if not $ntests;
+    }
+
+    # whinge about 'tiny-tests' directories in unexpected places
+    # start searching in the parent directory so that we're checking the
+    # whole cyrus-imapd repository
+    my @unexpected_tt_dirs = grep {
+        chomp;
+        $_ ne '../cassandane/tiny-tests';
+    } qx{find .. -type d -name tiny-tests};
+    die "unexpected extra tiny-tests directories: @unexpected_tt_dirs"
+        if @unexpected_tt_dirs;
+}
 
 #
 # Get the entire expanded schedule as specific {suite,testname} tuples,
@@ -871,10 +953,20 @@ sub _finish_workitem
     my ($self, $witem, $result, $runner) = @_;
     my ($suite, $test) = $self->_get_suite_and_test($witem);
 
+    # The test was actually started earlier by _run_workitem, but its
+    # start_test event wasn't sent.  It might have got swallowed due to
+    # the output format listeners being removed in the workitem handling.
+    # Send the event again now, to make sure the formatters actually get
+    # it...
     $result->start_test($test);
-    if ($runner->can('fake_start_time'))
+    # But! If they're computing their own start time based on this event
+    # they'll get it wrong.  We know the real start time, so tell the
+    # formatter to use that instead.
+    if ($runner->can('tell_formatters'))
     {
-        $runner->fake_start_time($test, $witem->{start_time});
+        $runner->tell_formatters('fake_start_time',
+                                 $test,
+                                 $witem->{start_time});
     }
 
     $test->annotate_from_file($witem->{logfile});

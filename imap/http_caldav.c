@@ -367,13 +367,13 @@ static const struct prop_entry caldav_props[] = {
       propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Language" },
+      propfind_fromhdr, NULL, (void *) "Content-Language" },
     { "getcontentlength", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_getcontenttype, NULL, "Content-Type" },
+      propfind_getcontenttype, NULL, (void *) "Content-Type" },
     { "getetag", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
@@ -385,7 +385,7 @@ static const struct prop_entry caldav_props[] = {
       propfind_lockdisc, NULL, NULL },
     { "resourcetype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_restype, proppatch_restype, "calendar" },
+      propfind_restype, proppatch_restype, (void *) "calendar" },
     { "supportedlock", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
       propfind_suplock, NULL, NULL },
@@ -444,7 +444,7 @@ static const struct prop_entry caldav_props[] = {
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV,
       PROP_COLLECTION,
-      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
+      propfind_sync_token, NULL, (void *) SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
     { "share-access", NS_DAV,
@@ -460,13 +460,13 @@ static const struct prop_entry caldav_props[] = {
     /* Backwards compatibility with Apple calendar sharing clients */
     { "invite", NS_CS,
       PROP_COLLECTION,
-      propfind_invite, NULL, "calendarserver-sharing" },
+      propfind_invite, NULL, (void *) "calendarserver-sharing" },
     { "allowed-sharing-modes", NS_CS,
       PROP_COLLECTION,
       propfind_sharingmodes, NULL, NULL },
     { "shared-url", NS_CS,
       PROP_COLLECTION,
-      propfind_sharedurl, NULL, "calendarserver-sharing" },
+      propfind_sharedurl, NULL, (void *) "calendarserver-sharing" },
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CALDAV,
@@ -550,7 +550,7 @@ static const struct prop_entry caldav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
       PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, "" },
+      propfind_sync_token, NULL, (void *) "" },
 
     /* Apple Mobile Me properties */
     { "bulk-requests", NS_MECOM,
@@ -930,7 +930,7 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
         int r;
 
         /* Parse the userdata and fetch the modseq */
-        dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+        dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
         dlist_getnum64(dl, "MODSEQ", &modseq);
         dlist_free(&dl);
         buf_free(&userdata);
@@ -1304,7 +1304,7 @@ static void update_refcount(const char *mid, short *op,
 static int open_attachments(const char *userid, struct mailbox **attachments,
                             struct webdav_db **webdavdb)
 {
-    char *mailboxname = mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+    char *mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
     int r, ret = 0;
 
     /* Open attachments collection for writing */
@@ -1953,6 +1953,10 @@ static int export_calendar(struct transaction_t *txn)
 struct cal_info {
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
+    char *description;
+    char *color;
+    char *order_string;
+    long order_number;
     unsigned flags;
     unsigned long types;
 };
@@ -1962,7 +1966,8 @@ enum {
     CAL_CAN_DELETE =    (1<<1),
     CAL_CAN_ADMIN =     (1<<2),
     CAL_IS_PUBLIC =     (1<<3),
-    CAL_IS_TRANSP =     (1<<4)
+    CAL_IS_TRANSP =     (1<<4),
+    CAL_CAN_PROPCOL =   (1<<5)
 };
 
 struct list_cal_rock {
@@ -1988,7 +1993,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
     static const char *calcompset_annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
-    struct buf displayname = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
+    struct buf temp = BUF_INITIALIZER, schedtransp = BUF_INITIALIZER;
     struct buf calcompset = BUF_INITIALIZER;
 
     if (!inboxlen) inboxlen = strlen(SCHED_INBOX) - 1;
@@ -2011,9 +2016,9 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
 
     /* Lookup DAV:displayname */
     r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
-                                    httpd_userid, &displayname);
+                                    httpd_userid, &temp);
     /* fall back to the last part of the mailbox name */
-    if (r || !displayname.len) buf_setcstr(&displayname, shortname);
+    if (r || !temp.len) buf_setcstr(&temp, shortname);
 
     /* Make sure we have room in our array */
     if (lrock->len == lrock->alloc) {
@@ -2025,8 +2030,31 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     /* Add our calendar to the array */
     cal = &lrock->cal[lrock->len];
     strlcpy(cal->shortname, shortname, MAX_MAILBOX_NAME);
-    strlcpy(cal->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
+    strlcpy(cal->displayname, buf_cstring(&temp), MAX_MAILBOX_NAME);
+    buf_reset(&temp);
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-description",
+                                httpd_userid, &temp);
+    cal->description = buf_release(&temp);
+
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color",
+                                httpd_userid, &temp);
+    cal->color = buf_release(&temp);
+
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order",
+                                httpd_userid, &temp);
+    char *endptr = NULL;
+    cal->order_number = strtol(buf_cstring(&temp), &endptr, 10);
+    if (cal->order_number < 0 || *endptr || !temp.len) {
+        buf_reset(&temp);
+        cal->order_number = LONG_MAX;
+    }
+    cal->order_string = buf_release(&temp);
+
     cal->flags = 0;
+
+    if (rights & DACL_PROPCOL) {
+        cal->flags |= CAL_CAN_PROPCOL;
+    }
 
     /* Is this the default calendar? */
     if (len == lrock->defaultlen &&
@@ -2078,7 +2106,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     lrock->len++;
 
 done:
-    buf_free(&displayname);
+    buf_free(&temp);
 
     return 0;
 }
@@ -2087,6 +2115,8 @@ static int cal_compare(const void *a, const void *b)
 {
     struct cal_info *c1 = (struct cal_info *) a;
     struct cal_info *c2 = (struct cal_info *) b;
+    if (c1->order_number != c2->order_number)
+        return c1->order_number - c2->order_number;
 
     return strcmp(c1->displayname, c2->displayname);
 }
@@ -2128,7 +2158,7 @@ static int list_calendars(struct transaction_t *txn)
     const char *proto = NULL;
     const char *host = NULL;
     const struct cal_comp_t *comp;
-#include "imap/http_caldav_js.h"
+#include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -2183,8 +2213,8 @@ static int list_calendars(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Calendars");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_caldav_js,
-               CYRUS_VERSION, http_caldav_js_len);
+    buf_printf(body, http_cal_abook_admin_js,
+               CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
@@ -2224,7 +2254,7 @@ static int list_calendars(struct transaction_t *txn)
         buf_printf_markup(body, level++, "<td>");
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level,
-                              "<input type=checkbox%s name=comp value=%s>%s",
+                              "<label><input type=checkbox%s name=comp value=%s>%s</label>",
                               !strcmp(comp->name, "VEVENT") ? " checked" : "",
                               comp->name, comp->name);
         }
@@ -2247,9 +2277,8 @@ static int list_calendars(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td></td>");
         buf_printf_markup(body, level,
                           "<td><br><input type=button value='Create'"
-                          " onclick=\"createCalendar('%s')\">"
-                          " <input type=reset></td>",
-                          base_path);
+                          " onclick='createCollection()'>"
+                          " <input type=reset></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, --level, "</table>");
@@ -2279,10 +2308,15 @@ static int list_calendars(struct transaction_t *txn)
 
     /* Sort calendars by displayname */
     qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
+    charset_t utf8 = charset_lookupname("utf-8");
+    buf_printf_markup(body, level, "<thead>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Color</th><th>Order</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
+    buf_printf_markup(body, level, "</thead><tbody>");
 
     /* Add available calendars with action items */
     for (i = 0; i < lrock.len; i++) {
         struct cal_info *cal = &lrock.cal[i];
+        char *temp = charset_convert(cal->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -2291,18 +2325,52 @@ static int list_calendars(struct transaction_t *txn)
         }
 
         /* Calendar name */
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td>%s%s%s",
-                          (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
-                          cal->displayname,
-                          (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
+        buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, cal->shortname);
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+                              (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+                              temp,
+                              (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "", i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (cal->flags & CAL_IS_DEFAULT) ? "<b>" : "",
+                              temp,
+                              (cal->flags & CAL_IS_DEFAULT) ? "</b>" : "");
+        free(temp);
+
+        /* Calendar description */
+        temp = charset_convert(cal->description, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        free(cal->description);
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s</td><td><button onclick='changeDescription(%i)'>✎</button></td>", temp, i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s</td>", temp);
+        free(temp);
+
+        /* Calendar color */
+        temp = *cal->color ? charset_convert(cal->color, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML) : NULL;
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td><label><input type='radio' name='color%i' %s onclick='document.getElementById(\"cal_%i\").click();return false'><input type='color' value='%s' id='cal_%i' onchange='changeColor(%i, true)'></label><label><input type=radio name='color%i' %s onchange='changeColor(%i, false)'>None</label></td>", i, *cal->color ? " checked" : "", i, *cal->color ? temp : "#808080", i , i, i,  *cal->color ? "": " checked", i);
+        else if (*cal->color)
+            buf_printf_markup(body, level, "<td bgcolor='%s'></td>", temp);
+        else
+            buf_printf_markup(body, level, "<td>Not set</td>");
+        free(temp);
+        free(cal->color);
+
+        /* Order */
+        if (cal->flags & CAL_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s <button onclick='changeOrder(%i, \"%s\")'>✎</button></td>",
+                              cal->order_string, i, cal->order_string);
+        else
+            buf_printf_markup(body, level, "<td>%s</td>", cal->order_string);
+        free(cal->order_string);
 
         /* Supported components list */
         buf_printf_markup(body, level++, "<td>");
         buf_printf_markup(body, level++,
-                          "<select multiple name=comp size=3"
-                          " onChange=\"compsetCalendar('%s%s', '%s', this.options)\">",
-                          base_path, cal->shortname, cal->displayname);
+                          "<select multiple size=3"
+                          " onChange='compsetCalendar(%i, this.options)'>", i);
         for (comp = cal_comps; comp->name; comp++) {
             buf_printf_markup(body, level, "<option%s>%s</option>",
                               (cal->types & comp->type) ? " selected" : "",
@@ -2321,37 +2389,40 @@ static int list_calendars(struct transaction_t *txn)
                           base_path, cal->shortname);
 
         /* Delete button */
-        buf_printf_markup(body, level,
-                          "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteCalendar('%s%s', '%s')\"></td>",
-                          !(cal->flags & CAL_CAN_DELETE) ? " disabled" : "",
-                          base_path, cal->shortname, cal->displayname);
+        if (cal->flags & CAL_IS_DEFAULT)
+            buf_printf_markup(body, level,
+                              "<td>Default Calendar</td>");
+        else if (cal->flags & CAL_CAN_DELETE)
+            buf_printf_markup(body, level,
+                              "<td><input type=button value='Delete'"
+                              " onclick='deleteCollection(%i)'></td>", i);
+        else
+            buf_printf_markup(body, level, "<td></td>");
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share"
-                          " onclick=\"shareCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='share(%i, this.checked)'>"
                           "Public</td>",
-                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_PUBLIC) ? " checked" : "",
-                          base_path, cal->shortname);
+                          (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
+                          (cal->flags & CAL_IS_PUBLIC) ? " checked" : "", i);
 
         /* Transparent checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=transp"
-                          " onclick=\"transpCalendar('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='transpCalendar(%i, this.checked)'>"
                           "Transparent</td>",
-                          !(cal->flags & CAL_CAN_ADMIN) ? " disabled" : "",
-                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "",
-                          base_path, cal->shortname);
+                          (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
+                          (cal->flags & CAL_IS_TRANSP) ? " checked" : "", i);
 
         buf_printf_markup(body, --level, "</tr>");
     }
 
+    charset_free(&utf8);
     free(lrock.cal);
 
     /* Finish list */
-    buf_printf_markup(body, --level, "</table>");
+    buf_printf_markup(body, --level, "</tbody></table>");
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");
@@ -2431,7 +2502,7 @@ static void personalize_and_add_defaultalarms(struct mailbox *mailbox,
 
     if (namespace_calendar.allow & ALLOW_USERDATA) {
         if (caldav_is_personalized(mailbox, cdata, httpd_userid, &userdata)) {
-            dlist_parsemap(&dl, 1, 0, buf_base(&userdata), buf_len(&userdata));
+            dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
             icalcomponent_add_personal_data_from_dl(ical, dl);
             usedefaultalerts = caldav_get_usedefaultalerts(dl, mailbox, record, &ical);
         }
@@ -3265,7 +3336,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
     }
 
     /* Organizer MUST be local to use CalDAV Scheduling */
-    organizer = icalproperty_get_organizer(prop);
+    organizer = icalproperty_get_decoded_calendaraddress(prop);
     if (!organizer) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
@@ -3840,8 +3911,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty *prop;
-    struct icalrecurrencetype rt = ICALRECURRENCETYPE_INITIALIZER;
-    icaltimetype dtstart;
+    struct icalrecurrencetype *rt = NULL;
+    icaltimetype dtstart = icaltime_null_time();
     hashu64_table rdates = HASHU64_TABLE_INITIALIZER;
     hashu64_table overrides = HASHU64_TABLE_INITIALIZER;
     unsigned stripped_overrides = 0;
@@ -3906,11 +3977,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (prop) {
-            nextorg = icalproperty_get_organizer(prop);
-            if (nextorg) {
-                if (!strncasecmp(nextorg, "mailto:", 7)) nextorg += 7;
-                if (!*nextorg) nextorg = NULL;
-            }
+            nextorg = icalproperty_get_decoded_calendaraddress(prop);
+            if (nextorg && !*nextorg) nextorg = NULL;
         }
         /* if no toplevel organizer, use the one from here */
         if (!organizer && nextorg) organizer = nextorg;
@@ -3926,8 +3994,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         /* Grab RRULE and RDATEs to check RSCALE and overrides */
         prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-        if (prop) {
-            rt = icalproperty_get_rrule(prop);
+        if (!rt && prop) {
+            rt = icalproperty_get_recurrence(prop);
             dtstart = icalcomponent_get_dtstart(comp);
 
             for (prop = icalcomponent_get_first_property(comp,
@@ -3951,7 +4019,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
     }
 
-    if (rt.freq != ICAL_NO_RECURRENCE) {
+    if (rt) {
         /* Strip overrides that occur before start of RRULE */
         /* XXX  This is a bugfix for Fantastical when splitting a
            recurring event with existing overrides prior to the split */
@@ -3964,7 +4032,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
 #ifdef HAVE_RSCALE
         /* Make sure we support the provided RSCALE in an RRULE */
-        if (rscale_calendars && rt.rscale && *rt.rscale) {
+        if (rscale_calendars && rt->rscale && *rt->rscale) {
             /* Perform binary search on sorted icalarray */
             unsigned found = 0, start = 0, end = rscale_calendars->num_elements;
 
@@ -3972,7 +4040,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 unsigned mid = start + (end - start) / 2;
                 const char **rscale =
                     icalarray_element_at(rscale_calendars, mid);
-                int r = strcasecmp(rt.rscale, *rscale);
+                int r = strcasecmp(rt->rscale, *rscale);
 
                 if (r == 0) found = 1;
                 else if (r < 0) end = mid;
@@ -4058,8 +4126,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* Scheduling object resource */
 
             syslog(LOG_DEBUG, "caldav_put: organizer: %s", organizer);
-
-            if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
             if (cdata->organizer &&
                 !spool_getheader(txn->req_hdrs, "Allow-Organizer-Change")) {
@@ -4260,6 +4326,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     if (myoldical && myoldical != oldical) icalcomponent_free(myoldical);
     if (oldical) icalcomponent_free(oldical);
     if (myical) icalcomponent_free(myical);
+    if (rt) icalrecurrencetype_unref(rt);
     strarray_fini(&schedule_addresses);
     free_hashu64_table(&rdates, NULL);
     free_hashu64_table(&overrides, NULL);
@@ -4346,7 +4413,8 @@ static void parse_timerange(xmlNodePtr node,
 static void cal_parse_propfilter(xmlNodePtr node, struct prop_filter *prop,
                                  struct error_t *error)
 {
-    if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+    if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
+        !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
         if (prop->other) {
             error->precond = CALDAV_SUPP_FILTER;
             error->desc = "Multiple time-range";
@@ -4499,7 +4567,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
             error->desc = DAV_FILTER_ISNOTDEF_ERR;
             error->node = xmlCopyNode(root, 1);
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "is-not-defined") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             if ((*comp)->range || (*comp)->prop || (*comp)->comp) {
                 error->precond = CALDAV_SUPP_FILTER;
                 error->desc = DAV_FILTER_ISNOTDEF_ERR;
@@ -4514,7 +4583,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                 }
             }
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             if ((*comp)->range) {
                 error->precond = CALDAV_SUPP_FILTER;
                 error->desc = "Multiple time-range";
@@ -4543,7 +4613,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
 
             if (depth != 1) *flags |= PARSE_ICAL;
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "prop-filter") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             struct prop_filter *prop = NULL;
 
             *flags |= PARSE_ICAL;
@@ -4566,7 +4637,8 @@ static void parse_compfilter(xmlNodePtr root, unsigned depth,
                 }
             }
         }
-        else if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+        else if (!xmlStrcmp(node->name, BAD_CAST "comp-filter") &&
+                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
             struct comp_filter *subcomp = NULL;
 
             parse_compfilter(node, depth + 1, &subcomp,
@@ -4591,7 +4663,8 @@ static int parse_calfilter(xmlNodePtr root, struct calquery_filter *filter,
 
     /* Parse elements of filter */
     node = xmlFirstElementChild(root);
-    if (node && !xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+    if (node && !xmlStrcmp(node->name, BAD_CAST "comp-filter") &&
+        !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
         parse_compfilter(node, 0, &filter->comp,
                          &filter->flags, &filter->comp_types, error);
     }
@@ -5189,7 +5262,7 @@ static void prune_properties(icalcomponent *parent,
             nextprop =
                 icalcomponent_get_next_property(parent, ICAL_ANY_PROPERTY);
 
-            uint64_t kind;
+            uint64_t kind = ICAL_NO_PROPERTY;
 
             for (n = 0; n < size; n++) {
                 kind = arrayu64_nth(&pcomp->props, n);
@@ -5244,7 +5317,7 @@ static int expand_cb(icalcomponent *comp,
     icalcomponent *expanded_ical = (icalcomponent *) rock;
     icalproperty *prop, *nextprop, *recurid = NULL;
     struct icaldatetimeperiodtype dtp;
-    icaltimetype dtstart;
+    icaltimetype dtstart = icaltime_null_time();
 
     start = icaltime_convert_to_zone(start, utc_zone);
     end = icaltime_convert_to_zone(end, utc_zone);
@@ -5536,7 +5609,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                     return (*fctx->ret = HTTP_BAD_REQUEST);
                 }
             }
-            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set") &&
+                     !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
                 syslog(LOG_NOTICE,
                        "Client attempted to use CALDAV:limit-freebusy-set");
                 return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
@@ -5733,7 +5807,7 @@ static int propfind_scheddefault(const xmlChar *name, xmlNsPtr ns,
     if (fctx->req_tgt->flags != TGT_SCHED_INBOX) return HTTP_NOT_FOUND;
 
     return propfind_calurl(name, ns, fctx,
-                           prop, resp, propstat, SCHED_DEFAULT);
+                           prop, resp, propstat, (void  *) SCHED_DEFAULT);
 }
 
 
@@ -6240,7 +6314,10 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
                                struct propstat propstat[],
                                void *rock __attribute__((unused)))
 {
-    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+    const char *explanation = NULL;
+    if (pctx->txn->req_tgt.flags & (TGT_MANAGED_ATTACH | TGT_SCHED_INBOX | TGT_SCHED_OUTBOX))
+        explanation = "Cannot be altered on Attachments, Inbox, or Outbox";
+    else if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         const xmlChar *value = NULL;
 
         if (set) {
@@ -6251,34 +6328,36 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
                 /* Make sure it is a value we understand */
                 if (cur->type != XML_ELEMENT_NODE) continue;
-                if ((!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
+                if (!value && (!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
                      !xmlStrcmp(cur->name, BAD_CAST "transparent")) &&
                      !xmlStrcmp(cur->ns->href, BAD_CAST XML_NS_CALDAV)) {
                     value = cur->name;
-                    break;
                 }
                 else {
-                    /* Unknown value */
                     xml_add_prop(HTTP_CONFLICT, pctx->ns[NS_DAV],
                                  &propstat[PROPSTAT_CONFLICT],
                                  prop->name, prop->ns, NULL, 0);
+                    xmlNewTextChild(propstat[PROPSTAT_CONFLICT].root, NULL, BAD_CAST "responsedescription",
+                                    value ? BAD_CAST "More than one values set"
+                                    : BAD_CAST "Not recognized value");
 
-                    *pctx->ret = HTTP_FORBIDDEN;
+                    *pctx->ret = HTTP_CONFLICT;
 
                     return 0;
                 }
             }
         }
-
-        proppatch_todb(prop, set, pctx, propstat, (void *) value);
+        if (value || !set)
+            return proppatch_todb(prop, set, pctx, propstat, (void *) value);
+        explanation = "No value set";
     }
-    else {
-        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-                     &propstat[PROPSTAT_FORBID],
-                     prop->name, prop->ns, NULL, 0);
+    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
+                 prop->name, prop->ns, NULL, 0);
+    if (explanation)
+        xmlNewTextChild(propstat[PROPSTAT_FORBID].root, NULL,
+                        BAD_CAST "responsedescription", BAD_CAST explanation);
 
-        *pctx->ret = HTTP_FORBIDDEN;
-    }
+    *pctx->ret = HTTP_FORBIDDEN;
 
     return 0;
 }
@@ -6298,6 +6377,9 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
     size_t datalen = 0;
     int r = 0;
 
+    if (!fctx->txn->req_tgt.userid || fctx->txn->req_tgt.resource)
+        return HTTP_NOT_FOUND;
+
     if (propstat) {
         const char *prop_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
@@ -6314,7 +6396,7 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
             data = buf_cstring(&attrib);
             datalen = attrib.len;
         }
-        else if ((namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
+        else {
             /*  Check for CALDAV:calendar-timezone-id */
             prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
@@ -6347,7 +6429,6 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
                 else r = HTTP_SERVER_ERROR;
             }
         }
-        else r = HTTP_NOT_FOUND;
     }
 
     if (!r) r = propfind_getdata(name, ns, fctx, prop, propstat,
@@ -6660,8 +6741,9 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
     const char *value = NULL;
     int r = 0;
 
-    if (!(namespace_calendar.allow & ALLOW_CAL_NOTZ) || fctx->req_tgt->resource)
+    if (!fctx->req_tgt->userid || fctx->req_tgt->resource) {
         return HTTP_NOT_FOUND;
+    }
 
     r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
                                      httpd_userid, &attrib);
@@ -6709,8 +6791,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
                           struct propstat propstat[],
                           void *rock __attribute__((unused)))
 {
-    if ((namespace_calendar.allow & ALLOW_CAL_NOTZ) &&
-        pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
         xmlChar *freeme = NULL;
         const char *tzid = NULL;
         const icaltimezone *tz = NULL;
@@ -6874,7 +6955,7 @@ static int propfind_caldav_alarms(const xmlChar *name, xmlNsPtr ns,
      * Now, CalDAV default alarms are stored as any other dead
      * DAV property again. */
     struct dlist *dl = NULL;
-    if (dlist_parsemap(&dl, 1, 0, buf_base(&attrib), buf_len(&attrib)) == 0) {
+    if (dlist_parsemap(&dl, 1, buf_base(&attrib), buf_len(&attrib)) == 0) {
         const char *content = NULL;
         if (dlist_getatom(dl, "CONTENT", &content)) {
             icalcomponent *ical = icalparser_parse_string(content);
@@ -7870,7 +7951,8 @@ static int report_fb_query(struct transaction_t *txn,
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
                 xmlChar *start, *end;
 
                 start = xmlGetProp(node, BAD_CAST "start");
@@ -8136,6 +8218,13 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
                    txn->req_tgt.path);
         strarray_appendm(&txn->resp_body.links, buf_release(&link));
     }
+    if ((txn->req_tgt.allow & ALLOW_CAL_SCHED) && txn->req_tgt.mbentry) {
+        struct buf temp = BUF_INITIALIZER;
+        if (!annotatemore_lookup_mbe(txn->req_tgt.mbentry, DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled", "", &temp)
+            && (!strcasecmp(buf_cstring(&temp), "F") || !strcasecmp(buf_cstring(&temp), "no")))
+                txn->req_tgt.allow &= ~ALLOW_CAL_SCHED;
+        buf_free(&temp);
+    };
 
     return meth_options(txn, oparams->parse_path);
 }

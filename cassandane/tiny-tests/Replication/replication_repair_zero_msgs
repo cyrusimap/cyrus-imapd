@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_replication_repair_zero_msgs
-    :needs_component_replication
 {
     my ($self) = @_;
 

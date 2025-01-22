@@ -52,6 +52,7 @@
 
 #include "arrayu64.h"
 #include "strarray.h"
+#include "hash.h"
 #include "util.h"
 #include "sieve/sieve_err.h"
 
@@ -125,20 +126,23 @@ typedef struct sieve_duplicate {
     sieve_callback *track;
 } sieve_duplicate_t;
 
-typedef struct sieve_imip_context {
-    unsigned invites_only    : 1;
-    unsigned updates_only    : 1;
-    unsigned delete_canceled : 1;
+typedef struct sieve_cal_context {
+    unsigned allow_public     : 1;
+    unsigned invites_only     : 1;
+    unsigned updates_only     : 1;
+    unsigned delete_cancelled : 1;
+    strarray_t *addresses;
+    const char *organizers;
     const char *calendarid;
     struct buf outcome;
-    struct buf errstr;
-} sieve_imip_context_t;
+    struct buf reason;
+} sieve_cal_context_t;
 
 
 typedef struct sieve_redirect_context {
     const char *addr;
     int is_ext_list :1;
-    const char *deliverby;
+    char *deliverby;
     const char *dsn_notify;
     const char *dsn_ret;
     struct buf *headers;
@@ -169,6 +173,7 @@ typedef struct sieve_fileinto_context {
     strarray_t *imapflags;
     unsigned do_create : 1;
     unsigned ikeep_target : 1;
+    unsigned copy : 1;
     const char *mailboxid;
     struct buf *headers;
     char *resolved_mailbox;
@@ -230,7 +235,7 @@ void sieve_register_notify(sieve_interp_t *interp,
                            sieve_callback *f, const strarray_t *methods);
 void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 void sieve_register_logger(sieve_interp_t *interp, sieve_logger *f);
-void sieve_register_imip(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_processcal(sieve_interp_t *interp, sieve_callback *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */
@@ -294,7 +299,7 @@ void sieve_script_free(sieve_script_t **s);
 
 /* execute bytecode on a message */
 int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,
-                           void *script_context, void *message_context);
+                           void *script_context, void *message_context, hash_table *prevars);
 
 /* Get space separated list of extensions supported by the implementation */
 const strarray_t *sieve_listextensions(sieve_interp_t *i);
@@ -313,5 +318,8 @@ void sieve_free_bytecode(bytecode_info_t **p);
  */
 int sieve_rebuild(const char *script_fname, const char *bc_fname,
                   int force, char **out_parse_errors);
+
+/* Test if a string is a valid variable name in a sieve script */
+int sieve_is_identifier(char *s);
 
 #endif

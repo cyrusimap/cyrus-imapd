@@ -163,6 +163,30 @@ static int stub_parse_error(int lineno, const char *msg,
     return SIEVE_OK;
 }
 
+#ifdef WITH_DAV
+#include <libxml/uri.h>
+
+static int listvalidator(void *ic __attribute__((unused)),
+                         const char *list)
+{
+    const char *addrbook_urn_full = "urn:ietf:params:sieve:addrbook:";
+    const char *addrbook_urn_abbrev = ":addrbook:";
+    int ret = SIEVE_FAIL;
+
+    /* percent-decode list URI */
+    char *uri = xmlURIUnescapeString(list, strlen(list), NULL);
+
+    if (!strncmp(uri, addrbook_urn_full, strlen(addrbook_urn_full)) ||
+        !strncmp(uri, addrbook_urn_abbrev, strlen(addrbook_urn_abbrev))) {
+        ret = SIEVE_OK;
+    }
+
+    free(uri);
+
+    return ret;
+}
+#endif /* WITH_DAV */
+
 EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 {
     sieve_interp_t *interpreter = NULL;
@@ -211,10 +235,9 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     }
 
 #ifdef WITH_DAV
-    sieve_register_extlists(interpreter,
-                            (sieve_list_validator *) &stub_generic,
+    sieve_register_extlists(interpreter, &listvalidator,
                             (sieve_list_comparator *) &stub_generic);
-    sieve_register_imip(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_processcal(interpreter, (sieve_callback *) &stub_generic);
 #endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
@@ -318,7 +341,7 @@ EXPORTED void sieve_script_free(sieve_script_t **s)
     }
 }
 
-static void add_header(sieve_interp_t *i, int isenv, char *header,
+static void add_header(sieve_interp_t *i, int isenv, const char *header,
                        void *message_context, struct buf *out)
 {
     const char **h;
@@ -407,7 +430,6 @@ static int build_notify_message(sieve_interp_t *i,
 static int send_notify_callback(sieve_interp_t *interp,
                                 void *message_context,
                                 void *script_context, notify_list_t *notify,
-                                char *actions_string,
                                 const char **errmsg)
 {
     sieve_notify_context_t nc;
@@ -439,7 +461,6 @@ static int send_notify_callback(sieve_interp_t *interp,
     build_notify_message(interp, notify->message, message_context,
                          &out);
     buf_appendcstr(&out, "\n\n");
-    buf_appendcstr(&out, actions_string);
 
     nc.message = buf_cstring(&out);
     nc.fname = NULL;
@@ -457,7 +478,7 @@ static int send_notify_callback(sieve_interp_t *interp,
     return ret;
 }
 
-static char *action_to_string(action_t action)
+static const char *action_to_string(action_t action)
 {
     switch(action)
         {
@@ -484,7 +505,7 @@ static char *action_to_string(action_t action)
     /* never reached */
 }
 
-static char *sieve_errstr(int code)
+static const char *sieve_errstr(int code)
 {
     switch (code)
         {
@@ -654,7 +675,7 @@ static int do_sieve_error(int ret,
                notify_ret = send_notify_callback(interp,
                                                  message_context,
                                                  script_context,n,
-                                                 actions_string, &errmsg);
+                                                 &errmsg);
               ret |= notify_ret;
               }
             n = n->next;
@@ -918,14 +939,15 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_ptr, sieve_interp_t *i,
                   duptrack_list_t *duptrack_list, const char **errmsg);
 
 EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
-                           void *script_context, void *message_context)
+                           void *script_context, void *message_context, hash_table *prevars)
 {
     action_list_t *actions = NULL;
     notify_list_t *notify_list = NULL;
     duptrack_list_t *duptrack_list = NULL;
     /*   notify_action_t *notify_action;*/
     action_t lastaction = -1;
-    int ret;
+    int ret = SIEVE_OK;
+
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
     strarray_t imapflags = STRARRAY_INITIALIZER;
@@ -969,21 +991,56 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp
         varlist_extend(&variables)->name = xstrdup(VL_MATCH_VARS);
         varlist_extend(&variables)->name = xstrdup(VL_PARSED_STRINGS);
 
-        ret = sieve_eval_bc(exe, 0, interp,
-                            script_context, message_context, &variables,
-                            actions, notify_list, duptrack_list, &errmsg);
+        /* copy any provided variables in */
+        if (prevars) {
+            hash_iter *iter = hash_table_iter(prevars);
 
-        if (ret < 0) {
-            ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
-                                 script_context, message_context, &imapflags,
-                                 actions, notify_list, lastaction, 0,
-                                 actions_string, errmsg);
+            while (hash_iter_next(iter)) {
+                const char *key = hash_iter_key(iter);
+                const char *val = hash_iter_val(iter);
+
+                if (!strlen(key) || !sieve_is_identifier((char *)key)) {
+                    struct buf err = BUF_INITIALIZER;
+
+                    buf_appendcstr(&err, "prevars: Invalid sieve identifier: ");
+                    buf_appendcstr(&err, key);
+
+                    ret = do_sieve_error(SIEVE_PARSE_ERROR, interp,
+                                         script_context, message_context, &imapflags,
+                                         actions, notify_list, lastaction, 0,
+                                         actions_string, buf_cstring(&err));
+
+                    buf_free(&err);
+
+                    break;
+                }
+
+                variable_list_t *next = varlist_extend(&variables);
+
+                next->name = xstrdup(key);
+                strarray_add(next->var, val);
+            }
+
+            hash_iter_free(&iter);
         }
-        else {
-            ret = do_action_list(interp,
-                                 script_context, message_context,
-                                 &imapflags, actions, notify_list,
-                                 actions_string, errmsg);
+
+        if (ret == SIEVE_OK) {
+            ret = sieve_eval_bc(exe, 0, interp,
+                                script_context, message_context, &variables,
+                                actions, notify_list, duptrack_list, &errmsg);
+
+            if (ret < 0) {
+                ret = do_sieve_error(SIEVE_RUN_ERROR, interp,
+                                     script_context, message_context, &imapflags,
+                                     actions, notify_list, lastaction, 0,
+                                     actions_string, errmsg);
+            }
+            else {
+                ret = do_action_list(interp,
+                                     script_context, message_context,
+                                     &imapflags, actions, notify_list,
+                                     actions_string, errmsg);
+            }
         }
 
         varlist_fini(&variables);

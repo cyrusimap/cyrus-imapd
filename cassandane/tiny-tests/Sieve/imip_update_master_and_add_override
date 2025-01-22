@@ -2,8 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_imip_update_master_and_add_override
-    :needs_component_sieve :needs_component_httpd :min_version_3_5
-    :want_service_http
+    :needs_component_httpd :want_service_http
 {
     # this test is mainly here to test that a crasher caused by Cyrus using
     # a libical component after it was freed
@@ -21,9 +20,9 @@ sub test_imip_update_master_and_add_override
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+require ["body", "variables", "imap4flags", "processcalendar"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :outcome "outcome";
+    processcalendar :outcome "outcome";
     if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
     }

@@ -129,8 +129,10 @@ extern int quota_deleteroot(const char *quotaroot, int silent);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);
 
+#define QUOTA_USE_CONV (1<<0)
+
 extern int quota_foreach(const char *prefix, quotaproc_t *proc,
-                         void *rock, struct txn **);
+                         void *rock, struct txn **, unsigned flags);
 
 /* open the quotas db */
 void quotadb_open(const char *fname);
@@ -143,8 +145,7 @@ extern int quotadb_foreach(const char *prefix, size_t prefixlen,
 void quotadb_close(void);
 
 /* initialize database structures */
-#define QUOTADB_SYNC 0x02
-void quotadb_init(int flags);
+void quotadb_init(void);
 
 /* done with database stuff */
 void quotadb_done(void);

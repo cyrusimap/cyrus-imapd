@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_plusaddr_itip
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Set scheduling addresses via CalDAV";
+    my $xml = <<'EOF';
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+     <C:calendar-user-address-set>
+       <D:href>mailto:cassandane%2Btest@example.com</D:href>
+     </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/principals/user/cassandane",
+                       $xml, 'Content-Type' => 'text/xml');
+
+    my $uid = 'event1uid';
+    my $start = '2021-01-01T01:01:01';
+
+    xlog "Clear notification cache";
+    $self->{instance}->getnotify();
+
+    xlog "Create scheduled instance";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => $uid,
+                    title => 'instance1',
+                    start => $start,
+                    timeZone => 'America/New_York',
+                    duration => 'PT1H',
+                    replyTo => {
+                        imip => 'mailto:cassandane%2Btest@example.com',
+                    },
+                    participants => {
+                        foo => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:foo@example.com',
+                            },
+                            participationStatus => 'needs-action',
+                            expectReply => JSON::true,
+                        }
+                    }
+                }
+            }
+        }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    xlog "Assert that iTIP notification is sent";
+    my $data = $self->{instance}->getnotify();
+    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+
+    my $notif_payload = decode_json($notif->{MESSAGE});
+    $self->assert_str_equals('REQUEST', $notif_payload->{method});
+    $self->assert_str_equals('cassandane+test@example.com',
+                             $notif_payload->{sender});
+    $self->assert_str_equals('foo@example.com', $notif_payload->{recipient});
+}

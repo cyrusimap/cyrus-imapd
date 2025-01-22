@@ -115,18 +115,13 @@ static jmap_method_t jmap_backup_methods_nonstandard[] = {
 
 HIDDEN void jmap_backup_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_backup_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_backup_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                             JMAP_BACKUP_EXTENSION, json_object());
 
-        for (mp = jmap_backup_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_backup_methods_nonstandard, settings);
     }
 
     /* Initialize PRODID value
@@ -385,7 +380,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     if ((rrock->jrestore->mode & UNDO_ALL) &&
         rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch) {
         syslog(log_level,
-               "skipping '%s': cutoff (%ld) prior to mailbox history (%ld)",
+               "skipping '%s': cutoff (" TIME_T_FMT ") prior to mailbox history (" TIME_T_FMT")",
                mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
                rrock->mailbox->i.changes_epoch);
 
@@ -403,7 +398,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
         resource = rrock->resource_name_cb(msg, rrock->rock);
         syslog(log_level,
-               "UID %u: expunged: %x, savedate: %ld, updated: %ld, name: %s",
+               "UID %u: expunged: %x, savedate: " TIME_T_FMT ","
+               " updated: " TIME_T_FMT ", name: %s",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                record->savedate, record->last_updated,
                resource ? resource : "NULL");
@@ -903,7 +899,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_contacts(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_contacts(%s, " TIME_T_FMT ")",
            addrhomeset, restore.cutoff);
 
     struct contact_rock crock =
@@ -1007,7 +1003,7 @@ static int do_scheduling(jmap_req_t *req,
                  prop;
                  prop = icalcomponent_get_next_property(comp,
                                                         ICAL_ATTENDEE_PROPERTY)) {
-                const char *addr = icalproperty_get_attendee(prop);
+                const char *addr = icalproperty_get_decoded_calendaraddress(prop);
 
                 if (!addr || strncasecmp(addr, "mailto:", 7) ||
                     strcasecmp(strarray_nth(schedule_addresses, 0), addr+7)) {
@@ -1396,7 +1392,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_calendars(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_calendars(%s, " TIME_T_FMT ")",
            calhomeset, restore.cutoff);
 
     struct calendar_rock crock =
@@ -1489,7 +1485,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
 
-    syslog(restore.log_level, "jmap_backup_restore_notes(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_notes(%s, " TIME_T_FMT ")",
            subfolder ? subfolder : "NULL", restore.cutoff);
 
     if (subfolder) {
@@ -1614,7 +1610,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
-            syslog(log_level, "skipping '%s': destroyed (%ld) before cutoff",
+            syslog(log_level, "skipping '%s': destroyed (" TIME_T_FMT ") before cutoff",
                    mbentry->name, timestamp);
 
             return 0;
@@ -1642,7 +1638,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         int ignore_draft = 0;
 
         syslog(log_level,
-               "UID %u: expunged: %x, draft: %x, intdate: %ld, updated: %ld",
+               "UID %u: expunged: %x, draft: %x,"
+               " intdate: " TIME_T_FMT ", updated: " TIME_T_FMT,
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                (record->system_flags & FLAG_DRAFT),
                record->internaldate, record->last_updated);
@@ -1801,7 +1798,7 @@ static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
     struct message_t *message = (struct message_t *) data;
     ptrarray_t *deleted = &message->deleted;
     hash_table *mailboxes = (hash_table *) rock;
-    time_t last_removed;
+    time_t last_removed = 0;
     int i;
 
     if (!message->ignore) ptrarray_sort(deleted, &rmail_cmp);
@@ -2142,7 +2139,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     hash_table msgids = HASH_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_mail(%s, %ld)",
+    syslog(restore.log_level, "jmap_backup_restore_mail(%s, " TIME_T_FMT ")",
            inbox, restore.cutoff);
 
     struct mail_rock mrock = {

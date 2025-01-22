@@ -124,14 +124,10 @@ struct dbengine {
     char *data;         /* allocated buffer for fetched data */
 
     struct txn txn;     /* transaction associated with this db handle */
-
-    /* sorting function */
-    int (*compar) (const void *s1, const void *s2);
 };
 
 static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *tid);
 static int compar_qr(const void *v1, const void *v2);
-static int compar_qr_mbox(const void *v1, const void *v2);
 
 /* hash the prefix - either with or without 'user.' part */
 static char name_to_hashchar(const char *name, int isprefix)
@@ -349,8 +345,6 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
         return CYRUSDB_IOERROR;
     }
 
-    db->compar = (flags & CYRUSDB_MBOXSORT) ? compar_qr_mbox : compar_qr;
-
     *ret = db;
 
     if (mytid) {
@@ -523,17 +517,6 @@ static int compar_qr(const void *v1, const void *v2)
     return strcmp(qr1, qr2);
 }
 
-static int compar_qr_mbox(const void *v1, const void *v2)
-{
-    const char *qr1, *qr2;
-    char qrbuf1[MAX_QUOTA_PATH+1], qrbuf2[MAX_QUOTA_PATH+1];
-
-    qr1 = path_to_qr(*((const char **) v1), qrbuf1);
-    qr2 = path_to_qr(*((const char **) v2), qrbuf2);
-
-    return bsearch_compare_mbox(qr1, qr2);
-}
-
 static void scan_qr_dir(char *quota_path, const char *prefix,
                         strarray_t *pathbuf)
 {
@@ -658,7 +641,7 @@ static int foreach(struct dbengine *db,
 
     /* sort the quotaroots (ignoring paths) */
     if (pathbuf.data)
-        qsort(pathbuf.data, pathbuf.count, sizeof(char *), db->compar);
+        qsort(pathbuf.data, pathbuf.count, sizeof(char *), compar_qr);
 
     for (i = 0; i < pathbuf.count; i++) {
         const char *data, *key;
@@ -890,24 +873,12 @@ static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *ti
     return tid->result;
 }
 
-/* quotalegacy gets compar set at startup, but it's not the same */
-static int mycompar(struct dbengine *db, const char *a, int alen,
-                    const char*b, int blen)
-{
-    if (db->compar == compar_qr_mbox)
-        return bsearch_ncompare_mbox(a, alen, b, blen);
-    else
-        return bsearch_ncompare_raw(a, alen, b, blen);
-}
-
-
 HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
 {
     "quotalegacy",                      /* name */
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,
-    &cyrusdb_generic_sync,
     &cyrusdb_generic_noarchive,
     &cyrusdb_generic_unlink,
 
@@ -923,11 +894,12 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
     &store,
     &delete,
 
+    NULL, /* lock */
     &commit_txn,
     &abort_txn,
 
     NULL,
     NULL,
     NULL,
-    &mycompar
+    &bsearch_ncompare_raw
 };

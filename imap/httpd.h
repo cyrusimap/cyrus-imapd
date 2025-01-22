@@ -418,9 +418,10 @@ typedef void (*txn_done_t)(struct transaction_t *txn);
 
 /* HTTP version flags */
 enum {
-    VER_1_0 =           0,
-    VER_1_1 =           1,
-    VER_2 =             2
+    VER_0_9 =           0,
+    VER_1_0 =           1,
+    VER_1_1 =           2,
+    VER_2 =             3,
 };
 
 /* Connection token flags */
@@ -555,7 +556,6 @@ extern struct namespace_t namespace_cgi;
 extern struct buf serverinfo;
 extern ptrarray_t backend_cached;
 extern struct protstream *httpd_in;
-extern struct protstream *httpd_out;
 extern int https;
 extern sasl_conn_t *httpd_saslconn;
 extern int httpd_timeout;
@@ -585,7 +585,7 @@ extern void free_accept(struct accept *a);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
 extern const char *http_statusline(unsigned ver, long code);
-extern char *httpdate_gen(char *buf, size_t len, time_t t);
+void httpdate_gen(char *buf, size_t len, time_t t) __attribute__((nonnull));
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...)
                       __attribute__((format(printf, 3, 4)));

@@ -127,18 +127,13 @@ static jmap_method_t jmap_emailsubmission_methods_nonstandard[] = {
 
 HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
 {
-    jmap_method_t *mp;
-    for (mp = jmap_emailsubmission_methods_standard; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
+    jmap_add_methods(jmap_emailsubmission_methods_standard, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_SUBMISSION, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (mp = jmap_emailsubmission_methods_nonstandard; mp->name; mp++) {
-            hash_insert(mp->name, mp, &settings->methods);
-        }
+        jmap_add_methods(jmap_emailsubmission_methods_nonstandard, settings);
     }
 }
 
@@ -418,7 +413,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
             "From: %s\r\n"
             "Subject: JMAP EmailSubmission for %s\r\n"
             "Content-Type: message/rfc822\r\n"
-            "Content-Length: %ld\r\n"
+            "Content-Length: " SIZE_T_FMT "\r\n"
             "%s: ", datestr, from,
             json_string_value(json_object_get(emailsubmission, "emailId")),
             msglen, JMAP_SUBMISSION_HDR);
@@ -2059,7 +2054,7 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
     struct sub_match *m1 = (struct sub_match *) *vp1;
     struct sub_match *m2 = (struct sub_match *) *vp2;
     const struct sortcrit *sortcrit = m1->sortcrit;
-    int reverse, ret = 0, i = 0;
+    int reverse = 0, ret = 0, i = 0;
 
     for (i = 0; !ret && sortcrit[i].key != SORT_UID; i++) {
         /* determine sort order from reverse flag bit */

@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_empty_rrule
+{
+    my ($self) = @_;
+
+    my $uid = '39FCA8FE-1D4D-4BB6-8188-3AE90FD66324';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Flexibits Inc./Fantastical for iOS 3.7.21//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:00001229T190358
+DTEND:00001229T190359
+UID:$uid
+TRANSP:OPAQUE
+CREATED:20230907T165713Z
+SEQUENCE:0
+X-APPLE-TRAVEL-ADVISORY-BEHAVIOR:AUTOMATIC
+RRULE:
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent($uid, $ical);
+    $self->assert_not_null($event);
+    $self->assert_null($event->{recurrenceRules});
+}

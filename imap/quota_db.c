@@ -68,7 +68,7 @@
 
 #define QDB config_quota_db
 
-HIDDEN struct db *qdb;
+static struct db *qdb;
 
 /* skanky reuse of mboxname locks.  Ideally we would rename
  * them to something more general and use them elsewhere */
@@ -171,7 +171,7 @@ static int quota_parseval(const char *data, size_t datalen,
 
     /* new dlist format */
     if (data[0] == '%') {
-        if (dlist_parsemap(&dl, 0, 0, data, datalen))
+        if (dlist_parsemap(&dl, 0, data, datalen))
             goto out;
 
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
@@ -370,6 +370,7 @@ struct quota_foreach_t {
     quotaproc_t *proc;
     void *rock;
     struct txn **tid;
+    unsigned use_conv : 1;
 };
 
 static int do_onequota(void *rock,
@@ -388,6 +389,9 @@ static int do_onequota(void *rock,
 
     /* XXX - error if not parsable? */
     if (datalen && !quota_parseval(data, datalen, &quota, iswrite)) {
+        if (fd->use_conv) {
+            quota_read_withconversations(&quota);
+        }
         r = fd->proc(&quota, fd->rock);
     }
 
@@ -398,10 +402,10 @@ static int do_onequota(void *rock,
 }
 
 EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
-                  void *rock, struct txn **tid)
+                           void *rock, struct txn **tid, unsigned flags)
 {
     int r;
-    char *search = prefix ? (char *)prefix : "";
+    const char *search = prefix ? prefix : "";
     struct quota_foreach_t foreach_d;
 
     init_internal();
@@ -409,9 +413,10 @@ EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
     foreach_d.proc = proc;
     foreach_d.rock = rock;
     foreach_d.tid = tid;
+    foreach_d.use_conv = !!(flags & QUOTA_USE_CONV);
 
     r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
-                     do_onequota, &foreach_d, tid);
+                        do_onequota, &foreach_d, tid);
 
     return r;
 }
@@ -692,7 +697,7 @@ static void done_cb(void*rock __attribute__((unused)))
 
 static void init_internal() {
     if (!quota_initialized) {
-        quotadb_init(0);
+        quotadb_init();
         quota_initialized = 1;
     }
     if (!quota_dbopen) {
@@ -701,11 +706,8 @@ static void init_internal() {
 }
 
 /* must be called after cyrus_init */
-EXPORTED void quotadb_init(int myflags)
+EXPORTED void quotadb_init(void)
 {
-    if (myflags & QUOTADB_SYNC) {
-        cyrusdb_sync(QDB);
-    }
     cyrus_modules_add(done_cb, NULL);
 }
 
@@ -713,7 +715,6 @@ EXPORTED void quotadb_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
-    int flags = CYRUSDB_CREATE;
 
     if (!fname)
         fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
@@ -724,7 +725,7 @@ EXPORTED void quotadb_open(const char *fname)
         fname = tofree;
     }
 
-    ret = cyrusdb_open(QDB, fname, flags, &qdb);
+    ret = cyrusdb_open(QDB, fname, CYRUSDB_CREATE, &qdb);
     if (ret != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
                cyrusdb_strerror(ret));

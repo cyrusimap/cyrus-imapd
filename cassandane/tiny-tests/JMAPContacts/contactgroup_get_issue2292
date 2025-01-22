@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_contactgroup_get_issue2292
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1
 {
     my ($self) = @_;
 

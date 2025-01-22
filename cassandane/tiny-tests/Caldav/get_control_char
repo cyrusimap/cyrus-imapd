@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_get_control_char
-    :min_version_3_9 :needs_component_httpd :needs_ical_ctrl :MagicPlus
+    :min_version_3_9 :needs_ical_ctrl :MagicPlus
 {
     my ($self) = @_;
 

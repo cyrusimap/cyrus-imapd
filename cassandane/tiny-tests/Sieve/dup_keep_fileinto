@@ -8,7 +8,6 @@ use Cassandane::Tiny;
 # tested for here.
 
 sub test_dup_keep_fileinto
-    :needs_component_sieve
 {
     my ($self) = @_;
 

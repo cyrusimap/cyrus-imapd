@@ -1,0 +1,21 @@
+Description:
+
+The new `sieve_mdn_original_recipient_header` allows an install to get the
+original recipient from a header other than Original-Recipient.
+
+
+Config changes:
+
+This adds `sieve_mdn_original_recipient_header`, a string option which, if set,
+will cause Cyrus to look for the original recipient of Sieve-rejected messages
+somewhere other than the `Original-Recipient` field of the messages.
+
+
+Upgrade instructions:
+
+No action required.
+
+
+GitHub issue:
+
+None.

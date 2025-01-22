@@ -97,6 +97,7 @@ static void my_carddav_init(struct buf *serverinfo);
 static int my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
+static unsigned long carddav_allow_cb(struct request_target_t*);
 
 static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                               const char **resultstr);
@@ -228,13 +229,13 @@ static const struct prop_entry carddav_props[] = {
       propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
-      propfind_fromhdr, NULL, "Content-Language" },
+      propfind_fromhdr, NULL, (void *) "Content-Language" },
     { "getcontentlength", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
-      propfind_getcontenttype, NULL, "Content-Type" },
+      propfind_getcontenttype, NULL, (void *) "Content-Type" },
     { "getetag", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_getetag, NULL, NULL },
@@ -246,7 +247,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_lockdisc, NULL, NULL },
     { "resourcetype", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PRESCREEN,
-      propfind_restype, proppatch_restype, "addressbook" },
+      propfind_restype, proppatch_restype, (void *) "addressbook" },
     { "supportedlock", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
       propfind_suplock, NULL, NULL },
@@ -257,7 +258,7 @@ static const struct prop_entry carddav_props[] = {
       propfind_reportset, NULL, (void *) carddav_reports },
     { "supported-method-set", NS_DAV,
       PROP_COLLECTION | PROP_RESOURCE,
-      propfind_methodset, NULL, (void *) &calcarddav_allow_cb },
+      propfind_methodset, NULL, (void *) carddav_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "owner", NS_DAV,
@@ -306,7 +307,7 @@ static const struct prop_entry carddav_props[] = {
     /* WebDAV Sync (RFC 6578) properties */
     { "sync-token", NS_DAV,
       PROP_COLLECTION,
-      propfind_sync_token, NULL, SYNC_TOKEN_URL_SCHEME },
+      propfind_sync_token, NULL, (void *) SYNC_TOKEN_URL_SCHEME },
 
     /* WebDAV Sharing (draft-pot-webdav-resource-sharing) properties */
     { "share-access", NS_DAV,
@@ -339,7 +340,7 @@ static const struct prop_entry carddav_props[] = {
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
       PROP_ALLPROP | PROP_COLLECTION,
-      propfind_sync_token, NULL, "" },
+      propfind_sync_token, NULL, (void *) "" },
 
     /* Apple Push Notifications Service properties */
     { "push-transports", NS_CS,
@@ -582,6 +583,14 @@ static void my_carddav_shutdown(void)
     carddav_done();
 }
 
+/* Determine allowed methods in CardDAV namespace */
+static unsigned long carddav_allow_cb(struct request_target_t *tgt) {
+    unsigned long allow = calcarddav_allow_cb(tgt);
+    if (tgt->collection && !tgt->resource && !strcmp(tgt->collection, DEFAULT_ADDRBOOK "/"))
+        allow &= ~ALLOW_DELETE;
+
+    return allow;
+}
 
 /* Parse request-target path in CardDAV namespace */
 static int carddav_parse_path(const char *path, struct request_target_t *tgt,
@@ -710,7 +719,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
     r = dav_store_resource(txn, buf_cstring(buf), 0,
@@ -833,7 +842,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
@@ -1031,6 +1040,7 @@ static int export_addressbook(struct transaction_t *txn,
 struct addr_info {
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
+    char* description;
     unsigned flags;
 };
 
@@ -1038,7 +1048,8 @@ enum {
     ADDR_IS_DEFAULT =    (1<<0),
     ADDR_CAN_DELETE =    (1<<1),
     ADDR_CAN_ADMIN =     (1<<2),
-    ADDR_IS_PUBLIC =     (1<<3)
+    ADDR_IS_PUBLIC =     (1<<3),
+    ADDR_CAN_PROPCOL =   (1<<4)
 };
 
 struct list_addr_rock {
@@ -1057,7 +1068,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     int r, rights, any_rights = 0;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    struct buf displayname = BUF_INITIALIZER;
+    struct buf temp = BUF_INITIALIZER;
 
     if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
 
@@ -1073,9 +1084,9 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
 
     /* Lookup DAV:displayname */
     r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
-                                    httpd_userid, &displayname);
+                                    httpd_userid, &temp);
     /* fall back to the last part of the mailbox name */
-    if (r || !displayname.len) buf_setcstr(&displayname, shortname);
+    if (r || !temp.len) buf_setcstr(&temp, shortname);
 
     /* Make sure we have room in our array */
     if (lrock->len == lrock->alloc) {
@@ -1087,7 +1098,11 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     /* Add our addressbook to the array */
     addr = &lrock->addr[lrock->len];
     strlcpy(addr->shortname, shortname, MAX_MAILBOX_NAME);
-    strlcpy(addr->displayname, buf_cstring(&displayname), MAX_MAILBOX_NAME);
+    strlcpy(addr->displayname, buf_cstring(&temp), MAX_MAILBOX_NAME);
+    buf_reset(&temp);
+    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_CARDDAV ">addressbook-description",
+                                httpd_userid, &temp);
+    addr->description = buf_release(&temp);
     addr->flags = 0;
 
     /* Is this the default addressbook? */
@@ -1104,6 +1119,9 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     if (rights & DACL_ADMIN) {
         addr->flags |= ADDR_CAN_ADMIN;
     }
+    if (rights & DACL_PROPCOL) {
+        addr->flags |= ADDR_CAN_PROPCOL;
+    }
 
     /* Is this addressbook public? */
     if (mbentry->acl) {
@@ -1119,7 +1137,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     lrock->len++;
 
 done:
-    buf_free(&displayname);
+    buf_free(&temp);
 
     return 0;
 }
@@ -1140,13 +1158,13 @@ static int list_addressbooks(struct transaction_t *txn)
     char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
-    const char *etag, *base_path = txn->req_tgt.path;
+    const char *etag;
     unsigned level = 0, i;
     struct buf *body = &txn->resp_body.payload;
     struct list_addr_rock lrock;
     const char *proto = NULL;
     const char *host = NULL;
-#include "imap/http_carddav_js.h"
+#include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
     snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
@@ -1201,8 +1219,8 @@ static int list_addressbooks(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Addressbooks");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
-    buf_printf(body, (const char *) http_carddav_js,
-               CYRUS_VERSION, http_carddav_js_len);
+    buf_printf(body, http_cal_abook_admin_js,
+               CYRUS_VERSION, http_cal_abook_admin_js_len);
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
@@ -1239,9 +1257,8 @@ static int list_addressbooks(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td></td>");
         buf_printf_markup(body, level,
                           "<td><br><input type=button value='Create'"
-                          " onclick=\"createAddressbook('%s')\">"
-                          " <input type=reset></td>",
-                          base_path);
+                          " onclick='createCollection()'>"
+                          " <input type=reset></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, --level, "</table>");
@@ -1267,10 +1284,16 @@ static int list_addressbooks(struct transaction_t *txn)
 
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
+    buf_printf_markup(body, level, "<thead>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>HTTPS link</th><th>Actions</th><th>Public</th></tr>"
+);
+    buf_printf_markup(body, level, "</thead><tbody>");
+    charset_t utf8 = charset_lookupname("utf-8");
 
     /* Add available addressbooks with action items */
     for (i = 0; i < lrock.len; i++) {
         struct addr_info *addr = &lrock.addr[i];
+        char *temp = charset_convert(addr->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -1279,39 +1302,59 @@ static int list_addressbooks(struct transaction_t *txn)
         }
 
         /* Addressbook name */
-        buf_printf_markup(body, level++, "<tr>");
-        buf_printf_markup(body, level, "<td>%s%s%s",
-                          (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
-                          addr->displayname,
-                          (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+        buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, addr->shortname);
+        if (addr->flags & ADDR_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                              temp,
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "", i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
+                              temp,
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+        free(temp);
+
+        /* Addressbook description */
+        temp = charset_convert(addr->description, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        free(addr->description);
+        if (addr->flags & ADDR_CAN_PROPCOL)
+            buf_printf_markup(body, level, "<td>%s</td><td><button onclick='changeDescription(%i)'>✎</button></td>",
+                              temp, i);
+        else
+            buf_printf_markup(body, level, "<td colspan='2'>%s</td>", temp);
+        free(temp);
 
         /* Download link */
         buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
-                          base_path, addr->shortname);
+                          txn->req_tgt.path, addr->shortname);
 
         /* Delete button */
-        buf_printf_markup(body, level,
-                          "<td><input type=button%s value='Delete'"
-                          " onclick=\"deleteAddressbook('%s%s', '%s')\"></td>",
-                          !(addr->flags & ADDR_CAN_DELETE) ? " disabled" : "",
-                          base_path, addr->shortname, addr->displayname);
+        if (addr->flags & ADDR_IS_DEFAULT)
+            buf_printf_markup(body, level, "<td>Default Addressbook</td>");
+        else if (addr->flags & ADDR_CAN_DELETE)
+            buf_printf_markup(body, level,
+                              "<td><input type=button value='Delete'"
+                              " onclick='deleteCollection(%i)'></td>", i);
+        else
+            buf_printf_markup(body, level, "<td></td>");
 
         /* Public (shared) checkbox */
         buf_printf_markup(body, level,
-                          "<td><input type=checkbox%s%s name=share"
-                          " onclick=\"shareAddressbook('%s%s', this.checked)\">"
+                          "<td><input type=checkbox%s%s"
+                          " onclick='share(%i, this.checked)'>"
                           "Public</td>",
-                          !(addr->flags & ADDR_CAN_ADMIN) ? " disabled" : "",
-                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "",
-                          base_path, addr->shortname);
+                          (addr->flags & ADDR_CAN_ADMIN) ? "" : " disabled",
+                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "", i);
 
         buf_printf_markup(body, --level, "</tr>");
     }
 
+    charset_free(&utf8);
     free(lrock.addr);
 
     /* Finish list */
-    buf_printf_markup(body, --level, "</table>");
+    buf_printf_markup(body, --level, "</tbody></table>");
 
     /* Finish HTML */
     buf_printf_markup(body, --level, "</body>");
@@ -2312,7 +2355,8 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         for (node = xmlFirstElementChild(prop); node;
              node = xmlNextElementSibling(node)) {
 
-            if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "prop") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
                 xmlChar *name = xmlGetProp(node, BAD_CAST "name");
                 if (name) {
                     strarray_add_case(partial, (const char *) name);
@@ -2852,7 +2896,8 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
     for (node = xmlFirstElementChild(root); node && !error->precond;
          node = xmlNextElementSibling(node)) {
 
-        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")) {
+        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter") &&
+            !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
             struct prop_filter *prop = NULL;
 
             dav_parse_propfilter(node, &prop, &profile, error);
@@ -2925,7 +2970,8 @@ static int report_card_query(struct transaction_t *txn,
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
+            if (!xmlStrcmp(node->name, BAD_CAST "filter") &&
+                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
                 ret = parse_cardfilter(node, &cardfilter, &txn->error);
                 if (ret) goto done;
                 else fctx->filter = apply_cardfilter;

@@ -108,7 +108,6 @@ static int fixquota_dopass(char *domain, char **roots, int nroots,
                            mboxlist_cb *pass, int isuser);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
-static int (*compar)(const char *s1, const char *s2);
 
 #define QUOTAGROW 300
 
@@ -201,13 +200,11 @@ int main(int argc,char **argv)
         fatal(error_message(r), EX_CONFIG);
     }
 
-    compar = strcmp;
-
     /*
      * Lock mailbox list to prevent mailbox creation/deletion
      * during work
      */
-    mboxlist_init(0);
+    mboxlist_init();
     mboxlist_open(NULL);
 
     quota_changelock();
@@ -407,7 +404,7 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-        r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
+      r = quota_foreach(buf, fixquota_addroot, NULL, NULL, 0);
         if (r) {
             errmsg(IMAP_IOERROR, "failed building quota list for '%s'", buf);
         }
@@ -422,13 +419,13 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
             char *res = mboxname_user_mbox(roots[i], NULL);
             strlcpy(buf, res, sizeof(buf));
             free(res);
-            r = quota_foreach(buf, fixquota_addroot, roots[i], NULL);
+            r = quota_foreach(buf, fixquota_addroot, roots[i], NULL, 0);
         }
         else {
             char *intname = mboxname_from_external(roots[i], &quota_namespace, NULL);
             strlcpy(tail, intname, sizeof(buf) - domainlen);
             free(intname);
-            r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
+            r = quota_foreach(buf, fixquota_addroot, NULL, NULL, 0);
         }
 
         if (r) {
@@ -451,7 +448,7 @@ static int findroot(const char *name, int *thisquota)
 
         /* have we already passed the name, then there can
          * be no further matches */
-        if (compar(root, name) > 0)
+        if (strcmp(root, name) > 0)
             break;
 
         /* is the mailbox within this root? */

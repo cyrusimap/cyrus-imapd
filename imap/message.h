@@ -268,9 +268,16 @@ enum message_format
     MESSAGE_TRIM=               (1<<8),
 
     /* This flag can be OR'd into the format argument to request that
-     * only the last field of the given name is returned.  Normally only
-     * the first is returned, which is faster. */
+     * only the last field of the given name is returned
+     * (by parsing the header block top to bottom).
+     * Normally ALL the values of the named header are returned. */
     MESSAGE_LAST=               (1<<9),
+
+    /* This flag can be OR'd into the format argument to request that
+     * only the first field of the given name is returned
+     * (by parsing the header block top to bottom).
+     * Normally ALL the values of the named header are returned. */
+    MESSAGE_FIRST=              (1<<10),
 };
 
 enum message_indexflags
@@ -289,6 +296,7 @@ extern message_t *message_new_from_index(struct mailbox *,
                                          const struct index_record *,
                                          uint32_t msgno,
                                          uint32_t indexflags);
+__attribute__((malloc, nonnull, returns_nonnull, warn_unused_result))
 extern message_t *message_new_from_filename(const char *filename);
 extern void message_set_from_data(const char *base, size_t len,
                                   message_t *m);
@@ -379,7 +387,9 @@ extern const struct message_guid *msg_guid(const message_t *m);
 /* Find a message-id looking thingy in a string.  Returns a pointer to the
  * alloc'd id and the remaining string is returned in the **loc parameter.
  */
-extern char *message_iter_msgid(char *str, char **rem);
+#define MESSAGE_ITER_MSGID_FLAG_DEFAULT                  (0)
+#define MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET       (1<<0)
+extern char *message_iter_msgid(char *str, unsigned flags, char **rem);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 

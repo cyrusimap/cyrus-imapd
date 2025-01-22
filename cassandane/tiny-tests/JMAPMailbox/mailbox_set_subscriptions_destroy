@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_subscriptions_destroy
-    :min_version_3_1 :needs_component_jmap :NoAltNameSpace
+    :min_version_3_1 :NoAltNameSpace
 {
     my ($self) = @_;
 

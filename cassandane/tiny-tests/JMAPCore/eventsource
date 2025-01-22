@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_eventsource
+    :min_version_3_5 :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $http = $self->{instance}->get_service("http");
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+    my $url = $session->{eventSourceUrl};
+    $self->assert_not_null($url);
+
+    $self->assert_num_equals(1, $url =~ s/\{types\}/Email/g);
+    $self->assert_num_equals(1, $url =~ s/\{closeafter\}/state/g);
+    $self->assert_num_equals(1, $url =~ s/\{ping\}/0/g);
+
+    if (not $url =~ /^http/) {
+        $url = "http://".$http->host().":".$http->port().$url;
+    }
+
+    $RawRequest->{headers}->{'Last-Event-Id'} = '0';
+    $RawResponse = $jmap->ua->get($url, $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    $self->assert_str_equals('text/event-stream',
+                             $RawResponse->{headers}{'content-type'});
+    $self->assert_null($RawResponse->{headers}{'content-length'});
+
+    my %event = $RawResponse->{content} =~ /^(\w+): ?(.*)$/mg;
+    $self->assert_not_null($event{id});
+    $self->assert_str_equals('state', $event{event});
+
+    my $data = eval { decode_json($event{data}) };
+    $self->assert_not_null($data);
+    $self->assert_str_equals('StateChange', $data->{'@type'});
+    $self->assert_not_null($data->{changed});
+    $self->assert_not_null($data->{changed}->{cassandane});
+    $self->assert_not_null($data->{changed}->{cassandane}->{Email});
+}

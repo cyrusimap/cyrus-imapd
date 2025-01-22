@@ -50,10 +50,6 @@
 #include <string.h>
 #include <netdb.h>
 #include <sys/types.h>
-#ifdef HAVE_KRB
-#include <netinet/in.h>
-#include <krb.h>
-#endif
 #include <zephyr/zephyr.h>
 #include <syslog.h>
 
@@ -81,7 +77,6 @@ char* notify_zephyr(const char *class, const char *priority,
     char myhost[HOST_NAME_MAX], *mysender = NULL;
     struct buf msgbody = BUF_INITIALIZER;
     char *lines[2];
-    char *mykrbhost = NULL;
 
     if (!*user) return xstrdup("NO zephyr recipient not specified");
 
@@ -96,10 +91,6 @@ char* notify_zephyr(const char *class, const char *priority,
     }
     myhost[sizeof(myhost)-1] = '\0';
 
-#ifdef HAVE_KRB
-    mykrbhost = krb_get_phost(myhost);
-#endif
-
     if (*mailbox) {
         buf_printf(&msgbody, "You have new mail in %s.\n\n", mailbox);
     }
@@ -112,22 +103,19 @@ char* notify_zephyr(const char *class, const char *priority,
     lines[0] = myhost;
     lines[1] = (char *)buf_cstring(&msgbody);
 
-    mysender = strconcat("imap",
-                         mykrbhost ? "." : "",
-                         mykrbhost ? mykrbhost : "",
-                         "@",
+    mysender = strconcat("imap@",
                          ZGetRealm(),
                          (char *)NULL);
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
-    notice.z_class = *class ? (char *) class : MAIL_CLASS;
+    notice.z_class = *class ? (char *) class : (char *) MAIL_CLASS;
     notice.z_class_inst = *priority ? (char *) priority :
-        *mailbox ? (char *) mailbox : "INBOX";
+        *mailbox ? (char *) mailbox : (char *) "INBOX";
 
-    notice.z_opcode = "";
+    notice.z_opcode = (char *) "";
     notice.z_sender = mysender;
-    notice.z_default_format = "From Post Office $1:\n$2";
+    notice.z_default_format = (char *) "From Post Office $1:\n$2";
 
     notice.z_recipient = (char *) user;
 

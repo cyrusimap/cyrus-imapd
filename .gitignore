@@ -29,10 +29,6 @@ Makefile.bak
 Makefile.old
 aclocal.m4
 autom4te.cache/
-backup/backupd
-backup/ctl_backups
-backup/cyr_backup
-backup/restore
 bench/cyrdbbench
 cmulocal/libtool.m4
 cmulocal/ltoptions.m4
@@ -61,6 +57,7 @@ cunit/unit
 debian/
 depcomp
 doc/examples/imapd_conf/imapd.conf.sample
+doc/examples/libcyrus/example_libcyrus_min
 doc/html/
 doc/legacy/murder.png
 doc/legacy/netnews.png
@@ -100,8 +97,7 @@ imap/dav_reconstruct
 imap/deliver
 imap/fetchnews
 imap/fud
-imap/http_caldav_js.h
-imap/http_carddav_js.h
+imap/http_cal_abook_admin_js.h
 imap/http_err.c
 imap/http_err.h
 imap/httpd

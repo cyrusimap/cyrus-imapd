@@ -102,10 +102,12 @@ struct scan_rock {
 };
 
 /* globals for callback functions */
-int disinfect = 0;
-int email_notification = 0;
-struct infected_mbox *public = NULL;
-struct infected_mbox *user = NULL;
+static int disinfect = 0;
+static int email_notification = 0;
+#if 0
+static struct infected_mbox *public = NULL;
+#endif
+static struct infected_mbox *user = NULL;
 
 static int verbose = 0;
 
@@ -234,7 +236,7 @@ void clamav_destroy(void *state)
     free(st);
 }
 
-struct scan_engine engine =
+static struct scan_engine engine =
 { "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy };
 
 #elif defined(HAVE_SOME_UNKNOWN_VIRUS_SCANNER)
@@ -242,12 +244,12 @@ struct scan_engine engine =
 
 #else
 /* NO configured virus scanner */
-struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
+static struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
 #endif
 
 
 /* forward declarations */
-int usage(char *name);
+void usage(char *name) __attribute__((noreturn));
 int scan_me(struct findall_data *, void *);
 unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
@@ -393,7 +395,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-int usage(char *name)
+void usage(char *name)
 {
     printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ] [-v]\n"
            "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
@@ -487,7 +489,7 @@ int scan_me(struct findall_data *data, void *rock)
     srock->i_mbox = i_mbox;
 
     if (verbose) printf("Scanning %s...\n", name);
-    mailbox_expunge(mailbox, NULL, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE);
+    mailbox_expunge(mailbox, NULL, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE, /*limit*/0);
     if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
     else mailbox_close(&mailbox);
 

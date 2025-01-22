@@ -85,7 +85,7 @@ require no server-side processing).
 In the case of IMAP, a commonly used IMAP proxy is NGINX. However,
 NGINX can proxy John's connection to only one backend at a time. NGINX
 allows an external script to respond with a target backend address
-based on the authentication of the user [#]_.
+based on the authentication of the user.
 
 As such, NGINX is a socket proxy, and not a fully-featured
 application proxy:
@@ -376,10 +376,6 @@ Back to :ref:`imap-features`
 
 .. [#]
 
-    See also: :ref:`imap-howto-nginx-proxy`.
-
-.. [#]
-
     More literally speaking, John and Jane can *share*, just neither can
     make use of the privilege.
 
@@ -387,13 +383,3 @@ Back to :ref:`imap-features`
 
     Including but not limited to ``SELECT``, ``UID MOVE``, ``RENAME``,
     etc.
-
-.. glossary::
-
-    frontend
-	  the user interface
-
-.. glossary::
-
-	backend
-	  the server components

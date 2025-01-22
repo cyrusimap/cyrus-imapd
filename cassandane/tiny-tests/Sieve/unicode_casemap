@@ -2,8 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_unicode_casemap
-    :min_version_3_9
-    :needs_component_sieve :needs_component_sieve :NoAltNameSpace :NoMunge8bit
+    :min_version_3_9 :NoAltNameSpace :NoMunge8bit
 {
     my ($self) = @_;
 
@@ -23,7 +22,7 @@ sub test_unicode_casemap
     $imaptalk->create($contains)
          or die "Cannot create $contains: $@";
     $imaptalk->create($matches)
-         or die "Cannot create $match: $@";
+         or die "Cannot create $matches: $@";
     $imaptalk->create($regex)
          or die "Cannot create $regex: $@";
 

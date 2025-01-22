@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_parse_inmemory_blob
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -26,7 +26,7 @@ EOF
     # XXX: can't use a result reference in array
     my $blobId = 'G67501cd2e1eaaf65d25e6f3b49554d2193f06ee8';
 
-    $res = $jmap->CallMethods([
+    my $res = $jmap->CallMethods([
         ['Blob/upload', {
             create => {
                 b1 => {

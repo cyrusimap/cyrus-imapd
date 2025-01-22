@@ -70,12 +70,15 @@ sub new
                  vcard_max_size => 100000,
                  jmap_nonstandard_extensions => 'yes');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
         services => [ 'imap', 'http' ]
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up

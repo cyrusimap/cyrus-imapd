@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_sync_log_mailbox_with_spaces
-    :DelayedDelete :NoStartInstances :needs_component_replication
+    :DelayedDelete :NoStartInstances
 {
     my ($self) = @_;
 

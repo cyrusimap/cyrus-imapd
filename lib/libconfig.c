@@ -91,6 +91,7 @@ EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
 EXPORTED toggle_debug_cb config_toggle_debug_cb = NULL;
 EXPORTED int config_debug_slowio = 0;
+EXPORTED int config_fatals_abort = 0;
 
 static int config_loaded;
 
@@ -556,21 +557,6 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
     return dir;
 }
 
-EXPORTED const char *config_backupstagingpath(void)
-{
-    static const char *staging_path = NULL;
-
-    if (staging_path) return staging_path;
-
-    staging_path = config_getstring(IMAPOPT_BACKUP_STAGING_PATH);
-
-    if (!staging_path)
-        staging_path = strconcat(config_getstring(IMAPOPT_TEMP_PATH),
-                                 "/backup", NULL);
-
-    return staging_path;
-}
-
 static void config_ispartition(const char *key,
                                const char *val __attribute__((unused)),
                                void *rock)
@@ -663,6 +649,7 @@ EXPORTED void config_reset(void)
     config_debug = 0;
     config_toggle_debug_cb = NULL;
     config_debug_slowio = 0;
+    config_fatals_abort = 0;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -860,7 +847,6 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     /* create an array of calendar-user-address-set domains */
     cua_domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
     if (!cua_domains) cua_domains = config_defdomain;
-    if (!cua_domains) cua_domains = config_servername;
 
     tok_init(&tok, cua_domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
     while ((domain = tok_next(&tok)))
@@ -893,6 +879,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     /* do we want artificially-slow I/O ops */
     config_debug_slowio = config_getswitch(IMAPOPT_DEBUG_SLOWIO);
+
+    /* do we want to abort() on fatal errors */
+    config_fatals_abort = config_getswitch(IMAPOPT_FATALS_ABORT);
 }
 
 #define GROWSIZE 4096
@@ -1171,13 +1160,19 @@ static void config_read_file(const char *filename)
                    as one value unless told otherwise */
 
                 if (imapopts[opt].t == OPT_ENUM) {
-                    /* normalize on/off values */
+                    /* normalize on/off values
+                     * we don't write to p in this section of the parser, so
+                     * this is safe, but if that ever changes it'll crash!
+                     */
                     if (!strcmp(p, "1") || !strcmp(p, "yes") ||
-                        !strcmp(p, "t") || !strcmp(p, "true")) {
-                        p = "on";
-                    } else if (!strcmp(p, "0") || !strcmp(p, "no") ||
-                               !strcmp(p, "f") || !strcmp(p, "false")) {
-                        p = "off";
+                        !strcmp(p, "t") || !strcmp(p, "true"))
+                    {
+                        p = (char *) "on";
+                    }
+                    else if (!strcmp(p, "0") || !strcmp(p, "no") ||
+                             !strcmp(p, "f") || !strcmp(p, "false"))
+                    {
+                        p = (char *) "off";
                     }
                 } else if (imapopts[opt].t == OPT_BITFIELD) {
                     /* split the string into separate values */

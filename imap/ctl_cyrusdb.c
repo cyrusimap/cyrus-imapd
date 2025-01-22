@@ -86,10 +86,6 @@
 #include "xstrlcpy.h"
 #include "xunlink.h"
 
-#ifdef ENABLE_BACKUP
-#include "backup/backup.h"
-#endif
-
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
 static struct cyrusdb {
@@ -101,9 +97,6 @@ static struct cyrusdb {
     { FNAME_MBOXLIST,           &config_mboxlist_db,    NULL,   1 },
     { FNAME_QUOTADB,            &config_quota_db,       NULL,   1 },
     { FNAME_GLOBALANNOTATIONS,  &config_annotation_db,  NULL,   1 },
-#ifdef ENABLE_BACKUP
-    { FNAME_BACKUPDB,           &config_backup_db,      NULL,   1 },
-#endif
     { FNAME_DELIVERDB,          &config_duplicate_db,   NULL,   0 },
     { FNAME_TLSSESSIONS,        &config_tls_sessions_db,NULL,   0 },
     { FNAME_PTSDB,              &config_ptscache_db,    NULL,   0 },
@@ -247,10 +240,6 @@ static const char *dbfname(struct cyrusdb *db)
         fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
     else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS))
         fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
-#ifdef ENABLE_BACKUP
-    else if (!strcmp(db->name, FNAME_BACKUPDB))
-        fname = config_getstring(IMAPOPT_BACKUP_DB_PATH);
-#endif
     else if (!strcmp(db->name, FNAME_DELIVERDB))
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
     else if (!strcmp(db->name, FNAME_TLSSESSIONS))
@@ -304,7 +293,7 @@ int main(int argc, char *argv[])
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char *dirname = NULL, *backup1 = NULL, *backup2 = NULL;
     strarray_t files = STRARRAY_INITIALIZER;
-    char *msg = "";
+    const char *msg = "";
     int i, rotated = 0;
 
     /* keep this in alphabetical order */
@@ -394,17 +383,7 @@ int main(int argc, char *argv[])
             break;
 
         case CHECKPOINT:
-            r2 = cyrusdb_sync(*dblist[i].configptr);
-            if (r2) {
-                syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
-                       cyrusdb_strerror(r2));
-                fprintf(stderr,
-                        "ctl_cyrusdb: unable to sync environment\n");
-            }
-
             /* ARCHIVE */
-            r2 = 0;
-
             if (!rotated) {
                 /* rotate the backup directories -- ONE time only */
                 char *file;

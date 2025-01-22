@@ -97,8 +97,9 @@ and included in the release, and do not normally need to be re-built.
     `perl(Pod::POM::View::Restructured)`_,,, "no", "Needed to generate man
     pages. This has to be available to the system-wide perl interpreter, found
     by ``which``."
-    `python(GitPython)`_,,, "no", "Needed for building the documentation."
-    `python(Sphinx)`_,,, "no", "Needed for building the documentation."
+    `python(GitPython)`_,python3-git,, "no", "Needed for building the documentation."
+    `python(sphinx_rtd_theme)`_,python3-sphinx-rtd-theme,, "no", "Needed for building the documentation."
+    `python(Sphinx)`_,python3-sphinx,, "no", "Needed for building the documentation."
     `transfig`_, transfig, transfig, "no", "Also known as fig2dev, transfig is
     an artifact from the old days, and is only used for generation of a couple
     of png files in the legacy documentation (doc/legacy/murder.png and
@@ -117,10 +118,10 @@ SASL Authentication
     to pass Cyrus IMAP's PLAIN authentication unit tests."
     `sasl binaries`_, sasl2-bin, sasl2-bin, "no", "Administration tools for
     managing SASL."
-    `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "yes/no", "Development
+    `Kerberos`_, libsasl2-modules-gssapi-mit, krb5-devel, "no", "Development
     headers required to enable Kerberos v5 authentication capabilities, also
     known as the authentication mechanism *GSSAPI*. Configure option:
-    ``--with-krbimpl=mit``."
+    ``--with-gss_impl=mit``."
 
 Alternate database formats
 ##########################
@@ -224,6 +225,7 @@ Other
 .. _perl-devel: http://www.perl.org/
 .. _postgresql: http://www.postgresql.org/
 .. _python(GitPython): https://github.com/gitpython-developers/GitPython
+.. _python(sphinx_rtd_theme): https://github.com/readthedocs/sphinx_rtd_theme
 .. _python(Sphinx): https://www.sphinx-doc.org/
 .. _shapelib: http://shapelib.maptools.org
 .. _libsrs2: https://www.libsrs2.org/

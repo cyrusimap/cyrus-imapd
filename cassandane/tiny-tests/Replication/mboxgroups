@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_mboxgroups
-    :needs_component_replication :Mboxgroups :ReverseACLs
+    :Mboxgroups :ReverseACLs
 {
     my ($self) = @_;
 

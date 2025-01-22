@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test empty mailbox gets overwritten
 #
 sub test_splitbrain_different_uniqueid_unused
-    :min_version_3_5 :needs_component_replication :NoReplicaonly
+    :min_version_3_5 :NoReplicaonly
 {
     my ($self) = @_;
 

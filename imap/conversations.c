@@ -2267,7 +2267,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
     if (add) {
         struct buf val = BUF_INITIALIZER;
         if (state->folders_byname) {
-            buf_putc(&val, 0x80 | CONV_GUIDREC_BYNAME_VERSION);
+            buf_putc(&val, (char) (0x80 | CONV_GUIDREC_BYNAME_VERSION));
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
@@ -2275,12 +2275,12 @@ static int conversations_guid_setitem(struct conversations_state *state,
         }
         /* When bumping the G value version, make sure to update _guid_cb */
         else {
-            buf_putc(&val, 0x80 | CONV_GUIDREC_VERSION);
+            buf_putc(&val, (char) (0x80 | CONV_GUIDREC_VERSION));
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
             buf_appendbit64(&val, (bit64)internaldate);
-            buf_appendbit64(&val, basecid);
+            buf_appendbit64(&val, basecid == cid ? 0 : basecid);
         }
 
         r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
@@ -2450,12 +2450,14 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     if (old && new) {
         /* we're always moving forwards */
-        assert(old->uid == new->uid);
-        assert(old->modseq <= new->modseq);
+        if (imaply_strict) {
+            assert(old->uid == new->uid);
+            assert(old->modseq <= new->modseq);
 
-        /* this flag cannot go away */
-        if (old->internal_flags & FLAG_INTERNAL_EXPUNGED)
+            /* this flag cannot go away */
+            if (old->internal_flags & FLAG_INTERNAL_EXPUNGED)
                 assert(new->internal_flags & FLAG_INTERNAL_EXPUNGED);
+        }
 
         /* we're changing the CID for any reason at all, treat as
          * a removal and re-add, so cache gets parsed and msgids
@@ -3246,6 +3248,61 @@ EXPORTED int conversations_undump(struct conversations_state *state, FILE *fp)
     return cyrusdb_undumpfile(state->db, fp, &state->txn);
 }
 
+static int zeromodseq_b_cb(void *rock,
+                           const char *key,
+                           size_t keylen,
+                           const char *val,
+                           size_t vallen)
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    conversation_t *conv = conversation_new();
+    int r;
 
+    r = conversation_parse(val, vallen, conv, CONV_WITHALL);
+    if (r) goto done;
+
+    /* lower the modseqs */
+    if (conv->modseq > 1 || conv->createdmodseq > 1) {
+        conv->modseq = 1;
+        conv->createdmodseq = 1;
+        r = conversation_store(state, key, keylen, conv);
+    }
+
+done:
+    conversation_free(conv);
+    return r;
+}
+
+static int zeromodseq_f_cb(void *rock,
+                           const char *key,
+                           size_t keylen,
+                           const char *val,
+                           size_t vallen)
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    conv_status_t status;
+    int r;
+
+    r = conversation_parsestatus(val, vallen, &status);
+    if (r) return r;
+
+    if (status.threadmodseq > 1) {
+        /* reset threadmodseq */
+        status.threadmodseq = 1;
+        r = conversation_storestatus(state, key, keylen, &status);
+    }
+
+    return r;
+}
+
+EXPORTED int conversations_zero_modseq(struct conversations_state *state)
+{
+    int r = cyrusdb_foreach(state->db, "B", 1, NULL, zeromodseq_b_cb,
+                        state, &state->txn);
+    if (r) return r;
+    r = cyrusdb_foreach(state->db, "F", 1, NULL, zeromodseq_f_cb,
+                        state, &state->txn);
+    return r;
+}
 
 #undef DB

@@ -331,16 +331,6 @@ EXPORTED void appendattvalue(struct attvaluelist **l,
 }
 
 /*
- * Duplicate the attvaluelist @src to @dst.
- */
-void dupattvalues(struct attvaluelist **dst,
-                  const struct attvaluelist *src)
-{
-    for ( ; src ; src = src->next)
-        appendattvalue(dst, src->attrib, &src->value);
-}
-
-/*
  * Free the attvaluelist 'l'
  */
 EXPORTED void freeattvalues(struct attvaluelist *l)
@@ -456,19 +446,6 @@ EXPORTED void clearentryatt(struct entryattlist **l, const char *entry,
         *pea = ea->next;
         free(ea->entry);
         free(ea);
-    }
-}
-
-/*
- * Duplicate the entryattlist @src to @dst.
- */
-void dupentryatt(struct entryattlist **dst,
-                 const struct entryattlist *src)
-{
-    for ( ; src ; src = src->next) {
-        struct attvaluelist *attvalues = NULL;
-        dupattvalues(&attvalues, src->attvalues);
-        appendentryatt(dst, src->entry, attvalues);
     }
 }
 
@@ -3719,7 +3696,7 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
     strarray_add(valid, "\\Archive");
     strarray_add(valid, "\\Drafts");
     /* strarray_add(valid, "\\Flagged"); -- we don't support virtual folders right now */
-    strarray_add(valid, "\\Important"); // draft-ietf-specialuse-important
+    strarray_add(valid, "\\Important"); // RFC 8457
     strarray_add(valid, "\\Junk");
     strarray_add(valid, "\\Sent");
     strarray_add(valid, "\\Trash");

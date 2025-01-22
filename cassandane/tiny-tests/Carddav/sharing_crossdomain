@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_sharing_crossdomain
     :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs :min_version_3_0
-    :needs_component_httpd
 {
     my ($self) = @_;
 

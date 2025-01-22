@@ -46,6 +46,7 @@
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
+#include <libxml/uri.h>
 
 #include "assert.h"
 #include "bsearch.h"
@@ -388,65 +389,73 @@ static int span_compare_range(icaltime_span *span, icaltime_span *range)
     return 0; /* span overlaps range */
 }
 
-static int icalrecur_compare(struct icalrecurrencetype a,
-                             struct icalrecurrencetype b)
+static int icalrecur_compare(struct icalrecurrencetype *a,
+                             struct icalrecurrencetype *b)
 {
-    int cmp = a.freq - b.freq;
+    int cmp = a->freq - b->freq;
     if (cmp) return cmp;
 
-    cmp = icaltime_compare(a.until, b.until);
+    cmp = icaltime_compare(a->until, b->until);
     if (cmp) return cmp;
 
-    cmp = a.count - b.count;
+    cmp = a->count - b->count;
     if (cmp) return cmp;
 
-    cmp = a.interval - b.interval;
+    cmp = a->interval - b->interval;
     if (cmp) return cmp;
 
-    cmp = a.week_start - b.week_start;
+    cmp = a->week_start - b->week_start;
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_second, b.by_second,
-                 sizeof(a.by_second) / sizeof(a.by_second[0]));
+    cmp = strcasecmpsafe(a->rscale, b->rscale);
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_minute, b.by_minute,
-                 sizeof(a.by_minute) / sizeof(a.by_minute[0]));
+    cmp = a->skip - b->skip;
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_hour, b.by_hour,
-                 sizeof(a.by_hour) / sizeof(a.by_hour[0]));
+#ifdef HAVE_RECUR_BY_REF
+    short i;
+    for (i = 0; i < ICAL_BY_NUM_PARTS; i++) {
+        cmp = a->by[i].size - b->by[i].size;
+        if (cmp) return cmp;
+
+        cmp = memcmp(a->by[i].data, b->by[i].data,
+                     a->by[i].size * sizeof(a->by[i].data[0]));
+        if (cmp) return cmp;
+    }
+#else /* !HAVE_RECUR_BY_REF */
+    cmp = memcmp(a->by_minute, b->by_minute,
+                 sizeof(a->by_minute) / sizeof(a->by_minute[0]));
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_day, b.by_day,
-                 sizeof(a.by_day) / sizeof(a.by_day[0]));
+    cmp = memcmp(a->by_hour, b->by_hour,
+                 sizeof(a->by_hour) / sizeof(a->by_hour[0]));
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_month_day, b.by_month_day,
-                 sizeof(a.by_month_day) / sizeof(a.by_month_day[0]));
+    cmp = memcmp(a->by_day, b->by_day,
+                 sizeof(a->by_day) / sizeof(a->by_day[0]));
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_year_day, b.by_year_day,
-                 sizeof(a.by_year_day) / sizeof(a.by_year_day[0]));
+    cmp = memcmp(a->by_month_day, b->by_month_day,
+                 sizeof(a->by_month_day) / sizeof(a->by_month_day[0]));
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_week_no, b.by_week_no,
-                 sizeof(a.by_week_no) / sizeof(a.by_week_no[0]));
+    cmp = memcmp(a->by_year_day, b->by_year_day,
+                 sizeof(a->by_year_day) / sizeof(a->by_year_day[0]));
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_month, b.by_month,
-                 sizeof(a.by_month) / sizeof(a.by_month[0]));
+    cmp = memcmp(a->by_week_no, b->by_week_no,
+                 sizeof(a->by_week_no) / sizeof(a->by_week_no[0]));
     if (cmp) return cmp;
 
-    cmp = memcmp(a.by_set_pos, b.by_set_pos,
-                 sizeof(a.by_set_pos) / sizeof(a.by_set_pos[0]));
+    cmp = memcmp(a->by_month, b->by_month,
+                 sizeof(a->by_month) / sizeof(a->by_month[0]));
     if (cmp) return cmp;
 
-    cmp = strcasecmpsafe(a.rscale, b.rscale);
+    cmp = memcmp(a->by_set_pos, b->by_set_pos,
+                 sizeof(a->by_set_pos) / sizeof(a->by_set_pos[0]));
     if (cmp) return cmp;
-
-    cmp = a.skip - b.skip;
-    if (cmp) return cmp;
+#endif /* HAVE_RECUR_BY_REF */
 
     return 0;
 }
@@ -454,7 +463,7 @@ static int icalrecur_compare(struct icalrecurrencetype a,
 struct multirrule_iterator_entry {
     struct icaltimetype next;
     icalrecur_iterator *icaliter;
-    struct icalrecurrencetype recur;
+    struct icalrecurrencetype *recur;
 };
 
 struct multirrule_iterator {
@@ -470,7 +479,7 @@ static void multirrule_iterator_fini(struct multirrule_iterator *iter)
     size_t i;
     for (i = 0; i < iter->nentries; i++) {
         icalrecur_iterator_free(iter->entries[i].icaliter);
-        free(iter->entries[i].recur.rscale);
+        icalrecurrencetype_unref(iter->entries[i].recur);
     }
     free(iter->entries);
     iter->entries = NULL;
@@ -479,7 +488,7 @@ static void multirrule_iterator_fini(struct multirrule_iterator *iter)
 }
 
 static void multirrule_iterator_add(struct multirrule_iterator *iter,
-                                    struct icalrecurrencetype recur,
+                                    struct icalrecurrencetype *recur,
                                     icaltimetype dtstart,
                                     icaltimetype range_start)
 {
@@ -490,9 +499,9 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
         }
     }
 
-    icalrecur_iterator *icaliter = icalrecur_iterator_new(recur, dtstart);
+    icalrecur_iterator *icaliter = icalrecurrence_iterator_new(recur, dtstart);
     if (!icaliter) return;
-    if (recur.count > 0) {
+    if (recur->count > 0) {
         icalrecur_iterator_set_start(icaliter, range_start);
     }
 
@@ -507,7 +516,11 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
     entry->icaliter = icaliter;
     entry->next = icalrecur_iterator_next(entry->icaliter);
     entry->recur = recur;
-    entry->recur.rscale = xstrdupnull(recur.rscale);
+#ifdef HAVE_RECUR_BY_REF
+    icalrecurrencetype_ref(recur);
+#else /* !HAVE_RECUR_BY_REF */
+    entry->recur->rscale = xstrdupnull(recur->rscale);
+#endif /* HAVE_RECUR_BY_REF */
 }
 
 static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
@@ -553,19 +566,27 @@ multirrule_iterator_for_range(icalcomponent *comp,
          rrule;
          rrule = icalcomponent_get_next_property(comp, kind)) {
 
-        struct icalrecurrencetype recur = kind == ICAL_EXRULE_PROPERTY ?
-            icalproperty_get_exrule(rrule) : icalproperty_get_rrule(rrule);
+        struct icalrecurrencetype *recur = icalproperty_get_recurrence(rrule);
+        if (!recur) continue;
 
         /* check if span of RRULE overlaps range */
         icaltime_span recur_span = {
             icaltime_to_timet(dtstart, floatingtz),
-            icaltime_to_timet(recur.until, NULL), 0 /* is_busy */
+            icaltime_to_timet(recur->until, NULL), 0 /* is_busy */
         };
         if (!recur_span.end) recur_span.end = eternity;
 
         if (!span_compare_range(&recur_span, &range_span)) {
             multirrule_iterator_add(&iter, recur, dtstart, range.start);
         }
+
+#ifdef HAVE_RECUR_BY_REF
+        icalrecurrencetype_unref(recur);
+#else /* !HAVE_RECUR_BY_REF */
+        else {
+            icalrecurrencetype_unref(recur);
+        }
+#endif
     }
 
     return iter;
@@ -645,9 +666,9 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
                                                     ICAL_RDATE_PROPERTY)) {
             struct icaldatetimeperiodtype rdate =
                 icalproperty_get_datetimeperiod(prop);
-            icaltimetype mystart = rdate.time;
-            icaltimetype myend = rdate.time;
+            icaltimetype mystart, myend;
             if (icalperiodtype_is_null_period(rdate.period)) {
+                mystart = rdate.time;
                 myend = icaltime_add(mystart, event_length);
             }
             else {
@@ -906,7 +927,7 @@ EXPORTED void icalcomponent_add_personal_data_from_dl(icalcomponent *ical, struc
 EXPORTED void icalcomponent_add_personal_data(icalcomponent *ical, struct buf *userdata)
 {
     struct dlist *dl;
-    dlist_parsemap(&dl, 1, 0, buf_base(userdata), buf_len(userdata));
+    dlist_parsemap(&dl, 1, buf_base(userdata), buf_len(userdata));
     icalcomponent_add_personal_data_from_dl(ical, dl);
     dlist_free(&dl);
 }
@@ -937,7 +958,7 @@ EXPORTED int icalsupport_decode_personal_data(const struct buf *value,
         return -1;
 
     struct dlist *dl;
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     if (!dl) return -1;
 
     int is_valid = 0;
@@ -1123,67 +1144,83 @@ EXPORTED void icalcomponent_set_usedefaultalerts(icalcomponent *comp,
 EXPORTED void icalcomponent_remove_invitee(icalcomponent *comp,
                                            icalproperty *prop)
 {
+#ifdef HAVE_VPOLL_SUPPORT
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-        icalcomponent *vvoter = icalproperty_get_parent(prop);
+        icalcomponent *participant = icalproperty_get_parent(prop);
 
-        icalcomponent_remove_component(comp, vvoter);
-        icalcomponent_free(vvoter);
+        icalcomponent_remove_component(comp, participant);
+        icalcomponent_free(participant);
+        return;
     }
-    else {
-        icalcomponent_remove_property(comp, prop);
-        icalproperty_free(prop);
-    }
+#endif
+
+    icalcomponent_remove_property(comp, prop);
+    icalproperty_free(prop);
 }
 
 
 EXPORTED icalproperty *icalcomponent_get_first_invitee(icalcomponent *comp)
 {
-    icalproperty *prop;
-
+#ifdef HAVE_VPOLL_SUPPORT
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-        icalcomponent *vvoter =
-            icalcomponent_get_first_component(comp, ICAL_VVOTER_COMPONENT);
+        icalcomponent *participant =
+            icalcomponent_get_first_component(comp, ICAL_PARTICIPANT_COMPONENT);
 
-        prop = icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+        return icalcomponent_get_first_property(participant,
+                                                ICAL_CALENDARADDRESS_PROPERTY);
     }
-    else {
-        prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-    }
+#endif
 
-    return prop;
+    return icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 }
 
 EXPORTED icalproperty *icalcomponent_get_next_invitee(icalcomponent *comp)
 {
-    icalproperty *prop;
-
+#ifdef HAVE_VPOLL_SUPPORT
     if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT) {
-        icalcomponent *vvoter =
-            icalcomponent_get_next_component(comp, ICAL_VVOTER_COMPONENT);
+        icalcomponent *participant =
+            icalcomponent_get_next_component(comp, ICAL_PARTICIPANT_COMPONENT);
 
-        prop = icalcomponent_get_first_property(vvoter, ICAL_VOTER_PROPERTY);
+        return icalcomponent_get_first_property(participant,
+                                                ICAL_CALENDARADDRESS_PROPERTY);
     }
-    else {
-        prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
-    }
+#endif
 
-    return prop;
+    return icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
 }
 
 EXPORTED const char *icalproperty_get_invitee(icalproperty *prop)
 {
-    const char *recip;
-
-    if (icalproperty_isa(prop) == ICAL_VOTER_PROPERTY) {
-        recip = icalproperty_get_voter(prop);
+#ifdef HAVE_VPOLL_SUPPORT
+    if (icalproperty_isa(prop) == ICAL_CALENDARADDRESS_PROPERTY) {
+        return icalproperty_get_calendaraddress(prop);
     }
-    else {
-        recip = icalproperty_get_attendee(prop);
-    }
+#endif
 
-    return recip;
+    return icalproperty_get_attendee(prop);
 }
 
+EXPORTED const char *icalproperty_get_decoded_calendaraddress(icalproperty *prop)
+{
+    const char *uri;
+
+    if (icalproperty_isa(prop) == ICAL_ORGANIZER_PROPERTY)
+        uri = icalproperty_get_organizer(prop);
+#ifdef HAVE_VPOLL_SUPPORT
+    else if (icalproperty_isa(prop) == ICAL_CALENDARADDRESS_PROPERTY)
+        uri = icalproperty_get_calendaraddress(prop);
+#endif
+    else
+        uri = icalproperty_get_attendee(prop);
+
+    if (!uri) return NULL;
+    if (!strncasecmp(uri, "mailto:", 7)) uri += 7;
+
+    char *addr = xmlURIUnescapeString(uri, strlen(uri), NULL);
+    icalmemory_add_tmp_buffer(addr);
+
+    return addr;
+}
 
 EXPORTED icaltimetype
 icalcomponent_get_recurrenceid_with_zone(icalcomponent *comp)
@@ -1466,38 +1503,40 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
             /* Recurring - find widest time range that includes events */
             unsigned expand = recurring = 1;
 
-            if (rrule) {
-                do {
-                    struct icalrecurrencetype recur = icalproperty_get_rrule(rrule);
-                    if (!icaltime_is_null_time(recur.until)) {
-                        /* Recurrence ends - calculate dtend of last recurrence */
-                        struct icaldurationtype duration;
-                        icaltimezone *utc = icaltimezone_get_utc_timezone();
+            for (; expand && rrule;
+                 rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+                struct icalrecurrencetype *recur =
+                    icalproperty_get_recurrence(rrule);
+                if (!recur) continue;
 
-                        duration = icaltime_subtract(period.end, period.start);
-                        icaltimetype end =
-                            icaltime_add(icaltime_convert_to_zone(recur.until, utc),
-                                    duration);
+                if (!icaltime_is_null_time(recur->until)) {
+                    /* Recurrence ends - calculate dtend of last recurrence */
+                    struct icaldurationtype duration;
+                    icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-                        if (icaltime_compare(period.end, end) < 0)
-                            period.end = end;
+                    duration = icaltime_subtract(period.end, period.start);
+                    icaltimetype end =
+                        icaltime_add(icaltime_convert_to_zone(recur->until, utc),
+                                     duration);
 
-                        /* Do RDATE expansion only */
-                        /* Temporarily remove RRULE to allow for expansion of
-                         * remaining recurrences. */
-                        icalcomponent_remove_property(comp, rrule);
-                        ptrarray_append(&detached_rrules, rrule);
-                    }
-                    else if (!recur.count) {
-                        /* Recurrence never ends - set end of span to eternity */
-                        span.end =
-                            icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+                    if (icaltime_compare(period.end, end) < 0)
+                        period.end = end;
 
-                        /* Skip RRULE & RDATE expansion */
-                        expand = 0;
-                    }
-                    rrule = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY);
-                } while (expand && rrule);
+                    /* Do RDATE expansion only */
+                    /* Temporarily remove RRULE to allow for expansion of
+                     * remaining recurrences. */
+                    icalcomponent_remove_property(comp, rrule);
+                    ptrarray_append(&detached_rrules, rrule);
+                }
+                else if (!recur->count) {
+                    /* Recurrence never ends - set end of span to eternity */
+                    period.end =
+                        icaltime_from_timet_with_zone(caldav_eternity, 0, NULL);
+
+                    /* Skip RRULE & RDATE expansion */
+                    expand = 0;
+                }
+                icalrecurrencetype_unref(recur);
             }
 
             /* Expand (remaining) recurrences */
@@ -1506,7 +1545,7 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                         comp,
                         icaltime_from_timet_with_zone(caldav_epoch, 0, NULL),
                         icaltime_from_timet_with_zone(caldav_eternity, 0, NULL),
-                        utc_timespan_cb, &span);
+                        utc_timespan_cb, &period);
             }
 
             /* Add RRULEs back, if we had removed them before. */
@@ -2572,7 +2611,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
          comp; comp = nextc) {
         icalproperty *dtstart_prop = NULL, *rrule_prop = NULL;
         icalarray *rdate_array = icalarray_new(sizeof(struct rdate), 10);
-        icaltimetype dtstart;
+        icaltimetype dtstart = icaltime_null_time();
         struct observance obs;
         unsigned n, trunc_dtstart = 0;
         int r;
@@ -2674,11 +2713,10 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             }
         }
 
-        if (rrule_prop) {
-            struct icalrecurrencetype rrule =
-                icalproperty_get_rrule(rrule_prop);
+        struct icalrecurrencetype *rrule = NULL;
+        if (rrule_prop && (rrule = icalproperty_get_recurrence(rrule_prop))) {
             icalrecur_iterator *ritr = NULL;
-            unsigned eternal = icaltime_is_null_time(rrule.until);
+            unsigned eternal = icaltime_is_null_time(rrule->until);
             unsigned trunc_until = 0;
 
             if (eternal) {
@@ -2689,10 +2727,10 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             }
 
             /* Check RRULE duration */
-            if (!eternal && icaltime_compare(rrule.until, start) < 0) {
+            if (!eternal && icaltime_compare(rrule->until, start) < 0) {
                 /* RRULE ends prior to our window open -
                    check UNTIL vs tombstone */
-                obs.onset = rrule.until;
+                obs.onset = rrule->until;
                 if (need_tomb) check_tombstone(&tombstone, &obs);
 
                 /* Remove RRULE */
@@ -2702,15 +2740,15 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             else {
                 /* RRULE ends on/after our window open */
                 if (!icaltime_is_null_time(end) &&
-                    (eternal || icaltime_compare(rrule.until, end) >= 0)) {
+                    (eternal || icaltime_compare(rrule->until, end) >= 0)) {
                     /* RRULE ends after our window close - need to adjust it */
                     trunc_until = 1;
                 }
 
                 if (!eternal) {
                     /* Adjust UNTIL to local time (for iterator) */
-                    icaltime_adjust(&rrule.until, 0, 0, 0, obs.offset_from);
-                    icaltime_set_utc(&rrule.until, 0);
+                    icaltime_adjust(&rrule->until, 0, 0, 0, obs.offset_from);
+                    icaltime_set_utc(&rrule->until, 0);
                 }
 
                 if (trunc_dtstart) {
@@ -2721,7 +2759,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                     icaltime_normalize(dtstart);
                 }
 
-                ritr = icalrecur_iterator_new(rrule, dtstart);
+                ritr = icalrecurrence_iterator_new(rrule, dtstart);
             }
 
             /* Process any RRULE observances within our window */
@@ -2764,8 +2802,8 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                         }
                         else if (!eternal) {
                             /* Set UNTIL to previous onset */
-                            rrule.until = prev_onset;
-                            icalproperty_set_rrule(rrule_prop, rrule);
+                            rrule->until = prev_onset;
+                            icalproperty_set_recurrence(rrule_prop, rrule);
                         }
 
                         /* We're done */
@@ -2808,7 +2846,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                             }
 
                             /* Check if new DSTART is within 1yr of UNTIL */
-                            ydiff = rrule.until.year - recur.year;
+                            ydiff = rrule->until.year - recur.year;
                             if (!trunc_until && ydiff <= 1) {
                                 /* Remove RRULE */
                                 icalcomponent_remove_property(comp, rrule_prop);
@@ -2817,7 +2855,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                                 if (ydiff) {
                                     /* Add UNTIL as RDATE */
                                     struct icaldatetimeperiodtype rdate = {
-                                        rrule.until,
+                                        rrule->until,
                                         icalperiodtype_null_period()
                                     };
                                     prop = icalproperty_new_rdate(rdate);
@@ -2839,6 +2877,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                 }
                 icalrecur_iterator_free(ritr);
             }
+            icalrecurrencetype_unref(rrule);
         }
 
         /* Sort the RDATEs by onset */
@@ -3242,5 +3281,147 @@ EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
     icalcomponent_add_property(comp, prop);
 }
 #endif
+
+#ifdef HAVE_RECUR_BY_REF
+EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
+{
+    icalrecurrencetype_t *rt = icalvalue_get_recur(val);
+
+    if (rt) icalrecurrencetype_ref(rt);
+
+    return rt;
+}
+
+#else /* !HAVE_RECUR_BY_REF */
+EXPORTED icalrecurrencetype_t *icalrecurrencetype_new(void)
+{
+    icalrecurrencetype_t *rt =
+        icalmemory_new_buffer(sizeof(icalrecurrencetype_t));
+
+    if (!rt) return NULL;
+
+    icalrecurrencetype_clear(rt);
+
+    return rt;
+}
+
+EXPORTED void icalrecurrencetype_unref(icalrecurrencetype_t *rt)
+{
+    icalerror_check_arg_rv((rt != NULL), "rt");
+
+    if (rt->rscale) icalmemory_free_buffer(rt->rscale);
+
+    icalmemory_free_buffer(rt);
+}
+
+EXPORTED icalrecurrencetype_t *icalrecurrencetype_clone(icalrecurrencetype_t *rt)
+{
+    icalrecurrencetype_t *res;
+
+    icalerror_check_arg_rz((rt != NULL), "rt");
+
+    res = icalrecurrencetype_new();
+    if (!res) {
+        return NULL;
+    }
+
+    memcpy(res, rt, sizeof(*res));
+
+    if (res->rscale) {
+        res->rscale = icalmemory_strdup(res->rscale);
+        if (!res->rscale) {
+            icalrecurrencetype_unref(res);
+            return NULL;
+        }
+    }
+
+    return res;
+}
+
+EXPORTED icalrecurrencetype_t *icalrecurrencetype_new_from_string(const char *str)
+{
+    icalrecurrencetype_t rt = icalrecurrencetype_from_string(str);
+    icalrecurrencetype_t *res = icalrecurrencetype_clone(&rt);
+
+    if (rt.rscale) icalmemory_free_buffer(rt.rscale);
+
+    return res;
+}
+
+EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
+{
+    icalrecurrencetype_t rt = icalvalue_get_recur(val);
+
+    return icalrecurrencetype_clone(&rt);
+}
+
+EXPORTED short *icalrecur_byrule_data(icalrecurrencetype_t *rt,
+                                      icalrecurrencetype_byrule rule)
+{
+    switch (rule) {
+    case ICAL_BY_MONTH:     return rt->by_month;
+    case ICAL_BY_WEEK_NO:   return rt->by_week_no;
+    case ICAL_BY_YEAR_DAY:  return rt->by_year_day;
+    case ICAL_BY_MONTH_DAY: return rt->by_month_day;
+    case ICAL_BY_DAY:       return rt->by_day;
+    case ICAL_BY_HOUR:      return rt->by_hour;
+    case ICAL_BY_MINUTE:    return rt->by_minute;
+    case ICAL_BY_SECOND:    return rt->by_second;
+    case ICAL_BY_SET_POS:   return rt->by_set_pos;
+    default:                return NULL;
+    }
+}
+
+EXPORTED short icalrecur_byrule_size(icalrecurrencetype_t *rt,
+                                     icalrecurrencetype_byrule rule)
+{
+    short *byX, max, size;
+
+    switch (rule) {
+    case ICAL_BY_MONTH:
+        byX = rt->by_month;
+        max = ICAL_BY_MONTH_SIZE;
+        break;
+    case ICAL_BY_WEEK_NO:
+        byX = rt->by_week_no;
+        max = ICAL_BY_WEEKNO_SIZE;
+        break;
+    case ICAL_BY_YEAR_DAY:
+        byX = rt->by_year_day;
+        max = ICAL_BY_YEARDAY_SIZE;
+        break;
+    case ICAL_BY_MONTH_DAY:
+        byX = rt->by_month_day;
+        max = ICAL_BY_MONTHDAY_SIZE;
+        break;
+    case ICAL_BY_DAY:
+        byX = rt->by_day;
+        max = ICAL_BY_DAY_SIZE;
+        break;
+    case ICAL_BY_HOUR:
+        byX = rt->by_hour;
+        max = ICAL_BY_HOUR_SIZE;
+        break;
+    case ICAL_BY_MINUTE:
+        byX = rt->by_minute;
+        max = ICAL_BY_MINUTE_SIZE;
+        break;
+    case ICAL_BY_SECOND:
+        byX = rt->by_second;
+        max = ICAL_BY_SECOND_SIZE;
+        break;
+    case ICAL_BY_SET_POS:
+        byX = rt->by_set_pos;
+        max = ICAL_BY_SETPOS_SIZE;
+        break;
+    default:
+        return 0;
+    }
+
+    for (size = 0; size < max && byX[size] != ICAL_RECURRENCE_ARRAY_MAX; size++);
+
+    return size;
+}
+#endif /* !HAVE_RECUR_BY_REF */
 
 #endif /* HAVE_ICAL */

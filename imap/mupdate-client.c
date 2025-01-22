@@ -72,10 +72,8 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
-const char service_name[] = "mupdate";
-
 static struct protocol_t mupdate_protocol =
-{ "mupdate", "mupdate", TYPE_STD,
+{ "mupdate", "mupdate", NULL, TYPE_STD,
   { { { 1, "* OK" },
       { NULL, NULL, "* OK", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,

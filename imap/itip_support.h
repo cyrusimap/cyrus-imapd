@@ -95,14 +95,16 @@ struct sched_data {
 #define SCHEDFLAG_IS_UPDATE        (1<<2)
 #define SCHEDFLAG_INVITES_ONLY     (1<<3)
 #define SCHEDFLAG_UPDATES_ONLY     (1<<4)
-#define SCHEDFLAG_DELETE_CANCELED  (1<<5)
+#define SCHEDFLAG_DELETE_CANCELLED (1<<5)
+#define SCHEDFLAG_ALLOW_PUBLIC     (1<<6)
 
 #define SCHED_ISCHEDULE(sched)        (sched->flags & SCHEDFLAG_ISCHEDULE)
 #define SCHED_IS_REPLY(sched)         (sched->flags & SCHEDFLAG_IS_REPLY)
 #define SCHED_IS_UPDATE(sched)        (sched->flags & SCHEDFLAG_IS_UPDATE)
 #define SCHED_INVITES_ONLY(sched)     (sched->flags & SCHEDFLAG_INVITES_ONLY)
 #define SCHED_UPDATES_ONLY(sched)     (sched->flags & SCHEDFLAG_UPDATES_ONLY)
-#define SCHED_DELETE_CANCELED(sched)  (sched->flags & SCHEDFLAG_DELETE_CANCELED)
+#define SCHED_DELETE_CANCELLED(sched) (sched->flags & SCHEDFLAG_DELETE_CANCELLED)
+#define SCHED_ALLOW_PUBLIC(sched)     (sched->flags & SCHEDFLAG_ALLOW_PUBLIC)
 
 #define SCHED_STATUS(sched, isched, ical) \
     (sched->status = SCHED_ISCHEDULE(sched) ? isched : ical)
@@ -130,9 +132,6 @@ enum sched_deliver_outcome {
     SCHED_DELIVER_UPDATED  = 2,
     SCHED_DELIVER_DELETED  = 3
 };
-
-extern unsigned config_allowsched;
-extern struct strlist *cua_domains;
 
 struct proplist {
     icalproperty *prop;

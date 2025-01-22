@@ -101,14 +101,19 @@
 
 static int opt_force = 0; // FIXME
 
-struct sync_client_state rightnow_sync_cs;
+static struct sync_client_state rightnow_sync_cs;
 
 /* protocol definitions */
 static char *imap_sasl_parsesuccess(char *str, const char **status);
 static void imap_postcapability(struct backend *s);
 
+static const struct tls_alpn_t imap_alpn_map[] = {
+    { "imap", NULL, NULL },
+    { "",     NULL, NULL },
+};
+
 struct protocol_t imap_csync_protocol =
-{ "imap", "imap", TYPE_STD,
+{ "imap", "imap", imap_alpn_map, TYPE_STD,
   { { { 1, NULL },
       { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
         CAPAF_MANY_PER_LINE,
@@ -136,7 +141,7 @@ struct protocol_t imap_csync_protocol =
 };
 
 struct protocol_t csync_protocol =
-{ "csync", "csync", TYPE_STD,
+{ "csync", "csync", NULL, TYPE_STD,
   { { { 1, "* OK" },
       { NULL, NULL, "* OK", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
@@ -679,6 +684,18 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
     return NULL;
 }
 
+const struct sync_folder *sync_folder_lookup_byname(struct sync_folder_list *l,
+                                                    const char *name)
+{
+    struct sync_folder *p;
+
+    for (p = l->head; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return p;
+    }
+    return NULL;
+}
+
 void sync_folder_list_free(struct sync_folder_list **lp)
 {
     struct sync_folder_list *l = *lp;
@@ -1038,10 +1055,7 @@ static int sync_sieve_validate(struct index_record *record,
     int r = SIEVE_OK;
     int fd;
     
-    if (!(item && item->fname && (fd = open(item->fname, O_RDONLY)) != -1)) {
-        r = IMAP_IOERROR;
-    }
-    else {
+    if (item && item->fname && (fd = open(item->fname, O_RDONLY)) != -1) {
         struct buf buf = BUF_INITIALIZER;
         const char *sep;
 
@@ -1060,6 +1074,9 @@ static int sync_sieve_validate(struct index_record *record,
 
         buf_free(&buf);
         close(fd);
+    }
+    else {
+        r = IMAP_IOERROR;
     }
 
     if (r != SIEVE_OK) {
@@ -1912,7 +1929,7 @@ struct dlist *sync_parseline(struct protstream *in, int isarchive)
     struct dlist *dl = NULL;
     int c;
 
-    c = dlist_parse(&dl, 1, isarchive, 0, in);
+    c = dlist_parse(&dl, 1, isarchive, in);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);
@@ -2385,7 +2402,7 @@ redo:
         /* Attempt to reserve this message */
         mailbox_msg_path = mailbox_record_fname(mailbox, record);
         stage_msg_path = dlist_reserve_path(part, record->internal_flags & FLAG_INTERNAL_ARCHIVED,
-                                            0, &record->guid);
+                                            &record->guid);
 
         /* check that the sha1 of the file on disk is correct */
         struct index_record record2;
@@ -3836,6 +3853,8 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
     struct mboxlock *oldlock = NULL;
     struct mboxlock *newlock = NULL;
+    mbentry_t *olddestmbentry = NULL;
+    mbentry_t *newdestmbentry = NULL;
 
     /* make sure we grab these locks in a stable order! */
     if (strcmpsafe(oldmboxname, newmboxname) < 0) {
@@ -3849,18 +3868,69 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     }
 
     r = mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0);
+    if (r) goto done;
 
-    if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                                       uidvalidity, 1, sstate->userid,
-                                       sstate->authstate, NULL,
-                                       (sstate->flags & SYNC_FLAG_LOCALONLY),
-                                       1/*forceuser*/,
-                                       1/*ignorequota*/,
-                                       1/*keep_intermediaries*/,
-                                       0/*move_subscription*/,
-                                       1/*silent*/);
+    if (mboxname_isusermailbox(oldmboxname, 1) &&
+        mboxname_isusermailbox(newmboxname, 1)) {
+        // we can't rename users if the new inbox already exists!
+        r = mboxlist_lookup_allow_all(newmboxname, &olddestmbentry, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            // all good, there's nothing here
+        } else if (r) {
+            // any other error, abort - something bad with mailboxesdb
+            goto done;
+        } else if (olddestmbentry->mbtype & MBTYPE_DELETED) {
+            // this is OK, we're replacing a tombstone - hold on to the old entry in case we need to recreate it
+        }
+        else {
+            // can't rename over an existing mailbox - abort
+            mboxlist_entry_free(&olddestmbentry);
+            r = IMAP_MAILBOX_EXISTS;
+            goto done;
+        }
 
+        /* we need to create a reference for the uniqueid so we find the right
+         * conversations DB */
+        newdestmbentry = mboxlist_entry_copy(mbentry);
+        free(newdestmbentry->name);
+        newdestmbentry->name = xstrdup(newmboxname);
+        newdestmbentry->mbtype |= MBTYPE_DELETED;
+        r = mboxlist_update_full(newdestmbentry, /*localonly*/1, /*silent*/1);
+        if (r) goto done;
+    }
+
+    r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
+                               uidvalidity, 1, sstate->userid,
+                               sstate->authstate, NULL,
+                               (sstate->flags & SYNC_FLAG_LOCALONLY),
+                               1/*forceuser*/,
+                               1/*ignorequota*/,
+                               1/*keep_intermediaries*/,
+                               0/*move_subscription*/,
+                               1/*silent*/);
+
+
+done:
+    if (r) {
+        xsyslog(LOG_NOTICE, "rename failed",
+                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
+                oldmboxname, newmboxname, error_message(r));
+        // ensure the mboxlist entry gets fixed up or removed
+        if (olddestmbentry) {
+            int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
+            if (r2)
+                xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
+                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
+        } else if (newdestmbentry) {
+            int r2 = mboxlist_delete(newdestmbentry);
+            if (r2)
+                xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
+                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
+        }
+    }
     mboxlist_entry_free(&mbentry);
+    mboxlist_entry_free(&olddestmbentry);
+    mboxlist_entry_free(&newdestmbentry);
     mboxname_release(&oldlock);
     mboxname_release(&newlock);
 
@@ -4972,7 +5042,7 @@ static int sync_readcache(struct sync_client_state *sync_cs, const char *mboxnam
     if (r) return r;
 
 
-    dlist_parsemap(klp, 0, 0, base, len);
+    dlist_parsemap(klp, 0, base, len);
 
     // we need the name so the parser can parse it
     if (*klp) (*klp)->name = xstrdup("MAILBOX");
@@ -6481,14 +6551,13 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
         sync_send_apply(kl, sync_cs->backend->out);
         r = sync_parse_response("MAILBOX", sync_cs->backend->in, NULL);
 
-        // on error, clear cache - otherwise cache this state
-        if (r) sync_uncache(sync_cs, mbentry->name);
-        else r = sync_cache(sync_cs, mbentry->name, kl);
+        // we never want to cache intermediate records
+        sync_uncache(sync_cs, mbentry->name);
 
         dlist_free(&kl);
         mboxlist_entry_free(&mbentry);
 
-        return 0;
+        return r;
     }
 
     mboxlist_entry_free(&mbentry);
@@ -6831,6 +6900,32 @@ static int do_folders(struct sync_client_state *sync_cs,
      * short and contain few dependancies.  Algorithm is to simply pick a
      * rename operation which has no dependancy and repeat until done */
 
+    struct sync_rename *item;
+    for (item = rename_folders->head; item; item = item->next) {
+        if (!strcmp(item->oldname, item->newname)) continue;
+        if (!sync_folder_lookup_byname(replica_folders, item->oldname)) continue;
+        if (!sync_folder_lookup_byname(replica_folders, item->newname)) continue;
+
+        // ok, it's a rename and both source and destination names exist already,
+        // is there an intermediate we can rename to?
+
+        mbentry_t *mbentry_byid = NULL;
+        if (mboxlist_lookup_by_uniqueid(item->uniqueid, &mbentry_byid, NULL)) continue;
+        int i;
+        for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
+            const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
+            if (sync_folder_lookup_byname(replica_folders, histitem->name)) continue;
+            // add a rename from old name to the temporary name
+            sync_rename_list_add(rename_folders, item->uniqueid, item->oldname,
+                                 histitem->name, item->part, histitem->uidvalidity);
+            // and then reuse this item for the rename from temporary to final
+            free(item->oldname);
+            item->oldname = xstrdup(histitem->name);
+            break;
+        }
+        mboxlist_entry_free(&mbentry_byid);
+    }
+
     while (rename_folders->done < rename_folders->count) {
         int rename_success = 0;
         struct sync_rename *item, *item2 = NULL;
@@ -6841,7 +6936,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             /* don't skip rename to different partition */
             if (strcmp(item->oldname, item->newname)) {
                 item2 = sync_rename_lookup(rename_folders, item->newname);
-                if (item2 && !item2->done) continue;
+                if (item2 && !item2->done && sync_folder_lookup_byname(replica_folders, item->newname)) continue;
             }
 
             /* Found unprocessed item which should rename cleanly */

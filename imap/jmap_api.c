@@ -406,9 +406,20 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
     req->perf_details = NULL;
 }
 
-static jmap_method_t *find_methodproc(const char *name, hash_table *jmap_methods)
+static jmap_method_t *find_methodproc(const char *name,
+                                      hash_table *jmap_methods,
+                                      strarray_t *using_capabilities)
 {
-    return hash_lookup(name, jmap_methods);
+    ptrarray_t *pa = hash_lookup(name, jmap_methods);
+    int i;
+
+    for (i = 0; i < ptrarray_size(pa); i++) {
+        jmap_method_t *mp = ptrarray_nth(pa, i);
+
+        if (strarray_contains(using_capabilities, mp->capability)) return mp;
+    }
+
+    return NULL;
 }
 
 struct mbstate {
@@ -544,6 +555,8 @@ static json_t *lookup_capabilities(const char *accountid,
     if (!strcmp(authuserid, accountid)) {
         /* Primary account has all capabilities */
         jmap_core_capabilities(capas);
+        jmap_blob_capabilities(capas);
+        jmap_quota_capabilities(capas);
         jmap_mail_capabilities(capas, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
@@ -567,6 +580,8 @@ static json_t *lookup_capabilities(const char *accountid,
                               &rock, MBOXTREE_INTERMEDIATES);
         if (rock.is_visible) {
             jmap_core_capabilities(capas);
+            jmap_blob_capabilities(capas);
+            jmap_quota_capabilities(capas);
             if (rock.has_mail) {
                 // we don't offer emailsubmission or vacation
                 // for shared accounts right now
@@ -698,8 +713,8 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         json_incref(args);
 
         /* Find the message processor */
-        mp = find_methodproc(mname, &settings->methods);
-        if (!mp || !strarray_contains(&using_capabilities, mp->capability)) {
+        mp = find_methodproc(mname, &settings->methods, &using_capabilities);
+        if (!mp) {
             json_array_append_new(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             json_decref(args);
@@ -997,6 +1012,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
 
     json_t *jprimary = json_string(httpd_userid);
 
+    json_object_set(primary_accounts, JMAP_URN_BLOB, jprimary);
     json_object_set(primary_accounts, JMAP_URN_MAIL, jprimary);
     json_object_set(primary_accounts, JMAP_URN_SUBMISSION, jprimary);
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
@@ -1009,6 +1025,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_BACKUP_EXTENSION, jprimary);
 #ifdef USE_SIEVE
     json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_SIEVE, jprimary);
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
@@ -3190,6 +3207,12 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
     return _mbentry_by_uniqueid(req, id, 1/*scope*/);
 }
 
+EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req,
+                                                       const char *id)
+{
+    return _mbentry_by_uniqueid(req, id, 0/*scope*/);
+}
+
 EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
 {
     const mbentry_t *mbentry = _mbentry_by_uniqueid(req, id, 1/*scope*/);
@@ -3367,4 +3390,21 @@ EXPORTED int jmap_findmbox_role(jmap_req_t *req, const char *role,
     free(specialuse);
 
     return r;
+}
+
+EXPORTED void jmap_add_methods(jmap_method_t methods[],
+                               jmap_settings_t *settings)
+{
+    jmap_method_t *mp;
+
+    for (mp = methods; mp->name; mp++) {
+        ptrarray_t *pa = hash_lookup(mp->name, &settings->methods);
+
+        if (!pa) {
+            pa = ptrarray_new();
+            hash_insert(mp->name, pa, &settings->methods);
+        }
+
+        ptrarray_append(pa, mp);
+    }
 }

@@ -416,8 +416,7 @@ void mboxlist_open(const char *name);
 void mboxlist_close(void);
 
 /* initialize database structures */
-#define MBOXLIST_SYNC 0x02
-void mboxlist_init(int flags);
+void mboxlist_init(void);
 
 /* done with database stuff */
 void mboxlist_done(void);

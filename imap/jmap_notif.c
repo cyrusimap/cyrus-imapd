@@ -185,7 +185,7 @@ static int append_eventnotif(const char *from,
             }
             int matches_uid = 0;
             struct dlist *dl = NULL;
-            if (!dlist_parsemap(&dl, 1, 0, body->description,
+            if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 const char *val;
                 matches_uid = dlist_getatom(dl, "ID", &val) &&
@@ -226,7 +226,8 @@ static int append_eventnotif(const char *from,
     fputs(date5322, fp);
     fputs("\r\n", fp);
 
-    fprintf(fp, "Message-ID: <%s-%ld@%s>\r\n", makeuuid(), created, config_servername);
+    fprintf(fp, "Message-ID: <%s-" TIME_T_FMT "@%s>\r\n",
+                makeuuid(), created, config_servername);
     fputs("Content-Type: application/json; charset=utf-8\r\n", fp);
     fputs("Content-Transfer-Encoding: 8bit\r\n", fp);
 

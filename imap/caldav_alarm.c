@@ -226,8 +226,12 @@ static sqldb_t *caldav_alarm_open()
         return NULL;
     }
 
-    // XXX - config option?
-    char *dbfilename = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
+    char *tempname = NULL;
+    const char *dbfilename = config_getstring(IMAPOPT_CALDAV_ALARM_DB_PATH);
+    if (!dbfilename) {
+        tempname = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
+        dbfilename = tempname;
+    }
     my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade,
                             config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
 
@@ -236,7 +240,7 @@ static sqldb_t *caldav_alarm_open()
         mboxname_release(&my_alarmdb_lock);
     }
 
-    free(dbfilename);
+    free(tempname);
     refcount = 1;
     return my_alarmdb;
 }
@@ -533,10 +537,9 @@ static int process_alarm_cb(icalcomponent *comp,
 
     for (prop = icalcomponent_get_first_invitee(comp);
          prop; prop = icalcomponent_get_next_invitee(comp)) {
-        const char *attendee = icalproperty_get_invitee(prop);
+        const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
 
         if (!attendee) continue;
-        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         if (strarray_contains_case(&sched_addrs, attendee)) {
             const char *partstat =
@@ -580,7 +583,7 @@ static int process_alarm_cb(icalcomponent *comp,
         struct icaltriggertype trigger = icalvalue_get_trigger(val);
         /* XXX validate trigger */
 
-        icaltimetype alarmtime = icaltime_null_time();
+        icaltimetype alarmtime;
         unsigned is_duration = (icalvalue_isa(val) == ICAL_DURATION_VALUE);
         if (is_duration) {
             icalparameter *param =
@@ -746,7 +749,7 @@ static int has_peruser_alarms_cb(const char *mailbox,
         return 0;
     }
 
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     const char *strval = NULL;
     if (dlist_getatom(dl, "USEDEFAULTALERTS", &strval)) {
         if (!strcasecmp(strval, "YES")) {
@@ -796,7 +799,7 @@ static int check_by_array(const short *byX, short size,
     memcpy(my_byX, byX, size * sizeof(short));
 
     /* convert each value to seconds and determine actual length of data */
-    for (len = 0; len < size && my_byX[len] != ICAL_RECURRENCE_ARRAY_MAX; len++) {
+    for (len = 0; len < size; len++) {
         my_byX[len] *= to_seconds;
     }
 
@@ -821,6 +824,34 @@ static int check_by_array(const short *byX, short size,
     return disable;
 }
 
+static int is_supported_component(icalcomponent *ical)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+    int is_supported = 0;
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+        is_supported =
+            config_getbitfield(IMAPOPT_CALDAV_ALARM_SUPPORT_COMPONENTS) &
+            IMAP_ENUM_CALDAV_ALARM_SUPPORT_COMPONENTS_VEVENT;
+        break;
+    case ICAL_VTODO_COMPONENT:
+        is_supported = config_getbitfield(IMAPOPT_CALDAV_ALARM_SUPPORT_COMPONENTS) &
+               IMAP_ENUM_CALDAV_ALARM_SUPPORT_COMPONENTS_VTODO;
+        break;
+    default:
+        ; // do nothing
+    }
+
+    if (!is_supported) {
+        xsyslog(LOG_DEBUG, "alarms are not supported for iCalendar component",
+                "kind=<%s>", icalenum_component_kind_to_string(kind));
+    }
+
+    return is_supported;
+}
+
 static int has_alarms(void *data, struct mailbox *mailbox,
                       uint32_t uid, unsigned *num_rcpts)
 {
@@ -843,6 +874,12 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 
     icalcomponent *ical = (icalcomponent *) data;
     if (ical) {
+        if (!is_supported_component(ical)) {
+            xsyslog(LOG_DEBUG, "ignoring alarms for index record",
+                    "mboxname=<%s> imap_uid=<%d>", mailbox_name(mailbox), uid);
+            return 0;
+        }
+
         /* Check iCalendar resource for VALARMs */
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -858,12 +895,16 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                  prop =
                      icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
 
-                struct icalrecurrencetype rrule = icalproperty_get_rrule(prop);
-                int recur_interval = rrule.interval;
+                struct icalrecurrencetype *rrule =
+                    icalproperty_get_recurrence(prop);
+                if (!rrule) continue;
+
+                int recur_interval = rrule->interval;
                 const char *bypart = "";
                 int disable = 0;
+                short size;
 
-                switch (rrule.freq) {
+                switch (rrule->freq) {
                 case ICAL_YEARLY_RECURRENCE:
                 case ICAL_MONTHLY_RECURRENCE:
                 case ICAL_WEEKLY_RECURRENCE:
@@ -892,20 +933,20 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                     break;
                 }
 
-                if (rrule.by_second[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                if ((size = icalrecur_byrule_size(rrule, ICAL_BY_SECOND))) {
                     bypart = "SECOND";
-                    disable = check_by_array(rrule.by_second, ICAL_BY_SECOND_SIZE,
-                                             recur_interval, 1);
+                    disable = check_by_array(icalrecur_byrule_data(rrule, ICAL_BY_SECOND),
+                                             size, recur_interval, 1);
                 }
-                else if (rrule.by_minute[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                else if ((size = icalrecur_byrule_size(rrule, ICAL_BY_MINUTE))) {
                     bypart = "MINUTE";
-                    disable = check_by_array(rrule.by_minute, ICAL_BY_MINUTE_SIZE,
-                                             recur_interval, 60);
+                    disable = check_by_array(icalrecur_byrule_data(rrule, ICAL_BY_MINUTE),
+                                             size, recur_interval, 60);
                 }
-                else if (rrule.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+                else if ((size = icalrecur_byrule_size(rrule, ICAL_BY_HOUR))) {
                     bypart = "HOUR";
-                    disable = check_by_array(rrule.by_hour, ICAL_BY_HOUR_SIZE,
-                                             recur_interval, 3600);
+                    disable = check_by_array(icalrecur_byrule_data(rrule, ICAL_BY_HOUR),
+                                             size, recur_interval, 3600);
                 }
                 else if (recur_interval < min_interval) {
                     disable = 1;
@@ -916,11 +957,14 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                             "Disabling alarms for high frequence calendar entry",
                             "freq=<%s> interval=<%u> bypart=<%s>"
                             " mboxname=<%s> imap_uid=<%d>",
-                            icalrecur_freq_to_string(rrule.freq),
-                            rrule.interval, bypart,
+                            icalrecur_freq_to_string(rrule->freq),
+                            rrule->interval, bypart,
                             mailbox_name(mailbox), uid);
+                    icalrecurrencetype_unref(rrule);
                     return 0;
                 }
+
+                icalrecurrencetype_unref(rrule);
             }
 
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
@@ -946,6 +990,17 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              icalcomponent *ical, time_t lastrun,
                              time_t runtime, int dryrun)
 {
+    if (!is_supported_component(ical)) {
+        // Ignore unsupported components that already made it into
+        // the database. They might have been added before we added
+        // support to ignore component kinds, or because an installation
+        // changed their config of supported components and did not
+        // rebuild the alarm database.
+        xsyslog(LOG_DEBUG, "ignoring alarms for index record",
+                "mboxname=<%s> imap_uid=<%d>", mboxname, imap_uid);
+        return 0;
+    }
+
     icalcomponent *myical = NULL;
 
     /* Add default alarms */
@@ -1216,7 +1271,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     }
 
     /* Extract VPATCH from per-user-cal-data annotation */
-    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_parsemap(&dl, 1, buf_base(value), buf_len(value));
     vpatch = vpatch_from_peruserdata(dl);
 
     /* Apply VPATCH to a clone of the iCalendar resource */
@@ -1743,7 +1798,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     if (r) {
         /* Determine if we should retry (again) or cancel the submission.
            We try at 5m, 15m, 30m, 60m after original scheduled time. */
-        unsigned duration;
+        unsigned duration = 0;
         switch (data->num_retries) {
         case 0: duration =  300; break;
         case 1: duration =  600; break;

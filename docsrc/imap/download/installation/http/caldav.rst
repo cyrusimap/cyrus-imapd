@@ -77,10 +77,19 @@ There is also a Cyrus web GUI for managing calendar resources.
 It allows you to:
 
     * Create new collections, with whichever components are required
-    * Alter existing collections with different components
+    * Alter existing collections
     * Subscribe or download existing collections via prepared URLs
     * Set visibility attributes such as Public or Transparent
     * Delete existing collections
+
+To delete the value of a property, click on ✎ and then submit empty new value.
+
+The Name, Description, Color, and Order properties are used only for UI
+purposes.  “None color” means, that no calendar color is communicated
+to the calendar user agents.  Transparent calendars are skipped by
+server-side freebusy calculations.  The Time Zone on calendars
+is used to calculate the freebusy state on events with floating
+times.  Public toggles the `lrw9` rights for the `anyone` user.
 
 The Cyrus web GUI for CalDAV Collection Management is disabled by
 default, but can be enabled with the "caldav_allowcalendaradmin" option.

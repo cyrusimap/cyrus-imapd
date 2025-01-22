@@ -106,7 +106,7 @@ static std::set<int> read_db_versions(const Xapian::Database &database)
     return versions;
 }
 
-static void write_db_versions(Xapian::WritableDatabase &database, std::set<int> &versions)
+static void write_db_versions(Xapian::WritableDatabase &database, const std::set<int> &versions)
 {
     std::ostringstream val;
     for (std::set<int>::iterator it = versions.begin(); it != versions.end(); ++it) {
@@ -121,25 +121,21 @@ static void write_db_versions(Xapian::WritableDatabase &database, std::set<int> 
 #define XAPIAN_LANG_COUNT_KEYPREFIX "lang.count"
 #define XAPIAN_LANG_DOC_KEYPREFIX "lang.doc"
 
-static std::string lang_prefix(const std::string& iso_lang, const char *prefix)
+static std::string lang_prefix(const std::string& iso_lang, const std::string& prefix)
 {
-    std::string ustr = std::string(prefix) + "XI" + iso_lang;
+    std::string ustr = prefix + "XI" + iso_lang;
     std::transform(ustr.begin(), ustr.end(), ustr.begin(), ::toupper);
     return ustr;
 }
 
 static std::string lang_doc_key(const char *cyrusid)
 {
-    std::string key(XAPIAN_LANG_DOC_KEYPREFIX ".");
-    key += cyrusid;
-    return key;
+    return std::string{XAPIAN_LANG_DOC_KEYPREFIX "."} + cyrusid;
 }
 
 static std::string lang_count_key(const std::string& iso_lang)
 {
-    std::string key(XAPIAN_LANG_COUNT_KEYPREFIX ".");
-    key += iso_lang;
-    return key;
+    return XAPIAN_LANG_COUNT_KEYPREFIX "." + iso_lang;
 }
 
 static int calculate_language_counts(const Xapian::Database& db,
@@ -246,8 +242,7 @@ static std::string format_doclangs(const std::set<std::string>& doclangs)
         if (it != doclangs.begin()) val << ",";
         val << *it;
     }
-    std::string s = val.str();
-    return s;
+    return val.str();
 }
 
 static std::string parse_langcode(const char *str)
@@ -392,19 +387,25 @@ static std::string detect_language(const struct buf *part)
 {
     std::string iso_lang;
     bool reliable = false;
-    CLD2::Language lang = CLD2::DetectLanguage(part->s, part->len, 1, &reliable);
+
+    buf_cstring(part);
+    CLD2::Language lang = CLD2::DetectLanguage(
+        buf_base(part),
+        buf_len(part) < INT_MAX ? static_cast<int>(buf_len(part)) : INT_MAX,
+        1,
+        &reliable);
 
     if (reliable && lang != CLD2::UNKNOWN_LANGUAGE) {
         std::string code(CLD2::LanguageCode(lang));
         std::transform(code.begin(), code.end(), code.begin(), ::tolower);
         // Map CLD2 special codes to ISO 639.
-        if (!code.compare("zh-Hant")) {
+        if (code == "zh-hant") {
             code = "zh";
         }
-        else if (!code.compare("sr-ME" )) {
+        else if (code == "sr-me" ) {
             code = "sr"; // not a political statement!
         }
-        else if (!code.compare("xxx")) {
+        else if (code == "xxx") {
             code = "";
         }
         iso_lang = parse_langcode(code.c_str());
@@ -547,8 +548,10 @@ EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
 
 /* ====================================================================== */
 
-static const char *get_term_prefix(int partnum)
+static std::string get_term_prefix(enum search_part partnum)
 {
+    assert(partnum > SEARCH_PART_ANY && partnum < SEARCH_NUM_PARTS);
+
     /*
      * We use term prefixes to store terms per search part.
      * In addition, each Xapian document contains a "XE"
@@ -582,7 +585,7 @@ static const char *get_term_prefix(int partnum)
     return term_prefixes[partnum];
 }
 
-static Xapian::TermGenerator::stem_strategy get_stem_strategy(int partnum)
+static Xapian::TermGenerator::stem_strategy get_stem_strategy(enum search_part partnum)
 {
     static Xapian::TermGenerator::stem_strategy stem_strategy[SEARCH_NUM_PARTS] = {
         // Version 2 and higher
@@ -688,8 +691,7 @@ static int xapian_dbw_init(xapian_dbw_t *dbw)
     return 0;
 }
 
-EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp,
-                             int mode, int nosync)
+EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
 {
     xapian_dbw_t *dbw = (xapian_dbw_t *)xzmalloc(sizeof(xapian_dbw_t));
     int r = 0;
@@ -698,7 +700,9 @@ EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp,
     std::set<int> db_versions;
     try {
         int flags = Xapian::DB_BACKEND_GLASS|Xapian::DB_RETRY_LOCK;
-        if (nosync) flags |= Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC;
+        if (mode & XAPIAN_DBW_NOSYNC) {
+            flags |= Xapian::DB_DANGEROUS|Xapian::DB_NO_SYNC;
+        }
         try {
             dbw->database = new Xapian::WritableDatabase{thispath, flags|Xapian::DB_OPEN};
             db_versions = read_db_versions(*dbw->database);
@@ -734,7 +738,7 @@ EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp,
     }
 
     /* open the read-only databases */
-    if (mode == XAPIAN_DBW_XAPINDEXED) {
+    if (mode & XAPIAN_DBW_XAPINDEXED) {
         while (*paths) {
             try {
                 thispath = *paths;
@@ -759,8 +763,7 @@ EXPORTED int xapian_dbw_openmem(struct xapian_dbw **dbwp)
     dbw->is_inmemory = true;
 
     dbw->database = new Xapian::WritableDatabase{"", Xapian::DB_BACKEND_INMEMORY};
-    std::set<int> db_versions {XAPIAN_DB_CURRENT_VERSION};
-    write_db_versions(*dbw->database, db_versions);
+    write_db_versions(*dbw->database, {XAPIAN_DB_CURRENT_VERSION});
 
     int r = xapian_dbw_init(dbw);
     if (r) {
@@ -870,7 +873,7 @@ EXPORTED int xapian_dbw_begin_doc(xapian_dbw_t *dbw,
     return r;
 }
 
-static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
     std::string prefix(get_term_prefix(partnum));
     std::string val = parse_langcode(buf_cstring(part));
@@ -893,7 +896,7 @@ static std::string parse_priority(const char *str)
     return std::to_string(u);
 }
 
-static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
     std::string prefix(get_term_prefix(partnum));
     if (buf_len(part)) {
@@ -948,7 +951,7 @@ static std::string parse_listid(const char *str)
     return val;
 }
 
-static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
     std::string prefix(get_term_prefix(partnum));
 
@@ -965,7 +968,7 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, int partnu
     return 0;
 }
 
-static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
     std::string prefix(get_term_prefix(partnum));
     struct address_itr itr;
@@ -996,7 +999,7 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
             dbw->term_generator->set_stopper(NULL);
             dbw->term_generator->index_text(Xapian::Utf8Iterator(val), 1, prefix);
         }
-        if (addr->domain && strcmp(addr->domain, "unspecified-domain")) {
+        if (addr->domain && strcmp(addr->domain, "unspecified-domain") != 0) {
             char *utf8_domain = charset_idna_to_utf8(addr->domain);
             char *puny_domain = charset_idna_to_ascii(addr->domain);
 
@@ -1012,9 +1015,8 @@ static int add_email_part(xapian_dbw_t *dbw, const struct buf *part, int partnum
                 myaddr.domain = domains[i];
 
                 // index entire addr-spec
-                char *a = address_get_all(&myaddr, /*canon_domain*/1);
-                if (a) {
-                    add_boolean_nterm(*dbw->document, prefix + 'A' + std::string(a));
+                if (char *a = address_get_all(&myaddr, /*canon_domain*/1)) {
+                    add_boolean_nterm(*dbw->document, prefix + 'A' + a);
                     free(a);
                 }
 
@@ -1076,7 +1078,7 @@ static std::pair<std::string, std::string> parse_content_type(const char *str)
     return ret;
 }
 
-static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
     std::string prefix(get_term_prefix(partnum));
     std::pair<std::string, std::string> ct = parse_content_type(buf_cstring(part));
@@ -1092,16 +1094,16 @@ static int add_type_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
     return 0;
 }
 
-static int add_msgid_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_msgid_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
     std::string prefix(get_term_prefix(partnum));
     add_boolean_nterm(*dbw->document, prefix + buf_cstring(part));
     return 0;
 }
 
-static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
+static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, enum search_part partnum)
 {
-    const char *prefix = get_term_prefix(partnum);
+    std::string prefix(get_term_prefix(partnum));
     int r = 0;
 
     // Index text.
@@ -1147,7 +1149,7 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
                     }
                     // Store detected languages in document.
                     dbw->doclangs->insert(iso_lang.c_str());
-                    add_boolean_nterm(*dbw->document, std::string("XI") + iso_lang);
+                    add_boolean_nterm(*dbw->document, "XI" + iso_lang);
                 }
             }
             else if (partnum == SEARCH_PART_SUBJECT) {
@@ -1172,14 +1174,9 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, int partnum)
 
 EXPORTED int xapian_dbw_doc_part(xapian_dbw_t *dbw,
                                  const struct buf *part,
-                                 int partnum)
+                                 enum search_part partnum)
 {
     int r = 0;
-
-    if (!get_term_prefix(partnum)) {
-        syslog(LOG_ERR, "xapian_wrapper: no prefix for partnum %d", partnum);
-        return IMAP_INTERNAL;
-    }
 
     try {
         // Handle search parts.
@@ -1242,8 +1239,8 @@ EXPORTED int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
                 std::string iso_lang = *it;
                 if (iso_lang.compare("en")) {
                     try {
-                        const char *tp = get_term_prefix(SEARCH_PART_SUBJECT);
-                        std::string prefix = lang_prefix(iso_lang, tp);
+                        std::string prefix = lang_prefix(
+                            iso_lang, get_term_prefix(SEARCH_PART_SUBJECT));
                         dbw->term_generator->set_stemmer(get_stemmer(iso_lang));
                         dbw->term_generator->set_stopper(get_stopper(iso_lang));
                         for (const std::string& subject : *dbw->subjects)
@@ -1350,7 +1347,7 @@ static int xapian_db_init(xapian_db_t *db, int is_inmemory)
         if (!is_inmemory) {
             // Determine stemmer languages (in addition to English).
             std::map<const std::string, unsigned> lang_counts;
-            size_t total_doccount = 0;
+            unsigned total_doccount = 0;
             for (const Xapian::Database& subdb : *db->subdbs) {
                 read_language_counts(subdb, lang_counts);
                 total_doccount += subdb.get_doccount();
@@ -1515,16 +1512,18 @@ EXPORTED int xapian_db_langstats(xapian_db_t *db, ptrarray_t* lstats,
 
 EXPORTED void xapian_query_add_stemmer(xapian_db_t *db, const char *iso_lang)
 {
-    if (strcmp(iso_lang, "en")) db->stem_languages->insert(iso_lang);
+    if (strcmp(iso_lang, "en") != 0)
+        db->stem_languages->insert(iso_lang);
 }
 
 static Xapian::Query* query_new_textmatch(const xapian_db_t *db,
+                                          enum search_part partnum,
                                           const char *match,
-                                          const char *prefix,
                                           Xapian::TermGenerator::stem_strategy tg_stem_strategy)
 {
     unsigned flags = Xapian::QueryParser::FLAG_PHRASE |
                      Xapian::QueryParser::FLAG_WILDCARD;
+    std::string prefix(get_term_prefix(partnum));
 
     std::string lmatch = Xapian::Unicode::tolower(match);
 
@@ -1570,7 +1569,7 @@ static Xapian::Query* query_new_textmatch(const xapian_db_t *db,
 }
 
 static Xapian::Query *query_new_language(const xapian_db_t *db __attribute__((unused)),
-                                         const char *prefix,
+                                         enum search_part partnum,
                                          const char *str)
 {
     std::string val = parse_langcode(str);
@@ -1578,11 +1577,11 @@ static Xapian::Query *query_new_language(const xapian_db_t *db __attribute__((un
         syslog(LOG_DEBUG, "Xapian: invalid language in query: %s", str);
         return new Xapian::Query(Xapian::Query::MatchNothing);
     }
-    return new Xapian::Query(std::string(prefix) + val);
+    return new Xapian::Query(get_term_prefix(partnum) + val);
 }
 
 static Xapian::Query *query_new_priority(const xapian_db_t *db __attribute__((unused)),
-                                         const char *prefix,
+                                         enum search_part partnum,
                                          const char *str)
 {
     std::string val = parse_priority(str);
@@ -1590,18 +1589,19 @@ static Xapian::Query *query_new_priority(const xapian_db_t *db __attribute__((un
         syslog(LOG_DEBUG, "Xapian: invalid priority in query: %s", str);
         return new Xapian::Query(Xapian::Query::MatchNothing);
     }
-    return new Xapian::Query(std::string(prefix) + val);
+    return new Xapian::Query(get_term_prefix(partnum) + val);
 }
 
 static Xapian::Query *query_new_listid(const xapian_db_t *db,
-                                       const char *prefix,
+                                       enum search_part partnum,
                                        const char *str)
 {
     Xapian::Query *q = NULL;
+    std::string prefix(get_term_prefix(partnum));
 
     std::string val = parse_listid(str);
     if (!val.empty()) {
-        q = new Xapian::Query(std::string(prefix) + val);
+        q = new Xapian::Query(prefix + val);
     }
     else {
         syslog(LOG_DEBUG, "Xapian: invalid listid in query: %s", str);
@@ -1621,17 +1621,18 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
 }
 
 static Xapian::Query *query_new_messageid(const xapian_db_t *db __attribute__((unused)),
-                                          const char *prefix,
+                                          enum search_part partnum,
                                           const char *str)
 {
-    return new Xapian::Query(std::string(prefix) + str);
+    return new Xapian::Query(get_term_prefix(partnum) + str);
 }
 
 static Xapian::Query *query_new_email(const xapian_db_t *db,
-                                      const char *_prefix,
+                                      enum search_part partnum,
                                       const char *searchstr)
 {
-    std::string prefix(_prefix);
+    std::string prefix(get_term_prefix(partnum));
+    bool is_phrase_query = false;
 
     unsigned queryflags =
         Xapian::QueryParser::FLAG_PHRASE | Xapian::QueryParser::FLAG_WILDCARD;
@@ -1641,6 +1642,14 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
 
     std::string str = Xapian::Unicode::tolower(searchstr);
+    // Remove enclosing phrase search quotes, if any.
+    if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
+        str.erase(str.end() - 1);
+        str.erase(str.begin());
+        if (str.empty()) return NULL;
+        is_phrase_query = true;
+    }
+
     size_t atsign_pos = str.find('@');
 
     if (atsign_pos == std::string::npos || atsign_pos == str.length() - 1) {
@@ -1660,7 +1669,8 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
         email.append(str, 0, atsign_pos);
     }
 
-    if (!email.empty() && email[email.length() - 1] == '*') {
+    if (!is_phrase_query &&
+            !email.empty() && email[email.length() - 1] == '*') {
         wildcard_localpart = true;
         email.erase(email.length() - 1, 1);
     }
@@ -1682,7 +1692,7 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
     bool subdomain_only = false;
     std::string domain(str, atsign_pos + 1);
 
-    if (domain.length() && domain[0] == '*') {
+    if (!is_phrase_query && domain.length() && domain[0] == '*') {
         wildcard_domain = true;
         domain.erase(0, 1);
         if (domain.length() && domain[0] == '.') {
@@ -1747,12 +1757,10 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
             if (myaddr.mailbox && !wildcard_localpart && !wildcard_domain) {
                 // Query complete email addresses with A prefix
                 Xapian::Query q = Xapian::Query::MatchNothing;
-                char *a = address_get_all(&myaddr, /*canon_domain*/ 1);
-                if (a) {
-                    std::string term(prefix + 'A' + std::string(a));
-                    q = Xapian::Query(term);
+                if (char *a = address_get_all(&myaddr, /*canon_domain*/ 1)) {
+                    q = Xapian::Query(prefix + 'A' + a);
+                    free(a);
                 }
-                free(a);
 
                 if (db->db_versions->lower_bound(16) !=
                         db->db_versions->begin()) {
@@ -1854,12 +1862,12 @@ static void append_alnum(struct buf *buf, const char *ss)
 }
 
 static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused)),
-                                     const char *_prefix,
+                                     enum search_part partnum,
                                      const char *str)
 {
 
     std::pair<std::string, std::string> ct = parse_content_type(str);
-    std::string prefix(_prefix);
+    std::string prefix(get_term_prefix(partnum));
     Xapian::Query q = Xapian::Query::MatchNothing;
 
     bool query_legacy = db->db_versions->lower_bound(13) != db->db_versions->begin();
@@ -1913,8 +1921,12 @@ static Xapian::Query *query_new_type(const xapian_db_t *db __attribute__((unused
     return new Xapian::Query(q);
 }
 
-static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, const char *str, const char *prefix)
+static Xapian::Query *xapian_query_new_match_word_break(const xapian_db_t *db,
+                                                        enum search_part partnum,
+                                                        const char *str)
 {
+    std::string prefix(get_term_prefix(partnum));
+
     Xapian::Query *q = new Xapian::Query {db->parser->parse_query(
             str,
 #if defined(USE_XAPIAN_WORD_BREAKS)
@@ -1960,12 +1972,10 @@ static Xapian::Query* xapian_query_new_match_word_break(const xapian_db_t *db, c
 }
 
 static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
-                                                      int partnum,
+                                                      enum search_part partnum,
                                                       const char *str,
                                                       int convert_flags)
 {
-    const char *prefix = get_term_prefix(partnum);
-
     charset_t utf8 = charset_lookupname("utf-8");
     char *mystr = charset_convert(str, utf8, convert_flags);
     charset_free(&utf8);
@@ -1976,28 +1986,28 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
     try {
         // Handle special value search parts.
         if (partnum == SEARCH_PART_LANGUAGE) {
-            q = query_new_language(db, prefix, mystr);
+            q = query_new_language(db, partnum, mystr);
         }
         else if (partnum == SEARCH_PART_PRIORITY) {
-            q = query_new_priority(db, prefix, mystr);
+            q = query_new_priority(db, partnum, mystr);
         }
         else if (partnum == SEARCH_PART_LISTID) {
-            q = query_new_listid(db, prefix, mystr);
+            q = query_new_listid(db, partnum, mystr);
         }
         else if (partnum == SEARCH_PART_FROM ||
                  partnum == SEARCH_PART_TO ||
                  partnum == SEARCH_PART_CC ||
                  partnum == SEARCH_PART_BCC ||
                  partnum == SEARCH_PART_DELIVEREDTO) {
-            q = query_new_email(db, prefix, mystr);
+            q = query_new_email(db, partnum, mystr);
         }
         else if (partnum == SEARCH_PART_TYPE) {
-            q = query_new_type(db, prefix, mystr);
+            q = query_new_type(db, partnum, mystr);
         }
         else if (partnum == SEARCH_PART_INREPLYTO ||
                 partnum == SEARCH_PART_MESSAGEID ||
                 partnum == SEARCH_PART_REFERENCES) {
-            q = query_new_messageid(db, prefix, mystr);
+            q = query_new_messageid(db, partnum, mystr);
         }
         else {
             // Match unstructured search parts
@@ -2011,12 +2021,12 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
             }
 
             if (need_word_break) {
-                q = xapian_query_new_match_word_break(db, mystr, prefix);
+                q = xapian_query_new_match_word_break(db, partnum, mystr);
             }
             else {
                 Xapian::TermGenerator::stem_strategy stem_strategy =
                     get_stem_strategy(partnum);
-                q = query_new_textmatch(db, mystr, prefix, stem_strategy);
+                q = query_new_textmatch(db, partnum, mystr, stem_strategy);
             }
             if (q && q->get_type() == Xapian::Query::LEAF_MATCH_NOTHING) {
                 delete q;
@@ -2076,19 +2086,14 @@ static bool query_terms_eq(const Xapian::Query *qa, const Xapian::Query *qb)
 }
 
 EXPORTED xapian_query_t *
-xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
+xapian_query_new_match(const xapian_db_t *db, enum search_part partnum, const char *str)
 {
     if (db->subdbs->empty()) {
         // no database to query
         return NULL;
     }
 
-    const char *prefix = get_term_prefix(partnum);
-    if (!prefix) {
-        return NULL;
-    }
-
-    int min_version = *db->db_versions->begin();
+    unsigned min_version = *db->db_versions->begin();
     if (min_version < XAPIAN_DB_MIN_SUPPORTED_VERSION) {
         xsyslog(LOG_WARNING,
                 "deprecated database version, reindex required",
@@ -2097,7 +2102,7 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
                 db->paths->c_str());
     }
 
-    int max_version = *db->db_versions->rbegin();
+    unsigned max_version = *db->db_versions->rbegin();
 
     Xapian::Query *q = NULL;
     if (max_version >= 17) {
@@ -2325,19 +2330,16 @@ struct xapian_snipgen
 };
 
 EXPORTED xapian_snipgen_t *
-xapian_snipgen_new(xapian_db_t *db,
-                   const char *hi_start,
-                   const char *hi_end,
-                   const char *omit)
+xapian_snipgen_new(xapian_db_t *db, const struct search_snippet_markup *markup)
 {
     xapian_snipgen_t *snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
     snipgen->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer);
     snipgen->db = db;
     snipgen->memdb = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
     snipgen->buf = buf_new();
-    snipgen->hi_start = hi_start;
-    snipgen->hi_end = hi_end;
-    snipgen->omit = omit;
+    snipgen->hi_start = markup->hi_start;
+    snipgen->hi_end = markup->hi_end;
+    snipgen->omit = markup->omit;
     snipgen->max_len = (size_t) config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
 
     return snipgen;
@@ -2481,8 +2483,7 @@ EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
 }
 
 EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
-                                     const struct buf *part,
-                                     int partnum __attribute__((unused)))
+                                     const struct buf *part)
 {
     // Ignore empty queries.
     if (!snipgen->loose_terms && !snipgen->queries) return 0;
@@ -2505,9 +2506,8 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
         // Generate snippets for each detected message language.
         // The first non-empty snippet wins.
         size_t prev_size = buf_len(snipgen->buf);
-        for (std::set<std::string>::iterator it = doclangs.begin(); it != doclangs.end(); ++it) {
-            const std::string& iso_lang = *it;
-            if (iso_lang.compare("en")) {
+        for (const std::string& iso_lang : doclangs) {
+            if (iso_lang != "en") {
                 try {
                     Xapian::Stem stemmer = get_stemmer(iso_lang);
                     int r = xapian_snipgen_make_snippet(snipgen, part, &stemmer);
@@ -2680,36 +2680,34 @@ EXPORTED const char *xapian_version_string()
 }
 
 struct xapian_doc {
-    Xapian::TermGenerator *termgen;
-    Xapian::Document *doc;
+    Xapian::TermGenerator termgen;
+    Xapian::Document doc;
 };
 
 EXPORTED xapian_doc_t *xapian_doc_new(void)
 {
-    xapian_doc_t *doc = (xapian_doc_t *) xzmalloc(sizeof(struct xapian_doc));
-    doc->doc = new Xapian::Document;
-    doc->termgen = new Xapian::TermGenerator;
-    doc->termgen->set_document(*doc->doc);
+    xapian_doc_t *doc = new xapian_doc;
+    doc->termgen.set_document(doc->doc);
     return doc;
 }
 
 EXPORTED void xapian_doc_index_text(xapian_doc_t *doc,
                                     const char *text, size_t len)
 {
-    doc->termgen->index_text(Xapian::Utf8Iterator(text, len));
+    doc->termgen.index_text(Xapian::Utf8Iterator(text, len));
 }
 
 EXPORTED size_t xapian_doc_termcount(xapian_doc_t *doc)
 {
-    return doc->doc->termlist_count();
+    return doc->doc.termlist_count();
 }
 
 EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
                                      int(*cb)(const char*, void*),
                                      void *rock)
 {
-    for (Xapian::TermIterator ti = doc->doc->termlist_begin();
-            ti != doc->doc->termlist_end(); ++ti) {
+    for (Xapian::TermIterator ti = doc->doc.termlist_begin();
+            ti != doc->doc.termlist_end(); ++ti) {
         int r = cb((*ti).c_str(), rock);
         if (r) return r;
     }
@@ -2718,14 +2716,12 @@ EXPORTED int xapian_doc_foreach_term(xapian_doc_t *doc,
 
 EXPORTED void xapian_doc_reset(xapian_doc_t *doc)
 {
-    doc->doc->clear_values();
+    doc->doc.clear_values();
 }
 
 EXPORTED void xapian_doc_close(xapian_doc_t *doc)
 {
-    delete doc->termgen;
-    delete doc->doc;
-    free(doc);
+    delete doc;
 }
 
 EXPORTED int xapian_charset_flags(int flags)

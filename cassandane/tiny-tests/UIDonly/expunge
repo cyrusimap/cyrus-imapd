@@ -24,7 +24,7 @@ sub test_expunge
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     xlog $self, "ENABLE UIDONLY";
-    $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+    my $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
     $self->assert_num_equals(1, $res->{uidonly});
 
     xlog $self, "EXPUNGE";

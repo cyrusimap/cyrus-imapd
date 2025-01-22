@@ -83,13 +83,16 @@ sub new
                  httpmodules => 'jmap',
                  httpallowcompress => 'no');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         deliver => 1,
         adminstore => 1,
         services => [ 'imap', 'sieve', 'http' ]
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up
@@ -109,7 +112,7 @@ sub tear_down
 }
 
 sub test_vacation_get_none
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9
 {
     my ($self) = @_;
 
@@ -130,7 +133,7 @@ sub test_vacation_get_none
 }
 
 sub test_vacation_set
-    :min_version_3_9 :needs_component_jmap
+    :min_version_3_9
 {
     my ($self) = @_;
 

@@ -133,6 +133,7 @@ static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 {
+    const char *text = error_message(r);
     int code;
 
     if (resp) {
@@ -146,7 +147,14 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 
     switch (r) {
     case 0:
+        /* n.b. can't rely on error_message(0) to produce a success string */
+        text = "Success";
         code = LMTP_OK;
+        break;
+
+    case IMAP_LIMIT_HOST:
+    case IMAP_LIMIT_USER:
+        code = LMTP_SERVER_BUSY;
         break;
 
     case IMAP_SERVER_UNAVAILABLE:
@@ -219,7 +227,7 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
         break;
     }
 
-    prot_printf(pout, error_message(code), error_message(r), session_id());
+    prot_printf(pout, error_message(code), text, session_id());
     prot_puts(pout, "\r\n");
 }
 
@@ -654,7 +662,7 @@ static int savemsg(struct clientdata *cd,
 
     strcat(p++, ";");
     fold[nfold++] = p;
-    p += sprintf(p, " %s", datestr);
+    sprintf(p, " %s", datestr);
 
     struct buf rbuf = BUF_INITIALIZER;
     buf_setcstr(&rbuf, "Received: ");
@@ -1451,19 +1459,21 @@ void lmtpmode(struct lmtp_func *func,
                                       1, /* write */
                                       360, /* 6 minutes */
                                       &saslprops,
+                                      NULL, /* no ALPN id for lmtp */
                                       &(cd.tls_conn));
 
                 /* if error */
                 if (r==-1) {
-                    prot_printf(pout, "454 4.3.3 STARTTLS failed\r\n");
-                    syslog(LOG_NOTICE, "[lmtpd] STARTTLS failed: %s", cd.clienthost);
-                    continue;
+                    syslog(LOG_NOTICE,
+                           "TLS negotiation failed: %s", cd.clienthost);
+                    func->shutdown(EX_PROTOCOL);
                 }
 
                 /* tell SASL about the negotiated layer */
                 r = saslprops_set_tls(&saslprops, cd.conn);
                 if (r != SASL_OK) {
-                    fatal("saslprops_set_tls() failed: STARTTLS", EX_TEMPFAIL);
+                    syslog(LOG_NOTICE, "saslprops_set_tls() failed: STARTTLS");
+                    func->shutdown(EX_TEMPFAIL);
                 }
                 if (buf_len(&saslprops.authid)) {
                     cd.authenticated = TLSCERT_AUTHED;

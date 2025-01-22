@@ -94,7 +94,6 @@ sub new
         replica => 0,
         imapmurder => 0,
         httpmurder => 0,
-        backups => 0,
         start_instances => 1,
         services => [ 'imap' ],
         store => 1,
@@ -104,6 +103,7 @@ sub new
         jmap => 0,
         install_certificates => 0,
         squatter => 0,
+        smtpdaemon => 0,
     };
     map {
         $want->{$_} = delete $params->{$_}
@@ -224,6 +224,18 @@ sub want_services
 
 }
 
+sub needs
+{
+    my ($self, $category, $key, $want_value) = @_;
+
+    # $category and $key are as per cyr_buildinfo output. $want_value is
+    # optional and defaults to '1', but can be a particular value for
+    # category=>key pairs that aren't boolean.
+    # See Cassandane::Unit:TestCase::is_feature_missing to see how
+    # needs are used.
+    $self->{needs}->{$category}->{$key} = $want_value // 1;
+}
+
 sub config_set
 {
     my ($self, %pairs) = @_;
@@ -252,7 +264,6 @@ magic(CSyncReplication => sub {
 });
 magic(IMAPMurder => sub { shift->want('imapmurder'); });
 magic(HTTPMurder => sub { shift->want('httpmurder'); });
-magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
 });
@@ -479,6 +490,11 @@ magic(Mboxgroups => sub {
     my $self = shift;
     $self->config_set('auth_mech' => 'mboxgroups');
 });
+magic(CaldavAlarmOnlyVevent => sub {
+    my $self = shift;
+    $self->config_set('caldav_alarm_support_components' => 'VEVENT');
+});
+
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
@@ -527,7 +543,6 @@ sub _create_instances
     my $frontend_service_port;
     my $backend1_service_port;
     my $backend2_service_port;
-    my $backupd_port;
 
     $self->{_config} = $self->{_instance_params}->{config} || Cassandane::Config->default();
     $self->{_config} = $self->{_config}->clone();
@@ -588,19 +603,6 @@ sub _create_instances
             );
         }
 
-        if ($want->{backups})
-        {
-            $backupd_port = Cassandane::PortManager::alloc("localhost");
-            $conf->set(
-                backup_sync_host => "localhost",
-                backup_sync_port => $backupd_port,
-                backup_sync_authname => 'repluser',
-                backup_sync_password => 'repluser',
-                backup_sync_try_imap => 'no',
-                xbackup_enabled => 'yes',
-            );
-        }
-
         my $sub = $self->{_name};
         if ($sub =~ s/^test_/config_/ && $self->can($sub))
         {
@@ -609,6 +611,7 @@ sub _create_instances
 
         $instance_params{config} = $conf;
         $instance_params{install_certificates} = $want->{install_certificates};
+        $instance_params{smtpdaemon} = $want->{smtpdaemon};
 
         $instance_params{description} = "main instance for test $self->{_name}";
         $self->{instance} = Cassandane::Instance->new(%instance_params);
@@ -630,9 +633,9 @@ sub _create_instances
         if ($want->{replica} || $want->{csyncreplica})
         {
             my %replica_params = %instance_params;
-            $replica_params{config} = $conf->clone();
+            $replica_params{config} = $self->{_config}->clone();
             $replica_params{config}->set(sync_rightnow_channel => undef);
-	    unless ($self->{no_replicaonly}) {
+            unless ($self->{no_replicaonly}) {
                 $replica_params{config}->set(replicaonly => 'yes');
             }
             my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
@@ -780,32 +783,6 @@ sub _create_instances
             $self->{backend2}->_setup_for_deliver()
                 if ($want->{deliver});
         }
-
-        if ($want->{backups})
-        {
-            # set up a backup server
-            my $backup_conf = $self->{_config}->clone();
-            $backup_conf->set(
-                temp_path => '@basedir@/tmp',
-                backup_keep_previous => 'yes',
-                'backuppartition-default' => '@basedir@/data/backup',
-            );
-
-            my $cyrus_backup_prefix = $cassini->val('cyrus backup', 'prefix');
-            if (defined $cyrus_backup_prefix and -d $cyrus_backup_prefix) {
-                xlog $self, "backup instance: using [cyrus backup] configuration";
-                $instance_params{installation} = 'backup';
-            }
-
-            $instance_params{description} = "backup server for test $self->{_name}";
-            $instance_params{config} = $backup_conf;
-
-            $self->{backups} = Cassandane::Instance->new(%instance_params,
-                                                         setup_mailbox => 0);
-            $self->{backups}->add_service(name => 'backup',
-                                          port => $backupd_port,
-                                          argv => ['backupd']);
-        }
     }
 
     if ($want->{gen})
@@ -818,22 +795,30 @@ sub _setup_http_service_objects
 {
     my ($self) = @_;
 
-    # nothing to do if no http service
-    require Mail::JMAPTalk;
-    require Net::CalDAVTalk;
-    require Net::CardDAVTalk;
-
+    # nothing to do if no http or https service
     my $service = $self->{instance}->get_service("http");
+    $service ||= $self->{instance}->get_service("https");
     return if !$service;
+
+    my %common_args = (
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => ($service->is_ssl() ? 'https' : 'http'),
+    );
+
+    # XXX HTTP::Tiny 0.8.3 and later have SSL_verify enabled by default, but
+    # XXX Net::DAVTalk doesn't provide any way for us to supply our CA file,
+    # XXX making setup fail with certificate verify errors.
+    # XXX HTTP::Tiny 0.86 and later lets us set this environment variable
+    # XXX to restore the old default
+    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} = 1;
 
     if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
         require Net::CardDAVTalk;
         $self->{carddav} = Net::CardDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
+            %common_args,
             url => '/',
             expandurl => 1,
         );
@@ -841,26 +826,18 @@ sub _setup_http_service_objects
     if ($self->{instance}->{config}->get_bit('httpmodules', 'caldav')) {
         require Net::CalDAVTalk;
         $self->{caldav} = Net::CalDAVTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
+            %common_args,
             url => '/',
             expandurl => 1,
         );
         $self->{caldav}->UpdateAddressSet("Test User",
-                                            "cassandane\@example.com");
+                                          "cassandane\@example.com");
     }
     if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
         require Mail::JMAPTalk;
         $ENV{DEBUGJMAP} = 1;
         $self->{jmap} = Mail::JMAPTalk->new(
-            user => 'cassandane',
-            password => 'pass',
-            host => $service->host(),
-            port => $service->port(),
-            scheme => 'http',
+            %common_args,
             url => '/jmap/',
         );
     }
@@ -911,8 +888,6 @@ sub _start_instances
         if (defined $self->{backend2});
     $self->{replica}->start()
         if (defined $self->{replica});
-    $self->{backups}->start()
-        if (defined $self->{backups});
 
     $self->{store} = undef;
     $self->{adminstore} = undef;
@@ -1031,16 +1006,6 @@ sub tear_down
         push @basedirs, $self->{instance}->get_basedir();
         $self->{instance} = undef;
     }
-    if (defined $self->{backups})
-    {
-        eval {
-            push @stop_errors, $self->{backups}->stop(
-                no_check_syslog => defined $self->{no_check_syslog}
-            );
-        };
-        push @basedirs, $self->{backups}->get_basedir();
-        $self->{backups} = undef;
-    }
     if (defined $self->{backend2})
     {
         eval {
@@ -1074,8 +1039,20 @@ sub tear_down
 
     $self->{cleanup_basedirs} = [@basedirs];
 
-    # maybe there's multiple errors, but we can only die for one of them...
-    die $stop_errors[0] if scalar @stop_errors;
+    if (@stop_errors) {
+        if (exists $self->{'__Error__'}) {
+            # XXX this feels fragile, but there isn't a correct way for
+            # XXX tear_down to see the test's result.
+
+            # looks like we already failed, and dying again here would conceal
+            # the test failure details, which are probably more interesting
+            xlog "errors found during instance shutdown";
+        }
+        else {
+            # maybe there's multiple errors, but we can only die once...
+            die $stop_errors[0];
+        }
+    }
 
     xlog "---------- END $self->{_name} ----------";
 }

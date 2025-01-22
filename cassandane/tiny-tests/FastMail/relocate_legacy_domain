@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_relocate_legacy_domain
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
-    :needs_component_httpd
 {
     my ($self) = @_;
 

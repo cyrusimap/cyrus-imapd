@@ -69,15 +69,39 @@
 #include "imap/prometheus.h"
 #include "imap/quota.h"
 
+static void do_collate_service_report(struct buf *buf);
+static void do_collate_usage_report(struct buf *buf);
+
 /* globals so that shut_down() can clean up */
-static struct buf report_buf = BUF_INITIALIZER;
-static struct mappedfile *report_file = NULL;
+static struct report {
+    const char *fname;
+    const char *desc;
+    void (*collate_fn)(struct buf *);
+    enum imapopt freq_opt;
+    int default_frequency;
+    struct mappedfile *mf;
+    struct buf buf;
+    int frequency;
+    int64_t prev_report_time;
+} reports[] = {
+    { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
+      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 10,
+      NULL, BUF_INITIALIZER, 0, 0 },
+    { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
+      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ, 0,
+      NULL, BUF_INITIALIZER, 0, 0 },
+};
+const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
 
 static void shut_down(int ec) __attribute__((noreturn));
 static void shut_down(int ec)
 {
-    mappedfile_close(&report_file);
-    buf_free(&report_buf);
+    unsigned i;
+
+    for (i = 0; i < n_reports; i++) {
+        mappedfile_close(&reports[i].mf);
+        buf_free(&reports[i].buf);
+    }
     cyrus_done();
     exit(ec);
 }
@@ -87,6 +111,8 @@ EXPORTED void fatal(const char *msg, int err)
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
+    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+
     shut_down(err);
 }
 
@@ -94,7 +120,7 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s [-C alt_config] [-v] [-f frequency] [-d]\n", argv0);
+    fprintf(stderr, "    %s [-C alt_config] [-v] [-f service_frequency] [-d]\n", argv0);
     fprintf(stderr, "    %s [-C alt_config] [-v] -c\n", argv0);
     exit(EX_USAGE);
 }
@@ -145,7 +171,9 @@ enum promdir_foreach_mode {
     PROMDIR_FOREACH_DONEPROCS,
 };
 typedef int promdir_foreach_cb(const struct prom_stats *stats, void *rock);
-static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode mode, void *rock)
+static int promdir_foreach(promdir_foreach_cb *proc,
+                           enum promdir_foreach_mode mode,
+                           void *rock)
 {
     const char *basedir;
     DIR *dh;
@@ -242,7 +270,7 @@ static void format_metric(const char *key __attribute__((unused)),
                             stats->metrics[fmrock->metric].last_updated);
 }
 
-static void do_collate_report(struct buf *buf)
+static void do_collate_service_report(struct buf *buf)
 {
     hash_table all_stats = HASH_TABLE_INITIALIZER;
     char *doneprocs_lock_fname;
@@ -552,13 +580,14 @@ static void format_usage_quota_commitment(struct buf *buf,
     }
 }
 
-static void do_collate_usage(struct buf *buf)
+static void do_collate_usage_report(struct buf *buf)
 {
     hash_table h = HASH_TABLE_INITIALIZER;
     strarray_t *partition_names = NULL;
     int r;
     int64_t starttime;
 
+    buf_reset(buf);
     construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
 
     starttime = now_ms();
@@ -573,7 +602,7 @@ static void do_collate_usage(struct buf *buf)
         struct quota_rock rock = { NULL, &h, NULL };
 
         starttime = now_ms();
-        r = quota_foreach(NULL, count_quota_commitments, &rock, NULL);
+        r = quota_foreach(NULL, count_quota_commitments, &rock, NULL, 0);
         syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
                           (now_ms() - starttime) / 1000.0);
 
@@ -623,22 +652,26 @@ static void do_write_report(struct mappedfile *mf, const struct buf *report)
     mappedfile_unlock(mf);
 }
 
+static inline int report_due(const struct report *report, int64_t tick)
+{
+    return (report->prev_report_time + 1000 * report->frequency <= tick);
+}
+
 int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
 
     const char *alt_config = NULL;
     int call_debugger = 0;
-    char *report_fname = NULL;
-    struct mappedfile *report_file = NULL;
     const char *p;
     int cleanup = 0;
     int debugmode = 0;
     int verbose = 0;
-    int frequency = 0;
     int oneshot = 0;
+    int min_frequency = INT_MAX;
     int opt;
     int r;
+    unsigned i;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -665,9 +698,9 @@ int main(int argc, char **argv)
             debugmode = 1;
             break;
 
-        case 'f': /* set frequency */
-            frequency = atoi(optarg);
-            if (frequency <= 0) usage();
+        case 'f': /* set service report frequency */
+            reports[0].frequency = atoi(optarg);
+            if (reports[0].frequency <= 0) usage();
             break;
 
         case 'v': /* verbose */
@@ -720,22 +753,37 @@ int main(int argc, char **argv)
         }
     }
 
-    if (frequency <= 0)
-        frequency = config_getduration(IMAPOPT_PROMETHEUS_UPDATE_FREQ, 's');
-    if (frequency <= 0)
-        frequency = 10;
+    for (i = 0; i < n_reports; i++) {
+        char *fname = strconcat(prometheus_stats_dir(),
+                                reports[i].fname,
+                                NULL);
 
-    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
-    syslog(LOG_DEBUG, "updating %s every %d seconds", report_fname, frequency);
+        if (reports[i].frequency <= 0)
+            reports[i].frequency = config_getduration(reports[i].freq_opt, 's');
+        if (reports[i].frequency <= 0)
+            reports[i].frequency = reports[i].default_frequency;
 
-    xunlink(report_fname);
-    r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
-    free(report_fname);
-    if (r) fatal("couldn't open report file", EX_IOERR);
+        if (reports[i].frequency) {
+            syslog(LOG_DEBUG, "updating %s every %d seconds",
+                              fname, reports[i].frequency);
+            if (reports[i].frequency < min_frequency)
+                min_frequency = reports[i].frequency;
+        }
+        else {
+            syslog(LOG_DEBUG, "not updating %s due to frequency 0", fname);
+        }
+
+        xunlink(fname);
+        r = mappedfile_open(&reports[i].mf, fname,
+                            MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+        free(fname);
+        if (r) fatal("couldn't open report file", EX_IOERR);
+    }
+    assert(min_frequency > 0 && min_frequency < INT_MAX);
 
     for (;;) {
         int sig;
-        int64_t starttime;
+        int64_t tick, elapsed;
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
@@ -750,24 +798,34 @@ int main(int argc, char **argv)
             shut_down(0);
         }
 
-        starttime = now_ms();
-        do_collate_report(&report_buf);
-        syslog(LOG_DEBUG, "collated service report in %f seconds",
-                (now_ms() - starttime) / 1000.0);
-
-        starttime = now_ms();
-        do_collate_usage(&report_buf);
-        syslog(LOG_DEBUG, "collated usage report in %f seconds",
-                (now_ms() - starttime) / 1000.0);
-
-        do_write_report(report_file, &report_buf);
+        tick = now_ms();
+        for (i = 0; i < n_reports; i++) {
+            if (reports[i].frequency
+                && (oneshot || report_due(&reports[i], tick)))
+            {
+                int64_t profile_starttime = now_ms();
+                reports[i].collate_fn(&reports[i].buf);
+                syslog(LOG_DEBUG, "collated %s report in %f seconds",
+                                  reports[i].desc,
+                                  (now_ms() - profile_starttime) / 1000.0);
+                do_write_report(reports[i].mf, &reports[i].buf);
+                reports[i].prev_report_time = tick;
+            }
+        }
 
         if (oneshot) {
             shut_down(0);
         }
 
         /* then wait around a bit */
-        sleep(frequency); /* XXX substract elapsed time? */
+        /* XXX This isn't exactly right: if service is 10s and usage is 15s
+         * XXX we'll end up waking at 10s, 20s, 30s, 40s, and the usage report
+         * XXX will be on a lurching clock since 10 doesn't evenly divide 15.
+         * XXX Probably want to use greatest common divisor, but that would
+         * XXX become annoying to compute if we add a third report to the mix.
+         */
+        elapsed = now_ms() - tick;
+        sleep(min_frequency - elapsed / 1000);
     }
 
     /* NOTREACHED */

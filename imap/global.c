@@ -113,7 +113,6 @@ EXPORTED const char *config_statuscache_db;
 HIDDEN const char *config_userdeny_db;
 EXPORTED const char *config_zoneinfo_db;
 EXPORTED const char *config_conversations_db;
-EXPORTED const char *config_backup_db;
 EXPORTED int charset_flags;
 EXPORTED int charset_snippet_flags;
 EXPORTED size_t config_search_maxsize;
@@ -121,6 +120,7 @@ EXPORTED int config_httpprettytelemetry;
 EXPORTED int config_take_globallock;
 EXPORTED char *config_skip_userlock;
 EXPORTED int haproxy_protocol = 0;
+EXPORTED int imaply_strict = 1;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -219,6 +219,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     } else {
         cyrus_init_run = RUNNING;
     }
+
+    srand(time(NULL) * getpid());
 
     cyrus_init_nodb = (flags & CYRUSINIT_NODB);
 #ifdef LOG_PERROR
@@ -364,7 +366,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         config_userdeny_db = config_getstring(IMAPOPT_USERDENY_DB);
         config_zoneinfo_db = config_getstring(IMAPOPT_ZONEINFO_DB);
         config_conversations_db = config_getstring(IMAPOPT_CONVERSATIONS_DB);
-        config_backup_db = config_getstring(IMAPOPT_BACKUP_DB);
 
         /* configure libcyrus as needed */
         libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
@@ -477,25 +478,20 @@ EXPORTED int mysasl_config(void *context __attribute__((unused)),
                   const char **result,
                   unsigned *len)
 {
-    if (!strcmp(option, "srvtab")) {
-        /* we don't transform srvtab! */
-        *result = config_getstring(IMAPOPT_SRVTAB);
-    } else {
-        *result = NULL;
+    *result = NULL;
 
-        if (plugin_name) {
-            /* first try it with the plugin name */
-            char *opt = strconcat("sasl_", plugin_name, "_", option, (char*)NULL);
-            *result = config_getoverflowstring(opt, NULL);
-            free(opt);
-        }
+    if (plugin_name) {
+        /* first try it with the plugin name */
+        char *opt = strconcat("sasl_", plugin_name, "_", option, (char*)NULL);
+        *result = config_getoverflowstring(opt, NULL);
+        free(opt);
+    }
 
-        if (*result == NULL) {
-            /* try without the plugin name */
-            char *opt = strconcat("sasl_", option, (char *)NULL);
-            *result = config_getoverflowstring(opt, NULL);
-            free(opt);
-        }
+    if (*result == NULL) {
+        /* try without the plugin name */
+        char *opt = strconcat("sasl_", option, (char *)NULL);
+        *result = config_getoverflowstring(opt, NULL);
+        free(opt);
     }
 
     if (*result != NULL) {

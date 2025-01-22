@@ -105,7 +105,7 @@ EXPORTED const struct search_engine *search_engine(void)
     }
 }
 
-EXPORTED search_snippet_markup_t default_snippet_markup = {
+EXPORTED struct search_snippet_markup default_snippet_markup = {
     "<b>", "</b>", "..."
 };
 
@@ -580,7 +580,7 @@ EXPORTED int search_end_update(search_text_receiver_t *rx)
 
 EXPORTED search_text_receiver_t *search_begin_snippets(void *internalised,
                                                        int verbose,
-                                                       search_snippet_markup_t *markup,
+                                                       struct search_snippet_markup *markup,
                                                        search_snippet_cb_t proc,
                                                        void *rock)
 {
@@ -651,7 +651,7 @@ const char *search_op_as_string(int op)
     }
 }
 
-EXPORTED int search_can_match(enum search_op matchop, int partnum)
+EXPORTED int search_can_match(enum search_op matchop, enum search_part partnum)
 {
     const struct search_engine *se = search_engine();
     return (se->can_match ? se->can_match(matchop, partnum) : 0);

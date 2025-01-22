@@ -138,8 +138,6 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
 
-    *body = NULL;
-
     if (!m->cache_full) {
         fill_cache(m);
     }
@@ -201,11 +199,11 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(head, m->cache);
     }
     else {
         printf("removing header '%s[%d]'\n", head, index);
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(head, index, m->cache);
     }
 
     return SIEVE_OK;
@@ -489,7 +487,7 @@ static int send_response(void *ac, void *ic, void *sc,
            src->msg, src->subj, src->addr, m->name, src->fromaddr);
 
     if (src->fcc.mailbox) {
-        message_data_t vmc = { .name = "vacation-autoresponse" };
+        message_data_t vmc = { .name = (char *) "vacation-autoresponse" };
 
         (void) fileinto(&src->fcc, ic, sc, &vmc, errmsg);
     }
@@ -547,7 +545,7 @@ int process_message(const char *path, sieve_execute_t *exe,
     m->env_from = &e_from;
     m->env_to = &e_to;
 
-    res = sieve_execute_bytecode(exe, i, sd, m);
+    res = sieve_execute_bytecode(exe, i, sd, m, NULL);
     free_msg(m);
     fclose(f);
     close(fd);
@@ -786,5 +784,8 @@ int main(int argc, char *argv[])
 EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
+
+    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+
     exit(rc);
 }

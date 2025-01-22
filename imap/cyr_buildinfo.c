@@ -130,11 +130,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "httpd", json_false());
 #endif
-#ifdef HAVE_KRB
-    json_object_set_new(component, "kerberos_v4", json_true());
-#else
-    json_object_set_new(component, "kerberos_v4", json_false());
-#endif
 #ifdef USE_MURDER
     json_object_set_new(component, "murder", json_true());
 #else
@@ -170,11 +165,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "objectstore", json_false());
 #endif
-#ifdef ENABLE_BACKUP
-    json_object_set_new(component, "backup", json_true());
-#else
-    json_object_set_new(component, "backup", json_false());
-#endif
 #ifdef ENABLE_DEBUG_SLOWIO
     json_object_set_new(component, "slowio", json_true());
 #else
@@ -189,8 +179,14 @@ static json_t *buildinfo()
 #endif
 #ifdef HAVE_SSL
     json_object_set_new(dependency, "openssl", json_true());
+# ifdef HAVE_TLS_ALPN
+    json_object_set_new(dependency, "openssl_alpn", json_true());
+# else
+    json_object_set_new(dependency, "openssl_alpn", json_false());
+# endif
 #else
     json_object_set_new(dependency, "openssl", json_false());
+    json_object_set_new(dependency, "openssl_alpn", json_false());
 #endif
 #ifdef HAVE_ZLIB
     json_object_set_new(dependency, "zlib", json_true());

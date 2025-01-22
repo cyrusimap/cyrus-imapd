@@ -70,12 +70,16 @@ sub new
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no');
 
-    return $class->SUPER::new({
+    my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        services => [ 'imap', 'http' ],
+        smtpdaemon => 1,
     }, @args);
+
+    $self->needs('component', 'jmap');
+    return $self;
 }
 
 sub set_up
@@ -87,21 +91,6 @@ sub set_up
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
     ]);
-}
-
-sub skip_check
-{
-    my ($self) = @_;
-
-    # XXX skip tests that would hang in verbose mode for now -- see
-    # XXX detailed comment at MaxMessages::put_submission
-    if (get_verbose()
-        && $self->{_name} eq 'test_emailsubmission_set_futurerelease')
-    {
-        return 'test would hang in verbose mode';
-    }
-
-    return undef;
 }
 
 sub getinbox

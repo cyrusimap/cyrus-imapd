@@ -82,10 +82,10 @@ extern int sieved_userisadmin;
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static const char *referral_host = NULL;
 
-int authenticated = 0;
-int verify_only = 0;
-int starttls_done = 0;
-sasl_ssf_t sasl_ssf = 0;
+static int authenticated = 0;
+static int verify_only = 0;
+static int starttls_done = 0;
+static sasl_ssf_t sasl_ssf = 0;
 #ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
@@ -93,6 +93,7 @@ static SSL *tls_conn = NULL;
 extern int sieved_timeout;
 
 /* from elsewhere */
+void shut_down(int code) __attribute__ ((noreturn));
 void fatal(const char *s, int code) __attribute__((noreturn));
 extern int sieved_logfd;
 extern struct backend *backend;
@@ -123,8 +124,13 @@ static char *sieve_parsesuccess(char *str, const char **status)
     return success;
 }
 
+static const struct tls_alpn_t sieve_alpn_map[] = {
+    { "managesieve", NULL, NULL },
+    { "",            NULL, NULL },
+};
+
 static struct protocol_t sieve_protocol =
-{ "sieve", SIEVE_SERVICE_NAME, TYPE_STD,
+{ "sieve", SIEVE_SERVICE_NAME, sieve_alpn_map, TYPE_STD,
   { { { 1, "OK" },
       { "CAPABILITY", NULL, "OK", NULL,
         CAPAF_ONE_PER_LINE|CAPAF_QUOTE_WORDS,
@@ -890,8 +896,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   sasl_getprop(sieved_saslconn, SASL_SSF, &val);
   sasl_ssf = *((sasl_ssf_t *) val);
 
-  if (sasl_ssf &&
-      config_getswitch(IMAPOPT_SIEVE_SASL_SEND_UNSOLICITED_CAPABILITY)) {
+  if (sasl_ssf) {
       capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
                    sasl_ssf);
       prot_flush(sieved_out);
@@ -929,10 +934,11 @@ static int cmd_starttls(struct protstream *sieved_out,
         return TIMSIEVE_FAIL;
     }
 
+    SSL_CTX *ctx = NULL;
     result=tls_init_serverengine("sieve",
                                  5,        /* depth to verify */
                                  1,        /* can client auth? */
-                                 NULL);
+                                 &ctx);
 
     if (result == -1) {
 
@@ -951,20 +957,21 @@ static int cmd_starttls(struct protstream *sieved_out,
                                1, /* write */
                                sieved_timeout,
                                saslprops,
+                               sieve_alpn_map,
                                &tls_conn);
 
     /* if error */
     if (result==-1) {
-        prot_printf(sieved_out, "NO \"Starttls failed\"\r\n");
-        syslog(LOG_NOTICE, "STARTTLS failed: %s", sieved_clienthost);
-        return TIMSIEVE_FAIL;
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", sieved_clienthost);
+        shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(saslprops, sieved_saslconn);
 
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
+        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        shut_down(EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */

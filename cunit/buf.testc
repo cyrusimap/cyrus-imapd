@@ -1612,8 +1612,8 @@ static void test_appendoverlap(void)
 static void test_tocrlf(void)
 {
     struct testcase {
-        char *input;
-        char *expect;
+        const char *input;
+        const char *expect;
     };
 
     struct testcase testcases[] = {

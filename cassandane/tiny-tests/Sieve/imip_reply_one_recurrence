@@ -2,8 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_imip_reply_one_recurrence
-    :needs_component_sieve :needs_component_httpd :min_version_3_5
-    :want_service_http
+    :needs_component_httpd :want_service_http
 {
     my ($self) = @_;
 
@@ -20,17 +19,17 @@ sub test_imip_reply_one_recurrence
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
-require ["body", "variables", "imap4flags", "vnd.cyrus.imip", "editheader"];
-set "processimip_outcome" "no_action";
+require ["body", "variables", "imap4flags", "processcalendar", "editheader"];
+set "outcome" "no_action";
 if body :content "text/calendar" :contains "\nMETHOD:" {
-    processimip :updatesonly :deletecanceled :outcome "processimip_outcome" :errstr "processimip_error";
-    if string "\${processimip_outcome}" "updated" {
+    processcalendar :updatesonly :deletecanceled :outcome "outcome" :reason "reason";
+    if string "\${outcome}" "updated" {
         setflag "\\\\Flagged";
         keep;
     }
-    elsif not string :is "\${processimip_outcome}" "no_action" {
-        addheader "X-ME-Cal-Outcome" "\${processimip_outcome}";
-        addheader "X-ME-Cal-Error" "\${processimip_error}";
+    elsif not string :is "\${outcome}" "no_action" {
+        addheader "X-ME-Cal-Outcome" "\${outcome}";
+        addheader "X-ME-Cal-Reason" "\${reason}";
     }
 }
 EOF

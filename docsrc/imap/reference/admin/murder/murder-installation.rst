@@ -225,7 +225,7 @@ auth name of ``mailproxy``::
     proxy_authname: mailproxy
     
 For SASL mechanisms not using authnames or passwords (e.g.
-KERBEROS_V4), the password options are not required. Note the use of
+GSSAPI), the password options are not required. Note the use of
 the same authname as configured in the proxyservers line of the
 backend's :cyrusman:`imapd.conf(5)` above.
 

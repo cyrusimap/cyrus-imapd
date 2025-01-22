@@ -55,9 +55,14 @@ static const char unspecified_domain[] = "unspecified-domain";
 static void parseaddr_append(struct address ***addrpp, const char *name,
                              const char *route, const char *mailbox,
                              const char *domain, char **freemep, int invalid);
-static int parseaddr_phrase (char **inp, char **phrasep, const char *specials);
-static int parseaddr_domain (char **inp, char **domainp, char **commmentp, int *invalid);
-static int parseaddr_route (char **inp, char **routep);
+static int parseaddr_phrase(char **inp,
+                            const char **phrasep,
+                            const char *specials);
+static int parseaddr_domain(char **inp,
+                            const char **domainp,
+                            const char **commmentp,
+                            int *invalid);
+static int parseaddr_route(char **inp, const char **routep);
 
 /*
  * Parse an address list in 's', appending address structures to
@@ -69,7 +74,7 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
     int ingroup = 0;
     char *freeme;
     int tok = ' ', invalid = 0;
-    char *phrase, *route, *mailbox, *domain, *comment;
+    const char *phrase, *route, *mailbox, *domain, *comment;
 
     /* Skip down to the tail */
     while (*addrp) {
@@ -224,7 +229,9 @@ static void parseaddr_append(struct address ***addrpp, const char *name,
 /*
  * Parse an RFC 822 "phrase", stopping at 'specials'
  */
-static int parseaddr_phrase(char **inp, char **phrasep, const char *specials)
+static int parseaddr_phrase(char **inp,
+                            const char **phrasep,
+                            const char *specials)
 {
     int c;
     char *src = *inp;
@@ -299,7 +306,10 @@ fail:
  * Parse a domain.  If 'commentp' is non-nil, parses any trailing comment.
  * If the domain is invalid, set invalid to non-zero.
  */
-static int parseaddr_domain(char **inp, char **domainp, char **commentp, int *invalid)
+static int parseaddr_domain(char **inp,
+                            const char **domainp,
+                            const char **commentp,
+                            int *invalid)
 {
     u_char c;
     char *src = *inp;
@@ -360,7 +370,7 @@ static int parseaddr_domain(char **inp, char **domainp, char **commentp, int *in
 /*
  * Parse a source route (at-domain-list)
  */
-static int parseaddr_route(char **inp, char **routep)
+static int parseaddr_route(char **inp, const char **routep)
 {
     int c;
     char *src = *inp;
