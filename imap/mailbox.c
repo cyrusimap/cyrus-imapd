@@ -3472,17 +3472,33 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
 
 static int mailbox_is_virtannot(struct mailbox *mailbox, const char *entry)
 {
-    if (mailbox->i.minor_version < 13) return 0;
-    // thrid was introduced in v13
-    if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) return 1;
+    switch (mailbox->i.minor_version) {
+    case 20:
+    case 19:
+    case 18:
+    case 17:
+    case 16:
+        // createdmodseq was introduced in v16
+        if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) return 1;
 
-    if (mailbox->i.minor_version < 15) return 0;
-    // savedate was introduced in v15
-    if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) return 1;
+        GCC_FALLTHROUGH
 
-    if (mailbox->i.minor_version < 16) return 0;
-    // createdmodseq was introduced in v16
-    if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) return 1;
+    case 15:
+        // savedate was introduced in v15
+        if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) return 1;
+
+        GCC_FALLTHROUGH
+
+    case 14:
+    case 13:
+        // thrid was introduced in v13
+        if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) return 1;
+
+        GCC_FALLTHROUGH
+
+    default:
+        break;
+    }
 
     return 0;
 }
@@ -3497,22 +3513,41 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
     uint32_t crc = 0;
     struct buf buf = BUF_INITIALIZER;
 
-    if (record->cid && mailbox->i.minor_version >= 13) {
-        buf_printf(&buf, CONV_FMT, record->cid);
-        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
-        buf_reset(&buf);
-    }
+    switch (mailbox->i.minor_version) {
+    case 20:
+    case 19:
+    case 18:
+    case 17:
+    case 16:
+        if (record->createdmodseq) {
+            buf_printf(&buf, MODSEQ_FMT, record->createdmodseq);
+            crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+            buf_reset(&buf);
+        }
 
-    if (record->savedate && mailbox->i.minor_version >= 15) {
-        buf_printf(&buf, TIME_T_FMT, record->savedate);
-        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", "", &buf);
-        buf_reset(&buf);
-    }
+        GCC_FALLTHROUGH
 
-    if (record->createdmodseq && mailbox->i.minor_version >= 16) {
-        buf_printf(&buf, MODSEQ_FMT, record->createdmodseq);
-        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
-        buf_reset(&buf);
+    case 15:
+        if (record->savedate) {
+            buf_printf(&buf, TIME_T_FMT, record->savedate);
+            crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", "", &buf);
+            buf_reset(&buf);
+        }
+
+        GCC_FALLTHROUGH
+
+    case 14:
+    case 13:
+        if (record->cid) {
+            buf_printf(&buf, CONV_FMT, record->cid);
+            crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
+            buf_reset(&buf);
+        }
+
+        GCC_FALLTHROUGH
+
+    default:
+        break;
     }
 
     buf_free(&buf);
