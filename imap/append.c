@@ -1057,8 +1057,6 @@ havefile:
     msgrec = msgrecord_new(mailbox);
     r = msgrecord_set_uid(msgrec, uid);
     if (r) goto out;
-    r = msgrecord_set_internaldate(msgrec, internaldate);
-    if (r) goto out;
     r = msgrecord_set_createdmodseq(msgrec, createdmodseq);
     if (r) goto out;
     r = msgrecord_set_bodystructure(msgrec, *body);
@@ -1069,9 +1067,9 @@ havefile:
     }
 
     /* And make sure it has a timestamp */
-    r = msgrecord_get_internaldate(msgrec, &internaldate);
-    if (!r && !internaldate)
-        r = msgrecord_set_internaldate(msgrec, time(NULL));
+    struct timespec t = { internaldate, UTIME_NOW };
+    if (!internaldate) t.tv_sec = time(NULL);
+    r = msgrecord_set_internaldate(msgrec, &t);
     if (r) goto out;
 
     /* should we archive it straight away? */
@@ -1256,7 +1254,11 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     msgrec = msgrecord_new(mailbox);
     r = msgrecord_set_uid(msgrec, as->baseuid + as->nummsg);
     if (r) goto out;
-    r = msgrecord_set_internaldate(msgrec, internaldate);
+
+    /* And make sure it has a timestamp */
+    struct timespec t = { internaldate, UTIME_NOW };
+    if (!internaldate) t.tv_sec = time(NULL);
+    r = msgrecord_set_internaldate(msgrec, &t);
     if (r) goto out;
 
     /* Create message file */
