@@ -307,30 +307,35 @@ static int do_examine(struct findall_data *data, void *rock)
         }
 
         printf("%06u> UID:%08u"
-               "   INT_DATE:" TIME_T_FMT " SENTDATE:" TIME_T_FMT
+               "   INT_DATE:" TIME_T_FMT UINT64_NANOSEC_FMT
+               " SENTDATE:" TIME_T_FMT
                " SAVEDATE:" TIME_T_FMT " SIZE: " UINT64_LALIGN_FMT "\n",
-               msgno, record->uid, record->internaldate.tv_sec,
+               msgno, record->uid,
+               record->internaldate.tv_sec, record->internaldate.tv_nsec,
                record->sentdate, record->savedate, 6, record->size);
         printf("      > HDRSIZE:%-6u LASTUPD :" TIME_T_FMT " SYSFLAGS:%08X",
                record->header_size, record->last_updated,
                record->system_flags);
 
-        if (mailbox->i.minor_version >= 6)
-            printf("      > CACHEVER:%-2u", record->cache_version);
-
-        if (mailbox->i.minor_version >= 7) {
-            printf(" GUID:%s", message_guid_encode(&record->guid));
-        }
-
-        if (mailbox->i.minor_version >= 8) {
-            printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
-        }
-
-        if (mailbox->i.minor_version >= 13) {
-            printf("  THRID: " CONV_FMT, record->cid);
-        }
-
         printf("\n");
+
+        if (mailbox->i.minor_version >= 6) {
+            printf("      > CACHEVER:%-5u", record->cache_version);
+
+            if (mailbox->i.minor_version >= 7) {
+                printf(" GUID:%s", message_guid_encode(&record->guid));
+
+                if (mailbox->i.minor_version >= 8) {
+                    printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
+
+                    if (mailbox->i.minor_version >= 13) {
+                        printf("  THRID: " CONV_FMT, record->cid);
+                    }
+                }
+            }
+
+            printf("\n");
+        }
 
         printf("      > INTERNALFLAGS:");
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
@@ -343,6 +348,8 @@ static int do_examine(struct findall_data *data, void *rock)
             printf(" FLAG_INTERNAL_NEEDS_CLEANUP");
         if (record->internal_flags & FLAG_INTERNAL_SNOOZED)
             printf(" FLAG_INTERNAL_SNOOZED");
+
+        printf("\n");
 
         printf("      > SYSTEMFLAGS:");
         if (record->system_flags & FLAG_SEEN) printf(" FLAG_SEEN");
