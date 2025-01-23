@@ -1460,34 +1460,55 @@ static void encode_annotations(struct dlist *parent,
         }
     }
 
-    if (record && record->cid && mailbox->i.minor_version >= 13) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
-        dlist_setatom(aa, "USERID", "");
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_sethex64(aa, "VALUE", record->cid);
-    }
+    if (!record) return;
 
-    if (record && record->savedate && mailbox->i.minor_version >= 15) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
-        dlist_setatom(aa, "USERID", "");
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_setnum32(aa, "VALUE", record->savedate);
-    }
+    switch (mailbox->i.minor_version) {
+    case 20:
+    case 19:
+    case 18:
+    case 17:
+    case 16:
+        if (record->createdmodseq) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "createdmodseq");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_setnum64(aa, "VALUE", record->createdmodseq);
+        }
 
-    if (record && record->createdmodseq && mailbox->i.minor_version >= 16) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "createdmodseq");
-        dlist_setatom(aa, "USERID", "");
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_setnum64(aa, "VALUE", record->createdmodseq);
+        GCC_FALLTHROUGH
+
+    case 15:
+        if (record->savedate) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_setnum32(aa, "VALUE", record->savedate);
+        }
+
+        GCC_FALLTHROUGH
+
+    case 14:
+    case 13:
+        if (record->cid) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_sethex64(aa, "VALUE", record->cid);
+        }
+
+        GCC_FALLTHROUGH
+
+    default:
+        break;
     }
 }
 
@@ -1524,47 +1545,69 @@ static int decode_annotations(/*const*/struct dlist *annots,
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getbuf(aa, "VALUE", &value))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!strcmp(entry, IMAP_ANNOT_NS "thrid") &&
-            record && mailbox->i.minor_version >= 13) {
-            const char *p = buf_cstring(&value);
-            parsehex(p, &p, 16, &record->cid);
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate") &&
-                 record && mailbox->i.minor_version >= 15) {
-            const char *p = buf_cstring(&value);
-            bit64 newval;
-            parsenum(p, &p, 0, &newval);
-            record->savedate = newval;
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq") &&
-                 record && mailbox->i.minor_version >= 16) {
-            const char *p = buf_cstring(&value);
-            bit64 newval;
-            parsenum(p, &p, 0, &newval);
-            record->createdmodseq = newval;
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid") && record) {
-            /* this might double-apply the annotation, but oh well.  It does mean that
-             * basethrid is paired in here when we do a comparison against new values
-             * from the replica later! */
-            const char *p = buf_cstring(&value);
-            parsehex(p, &p, 16, &record->basecid);
-            /* XXX - check on p? */
 
-            /* "basethrid" is special, since it is written during mailbox
-             * appends and rewrites, using whatever modseq the index_record
-             * has at this moment. This might differ from the modseq we
-             * just parsed here, causing master and replica annotations
-             * to get out of sync.
-             * The fix is to set the basecid field both on the index
-             * record *and* adding the annotation to the annotation list.
-             * That way the local modseq of basethrid always gets over-
-             * written by whoever wins to be master of this annotation */
+        if (!record) goto realannot;
+
+        const char *p = buf_cstring(&value);
+
+        /* Look for and process "virtual" annotations */
+        switch (mailbox->i.minor_version) {
+        case 20:
+        case 19:
+        case 18:
+        case 17:
+        case 16:
+            if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) {
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->createdmodseq = newval;
+                break;
+            }
+
+            GCC_FALLTHROUGH
+
+        case 15:
+            if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->savedate = newval;
+                break;
+            }
+
+            GCC_FALLTHROUGH
+
+        case 14:
+        case 13:
+            if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) {
+                parsehex(p, &p, 16, &record->cid);
+                break;
+            }
+            else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
+                /* this might double-apply the annotation, but oh well.
+                 * It does mean that basethrid is paired in here when we do
+                 * a comparison against new values from the replica later! */
+                parsehex(p, &p, 16, &record->basecid);
+                /* XXX - check on p? */
+
+                /* "basethrid" is special, since it is written during mailbox
+                 * appends and rewrites, using whatever modseq the index_record
+                 * has at this moment. This might differ from the modseq we
+                 * just parsed here, causing master and replica annotations
+                 * to get out of sync.
+                 * The fix is to set the basecid field both on the index
+                 * record *and* adding the annotation to the annotation list.
+                 * That way the local modseq of basethrid always gets over-
+                 * written by whoever wins to be master of this annotation */
+            }
+
+            GCC_FALLTHROUGH
+
+    realannot:
+        default:
             sync_annot_list_add(*salp, entry, userid, &value, modseq);
+            break;
         }
-        else {
-            sync_annot_list_add(*salp, entry, userid, &value, modseq);
-        }
+
         buf_free(&value);
     }
     return 0;
