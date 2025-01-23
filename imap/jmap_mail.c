@@ -7361,10 +7361,10 @@ static int _email_get_meta(jmap_req_t *req,
     /* receivedAt */
     if (jmap_wantprop(props, "receivedAt")) {
         char datestr[RFC3339_DATETIME_MAX];
-        time_t t;
+        struct timespec t;
         r = msgrecord_get_internaldate(msg->mr, &t);
         if (r) goto done;
-        time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+        time_to_rfc3339(t.tv_sec, datestr, RFC3339_DATETIME_MAX);
         json_object_set_new(email, "receivedAt", json_string(datestr));
     }
 
@@ -13251,9 +13251,11 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
 
             if (update->received_at) {
                 /* Write internaldate (Email/copy only) */
-                time_t internaldate;
-                time_from_iso8601(update->received_at, &internaldate);
-                r = msgrecord_set_internaldate(mrw, internaldate);
+                struct timespec now, internaldate;
+                clock_gettime(CLOCK_REALTIME, &now);
+                internaldate.tv_nsec = now.tv_nsec;
+                time_from_iso8601(update->received_at, &internaldate.tv_sec);
+                r = msgrecord_set_internaldate(mrw, &internaldate);
             }
 
             /* Determine if to write the aggregated or updated JMAP keywords */
