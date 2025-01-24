@@ -796,8 +796,8 @@ sub _setup_http_service_objects
     my ($self) = @_;
 
     # nothing to do if no http or https service
-    my $service = $self->{instance}->get_service("http");
-    $service ||= $self->{instance}->get_service("https");
+    my $service = $self->{instance}->get_service("https");
+    $service ||= $self->{instance}->get_service("http");
     return if !$service;
 
     my %common_args = (
