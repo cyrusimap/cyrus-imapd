@@ -475,6 +475,9 @@ static inline int tm_commit(struct twom_db *db, size_t len)
     assert(db->openfile);
     if (!db->openfile->dirty) return 0;
     assert(db->openfile->has_datalock == 2);
+    // this could clear dirty if msync fails, but we don't have a real
+    // way to recover and clearing it now stops us failing asserts later
+    // while erroring out and leaving the file dirty.
     db->openfile->dirty = 0;
     if (db->nosync) return 0;
     if (db->write_txn && db->write_txn->nosync) return 0;
