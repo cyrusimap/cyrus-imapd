@@ -185,6 +185,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     }
     if (flags & CYRUSDB_CREATE)
         init.flags |= TWOM_CREATE;
+    if (flags & CYRUSDB_SHARED)
+        init.flags |= TWOM_SHARED;
     int tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
     if (tmr == TWOM_NOTFOUND && (flags & CYRUSDB_CREATE)) {
         int r = cyrus_mkdir(fname, 0755);
