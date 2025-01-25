@@ -2413,6 +2413,9 @@ int twom_db_open(const char *fname, struct twom_open_data *setup,
             r = twom_db_begin_txn(mydb, setup->flags, txnp);
             if (r) return r;
         }
+        // FIXME: we should check that setup->flags are compatible with the
+        // flags that the DB was originally opened with and reject if they
+        // aren't, e.g. NOSYNC
         mydb->refcount++;
         *ret = mydb;
         return 0;
