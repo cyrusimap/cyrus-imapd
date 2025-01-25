@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_dbtool", 0, 0);
 
-    r = cyrusdb_open(argv[optind+1], fname, db_flags, &db);
+    r = cyrusdb_lockopen(argv[optind+1], fname, db_flags, &db, tidp);
     if(r != CYRUSDB_OK)
         fatal("can't open database", EX_TEMPFAIL);
 
