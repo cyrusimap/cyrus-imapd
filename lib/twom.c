@@ -2410,7 +2410,7 @@ int twom_db_open(const char *fname, struct twom_open_data *setup,
     for (mydb = open_twom; mydb; mydb = mydb->next) {
         if (strcmp(mydb->fname, fname)) continue;
         if (txnp) {
-            r = twom_db_begin_txn(mydb, setup->flags & TWOM_SHARED, txnp);
+            r = twom_db_begin_txn(mydb, setup->flags, txnp);
             if (r) return r;
         }
         mydb->refcount++;
