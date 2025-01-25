@@ -395,12 +395,15 @@ int main(int argc, char *argv[])
         }
         while ( loop ) {
           if (is_get) {
-            cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
+            r = cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
+            if (r) break;
             printf("%.*s\n", (int)reslen, res);
           } else if (is_set) {
-            cyrusdb_store(db, key, keylen, value, vallen, tidp);
+            r = cyrusdb_store(db, key, keylen, value, vallen, tidp);
+            if (r) break;
           } else if (is_delete) {
-            cyrusdb_delete(db, key, keylen, tidp, 1);
+            r = cyrusdb_delete(db, key, keylen, tidp, 1);
+            if (r) break;
           }
           loop = 0;
           if ( use_stdin ) {
@@ -411,21 +414,17 @@ int main(int argc, char *argv[])
         batch_commands(db);
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
-            cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
+            r = cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
         } else {
             key = argv[optind+3];
             keylen = strlen(key);
-            cyrusdb_foreach(db, key, keylen, NULL, printer_cb, NULL, tidp);
-        }
-    } else if (!strcmp(action, "consistency")) {
-        if (cyrusdb_consistent(db)) {
-            printf("Consistency Error for %s\n", fname);
+            r = cyrusdb_foreach(db, key, keylen, NULL, printer_cb, NULL, tidp);
         }
     } else if (!strcmp(action, "dump")) {
         int level = 1;
         if ((argc - optind) > 3)
             level = atoi(argv[optind+3]);
-        cyrusdb_dump(db, level);
+        r = cyrusdb_dump(db, level);
     } else if (!strcmp(action, "consistent")) {
         if (cyrusdb_consistent(db)) {
             printf("No, not consistent\n");
@@ -433,22 +432,25 @@ int main(int argc, char *argv[])
             printf("Yes, consistent\n");
         }
     } else if (!strcmp(action, "repack")) {
-        if (cyrusdb_repack(db))
-            printf("Failed to repack\n");
+        r = cyrusdb_repack(db);
     } else if (!strcmp(action, "damage")) {
         cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
         assert(!tid);
     } else {
         printf("Unknown action %s\n", action);
     }
-    if (tid) {
-      cyrusdb_commit(db, tid);
-      tid = NULL;
+    if (tid && !r) {
+        r = cyrusdb_commit(db, tid);
+        tid = NULL;
+    }
+    if (r) {
+        if (tid) cyrusdb_abort(db, tid);
+        printf("ERROR: %s\n", cyrusdb_strerror(r));
     }
 
     cyrusdb_close(db);
 
     cyrus_done();
 
-    return 0;
+    return r ? 1 : 0;
 }
