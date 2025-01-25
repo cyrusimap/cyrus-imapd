@@ -1910,6 +1910,8 @@ static void errors_to_stderr(const char *msg, const char *fmt, ...)
         vfprintf(stderr, fmt, args);
         va_end(args);
     }
+    if (errno)
+        fprintf(stderr, " errno=<%s>", strerror(errno));
     fprintf(stderr, "%s", "\n");
 }
 
