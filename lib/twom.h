@@ -66,8 +66,8 @@ typedef uint32_t twom_csum(const char *s, size_t l);
 
 struct twom_open_data {
     uint32_t flags;
-    int (*compar)(const char *s1, size_t l1, const char *s2, size_t l2);
-    uint32_t (*csum)(const char *s, size_t l);
+    twom_compar *compar;
+    twom_csum *csum;
     void (*error)(const char *msg, const char *fmt, ...);
 };
 
