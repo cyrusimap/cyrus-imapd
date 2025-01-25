@@ -164,6 +164,7 @@ struct twom_db {
     unsigned readonly:1;
     unsigned nocsum:1;
     unsigned nosync:1;
+    unsigned noyield:1;
     unsigned nocompact:1;
     int refcount;
 
@@ -1936,6 +1937,7 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     db->readonly = (setup->flags & TWOM_SHARED) ? 1 : 0;
     db->nocsum = (setup->flags & TWOM_NOCSUM) ? 1 : 0;
     db->nosync = (setup->flags & TWOM_NOSYNC) ? 1 : 0;
+    db->noyield = (setup->flags & TWOM_NOYIELD) ? 1 : 0;
     db->fname = strdup(fname);
     db->foreach_lock_release = FOREACH_LOCK_RELEASE;
     db->error = setup->error ? setup->error : errors_to_stderr;
@@ -2460,7 +2462,11 @@ int twom_db_close(struct twom_db **dbp)
 int twom_db_yield(struct twom_db *db)
 {
     if (!db) return 0;
-    if (!db->readonly) return TWOM_LOCKED;
+    if (db->write_txn) return TWOM_LOCKED;
+    // we don't check transactions for noyield, because they don't
+    // control yield on other transactions; if you want to restrict
+    // it entirely, it's only at the DB level that you we check
+    if (db->noyield) return TWOM_LOCKED;
     struct tm_file *file;
     for (file = db->openfile; file; file = file->next)
         if (file->has_datalock == 1) unlock(db, file);
@@ -2520,10 +2526,12 @@ int twom_db_begin_txn(struct twom_db *db, int flags, struct twom_txn **txnp)
         if (r) return r;
     }
 
-    if (flags & TWOM_NOSYNC)
-        (*txnp)->nosync = 1;
     if (flags & TWOM_MVCC)
         (*txnp)->mvcc = 1;
+    if (flags & TWOM_NOSYNC)
+        (*txnp)->nosync = 1;
+    if (flags & TWOM_NOYIELD)
+        (*txnp)->noyield = 1;
 
     return 0;
 }
@@ -2636,7 +2644,7 @@ again:
 
     if (txn->readonly) {
         // release locks every N records if readonly
-        if (!txn->noyield && txn->counter++ > txn->db->foreach_lock_release) {
+        if (!txn->db->noyield && !txn->noyield && txn->counter++ > txn->db->foreach_lock_release) {
             r = twom_txn_yield(txn);
             if (r) return r;
         }
