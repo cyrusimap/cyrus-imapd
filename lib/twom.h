@@ -74,87 +74,81 @@ struct twom_open_data {
 #define TWOM_OPEN_DATA_INITIALIZER { 0, NULL, NULL, NULL }
 
 // database operations
-extern int twom_db_open(const char *fname, struct twom_open_data *setup,
-                        struct twom_db **dbptr,
-                        struct twom_txn **tidptr);
-extern int twom_db_close(struct twom_db **dbptr);
+int twom_db_open(const char *fname, struct twom_open_data *setup,
+                 struct twom_db **dbptr,
+                 struct twom_txn **tidptr);
+int twom_db_close(struct twom_db **dbptr);
 
 // non-transactional operations
-extern int twom_db_fetch(struct twom_db *db,
-                         const char *key, size_t keylen,
-                         const char **keyp, size_t *keylenp,
-                         const char **valp, size_t *vallenp,
-                         int flags);
-extern int twom_db_foreach(struct twom_db *db,
-                           const char *prefix, size_t prefixlen,
-                           twom_cb *p, twom_cb *cb, void *rock,
-                           int flags);
-extern int twom_db_store(struct twom_db *db,
-                         const char *key, size_t keylen,
-                         const char *val, size_t vallen,
-                         int flags);
+int twom_db_fetch(struct twom_db *db,
+                  const char *key, size_t keylen,
+                  const char **keyp, size_t *keylenp,
+                  const char **valp, size_t *vallenp,
+                  int flags);
+int twom_db_foreach(struct twom_db *db,
+                    const char *prefix, size_t prefixlen,
+                    twom_cb *p, twom_cb *cb, void *rock,
+                    int flags);
+int twom_db_store(struct twom_db *db,
+                  const char *key, size_t keylen,
+                  const char *val, size_t vallen,
+                  int flags);
 
 // utility
-extern int twom_db_dump(struct twom_db *, int detail);
-extern int twom_db_check_consistency(struct twom_db *db);
-extern int twom_db_repack(struct twom_db *db);
-extern bool twom_db_should_repack(struct twom_db *db); // returns 1 for true
+int twom_db_dump(struct twom_db *, int detail);
+int twom_db_check_consistency(struct twom_db *db);
+int twom_db_repack(struct twom_db *db);
+bool twom_db_should_repack(struct twom_db *db); // returns 1 for true
 
 // release any read lock if doing something else for a while
-
-extern int twom_db_yield(struct twom_db *db);
+int twom_db_yield(struct twom_db *db);
 
 // cursor operations
+int twom_db_begin_cursor(struct twom_db *db,
+                         const char *key, size_t keylen,
+                         struct twom_cursor **curp, int flags);
+int twom_cursor_next(struct twom_cursor *cur,
+                     const char **keyp, size_t *keylenp,
+                     const char **valp, size_t *vallenp);
 
-extern int twom_db_begin_cursor(struct twom_db *db,
-                                const char *key, size_t keylen,
-                                struct twom_cursor **curp, int flags);
-extern int twom_cursor_next(struct twom_cursor *cur,
-                            const char **keyp, size_t *keylenp,
-                            const char **valp, size_t *vallenp);
-
-extern int twom_cursor_replace(struct twom_cursor *cur,
-                               const char *val, size_t vallen,
-                               int flags);
-extern int twom_cursor_commit(struct twom_cursor **curp);
-extern int twom_cursor_abort(struct twom_cursor **curp);
+int twom_cursor_replace(struct twom_cursor *cur,
+                        const char *val, size_t vallen,
+                        int flags);
+int twom_cursor_commit(struct twom_cursor **curp);
+int twom_cursor_abort(struct twom_cursor **curp);
 
 // cursors within a transaction
-
-extern int twom_txn_begin_cursor(struct twom_txn *txn,
-                                 const char *key, size_t keylen,
-                                 struct twom_cursor **curp, int flags);
-extern void twom_cursor_fini(struct twom_cursor **curp);
+int twom_txn_begin_cursor(struct twom_txn *txn,
+                          const char *key, size_t keylen,
+                          struct twom_cursor **curp, int flags);
+void twom_cursor_fini(struct twom_cursor **curp);
 
 // transactional operations
-
-extern int twom_db_begin_txn(struct twom_db *db, int shared, struct twom_txn **tidptr);
-extern int twom_txn_abort(struct twom_txn **txnp);
-extern int twom_txn_commit(struct twom_txn **txnp);
-extern int twom_txn_yield(struct twom_txn *txn);
-extern int twom_txn_fetch(struct twom_txn *txn,
-                          const char *key, size_t keylen,
-                          const char **keyp, size_t *keylenp,
-                          const char **valp, size_t *vallenp,
-                          int flags);
-extern int twom_txn_foreach(struct twom_txn *txn,
-                            const char *prefix, size_t prefixlen,
-                            twom_cb *p, twom_cb *cb, void *rock,
-                            int flags);
-extern int twom_txn_store(struct twom_txn *txn,
-                          const char *key, size_t keylen,
-                          const char *val, size_t vallen,
-                          int flags);
+int twom_db_begin_txn(struct twom_db *db, int shared, struct twom_txn **tidptr);
+int twom_txn_abort(struct twom_txn **txnp);
+int twom_txn_commit(struct twom_txn **txnp);
+int twom_txn_yield(struct twom_txn *txn);
+int twom_txn_fetch(struct twom_txn *txn,
+                   const char *key, size_t keylen,
+                   const char **keyp, size_t *keylenp,
+                   const char **valp, size_t *vallenp,
+                   int flags);
+int twom_txn_foreach(struct twom_txn *txn,
+                     const char *prefix, size_t prefixlen,
+                     twom_cb *p, twom_cb *cb, void *rock,
+                     int flags);
+int twom_txn_store(struct twom_txn *txn,
+                   const char *key, size_t keylen,
+                   const char *val, size_t vallen,
+                   int flags);
 
 // header info
-extern size_t twom_db_generation(struct twom_db *db);
-extern size_t twom_db_num_records(struct twom_db *db);
-extern size_t twom_db_size(struct twom_db *db);
-extern const char *twom_db_fname(struct twom_db *db);
-extern const char *twom_db_uuid(struct twom_db *db);
-
-extern int twom_db_sync(struct twom_db *db);
-
-extern const char *twom_strerror(int r);
+size_t twom_db_generation(struct twom_db *db);
+size_t twom_db_num_records(struct twom_db *db);
+size_t twom_db_size(struct twom_db *db);
+const char *twom_db_fname(struct twom_db *db);
+const char *twom_db_uuid(struct twom_db *db);
+int twom_db_sync(struct twom_db *db);
+const char *twom_strerror(int r);
 
 #endif /* INCLUDED_TWOM_H */
