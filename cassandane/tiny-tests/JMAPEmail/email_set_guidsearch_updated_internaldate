@@ -116,6 +116,9 @@ sub test_email_set_guidsearch_updated_internaldate
     xlog "Append blob of message A via IMAP";
     $imap->append('INBOX', $emailBlobA) || die $@;
 
+    $res = $imap->fetch('3', "(emailid)");
+    my $emailIdC = $res->{3}{emailid}[0];
+
     xlog $self, "run incremental squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
 
@@ -132,5 +135,5 @@ sub test_email_set_guidsearch_updated_internaldate
         }, 'R1'],
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$emailIdB, $emailIdA], $res->[0][1]{ids});
+    $self->assert_deep_equals([$emailIdB, $emailIdC], $res->[0][1]{ids});
 }
