@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append_duplicate_diff_internaldate
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "Append duplicate messages with different internaldates";
+    my $mimeMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+
+
+    $imaptalk->append('INBOX', $mimeMessage) || die $@;
+    $imaptalk->append('INBOX',
+                      '17-Aug-2023 15:13:54 +0200', $mimeMessage) || die $@;
+
+    $imaptalk->create('foo');
+    $imaptalk->append('foo',
+                      '26-Jan-2025 15:13:54 -0500', $mimeMessage) || die $@;
+
+    xlog $self, "Verify that all messages have the same internaldates";
+    $imaptalk->examine('INBOX');
+    my $res = $imaptalk->fetch('1:*', 'INTERNALDATE');
+    my $internaldate = $res->{1}->{internaldate};
+    $self->assert_str_equals($internaldate, $res->{2}->{internaldate});
+
+    $imaptalk->examine('foo');
+    $res = $imaptalk->fetch('1:*', 'INTERNALDATE');
+    $self->assert_str_equals($internaldate, $res->{1}->{internaldate});
+}
+
+1;
