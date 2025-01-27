@@ -2193,3 +2193,137 @@ EXPORTED char *modseqtoa(modseq_t modseq)
     buf_printf(&buf, MODSEQ_FMT, modseq);
     return buf_release(&buf);
 }
+
+static char *_xsyslog_ev_escape(const char *val)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int needs_escaping = 0, orig_len, escaped_len;
+    const char *p;
+
+    buf_setcstr(&buf, val);
+
+    escaped_len = orig_len = buf_len(&buf);
+
+    // Make sure the empty string is visible
+    if (orig_len == 0) {
+        buf_setcstr(&buf, "\"\"");
+        return buf_release(&buf);
+    }
+
+    for (p = buf_cstring(&buf); *p; p++) {
+        switch (*p) {
+        case '\\':
+        case '\"':
+        case '\n':
+        case '\r':
+            ++escaped_len;  // add 1 for the backslash
+
+        // FALL THROUGH
+        case ' ':
+            needs_escaping = 1;
+            break;
+        }
+    }
+
+    if (needs_escaping) {
+        char *q;
+
+        escaped_len += 2;  // add 2 for surrounding DQUOTEs
+
+        buf_truncate(&buf, escaped_len);  // grow the buffer to escaped length
+
+        // we can now build the escaped value in place, tail to head
+        q = (char *) buf_base(&buf) + escaped_len - 1;
+        *q-- = '\"';  // closing DQUOTE
+
+        for (p = buf_base(&buf) + orig_len - 1; p >= buf_base(&buf); p--) {
+            char c = *p;
+
+            switch (c) {
+            case '\\':
+            case '\"':
+                needs_escaping = 1;
+                break;
+
+            case '\n':
+                needs_escaping = 1;
+                c = 'n';
+                break;
+
+            case '\r':
+                needs_escaping = 1;
+                c = 'r';
+                break;
+
+            default:
+                needs_escaping = 0;
+                break;
+            }
+
+            *q-- = c;
+
+            if (needs_escaping) *q-- = '\\';
+        }
+
+        assert(q == buf_base(&buf));
+        *q = '\"';  // opening DQUOTE
+    }
+
+    return buf_release(&buf);
+}
+
+EXPORTED void _xsyslog_ev(int priority, const char *event,
+                          logfmt_arg_list *arg)
+{
+    static struct buf buf = BUF_INITIALIZER;
+    int saved_errno = errno;
+
+    char *escaped = _xsyslog_ev_escape(event);
+    buf_printf(&buf, "event=%s", escaped);
+    free(escaped);
+
+    for (size_t i = 0; i < arg->nmemb; i++) {
+        buf_printf(&buf, " %s=", arg->data[i].name);
+
+        switch(arg->data[i].type) {
+        case LF_C:   buf_printf(&buf, "%c",   arg->data[i].c);   break;
+        case LF_D:   buf_printf(&buf, "%d",   arg->data[i].d);   break;
+        case LF_LD:  buf_printf(&buf, "%ld",  arg->data[i].ld);  break;
+        case LF_LLD: buf_printf(&buf, "%lld", arg->data[i].lld); break;
+        case LF_U:   buf_printf(&buf, "%u",   arg->data[i].u);   break;
+        case LF_LU:  buf_printf(&buf, "%lu",  arg->data[i].lu);  break;
+        case LF_LLU: buf_printf(&buf, "%llu", arg->data[i].llu); break;
+        case LF_ZD:  buf_printf(&buf, "%zd",  arg->data[i].zd);  break;
+        case LF_ZU:  buf_printf(&buf, "%zu",  arg->data[i].zu);  break;
+        case LF_LLX: buf_printf(&buf, "%llx", arg->data[i].llu); break;
+        case LF_F:   buf_printf(&buf, "%f",   arg->data[i].f);   break;
+        case LF_M:
+            char *escaped_errno = _xsyslog_ev_escape(strerror(errno));
+            buf_appendcstr(&buf, escaped_errno);
+            free(escaped_errno);
+            break;
+
+        case LF_S:
+            char *escaped_s = _xsyslog_ev_escape(arg->data[i].s);
+            buf_appendcstr(&buf, escaped_s);
+            free(escaped_s);
+            break;
+
+        case LF_RAW:
+            char *escaped_raw = _xsyslog_ev_escape(arg->data[i].s);
+            buf_appendcstr(&buf, escaped_raw);
+            free(escaped_raw);
+            free((char *)arg->data[i].s);
+            break;
+
+        default:
+            struct buf errbuf = BUF_INITIALIZER;
+            buf_printf(&errbuf, "Unknown lf type: %d", arg->data[i].type);
+            fatal(buf_cstring(&errbuf), EX_SOFTWARE);
+        }
+    }
+
+    syslog(priority, "%s", buf_cstring(&buf));
+    buf_free(&buf);
+    errno = saved_errno;
+}
