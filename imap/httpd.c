@@ -2526,7 +2526,7 @@ dynarray_t *parse_accept(const char **hdr)
         while ((token = tok_next(&tok))) {
             struct param *params = NULL, *param;
             char *type = NULL, *subtype = NULL;
-            struct accept accept = { .qual = 1.0 };
+            struct accept accept = { .qual = 1.0, .version = NULL, .charset = NULL };
 
             message_parse_type(token, &type, &subtype, &params);
 
@@ -2540,9 +2540,11 @@ dynarray_t *parse_accept(const char **hdr)
                     accept.qual = strtof(param->value, NULL);
                 }
                 else if (!strcasecmp(param->attribute, "version")) {
+                    free(accept.version);
                     accept.version = xstrdup(param->value);
                 }
                 else if (!strcasecmp(param->attribute, "charset")) {
+                    free(accept.charset);
                     accept.charset = xstrdup(param->value);
                 }
             }
