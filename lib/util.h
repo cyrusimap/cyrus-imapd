@@ -445,4 +445,76 @@ void xsyslog_fn(int priority, const char *description,
                      + __GNUC_MINOR__ * 100     \
                      + __GNUC_PATCHLEVEL__)
 
+typedef struct logfmt_arg {
+    const char *name;
+    int type;
+    union {
+        char c;
+        int d;
+        long int ld;
+        long long int lld;
+        unsigned int u;
+        long unsigned int lu;
+        long long unsigned int llu;
+        ssize_t zd;
+        size_t zu;
+        double f;
+        const char *s;
+    };
+} logfmt_arg;
+
+typedef struct logfmt_arg_list {
+    size_t nmemb;
+    logfmt_arg *data;
+} logfmt_arg_list;
+
+#define logfmt_arg_LIST(ARRAY...) (logfmt_arg_list *)        \
+    &(logfmt_arg_list) {                                     \
+        sizeof((logfmt_arg []){ARRAY}) / sizeof(logfmt_arg), \
+        (logfmt_arg []){ARRAY}                               \
+    }
+
+void _xsyslog_ev(int priority, const char *event,
+                 logfmt_arg_list *arg);
+
+#define xsyslog_ev(priority, event, ...)                       \
+    _xsyslog_ev(priority, event, logfmt_arg_LIST(__VA_ARGS__))
+
+enum logfmt_type {
+    LF_C,
+    LF_D,
+    LF_LD,
+    LF_LLD,
+    LF_U,
+    LF_LU,
+    LF_LLU,
+    LF_ZD,
+    LF_ZU,
+    LF_LLX,
+    LF_F,
+    LF_M,
+    LF_S,
+    LF_RAW
+};
+
+#define lf_c(key, value)   (logfmt_arg){ key, LF_C,   { .c   = value } }
+#define lf_d(key, value)   (logfmt_arg){ key, LF_D,   { .d   = value } }
+#define lf_ld(key, value)  (logfmt_arg){ key, LF_LD,  { .ld  = value } }
+#define lf_lld(key, value) (logfmt_arg){ key, LF_LLD, { .lld = value } }
+#define lf_u(key, value)   (logfmt_arg){ key, LF_U,   { .u   = value } }
+#define lf_lu(key, value)  (logfmt_arg){ key, LF_LU,  { .lu  = value } }
+#define lf_llu(key, value) (logfmt_arg){ key, LF_LLU, { .llu = value } }
+#define lf_zd(key, value)  (logfmt_arg){ key, LF_ZD,  { .zd  = value } }
+#define lf_zu(key, value)  (logfmt_arg){ key, LF_ZU,  { .zu  = value } }
+#define lf_llx(key, value) (logfmt_arg){ key, LF_LLX, { .llu = value } }
+#define lf_f(key, value)   (logfmt_arg){ key, LF_F,   { .f   = value } }
+#define lf_m(key)          (logfmt_arg){ key, LF_M,   {              } }
+#define lf_s(key, value)   (logfmt_arg){ key, LF_S,   { .s   = value } }
+
+#define lf_raw(key, fmt, ...) ({                               \
+    struct buf value = BUF_INITIALIZER;                        \
+    buf_printf(&value, fmt, __VA_ARGS__);                      \
+    (logfmt_arg){ key, LF_RAW, { .s = buf_release(&value) } }; \
+})
+
 #endif /* INCLUDED_UTIL_H */
