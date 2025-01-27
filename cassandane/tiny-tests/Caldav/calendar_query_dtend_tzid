@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_query_dtend_tzid
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    xlog $self, "Load a resource";
+    my $CalendarId = 'Default';
+    my $uuid = "851e34f4-23fc-4b69-9e90-67468336e53c";
+    my $href = "$CalendarId/$uuid.ics";
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uuid
+DTSTART;TZID=Europe/Berlin:20250127T130000
+DTEND;TZID=America/New_York:20250127T140000
+DTSTAMP:20250127T222618Z
+SUMMARY:Start 1pm CET, end 2pm EST
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Perform calendar-query";
+    my $xml = <<EOF;
+<c:calendar-query xmlns:d="DAV:"
+                  xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <d:getetag />
+    <c:calendar-data>
+      <c:expand start="20250127T000000Z" end="20250128T000000Z"/>
+      <c:comp name="VCALENDAR">
+        <c:prop name="VERSION"/>
+        <c:comp name="VEVENT">
+          <c:prop name="UID"/>
+          <c:prop name="DTSTART"/>
+          <c:prop name="DTEND"/>
+        </c:comp>
+      </c:comp>
+    </c:calendar-data>
+  </d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="20250127T140000Z" end="20250128T000000Z"/>
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>
+EOF
+
+    my $res = $CalDAV->Request('REPORT',
+                               "/dav/calendars/user/cassandane/$CalendarId",
+                               $xml, Depth => 1, 'Content-Type' => 'text/xml');
+    my $responses = $res->{'{DAV:}response'};
+    $self->assert_equals(1, scalar @$responses);
+
+    my $ical = Data::ICal->new(data =>
+                               $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
+    $self->assert_str_equals($uuid,
+                             $ical->{entries}[0]{properties}{uid}[0]{value});
+    $self->assert_str_equals('20250127T120000Z',
+                             $ical->{entries}[0]{properties}{dtstart}[0]{value});
+    $self->assert_str_equals('20250127T190000Z',
+                             $ical->{entries}[0]{properties}{dtend}[0]{value});
+}

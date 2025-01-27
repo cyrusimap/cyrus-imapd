@@ -651,7 +651,12 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     /* find event length first, we'll need it for overrides */
     if (mastercomp) {
         dtstart = icalcomponent_get_mydtstart(mastercomp);
-        event_length = icalcomponent_get_duration(mastercomp);
+
+        struct icalperiodtype period =
+            icalcomponent_get_utc_timespan(mastercomp,
+                                           icalcomponent_isa(mastercomp),
+                                           (icaltimezone *) floatingtz);
+        event_length = icaltime_subtract(period.end, period.start);
         if (icaldurationtype_is_null_duration(event_length) &&
             icaltime_is_date(dtstart)) {
             event_length = icaldurationtype_from_int(60 * 60 * 24);  /* P1D */
