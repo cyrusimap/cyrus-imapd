@@ -889,6 +889,7 @@ struct findstage_cb_rock {
     struct timespec *internaldate;
     char *fname;
     int nolink;
+    int found_dup;
 };
 
 static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
@@ -908,6 +909,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
             // found a non-expunged duplicate email; use its internaldate
             TIMESPEC_FROM_NANOSEC(rock->internaldate, rec->internaldate);
             if (rock->nolink) {
+                rock->found_dup = 1;
                 ret = CYRUSDB_DONE;
                 goto done;
             }
@@ -1011,11 +1013,42 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
                 strcpy(guid, message_guid_encode(&(*body)->guid)),
                 mbtype == MBTYPE_EMAIL ? internaldate : NULL,
                 NULL/*fname*/,
-                nolink
+                nolink,
+                0/*found_dup*/
             };
 
             // ignore errors, it's OK for this to fail
             conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
+
+            // make sure we don't have a JMAP ID (internaldate) clash
+            if (!rock.found_dup && internaldate) {
+                struct buf jidrep = BUF_INITIALIZER;
+                char this_guid[2*MESSAGE_GUID_SIZE+1];
+
+                do {
+                    buf_reset(&jidrep);
+                    NANOSEC_TO_JMAPID(&jidrep,
+                                      TIMESPEC_TO_NANOSEC(internaldate));
+                    r = conversations_jmapid_guidrep_lookup(cstate,
+                                                            buf_cstring(&jidrep),
+                                                            this_guid);
+                    if (r || !strcmp(guid, this_guid)) {
+                        // JMAP ID doesn't exist or it references our GUID
+                        break;
+                    }
+
+                    xsyslog(LOG_INFO, "IOERROR: JMAPID conflict during append,"
+                            " incrementing internaldate.tv_nsec",
+                            "JMAPID=<%s> new_GUID=<%s> existing_GUID=<%s>",
+                            buf_cstring(&jidrep), guid, this_guid);
+
+                    // try the next nanosecond */
+                    internaldate->tv_nsec =
+                        (internaldate->tv_nsec + 1) % UTIME_OMIT;
+                } while (1);
+
+                buf_free(&jidrep);
+            }
 
             // if we found a file, use it
             if (rock.fname) {
