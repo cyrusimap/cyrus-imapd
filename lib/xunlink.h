@@ -52,6 +52,10 @@
  * These wrappers present the same interface as the original functions,
  * but will also log an error if the original function did anything
  * other than succeed or fail-due-to-ENOENT
+ *
+ * If the original function fails with ENOENT, errno will be reset to zero.
+ * This prevents errno leaks in the common case, but it means you can't use
+ * these wrappers if you need to detect ENOENT failures.
  **/
 
 #define xunlink(pathname)                                                     \

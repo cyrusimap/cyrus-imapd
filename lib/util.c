@@ -571,7 +571,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     if (!nolink) {
         if (link(from, to) == 0) return 0;
         if (errno == EEXIST) {
-            if (xunlink(to) == -1) {
+            if (unlink(to) == -1) {
                 xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
                                  "filename=<%s>", to);
                 return -1;
