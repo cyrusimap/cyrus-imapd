@@ -387,6 +387,62 @@ static void test_read_and_delete(void)
     CU_ASSERT_EQUAL(fexists(filename), 0);
 }
 
+static void test_replace_before_delete(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    int r;
+    /* data courtesy hipsteripsum.me */
+    static const char KEY1[] = "alphabet";
+    static const char DATA1[] = "blog lomo";
+    static const char KEY2[] = "blanket";
+    static const char DATA2[] = "beard ethical";
+    static const char KEY3[] = "cobra";
+    static const char DATA3[] = "prius toke";
+    static const char KEY4[] = "dynamo";
+    static const char DATA4[] = "etsy tote bag";
+
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
+
+    /* open() with _CREATE succeeds and creates the db */
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+
+    /* 1st txn */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANSTORE(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* 2nd txn */
+    CANDELETE(KEY3, strlen(KEY3));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* 3rd txn */
+    CANSTORE(KEY2, strlen(KEY2), DATA3, strlen(DATA3));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* 4th txn (new value) */
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    CANFETCH_NOTXN(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANFETCH_NOTXN(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANNOTFETCH_NOTXN(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
+    CANFETCH_NOTXN(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+
+    /* closing succeeds and leaves the file in place */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+}
+
 static void test_opentwo(void)
 {
     struct db *db1 = NULL;
