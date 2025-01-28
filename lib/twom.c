@@ -1264,6 +1264,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
 
     // track that we've added the record
     loc->offset = offset;
+    loc->deleted_offset = 0;
     file->written_size += reclen;
     txn->end = file->written_size;
     loc->end = file->written_size;
