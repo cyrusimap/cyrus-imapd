@@ -294,6 +294,9 @@ extern int conversations_guid_cid_lookup(struct conversations_state *state,
 #define CONV_JMAPID_SIZE 11  // 64-bits base64-encoded w/o padding
 extern int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
                                                const char *jidrep, char guidrep[]);
+extern void conversations_adjust_internaldate(struct conversations_state *cstate,
+                                              const char *guidrep,
+                                              struct timespec *internaldate);
 
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
