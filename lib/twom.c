@@ -1728,7 +1728,7 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         return 0;
     }
 
-done:
+ done:
     unlock(db, file);
     return r;
 }
@@ -1747,7 +1747,7 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     fl.l_type = F_RDLCK;
     fl.l_whence = SEEK_SET;
 
-restart:
+ restart:
     fl.l_start = 0;
     fl.l_len = HEADER_MAGIC_SIZE;
     for (;!file->has_headlock;) {
@@ -1860,7 +1860,7 @@ restart:
 
     /* we can't read an unclean database */
     if (!db_is_clean(db, file)) {
-badfile:
+ badfile:
         /* we have to be able to re-lock safely */
         if (db->readonly) {
             r = TWOM_IOERROR;
@@ -1892,7 +1892,7 @@ badfile:
         return 0;
     }
 
-done:
+ done:
     unlock(db, file);
     return r;
 }
@@ -1967,7 +1967,7 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
 
     *ret = db;
 
-done:
+ done:
     if (r) dispose_db(db);
     return r;
 }
@@ -2105,7 +2105,7 @@ static int myreplay(struct twom_txn *txn,
         size_t reclen = RECLEN(ptr);
         // ensure the entire record fits!
         if (txn->end + reclen > file->committed_size)
-             return TWOM_IOERROR;
+            return TWOM_IOERROR;
 
         // skip over commits, but replay all ADD, REPLACE or DELETE
         if (TYPE(ptr) == COMMIT) {
@@ -2254,7 +2254,7 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
         }
     }
 
-done:
+ done:
     if (dirfd >= 0) close(dirfd);
     free(copy);
     return r;
@@ -2643,8 +2643,7 @@ int twom_cursor_next(struct twom_cursor *cur,
     // one use only (could offer a "reset" function)
     if (cur->done) return TWOM_DONE;
 
-again:
-
+ again:
     if (txn->readonly) {
         // release locks every N records if readonly
         if (!txn->db->noyield && !txn->noyield && txn->counter++ > txn->db->foreach_lock_release) {
@@ -2793,7 +2792,7 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
     if (!cur->loc.is_exactmatch || (flags & TWOM_SKIPROOT))
         cur->started = 1;
 
-done:
+ done:
     if (r) twom_cursor_fini(&cur);
     else *curp = cur;
 
@@ -2933,15 +2932,14 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
     char scratch[80];
     const char *ptr;
     size_t offset = DUMMY_OFFSET;
-    int r = 0;
     int i;
 
     struct tm_header *header = &txn->file->header;
     struct twom_db *db = txn->db;
     struct tm_loc *loc = &db->loc;
 
-    r = find_loc(txn, loc, NULL, 0);
-    if (r) goto done;
+    int r = find_loc(txn, loc, NULL, 0);
+    if (r) return r;
 
     scratch[79] = 0; // avoid overruns
 
@@ -3021,9 +3019,8 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
 
         offset += RECLEN(ptr);
     }
-done:
 
-    return r;
+    return 0;
 }
 
 int twom_db_fetch(struct twom_db *db,
@@ -3285,7 +3282,7 @@ int twom_db_repack(struct twom_db *db)
 
     return 0;
 
-fail:
+ fail:
     // unwind the new file and new txn.  This is for if we abort AFTER
     // we start writing to the new file.  In this case, the new file
     // contains rubish so we'll unlink it before unlocking.
@@ -3300,7 +3297,7 @@ fail:
     free(db->openfile);
     db->openfile = oldfile;
 
-badfile:
+ badfile:
     fl.l_type= F_UNLCK;
     for (;;) {
         if (fcntl(oldfd, F_SETLKW, &fl) < 0)
