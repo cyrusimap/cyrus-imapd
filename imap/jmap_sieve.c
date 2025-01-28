@@ -1374,6 +1374,51 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
     }
 }
 
+static int getenvironment(void *sc __attribute__((unused)),
+                          const char *keyname, char **res)
+{
+    *res = NULL;
+
+    switch (*keyname) {
+    case 'd':
+        if (!strcmp(keyname, "domain")) {
+            const char *domain = strchr(config_servername, '.');
+
+            if (domain) domain++;
+            else domain = "";
+
+            *res = xstrdup(domain);
+        }
+        break;
+
+    case 'h':
+        if (!strcmp(keyname, "host")) *res = xstrdup(config_servername);
+        break;
+
+    case 'l':
+        if (!strcmp(keyname, "location")) *res = xstrdup("MDA");
+        break;
+
+    case 'n':
+        if (!strcmp(keyname, "name")) *res = xstrdup("Cyrus LMTP");
+        break;
+
+    case 'p':
+        if (!strcmp(keyname, "phase")) *res = xstrdup("during");
+        break;
+
+    /* Not supporting remote host or ip since they'd be the jmap client, not
+       the lmtp client */
+
+    case 'v':
+        if (!strcmp(keyname, "version")) *res = xstrdup(CYRUS_VERSION);
+        break;
+    }
+
+    return (*res ? SIEVE_OK : SIEVE_FAIL);
+}
+
+
 static int getsize(void *mc, int *size)
 {
     message_data_t *m = (message_data_t *) mc;
@@ -1948,6 +1993,32 @@ static int execute_error(const char *msg,
     return SIEVE_OK;
 }
 
+static int sieve_duplicate_check(void *dc __attribute__((unused)),
+                                 void *ic __attribute__((unused)),
+                                 void *sc __attribute__((unused)),
+                                 void *mc __attribute__((unused)),
+                                 const char **errmsg __attribute__((unused)))
+{
+    /* no active tracking records in this test mode */
+    return 0;
+}
+
+static int sieve_duplicate_track(void *dc __attribute__((unused)),
+                                 void *ic __attribute__((unused)),
+                                 void *sc __attribute__((unused)),
+                                 void *mc __attribute__((unused)),
+                                 const char **errmsg __attribute__((unused)))
+{
+    return SIEVE_OK;
+}
+
+/* duplicate support */
+static sieve_duplicate_t duplicate = {
+    0, /* max expiration */
+    &sieve_duplicate_check,
+    &sieve_duplicate_track,
+};
+
 static const char *_envelope_address_parse(json_t *addr,
                                            struct jmap_parser *parser)
 {
@@ -2174,6 +2245,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_header(interp, getheader);
     sieve_register_headersection(interp, getheadersection);
     sieve_register_envelope(interp, getenvelope);
+    sieve_register_environment(interp, getenvironment);
     sieve_register_size(interp, getsize);
     sieve_register_body(interp, getbody);
     sieve_register_mailboxexists(interp, &getmailboxexists);
@@ -2196,6 +2268,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_processcal(interp, processcal);
     sieve_register_include(interp, getinclude);
     sieve_register_execute_error(interp, execute_error);
+    sieve_register_duplicate(interp, &duplicate);
 
     /* test against each email */
     size_t i;
