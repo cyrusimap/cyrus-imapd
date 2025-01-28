@@ -2924,14 +2924,14 @@ int sync_apply_mailbox(struct dlist *kin,
 
             mbname_free(&mbname);
 
-            r = stat(sieve_path, &sbuf);
-            if (r) {
+            int r2 = stat(sieve_path, &sbuf);
+            if (r2) {
                 if (errno == ENOENT &&
                     !cyrus_mkdir(sieve_path, 0755) &&
                     !mkdir(sieve_path, 0755)) {
-                    r = 0;
+                    r2 = 0;
                 }
-                if (r) {
+                if (r2) {
                     syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
                     r = IMAP_IOERROR;
                 }
