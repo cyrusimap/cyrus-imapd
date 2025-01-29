@@ -474,11 +474,14 @@ typedef struct logfmt_arg_list {
         (logfmt_arg []){ARRAY}                               \
     }
 
-void _xsyslog_ev(int priority, const char *event,
+void _xsyslog_ev(int saved_errno, int priority, const char *event,
                  logfmt_arg_list *arg);
 
-#define xsyslog_ev(priority, event, ...)                       \
-    _xsyslog_ev(priority, event, logfmt_arg_LIST(__VA_ARGS__))
+#define xsyslog_ev(priority, event, ...)                                \
+    do {                                                                \
+        int se = errno;                                                 \
+        _xsyslog_ev(se, priority, event, logfmt_arg_LIST(__VA_ARGS__)); \
+    } while (0)
 
 enum logfmt_type {
     LF_C,
