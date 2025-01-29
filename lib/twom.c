@@ -241,6 +241,8 @@ static inline void *twom_zmalloc(size_t bytes)
 #define NEXTNPTR(ptr, lvl) (ptr + ptroffset[TYPE(ptr)] + 8 * (1 + lvl))
 #define NEXT0(ptr, alt) le64toh(*((uint64_t *)NEXT0PTR(ptr, alt)))
 #define NEXTN(ptr, lvl) le64toh(*((uint64_t *)NEXTNPTR(ptr, lvl)))
+#define SET0(file, ptr, offset) _setloc0(file, ptr, offset)
+#define SETN(ptr, level, offset)  *((uint64_t *)((ptr) + ptroffset[TYPE(ptr)] + 8 * ((level) + 1))) = htole64(offset)
 
 #ifdef HAVE_DECLARE_OPTIMIZE
 static size_t reclen_dummy(const char *ptr);
@@ -702,27 +704,21 @@ static inline int commit_header(struct twom_db *db, struct tm_header *header)
 /******************** RECORD MANAGEMENT *********************/
 
 #ifdef HAVE_DECLARE_OPTIMIZE
-static inline void _setloc(struct tm_file *file, char *ptr, uint8_t level, size_t offset)
+static inline void _setloc0(struct tm_file *file, char *ptr, size_t offset)
     __attribute__((optimize("-O3")));
 #endif
-static inline void _setloc(struct tm_file *file, char *ptr, uint8_t level, size_t offset)
+static inline void _setloc0(struct tm_file *file, char *ptr, size_t offset)
 {
     char *addr = ptr + ptroffset[TYPE(ptr)];
 
-    if (level) {
-        // positions past the start
-        addr += 8 * (level + 1);
-    }
-    else {
-        /* level zero is special */
-        size_t val0 = NEXT0(ptr, 0);
-        size_t val1 = NEXT0(ptr, 1);
+    /* level zero is special */
+    size_t val0 = NEXT0(ptr, 0);
+    size_t val1 = NEXT0(ptr, 1);
 
-        size_t end = file->committed_size;
-        /* already this transaction, update this one */
-        if (val0 < end && (val1 >= end || val0 > val1))
-            addr += 8; // conditions to write to val1
-    }
+    size_t end = file->committed_size;
+    /* already this transaction, update this one */
+    if (val0 < end && (val1 >= end || val0 > val1))
+        addr += 8; // conditions to write to val1
 
     *((uint64_t *)(addr)) = htole64(offset);
 }
@@ -1067,7 +1063,7 @@ static int delete_here(struct twom_txn *txn, struct tm_loc *loc)
     char *backptr = file->base + loc->backloc[0];
     char *prevptr = backptr;
     *((uint64_t *)(addr)) = htole64(loc->offset);
-    _setloc(file, backptr, 0, offset);
+    SET0(file, backptr, offset);
     addr += 8;
 
     // update the old checksum
@@ -1204,7 +1200,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     char *backptr = file->base + loc->backloc[0];
     char *prevptr = backptr;
     *((uint64_t *)(addr)) = htole64(advance0(locptr));
-    _setloc(file, backptr, 0, offset);
+    SET0(file, backptr, offset);
     addr += 8;
 
     for (i = 1; i < oldlevel && i < level; i++) {
@@ -1213,7 +1209,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         prevptr = backptr;
         *((uint64_t *)(addr)) = htole64(NEXTN(locptr, i));
         addr += 8;
-        _setloc(file, backptr, i, offset);
+        SETN(backptr, i, offset);
     }
 
     // old level stuck up higher?  If we're removing it then we need to
@@ -1222,7 +1218,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         backptr = file->base + loc->backloc[i];
         if (backptr != prevptr) _recsum(file, prevptr);
         prevptr = backptr;
-        _setloc(file, backptr, i, NEXTN(locptr, i));
+        SETN(backptr, i, NEXTN(locptr, i));
     }
 
     // new record sticks up higher?  We need to intercept the existing pointers
@@ -1232,7 +1228,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         prevptr = backptr;
         *((uint64_t *)(addr)) = htole64(NEXTN(backptr, i));
         addr += 8;
-        _setloc(file, backptr, i, offset);
+        SETN(backptr, i, offset);
     }
 
     // update the last old checksum
