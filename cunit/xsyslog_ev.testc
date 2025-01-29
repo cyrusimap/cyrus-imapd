@@ -131,6 +131,13 @@ static void test_lf_f(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 }
 
+int mess_with_errno()
+{
+    errno = errno + 1;
+
+    return 1;
+}
+
 static void test_lf_m(void)
 {
     struct buf expect = BUF_INITIALIZER;
@@ -139,7 +146,7 @@ static void test_lf_m(void)
     size_t i;
     int needs_quotes = 0;
 
-    buf_printf(&expect, "event=\"lf_m test\"");
+    buf_printf(&expect, "event=\"lf_m test\" a=1");
 
     // escape error string if necessary...
     for (i = 0; i < strlen(errstr); i++) {
@@ -175,9 +182,15 @@ static void test_lf_m(void)
         buf_printf(&expect, " error=%s", buf_cstring(&errbuf));
     }
 
+    buf_printf(&expect, " b=1");
+
     CU_SYSLOG_MATCH(buf_cstring(&expect));
     errno = 1;
-    xsyslog_ev(LOG_ERR, "lf_m test", lf_m("error"));
+    xsyslog_ev(LOG_ERR, "lf_m test",
+        lf_d("a", mess_with_errno()),
+        lf_m("error"),
+        lf_d("b", mess_with_errno())
+    );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     buf_free(&errbuf);

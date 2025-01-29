@@ -2272,11 +2272,10 @@ static char *_xsyslog_ev_escape(const char *val)
     return buf_release(&buf);
 }
 
-EXPORTED void _xsyslog_ev(int priority, const char *event,
+EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
                           logfmt_arg_list *arg)
 {
     static struct buf buf = BUF_INITIALIZER;
-    int saved_errno = errno;
 
     char *escaped = _xsyslog_ev_escape(event);
     buf_printf(&buf, "event=%s", escaped);
@@ -2298,7 +2297,7 @@ EXPORTED void _xsyslog_ev(int priority, const char *event,
         case LF_LLX: buf_printf(&buf, "%llx", arg->data[i].llu); break;
         case LF_F:   buf_printf(&buf, "%f",   arg->data[i].f);   break;
         case LF_M:
-            char *escaped_errno = _xsyslog_ev_escape(strerror(errno));
+            char *escaped_errno = _xsyslog_ev_escape(strerror(saved_errno));
             buf_appendcstr(&buf, escaped_errno);
             free(escaped_errno);
             break;
