@@ -703,6 +703,22 @@ static inline int commit_header(struct twom_db *db, struct tm_header *header)
 
 /******************** RECORD MANAGEMENT *********************/
 
+// Setting the next location at level 0 is special within twom (and
+// twoskip before it).  The logic is:
+// * if the higher value is past the committed length of the file, update
+//   the higher value, because it's been changed within this transaction.
+// * otherwise, update the lower value
+//
+// This means that the highest value that's NOT past the end of the
+// committed file is correct, so when we do a recovery or a transaction
+// abort, we can zero out the pointer that's past the "end" of the file,
+// and the remaining value will always point to the next committed record
+// in the valid file.
+//
+// The recovery operation then checks all the higher-level pointers to make
+// sure they still point to the correct next record as it walks the entire
+// linked list at level zero, which fixes any other values that were updated
+// in the aborted transaction.
 #ifdef HAVE_DECLARE_OPTIMIZE
 static inline void _setloc0(struct tm_file *file, char *ptr, size_t offset)
     __attribute__((optimize("-O3")));
