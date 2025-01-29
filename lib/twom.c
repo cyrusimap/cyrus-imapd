@@ -1617,6 +1617,9 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
         if (sbuf.st_ino == sbuffile.st_ino) break;
 
+        r = unlock(db, file);
+        if (r) goto done;
+
         int newfd = open(db->fname, O_RDWR, 0644);
         if (newfd == -1) {
             db->error("write_lock open failed",
@@ -1787,7 +1790,8 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         if (sbuf.st_ino == sbuffile.st_ino) break;
 
         // unlock the old file
-        unlock(db, file);
+        r = unlock(db, file);
+        if (r) goto done;
 
         int newfd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
         if (newfd == -1) {
