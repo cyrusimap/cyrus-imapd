@@ -317,7 +317,7 @@ static size_t(*reclenfn[])(const char *) = {
 #define RECLEN(ptr) (reclenfn[TYPE(ptr)](ptr))
 
 /* return a "safe" pointer - that's one where it's guaranteed that the entire record
- * fits inside the mapped space for the transaction */
+ * fits inside the mapped space for the file */
 #ifdef HAVE_DECLARE_OPTIMIZE
 static inline const char *safeptr(struct tm_loc *loc, size_t offset)
     __attribute__((optimize("-O3")));
@@ -333,6 +333,7 @@ static inline const char *safeptr(struct tm_loc *loc, size_t offset)
     return base;
 }
 
+/* find the more recent of the forward pointers at level 0 */
 #ifdef HAVE_DECLARE_OPTIMIZE
 static size_t advance0(const char *ptr)
     __attribute__((optimize("-O3")));
