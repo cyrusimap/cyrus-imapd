@@ -1107,10 +1107,8 @@ havefile:
         goto out;
     }
 
-    if (
-        config_getstring(IMAPOPT_ANNOTATION_CALLOUT)
-        && (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)
-    ) {
+    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
+        (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)) {
         if (flags)
             newflags = strarray_dup(flags);
         else
