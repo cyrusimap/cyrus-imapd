@@ -1107,7 +1107,8 @@ havefile:
         goto out;
     }
 
-    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
+    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
+        (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)) {
         if (flags)
             newflags = strarray_dup(flags);
         else
@@ -1345,12 +1346,20 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     strarray_t *flags = NULL;
     struct body *body = NULL;
     int r = 0;
+    struct mailbox *mailbox = NULL;
 
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
 
     if (config_getswitch(IMAPOPT_ANNOTATION_CALLOUT_DISABLE_APPEND)) {
         syslog(LOG_DEBUG, "append_run_annotator: Append disabled.");
+        return 0;
+    }
+
+    r = msgrecord_get_mailbox(msgrec, &mailbox);
+    if (r) goto out;
+
+    if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_EMAIL) {
         return 0;
     }
 

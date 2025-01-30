@@ -624,12 +624,12 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     fclose(f);
 
+    /* Treat this as the user taking action, since that's what it is. */
+    authstate = auth_newstate(userid);
+
     if (sdata->isactive) {
         /* Flag script as active */
         strarray_append(&flags, "\\Flagged");
-
-        /* Need authstate in order to set flags */
-        authstate = auth_newstate(userid);
     }
 
     if ((r = append_setup_mbox(&as, mailbox, userid, authstate,
