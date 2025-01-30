@@ -424,7 +424,7 @@ static struct capa_struct base_capabilities[] = {
       { .statep = &imapd_idle_enabled }                       },
     { "IMAPSIEVE=",            0, /* not implemented */ { 0 } }, /* RFC 6785 */
     { "INPROGRESS",            CAPA_POSTAUTH,           { 0 } }, /* RFC 9585 */
-    { "JMAPACCESS",            CAPA_POSTAUTH|CAPA_STATE,         /* draft-ietf-extra-jmapaccess */
+    { "JMAPACCESS",            CAPA_POSTAUTH|CAPA_STATE,         /* RFC 9698 */
       { .statep = &imapd_jmapaccess_enabled }                 },
     { "LANGUAGE",              0, /* not implemented */ { 0 } }, /* RFC 5255 */
     { "LIST-EXTENDED",         CAPA_POSTAUTH,           { 0 } }, /* RFC 5258 */

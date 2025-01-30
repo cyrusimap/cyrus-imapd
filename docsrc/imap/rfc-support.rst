@@ -932,12 +932,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Email Filtering: Extension for Processing Calendar Attachments
 
-IETF RFC Drafts
-===============
-
-draft-ietf-extra-jmapaccess
+:rfc:`9698`
 
    The JMAPACCESS Extension for IMAP
+
+IETF RFC Drafts
+===============
 
 draft-ietf-extra-sieve-snooze
 
