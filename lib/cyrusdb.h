@@ -59,7 +59,8 @@ enum cyrusdb_ret {
     CYRUSDB_LOCKED = -6,
     CYRUSDB_NOTIMPLEMENTED = -7,
     CYRUSDB_FULL = -8,
-    CYRUSDB_READONLY = -9
+    CYRUSDB_READONLY = -9,
+    CYRUSDB_BADFORMAT = -10,
 };
 
 enum cyrusdb_initflags {

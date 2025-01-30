@@ -528,16 +528,19 @@ static int read_header(struct dbengine *db)
 {
     const char *dptr;
 
-    assert(db && db->map_len && db->fname && db->map_base
-              && db->is_open && db->lock_status);
+    assert(db);
+
     if (db->map_len < HEADER_SIZE) {
         syslog(LOG_ERR,
                "skiplist: file not large enough for header: %s", db->fname);
+        return CYRUSDB_BADFORMAT;
     }
+
+    assert(db->fname && db->map_base && db->is_open && db->lock_status);
 
     if (memcmp(db->map_base, HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
         syslog(LOG_ERR, "skiplist: invalid magic header: %s", db->fname);
-        return CYRUSDB_IOERROR;
+        return CYRUSDB_BADFORMAT;
     }
 
     db->version = ntohl(*((uint32_t *)(db->map_base + OFFSET_VERSION)));
@@ -546,7 +549,7 @@ static int read_header(struct dbengine *db)
     if (db->version != SKIPLIST_VERSION) {
         syslog(LOG_ERR, "skiplist: version mismatch: %s has version %d.%d",
                db->fname, db->version, db->version_minor);
-        return CYRUSDB_IOERROR;
+        return CYRUSDB_BADFORMAT;
     }
 
     db->maxlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_MAXLEVEL)));

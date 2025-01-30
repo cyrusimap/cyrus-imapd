@@ -33,6 +33,9 @@ enum twom_ret {
     TWOM_LOCKED = -4,
     TWOM_NOTFOUND = -5,
     TWOM_READONLY = -6,
+    TWOM_BADFORMAT = -7,
+    TWOM_BADUSAGE = -8,
+    TWOM_BADCHECKSUM = -9,
 };
 
 // we don't reuse flags for different operations (e.g. open, fetch, foreach), as

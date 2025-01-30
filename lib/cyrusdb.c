@@ -205,20 +205,18 @@ static int _myopen(const char *backend, const char *fname,
 
     /* check if it opens normally.  Horray */
     r = db->backend->open(fname, flags, &db->engine, tid);
-    if (r == CYRUSDB_NOTFOUND) goto done; /* no open flags */
-    if (!r) goto done;
-
-    r = _detect_or_convert(db, backend, fname, flags);
+    if (r == CYRUSDB_BADFORMAT) {
+        r = _detect_or_convert(db, backend, fname, flags);
+        if (r) goto done;
+        r = db->backend->open(fname, flags, &db->engine, tid);
+    }
     if (r) goto done;
 
-    r = db->backend->open(fname, flags, &db->engine, tid);
-
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB open(%s, %d) => %llx", fname, flags, (long long unsigned)db->engine);
+    syslog(LOG_NOTICE, "DEBUGDB open(%s, %d) => %d, %llx", fname, flags, r, (long long unsigned)db->engine);
 #endif
 
-done:
-
+ done:
     if (r) free(db);
     else *ret = db;
 
