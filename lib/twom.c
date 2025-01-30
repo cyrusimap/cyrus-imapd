@@ -440,7 +440,7 @@ static inline int check_headcsum(struct twom_txn *txn, struct tm_file *file, con
         txn->db->error("invalid head checksum",
                        "filename=<%s> offset=<%08llX>",
                        txn->db->fname, (LLU)offset);
-        return TWOM_IOERROR;
+        return TWOM_BADCHECKSUM;
     }
 
     return 0;
@@ -460,7 +460,7 @@ static inline int check_tailcsum(struct twom_txn *txn, struct tm_file *file, con
         txn->db->error("invalid tail checksum",
                        "filename=<%s> offset=<%08llX>",
                        txn->db->fname, (LLU)offset);
-        return TWOM_IOERROR;
+        return TWOM_BADCHECKSUM;
     }
 
     return 0;
@@ -585,15 +585,11 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
     const char *base = file->base;
 
     if (file->size < HEADER_SIZE) {
-        db->error("file not large enough for header",
-                  "filename=<%s>", db->fname);
-        return TWOM_IOERROR;
+        return TWOM_BADFORMAT;
     }
 
     if (memcmp(base, HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
-        db->error("invalid magic header",
-                  "filename=<%s>", db->fname);
-        return TWOM_IOERROR;
+        return TWOM_BADFORMAT;
     }
 
     memcpy(header->uuid, base + OFFSET_UUID, 16);
@@ -605,7 +601,7 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
         db->error("invalid version",
                   "filename=<%s> version=<%d>",
                   db->fname, header->version);
-        return TWOM_IOERROR;
+        return TWOM_BADFORMAT;
     }
 
     header->flags
@@ -615,7 +611,7 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
         if (!db->external_csum) {
             db->error("missing external csum function",
                       "filename=<%s>", db->fname);
-            return TWOM_IOERROR;
+            return TWOM_BADUSAGE;
         }
     }
     set_csum_engine(db, file, header->flags);
@@ -625,7 +621,7 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
         if (!db->external_compar) {
             db->error("missing external compar function",
                       "filename=<%s>", db->fname);
-            return TWOM_IOERROR;
+            return TWOM_BADUSAGE;
         }
         file->compar = db->external_compar;
     }
@@ -660,7 +656,7 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
     if (file->csum(base, OFFSET_CSUM) != csum) {
         db->error("header checksum failure",
                   "filename=<%s>", db->fname);
-        return TWOM_IOERROR;
+        return TWOM_BADCHECKSUM;
     }
 
     return 0;

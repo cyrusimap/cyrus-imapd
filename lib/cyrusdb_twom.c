@@ -93,6 +93,9 @@ static int _errormap(int r) {
     case TWOM_LOCKED: return CYRUSDB_LOCKED;
     case TWOM_NOTFOUND: return CYRUSDB_NOTFOUND;
     case TWOM_READONLY: return CYRUSDB_READONLY;
+    case TWOM_BADFORMAT: return CYRUSDB_BADFORMAT;
+    case TWOM_BADUSAGE: return CYRUSDB_INTERNAL;
+    case TWOM_BADCHECKSUM: return CYRUSDB_IOERROR;
     // must be a foreach result
     default: return r;
     }
