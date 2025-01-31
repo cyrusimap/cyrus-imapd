@@ -217,7 +217,10 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
 } while(0)
 
 #define CU_SYSLOG_MATCH(re) \
-    CU_syslogMatchBegin((re), __FILE__, __LINE__)
+    CU_syslogMatchBegin((re), __FILE__, __LINE__, 0)
+
+#define CU_SYSLOG_MATCH_SUBSTR(str) \
+    CU_syslogMatchBegin((str), __FILE__, __LINE__, 1)
 
 #define CU_ASSERT_SYSLOG(match, expected) do {                          \
     const char *_s = NULL; unsigned int _e = (expected),                \

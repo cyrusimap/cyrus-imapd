@@ -184,7 +184,7 @@ static void test_lf_m(void)
 
     buf_printf(&expect, " b=1");
 
-    CU_SYSLOG_MATCH(buf_cstring(&expect));
+    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&expect));
     errno = 1;
     xsyslog_ev(LOG_ERR, "lf_m test",
         lf_d("a", mess_with_errno()),
@@ -201,29 +201,80 @@ static void test_lf_s(void)
 {
     const char *third = "three";
 
+    /*
+     * Escaping rules are, for now:
+     * \x21 \x23-x7E: do not force quoting and remain as is
+     *                (except 3D '=' and 5C '\')
+     * existing special cases ([\\ \n \r "]) force quoting and become two chars
+     * literal space forces quoting and remains space
+     * any other character forces quoting and remains self for now
+     */
+
+    // simple
     CU_SYSLOG_MATCH("event=\"lf_s test\" first=one second=two third=three");
     xsyslog_ev(LOG_ERR, "lf_s test",
         lf_s("first", "one"), lf_s("second", "two"), lf_s("third", third));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
+    // empty string
     CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\"");
     xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", ""));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
+    // spaces
     CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with spaces\"");
     xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with spaces"));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
-    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with \\\\\"quotes\\\\\"\"");
-    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with \"quotes\""));
+    // tabs
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with\ttabs\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with\ttabs"));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
-    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with \\\\r\\\\n\"");
-    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with \r\n"));
+    // quotes
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\\\\\"quotes\\\\\"\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\"quotes\""));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
-    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with \\\\\\\\\"");
-    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with \\"));
+    // \r and \n
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\\\\r\\\\n\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\r\n"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // =
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"=\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "="));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // backslashes
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\\\\\\\\\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\\"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // no quoting or escaping
+    struct buf str = BUF_INITIALIZER;
+    int iter;
+    buf_setcstr(&str, "\x21");
+
+    for (iter = 0x23; iter <= 0x7E; iter++) {
+      if (iter == 0x3D || iter == 0x5C)
+          continue;
+      buf_printf(&str, "%c", iter);
+    }
+
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_s test\" first=%s", buf_cstring(&str));
+
+    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", buf_cstring(&str)));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+    buf_free(&str);
+
+    // characters outside that range stay as they are but force quoting
+    CU_SYSLOG_MATCH("event=\"lf_s test\" build=\"☃\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("build", "☃"));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 }
 

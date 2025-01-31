@@ -2211,7 +2211,7 @@ static char *_xsyslog_ev_escape(const char *val)
     }
 
     for (p = buf_cstring(&buf); *p; p++) {
-        switch (*p) {
+        switch ((unsigned char) *p) {
         case '\\':
         case '\"':
         case '\n':
@@ -2219,7 +2219,11 @@ static char *_xsyslog_ev_escape(const char *val)
             ++escaped_len;  // add 1 for the backslash
 
         // FALL THROUGH
-        case ' ':
+        case 0x00 ... 0x09:
+        case 0x11 ... 0x12:
+        case 0x14 ... 0x20:
+        case 0x3D:
+        case 0x7F ... 0xFF:
             needs_escaping = 1;
             break;
         }

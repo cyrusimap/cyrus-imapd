@@ -44,8 +44,8 @@
 #define __CUNIT_SYSLOG_H__
 
 /* returns an active match number from 1 up */
-extern unsigned int CU_syslogMatchBegin(const char *re,
-                        const char *filename, unsigned int lineno);
+extern unsigned int CU_syslogMatchBegin(const char *re, const char *filename,
+                                        unsigned int lineno, int issubstr);
 /* returns count of given match (or 0 for sum of all matches), and remove the match */
 extern unsigned int CU_syslogMatchEnd(unsigned int match, const char **s);
 /* reset all matches, call before each test */
