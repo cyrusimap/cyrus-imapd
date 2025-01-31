@@ -2197,7 +2197,8 @@ EXPORTED char *modseqtoa(modseq_t modseq)
 static char *_xsyslog_ev_escape(const char *val)
 {
     struct buf buf = BUF_INITIALIZER;
-    int needs_escaping = 0, orig_len, escaped_len;
+    int needs_escaping = 0;
+    size_t orig_len, escaped_len;
     const char *p;
 
     buf_setcstr(&buf, val);
@@ -2282,11 +2283,14 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
     static struct buf buf = BUF_INITIALIZER;
 
     char *escaped = _xsyslog_ev_escape(event);
-    buf_printf(&buf, "event=%s", escaped);
+    buf_setcstr(&buf, "event=");
+    buf_appendcstr(&buf, escaped);
     free(escaped);
 
     for (size_t i = 0; i < arg->nmemb; i++) {
-        buf_printf(&buf, " %s=", arg->data[i].name);
+        buf_appendcstr(&buf, " ");
+        buf_appendcstr(&buf, arg->data[i].name);
+        buf_appendcstr(&buf, "=");
 
         switch(arg->data[i].type) {
         case LF_C:   buf_printf(&buf, "%c",   arg->data[i].c);   break;
