@@ -50,11 +50,21 @@
 #include <CUnit/CUnit.h>
 #include "cunit-syslog.h"
 
+// Don't let util.h override our regex include
+#ifdef ENABLE_REGEX
+#undef ENABLE_REGEX
+#include "lib/util.h"
+#define ENABLE_REGEX
+#else
+#include "lib/util.h"
+#endif
+
 extern int verbose;
 
 struct slmatch
 {
     const char *re;         /* NULL => disabled */
+    int re_needs_free;      /* true if re is on the heap */
     unsigned int count;
     regex_t cre;            /* compiled regex */
 };
@@ -168,17 +178,40 @@ EXPORTED void syslog(int prio, const char *fmt, ...)
     va_end(args);
 }
 
-unsigned int CU_syslogMatchBegin(const char *re, const char *filename,
-                                 unsigned int lineno)
+unsigned int CU_syslogMatchBegin(const char *match, const char *filename,
+                                 unsigned int lineno, int issubstr)
 {
     unsigned int i;
     int r;
+    const char *re = match;
+    struct buf escaped = BUF_INITIALIZER;
+
+    if (issubstr) {
+        // Escape regex specials so it matches like an unanchored substring
+        buf_setcstr(&escaped, re);
+        buf_replace_all(&escaped, "\\", "\\\\");
+        buf_replace_all(&escaped, "(", "\\(");
+        buf_replace_all(&escaped, ")", "\\)");
+        buf_replace_all(&escaped, "[", "\\[");
+        buf_replace_all(&escaped, "]", "\\]");
+        buf_replace_all(&escaped, "{", "\\{");
+        buf_replace_all(&escaped, "}", "\\}");
+        buf_replace_all(&escaped, ".", "\\.");
+        buf_replace_all(&escaped, "*", "\\*");
+        buf_replace_all(&escaped, "?", "\\?");
+        buf_replace_all(&escaped, "+", "\\+");
+        buf_replace_all(&escaped, "|", "\\|");
+        buf_replace_all(&escaped, "^", "\\^");
+        buf_replace_all(&escaped, "$", "\\$");
+        re = buf_release(&escaped);
+    }
 
     /* find an empty slot */
     for (i = 0 ; i < MAX_SLMATCH ; i++) {
         if (!slmatches[i].re) {
             /* found */
             slmatches[i].re = re;
+            slmatches[i].re_needs_free = issubstr;
             slmatches[i].count = 0;
             r = regcomp(&slmatches[i].cre, re, REG_EXTENDED|REG_ICASE|REG_NOSUB);
             if (r) {
@@ -216,6 +249,9 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
 
         count += slmatches[i].count;
         regfree(&slmatches[i].cre);
+        if (slmatches[i].re_needs_free) {
+            free((char *)slmatches[i].re);
+        }
         memset(&slmatches[i], 0, sizeof(slmatches[i]));
         nslmatches--;
         if (match)
