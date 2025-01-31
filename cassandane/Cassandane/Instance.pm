@@ -1073,8 +1073,15 @@ sub create_user
     my $adminclient = $adminstore->get_client();
 
     my @mboxes = ( $mb->to_external() );
-    map { push(@mboxes, $mb->make_child($_)->to_external()); } @{$params{subdirs}}
-        if ($params{subdirs});
+    foreach my $subdir ($params{subdirs} ? @{$params{subdirs}} : ())
+    {
+        if (ref $subdir eq 'Cassandane::Mboxname') {
+            push(@mboxes, $subdir->to_external());
+        }
+        else {
+            push(@mboxes, $mb->make_child($subdir)->to_external());
+        }
+    }
 
     foreach my $mb (@mboxes)
     {
