@@ -163,6 +163,7 @@ sub new
 
     $self->needs('component', 'jmap');
     $self->needs('component', 'sieve');
+    $self->needs('dependency', 'cld2');
     return $self;
 }
 
