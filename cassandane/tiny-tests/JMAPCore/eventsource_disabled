@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_eventsource_disabled
+    :JMAPExtensions :NoAltNameSpace :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('jmap_pushpoll' => 0);
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $jmap = $self->{jmap};
+    my $http = $self->{instance}->get_service("http");
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+    my $url = $session->{eventSourceUrl};
+    $self->assert_null($url);
+
+    $url = $jmap->uri() . "eventsource/";
+
+    $RawRequest->{headers}->{'Last-Event-Id'} = '0';
+    $RawResponse = $jmap->ua->get($url, $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('404', $RawResponse->{status});
+}

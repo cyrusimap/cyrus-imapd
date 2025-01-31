@@ -198,10 +198,10 @@ static void jmap_init(struct buf *serverinfo)
 #endif
     jmap_admin_init(&my_jmap_settings);
 
-    if (ws_enabled) {
-        jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
-        if (jmap_push_poll < 0) jmap_push_poll = 0;
+    jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
+    if (jmap_push_poll < 0) jmap_push_poll = 0;
 
+    if (ws_enabled) {
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
@@ -321,7 +321,8 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
             tgt->flags = JMAP_ENDPOINT_WS;
             tgt->allow |= ALLOW_CONNECT;
         }
-        else if (!strncmp(tgt->collection,
+        else if (jmap_push_poll &&
+                 !strncmp(tgt->collection,
                           JMAP_EVENTSOURCE_COL, strlen(JMAP_EVENTSOURCE_COL))) {
             tgt->flags = JMAP_ENDPOINT_EVENTSOURCE;
         }
@@ -1308,8 +1309,11 @@ static int jmap_get_session(struct transaction_t *txn)
             json_string(JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL));
     json_object_set_new(jsession, "uploadUrl",
             json_string(JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL));
-    json_object_set_new(jsession, "eventSourceUrl",
-            json_string(JMAP_BASE_URL JMAP_EVENTSOURCE_COL JMAP_EVENTSOURCE_TPL));
+
+    if (jmap_push_poll) {
+        json_object_set_new(jsession, "eventSourceUrl",
+                            json_string(JMAP_BASE_URL JMAP_EVENTSOURCE_COL JMAP_EVENTSOURCE_TPL));
+    }
 
     /* state */
     char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
@@ -1462,14 +1466,14 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
             /* Process the API request */
             ret = jmap_api(txn, req, &res, &my_jmap_settings);
         }
-        else if (!strcmpsafe(type, "WebSocketPushEnable")) {
+        else if (jmap_push_poll && !strcmpsafe(type, "WebSocketPushEnable")) {
             /* Log request */
             spool_replace_header(xstrdup(":jmap"),
                                  xstrdup("WebSocketPushEnable"), txn->req_hdrs);
             ws_push_enable(txn, req);
             ret = HTTP_NO_CONTENT;
         }
-        else if (!strcmpsafe(type, "WebSocketPushDisable")) {
+        else if (jmap_push_poll && !strcmpsafe(type, "WebSocketPushDisable")) {
             /* Log request */
             spool_replace_header(xstrdup(":jmap"),
                                  xstrdup("WebSocketPushDisable"), txn->req_hdrs);
