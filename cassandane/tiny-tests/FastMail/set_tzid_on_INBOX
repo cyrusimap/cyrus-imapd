@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_set_tzid_on_INBOX
+    :min_version_3_9 :AltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $folder = 'INBoX';
+    my $entry = "/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>calendar-timezone-id";
+    my $value = 'EST';
+
+    # SHOULD NOT crash
+    my $res = $imaptalk->setmetadata($folder, $entry, $value);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+}
