@@ -472,6 +472,7 @@ static struct capa_struct base_capabilities[] = {
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
+    { "UIDBATCHES",            CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-mailmaint-imap-uidbatches */
     { "UIDONLY",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9586 */
     { "UIDPLUS",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4315 */
     { "UNAUTHENTICATE",        CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8437 */
@@ -610,6 +611,8 @@ static void cmd_notify(char *tag, int set);
 static void push_updates(int idling);
 
 static void cmd_getjmapaccess(char* tag);
+static void cmd_uidbatches(char *tag, uint32_t size,
+                           uint32_t low, uint32_t high);
 
 static int parsecreateargs(struct dlist **extargs);
 
@@ -2579,6 +2582,26 @@ static void cmdloop(void)
                     prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
                     eatline(imapd_in, c);
                 }
+            }
+            else if (!strcmp(cmd.s, "Uidbatches")) {
+                uint32_t size, low = 1, high = UINT32_MAX;
+
+                if (!imapd_index && !backend_current) goto nomailbox;
+
+                if (c != ' ') goto missingargs;
+                c = getuint32(imapd_in, &size);
+                if (c <= EOF) goto missingargs;
+                if (c == ' ' ) {
+                    c = getuint32(imapd_in, &low);
+                    if (c != ':') goto badsequence;
+                    c = getuint32(imapd_in, &high);
+                    if (c <= EOF) goto badsequence;
+                }
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
+
+                cmd_uidbatches(tag.s, size, low, high);
+
+                prometheus_increment(CYRUS_IMAP_UIDBATCHES_TOTAL);
             }
             else if (!strcmp(cmd.s, "Unauthenticate")) {
                 if (!imapd_userisadmin) goto adminsonly;
@@ -15806,4 +15829,39 @@ static void cmd_getjmapaccess(char *tag)
     prot_printf(imapd_out, "* JMAPACCESS \"%s\"\r\n", imapd_jmapaccess_url);
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 "This server is also accessible via JMAP, see RFC8620");
+}
+
+static void cmd_uidbatches(char *tag, uint32_t size, uint32_t low, uint32_t high)
+{
+    if (backend_current) {
+        /* remote mailbox */
+        prot_printf(backend_current->out, "%s UIDBATCHES %u", tag, size);
+        if (low > 1 || high < UINT32_MAX) {
+            prot_printf(backend_current->out, " %u:%u", low, high);
+        }
+        prot_puts(backend_current->out, "\r\n");
+        pipe_including_tag(backend_current, tag, 0);
+        return;
+    }
+
+    prot_printf(imapd_out, "* UIDBATCHES (TAG \"%s\") UID", tag);
+    if (low <= (imapd_index->exists + size - 1) / size) {
+        int64_t msgno = imapd_index->exists - ((low - 1) * size);
+        uint32_t batch = low;
+        char sep = ' ';
+
+        prot_puts(imapd_out, " ALL");
+
+        for (; msgno > 0 && batch <= high; batch++) {
+            uint32_t first = index_getuid(imapd_index, msgno);
+            uint32_t last  = index_getuid(imapd_index,
+                                          (msgno -= size) > 0 ? msgno + 1 : 1);
+
+            prot_printf(imapd_out, "%c%u:%u", sep, first, last);
+            sep = ',';
+        }
+    }
+    prot_puts(imapd_out, "\r\n");
+    prot_printf(imapd_out, "%s OK %s\r\n",
+                tag, error_message(IMAP_OK_COMPLETED));
 }
