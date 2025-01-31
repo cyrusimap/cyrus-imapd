@@ -3324,7 +3324,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     }
 
     /* add internal date */
-    time_to_rfc3501(record.internaldate, datebuf, sizeof(datebuf));
+    time_to_rfc3501(record.internaldate.tv_sec, datebuf, sizeof(datebuf));
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
@@ -4458,7 +4458,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
 
     if (fetchitems & FETCH_INTERNALDATE) {
-        time_t msgdate = record.internaldate;
+        time_t msgdate = record.internaldate.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
@@ -4485,7 +4485,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-        prot_printf(state->out, "%cRFC822.SIZE %u",
+        prot_printf(state->out, "%cRFC822.SIZE " UINT64_FMT,
                     sepchar, record.size);
         sepchar = ' ';
     }
@@ -4537,11 +4537,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&record.guid), 24);
-        emailid[25] = '\0';
-        prot_printf(state->out, "%cEMAILID (%s)", sepchar, emailid);
+        struct buf emailid = BUF_INITIALIZER;
+        buf_putc(&emailid, 'S');
+        NANOSEC_TO_JMAPID(&emailid, TIMESPEC_TO_NANOSEC(&record.internaldate));
+        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
+        buf_free(&emailid);
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
@@ -4577,7 +4577,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         // handle internaldate
-        if (!msgdate) msgdate = record.internaldate;
+        if (!msgdate) msgdate = record.internaldate.tv_sec;
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
 
@@ -6333,7 +6333,8 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->sentdate = record.gmtime;
                 /* fall through */
             case SORT_ARRIVAL:
-                cur->internaldate = record.internaldate;
+                cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 break;
             case SORT_FROM:
                 cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
@@ -6376,7 +6377,8 @@ MsgData **index_msgdata_load(struct index_state *state,
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate;
+                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
@@ -6402,7 +6404,8 @@ MsgData **index_msgdata_load(struct index_state *state,
 #endif
                 if (!cur->savedate) {
                     /* If not snoozed in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate;
+                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 }
                 break;
             case LOAD_IDS:
@@ -6768,21 +6771,21 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(md1->msgno, md2->msgno);
             break;
         case SORT_ARRIVAL:
-            ret = numcmp(md1->internaldate, md2->internaldate);
+            ret = numcmp(md1->internaldate.tv_sec, md2->internaldate.tv_sec);
             break;
         case SORT_CC:
             ret = strcmpsafe(md1->cc, md2->cc);
             break;
         case SORT_DATE: {
-            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate;
-            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate;
+            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate.tv_sec;
+            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate.tv_sec;
             ret = numcmp(d1, d2);
             break;
         }
         case SORT_SNOOZEDUNTIL:
         case SORT_SAVEDATE: {
-            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate;
-            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate;
+            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate.tv_sec;
+            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate.tv_sec;
             ret = numcmp(d1, d2);
             break;
         }
@@ -6844,6 +6847,13 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             break;
         case SORT_GUID:
             ret = message_guid_cmp(&md1->guid, &md2->guid);
+            break;
+        case SORT_EMAILID:
+            // EMAILIDs are an ASCII-order encoding of
+            // (INT_MAX - nano_internaldate) =>
+            // reverse the order of nano_internaldate comparison
+            ret = numcmp(TIMESPEC_TO_NANOSEC(&md2->internaldate),
+                         TIMESPEC_TO_NANOSEC(&md1->internaldate));
             break;
         }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
@@ -6982,7 +6992,7 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md1->internaldate - md2->internaldate;
+    ret = md1->internaldate.tv_sec - md2->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md1->createdmodseq - md2->createdmodseq;
@@ -7004,7 +7014,7 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md2->internaldate - md1->internaldate;
+    ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md2->createdmodseq - md1->createdmodseq;
@@ -7029,7 +7039,7 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     ret = md2->hasflag - md1->hasflag;
     if (ret) return ret;
 
-    ret = md2->internaldate - md1->internaldate;
+    ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md2->createdmodseq - md1->createdmodseq;
@@ -7937,8 +7947,8 @@ static void find_most_recent(Thread *thread, MsgData *recent)
     Thread *child;
 
     /* test the head node */
-    if (thread->msgdata->internaldate > recent->internaldate)
-        recent->internaldate = thread->msgdata->internaldate;
+    if (thread->msgdata->internaldate.tv_sec > recent->internaldate.tv_sec)
+        recent->internaldate.tv_sec = thread->msgdata->internaldate.tv_sec;
 
     /* test the children recursively */
     child = thread->child;

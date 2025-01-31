@@ -640,7 +640,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
     else {
         struct body *body = NULL;
 
-        r = append_fromstage(&as, &body, stage, now,
+        r = append_fromstage(&as, &body, stage, NULL,
                              sdata->createdmodseq, &flags, 0, NULL);
         if (body) {
             message_free_body(body);
