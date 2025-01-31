@@ -646,7 +646,8 @@ cunit_TESTS = \
     cunit/search_expr.testc \
     cunit/seqset.testc \
     cunit/slowio.testc \
-    cunit/smallarrayu64.testc
+    cunit/smallarrayu64.testc \
+    cunit/xsyslog_ev.testc
 
 if SIEVE
 cunit_TESTS += cunit/sieve.testc

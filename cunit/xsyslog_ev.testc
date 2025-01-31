@@ -1,0 +1,300 @@
+#include "config.h"
+#include "cunit/cyrunit.h"
+#include "util.h"
+#include <syslog.h>
+#include <limits.h>
+#include <errno.h>
+
+static void test_lf_c(void)
+{
+    char third = 'c';
+
+    CU_SYSLOG_MATCH("event=\"lf_c test\" first=a second=b third=c");
+    xsyslog_ev(LOG_ERR, "lf_c test",
+        lf_c("first", 'a'), lf_c("second", 'b'), lf_c("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_d(void)
+{
+    int third = -56;
+
+    CU_SYSLOG_MATCH("event=\"lf_d test\" first=12 second=-34 third=-56");
+    xsyslog_ev(LOG_ERR, "lf_d test",
+        lf_d("first", 12), lf_d("second", -34), lf_d("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_ld(void)
+{
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_ld test\" first=12 second=-34 third=%ld",
+               LONG_MAX);
+
+    CU_SYSLOG_MATCH(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_ld test",
+        lf_ld("first", 12), lf_ld("second", -34), lf_ld("third", LONG_MAX));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+}
+
+static void test_lf_lld(void)
+{
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_lld test\" first=12 second=-34 third=%lld",
+               LLONG_MAX);
+
+    CU_SYSLOG_MATCH(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_lld test",
+        lf_lld("first", 12), lf_lld("second", -34), lf_lld("third", LLONG_MAX));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+}
+
+static void test_lf_u(void)
+{
+    int third = 56;
+
+    CU_SYSLOG_MATCH("event=\"lf_u test\" first=12 second=34 third=56");
+    xsyslog_ev(LOG_ERR, "lf_u test",
+        lf_u("first", 12), lf_u("second", 34), lf_u("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_lu(void)
+{
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_lu test\" first=12 second=34 third=%lu",
+               ULONG_MAX);
+
+    CU_SYSLOG_MATCH(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_lu test",
+        lf_lu("first", 12), lf_lu("second", 34), lf_lu("third", ULONG_MAX));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+}
+
+static void test_lf_llu(void)
+{
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_llu test\" first=12 second=34 third=%llu",
+               ULLONG_MAX);
+
+    CU_SYSLOG_MATCH(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_llu test",
+        lf_llu("first", 12), lf_llu("second", 34), lf_llu("third", ULLONG_MAX));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+}
+
+static void test_lf_zd(void)
+{
+    ssize_t third = -56;
+
+    CU_SYSLOG_MATCH("event=\"lf_zd test\" first=12 second=34 third=-56");
+    xsyslog_ev(LOG_ERR, "lf_zd test",
+        lf_zd("first", 12), lf_zd("second", 34), lf_zd("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_zu(void)
+{
+    size_t third = 56;
+
+    CU_SYSLOG_MATCH("event=\"lf_zu test\" first=12 second=34 third=56");
+    xsyslog_ev(LOG_ERR, "lf_zu test",
+        lf_zu("first", 12), lf_zu("second", 34), lf_zu("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_llx(void)
+{
+    size_t third = 15;
+
+    CU_SYSLOG_MATCH("event=\"lf_llx test\" first=1 second=A third=F");
+    xsyslog_ev(LOG_ERR, "lf_llx test",
+        lf_llx("first", 1), lf_llx("second", 10), lf_llx("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_f(void)
+{
+    double third = 3.3;
+
+    CU_SYSLOG_MATCH("event=\"lf_f test\" first=1\\.10* second=2\\.20* third=3\\.30*");
+    xsyslog_ev(LOG_ERR, "lf_f test",
+        lf_f("first", 1.1), lf_f("second", 2.2), lf_f("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+int mess_with_errno()
+{
+    errno = errno + 1;
+
+    return 1;
+}
+
+static void test_lf_m(void)
+{
+    struct buf expect = BUF_INITIALIZER;
+    struct buf errbuf = BUF_INITIALIZER;
+    char *errstr = strerror(1);
+    size_t i;
+    int needs_quotes = 0;
+
+    buf_printf(&expect, "event=\"lf_m test\" a=1");
+
+    // escape error string if necessary...
+    for (i = 0; i < strlen(errstr); i++) {
+        switch (errstr[i]) {
+        case '\\':
+            buf_appendcstr(&errbuf, "\\\\");
+            needs_quotes = 1;
+            break;
+        case '"':
+            buf_appendcstr(&errbuf, "\\\"");
+            needs_quotes = 1;
+            break;
+        case '\r':
+            buf_appendcstr(&errbuf, "\\r");
+            needs_quotes = 1;
+            break;
+        case '\n':
+            buf_appendcstr(&errbuf, "\\n");
+            needs_quotes = 1;
+            break;
+        case ' ':
+            needs_quotes = 1;
+            GCC_FALLTHROUGH
+
+        default:
+            buf_printf(&errbuf, "%c", errstr[i]);
+        }
+    }
+
+    if (needs_quotes || strlen(errstr) == 0) {
+        buf_printf(&expect, " error=\"%s\"", buf_cstring(&errbuf));
+    } else {
+        buf_printf(&expect, " error=%s", buf_cstring(&errbuf));
+    }
+
+    buf_printf(&expect, " b=1");
+
+    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&expect));
+    errno = 1;
+    xsyslog_ev(LOG_ERR, "lf_m test",
+        lf_d("a", mess_with_errno()),
+        lf_m("error"),
+        lf_d("b", mess_with_errno())
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&errbuf);
+    buf_free(&expect);
+}
+
+static void test_lf_s(void)
+{
+    const char *third = "three";
+
+    /*
+     * Escaping rules are, for now:
+     * \x21 \x23-x7E: do not force quoting and remain as is
+     *                (except 3D '=' and 5C '\')
+     * existing special cases ([\\ \n \r "]) force quoting and become two chars
+     * literal space forces quoting and remains space
+     * any other character forces quoting and remains self for now
+     */
+
+    // simple
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=one second=two third=three");
+    xsyslog_ev(LOG_ERR, "lf_s test",
+        lf_s("first", "one"), lf_s("second", "two"), lf_s("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // empty string
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", ""));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // spaces
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with spaces\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with spaces"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // tabs
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with\ttabs\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with\ttabs"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // quotes
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\\\\\"quotes\\\\\"\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\"quotes\""));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // \r and \n
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\\\\r\\\\n\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\r\n"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // =
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"=\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "="));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // backslashes
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"\\\\\\\\\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\\"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // no quoting or escaping
+    struct buf str = BUF_INITIALIZER;
+    int iter;
+    buf_setcstr(&str, "\x21");
+
+    for (iter = 0x23; iter <= 0x7E; iter++) {
+      if (iter == 0x3D || iter == 0x5C)
+          continue;
+      buf_printf(&str, "%c", iter);
+    }
+
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_s test\" first=%s", buf_cstring(&str));
+
+    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", buf_cstring(&str)));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+    buf_free(&str);
+
+    // characters outside that range stay as they are but force quoting
+    CU_SYSLOG_MATCH("event=\"lf_s test\" build=\"☃\"");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("build", "☃"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_raw(void)
+{
+    CU_SYSLOG_MATCH("event=\"lf_raw test\" first=3.14 second=what");
+    xsyslog_ev(LOG_ERR, "lf_raw test",
+        lf_raw("first", "%.02f", 3.14159), lf_raw("second", "%s", "what"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_mixed(void)
+{
+    CU_SYSLOG_MATCH("event=\"mixed test\" first=1 second=2.1 third=\"hi there\"");
+    xsyslog_ev(LOG_ERR, "mixed test",
+        lf_d("first", 1),
+        lf_raw("second", "%.01f", 2.1),
+        lf_s("third", "hi there")
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+/* vim: set ft=c: */
