@@ -61,7 +61,7 @@ The format of each record is as follows::
 
     Data: <Type Number>SP<Partition>SP<ACL (space-separated userid/rights pairs)>
 
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `sql`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, or `twom`_.
 
 .. _imap-concepts-deployment-db-annotations:
 
@@ -78,7 +78,7 @@ timestamp of the record. The format is each record is as follows::
 
     Data: <Value Size (4 bytes)><Value>\0<Content-Type>\0<Timestamp (4 bytes)>
 
-File type can be: `twoskip`_  (default) or `skiplist`_.
+File type can be: `twoskip`_  (default), `skiplist`_, or `twom`_.
 
 .. _imap-concepts-deployment-db-quotas:
 
@@ -94,7 +94,7 @@ The format of each record is as follows::
 
     Data: <Usage (in bytes)>SP<Limit (in Kbytes)>
 
-File type can be: `quotalegacy`_ (default), `flat`_, `skiplist`_, `sql`_, or `twoskip`_.
+File type can be: `quotalegacy`_ (default), `flat`_, `skiplist`_, `sql`_, `twom`_, or `twoskip`_.
 
 
 **Legacy Quotas**
@@ -129,7 +129,7 @@ each record is as follows::
 
     Data: <Timestamp (4 bytes)><Message UID (4 bytes)>
 
-File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
+File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `twom`_.
 
 
 .. _imap-concepts-deployment-db-tls:
@@ -147,7 +147,7 @@ data. The format of each record is as follows::
 
     Data: <Timestamp (4 bytes)><Session Data (multi-byte)>
 
-File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
+File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `twom`_.
 
 
 .. _imap-concepts-deployment-db-pts:
@@ -164,7 +164,7 @@ of each record is as follows::
 
     Data: <Auth State (multi-byte)>
 
-File type can be: `twoskip`_ (default) or `skiplist`_.
+File type can be: `twoskip`_ (default), `skiplist`_, or `twom`_.
 
 
 .. _imap-concepts-deployment-db-status:
@@ -186,7 +186,7 @@ each record is as follows::
 
     Data: <Version>SP<Bitmask of Items>SP<Mtime of Index>SP<Inode of Index>SP<Size of Index>SP<- of Messages>SP<- of Recent Messages>SP<Next UID>SP<UID Validity>SP<- of Unseen Messages>SP<Highest Mod Sequence>
 
-File type can be: `twoskip`_ (default), `skiplist`_, or `sql`_.
+File type can be: `twoskip`_ (default), `skiplist`_, `sql`_, or `twom`_.
 
 
 .. _imap-concepts-deployment-db-userdeny:
@@ -206,7 +206,7 @@ record is as follows::
 
     Data: <Version>TAB<Deny List (comma-separated wildmat patterns)>TAB<Deny Message>
 
-File type can be: `flat`_ (default), `skiplist`_, `sql`_, or `twoskip`_.
+File type can be: `flat`_ (default), `skiplist`_, `sql`_, `twom`_, or `twoskip`_.
 
 .. _imap-concepts-deployment-db-conversations:
 
@@ -223,7 +223,7 @@ have that conversations ID in them, and counts of messages and flags.
 Finally there are records for each folder with the counts of conversations in
 that folder.
 
-File type can be: `skiplist`_ (default), `sql`_, or `twoskip`_.
+File type can be: `skiplist`_ (default), `sql`_, `twom`_, or `twoskip`_.
 
 .. _imap-concepts-deployment-db-counters:
 
@@ -250,7 +250,7 @@ This is either cyrus.squat in each folder, or if you're using Xapian a single
 <userid>.xapianactive file listing active databases with tier name and number.
 
 cyrus.indexed.db is used by the Xapian search engine.  Its file type
-can be: `twoskip`_ (default), `flat`_, or `skiplist`_ and is
+can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `twom`_ and is
 determined by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
 
 The xapianactive file contains a space separated list of tiers and databases within
@@ -273,7 +273,7 @@ alias).  The format of each record is as follows::
 
     Data: <Version>SP<Record Type>SP<Timestamp>SP<Data Strings (TAB-separated)>
 
-File type can be: `twoskip`_ (default), `flat`_, or `skiplist`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `twom`_.
 
 .. _imap-concepts-deployment-db-seen:
 
@@ -291,7 +291,7 @@ unique-ids which have been read. The format of each record is as follows::
 
     Data: <Version>SP<Last Read Time>SP<Last Read UID>SP<Last Change Time>SP<List of Read UIDs>
 
-File type can be: `twoskip`_ (default), `flat`_, or `skiplist`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `twom`_.
 
 .. _imap-concepts-deployment-db-sub:
 
@@ -306,7 +306,7 @@ each data record contains no data. The format of each record is follows::
 
     Data: None
 
-File type can be: `flat`_ (default), `skiplist`_, or `twoskip`_.
+File type can be: `flat`_ (default), `skiplist`_, `twom`_, or `twoskip`_.
 
 .. _imap-concepts-deployment-db-xapianactive:
 
@@ -330,7 +330,7 @@ number and the associated access key. The format of each record is follows::
 
     Data: <Version (2 bytes)><Access Key (multi-byte)>
 
-File type can be: `twoskip`_ (default) or `skiplist`_.
+File type can be: `twoskip`_ (default), `skiplist`_, or `twom`_.
 
 .. _imap-concepts-deployment-db-userdav:
 
@@ -442,10 +442,17 @@ Flat
 Only for debugging. The file format is human-readable, but it is
 slow for reads and writes, and is easily corrupted.
 
+Twom
+-------
+
+**Recommended**. An update from twoskip which uses mmap for IO, supports
+MVCC reads and hence can checkpoint without an exclusive lock, and has
+double locking to give better lock fairness with busy files.
+
 Twoskip
 -------
 
-**Recommended**. A robust implementation of `Skip List <https://en.wikipedia.org/wiki/Skip_list>`_.
+A robust implementation of `Skip List <https://en.wikipedia.org/wiki/Skip_list>`_.
 Developers interested in the details can find more information at `these talk slides <http://opera.brong.fastmail.fm.user.fm/talks/twoskip/twoskip-yapc12.pdf>`_.
 
 Skiplist

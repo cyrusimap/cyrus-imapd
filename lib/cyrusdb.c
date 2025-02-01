@@ -57,6 +57,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
+#include "cyr_lock.h"
 #include "util.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
@@ -71,6 +72,7 @@ extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
 extern struct cyrusdb_backend cyrusdb_sql;
+extern struct cyrusdb_backend cyrusdb_twom;
 extern struct cyrusdb_backend cyrusdb_twoskip;
 
 static struct cyrusdb_backend *_backends[] = {
@@ -80,6 +82,7 @@ static struct cyrusdb_backend *_backends[] = {
 #if defined USE_CYRUSDB_SQL
     &cyrusdb_sql,
 #endif
+    &cyrusdb_twom,
     &cyrusdb_twoskip,
     NULL };
 
@@ -89,6 +92,8 @@ struct db {
     struct dbengine *engine;
     struct cyrusdb_backend *backend;
 };
+
+int cyrusdb_convertlock_fd;
 
 static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
 {
@@ -104,12 +109,82 @@ static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
     fatal(errbuf, EX_CONFIG);
 }
 
+static int _detect_or_convert(struct db *db, const char *backend,
+                              const char *fname, int flags)
+{
+    int r = 0;
+    /* This whole thing is a fricking critical section.  We don't have the API
+     * in place for a safe rename of a locked database, so the choices are
+     * basically:
+     * a) convert each DB layer to support locked database renames while still
+     *    in the transaction.  Best, but lots of work.
+     * b) rename and hope... unreliable
+     * c) global lock around this block of code.  Safest and least efficient.
+     *    We do that.
+     */
+
+    // make sure we have a lock file fd
+    if (cyrusdb_convertlock_fd < 0) {
+        struct buf namebuf = BUF_INITIALIZER;
+        const char *config_dir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
+        buf_printf(&namebuf, "%s/lock/cyrusdb_convert.lock", config_dir);
+        const char *fname = buf_cstring(&namebuf);
+        cyrusdb_convertlock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
+        if (cyrusdb_convertlock_fd < 0) {
+            if (!cyrus_mkdir(fname, 0755)) {
+                cyrusdb_convertlock_fd = open(fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
+            }
+        }
+        buf_free(&namebuf);
+        if (cyrusdb_convertlock_fd < 0)
+            return CYRUSDB_IOERROR;
+    }
+
+    // lock the lock file
+    if (lock_setlock(cyrusdb_convertlock_fd, 1, 0, "cyrusdb_convert.lock"))
+        return CYRUSDB_IOERROR;
+
+    /* magic time - we need to work out if the file was created by a different
+     * backend and convert if possible */
+    const char *realname = cyrusdb_detect(fname);
+    if (!realname) {
+        xsyslog(LOG_ERR, "DBERROR: failed to detect DB type",
+                         "fname=<%s> backend=<%s>",
+                         fname, backend);
+        r = CYRUSDB_IOERROR;
+    }
+
+    /* different type */
+    if (!r && strcmp(realname, backend)) {
+        if (flags & CYRUSDB_CONVERT || libcyrus_config_getswitch(CYRUSOPT_CYRUSDB_AUTOCONVERT)) {
+            r = cyrusdb_convert(fname, fname, realname, backend);
+            if (r) {
+                xsyslog(LOG_ERR, "DBERROR: failed to convert",
+                                 "fname=<%s> from=<%s> to=<%s>",
+                                 fname, realname, backend);
+            }
+            else {
+                syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
+                       fname, realname, backend);
+            }
+        }
+        else {
+            syslog(LOG_NOTICE, "cyrusdb: opening %s with backend %s (requested %s)",
+                   fname, realname, backend);
+            db->backend = cyrusdb_fromname(realname);
+        }
+    }
+
+    lock_unlock(cyrusdb_convertlock_fd, "cyrusdb_convert.lock");
+
+    return r;
+}
+
 static int _myopen(const char *backend, const char *fname,
                  int flags, struct db **ret, struct txn **tid)
 {
-    const char *realname;
     struct db *db = xzmalloc(sizeof(struct db));
-    int r;
+    int r = 0;
 
     if (!backend) backend = DEFAULT_BACKEND; /* not used yet, later */
     db->backend = cyrusdb_fromname(backend);
@@ -128,61 +203,20 @@ static int _myopen(const char *backend, const char *fname,
         }
     }
 
-    /* This whole thing is a fricking critical section.  We don't have the API
-     * in place for a safe rename of a locked database, so the choices are
-     * basically:
-     * a) convert each DB layer to support locked database renames while still
-     *    in the transaction.  Best, but lots of work.
-     * b) rename and hope... unreliable
-     * c) global lock around this block of code.  Safest and least efficient.
-     */
-
     /* check if it opens normally.  Horray */
     r = db->backend->open(fname, flags, &db->engine, tid);
-    if (r == CYRUSDB_NOTFOUND) goto done; /* no open flags */
-    if (!r) goto done;
-
-    /* magic time - we need to work out if the file was created by a different
-     * backend and convert if possible */
-
-    realname = cyrusdb_detect(fname);
-    if (!realname) {
-        xsyslog(LOG_ERR, "DBERROR: failed to detect DB type",
-                         "fname=<%s> backend=<%s> r=<%d>",
-                         fname, backend, r);
-        /* r is still set */
-        goto done;
+    if (r == CYRUSDB_BADFORMAT) {
+        r = _detect_or_convert(db, backend, fname, flags);
+        if (r) goto done;
+        r = db->backend->open(fname, flags, &db->engine, tid);
     }
-
-    /* different type */
-    if (strcmp(realname, backend)) {
-        if (flags & CYRUSDB_CONVERT) {
-            r = cyrusdb_convert(fname, fname, realname, backend);
-            if (r) {
-                xsyslog(LOG_ERR, "DBERROR: failed to convert, maybe someone beat us",
-                                 "fname=<%s> from=<%s> to=<%s>",
-                                 fname, realname, backend);
-            }
-            else {
-                syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
-                       fname, realname, backend);
-            }
-        }
-        else {
-            syslog(LOG_NOTICE, "cyrusdb: opening %s with backend %s (requested %s)",
-                   fname, realname, backend);
-            db->backend = cyrusdb_fromname(realname);
-        }
-    }
-
-    r = db->backend->open(fname, flags, &db->engine, tid);
+    if (r) goto done;
 
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB open(%s, %d) => %llx", fname, flags, (long long unsigned)db->engine);
+    syslog(LOG_NOTICE, "DEBUGDB open(%s, %d) => %d, %llx", fname, flags, r, (long long unsigned)db->engine);
 #endif
 
-done:
-
+ done:
     if (r) free(db);
     else *ret = db;
 
@@ -414,6 +448,9 @@ EXPORTED void cyrusdb_init(void)
                              _backends[i]->name);
         }
     }
+
+    // we create this on-demand if we need to convert a DB
+    cyrusdb_convertlock_fd = -1;
 }
 
 EXPORTED void cyrusdb_done(void)
@@ -422,6 +459,11 @@ EXPORTED void cyrusdb_done(void)
 
     for(i=0; _backends[i]; i++) {
         (_backends[i])->done();
+    }
+
+    if (cyrusdb_convertlock_fd >= 0) {
+        close(cyrusdb_convertlock_fd);
+        cyrusdb_convertlock_fd = -1;
     }
 }
 
@@ -540,11 +582,6 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     r = cyrusdb_open(frombackend, fromfname, 0, &fromdb);
     if (r) goto err;
 
-    /* use a bogus fetch to lock source DB before touching the destination */
-    r = cyrusdb_fetch(fromdb, "_", 1, NULL, NULL, &fromtid);
-    if (r == CYRUSDB_NOTFOUND) r = 0;
-    if (r) goto err;
-
     /* same file?  Create with a new name */
     if (!strcmp(tofname, fromfname))
         tofname = newfname = strconcat(fromfname, ".NEW", NULL);
@@ -617,6 +654,9 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 
     if (!strncmp(buf, "\241\002\213\015twoskip file\0\0\0\0", 16))
         return "twoskip";
+
+    if (!strncmp(buf, "\241\002\213\015twomfile\0\0\0\0", 16))
+        return "twom";
 
     /* unable to detect SQLite databases or flat files explicitly here */
     return NULL;

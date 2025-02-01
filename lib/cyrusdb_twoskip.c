@@ -479,12 +479,12 @@ static int read_header(struct dbengine *db)
     if (SIZE(db) < HEADER_SIZE) {
         syslog(LOG_ERR,
                "twoskip: file not large enough for header: %s", FNAME(db));
-        return CYRUSDB_IOERROR;
+        return CYRUSDB_BADFORMAT;
     }
 
     if (memcmp(base, HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
         syslog(LOG_ERR, "twoskip: invalid magic header: %s", FNAME(db));
-        return CYRUSDB_IOERROR;
+        return CYRUSDB_BADFORMAT;
     }
 
     db->header.version
@@ -493,7 +493,7 @@ static int read_header(struct dbengine *db)
     if (db->header.version > VERSION) {
         syslog(LOG_ERR, "twoskip: version mismatch: %s has version %d",
                FNAME(db), db->header.version);
-        return CYRUSDB_IOERROR;
+        return CYRUSDB_BADFORMAT;
     }
 
     db->header.generation

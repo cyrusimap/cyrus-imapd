@@ -275,13 +275,16 @@ int main(int argc, char *argv[])
     struct txn **tidp = NULL;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:Tcnt";
+    static const char short_options[] = "C:NRSTcnt";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "use-transaction", no_argument, NULL, 'T' },
-        { "convert", no_argument, NULL, 'c' }, /* XXX undocumented */
+        { "convert", no_argument, NULL, 'c' },
+        { "no-checksum", no_argument, NULL, 'N' },
         { "create", no_argument, NULL, 'n' },
+        { "readonly", no_argument, NULL, 'R' },
+        { "no-sync", no_argument, NULL, 'S' },
+        { "use-transaction", no_argument, NULL, 'T' },
         { "no-transaction", no_argument, NULL, 't' },
         { 0, 0, 0, 0 },
     };
@@ -296,14 +299,23 @@ int main(int argc, char *argv[])
         case 'c':
             db_flags |= CYRUSDB_CONVERT;
             break;
+        case 'N':
+            db_flags |= CYRUSDB_NOCRC;
+            break;
         case 'n': /* create new */
             db_flags |= CYRUSDB_CREATE;
             break;
-        case 't': /* legacy - now the default, but don't break existing users */
-            tidp = NULL;
+        case 'R':
+            db_flags |= CYRUSDB_SHARED;
+            break;
+        case 'S':
+            db_flags |= CYRUSDB_NOSYNC;
             break;
         case 'T':
             tidp = &tid;
+            break;
+        case 't': /* legacy - now the default, but don't break existing users */
+            tidp = NULL;
             break;
         }
     }
@@ -325,8 +337,12 @@ int main(int argc, char *argv[])
         fprintf(stderr, "\n");
         fprintf(stderr, "Options:\n");
         fprintf(stderr, "  -c     convert database to named backend if not already\n");
-        fprintf(stderr, "  -M     use \"improved_mboxlist_sort\" order\n");
+        fprintf(stderr, "  -N     minimise use of checksums (don't check on read, create nochecksum if supported)\n");
         fprintf(stderr, "  -n     create the database if it doesn't exist\n");
+        fprintf(stderr, "  -R     open the database readonly (won't create a new DB)\n");
+        fprintf(stderr, "  -S     don't fsync writes (dangerous)\n");
+        fprintf(stderr, "  -T     use a single transaction for the action\n");
+        fprintf(stderr, "  -t     don't use a transaction (default)\n");
         fprintf(stderr, "\n");
         fprintf(stderr, "Actions:\n");
         fprintf(stderr, "* show [<prefix>]\n");
@@ -334,7 +350,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "* set <key> <value>\n");
         fprintf(stderr, "* delete <key>\n");
         fprintf(stderr, "* dump - internal format dump\n");
-        fprintf(stderr, "* consistent - check consistency\n");
+        fprintf(stderr, "* consistent - check consistency (if supported)\n");
         fprintf(stderr, "* repack - repack/checkpoint the DB (if supported)\n");
         fprintf(stderr, "* damage - start a commit then die during\n");
         fprintf(stderr, "* batch - read from stdin and execute commands\n");
@@ -358,7 +374,7 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_dbtool", 0, 0);
 
-    r = cyrusdb_open(argv[optind+1], fname, db_flags, &db);
+    r = cyrusdb_lockopen(argv[optind+1], fname, db_flags, &db, tidp);
     if(r != CYRUSDB_OK)
         fatal("can't open database", EX_TEMPFAIL);
 
@@ -379,12 +395,15 @@ int main(int argc, char *argv[])
         }
         while ( loop ) {
           if (is_get) {
-            cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
+            r = cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
+            if (r) break;
             printf("%.*s\n", (int)reslen, res);
           } else if (is_set) {
-            cyrusdb_store(db, key, keylen, value, vallen, tidp);
+            r = cyrusdb_store(db, key, keylen, value, vallen, tidp);
+            if (r) break;
           } else if (is_delete) {
-            cyrusdb_delete(db, key, keylen, tidp, 1);
+            r = cyrusdb_delete(db, key, keylen, tidp, 1);
+            if (r) break;
           }
           loop = 0;
           if ( use_stdin ) {
@@ -395,21 +414,17 @@ int main(int argc, char *argv[])
         batch_commands(db);
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
-            cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
+            r = cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
         } else {
             key = argv[optind+3];
             keylen = strlen(key);
-            cyrusdb_foreach(db, key, keylen, NULL, printer_cb, NULL, tidp);
-        }
-    } else if (!strcmp(action, "consistency")) {
-        if (cyrusdb_consistent(db)) {
-            printf("Consistency Error for %s\n", fname);
+            r = cyrusdb_foreach(db, key, keylen, NULL, printer_cb, NULL, tidp);
         }
     } else if (!strcmp(action, "dump")) {
         int level = 1;
         if ((argc - optind) > 3)
             level = atoi(argv[optind+3]);
-        cyrusdb_dump(db, level);
+        r = cyrusdb_dump(db, level);
     } else if (!strcmp(action, "consistent")) {
         if (cyrusdb_consistent(db)) {
             printf("No, not consistent\n");
@@ -417,22 +432,25 @@ int main(int argc, char *argv[])
             printf("Yes, consistent\n");
         }
     } else if (!strcmp(action, "repack")) {
-        if (cyrusdb_repack(db))
-            printf("Failed to repack\n");
+        r = cyrusdb_repack(db);
     } else if (!strcmp(action, "damage")) {
         cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
         assert(!tid);
     } else {
         printf("Unknown action %s\n", action);
     }
-    if (tid) {
-      cyrusdb_commit(db, tid);
-      tid = NULL;
+    if (tid && !r) {
+        r = cyrusdb_commit(db, tid);
+        tid = NULL;
+    }
+    if (r) {
+        if (tid) cyrusdb_abort(db, tid);
+        printf("ERROR: %s\n", cyrusdb_strerror(r));
     }
 
     cyrusdb_close(db);
 
     cyrus_done();
 
-    return 0;
+    return r ? 1 : 0;
 }
