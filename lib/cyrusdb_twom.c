@@ -121,13 +121,17 @@ static int checkpoint(struct twom_db *db)
     int r = _errormap(twom_db_repack(db));
     size_t postsize = twom_db_size(db);
     size_t num = twom_db_num_records(db);
-    if (r) {
-        xsyslog(LOG_ERR, "twom: failed to repack",
+    if (r == CYRUSDB_LOCKED) {
+        syslog(LOG_INFO, "twom: repack already locked",
                "filename=<%s>", twom_db_fname(db));
+    }
+    else if (r) {
+        xsyslog(LOG_ERR, "twom: failed to checkpoint",
+               "filename=<%s> error=<%s>", twom_db_fname(db), cyrusdb_strerror(r));
     }
     else {
         syslog(LOG_INFO,
-               "twom: checkpointed %s (%llu record%s, %llu => %llu bytes) in %2.3f seconds",
+               "twom: repacked %s (%llu record%s, %llu => %llu bytes) in %2.3f seconds",
                twom_db_fname(db), (LLU)num, num == 1 ? "" : "s", (LLU)presize, (LLU)(postsize),
                (sclock() - start) / (double) CLOCKS_PER_SEC);
     }
