@@ -41,12 +41,14 @@ package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
 use attributes;
+use version 0.77;
+use Cwd qw(abs_path);
 use Data::Dumper;
-use Scalar::Util qw(refaddr);
-use List::Util qw(uniq);
 use Digest::file qw(digest_file_hex);
-use File::Temp qw(tempfile);
 use File::Path qw(rmtree);
+use File::Temp qw(tempfile);
+use List::Util qw(uniq);
+use Scalar::Util qw(refaddr);
 
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
@@ -791,14 +793,57 @@ sub _create_instances
     }
 }
 
+sub _need_http_tiny_env
+{
+    # Net::DAVTalk < 0.23 and Mail::JMAPTalk < 0.17 don't pass through
+    # SSL_options, but HTTP::Tiny >= 0.083 enables SSL certificate
+    # verification, which will fail without our SSL_options.
+    #
+    # For HTTP::Tiny >= 0.086, we can set an environment variable
+    # to turn off SSL certificate verifications.
+    #
+    # For HTTP::Tiny in 0.083 .. 0.085, ¯\_(ツ)_/¯
+    eval {
+        require Net::DAVTalk;
+        require HTTP::Tiny;
+    };
+    return undef if $@;
+
+    my $ndv = version->parse($Net::DAVTalk::VERSION);
+    my $mjv = version->parse($Mail::JMAPTalk::VERSION);
+    my $htv = version->parse($HTTP::Tiny::VERSION);
+
+    # not needed: old HTTP::Tiny doesn't check certificates
+    return undef if $htv < version->parse('0.083');
+
+    # not needed: new Net::DAVTalk and Mail::JMAPTalk pass through SSL_options
+    return undef if $ndv >= version->parse('0.23')
+                    && $mjv >= version->parse('0.17');
+
+    # awkward: HTTP::Tiny 0.083-0.085 are new enough to check certificates
+    # by default, but not new enough for us to override that by the
+    # environment variable.  if you get errors here, you need to either
+    # upgrade HTTP::Tiny to 0.086 (or later), or upgrade Net::DAVTalk to 0.23
+    # and Mail::JMAPTalk to 0.17 (or later).
+    HTTP::Tiny->VERSION('0.086');
+
+    xlog "Have Net::DAVTalk version " . Net::DAVTalk->VERSION();
+    xlog "Have Mail::JMAPTalk version " . Mail::JMAPTalk->VERSION();
+    xlog "Have HTTP::Tiny version " . HTTP::Tiny->VERSION();
+    xlog "Will set PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT=1";
+    return 1;
+}
+
 sub _setup_http_service_objects
 {
     my ($self) = @_;
 
     # nothing to do if no http or https service
-    my $service = $self->{instance}->get_service("http");
-    $service ||= $self->{instance}->get_service("https");
+    my $service = $self->{instance}->get_service("https");
+    $service ||= $self->{instance}->get_service("http");
     return if !$service;
+
+    my $ca_file = abs_path("data/certs/cacert.pem");
 
     my %common_args = (
         user => 'cassandane',
@@ -806,14 +851,13 @@ sub _setup_http_service_objects
         host => $service->host(),
         port => $service->port(),
         scheme => ($service->is_ssl() ? 'https' : 'http'),
+        SSL_options => {
+            SSL_ca_file => $ca_file,
+            SSL_verifycn_scheme => 'none',
+        },
     );
 
-    # XXX HTTP::Tiny 0.8.3 and later have SSL_verify enabled by default, but
-    # XXX Net::DAVTalk doesn't provide any way for us to supply our CA file,
-    # XXX making setup fail with certificate verify errors.
-    # XXX HTTP::Tiny 0.86 and later lets us set this environment variable
-    # XXX to restore the old default
-    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} = 1;
+    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} = _need_http_tiny_env();
 
     if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
         require Net::CardDAVTalk;
@@ -840,6 +884,9 @@ sub _setup_http_service_objects
             %common_args,
             url => '/jmap/',
         );
+
+        # preload default UA while the HTTP::Tiny env var is still set
+        $self->{jmap}->ua();
     }
 
     xlog $self, "http service objects setup complete!";
