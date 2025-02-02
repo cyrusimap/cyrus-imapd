@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_websocket_push_disabled
+    :JMAPExtensions :NoAltNameSpace :NoStartInstances
+    :needs_dependency_wslay
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('jmap_pushpoll' => 0);
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $jmap = $self->{jmap};
+    my $http = $self->{instance}->get_service("http");
+
+    my $ws_urn = 'urn:ietf:params:jmap:websocket';
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
+    my $url = $session->{capabilities}{$ws_urn}{url};
+    $self->assert_not_null($url);
+    $self->assert_equals(JSON::false,
+                         $session->{capabilities}{$ws_urn}{supportsPush});
+}
