@@ -447,33 +447,35 @@ enum {
 
 extern struct protstream *imapd_out, *imapd_in;
 
-struct client_behavior_registry {
-    uint32_t did_annotate     : 1;   /* used SETANNOTATION or
-                                        FETCH-ed ANNOTATION */
-    uint32_t did_binary       : 1;   /* fetched BINARY or APPEND literal8  */
-    uint32_t did_catenate     : 1;   /* used CATENATE on APPEND  */
-    uint32_t did_condstore    : 1;   /* gave CONDSTORE on SELECT */
-    uint32_t did_compress     : 1;   /* started COMPRESS */
-    uint32_t did_idle         : 1;   /* used IDLE */
-    uint32_t did_imap4rev2    : 1;   /* used ENABLE IMAP4rev2  */
-    uint32_t did_metadata     : 1;   /* called GETMETADATA or SETMETADATA */
-    uint32_t did_multisearch  : 1;   /* called ESEARCH */
-    uint32_t did_move         : 1;   /* used MOVE */
-    uint32_t did_notify       : 1;   /* used NOTIFY */
-    uint32_t did_objectid     : 1;   /* used STATUS MAILBOXID or
-                                        SEARCH/FETCH EMAILID/THREADID */
-    uint32_t did_partial      : 1;   /* used SEARCH/FETCH PARTIAL */
-    uint32_t did_preview      : 1;   /* fetched PREVIEW */
-    uint32_t did_qresync      : 1;   /* gave QRESYNC on SELECT */
-    uint32_t did_savedate     : 1;   /* fetched SAVEDATE */
-    uint32_t did_searchres    : 1;   /* used SAVE on SEARCH */
-    uint32_t did_replace      : 1;   /* used REPLACE */
-    uint32_t did_uidonly      : 1;   /* used ENABLE UIDONLY  */
-    uint32_t did_unselect     : 1;   /* used UNSELECT */
-    uint32_t did_utf8_accept  : 1;   /* used ENABLE UTF8=ACCEPT  */
+/* Bitmask for exhibited client behaviors */
+enum {
+    CB_ANNOTATE    =  (1<<0),   /* GET/SETANNOTATION or FETCH ANNOTATION */
+    CB_BINARY      =  (1<<1),   /* FETCH BINARY or APPEND literal8       */
+    CB_CATENATE    =  (1<<2),   /* CATENATE on APPEND                    */
+    CB_COMPRESS    =  (1<<3),   /* COMPRESS                              */
+    CB_CONDSTORE   =  (1<<4),   /* ENABLE CONSTORE/QRESYNC,
+                                   CONDSTORE on SELECT, or
+                                   UNCHANGEDSINCE on STORE               */
+    CB_IDLE        =  (1<<5),   /* IDLE                                  */
+    CB_IMAP4REV2   =  (1<<6),   /* ENABLE IMAP4rev2                      */
+    CB_METADATA    =  (1<<7),   /* GET/SETMETADATA                       */
+    CB_MOVE        =  (1<<8),   /* MOVE                                  */
+    CB_MULTISEARCH =  (1<<9),   /* ESEARCH                               */
+    CB_NOTIFY      =  (1<<10),  /* NOTIFY                                */
+    CB_OBJECTID    =  (1<<11),  /* STATUS MAILBOXID or
+                                   SEARCH/FETCH EMAILID/THREADID         */
+    CB_PARTIAL     =  (1<<12),  /* SEARCH/FETCH PARTIAL                  */
+    CB_PREVIEW     =  (1<<13),  /* FETCH PREVIEW                         */
+    CB_QRESYNC     =  (1<<14),  /* ENABLE QRESYNC or QRESYNC on SELECT   */
+    CB_REPLACE     =  (1<<15),  /* REPLACE                               */
+    CB_SAVEDATE    =  (1<<16),  /* FETCH SAVEDATE                        */
+    CB_SEARCHRES   =  (1<<17),  /* SAVE on SEARCH                        */
+    CB_UIDONLY     =  (1<<18),  /* ENABLE UIDONLY                        */
+    CB_UNSELECT    =  (1<<19),  /* UNSELECT                              */
+    CB_UTF8ACCEPT  =  (1<<20),  /* ENABLE UTF8=ACCEPT                    */
 
-    /* non-standard - track for possible deprecation */
-    uint32_t did_xlist        : 1;   /* used XLIST  */
+    /* non-standard - track for possible deprecation                     */
+    CB_XLIST       =  (1<<21),  /* XLIST                                 */
 };
 
 #endif /* INCLUDED_IMAPD_H */
