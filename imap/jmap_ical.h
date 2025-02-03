@@ -119,9 +119,9 @@ struct jmapical_ctx {
         json_t *serverset;
         json_t *replyto;
         char *emailalert_recipient;
-        int ignore_orphan_timezones : 1;
-        int no_sanitize_timestamps : 1;
-        int allow_method : 1;
+        unsigned ignore_orphan_timezones : 1;
+        unsigned no_sanitize_timestamps : 1;
+        unsigned allow_method : 1;
     } to_ical;
     struct {
         struct {
@@ -129,9 +129,9 @@ struct jmapical_ctx {
             uint32_t uid;
             const char *partid;
         } cyrus_msg;
-        int want_icalprops : 1;
-        int dont_guess_timezones : 1;
-        int repair_broken_ical : 1;
+        unsigned want_icalprops : 1;
+        unsigned dont_guess_timezones : 1;
+        unsigned repair_broken_ical : 1;
     } from_ical;
     const strarray_t *schedule_addresses;
 };
