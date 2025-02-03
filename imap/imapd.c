@@ -147,7 +147,7 @@ static int64_t maxmsgsize = 0;
 static int64_t maxargssize = 0;
 static uint64_t maxargssize_mark = 0;
 
-static struct client_behavior_registry client_behavior;
+static uint32_t client_behavior_mask = 0;
 
 /* PROXY STUFF */
 /* we want a list of our outgoing connections here and which one we're
@@ -871,63 +871,67 @@ static void event_groups_free(struct event_groups **groups)
     xzfree(*groups);
 }
 
+/* Registry of exhibited client behaviors */
+static const struct client_behavior {
+    uint32_t flag;
+    const char *name;
+} client_behavior_registry[] = {
+    { CB_ANNOTATE,    "annotate"    },
+    { CB_BINARY,      "binary"      },
+    { CB_CATENATE,    "catenate"    },
+    { CB_COMPRESS,    "compress"    },
+    { CB_CONDSTORE,   "condstore"   },
+    { CB_IDLE,        "idle"        },
+    { CB_IMAP4REV2,   "imap4rev2"   },
+    { CB_METADATA,    "metadata"    },
+    { CB_MOVE,        "move"        },
+    { CB_MULTISEARCH, "multisearch" },
+    { CB_NOTIFY,      "notify"      },
+    { CB_OBJECTID,    "objectid"    },
+    { CB_PARTIAL,     "partial"     },
+    { CB_PREVIEW,     "preview"     },
+    { CB_QRESYNC,     "qresync"     },
+    { CB_REPLACE,     "replace"     },
+    { CB_SAVEDATE,    "savedate"    },
+    { CB_SEARCHRES,   "searchres"   },
+    { CB_UIDONLY,     "uidonly"     },
+    { CB_UNSELECT,    "unselect"    },
+    { CB_UTF8ACCEPT,  "utf8_accept" },
+    { CB_XLIST,       "xlist"       },
+    { 0,              NULL          }
+};
+
 static void imapd_log_client_behavior(void)
 {
+    static struct buf buf  = BUF_INITIALIZER;
     const char *id_name    = hash_lookup("name", &imapd_id.params);
     const char *id_vendor  = hash_lookup("vendor", &imapd_id.params);
     const char *id_version = hash_lookup("version", &imapd_id.params);
 
     /* log the client behaviors
      *
-     * This slightly weird sprintf-ing is do that we only log the hits, not the
-     * misses.  Most connections, even those from clients that support
-     * SEARCHRES, won't use SEARCH SAVE, for example.  This pushes just a
-     * little complexity into the log processor, but should mean that the logs
+     * We only log the hits, not the misses, which should mean that the logs 
      * are a bit easier to skim and a bit smaller.
      */
+    const struct client_behavior *cb;
+    for (cb = client_behavior_registry; cb->flag; cb++) {
+        if (client_behavior_mask & cb->flag) {
+            buf_printf(&buf, " %s=<1>", cb->name);
+        }
+    }
+
     xsyslog(LOG_NOTICE, "session ended",
                         "sessionid=<%s> userid=<%s>"
                         " id.vendor=<%s> id.name=<%s> id.version=<%s>"
-                        "%s%s%s%s"
-                        "%s%s%s%s"
-                        "%s%s%s%s"
-                        "%s%s%s%s"
-                        "%s%s%s%s"
-                        "%s%s",
+                        "%s",
 
                         session_id(),
                         imapd_userid ? imapd_userid : "",
                         id_vendor    ? id_vendor    : "",
                         id_name      ? id_name      : "",
                         id_version   ? id_version   : "",
-
-                        client_behavior.did_annotate    ? " annotate=<1>"     : "",
-                        client_behavior.did_binary      ? " binary=<1>"       : "",
-                        client_behavior.did_catenate    ? " catenate=<1>"     : "",
-                        client_behavior.did_compress    ? " compress=<1>"     : "",
-
-                        client_behavior.did_condstore   ? " condstore=<1>"    : "",
-                        client_behavior.did_idle        ? " idle=<1>"         : "",
-                        client_behavior.did_imap4rev2   ? " imap4rev2=<1>"    : "",
-                        client_behavior.did_metadata    ? " metadata=<1>"     : "",
-
-                        client_behavior.did_move        ? " move=<1>"         : "",
-                        client_behavior.did_multisearch ? " multisearch=<1>"  : "",
-                        client_behavior.did_notify      ? " notify=<1>"       : "",
-                        client_behavior.did_objectid    ? " objectid=<1>"     : "",
-
-                        client_behavior.did_partial     ? " partial=<1>"      : "",
-                        client_behavior.did_preview     ? " preview=<1>"      : "",
-                        client_behavior.did_qresync     ? " qresync=<1>"      : "",
-                        client_behavior.did_replace     ? " replace=<1>"      : "",
-
-                        client_behavior.did_savedate    ? " savedate=<1>"     : "",
-                        client_behavior.did_searchres   ? " searchres=<1>"    : "",
-                        client_behavior.did_uidonly     ? " uidonly=<1>"      : "",
-                        client_behavior.did_unselect    ? " unselect=<1>"     : "",
-
-                        client_behavior.did_utf8_accept ? " utf8_accept=<1>"  : "",
-                        client_behavior.did_xlist       ? " xlist=<1>"        : "");
+                        buf_cstring(&buf));
+    buf_reset(&buf);
 }
 
 static void maybe_autoexpunge(void)
@@ -949,7 +953,7 @@ static void imapd_reset(void)
 
     /* log the client behaviors */
     imapd_log_client_behavior();
-    memset(&client_behavior, 0, sizeof(client_behavior));
+    client_behavior_mask = 0;
 
     proc_cleanup(&proc_handle);
 
@@ -2128,8 +2132,6 @@ static void cmdloop(void)
 
                 cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
 
-                client_behavior.did_move = 1;
-
                 prometheus_increment(CYRUS_IMAP_MOVE_TOTAL);
             } else goto badcmd;
             break;
@@ -2612,8 +2614,6 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Unselect")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
-
-                client_behavior.did_unselect = 1;
 
                 cmd_close(tag.s, cmd.s);
 
@@ -3625,7 +3625,7 @@ static void cmd_idle(char *tag)
     struct protstream *be_in = NULL;
     int extra_fd = idle_sock;
 
-    client_behavior.did_idle = 1;
+    client_behavior_mask |= CB_IDLE;
 
     /* get idle timeout */
     if (idle_timeout == -1) {
@@ -3874,7 +3874,7 @@ static int getliteralsize(const char *tag, const char *p, int c, size_t maxsize,
     /* Check for literal8 */
     if (*p == '~') {
         p++;
-        *binary = client_behavior.did_binary = 1;
+        *binary = client_behavior_mask |= CB_BINARY;
     }
 
     /* check for start of literal */
@@ -4397,7 +4397,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         /* now parsing "append-data" in the ABNF */
 
         if (!strcasecmp(arg.s, "CATENATE")) {
-            client_behavior.did_catenate = 1;
+            client_behavior_mask |= CB_CATENATE;
 
             if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
                 parseerr = "Missing message part(s) in Append command";
@@ -4732,11 +4732,11 @@ static void cmd_select(char *tag, char *cmd, char *name)
             ucase(arg.s);
             if (!strcmp(arg.s, "CONDSTORE")) {
                 client_capa |= CAPA_CONDSTORE;
-                client_behavior.did_condstore = 1;
+                client_behavior_mask |= CB_CONDSTORE;
             }
             else if ((client_capa & CAPA_QRESYNC) &&
                      !strcmp(arg.s, "QRESYNC")) {
-                client_behavior.did_qresync = 1;
+                client_behavior_mask |= CB_QRESYNC;
 
                 if (c != ' ') goto badqresync;
                 c = prot_getc(imapd_in);
@@ -5027,6 +5027,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
  */
 static void cmd_close(char *tag, char *cmd)
 {
+    if (cmd[0] == 'U') client_behavior_mask |= CB_UNSELECT;
+
     if (backend_current) {
         /* remote mailbox */
         prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
@@ -5793,22 +5795,22 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
         goto freeargs;
 
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
-        client_behavior.did_annotate = 1;
+        client_behavior_mask |= CB_ANNOTATE;
 
     if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID))
-        client_behavior.did_objectid = 1;
+        client_behavior_mask |= CB_OBJECTID;
 
     if (fetchargs.fetchitems & FETCH_PREVIEW)
-        client_behavior.did_preview = 1;
+        client_behavior_mask |= CB_PREVIEW;
 
     if (fetchargs.fetchitems & FETCH_SAVEDATE)
-        client_behavior.did_savedate = 1;
+        client_behavior_mask |= CB_SAVEDATE;
 
     if (fetchargs.binsections || fetchargs.sizesections)
-        client_behavior.did_binary = 1;
+        client_behavior_mask |= CB_BINARY;
 
     if (fetchargs.partial.low)
-        client_behavior.did_partial = 1;
+        client_behavior_mask |= CB_PARTIAL;
 
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
                 &fetchedsomething);
@@ -5877,7 +5879,7 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
 
             ucase(storemod.s);
             if (!strcmp(storemod.s, "UNCHANGEDSINCE")) {
-                client_behavior.did_condstore = 1;
+                client_behavior_mask |= CB_CONDSTORE;
 
                 if (c != ' ') {
                     prot_printf(imapd_out,
@@ -6182,7 +6184,7 @@ static void cmd_search(const char *tag, const char *cmd)
 
     switch (cmd[0]) {
     case 'E':  // Esearch (multisearch)
-        client_behavior.did_multisearch = 1;
+        client_behavior_mask |= CB_MULTISEARCH;
         state |= GETSEARCH_SOURCE;
 
         GCC_FALLTHROUGH
@@ -6251,12 +6253,13 @@ static void cmd_search(const char *tag, const char *cmd)
     }
 
     if (searchargs->returnopts & SEARCH_RETURN_SAVE)
-        client_behavior.did_searchres = 1;
+        client_behavior_mask |= CB_SEARCHRES;
 
     if (searchargs->returnopts & SEARCH_RETURN_PARTIAL)
-        client_behavior.did_partial = 1;
+        client_behavior_mask |= CB_PARTIAL;
 
-    client_behavior.did_objectid = searchargs->did_objectid;
+    if (searchargs->did_objectid)
+        client_behavior_mask |= CB_OBJECTID;
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
@@ -6620,6 +6623,8 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     int r, myrights = 0;
     char *copyuid = NULL;
     mbentry_t *mbentry = NULL;
+
+    if (ismove) client_behavior_mask |= CB_MOVE;
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
     r = mlookup(NULL, NULL, intname, &mbentry);
@@ -8460,7 +8465,7 @@ static void cmd_list(char *tag, struct listargs *listargs)
     char mytime[100];
 
     if (listargs->cmd == LIST_CMD_XLIST)
-        client_behavior.did_xlist = 1;
+        client_behavior_mask |= CB_XLIST;
 
     if (listargs->sel & LIST_SEL_REMOTE) {
         if (!config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS)) {
@@ -9744,7 +9749,7 @@ static void cmd_status(char *tag, char *name)
         condstore_enabled("STATUS (HIGHESTMODSEQ)");
 
     if (statusitems & STATUS_MAILBOXID)
-        client_behavior.did_objectid = 1;
+        client_behavior_mask |= CB_OBJECTID;
 
     /* check permissions */
     if (!r) {
@@ -10591,7 +10596,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_t attribs = STRARRAY_INITIALIZER;
     annotate_state_t *astate = NULL;
 
-    client_behavior.did_annotate = 1;
+    client_behavior_mask |= CB_ANNOTATE;
 
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c <= EOF) {
@@ -10825,7 +10830,7 @@ static void cmd_getmetadata(const char *tag)
     struct getmetadata_options opts = OPTS_INITIALIZER;
     annotate_state_t *astate = NULL;
 
-    client_behavior.did_metadata = 1;
+    client_behavior_mask |= CB_METADATA;
 
     while (nlists < 3)
     {
@@ -10989,7 +10994,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
 
-    client_behavior.did_annotate = 1;
+    client_behavior_mask |= CB_ANNOTATE;
 
     c = parse_annotate_store_data(tag, 0, &entryatts);
     if (c <= EOF) {
@@ -11058,7 +11063,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
 
-    client_behavior.did_metadata = 1;
+    client_behavior_mask |= CB_METADATA;
 
     c = parse_metadata_store_data(tag, &entryatts);
     if (c <= EOF) {
@@ -14541,7 +14546,7 @@ static void cmd_resetkey(char *tag, char *name,
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *tag, char *alg)
 {
-    client_behavior.did_compress = 1;
+    client_behavior_mask |= CB_COMPRESS;
 
     if (imapd_compress_done) {
         prot_printf(imapd_out,
@@ -14604,23 +14609,23 @@ static void cmd_enable(char *tag)
             return;
         }
         if (!strcasecmp(arg.s, "condstore")) {
-            client_behavior.did_condstore = 1;
+            client_behavior_mask |= CB_CONDSTORE;
             new_capa |= CAPA_CONDSTORE;
         }
         else if (!strcasecmp(arg.s, "qresync")) {
-            client_behavior.did_qresync = 1;
+            client_behavior_mask |= CB_QRESYNC;
             new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
         }
         else if (!strcasecmp(arg.s, "imap4rev2")) {
-            client_behavior.did_imap4rev2 = 1;
+            client_behavior_mask |= CB_IMAP4REV2;
             new_capa |= CAPA_IMAP4REV2;
         }
         else if (!strcasecmp(arg.s, "uidonly")) {
-            client_behavior.did_uidonly = 1;
+            client_behavior_mask |= CB_UIDONLY;
             new_capa |= CAPA_UIDONLY;
         }
         else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
-            client_behavior.did_utf8_accept = 1;
+            client_behavior_mask |= CB_UTF8ACCEPT;
             new_capa |= CAPA_UTF8_ACCEPT;
         }
     } while (c == ' ');
@@ -14981,7 +14986,7 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     char *intname = NULL;
     int r = 0;
 
-    client_behavior.did_replace = 1;
+    client_behavior_mask |= CB_REPLACE;
 
     /* Need permission to delete message and seqno must be valid */
     if (backend_current) {
@@ -15227,7 +15232,7 @@ static void cmd_notify(char *tag, int set)
     char *filter_name = NULL;
     int c = EOF, do_status = 0;
 
-    client_behavior.did_notify = 1;
+    client_behavior_mask |= CB_NOTIFY;
 
     if (set) {
         /* Parse optional status-indicator */
