@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_backref
+    :min_version_3_9 :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "create addressbook";
+    my $now = DateTime->now();
+    my $created = $now->strftime('%Y-%m-%dT%H:%M:%SZ');
+    my $prodid = '-//Example Corp.//CardDAV Client//EN';
+    my $name = 'Mr. John Q. Public, Esq.';
+    my $id = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
+
+    my $badres = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookIds => '#ohno',
+                    uid => $id,
+                    prodId => $prodid,
+                    kind => 'individual',
+                    created => $created,
+                    name => { full => $name }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_deep_equals(
+        { type => 'invalidProperties', properties => [ 'addressBookIds' ] },
+        $badres->[0][1]{notCreated}{1}
+    );
+
+    my $goodres = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => {
+                "good" => {
+                    name => "foo"
+                 }
+            }
+        }, "R1"],
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookIds => { '#good' => JSON::true },
+                    uid => $id,
+                    prodId => $prodid,
+                    kind => 'individual',
+                    created => $created,
+                    name => { full => $name }
+                }
+            }
+        }, 'R3']
+    ]);
+
+    $self->assert_not_null($goodres->[1][1]{created}{1});
+    $self->assert_not_null($goodres->[1][1]{created}{1}{id});
+
+    $jmap->{CreatedIds} = {};
+
+    my $checkres = $jmap->CallMethods([
+        ["ContactCard/get", {
+            ids => [ $goodres->[1][1]{created}{1}{id} ]
+        }, "R1"],
+    ]);
+
+    $self->assert_deep_equals(
+        { $goodres->[0][1]{created}{good}{id} => JSON::true },
+        $checkres->[0][1]{list}[0]{addressBookIds}
+    );
+}
+

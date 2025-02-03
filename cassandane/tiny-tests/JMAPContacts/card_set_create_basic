@@ -40,7 +40,7 @@ sub test_card_set_create_basic
                 "1" => {
                     '@type' => 'Card',
                     version => '1.0',
-                    addressBookId => $abookid,
+                    addressBookIds => { $abookid => JSON::true },
                     uid => $id,
                     prodId => $prodid,
                     kind => 'individual',

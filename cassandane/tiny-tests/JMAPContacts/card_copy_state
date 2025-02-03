@@ -28,7 +28,7 @@ sub test_card_copy_state
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     my $card =  {
-        "addressBookId" => "Default",
+        "addressBookIds" => { "Default" => JSON::true },
         name => { full => "foo bar" },
     };
 
@@ -59,7 +59,7 @@ sub test_card_copy_state
             create => {
                 1 => {
                     id => $cardId,
-                    addressBookId => "Default",
+                    addressBookIds => { Default => JSON::true },
                 },
             },
             onSuccessDestroyOriginal => JSON::true,
