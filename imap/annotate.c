@@ -3191,7 +3191,8 @@ static int write_entry(struct mailbox *mailbox,
     if (!mailbox)
         sync_log_annotation("");
 #ifdef WITH_DAV
-    else if (!strncmp(entry, CAL_TZ_ANNOT, strlen(CAL_TZ_ANNOT))) {
+    else if (mbtype_isa(mailbox->h.mbtype) == MBTYPE_CALENDAR &&
+             !strncmp(entry, CAL_TZ_ANNOT, strlen(CAL_TZ_ANNOT))) {
         char *freeme = NULL;
 
         if (!userid || !*userid)
