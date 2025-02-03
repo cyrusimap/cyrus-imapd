@@ -19,7 +19,7 @@ Synopsis
     **cyr_expire** [ **-C** *config-file* ] [ **-A** *archive-duration* ]
     [ **-D** *delete-duration* ] [ **-E** *expire-duration* ] [ **-X** *expunge-duration* ]
     [ **-p** *mailbox-pre‐fix* ] [ **-u** *username* ] [ **-t** ] [ **-v** ]
-    [ **-a** ] [ **-c** ] [ **-x** ]
+    [ **-b** *batchsize* ] [ **-a** ] [ **-c** ] [ **-x** ]
 
 Description
 ===========
@@ -159,6 +159,11 @@ Options
 
     Remove any user flags which are not used by remaining (not expunged)
     messages.
+
+.. option:: -b num, --batchsize=num
+
+    Process "num" messages per batch when expunging or expiring.  Default
+    is 4096.
 
 .. option:: -v, --verbose
 
