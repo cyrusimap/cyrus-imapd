@@ -153,8 +153,8 @@ EOF
             P2 => {
                 'number' => 'tel:+1-418-262-6501',
                 'contexts' => { 'work' => JSON::true },
-                'features' => { 'cell'  => JSON::true, 'voice' => JSON::true,
-                                'video' => JSON::true, 'text'  => JSON::true }
+                'features' => { 'mobile' => JSON::true, 'voice' => JSON::true,
+                                'video'  => JSON::true, 'text'  => JSON::true }
             },
         },
         emails => {
