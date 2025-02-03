@@ -100,6 +100,8 @@ struct arguments {
     int expire_seconds;
     int expunge_seconds;
 
+    int batchsize;
+
     int do_cid_expire;
 
     /* bools */
@@ -518,7 +520,7 @@ restart:
                      ((double)expire_seconds/SECS_IN_A_DAY));
 
             r = mailbox_expunge(mailbox, NULL, expire_cb, erock, NULL,
-                                EVENT_MESSAGE_EXPIRE, 4096);
+                                EVENT_MESSAGE_EXPIRE, ctx.args.batchsize);
             if (r == IMAP_AGAIN) {
                 mailbox_close(&mailbox);
                 goto restart;
@@ -544,7 +546,7 @@ restart:
 
     verbosep("cleaning up expunged messages in %s", mbentry->name);
 
-    r = mailbox_expunge_cleanup(mailbox, NULL, erock->expunge_mark, &numexpunged, 4096);
+    r = mailbox_expunge_cleanup(mailbox, NULL, erock->expunge_mark, &numexpunged, ctx.args.batchsize);
 
     erock->messages_expunged += numexpunged;
     erock->mailboxes_seen++;
@@ -816,7 +818,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     int opt;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "A:C:D:E:X:achp:tu:vx";
+    static const char short_options[] = "A:C:D:E:X:ab:chp:tu:vx";
 
     static const struct option long_options[] = {
         { "archive-duration", required_argument, NULL, 'A' },
@@ -825,6 +827,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         { "expire-duration", required_argument, NULL, 'E' },
         { "expunge-duration", required_argument, NULL, 'X' },
         { "ignore-annotations", no_argument, NULL, 'a' },
+        { "batchsize", required_argument, NULL, 'b' },
         { "no-conversations", no_argument, NULL, 'c' },
         { "help", no_argument, NULL, 'h' },
         { "prefix", required_argument, NULL, 'p' },
@@ -840,6 +843,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
     args->expire_seconds = -1;
     args->expunge_seconds = -1;
     args->do_expunge = true;
+    args->batchsize = 4096;
     args->do_cid_expire = -1;
 
     while (-1 != (opt = getopt_long(argc, argv,
@@ -849,6 +853,10 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         case 'A':
             if (config_parseduration(optarg, 'd', &args->archive_seconds) < 0)
                 usage();
+            break;
+
+        case 'b':
+            args->batchsize = atoi(optarg);
             break;
 
         case 'C':
