@@ -122,7 +122,7 @@ static int checkpoint(struct twom_db *db)
     size_t postsize = twom_db_size(db);
     size_t num = twom_db_num_records(db);
     if (r == CYRUSDB_LOCKED) {
-        syslog(LOG_INFO, "twom: repack already locked",
+        xsyslog(LOG_INFO, "twom: repack already locked",
                "filename=<%s>", twom_db_fname(db));
     }
     else if (r) {
