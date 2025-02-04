@@ -449,33 +449,34 @@ extern struct protstream *imapd_out, *imapd_in;
 
 /* Bitmask for exhibited client behaviors */
 enum {
-    CB_ANNOTATE    =  (1<<0),   /* GET/SETANNOTATION or FETCH ANNOTATION */
-    CB_BINARY      =  (1<<1),   /* FETCH BINARY or APPEND literal8       */
-    CB_CATENATE    =  (1<<2),   /* CATENATE on APPEND                    */
-    CB_COMPRESS    =  (1<<3),   /* COMPRESS                              */
-    CB_CONDSTORE   =  (1<<4),   /* ENABLE CONSTORE/QRESYNC,
+    CB_BINARY      =  (1<<0),   /* FETCH BINARY or APPEND literal8       */
+    CB_CATENATE    =  (1<<1),   /* CATENATE on APPEND                    */
+    CB_COMPRESS    =  (1<<2),   /* COMPRESS                              */
+    CB_CONDSTORE   =  (1<<3),   /* ENABLE CONSTORE/QRESYNC,
                                    CONDSTORE on SELECT, or
                                    UNCHANGEDSINCE on STORE               */
-    CB_IDLE        =  (1<<5),   /* IDLE                                  */
-    CB_IMAP4REV2   =  (1<<6),   /* ENABLE IMAP4rev2                      */
-    CB_METADATA    =  (1<<7),   /* GET/SETMETADATA                       */
-    CB_MOVE        =  (1<<8),   /* MOVE                                  */
-    CB_MULTISEARCH =  (1<<9),   /* ESEARCH                               */
-    CB_NOTIFY      =  (1<<10),  /* NOTIFY                                */
-    CB_OBJECTID    =  (1<<11),  /* STATUS MAILBOXID or
+    CB_IDLE        =  (1<<4),   /* IDLE                                  */
+    CB_IMAP4REV2   =  (1<<5),   /* ENABLE IMAP4rev2                      */
+    CB_METADATA    =  (1<<6),   /* GET/SETMETADATA                       */
+    CB_MOVE        =  (1<<7),   /* MOVE                                  */
+    CB_MULTISEARCH =  (1<<8),   /* ESEARCH                               */
+    CB_NOTIFY      =  (1<<9),   /* NOTIFY                                */
+    CB_OBJECTID    =  (1<<10),  /* STATUS MAILBOXID or
                                    SEARCH/FETCH EMAILID/THREADID         */
-    CB_PARTIAL     =  (1<<12),  /* SEARCH/FETCH PARTIAL                  */
-    CB_PREVIEW     =  (1<<13),  /* FETCH PREVIEW                         */
-    CB_QRESYNC     =  (1<<14),  /* ENABLE QRESYNC or QRESYNC on SELECT   */
-    CB_REPLACE     =  (1<<15),  /* REPLACE                               */
-    CB_SAVEDATE    =  (1<<16),  /* FETCH SAVEDATE                        */
-    CB_SEARCHRES   =  (1<<17),  /* SAVE on SEARCH                        */
-    CB_UIDONLY     =  (1<<18),  /* ENABLE UIDONLY                        */
-    CB_UNSELECT    =  (1<<19),  /* UNSELECT                              */
-    CB_UTF8ACCEPT  =  (1<<20),  /* ENABLE UTF8=ACCEPT                    */
+    CB_PARTIAL     =  (1<<11),  /* SEARCH/FETCH PARTIAL                  */
+    CB_PREVIEW     =  (1<<12),  /* FETCH PREVIEW                         */
+    CB_QRESYNC     =  (1<<13),  /* ENABLE QRESYNC or QRESYNC on SELECT   */
+    CB_REPLACE     =  (1<<14),  /* REPLACE                               */
+    CB_SAVEDATE    =  (1<<15),  /* FETCH SAVEDATE                        */
+    CB_SEARCHRES   =  (1<<16),  /* SAVE on SEARCH                        */
+    CB_UIDONLY     =  (1<<17),  /* ENABLE UIDONLY                        */
+    CB_UNSELECT    =  (1<<18),  /* UNSELECT                              */
+    CB_UTF8ACCEPT  =  (1<<19),  /* ENABLE UTF8=ACCEPT                    */
 
     /* non-standard - track for possible deprecation                     */
-    CB_XLIST       =  (1<<21),  /* XLIST                                 */
+    CB_ANNOTATE    =  (1<<29),  /* GET/SETANNOTATION or FETCH ANNOTATION */
+    CB_XCONV       =  (1<<30),  /* STATUS XCONV*                         */
+    CB_XLIST       =  (1<<31),  /* XLIST                                 */
 };
 
 #endif /* INCLUDED_IMAPD_H */

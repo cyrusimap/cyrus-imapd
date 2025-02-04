@@ -897,6 +897,7 @@ static const struct client_behavior {
     { CB_UIDONLY,     "uidonly"     },
     { CB_UNSELECT,    "unselect"    },
     { CB_UTF8ACCEPT,  "utf8_accept" },
+    { CB_XCONV,       "xconv"       },
     { CB_XLIST,       "xlist"       },
     { 0,              NULL          }
 };
@@ -9750,6 +9751,9 @@ static void cmd_status(char *tag, char *name)
 
     if (statusitems & STATUS_MAILBOXID)
         client_behavior_mask |= CB_OBJECTID;
+
+    if (statusitems & (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ))
+        client_behavior_mask |= CB_XCONV;
 
     /* check permissions */
     if (!r) {
