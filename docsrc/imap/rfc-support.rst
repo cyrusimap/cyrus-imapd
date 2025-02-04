@@ -1045,3 +1045,7 @@ RFC Wishlist
 :rfc:`8470`
 
     Using Early Data in HTTP
+
+:rfc:`9738`
+
+    IMAP MESSAGELIMIT Extension

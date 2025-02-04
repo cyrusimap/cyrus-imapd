@@ -440,7 +440,7 @@ static struct capa_struct base_capabilities[] = {
       { .statep = &imapd_login_disabled }                     },
     { "MAILBOX-REFERRALS",     CAPA_POSTAUTH|CAPA_REVCONFIG,     /* RFC 2193 */
       { .config = IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS }  },
-    { "MESSAGELIMIT=",         0, /* not implemented */ { 0 } }, /* draft-ietf-extra-imap-messagelimit */
+    { "MESSAGELIMIT=",         0, /* not implemented */ { 0 } }, /* RFC 9738 */
     { "METADATA",              CAPA_POSTAUTH,           { 0 } }, /* RFC 5464 */
     { "METADATA-SERVER",       0,/*implied by METADATA*/{ 0 } }, /* RFC 5464 */
     { "MOVE",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 6851 */
@@ -461,7 +461,7 @@ static struct capa_struct base_capabilities[] = {
     { "RIGHTS=kxten",          CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
     { "SASL_IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
     { "SAVEDATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8514 */
-    { "SAVELIMIT=",            0, /* not implemented */ { 0 } }, /* draft-ietf-extra-imap-messagelimit */
+    { "SAVELIMIT=",            0, /* not implemented */ { 0 } }, /* RFC 9738 */
     { "SEARCH=FUZZY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 6203 */
     { "SEARCHRES",             CAPA_POSTAUTH,           { 0 } }, /* RFC 5182 */
     { "SORT",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
