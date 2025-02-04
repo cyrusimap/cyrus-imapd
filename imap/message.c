@@ -862,7 +862,7 @@ static void message_parse_headers(struct msg *msg, struct body *body,
 {
     struct buf headers = BUF_INITIALIZER;
     char *next;
-    int len;
+    size_t len;
     if (sawboundaryp) *sawboundaryp = 0;
     uint32_t maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
     int have_max = 0;
@@ -877,7 +877,7 @@ static void message_parse_headers(struct msg *msg, struct body *body,
            (next[-1] != '\n' ||
             (*next != '\r' || next[1] != '\n'))) {
 
-        len = strlen(next);
+        len = next - buf_base(&headers) - 1;
 
         if (next[-1] == '\n' && *next == '-' &&
             message_pendingboundary(next, len, boundaries)) {
@@ -897,7 +897,8 @@ static void message_parse_headers(struct msg *msg, struct body *body,
     }
 
     body->content_offset = msg->offset;
-    body->header_size = strlen(headers.s+1);
+    if (buf_len(&headers) >= body->boundary_size + 1)
+        body->header_size = buf_len(&headers) - body->boundary_size - 1;
 
     /* Scan over the slurped-up headers for interesting header information */
     body->header_lines = -1;    /* Correct for leading newline */
