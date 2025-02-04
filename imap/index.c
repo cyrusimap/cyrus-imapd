@@ -1363,7 +1363,7 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
     mailbox = state->mailbox;
 
     seq = _parse_sequence(state, sequence, storeargs->usinguid);
-    if (!strcmp("$", sequence)) {
+    if (!strcmpsafe("$", sequence)) {
         storeargs->usinguid = 1;
 
         if (!seqset_first(seq)) {
@@ -2764,7 +2764,7 @@ EXPORTED int index_snippets(struct index_state *state,
     for ( ; snippetargs ; snippetargs = snippetargs->next) {
 
         mailbox = NULL;
-        if (!strcmp(snippetargs->mboxname, index_mboxname(state))) {
+        if (!strcmpsafe(snippetargs->mboxname, index_mboxname(state))) {
             mailbox = state->mailbox;
         }
         else {
@@ -5761,17 +5761,17 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
 
         /* Index attachment file names */
         const struct param *param;
-        if (disposition && !strcmp(disposition, "ATTACHMENT")) {
+        if (disposition && !strcmpsafe(disposition, "ATTACHMENT")) {
             /* Look for "Content-Disposition: attachment;filename=" header */
             for (param = disposition_params; param; param = param->next) {
-                if (!strcmp(param->attribute, "FILENAME")) {
+                if (!strcmpsafe(param->attribute, "FILENAME")) {
                     char *tmp = charset_decode_mimeheader(param->value, str->charset_flags);
                     buf_init_ro_cstr(&text, tmp);
                     stuff_converted_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
                     buf_free(&text);
                     free(tmp);
                 }
-                else if (!strcmp(param->attribute, "FILENAME*")) {
+                else if (!strcmpsafe(param->attribute, "FILENAME*")) {
                     char *xval = charset_parse_mimexvalue(param->value, NULL);
                     if (!xval) xval = xstrdup(param->value);
                     if (xval) {
@@ -5787,7 +5787,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         }
         for(param = type_params; param; param = param->next) {
             /* Look for "Content-Type: foo;name=" header */
-            if (strcmp(param->attribute, "NAME"))
+            if (strcmpsafe(param->attribute, "NAME"))
                 continue;
             char *tmp = charset_decode_mimeheader(param->value, str->charset_flags);
             buf_init_ro_cstr(&text, tmp);
@@ -5802,16 +5802,16 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         /* PGP encrypted body part - we don't want to index this,
          * it's a ton of random base64 noise */
     }
-    else if (isbody && !strcmp(type, "TEXT") && strcmpsafe(subtype, "RTF")) {
+    else if (isbody && !strcmpsafe(type, "TEXT") && strcmpsafe(subtype, "RTF")) {
 
         if (str->snippet_iteration >= 2) goto done;
 
-        if (!strcmp(subtype, "CALENDAR")) {
+        if (!strcmpsafe(subtype, "CALENDAR")) {
 #ifdef USE_HTTPD
             extract_icalbuf(data, charset, encoding, str);
 #endif /* USE_HTTPD */
         }
-        else if (!strcmp(subtype, "VCARD")) {
+        else if (!strcmpsafe(subtype, "VCARD")) {
 #ifdef USE_HTTPD
             extract_vcardbuf(data, charset, encoding, str);
 #endif /* USE_HTTPD */
@@ -5837,7 +5837,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         }
     }
 #ifdef USE_HTTPD
-    else if (isbody && (!strcmp(type, "APPLICATION") && !strcmp(subtype, "ICS"))) {
+    else if (isbody && (!strcmpsafe(type, "APPLICATION") && !strcmpsafe(subtype, "ICS"))) {
         // application/ics is an alias for text/icalendar
         extract_icalbuf(data, charset, encoding, str);
     }
@@ -6097,9 +6097,12 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 
     if (!message_get_leaf_types(msg, &types) && types.count) {
         for (i = 0 ; i < types.count ; i+= 2) {
+            if (!types.data[i]) continue;
             buf_setcstr(&buf, types.data[i]);
-            buf_putc(&buf, '/');
-            buf_appendcstr(&buf, types.data[i+1]);
+            if (types.data[i+1]) {
+                buf_putc(&buf, '/');
+                buf_appendcstr(&buf, types.data[i+1]);
+            }
             stuff_part(receiver, str.conv, SEARCH_PART_TYPE, &buf);
         }
     }
