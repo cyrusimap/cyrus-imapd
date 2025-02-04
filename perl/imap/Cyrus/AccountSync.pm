@@ -110,6 +110,7 @@ sub dump_user {
         modseq => $record->{MODSEQ} + 0,
         internalDate => $record->{INTERNALDATE} + 0,
         rawMessage => $data,
+        annotations => $record->{ANNOTATIONS},
       );
       if ($opts{objectid}) {
         $email{emailId} = "M" . substr($record->{GUID}, 0, 24);
@@ -176,8 +177,9 @@ sub undump_user {
       my $internaldate = $email->{internalDate} // $time;
       my $modseq = $email->{modseq} || 1;
       my $flags = $email->{flags} || [];
+      my $annotations = $email->{annotations} || [];
       my %record = (
-        ANNOTATIONS => [], # skip savedate and such for now
+        ANNOTATIONS => $annotations,
         GUID => $guid,
         FLAGS => $flags,
         INTERNALDATE => $internaldate,
