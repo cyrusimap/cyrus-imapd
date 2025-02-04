@@ -2030,7 +2030,7 @@ static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
     }
 
     i = json_array_size(sort);
-    sortcrit[i].key = SORT_UID;
+    sortcrit[i].key = SORT_SEQUENCE;
 
     return sortcrit;
 }
@@ -2056,7 +2056,7 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
     const struct sortcrit *sortcrit = m1->sortcrit;
     int reverse = 0, ret = 0, i = 0;
 
-    for (i = 0; !ret && sortcrit[i].key != SORT_UID; i++) {
+    for (i = 0; !ret && sortcrit[i].key != SORT_SEQUENCE; i++) {
         /* determine sort order from reverse flag bit */
         reverse = sortcrit[i].flags & SORT_REVERSE;
 
