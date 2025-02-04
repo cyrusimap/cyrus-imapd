@@ -781,6 +781,12 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     }
 
     if (rock.args.addressbook_id) {
+/*      XXX - Support, ignore, or error for ContactCard, -- alh, 2025-02-03
+        if (kind == CARDDAV_KIND_ANY) {
+
+        }
+*/
+
         char *mboxname = carddav_mboxname(req->accountid, rock.args.addressbook_id);
         mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
         free(mboxname);
@@ -7731,8 +7737,8 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     }
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
-    json_object_set_new(obj, "addressBookId",
-                        json_string(strrchr(mbentry->name, '.')+1));
+    json_object_set_new(obj, "addressBookIds",
+                             json_pack("{s:b}", strrchr(mbentry->name, '.')+1, 1));
 
     json_array_append_new(crock->get->list, obj);
     crock->rows++;
@@ -11319,24 +11325,43 @@ static int _card_set_create(jmap_req_t *req,
     buf_appendcstr(&buf, ".vcf");
     resourcename = buf_newcstring(&buf);
 
-    const char *addressbookId = "Default";
-    json_t *abookid = json_object_get(jcard, "addressBookId");
-    if (abookid && json_string_value(abookid)) {
-        /* XXX - invalid arguments */
-        addressbookId = json_string_value(abookid);
+    const char *addressbookId = NULL;
+    json_t *jval = json_object_get(jcard, "addressBookIds");
+    if (jval) {
+        if (json_object_size(jval) != 1) {
+            // multiple address book ids are not supported
+            json_array_append_new(invalid, json_string("addressBookIds"));
+            goto done;
+        }
+
+        void *iter = json_object_iter(jval);
+        if (json_object_iter_value(iter) == json_true()) {
+            addressbookId = json_object_iter_key(iter);
+        }
+        if (addressbookId && *addressbookId == '#') {
+            addressbookId = jmap_lookup_id(req, addressbookId + 1);
+        }
+
+        if (!addressbookId) {
+            json_array_append_new(invalid, json_string("addressBookIds"));
+            goto done;
+        }
     }
-    else {
-        json_object_set_new(item, "addressBookId", json_string(addressbookId));
+
+    if (! addressbookId) {
+        json_object_set_new(item, "addressBookIds", json_pack("{s:b}",
+                                                              "Default", 1));
+        addressbookId = "Default";
     }
     mboxname = mboxname_abook(req->accountid, addressbookId);
-    json_object_del(jcard, "addressBookId");
+    json_object_del(jcard, "addressBookIds");
     addressbookId = NULL;
 
     int needrights = required_set_rights(jcard);
 
     /* Check permissions. */
     if (!jmap_hasrights(req, mboxname, needrights)) {
-        json_array_append_new(invalid, json_string("addressBookId"));
+        json_array_append_new(invalid, json_string("addressBookIds"));
         goto done;
     }
 
@@ -11359,7 +11384,7 @@ static int _card_set_create(jmap_req_t *req,
         mailbox_close(mailbox);
         r = mailbox_open_iwl(mboxname, mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
-            json_array_append_new(invalid, json_string("addressbookId"));
+            json_array_append_new(invalid, json_string("addressbookIds"));
             r = 0;
             goto done;
         }
@@ -11508,14 +11533,36 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
-    json_t *abookid = json_object_get(jcard, "addressBookId");
-    if (abookid && json_string_value(abookid)) {
-        char *mboxname = mboxname_abook(req->accountid, json_string_value(abookid));
+    const char *addressbookId = NULL;
+    json_t *jval = json_object_get(jcard, "addressBookIds");
+    if (jval) {
+        if (json_object_size(jval) != 1) {
+            // multiple address book ids are not supported
+            json_array_append_new(invalid, json_string("addressBookIds"));
+            goto done;
+        }
+
+        void *iter = json_object_iter(jval);
+        if (json_object_iter_value(iter) == json_true()) {
+            addressbookId = json_object_iter_key(iter);
+        }
+        if (addressbookId && *addressbookId == '#') {
+            addressbookId = jmap_lookup_id(req, addressbookId + 1);
+        }
+
+        if (!addressbookId) {
+            json_array_append_new(invalid, json_string("addressBookIds"));
+            goto done;
+        }
+    }
+
+    if (addressbookId) {
+        char *mboxname = mboxname_abook(req->accountid, addressbookId);
 
         if (mbentry && strcmp(mboxname, mbentry->name)) {
             /* move */
             if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
-                json_array_append_new(invalid, json_string("addressBookId"));
+                json_array_append_new(invalid, json_string("addressBookIds"));
                 r = HTTP_FORBIDDEN;
             }
             else if ((r = mailbox_open_iwl(mboxname, &newmailbox))) {
@@ -11525,7 +11572,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                 do_move = 1;
             }
         }
-        json_object_del(jcard, "addressBookId");
+        json_object_del(jcard, "addressBookIds");
         free(mboxname);
 
         if (r) goto done;

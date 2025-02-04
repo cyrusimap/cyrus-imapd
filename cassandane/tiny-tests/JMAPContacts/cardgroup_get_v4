@@ -45,7 +45,7 @@ EOF
     my $want_jscard = {
         '@type' => 'Card',
         version => '1.0',
-        addressBookId => 'Default',
+        addressBookIds => { Default => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
         id => $id,
         uid => $id,

@@ -140,7 +140,7 @@ sub test_card_set_update
         ['ContactCard/set', {
             update => {
                 $id => {
-                    addressBookId => $abookid
+                    addressBookIds => { $abookid => JSON::true },
                 }
             }
          }, "R2"]

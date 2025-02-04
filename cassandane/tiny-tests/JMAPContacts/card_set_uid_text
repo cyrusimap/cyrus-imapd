@@ -24,7 +24,7 @@ sub test_card_set_uid_text
                 "1" => {
                     '@type' => 'Card',
                     version => '1.0',
-                    addressBookId => $abookid,
+                    addressBookIds => { $abookid => JSON::true },
                     uid => $id,
                     kind => 'individual',
                     name => { full => 'foo' }
