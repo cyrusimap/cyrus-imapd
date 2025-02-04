@@ -6398,10 +6398,14 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                         }
                         break;
 
+                    case VCARD_TYPE_CELL:
+                        val = "mobile";
+
+                        GCC_FALLTHROUGH
+
                     case VCARD_TYPE_TEXT:
                     case VCARD_TYPE_VOICE:
                     case VCARD_TYPE_FAX:
-                    case VCARD_TYPE_CELL:
                     case VCARD_TYPE_VIDEO:
                     case VCARD_TYPE_PAGER:
                     case VCARD_TYPE_TEXTPHONE:
@@ -8762,8 +8766,16 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
             if (!param) param = new = vcardparameter_new(pkind);
 
             json_object_foreach(jprop, type, set) {
-                vcardparameter_add_value_from_string(param,
-                    !strcasecmp("private", type) ? "home" : type);
+                const char *mytype;
+
+                if (!strcasecmp("private", type))
+                    mytype = "home";
+                else if (!strcasecmp("mobile", type))
+                    mytype = "cell";
+                else
+                    mytype = type;
+
+                vcardparameter_add_value_from_string(param, mytype);
             }
         }
         break;
