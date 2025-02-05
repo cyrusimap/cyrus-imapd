@@ -781,11 +781,13 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     }
 
     if (rock.args.addressbook_id) {
-/*      XXX - Support, ignore, or error for ContactCard, -- alh, 2025-02-03
         if (kind == CARDDAV_KIND_ANY) {
-
+            jmap_parser_invalid(&parser, "addressbookId");
+            err = json_pack("{s:s}", "type", "invalidArguments");
+            json_object_set(err, "arguments", parser.invalid);
+            jmap_error(req, err);
+            goto done;
         }
-*/
 
         char *mboxname = carddav_mboxname(req->accountid, rock.args.addressbook_id);
         mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
