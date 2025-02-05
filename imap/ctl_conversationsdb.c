@@ -501,6 +501,29 @@ static int next_diffable_record(struct cursor *c)
     }
 }
 
+static void printer(const char *type, struct cursor *c)
+{
+    if (!verbose) return;
+    static struct buf keybuf = BUF_INITIALIZER;
+    static struct buf databuf = BUF_INITIALIZER;
+    buf_reset(&keybuf);
+    buf_reset(&databuf);
+    size_t i;
+    for (i = 0; i < c->keylen; i++) {
+        if (c->key[i] > 31 && c->data[i] < 127)
+            buf_putc(&keybuf, c->key[i]);
+        else
+            buf_printf(&keybuf, "<%d>", (int)c->key[i]);
+    }
+    for (i = 0; i < c->datalen; i++) {
+        if (c->data[i] > 31 && c->data[i] < 127)
+            buf_putc(&databuf, c->data[i]);
+        else
+            buf_printf(&databuf, "<%d>", (int)c->data[i]);
+    }
+    printf("%s: \"%s\" data \"%s\"\n", type, buf_cstring(&keybuf), buf_cstring(&databuf));
+}
+
 static unsigned int diff_records(struct conversations_state *a,
                                  struct conversations_state *b)
 {
@@ -521,18 +544,14 @@ static unsigned int diff_records(struct conversations_state *a,
         if (rb || keydelta < 0) {
             if (ra) break;
             ndiffs++;
-            if (verbose)
-                printf("REALONLY: \"%.*s\" data \"%.*s\"\n",
-                       (int)ca.keylen, ca.key, (int)ca.datalen, ca.data);
+            printer("REALONLY", &ca);
             ra = next_diffable_record(&ca);
             continue;
         }
         if (ra || keydelta > 0) {
             if (rb) break;
             ndiffs++;
-            if (verbose)
-                printf("TEMPONLY: \"%.*s\" data \"%.*s\"\n",
-                       (int)cb.keylen, cb.key, (int)cb.datalen, cb.data);
+            printer("TEMPONLY", &cb);
             rb = next_diffable_record(&cb);
             continue;
         }
@@ -541,11 +560,8 @@ static unsigned int diff_records(struct conversations_state *a,
         delta = blob_compare(ca.data, ca.datalen, cb.data, cb.datalen);
         if (delta) {
             ndiffs++;
-            if (verbose)
-                printf("REAL: \"%.*s\" data \"%.*s\"\n"
-                       "TEMP: \"%.*s\" data \"%.*s\"\n",
-                       (int)ca.keylen, ca.key, (int)ca.datalen, ca.data,
-                       (int)cb.keylen, cb.key, (int)cb.datalen, cb.data);
+            printer("REAL", &ca);
+            printer("TEMP", &cb);
         }
 
         ra = next_diffable_record(&ca);
