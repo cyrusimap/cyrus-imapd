@@ -1815,11 +1815,11 @@ static void conversations_thread_sort(conversation_t *conv)
     ptrarray_fini(&items);
 }
 
-static void conversation_update_thread(conversation_t *conv,
-                                       const struct message_guid *guid,
-                                       time_t internaldate,
-                                       modseq_t createdmodseq,
-                                       int delta_exists)
+EXPORTED void conversation_update_thread(conversation_t *conv,
+                                         const struct message_guid *guid,
+                                         time_t internaldate,
+                                         modseq_t createdmodseq,
+                                         int delta_exists)
 {
     conv_thread_t *thread, **nextp = &conv->thread;
 

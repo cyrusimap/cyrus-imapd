@@ -448,6 +448,7 @@ struct cursor
 {
     struct db *db;
     struct txn **txnp;
+    struct buf buf;
     const char *key; size_t keylen;
     const char *data; size_t datalen;
     int err;
@@ -461,14 +462,25 @@ static void cursor_init(struct cursor *c,
     c->txnp = txnp;
 }
 
+static void cursor_fini(struct cursor *c)
+{
+    buf_free(&c->buf);
+}
+
 static int cursor_next(struct cursor *c)
 {
-    if (!c->err)
+    if (!c->err) {
         c->err = cyrusdb_fetchnext(c->db,
                                    c->key, c->keylen,
                                    &c->key, &c->keylen,
                                    &c->data, &c->datalen,
                                    c->txnp);
+    }
+    if (!c->err) {
+        // copy the key so it's safe for fetchnext even if the file is changed
+        buf_setmap(&c->buf, c->key, c->keylen);
+        c->key = c->buf.s;
+    }
     return c->err;
 }
 
@@ -501,6 +513,29 @@ static int next_diffable_record(struct cursor *c)
     }
 }
 
+static void printer(const char *type, struct cursor *c)
+{
+    if (!verbose) return;
+    static struct buf keybuf = BUF_INITIALIZER;
+    static struct buf databuf = BUF_INITIALIZER;
+    buf_reset(&keybuf);
+    buf_reset(&databuf);
+    size_t i;
+    for (i = 0; i < c->keylen; i++) {
+        if (c->key[i] > 31 && c->data[i] < 127)
+            buf_putc(&keybuf, c->key[i]);
+        else
+            buf_printf(&keybuf, "<%d>", (int)c->key[i]);
+    }
+    for (i = 0; i < c->datalen; i++) {
+        if (c->data[i] > 31 && c->data[i] < 127)
+            buf_putc(&databuf, c->data[i]);
+        else
+            buf_printf(&databuf, "<%d>", (int)c->data[i]);
+    }
+    printf("%s: \"%s\" data \"%s\"\n", type, buf_cstring(&keybuf), buf_cstring(&databuf));
+}
+
 static unsigned int diff_records(struct conversations_state *a,
                                  struct conversations_state *b)
 {
@@ -521,36 +556,32 @@ static unsigned int diff_records(struct conversations_state *a,
         if (rb || keydelta < 0) {
             if (ra) break;
             ndiffs++;
-            if (verbose)
-                printf("REALONLY: \"%.*s\" data \"%.*s\"\n",
-                       (int)ca.keylen, ca.key, (int)ca.datalen, ca.data);
+            printer("REALONLY", &ca);
             ra = next_diffable_record(&ca);
             continue;
         }
         if (ra || keydelta > 0) {
             if (rb) break;
             ndiffs++;
-            if (verbose)
-                printf("TEMPONLY: \"%.*s\" data \"%.*s\"\n",
-                       (int)cb.keylen, cb.key, (int)cb.datalen, cb.data);
+            printer("TEMPONLY", &cb);
             rb = next_diffable_record(&cb);
             continue;
         }
 
-        /* both exist an are the same key */
+        /* both exist and are the same key */
         delta = blob_compare(ca.data, ca.datalen, cb.data, cb.datalen);
         if (delta) {
             ndiffs++;
-            if (verbose)
-                printf("REAL: \"%.*s\" data \"%.*s\"\n"
-                       "TEMP: \"%.*s\" data \"%.*s\"\n",
-                       (int)ca.keylen, ca.key, (int)ca.datalen, ca.data,
-                       (int)cb.keylen, cb.key, (int)cb.datalen, cb.data);
+            printer("REAL", &ca);
+            printer("TEMP", &cb);
         }
 
         ra = next_diffable_record(&ca);
         rb = next_diffable_record(&cb);
     }
+
+    cursor_fini(&ca);
+    cursor_fini(&cb);
 
     return ndiffs;
 }
@@ -560,8 +591,9 @@ static int fix_modseqs(struct conversations_state *a,
 {
     int ra, rb;
     struct cursor ca, cb;
+    char buf[80];
     int keydelta;
-    int r;
+    int r = 0;
 
     cursor_init(&ca, a->db, &a->txn);
     ra = cursor_next(&ca);
@@ -577,7 +609,7 @@ static int fix_modseqs(struct conversations_state *a,
                 conv_status_t status = CONV_STATUS_INIT;
                 /* need to add record if it's zero */
                 r = conversation_parsestatus(ca.data, ca.datalen, &status);
-                if (r) return r;
+                if (r) goto done;
                 if (status.threadexists == 0) {
                     r = conversation_storestatus(b, ca.key, ca.keylen, &status);
                     if (r) {
@@ -585,7 +617,7 @@ static int fix_modseqs(struct conversations_state *a,
                                         "record \"%.*s\" to %s: %s, giving up\n",
                                         (int)ca.keylen, ca.key,
                                         b->path, error_message(r));
-                        return r;
+                        goto done;
                     }
                 }
                 /* otherwise it's a bug, so leave it in for reporting */
@@ -634,7 +666,7 @@ static int fix_modseqs(struct conversations_state *a,
                                     b->path, error_message(r));
                     /* If we cannot write to the temp DB, something is
                      * drastically wrong and we need to report a failure */
-                    return r;
+                    goto done;
                 }
             }
         }
@@ -645,6 +677,7 @@ static int fix_modseqs(struct conversations_state *a,
             conv_folder_t *foldera;
             conv_folder_t *folderb;
             conv_sender_t *sendera;
+            conv_thread_t *threada;
 
             r = conversation_parse(ca.data, ca.datalen, &conva, CONV_WITHALL);
             if (r) {
@@ -686,6 +719,15 @@ static int fix_modseqs(struct conversations_state *a,
                                            sendera->lastseen, /*delta_count*/0);
             }
 
+            /* emails have modseqs, and the modseq might be for a deleted message */
+            for (threada = conva.thread; threada; threada = threada->next) {
+                /* always update!  The delta logic will ensure we don't add
+                 * the record if it's not already at least present in the
+                 * other conversation */
+                conversation_update_thread(&convb, &threada->guid, threada->internaldate,
+                        threada->createdmodseq, /*delta_exists*/0);
+            }
+
             /* be nice to know if this is needed, but at least twoskip
              * will dedup for us */
             r = conversation_store(b, cb.key, cb.keylen, &convb);
@@ -699,7 +741,26 @@ static int fix_modseqs(struct conversations_state *a,
                                 "record \"%.*s\" to %s: %s, giving up\n",
                                 (int)cb.keylen, cb.key,
                                 b->path, error_message(r));
-                return r;
+                goto done;
+            }
+        }
+        if (ca.key[0] == 'G') {
+            // basecid might be different on the old record, so if they're both v3, then copy the data over
+            if (ca.datalen >= 33 && cb.datalen >= 33 && ca.data[0] == (char)0x83 && cb.data[0] == (char)0x83) {
+                conversation_id_t basea = ntohll(*((bit64*)(ca.data+25)));
+                conversation_id_t baseb = ntohll(*((bit64*)(cb.data+25)));
+                if (basea != baseb && cb.datalen < 80) {
+                    memcpy(buf, cb.data, cb.datalen);
+                    *((uint64_t *)(buf + 25)) = htonll(basea);
+                    r = cyrusdb_store(b->db, cb.key, cb.keylen, buf, cb.datalen, &b->txn);
+                    if (r) {
+                         fprintf(stderr, "Failed to store conversations "
+                                         "record \"%.*s\" to %s: %s, giving up\n",
+                                         (int)cb.keylen, cb.key,
+                                         b->path, error_message(r));
+                        goto done;
+                    }
+                }
             }
         }
 
@@ -708,7 +769,11 @@ next:
         rb = cursor_next(&cb);
     }
 
-    return 0;
+done:
+    cursor_fini(&ca);
+    cursor_fini(&cb);
+
+    return r;
 }
 
 int do_checkfolders(const char *userid)
