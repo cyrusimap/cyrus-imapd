@@ -315,9 +315,9 @@ static int popd_proxy_policy(sasl_conn_t *conn,
 }
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &popd_proxy_policy, (void*) &popd_proxyctx },
-    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &popd_canon_user, NULL },
+    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, SASL_CB_PROC_PTR &popd_proxy_policy, (void*) &popd_proxyctx },
+    { SASL_CB_CANON_USER, SASL_CB_PROC_PTR &popd_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 

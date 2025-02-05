@@ -784,10 +784,10 @@ static int imapd_sasl_log(void *context __attribute__((unused)),
 }
 
 static const struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &imapd_proxy_policy, (void*) &imapd_proxyctx },
-    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &imapd_canon_user, (void*) &disable_referrals },
-    { SASL_CB_LOG, (mysasl_cb_ft *) &imapd_sasl_log, NULL },
+    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, SASL_CB_PROC_PTR &imapd_proxy_policy, (void*) &imapd_proxyctx },
+    { SASL_CB_CANON_USER, SASL_CB_PROC_PTR &imapd_canon_user, (void*) &disable_referrals },
+    { SASL_CB_LOG, SASL_CB_PROC_PTR &imapd_sasl_log, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
