@@ -537,7 +537,7 @@ static unsigned int diff_records(struct conversations_state *a,
             continue;
         }
 
-        /* both exist an are the same key */
+        /* both exist and are the same key */
         delta = blob_compare(ca.data, ca.datalen, cb.data, cb.datalen);
         if (delta) {
             ndiffs++;
@@ -560,6 +560,7 @@ static int fix_modseqs(struct conversations_state *a,
 {
     int ra, rb;
     struct cursor ca, cb;
+    char buf[80];
     int keydelta;
     int r;
 
@@ -700,6 +701,25 @@ static int fix_modseqs(struct conversations_state *a,
                                 (int)cb.keylen, cb.key,
                                 b->path, error_message(r));
                 return r;
+            }
+        }
+        if (ca.key[0] == 'G') {
+            // basecid might be different on the old record, so if they're both v3, then copy the data over
+            if (ca.datalen >= 33 && cb.datalen >= 33 && ca.data[0] == (char)0x83 && cb.data[0] == (char)0x83) {
+                conversation_id_t basea = ntohll(*((bit64*)(ca.data+25)));
+                conversation_id_t baseb = ntohll(*((bit64*)(cb.data+25)));
+                if (basea != baseb && cb.datalen < 80) {
+                    memcpy(buf, cb.data, cb.datalen);
+                    *((uint64_t *)(buf + 25)) = htonll(basea);
+                    r = cyrusdb_store(b->db, cb.key, cb.keylen, buf, cb.datalen, &b->txn);
+                    if (r) {
+                         fprintf(stderr, "Failed to store conversations "
+                                         "record \"%.*s\" to %s: %s, giving up\n",
+                                         (int)cb.keylen, cb.key,
+                                         b->path, error_message(r));
+                         return r;
+                    }
+                }
             }
         }
 
