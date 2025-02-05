@@ -2304,29 +2304,33 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
         case LF_ZU:  buf_printf(&buf, "%zu",  arg->data[i].zu);  break;
         case LF_LLX: buf_printf(&buf, "%llx", arg->data[i].llu); break;
         case LF_F:   buf_printf(&buf, "%f",   arg->data[i].f);   break;
-        case LF_M:
+        case LF_M: {
             char *escaped_errno = _xsyslog_ev_escape(strerror(saved_errno));
             buf_appendcstr(&buf, escaped_errno);
             free(escaped_errno);
             break;
+        }
 
-        case LF_S:
+        case LF_S: {
             char *escaped_s = _xsyslog_ev_escape(arg->data[i].s);
             buf_appendcstr(&buf, escaped_s);
             free(escaped_s);
             break;
+        }
 
-        case LF_RAW:
+        case LF_RAW: {
             char *escaped_raw = _xsyslog_ev_escape(arg->data[i].s);
             buf_appendcstr(&buf, escaped_raw);
             free(escaped_raw);
             free((char *)arg->data[i].s);
             break;
+        }
 
-        default:
+        default: {
             struct buf errbuf = BUF_INITIALIZER;
             buf_printf(&errbuf, "Unknown lf type: %d", arg->data[i].type);
             fatal(buf_cstring(&errbuf), EX_SOFTWARE);
+        }
         }
     }
 
