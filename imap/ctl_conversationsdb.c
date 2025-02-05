@@ -677,6 +677,7 @@ static int fix_modseqs(struct conversations_state *a,
             conv_folder_t *foldera;
             conv_folder_t *folderb;
             conv_sender_t *sendera;
+            conv_thread_t *threada;
 
             r = conversation_parse(ca.data, ca.datalen, &conva, CONV_WITHALL);
             if (r) {
@@ -716,6 +717,15 @@ static int fix_modseqs(struct conversations_state *a,
                 conversation_update_sender(&convb, sendera->name, sendera->route,
                                            sendera->mailbox, sendera->domain,
                                            sendera->lastseen, /*delta_count*/0);
+            }
+
+            /* emails have modseqs, and the modseq might be for a deleted message */
+            for (threada = conva.thread; threada; threada = threada->next) {
+                /* always update!  The delta logic will ensure we don't add
+                 * the record if it's not already at least present in the
+                 * other conversation */
+                conversation_update_thread(&convb, &threada->guid, threada->internaldate,
+                        threada->createdmodseq, /*delta_exists*/0);
             }
 
             /* be nice to know if this is needed, but at least twoskip

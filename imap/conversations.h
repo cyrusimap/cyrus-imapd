@@ -352,6 +352,11 @@ extern void conversation_update_sender(conversation_t *conv,
                                        const char *domain,
                                        time_t lastseen,
                                        ssize_t delta_exists);
+extern void conversation_update_thread(conversation_t *conv,
+                                       const struct message_guid *guid,
+                                       time_t internaldate,
+                                       modseq_t createdmodseq,
+                                       int delta_exists);
 
 extern int conversations_prune(struct conversations_state *state,
                                time_t thresh, unsigned int *,
