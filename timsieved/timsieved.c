@@ -205,9 +205,9 @@ EXPORTED void fatal(const char *s, int code)
 }
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &mysasl_proxy_policy, (void*) &sieved_proxyctx },
-    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &mysasl_canon_user, (void*) &sieved_domainfromip },
+    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, SASL_CB_PROC_PTR &mysasl_proxy_policy, (void*) &sieved_proxyctx },
+    { SASL_CB_CANON_USER, SASL_CB_PROC_PTR &mysasl_canon_user, (void*) &sieved_domainfromip },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 

@@ -1825,16 +1825,17 @@ endif
 # sources only.
 sieve_libcyrus_sieve_lex_la_SOURCES = \
     sieve/addr-lex.l \
-    sieve/sieve-lex.l
+    sieve/sieve-lex.l \
+    sieve/addr.y \
+    sieve/sieve.y
 sieve_libcyrus_sieve_lex_la_LIBADD =
-sieve_libcyrus_sieve_lex_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(NOWARN_SIGN_COMPARE)
+sieve_libcyrus_sieve_lex_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(NOWARN_SIGN_COMPARE) $(NOWARN_UNUSED_BUT_SET)
 
 nodist_sieve_libcyrus_sieve_la_SOURCES = \
     sieve/sieve_err.c \
     sieve/sieve_err.h
 sieve_libcyrus_sieve_la_SOURCES = \
     sieve/bytecode.h \
-    sieve/addr.y \
     sieve/bc_emit.c \
     sieve/bc_eval.c \
     sieve/bc_generate.c \
@@ -1852,7 +1853,6 @@ sieve_libcyrus_sieve_la_SOURCES = \
     sieve/message.h \
     sieve/script.c \
     sieve/script.h \
-    sieve/sieve.y \
     sieve/tree.c \
     sieve/tree.h \
     sieve/variables.c \

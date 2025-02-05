@@ -119,7 +119,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
     if (username) {
         /* user callback */
         ret[n].id = SASL_CB_USER;
-        ret[n].proc = (mysasl_cb_ft *) &mysasl_simple_cb;
+        ret[n].proc = SASL_CB_PROC_PTR &mysasl_simple_cb;
         ret[n].context = (char *) username;
         n++;
     }
@@ -127,7 +127,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
     if (authname) {
         /* authname */
         ret[n].id = SASL_CB_AUTHNAME;
-        ret[n].proc = (mysasl_cb_ft *) &mysasl_simple_cb;
+        ret[n].proc = SASL_CB_PROC_PTR &mysasl_simple_cb;
         ret[n].context = (char *) authname;
         n++;
     }
@@ -135,7 +135,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
     if (realm) {
         /* realm */
         ret[n].id = SASL_CB_GETREALM;
-        ret[n].proc = (mysasl_cb_ft *) &mysasl_getrealm_cb;
+        ret[n].proc = SASL_CB_PROC_PTR &mysasl_getrealm_cb;
         ret[n].context = (char *) realm;
         n++;
     }
@@ -150,7 +150,7 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
 
         /* password */
         ret[n].id = SASL_CB_PASS;
-        ret[n].proc = (mysasl_cb_ft *) &mysasl_getsecret_cb;
+        ret[n].proc = SASL_CB_PROC_PTR &mysasl_getsecret_cb;
         ret[n].context = secret;
         n++;
     }
