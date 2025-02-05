@@ -496,4 +496,97 @@ sub test_proc_daemons
     }
 }
 
+sub _set_and_get_fields {
+    my ($self, $set_fields, $get_fields, $cmd) = @_;
+
+    $self->config_set(%$set_fields);
+
+    $self->_start_instances();
+
+    $cmd //= 'conf';
+
+    my %cyr_info_conf;
+    foreach my $line ($self->{instance}->run_cyr_info($cmd)) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $cyr_info_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $cyr_info_conf{$name} = $value;
+        }
+    }
+
+    for my $field (keys %$get_fields) {
+        my $expect = join q{ }, sort split /\s+/, $get_fields->{$field};
+        $self->assert_str_equals($expect, $cyr_info_conf{$field});
+    }
+}
+
+sub test_bitfield_size_conf
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # The original code used 1<<j where j could be >= 31, which was undefined
+    # behaviour and also overflowed, meaning fileinto would also list
+    # vnd.cyrus.jmapquery!
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'fileinto' },
+        { sieve_extensions => 'fileinto' },
+    );
+}
+
+sub test_bitfield_after_multiple_names
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # fields like vnd.cyrus.jmapquery=x-cyrus-jmapquery pushed the offset
+    # for any fields after that to be off by one (for each field with
+    # multiple names)
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'snooze' },
+        { sieve_extensions => 'snooze' },
+    );
+}
+
+sub test_bitfield_with_multiple_names_new
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'vnd.cyrus.jmapquery' },
+        { sieve_extensions => 'vnd.cyrus.jmapquery' },
+    );
+}
+
+sub test_bitfield_with_multiple_names_legacy
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # legacy names always come back in cyr_info as their current name
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'x-cyrus-jmapquery' },
+        { sieve_extensions => 'vnd.cyrus.jmapquery' },
+    );
+}
+
+sub test_bitfield_defaults
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $defaults = "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target";
+
+    $self->_set_and_get_fields(
+        { sieve_extensions => $defaults },
+        { sieve_extensions => $defaults },
+        'conf-default',
+    );
+}
+
 1;

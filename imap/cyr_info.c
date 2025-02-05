@@ -143,7 +143,10 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                     highlight(imapopts[i].last_modified);
                 printf("%s:", imapopts[i].optname);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    if (imapopts[i].val.x & (1<<j)) {
+                    /* multiple names? Use only the non-legacy (first) one */
+                    if (j && imapopts[i].enum_options[j].val == imapopts[i].enum_options[j-1].val)
+                        continue;
+                    if (imapopts[i].val.x & imapopts[i].enum_options[j].val) {
                         printf(" %s", imapopts[i].enum_options[j].name);
                     }
                 }
@@ -242,7 +245,10 @@ static void do_defconf(int want_since, uint32_t since)
             case OPT_BITFIELD:
                 printf("%s:", imapopts[i].optname);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
-                    if (imapopts[i].def.x & (1<<j)) {
+                    /* multiple names? Use only the non-legacy (first) one */
+                    if (j && imapopts[i].enum_options[j].val == imapopts[i].enum_options[j-1].val)
+                        continue;
+                    if (imapopts[i].def.x & imapopts[i].enum_options[j].val) {
                         printf(" %s", imapopts[i].enum_options[j].name);
                     }
                 }
