@@ -448,6 +448,7 @@ struct cursor
 {
     struct db *db;
     struct txn **txnp;
+    struct buf buf;
     const char *key; size_t keylen;
     const char *data; size_t datalen;
     int err;
@@ -461,14 +462,25 @@ static void cursor_init(struct cursor *c,
     c->txnp = txnp;
 }
 
+static void cursor_fini(struct cursor *c)
+{
+    buf_free(&c->buf);
+}
+
 static int cursor_next(struct cursor *c)
 {
-    if (!c->err)
+    if (!c->err) {
         c->err = cyrusdb_fetchnext(c->db,
                                    c->key, c->keylen,
                                    &c->key, &c->keylen,
                                    &c->data, &c->datalen,
                                    c->txnp);
+    }
+    if (!c->err) {
+        // copy the key so it's safe for fetchnext even if the file is changed
+        buf_setmap(&c->buf, c->key, c->keylen);
+        c->key = c->buf.s;
+    }
     return c->err;
 }
 
@@ -568,6 +580,9 @@ static unsigned int diff_records(struct conversations_state *a,
         rb = next_diffable_record(&cb);
     }
 
+    cursor_fini(&ca);
+    cursor_fini(&cb);
+
     return ndiffs;
 }
 
@@ -578,7 +593,7 @@ static int fix_modseqs(struct conversations_state *a,
     struct cursor ca, cb;
     char buf[80];
     int keydelta;
-    int r;
+    int r = 0;
 
     cursor_init(&ca, a->db, &a->txn);
     ra = cursor_next(&ca);
@@ -594,7 +609,7 @@ static int fix_modseqs(struct conversations_state *a,
                 conv_status_t status = CONV_STATUS_INIT;
                 /* need to add record if it's zero */
                 r = conversation_parsestatus(ca.data, ca.datalen, &status);
-                if (r) return r;
+                if (r) goto done;
                 if (status.threadexists == 0) {
                     r = conversation_storestatus(b, ca.key, ca.keylen, &status);
                     if (r) {
@@ -602,7 +617,7 @@ static int fix_modseqs(struct conversations_state *a,
                                         "record \"%.*s\" to %s: %s, giving up\n",
                                         (int)ca.keylen, ca.key,
                                         b->path, error_message(r));
-                        return r;
+                        goto done;
                     }
                 }
                 /* otherwise it's a bug, so leave it in for reporting */
@@ -651,7 +666,7 @@ static int fix_modseqs(struct conversations_state *a,
                                     b->path, error_message(r));
                     /* If we cannot write to the temp DB, something is
                      * drastically wrong and we need to report a failure */
-                    return r;
+                    goto done;
                 }
             }
         }
@@ -716,7 +731,7 @@ static int fix_modseqs(struct conversations_state *a,
                                 "record \"%.*s\" to %s: %s, giving up\n",
                                 (int)cb.keylen, cb.key,
                                 b->path, error_message(r));
-                return r;
+                goto done;
             }
         }
         if (ca.key[0] == 'G') {
@@ -733,7 +748,7 @@ static int fix_modseqs(struct conversations_state *a,
                                          "record \"%.*s\" to %s: %s, giving up\n",
                                          (int)cb.keylen, cb.key,
                                          b->path, error_message(r));
-                         return r;
+                        goto done;
                     }
                 }
             }
@@ -744,7 +759,11 @@ next:
         rb = cursor_next(&cb);
     }
 
-    return 0;
+done:
+    cursor_fini(&ca);
+    cursor_fini(&cb);
+
+    return r;
 }
 
 int do_checkfolders(const char *userid)
