@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_no_addressbookid
+    :min_version_3_9 :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            addressbookId => "Default",
+        }, 'R1']
+    ]);
+
+    $self->assert_deep_equals(
+      { type => "invalidArguments", arguments => [ "addressbookId" ] },
+      $res->[0][1],
+    );
+}
