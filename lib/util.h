@@ -468,10 +468,10 @@ typedef struct logfmt_arg_list {
     logfmt_arg *data;
 } logfmt_arg_list;
 
-#define logfmt_arg_LIST(ARRAY...) (logfmt_arg_list *)        \
-    &(logfmt_arg_list) {                                     \
-        sizeof((logfmt_arg []){ARRAY}) / sizeof(logfmt_arg), \
-        (logfmt_arg []){ARRAY}                               \
+#define logfmt_arg_LIST(...) (logfmt_arg_list *)                   \
+    &(logfmt_arg_list) {                                           \
+        sizeof((logfmt_arg []){__VA_ARGS__}) / sizeof(logfmt_arg), \
+        (logfmt_arg []){__VA_ARGS__}                               \
     }
 
 void _xsyslog_ev(int saved_errno, int priority, const char *event,
