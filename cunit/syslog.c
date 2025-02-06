@@ -63,8 +63,8 @@ extern int verbose;
 
 struct slmatch
 {
-    const char *re;         /* NULL => disabled */
-    int re_needs_free;      /* true if re is on the heap */
+    int is_used;            /* is this slot claimed? */
+    char re[1025];
     unsigned int count;
     regex_t cre;            /* compiled regex */
 };
@@ -86,7 +86,7 @@ static char *match_error(struct slmatch *sl, int r)
     int n;
 
     buf[0] = '\0';
-    if (sl->re)
+    if (*(sl->re))
         snprintf(buf, sizeof(buf)-100, "/%s/: ", sl->re);
 
     n = strlen(buf);
@@ -114,7 +114,7 @@ vlog(int prio, const char *fmt, va_list args)
         va_end(args2);
 
         for (i = 0 ; i < MAX_SLMATCH ; i++) {
-            if (!slmatches[i].re)
+            if (!slmatches[i].is_used)
                 continue; /* empty slot */
             r = regexec(&slmatches[i].cre, line, 0, NULL, 0);
             if (!r) {
@@ -206,25 +206,35 @@ unsigned int CU_syslogMatchBegin(const char *match, const char *filename,
         re = buf_release(&escaped);
     }
 
+    if (strlen(re) > 1024) {
+        CU_assertImplementation(0, lineno, "match too long, increase buffer size in syslog.c..", filename, NULL, CU_TRUE);
+    }
+
     /* find an empty slot */
     for (i = 0 ; i < MAX_SLMATCH ; i++) {
-        if (!slmatches[i].re) {
+        if (!slmatches[i].is_used) {
             /* found */
-            slmatches[i].re = re;
-            slmatches[i].re_needs_free = issubstr;
-            slmatches[i].count = 0;
             r = regcomp(&slmatches[i].cre, re, REG_EXTENDED|REG_ICASE|REG_NOSUB);
             if (r) {
+                if (issubstr)
+                    free((char*)re);
                 const char *msg = match_error(&slmatches[i], r);
                 memset(&slmatches[i], 0, sizeof(slmatches[i]));
                 CU_assertImplementation(0, lineno, msg, filename, NULL, CU_TRUE);
                 /* NOTREACHED */
                 return 0;
             }
+            strncpy(slmatches[i].re, re, 1025);
+            slmatches[i].count = 0;
+            slmatches[i].is_used = 1;
             nslmatches++;
+            if (issubstr)
+                free((char*)re);
             return i+1;
         }
     }
+    if (issubstr)
+        free((char*)re);
     CU_assertImplementation(0, lineno, "No free syslog match slots", filename, NULL, CU_TRUE);
     /* NOTREACHED */
     return 0;
@@ -237,7 +247,7 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
     const char *s = NULL;
 
     for (i = 0 ; i < MAX_SLMATCH ; i++) {
-        if (!slmatches[i].re)
+        if (!slmatches[i].is_used)
             continue; /* empty slot */
         if (match && match != i+1)
             continue; /* not the slot for @match */
@@ -249,10 +259,12 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
 
         count += slmatches[i].count;
         regfree(&slmatches[i].cre);
-        if (slmatches[i].re_needs_free) {
-            free((char *)slmatches[i].re);
-        }
-        memset(&slmatches[i], 0, sizeof(slmatches[i]));
+
+        /* reset but leave re alone. *s points to it! */
+        memset(&slmatches[i].cre, 0, sizeof(regex_t));
+        slmatches[i].count = 0;
+        slmatches[i].is_used = 0;
+
         nslmatches--;
         if (match)
             break;      /* only looking for a single slot */
