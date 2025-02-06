@@ -4345,6 +4345,7 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
     icalcomponent *myical = ical;
     icalcomponent *comp;
     struct buf buf = BUF_INITIALIZER;
+    jstimezones_t *jstzones = jstimezones_new(ical, 0);
 
     if (jmapctx && jmapctx->from_ical.repair_broken_ical) {
         repair_broken_ical(&myical);
@@ -4426,7 +4427,7 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
             ptrarray_shift(comps);
             json_array_append_new(jsevents,
                     calendarevent_from_ical(comp, NULL, props,
-                        ptrarray_size(comps) ? comps : NULL, NULL, jmapctx));
+                        ptrarray_size(comps) ? comps : NULL, jstzones, jmapctx));
         }
         else {
             // No main component, convert each instance one by one
@@ -4435,7 +4436,7 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
                 comp = ptrarray_nth(comps, j);
                 json_array_append_new(jsevents,
                         calendarevent_from_ical(comp, NULL, props,
-                            NULL, NULL, jmapctx));
+                            NULL, jstzones, jmapctx));
             }
         }
 
@@ -4447,6 +4448,7 @@ jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
     strarray_fini(&uids);
 
 done:
+    jstimezones_free(&jstzones);
     if (myical && myical != ical) {
         icalcomponent_free(myical);
     }
