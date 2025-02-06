@@ -554,7 +554,6 @@ static int list_feeds(struct transaction_t *txn)
     int fd = -1;
     struct message_guid guid;
     time_t lastmod = 0;
-    char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     int ret = 0, precond;
     struct buf *body = &txn->resp_body.payload;
@@ -611,8 +610,9 @@ static int list_feeds(struct transaction_t *txn)
     buf_setcstr(&txn->buf, message_guid_encode(&guid));
 
     /* stat() mailboxes.db for Last-Modified and ETag */
-    snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
+    char *mboxlist = mboxlist_fname();
     stat(mboxlist, &sbuf);
+    free(mboxlist);
     lastmod = MAX(lastmod, sbuf.st_mtime);
     buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
 

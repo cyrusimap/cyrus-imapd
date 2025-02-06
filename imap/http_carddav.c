@@ -1155,7 +1155,6 @@ static int addr_compare(const void *a, const void *b)
 static int list_addressbooks(struct transaction_t *txn)
 {
     int ret = 0, precond, rights;
-    char mboxlist[MAX_MAILBOX_PATH+1];
     struct stat sbuf;
     time_t lastmod;
     const char *etag;
@@ -1167,8 +1166,9 @@ static int list_addressbooks(struct transaction_t *txn)
 #include "imap/http_cal_abook_admin_js.h"
 
     /* stat() mailboxes.db for Last-Modified and ETag */
-    snprintf(mboxlist, MAX_MAILBOX_PATH, "%s%s", config_dir, FNAME_MBOXLIST);
+    char *mboxlist = mboxlist_fname();
     stat(mboxlist, &sbuf);
+    free(mboxlist);
     lastmod = MAX(compile_time, sbuf.st_mtime);
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
