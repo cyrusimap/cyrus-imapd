@@ -8,8 +8,8 @@ set -e
 : ${CONFIGOPTS:="--enable-jmap --enable-http --enable-calalarmd --enable-unit-tests --enable-replication --enable-nntp --enable-murder --enable-idled --enable-xapian --enable-autocreate --enable-silent-rules --enable-debug-slowio"}
 export LDFLAGS="-L$LIBSDIR/lib/x86_64-linux-gnu -L$LIBSDIR/lib -Wl,-rpath,$LIBSDIR/lib/x86_64-linux-gnu -Wl,-rpath,$LIBSDIR/lib"
 export PKG_CONFIG_PATH="$LIBSDIR/lib/x86_64-linux-gnu/pkgconfig:$LIBSDIR/lib/pkgconfig:\$PKG_CONFIG_PATH"
-export CFLAGS="-g -fPIC -W -Wall -Wextra -Werror -Wwrite-strings"
-export CXXFLAGS="-g -fPIC -W -Wall -Wextra -Werror"
+export CFLAGS="$CYRUS_SAN_FLAGS -g -fPIC -W -Wall -Wextra -Werror -Wwrite-strings"
+export CXXFLAGS="$CYRUS_SAN_FLAGS -g -fPIC -W -Wall -Wextra -Werror"
 export PATH="$LIBSDIR/bin:$PATH"
 autoreconf -v -i
 echo "./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5"
