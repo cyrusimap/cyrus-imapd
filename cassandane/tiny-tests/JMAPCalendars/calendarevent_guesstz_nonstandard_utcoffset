@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_guesstz_nonstandard_utcoffset
+    :needs_dependency_guesstz
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # This iCalendar object contains two non-standard timezones
+    # for which no equivalent IANA timezone can be found in the
+    # 'guesstz' timezone database. Cyrus falls back to guessing
+    # the nearest UTC offset timezone.
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+PRODID:-//Foo//Bar//EN
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Offset0430
+BEGIN:STANDARD
+DTSTART:16010101T000000
+TZOFFSETFROM:-0430
+TZOFFSETTO:-0430
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VTIMEZONE
+TZID:Offset0730
+BEGIN:STANDARD
+DTSTART:16010101T000000
+TZOFFSETFROM:-0730
+TZOFFSETTO:-0730
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:C14C9D9D-D9E0-4008-B995-A1ADEB47E3F9
+DTSTART;TZID=Offset0730:20250130T183000
+DTSTAMP:20250131T231705Z
+DURATION:PT1H
+SEQUENCE:0
+SUMMARY:offset0730
+END:VEVENT
+BEGIN:VEVENT
+UID:1F95E16C-A0EE-4041-8717-F93E175EDBF7
+DTSTART;TZID=Offset0430:20240824T153000
+DTSTAMP:20250131T231705Z
+DURATION:PT1H
+SEQUENCE:0
+SUMMARY:offset0430
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ical =~ s/\r?\n/\r\n/gs;
+
+    my $res = $jmap->CallMethods(
+        [
+            ['Blob/upload', {
+                create => {
+                    ical => {
+                        data => [ {
+                            'data:asText' => $ical,
+                        } ],
+                    },
+                },
+            }, 'R0'],
+            ['CalendarEvent/parse', {
+                blobIds    => ["#ical"],
+                properties =>
+                [ 'start', 'timeZone', 'timeZones', 'title' ],
+            },
+            'R1' ]
+        ],
+        [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/blob',
+        ]
+    );
+
+    my %timeZoneByTitle = map { $_->{title} => $_->{timeZone} }
+      @{ $res->[1][1]{parsed}{'#ical'}{entries} };
+
+    $self->assert_str_equals('Etc/GMT+8', $timeZoneByTitle{offset0730});
+    $self->assert_str_equals('Etc/GMT+5', $timeZoneByTitle{offset0430});
+}
