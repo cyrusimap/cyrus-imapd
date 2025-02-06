@@ -1094,6 +1094,10 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
     /* Process custom timezones */
     struct buf idbuf = BUF_INITIALIZER;
 
+    // Lookup the first VEVENT, we'll use its DTSTART to determine
+    // the timezone for non-standard UTC offsets later.
+    icalcomponent *realcomp = icalcomponent_get_first_real_component(ical);
+
     for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
          vtz;
          vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
@@ -1132,13 +1136,12 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
             if (!buf_len(&idbuf)) {
                 /* Could not guess IANA timezone name by comparing timezone
                  * rules. Let's determine the closest "Etc/GMT+X" timezone. */
-                icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-                if (comp) {
+                if (realcomp) {
                     icalcomponent *tmpvtz = icalcomponent_clone(myvtz);
                     icaltimezone *tmptz = icaltimezone_new();
                     icaltimezone_set_component(tmptz, tmpvtz);
 
-                    icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+                    icaltimetype dtstart = icalcomponent_get_dtstart(realcomp);
                     int is_daylight = 0;
                     int offset = icaltimezone_get_utc_offset(tmptz, &dtstart, &is_daylight);
 
