@@ -1810,6 +1810,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mboxname_lockpath", NULL, STRING, "2.4.0" }
 /* Path to mailbox name lock files (default $conf/lock) */
 
+{ "mboxname_userpath", NULL, STRING, "UNRELEASED" }
+/* Path to mailbox name lock files (default configdirectory/) */
+
 { "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "annotations", "lock", "dav", "archivecache"), "3.0.0" }
 /* Space-separated list of metadata files to be stored on a
    \fImetapartition\fR rather than in the mailbox directory on a spool

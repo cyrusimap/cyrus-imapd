@@ -4896,7 +4896,7 @@ EXPORTED void mboxlist_init(void)
     mboxlist_initialized = 1;
 }
 
-static char *mboxlist_fname(void)
+EXPORTED char *mboxlist_fname(void)
 {
     const char *fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
 

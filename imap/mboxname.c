@@ -2387,10 +2387,13 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
     char *fname = NULL;
     char c[2], d[2];
 
+    const char *root = config_getstring(IMAPOPT_MBOXNAME_USERPATH);
+    if (!root) root = config_dir;
+
     if (mbname->localpart) {
         if (mbname->domain) {
             if (suffix) {
-                fname = strconcat(config_dir,
+                fname = strconcat(root,
                                   FNAME_DOMAINDIR,
                                   dir_hash_b(mbname->domain, config_fulldirhash, d),
                                   "/", mbname->domain,
@@ -2400,7 +2403,7 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
                                   (char *)NULL);
             }
             else {
-                fname = strconcat(config_dir,
+                fname = strconcat(root,
                                   FNAME_DOMAINDIR,
                                   dir_hash_b(mbname->domain, config_fulldirhash, d),
                                   "/", mbname->domain,
@@ -2411,14 +2414,14 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
         }
         else {
             if (suffix) {
-                fname = strconcat(config_dir,
+                fname = strconcat(root,
                                   FNAME_USERDIR,
                                   dir_hash_b(mbname->localpart, config_fulldirhash, c),
                                   "/", mbname->localpart, ".", suffix,
                                   (char *)NULL);
             }
             else {
-                fname = strconcat(config_dir,
+                fname = strconcat(root,
                                   FNAME_USERDIR,
                                   dir_hash_b(mbname->localpart, config_fulldirhash, c),
                                   (char *)NULL);
@@ -2427,7 +2430,7 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
     }
     else if (mbname->domain) {
         if (suffix) {
-            fname = strconcat(config_dir,
+            fname = strconcat(root,
                               FNAME_DOMAINDIR,
                               dir_hash_b(mbname->domain, config_fulldirhash, d),
                               "/", mbname->domain,
@@ -2435,7 +2438,7 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
                               (char *)NULL);
         }
         else {
-            fname = strconcat(config_dir,
+            fname = strconcat(root,
                               FNAME_DOMAINDIR,
                               dir_hash_b(mbname->domain, config_fulldirhash, d),
                               "/", mbname->domain,
@@ -2444,12 +2447,12 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
     }
     else {
         if (suffix) {
-            fname = strconcat(config_dir,
+            fname = strconcat(root,
                               "/", FNAME_SHAREDPREFIX, ".", suffix,
                               (char *)NULL);
         }
         else {
-            fname = xstrdup(config_dir);
+            fname = xstrdup(root);
         }
     }
 
@@ -2463,14 +2466,17 @@ EXPORTED char *mboxid_conf_getpath(const char *mboxid, const char *suffix)
 
     mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mboxid);
 
+    const char *root = config_getstring(IMAPOPT_MBOXNAME_USERPATH);
+    if (!root) root = config_dir;
+
     if (suffix) {
-        fname = strconcat(config_dir,
+        fname = strconcat(root,
                           FNAME_USERDIR,
                           path, "/", suffix, ".db",
                           (char *)NULL);
     }
     else {
-        fname = strconcat(config_dir,
+        fname = strconcat(root,
                           FNAME_USERDIR,
                           path,
                           (char *)NULL);
