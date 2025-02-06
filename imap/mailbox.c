@@ -4382,11 +4382,15 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
     struct conversations_state *cstate = conversations_get_mbox(mailbox_name(mailbox));
     if (cstate) return cstate;
 
-    /* open the conversations DB - don't bother checking return code since it'll
-     * only be set if it opens successfully, and we can only return NULL or an
-     * object */
+    /* open the conversations DB - abort if this fails */
     int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
-    conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->local_cstate);
+    int r = conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->local_cstate);
+    if (r) {
+        xsyslog(LOG_ERR, "DBERROR: failed to open conversations",
+                "mboxname=<%s> ro=<%s> error=<%s>", mailbox_name(mailbox),
+                is_readonly ? "yes" : "no", error_message(r));
+        abort();
+    }
     return mailbox->local_cstate;
 }
 
