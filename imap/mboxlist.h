@@ -411,6 +411,7 @@ int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */
 void mboxlist_open(const char *name);
+char *mboxlist_fname();
 
 /* close the database */
 void mboxlist_close(void);
