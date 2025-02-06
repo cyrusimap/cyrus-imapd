@@ -51,7 +51,6 @@
 struct protstream;
 struct index_state;
 
-/* keep this in sync with search_op_name in search_expr.c */
 enum search_op {
     SEOP_UNKNOWN,
     SEOP_TRUE,
@@ -71,7 +70,6 @@ enum search_op {
     SEOP_OR,
     SEOP_NOT,
 };
-extern const char *search_op_name[];
 
 union search_value {
     time_t t;
