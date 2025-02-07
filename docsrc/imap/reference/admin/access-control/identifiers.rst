@@ -82,6 +82,52 @@ a non-/etc/passwd backend. Note that using unix groups in this way
     NSS augmentations, such as ``nss_ldap``, ``pam_ldap`` or ``sssd``
     may be used to provide Cyrus access to group information via NSS.
 
+mboxgroups Authorization
+------------------------
+
+::
+
+    auth_mech: mboxgroups
+
+The mboxgroups authorization mechanism is like the Unix mechanism, but it
+looks for groups stored in the mailboxes.db instead of the system groups file.
+
+When this authorization mechanism is in use, imapd will report the capability
+``XUSERGROUPS``, and admins can use the IMAP commands ``GETUSERGROUP``,
+``SETUSERGROUP``, and ``UNSETUSERGROUP`` for group management.
+
+    **GETUSERGROUP** *item*
+
+        If *item* is a userid, returns the groups the user belongs to.  If
+        *item* is a group identifier, returns its members.
+
+        ::
+
+            C: 8 GETUSERGROUP cassandane
+            S: * USERGROUP cassandane ("group:group c" "group:group co")
+            S: 8 OK Completed
+            C: 9 GETUSERGROUP "group:group co"
+            S: * USERGROUP "group:group co" (cassandane otheruser)
+            S: 9 OK Completed
+
+    **SETUSERGROUP** *userid* *group*
+
+        Adds *userid* as a member of *group*
+
+        ::
+
+            C: 9 SETUSERGROUP cassandane "group:new group"
+            S: 9 OK Completed
+
+    **UNSETUSERGROUP** *userid* *group*
+
+        Removes *userid* from *group*
+
+        ::
+
+            C: 9 UNSETUSERGROUP cassandane "group:group c"
+            S: 9 OK Completed
+
 Kerberos Authorization
 ----------------------
 
