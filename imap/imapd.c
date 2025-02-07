@@ -1923,6 +1923,7 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_GETQUOTA_TOTAL);
             }
             else if (!strcmp(cmd.s, "Getusergroup")) {
+                if (!imapd_userisadmin) goto adminsonly;
                 if (c != ' ') goto missingargs;
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c == EOF) goto missingargs;
