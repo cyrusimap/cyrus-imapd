@@ -97,6 +97,28 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub imap_getusergroup
+{
+    my ($self, $talk, $item) = @_;
+
+    my $usergroups = {};
+    my $handlers = {
+        'usergroup' => sub {
+            my (undef, $response) = @_;
+
+            my %ug = @{$response};
+            while (my ($user, $groups) = each %ug) {
+                $usergroups->{$user} = { map { $_ => 1 } @{$groups} };
+            }
+        },
+    };
+
+    $talk->_imap_cmd('GETUSERGROUP', 0, $handlers, $item);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    return $usergroups;
+}
+
 sub test_setacl_groupid
 {
     my ($self) = @_;
@@ -296,6 +318,122 @@ sub test_list_order_racl
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
+}
+
+sub test_nonadmin_group_mgmt
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # should have the xusergroups capability
+    $self->assert_not_null($talk->capability()->{xusergroups});
+
+    # group management commands are admin-only
+    $talk->_imap_cmd('GETUSERGROUP', 0, '', 'cassandane');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:foo');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('UNSETUSERGROUP', 0, '', 'cassandane', 'group:foo');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}
+
+sub test_admin_getusergroup
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # should have the xusergroups capability
+    $self->assert_not_null($admintalk->capability()->{xusergroups});
+
+    # get a user's groups
+    my $usergroups = $self->imap_getusergroup($admintalk, 'cassandane');
+    $self->assert_not_null($usergroups->{'cassandane'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group c'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group co'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group o'});
+
+    # get a group's users
+    $usergroups = $self->imap_getusergroup($admintalk, 'group:group co');
+    $self->assert_not_null($usergroups->{'group:group co'});
+    $self->assert_not_null($usergroups->{'group:group co'}->{'cassandane'});
+    $self->assert_not_null($usergroups->{'group:group co'}->{'otheruser'});
+    $self->assert_null($usergroups->{'group:group co'}->{'nobody'});
+}
+
+sub test_admin_setusergroup
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # should have the xusergroups capability
+    $self->assert_not_null($admintalk->capability()->{xusergroups});
+
+    # get a user's groups
+    my $usergroups = $self->imap_getusergroup($admintalk, 'cassandane');
+    $self->assert_not_null($usergroups->{'cassandane'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group c'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group co'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group o'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:new group'});
+
+    # set membership in a new group
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '',
+                          'cassandane', 'group:new group');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # get the groups again, should be in new group now
+    $usergroups = $self->imap_getusergroup($admintalk, 'cassandane');
+    $self->assert_not_null($usergroups->{'cassandane'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group c'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group co'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group o'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:new group'});
+
+    # get the new group's membership, should contain (only) the user
+    $usergroups = $self->imap_getusergroup($admintalk, 'group:new group');
+    $self->assert_not_null($usergroups->{'group:new group'});
+    $self->assert_not_null($usergroups->{'group:new group'}->{'cassandane'});
+    $self->assert_equals(1, scalar keys %{$usergroups->{'group:new group'}});
+}
+
+sub test_admin_unsetusergroup
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # should have the xusergroups capability
+    $self->assert_not_null($admintalk->capability()->{xusergroups});
+
+    # get a user's groups
+    my $usergroups = $self->imap_getusergroup($admintalk, 'cassandane');
+    $self->assert_not_null($usergroups->{'cassandane'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group c'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group co'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group o'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:new group'});
+
+    # remove membership from a group
+    $admintalk->_imap_cmd('UNSETUSERGROUP', 0, '',
+                          'cassandane', 'group:group c');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # get the groups again, shouldn't be in the group anymore
+    $usergroups = $self->imap_getusergroup($admintalk, 'cassandane');
+    $self->assert_not_null($usergroups->{'cassandane'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group c'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group co'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group o'});
+
+    # get the group's membership, shouldn't contain the user
+    $usergroups = $self->imap_getusergroup($admintalk, 'group:group c');
+    $self->assert_not_null($usergroups->{'group:group c'});
+    $self->assert_null($usergroups->{'group:group c'}->{'cassandane'});
 }
 
 1;
