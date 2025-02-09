@@ -886,6 +886,7 @@ out:
 struct findstage_cb_rock {
     const char *partition;
     const char *guid;
+    struct timespec *internaldate;
     char *fname;
 };
 
@@ -893,13 +894,32 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
 {
     struct findstage_cb_rock *rock = vrock;
     mbentry_t *mbentry = NULL;
+    int r, ret = 0;
 
     if (rec->part) return 0;
-    // no point copying from archive, spool is on data
-    if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) return 0;
 
-    int r = conv_guidrec_mbentry(rec, &mbentry);
-    if (r) return 0;
+    if (rock->internaldate && rec->version == 4 &&
+        !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        r = conv_guidrec_mbentry(rec, &mbentry);
+        if (r) return 0;
+
+        if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
+            // found a non-expunged duplicate email; use its internaldate
+            TIMESPEC_FROM_NANOSEC(rock->internaldate, rec->internaldate);
+            if (!rock->partition) {
+                ret = CYRUSDB_DONE;
+                goto done;
+            }
+        }
+    }
+
+    // no point copying from archive, spool is on data
+    if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) goto done;
+
+    if (!mbentry) {
+        r = conv_guidrec_mbentry(rec, &mbentry);
+        if (r) return 0;
+    }
 
     if (!strcmp(rock->partition, mbentry->partition)) {
         struct stat sbuf;
@@ -921,9 +941,10 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
         }
     }
 
+  done:
     mboxlist_entry_free(&mbentry);
 
-    return rock->fname ? CYRUSDB_DONE : 0;
+    return rock->fname ? CYRUSDB_DONE : ret;
 }
 
 /*
@@ -974,29 +995,38 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
-    if (!nolink) {
+    uint32_t mbtype = mbtype_isa(mailbox_mbtype(mailbox));
+    struct timespec existing_internaldate = { 0, UTIME_OMIT };
+    if (!nolink || mbtype == MBTYPE_EMAIL) {
         /* attempt to find an existing message with the same guid
-           and use it as the stagefile */
+           and use it as the stagefile and/or use its internaldate */
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
         if (cstate) {
-            char *guid = xstrdup(message_guid_encode(&(*body)->guid));
-            struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
+            char guid[2*MESSAGE_GUID_SIZE+1];
+            struct findstage_cb_rock rock = {
+                nolink ? NULL : mailbox_partition(mailbox),
+                strcpy(guid, message_guid_encode(&(*body)->guid)),
+                mbtype == MBTYPE_EMAIL ? &existing_internaldate : NULL,
+                NULL/*fname*/
+            };
 
             // ignore errors, it's OK for this to fail
             conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
 
-            // if we found a file, remember it
-            if (rock.fname) {
-                syslog(LOG_NOTICE, "found existing file %s for %s; linking", guid, rock.fname);
-                linkfile = rock.fname;
-            }
+            // if we found a matching message, use its internaldate
+            if (existing_internaldate.tv_nsec != UTIME_OMIT)
+                internaldate = &existing_internaldate;
 
-            free(guid);
+            // if we found a file, use it
+            if (rock.fname) {
+                syslog(LOG_NOTICE, "found existing file %s for %s; linking",
+                       guid, rock.fname);
+                linkfile = rock.fname;
+                goto havefile;
+            }
         }
     }
-
-    if (linkfile) goto havefile;
 
     for (i = 0 ; i < stage->parts.count ; i++) {
         /* ok, we've successfully created the file */
