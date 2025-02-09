@@ -51,7 +51,7 @@ static void test_bin_to_hex(void)
 {
     static const unsigned char BIN[4] = { 0xca, 0xfe, 0xba, 0xbe };
     static const char HEX[9] = "cafebabe";
-    char hex[9];
+    char hex[9] __attribute__((aligned(2)));
     ASSERT_TO_HEX(BIN, HEX, hex, BH_LOWER);
 }
 
@@ -62,7 +62,7 @@ static void test_bin_to_hex_long(void)
         0x6f,0x9f,0xfa,0x77,0xe4,0x04,0x84,0x04,0xa0,0x02
     };
     static const char HEX[41] = "33ac18b6dc746e9ad7bd6f9ffa77e4048404a002";
-    char hex[41];
+    char hex[41] __attribute__((aligned(2)));
     ASSERT_TO_HEX(BIN, HEX, hex, BH_LOWER);
 }
 
@@ -70,7 +70,7 @@ static void test_bin_to_hex_short(void)
 {
     static const unsigned char BIN[1] = { 0x42 };
     static const char HEX[3] = "42";
-    char hex[3];
+    char hex[3] __attribute__((aligned(2)));
     ASSERT_TO_HEX(BIN, HEX, hex, BH_LOWER);
 }
 
