@@ -103,6 +103,12 @@ my %commands =
         xlog "clear_flag($flag)";
         $message->clear_flag($flag);
     },
+
+    # These are here so that syntactically valid Sieve scripts can be appended,
+    # and go through the test annotator daemon, and not crash it before hitting
+    # instructions inside the comments.  Weird, right? -- rjbs, 2025-01-29
+    '/*' => sub {},
+    '*/' => sub {},
 );
 
 sub annotate_message

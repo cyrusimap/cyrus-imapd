@@ -52,15 +52,27 @@ sub new
 {
     my $class = shift;
     my $config = Cassandane::Config->default()->clone();
+
     $config->set(
         annotation_callout => '@basedir@/conf/socket/annotator.sock',
+        conversations => 'yes',
+        httpmodules => 'jmap',
+        jmap_nonstandard_extensions => 'yes',
     );
-    return $class->SUPER::new({
+
+    my $self = $class->SUPER::new({
         config => $config,
         deliver => 1,
         start_instances => 0,
         adminstore => 1,
+
+        jmap => 1,
+        services => [ 'imap', 'sieve', 'http' ]
     }, @_);
+
+    $self->needs('component', 'jmap');
+
+    return $self;
 }
 
 sub set_up
@@ -496,6 +508,75 @@ sub test_log_missing_acl
                     . "flag=<\\$_->{flag}> need_rights=<$_->{need_rights}>";
         $self->assert_syslog_matches($self->{instance}, qr{$wantLog});
     }
+}
+
+sub test_no_annotate_sieve
+    :min_version_3_3 :JMAPExtensions :MagicPlus
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+    $self->_setup_http_service_objects();
+
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:sieve',
+        'https://cyrusimap.org/ns/jmap/sieve',  # for SieveScript/test
+        'https://cyrusimap.org/ns/jmap/blob',
+    ]);
+
+    my $flag = '$Artisanal';
+
+    my $sieve = <<~"EOF";
+        /*
+        set_flag $flag
+        */
+        EOF
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => $sieve}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            onSuccessActivateScript => "#1",
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                }
+            }
+         }, "R1"]
+    ]);
+
+    $self->assert_not_null($res);
+
+    my $script_blob_id = $res->[1][1]{created}{"1"}{blobId};
+    $self->assert_not_null($script_blob_id);
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $plustalk = $plusstore->get_client();
+
+    # $self->assert_str_equals("x", Dumper($plustalk->list));
+
+    $plustalk->select('#sieve');
+    my $data = $plustalk->fetch('1:*', "(flags)");
+
+    my (@values) = values %$data;
+    $self->assert_num_equals(1, 0+@values);
+
+    my %has_flag = map {; $_ => 1 } $values[0]{flags}->@*;
+
+    # It will be activated, so flagged.  This shows that we managed to fetch
+    # the flags at all.
+    $self->assert_not_null($has_flag{'\\Flagged'});
+
+    # The annotator did not fire and annotate.
+    $self->assert_null($has_flag{$flag});
 }
 
 1;

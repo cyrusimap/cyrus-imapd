@@ -1,0 +1,21 @@
+Description:
+
+The annotator callback is only called on items added to email-type mailboxes.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+In general, no action is required.  In the very unlikely instance that your
+installation was relying on an annotator callout processing non-email appends
+(like Sieve, events, or contacts), you will need to find another solution.  The
+core team does not believe such a configuration is likely to exist.
+
+
+GitHub issue:
+
+None.
