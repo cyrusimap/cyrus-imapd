@@ -56,7 +56,7 @@ die "$filename appears to use Cassandane::Tiny::Loader already!\n"
 
 LINE: while ($_ = shift @lines) {
   if (/^sub test_(\S+)/) {
-    my $file = $1 =~ s/_/-/gr;
+    my $file = $1;
     say $file;
 
     my @test_buffer;
