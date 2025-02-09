@@ -103,11 +103,17 @@ struct tm_file {
 };
 
 /* a location in the twom file.  We always have:
- * offset: if "is_exactmatch" this points to the record
- *         with the matching key, otherwise it points to
- *         the 'compar' order previous record.
+ * offset: if a match this points to the record
+ *         with the matching key, otherwise it is zero.
+ * deleted_offset: if this is a deleted record, then
+ *         deleted_offset points at the DELETE record
+ *         and offset points at the ADD or REPLACE
+ *         record with the matching key.  The
+ *         ANCESTOR of the DELETE record will always
+ *         be the same as 'offset'.
  * backloc: the records that point TO this location
- *          at each level.
+ *          at each level, so the `compar` previous
+ *          key.
  * end: can be used to see if anything in the file may
  *      have changed and needs relocation.
  */
@@ -115,7 +121,6 @@ struct tm_loc {
     struct tm_file *file;
     size_t end;               // pointers are only valid when end matches file end
     size_t offset;            // current position
-    unsigned is_exactmatch:1; // key was passed in; did we match it?
     size_t deleted_offset;    // was there a deletion in front of the current record?
     size_t backloc[MAXLEVEL+1]; // previous record at every level
 };
@@ -137,8 +142,6 @@ struct twom_txn {
 struct twom_cursor {
     struct tm_loc loc;
     struct twom_txn *txn;
-    unsigned started:1;
-    unsigned done:1;
     unsigned alwaysyield:1;
 };
 
@@ -218,6 +221,7 @@ static inline void *twom_zmalloc(size_t bytes)
 #define PAD8(n) (((n)+7)&~7)
 
 // lots of direct accessors for every part of a message!
+#define LOCBACKPTR(loc, n) ((loc)->file->base + (loc)->backloc[n])
 #define LOCPTR(loc) ((loc)->file->base + (loc)->offset)
 #define TYPE(ptr) (*((uint8_t *)(ptr)))
 #define LEVEL(ptr) (*((uint8_t *)(ptr+1)))
@@ -762,15 +766,14 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
 #endif
 static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, size_t keylen)
 {
-    size_t offset = 0;
+    size_t offset = DUMMY_OFFSET;
     uint8_t level = MAXLEVEL-1;
     int cmp = -1; /* never found a thing! */
-    const char *ptr = NULL;
     struct tm_file *file = loc->file;
+    const char *ptr = NULL;
 
-    // Set the location to the beginning of the file
-    loc->offset = DUMMY_OFFSET;
-    loc->is_exactmatch = 0;
+    // reset the location
+    loc->offset = 0;
     loc->deleted_offset = 0;
 
     /* if we don't even have space for the DUMMY record in our mapped file,
@@ -791,15 +794,13 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
 
     /* at every level except zero, walk the pointers at this level until we either hit a record
      * at or past the one we're looking for. */
+    size_t futureoffset = 0; // efficiency hack, remember the offset we just saw in the future
     while (level) {
-        loc->backloc[level] = loc->offset;
-
+        size_t next = NEXTN(locptr, level);
         /* optimisation: if the next address is the same on levels N and N-1,
          * we don't need to compar the key again */
-        size_t next = NEXTN(locptr, level);
-        if (next && next != offset) {
-            offset = next;
-            ptr = safeptr(loc, offset);
+        if (next && next != futureoffset) {
+            ptr = safeptr(loc, next);
             if (!ptr) return TWOM_IOERROR;
 
             cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
@@ -807,123 +808,61 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
 
             /* not there?  stay at this level */
             if (cmp < 0) {
-                loc->offset = offset;
                 locptr = ptr;
+                offset = next;
                 continue;
             }
             /* NOTE: if we match exactly, we still need to make sure all the back
              * pointers at the lower levels are correct, so we still drop down to
              * the next level and repeat the algorithm */
+            futureoffset = next;
         }
 
+        loc->backloc[level] = offset;
         level--;
     }
 
-    while (loc->offset) {
-        loc->backloc[0] = loc->offset;
+    while (offset) {
         size_t next = advance0(locptr);
-        if (!next) break; // reached the end
+        if (!next) {
+            // hit the end!  No match
+            loc->backloc[0] = offset;
+            return 0;
+        }
 
-        offset = next;
-        ptr = safeptr(loc, offset);
+        size_t deleted_offset = 0;
+        ptr = safeptr(loc, next);
         if (!ptr) return TWOM_IOERROR;
         if (TYPE(ptr) == DELETE) {
-            loc->deleted_offset = offset;
-            offset = ANCESTOR(ptr);
-            ptr = safeptr(loc, offset);
+            deleted_offset = next;
+            next = ANCESTOR(ptr);
+            if (!next) return TWOM_IOERROR;
+            ptr = safeptr(loc, next);
             if (!ptr) return TWOM_IOERROR;
-        }
-        else {
-            loc->deleted_offset = 0;
         }
 
         cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
                            key, keylen);
 
-        if (cmp >= 0)
-            break;
         // if we match exactly or see into the future, we're there!
-
-        loc->offset = offset;
+        if (cmp > 0) {
+            // we're past, no match
+            loc->backloc[0] = offset;
+            return 0;
+        }
+        else if (!cmp) {
+            // we found it, track the previous offset
+            loc->backloc[0] = offset;
+            offset = next;
+            loc->offset = offset;
+            loc->deleted_offset = deleted_offset;
+            return check_headcsum(txn, loc->file, ptr, next);
+        }
         locptr = ptr;
+        offset = next;
     }
 
-    /* now that we've finished looping through every level, the backloc array points to
-     * the immediately previous record at every level, and offset points to either the
-     * exact match record, or the record immediately afterwards.
-     */
-
-    // found an exact match?  Great
-    if (!cmp) {
-        loc->is_exactmatch = 1;
-        loc->offset = offset;
-        return check_headcsum(txn, loc->file, ptr, offset);
-    }
-
-    // otherwise we're located immediately before, and is_exactmatch is still zero.
-    return 0;
-}
-
-/* relocate()
- *
- * db: a database, with a read or write locked file (not necessarily the most recent)
- * txn: a transaction which points to a locked file, which may or may not be the most
- *      recent (for a read-only transaction in MVCC it could be an older file), and
- *      which has an 'end' value which is the MVCC end for the view we're in
- * loc: a previously 'locate'd location which contains a file (possibly not locked)
- *      and an offset into the mmap on on that file for a record which contains the
- *      key data for that location.
- *
- * Since files are refcounted, the mmap in 'loc' is guaranteed to have not been cleared
- * yet, though it may have been unmapped and remapped, and it might be dirty or have
- * had pointers changed inside or outside a lock, BUT:
- *  * TYPE can't change
- *  * LEVEL can't change
- *  * KEYLEN and VALLEN can't change
- *  * KEY and VAL content can't change
- * So it's guaranteed that a read of the key data from the map in loc's file will be
- * clean and give the correct key to use for a 'locate'.
- */
-#ifdef HAVE_DECLARE_OPTIMIZE
-static int relocate(struct twom_txn *txn, struct tm_loc *loc)
-    __attribute__((optimize("-O3")));
-#endif
-static int relocate(struct twom_txn *txn, struct tm_loc *loc)
-{
-    // If the file is the same and the end hasn't moved, this location is still valid
-    // and the backloc pointers are still correct
-    if (loc->file == txn->file && loc->end == loc->file->written_size) return 0;
-
-    // new file, or current one extended?  Either way, we're going to have to locate
-    // the correct offset in the file and end that's in txn
-    const char *key = NULL;
-    size_t len = 0;
-    // no pointer or points to DUMMY? either way locate at the start of the new file.
-    if (loc->offset > DUMMY_OFFSET) {
-        const char *locptr = LOCPTR(loc);
-        key = KEYPTR(locptr);  // will remain valid until the tm_cleanup below
-        len = KEYLEN(locptr);
-    }
-
-    // update to the new file if necessary (just efficiency to check; common case is no
-    // change and this way we avoid extra refcount math on the file)
-    if (loc->file != txn->file) {
-        if (loc->file) loc->file->refcount--;
-        loc->file = txn->file;
-        loc->file->refcount++;
-    }
-    loc->end = loc->file->written_size;
-
-    // loc now contains the correct file and end, so we can use 'locate' to re-find the
-    // correct offset for the same key from above
-    int r = locate(txn, loc, key, len);
-    if (r) return r;
-
-    // finally the old loc may now be un-referenced.  If so, we can clean it up now because
-    // we have successfully used the old offset to find the key and relocated the loc pointer
-    // into the new correct location for that key.
-    tm_cleanup(txn->db);
-    return 0;
+    return TWOM_INTERNAL;
 }
 
 /* advance_loc()
@@ -943,42 +882,67 @@ static int advance_loc(struct twom_txn *txn, struct tm_loc *loc)
 #endif
 static int advance_loc(struct twom_txn *txn, struct tm_loc *loc)
 {
-    int r = relocate(txn, loc);
-    if (r) return r;
+    // need to read ptr BEFORE we potentially switch the file pointer
+    // below
+    const char *ptr = loc->offset ? LOCPTR(loc) : LOCBACKPTR(loc, 0);
 
-    const char *ptr = LOCPTR(loc);
+    // update to the new file if the transaction has refreshed
+    if (loc->file != txn->file) {
+        loc->file->refcount--;
+        loc->file = txn->file;
+        loc->file->refcount++;
+        loc->end = 0;
+    }
 
-    /* up to the level of the current record, this record will become the "previous" record
-     * at each level, regardless of the level of the next record */
-    uint8_t level = LEVEL(ptr);
-    int i;
-    for (i = 0; i < level; i++)
-        loc->backloc[i] = loc->offset;
+    // if file has changed, either new file or extended,
+    // then we need to re-calculate our location
+    if (loc->end != loc->file->written_size) {
+        int was_inexact = !loc->offset;
+        const char *key = KEYPTR(ptr);
+        size_t keylen = KEYLEN(ptr);
+        loc->end = loc->file->written_size;
+        int r = locate(txn, loc, key, keylen);
+        if (r) return r;
+        if (was_inexact) {
+            loc->deleted_offset = 0;
+            loc->offset = 0;
+        }
+        ptr = loc->offset ? LOCPTR(loc) : LOCBACKPTR(loc, 0);
+        // now we've re-mapped, we might have something to clean up
+        tm_cleanup(txn->db);
+    }
 
-    /* advance0 always get the exactly next record in the series, since it finds the level=1
-     * pointer after using the skip math to eliminate anything past the location end (e.g.
-     * outside the transaction) */
+    /* If we had an offset, advance the backloc to this record, so the location now points
+     * immediately after this record as if we had found a key in the gap */
+    if (loc->offset) {
+        uint8_t n;
+        uint8_t level = LEVEL(ptr);
+        for (n = 0; n < level; n++)
+            loc->backloc[n] = loc->offset;
+        loc->deleted_offset = 0;
+        loc->offset = 0;
+    }
+
+    /* advance0 always get the exactly next record in the series, since it finds the level0
+     * pointer after using the skip math to pick the highest value */
     size_t offset = advance0(ptr);
 
     /* reached the end:
-     * will have is_exactmatch == 0, so will break foreach */
-    if (!offset) return locate(txn, loc, NULL, 0);
+     * will have offset == 0, so will break foreach */
+    if (!offset) return TWOM_DONE;
 
     ptr = safeptr(loc, offset);
     if (!ptr) return TWOM_IOERROR;
     if (TYPE(ptr) == DELETE) {
         loc->deleted_offset = offset;
         offset = ANCESTOR(ptr);
+        if (!offset) return TWOM_IOERROR;
         ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
-    }
-    else {
-        loc->deleted_offset = 0;
     }
 
     /* make sure this record is complete */
     loc->offset = offset;
-    loc->is_exactmatch = 1;
     return check_headcsum(txn, loc->file, ptr, offset);
 }
 
@@ -998,50 +962,50 @@ static int find_loc(struct twom_txn *txn, struct tm_loc *loc, const char *key, s
         loc->end = loc->file->written_size;
         int r = locate(txn, loc, key, keylen);
         if (r) return r;
+        // we may have released the last reference, so clean up
         tm_cleanup(txn->db);
         return 0;
     }
 
-    const char *locptr = LOCPTR(loc);
-    int cmp = loc->file->compar(KEYPTR(locptr), KEYLEN(locptr), key, keylen);
-    if (!cmp && loc->is_exactmatch) {
+    const char *ptr = loc->offset ? LOCPTR(loc) : LOCBACKPTR(loc, 0);
+    int cmp = loc->file->compar(KEYPTR(ptr), KEYLEN(ptr), key, keylen);
+    if (!cmp && loc->offset) {
         // we haven't moved
         return 0;
     }
 
     // key is in the future?  let's see if it's next!
     if (cmp < 0) {
-        size_t offset = advance0(locptr);
-        if (!offset) {
-            // EOF
-            loc->is_exactmatch = 0;
-            return 0;
+        loc->deleted_offset = 0;
+        if (loc->offset) {
+            uint8_t n;
+            uint8_t level = LEVEL(ptr);
+            for (n = 0; n < level; n++)
+                loc->backloc[n] = loc->offset;
+            loc->offset = 0;
         }
-        const char *ptr = safeptr(loc, offset);
+        size_t deleted_offset = 0;
+        size_t offset = advance0(ptr);
+
+        // did we reach the end?
+        if (!offset) return 0;
+
+        ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
         if (TYPE(ptr) == DELETE) {
-            loc->deleted_offset = offset;
+            deleted_offset = offset;
             offset = ANCESTOR(ptr);
+            if (!offset) return TWOM_IOERROR;
             ptr = safeptr(loc, offset);
             if (!ptr) return TWOM_IOERROR;
         }
-        else {
-            loc->deleted_offset = 0;
-        }
         cmp = loc->file->compar(KEYPTR(ptr), KEYLEN(ptr), key, keylen);
-        if (cmp > 0) {
-            // it's in the gap
-            loc->is_exactmatch = 0;
-            return 0;
-        }
-        else if (cmp == 0) {
-            // found it
-            int i;
-            uint8_t level = LEVEL(locptr);
-            for (i = 0; i < level; i++)
-                loc->backloc[i] = loc->offset;
+        // it's in the gap?
+        if (cmp > 0) return 0;
+        // found it?
+        if (cmp == 0) {
+            loc->deleted_offset = deleted_offset;
             loc->offset = offset;
-            loc->is_exactmatch = 1;
             return check_headcsum(txn, loc->file, ptr, offset);
         }
     }
@@ -1072,15 +1036,16 @@ static int delete_here(struct twom_txn *txn, struct tm_loc *loc)
     *((uint8_t *)(addr)) = DELETE;
     addr += 8;
 
-    char *backptr = file->base + loc->backloc[0];
-    char *prevptr = backptr;
-    *((uint64_t *)(addr)) = htole64(loc->offset);
+    // update the level0 back record and re-checksum
+    char *backptr = LOCBACKPTR(loc, 0);
     SET0(file, backptr, offset);
+    _recsum(file, backptr);
+
+    // set ancestor to current record
+    *((uint64_t *)(addr)) = htole64(loc->offset);
     addr += 8;
 
-    // update the old checksum
-    _recsum(file, prevptr);
-
+    // calculate checksum of current record
     *((uint32_t *)(addr)) = htole32(file->csum(base, headlen));
 
     /* update header to know details of new record */
@@ -1108,9 +1073,9 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
 
     struct twom_db *db = txn->db;
     struct tm_loc *loc = &db->loc;
-    const char *locptr = LOCPTR(loc);
-    assert(txn->file == loc->file);
     struct tm_file *file = loc->file;
+    assert(file == txn->file);
+    assert(file == db->openfile);
     struct tm_header *header = &file->header;
     size_t keyoffset = 0;
     size_t valoffset = 0;
@@ -1134,7 +1099,9 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         if (r) return r;
     }
 
-    if (loc->is_exactmatch) {
+    uint8_t level;
+    if (loc->offset) {
+        const char *locptr = LOCPTR(loc);
         // if was a delete we'll point back to that
         if (loc->deleted_offset) {
             assert(val); // can't replace a delete with another delete!
@@ -1148,25 +1115,23 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         }
         // new type
         type = val ? REPLACE : DELETE;
+        level = LEVEL(locptr);
     }
-    else assert(val); // can't start with a delete
+    else {
+        assert(val); // can't start with a delete
+        level = randlvl(1, MAXLEVEL);
+    }
 
     if (type == DELETE) return delete_here(txn, loc);
 
-    if (keylen > UINT16_MAX || vallen > UINT32_MAX)
-        type++; // the FAT versions are all one more than the non-FAT versions
-
-    uint8_t level = randlvl(1, MAXLEVEL);
     size_t headlen = HLCALC(type, level);
     size_t taillen = TLCALC(type, keylen, vallen);
     size_t reclen = headlen + 8 + taillen;
 
-    assert(file == db->openfile);
     r = tm_ensure(db, offset + reclen);
     if (r) return r;
 
     // the file may have been re-mapped, so grab the locptr AFTER ensuring space
-    locptr = LOCPTR(loc);
     char *base = file->base + offset;
     memset(base, 0, reclen);
     char *addr = base;
@@ -1196,55 +1161,53 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     // wiped the space, so just skip it.
     addr += 8;
 
-    // store all the backwards and forwards locations
-    uint8_t oldlevel = LEVEL(locptr);
-    uint8_t i;
+    if (loc->offset) {
+        // store all the backwards and forwards locations
+        const char *locptr = LOCPTR(loc);
 
-    // if it wasn't an exact match, we'll be adding the new record afterwards,
-    // so the backloc now needs to point at that record so it gets updated below
-    if (!loc->is_exactmatch)
-        for (i = 0; i < oldlevel; i++)
-            loc->backloc[i] = loc->offset;
-    // otherwise we're replacing the existing record, so leave the backloc as before
-
-    // we need to update the backpointers to this new location,
-    // and the forward pointers to the old pointer's next location
-    char *backptr = file->base + loc->backloc[0];
-    char *prevptr = backptr;
-    *((uint64_t *)(addr)) = htole64(advance0(locptr));
-    SET0(file, backptr, offset);
-    addr += 8;
-
-    for (i = 1; i < oldlevel && i < level; i++) {
-        backptr = file->base + loc->backloc[i];
-        if (backptr != prevptr) _recsum(file, prevptr);
-        prevptr = backptr;
-        *((uint64_t *)(addr)) = htole64(NEXTN(locptr, i));
+        // we need to update the backpointers to this new location,
+        // and the forward pointers to the old pointer's next location
+        char *backptr = LOCBACKPTR(loc, 0);
+        char *prevptr = backptr;
+        *((uint64_t *)(addr)) = htole64(advance0(locptr));
         addr += 8;
-        SETN(backptr, i, offset);
-    }
+        SET0(file, backptr, offset);
 
-    // old level stuck up higher?  If we're removing it then we need to
-    // stitch across
-    for (; loc->is_exactmatch && i < oldlevel; i++) {
-        backptr = file->base + loc->backloc[i];
-        if (backptr != prevptr) _recsum(file, prevptr);
-        prevptr = backptr;
-        SETN(backptr, i, NEXTN(locptr, i));
-    }
+        uint8_t n;
+        for (n = 1; n < level; n++) {
+            backptr = LOCBACKPTR(loc, n);
+            if (backptr != prevptr) _recsum(file, prevptr);
+            prevptr = backptr;
+            *((uint64_t *)(addr)) = htole64(NEXTN(locptr, n));
+            addr += 8;
+            SETN(backptr, n, offset);
+        }
 
-    // new record sticks up higher?  We need to intercept the existing pointers
-    for (; i < level; i++) {
-        backptr = file->base + loc->backloc[i];
-        if (backptr != prevptr) _recsum(file, prevptr);
-        prevptr = backptr;
-        *((uint64_t *)(addr)) = htole64(NEXTN(backptr, i));
+        // update the last old checksum
+        _recsum(file, prevptr);
+    }
+    else {
+        // we need to update the backpointers to this new location,
+        // and the forward pointers to the old pointer's next location
+        char *backptr = LOCBACKPTR(loc, 0);
+        char *prevptr = backptr;
+        *((uint64_t *)(addr)) = htole64(advance0(backptr));
         addr += 8;
-        SETN(backptr, i, offset);
-    }
+        SET0(file, backptr, offset);
 
-    // update the last old checksum
-    _recsum(file, prevptr);
+        uint8_t n;
+        for (n = 1; n < level; n++) {
+            backptr = LOCBACKPTR(loc, n);
+            if (backptr != prevptr) _recsum(file, prevptr);
+            prevptr = backptr;
+            *((uint64_t *)(addr)) = htole64(NEXTN(backptr, n));
+            addr += 8;
+            SETN(backptr, n, offset);
+        }
+
+        // update the last old checksum
+        _recsum(file, prevptr);
+    }
 
     // head checksum
     *((uint32_t *)(addr)) = htole32(file->csum(base, headlen));
@@ -1264,8 +1227,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     }
 
     /* update header to know details of new record */
-    if (hastail[type]) header->num_records++;
-    else header->dirty_size += reclen;
+    header->num_records++;
 
     /* track the highest level in this DB */
     if (level > header->maxlevel)
@@ -1277,7 +1239,6 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     file->written_size += reclen;
     txn->end = file->written_size;
     loc->end = file->written_size;
-    loc->is_exactmatch = 1;
 
     // file definitely needs to be flushed now
     file->dirty = 1;
@@ -1362,6 +1323,7 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
             deleted_offset = next[0];
             dirty_size += 24;
             next[0] = ANCESTOR(nextptr);
+            if (!next[0]) return TWOM_IOERROR;
             nextptr = safeptr(loc, next[0]);
             if (!nextptr) return TWOM_IOERROR;
         }
@@ -1391,6 +1353,7 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
             if (TYPE(aptr) == DELETE) {
                 dirty_size += 24;
                 ancestor = ANCESTOR(aptr);
+                if (!ancestor) return TWOM_IOERROR;
                 aptr = safeptr(loc, ancestor);
                 if (!aptr) return TWOM_IOERROR;
             }
@@ -1583,6 +1546,7 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
                       struct tm_file *forcefile, int flags)
 {
     if (db->readonly) return TWOM_LOCKED;
+    if (txnp) assert(!*txnp);
 
     struct stat sbuf, sbuffile;
     struct flock fl;
@@ -1592,11 +1556,11 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
-    fl.l_type = F_WRLCK;
-    fl.l_whence = SEEK_SET;
-    fl.l_start = 0;
-    fl.l_len = HEADER_MAGIC_SIZE;
     for (;;) {
+        fl.l_type = F_WRLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = HEADER_MAGIC_SIZE;
         if (fcntl(file->fd, cmd, &fl) < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN && cmd == F_SETLK)
@@ -1645,16 +1609,18 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     }
 
     // lock the data section
-    fl.l_start = DUMMY_OFFSET;
-    fl.l_len = DUMMY_SIZE;
     for (;!file->has_datalock;) {
+        fl.l_type = F_WRLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = DUMMY_OFFSET;
+        fl.l_len = DUMMY_SIZE;
         if (fcntl(file->fd, cmd, &fl) < 0) {
             if (errno == EAGAIN && cmd == F_SETLK) {
                 r = TWOM_LOCKED;
                 goto done;
             }
             if (errno == EINTR) continue;
-            db->error("read_lock datalock fcntl failed",
+            db->error("write_lock datalock fcntl failed",
                       "filename=<%s>", db->fname);
             r = TWOM_IOERROR;
             goto done;
@@ -1663,13 +1629,14 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     }
 
     // release the head section (so readers don't starve)
-    fl.l_type= F_UNLCK;
-    fl.l_start = 0;
-    fl.l_len = HEADER_MAGIC_SIZE;
     for (;file->has_headlock;) {
+        fl.l_type= F_UNLCK;
+        fl.l_start = 0;
+        fl.l_whence = SEEK_SET;
+        fl.l_len = HEADER_MAGIC_SIZE;
         if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
             if (errno == EINTR) continue;
-            db->error("read_lock headunlock fcntl failed",
+            db->error("write_lock headunlock fcntl failed",
                       "filename=<%s>", db->fname);
             r = TWOM_IOERROR;
             goto done;
@@ -1682,7 +1649,7 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         struct tm_header header;
         size_t headlen = HLCALC(DUMMY, MAXLEVEL);
         size_t reclen = headlen + /*crcs*/8;
-        uint32_t csum_flags = set_csum_engine(db, db->openfile, flags);
+        uint32_t csum_flags = set_csum_engine(db, file, flags);
 
         // make sure there's space in the file
         r = tm_ensure(db, HEADER_SIZE + reclen);
@@ -1693,7 +1660,7 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         memset(base, 0, reclen);
         *((uint8_t *)(base)) = DUMMY;
         *((uint8_t *)(base+1)) = MAXLEVEL;
-        *((uint32_t *)(base+headlen)) = htole32(db->openfile->csum(base, headlen));
+        *((uint32_t *)(base+headlen)) = htole32(file->csum(base, headlen));
 
         // prepare the header
         uuid_generate(header.uuid);
@@ -1714,7 +1681,7 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     // tm_ensure above creates an openmap, so we don't need to check again
     else if (file->size < (size_t)sbuf.st_size) {
         if (file->size) munmap(file->base, file->size);
-        file->base = (char *)mmap((caddr_t)0, sbuf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
+        file->base = (char *)mmap((caddr_t)0, sbuf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
         file->size = sbuf.st_size;
         if (!file->base) {
             db->error("write_lock mmap failed",
@@ -1757,13 +1724,12 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
-    fl.l_type = F_RDLCK;
-    fl.l_whence = SEEK_SET;
-
  restart:
-    fl.l_start = 0;
-    fl.l_len = HEADER_MAGIC_SIZE;
     for (;!file->has_headlock;) {
+        fl.l_type = F_RDLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = HEADER_MAGIC_SIZE;
         if (fcntl(file->fd, cmd, &fl) < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN && cmd == F_SETLK)
@@ -1817,9 +1783,11 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     }
 
     // lock the data section
-    fl.l_start = DUMMY_OFFSET;
-    fl.l_len = DUMMY_SIZE;
     for (;!file->has_datalock;) {
+        fl.l_type = F_RDLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = DUMMY_OFFSET;
+        fl.l_len = DUMMY_SIZE;
         if (fcntl(file->fd, cmd, &fl) < 0) {
             if (errno == EAGAIN && cmd == F_SETLK) {
                 r = TWOM_LOCKED;
@@ -1835,10 +1803,11 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     }
 
     // release the head section (so writers don't starve)
-    fl.l_type= F_UNLCK;
-    fl.l_start = 0;
-    fl.l_len = HEADER_MAGIC_SIZE;
     for (;file->has_headlock;) {
+        fl.l_type= F_UNLCK;
+        fl.l_whence = SEEK_SET;
+        fl.l_start = 0;
+        fl.l_len = HEADER_MAGIC_SIZE;
         if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
             if (errno == EINTR) continue;
             db->error("read_lock headunlock fcntl failed",
@@ -2165,7 +2134,7 @@ static int skipwrite(struct twom_txn *txn,
 
     const char *ptr = LOCPTR(loc);
     /* could be a delete or a replace */
-    if (loc->is_exactmatch && !loc->deleted_offset) {
+    if (loc->offset && !loc->deleted_offset) {
         // replacing existing record
         if (flags & TWOM_IFNOTEXIST) return TWOM_EXISTS;
         if (!data) return store_here(txn, key, keylen, NULL, 0);
@@ -2192,14 +2161,16 @@ static int copy_cb(void *rock,
     struct twom_txn *txn = (struct twom_txn *)rock;
     int i;
 
-    /* minimal logic from find_loc and stitch knowing that we're
+    /* minimal logic from find_loc and advance_loc knowing that we're
      * always writing in order at the end of a file */
     struct tm_loc *loc = &txn->db->loc;
-    const char *ptr = LOCPTR(loc);
-    uint8_t level = LEVEL(ptr);
-    for (i = 0; i < level; i++)
-        loc->backloc[i] = loc->offset;
-    loc->is_exactmatch = 0;
+    if (loc->offset) {
+        const char *ptr = LOCPTR(loc);
+        uint8_t level = LEVEL(ptr);
+        for (i = 0; i < level; i++)
+            loc->backloc[i] = loc->offset;
+        loc->offset = 0;
+    }
     return store_here(txn, key, keylen, data, datalen);
 }
 
@@ -2314,6 +2285,7 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
             deleted_offset = next[0];
             dirty_size += 24;
             next[0] = ANCESTOR(nextptr);
+            if (!next[0]) return TWOM_IOERROR;
             nextptr = safeptr(loc, next[0]);
             if (!nextptr) return TWOM_IOERROR;
         }
@@ -2341,6 +2313,7 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
             if (TYPE(aptr) == DELETE) {
                 dirty_size += 24;
                 ancestor = ANCESTOR(aptr);
+                if (!ancestor) return TWOM_IOERROR;
                 aptr = safeptr(loc, ancestor);
                 if (!aptr) return TWOM_IOERROR;
             }
@@ -2596,27 +2569,27 @@ int twom_txn_fetch(struct twom_txn *txn,
 
     if (flags & TWOM_FETCHNEXT) {
         r = advance_loc(txn, loc);
+        if (r == TWOM_DONE) return TWOM_NOTFOUND;
         if (r) return r;
     }
 
     // if there's no match, this key never existed
-    if (!loc->is_exactmatch) return TWOM_NOTFOUND;
+    if (!loc->offset) return TWOM_NOTFOUND;
 
     // if we're in an MVCC read, might need to find an ancestor
 
-    const char *ptr = LOCPTR(loc);
-    size_t offset = loc->offset;
-    size_t deleted = loc->deleted_offset;
+    size_t offset = loc->deleted_offset ? loc->deleted_offset : loc->offset;
+    const char *ptr = safeptr(loc, offset);
+    if (!ptr) return TWOM_IOERROR;
     while (offset >= txn->end) {
         offset = ANCESTOR(ptr);
         if (!offset) return TWOM_NOTFOUND;
         ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
-        deleted = (TYPE(ptr) == DELETE) ? offset : 0;
     }
 
-    /* active ancestor must have been a delete */
-    if (deleted) return TWOM_NOTFOUND;
+    /* active ancestor is a delete */
+    if (TYPE(ptr) == DELETE) return TWOM_NOTFOUND;
 
     r = check_tailcsum(txn, loc->file, ptr, offset);
     if (r) return r;
@@ -2654,9 +2627,6 @@ int twom_cursor_next(struct twom_cursor *cur,
     struct twom_txn *txn = cur->txn;
     struct tm_loc *loc = &cur->loc;
 
-    // one use only (could offer a "reset" function)
-    if (cur->done) return TWOM_DONE;
-
  again:
     if (txn->readonly) {
         // release locks every N records if readonly
@@ -2672,45 +2642,24 @@ int twom_cursor_next(struct twom_cursor *cur,
         }
     }
 
-    // it's POSSIBLE that we started a cursor, then deleted the key, then repacked - in which
-    // case there won't be a matching record any more.  Wow.
-    // This case should only happen on the first call when the prefix matched a record, and
-    // we have to refresh it just in case.
-    if (!cur->started) {
-        r = relocate(txn, loc);
-        if (r) return r;
-        if (!loc->is_exactmatch) {
-            r = advance_loc(txn, loc);
-            if (r) return r;
-        }
-        cur->started = 1;
-    }
     // otherwise we need to get the next key
-    else {
-        r = advance_loc(txn, loc);
-        if (r) return r;
-    }
+    // (returns TWOM_DONE at end of file)
+    r = advance_loc(txn, loc);
+    if (r) return r;
 
-    // walked off the end?
-    if (!loc->is_exactmatch) {
-        cur->done = 1;
-        return TWOM_DONE;
-    }
-
-    // ancestor?
-    const char *ptr = LOCPTR(loc);
-    size_t offset = loc->offset;
-    size_t deleted = loc->deleted_offset;
+    // do we need an MVCC ancestor?
+    size_t offset = loc->deleted_offset ? loc->deleted_offset : loc->offset;
+    const char *ptr = safeptr(loc, offset);
+    if (!ptr) return TWOM_IOERROR;
     while (offset >= txn->end) {
         offset = ANCESTOR(ptr);
-        if (!offset) goto again;
+        if (!offset) goto again; // record didn't exist
         ptr = safeptr(loc, offset);
         if (!ptr) return TWOM_IOERROR;
-        deleted = (TYPE(ptr) == DELETE) ? offset : 0;
     }
 
     // latest is a delete?  move along
-    if (deleted) goto again;
+    if (TYPE(ptr) == DELETE) goto again;
 
     // we have a returnable value!
     r = check_tailcsum(txn, loc->file, ptr, offset);
@@ -2739,7 +2688,7 @@ int twom_cursor_replace(struct twom_cursor *cur,
                         const char *data, size_t datalen, int flags)
 {
     if (cur->txn->readonly) return TWOM_READONLY;
-    if (!cur->loc.is_exactmatch) return TWOM_NOTFOUND;
+    if (!cur->loc.offset) return TWOM_NOTFOUND;
     const char *ptr = LOCPTR(&cur->loc);
     const char *key = KEYPTR(ptr);
     size_t keylen = KEYLEN(ptr);
@@ -2799,12 +2748,15 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
     int r = find_loc(cur->txn, &cur->loc, prefix, prefixlen);
     if (r) goto done;
 
-    // skip the first record if we've been told to.  Setting 'started'
+    // unless we're skipping the first record, mark this location
+    // as inexact, so advance_loc will find the key first, which
     // allows us to still re-seek all the way back to this record
     // and then advance from there if the file gets changed between
     // starting the cursor and our first read.
-    if (!cur->loc.is_exactmatch || (flags & TWOM_SKIPROOT))
-        cur->started = 1;
+    if (!(flags & TWOM_SKIPROOT)) {
+        cur->loc.deleted_offset = 0;
+        cur->loc.offset = 0;
+    }
 
  done:
     if (r) twom_cursor_fini(&cur);
@@ -2888,7 +2840,7 @@ int twom_txn_store(struct twom_txn *txn,
     if (txn->db->readonly)
         return TWOM_READONLY;
 
-    assert (txn == txn->db->write_txn);
+    assert(txn == txn->db->write_txn);
     assert(key && keylen);
 
     return skipwrite(txn, key, keylen, data, datalen, flags);
@@ -2970,7 +2922,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
           (LLU)header->repack_size,
           (LU)header->maxlevel);
 
-    while (offset < header->current_size) {
+    while (offset < txn->end) {
         printf("%08llX ", (LLU)offset);
 
         ptr = safeptr(loc, offset);
