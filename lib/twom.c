@@ -515,14 +515,14 @@ static inline int tm_ensure(struct twom_db *db, size_t offset)
     }
 
     // map the larger file into new memory
-    file->base = (char *)mmap((caddr_t)0, newoffset, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
+    file->size = newoffset;
+    file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
     if (!file->base) {
         db->error("twom failed to mmap during tm_ensure",
                    "filename=<%s> newsize=<%08llX>",
-                   db->fname, (LLU)newoffset);
+                   db->fname, (LLU)file->size);
         return TWOM_IOERROR;
     }
-    file->size = newoffset;
 
     return 0;
 }
@@ -1560,20 +1560,58 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
     for (;;) {
-        fl.l_type = F_WRLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = HEADER_MAGIC_SIZE;
-        if (fcntl(file->fd, cmd, &fl) < 0) {
-            if (errno == EINTR) continue;
-            if (errno == EAGAIN && cmd == F_SETLK)
-                return TWOM_LOCKED;
-            db->error("write_lock headlock fcntl failed",
-                      "filename=<%s>", db->fname);
-            return TWOM_IOERROR;
+        // lock the head section
+        for (;!file->has_headlock;) {
+            fl.l_type = F_WRLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = 0;
+            fl.l_len = HEADER_MAGIC_SIZE;
+            if (fcntl(file->fd, cmd, &fl) < 0) {
+                if (errno == EINTR) continue;
+                if (errno == EAGAIN && cmd == F_SETLK)
+                    return TWOM_LOCKED;
+                db->error("write_lock headlock fcntl failed",
+                        "filename=<%s>", db->fname);
+                return TWOM_IOERROR;
+            }
+            file->has_headlock = 2;
         }
 
-        file->has_headlock = 2;
+        // lock the data section
+        for (;!file->has_datalock;) {
+            fl.l_type = F_WRLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = DUMMY_OFFSET;
+            fl.l_len = DUMMY_SIZE;
+            if (fcntl(file->fd, cmd, &fl) < 0) {
+                if (errno == EAGAIN && cmd == F_SETLK) {
+                    r = TWOM_LOCKED;
+                    goto done;
+                }
+                if (errno == EINTR) continue;
+                db->error("write_lock datalock fcntl failed",
+                        "filename=<%s>", db->fname);
+                r = TWOM_IOERROR;
+                goto done;
+            }
+            file->has_datalock = 2;
+        }
+
+        // release the head section (so readers don't starve)
+        for (;file->has_headlock;) {
+            fl.l_type= F_UNLCK;
+            fl.l_start = 0;
+            fl.l_whence = SEEK_SET;
+            fl.l_len = HEADER_MAGIC_SIZE;
+            if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
+                if (errno == EINTR) continue;
+                db->error("write_lock headunlock fcntl failed",
+                        "filename=<%s>", db->fname);
+                r = TWOM_IOERROR;
+                goto done;
+            }
+            file->has_headlock = 0;
+        }
 
         if (fstat(file->fd, &sbuf) == -1) {
             db->error("write_lock fstat failed",
@@ -1609,42 +1647,6 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         file->fd = newfd;
         file->next = db->openfile;
         db->openfile = file;
-    }
-
-    // lock the data section
-    for (;!file->has_datalock;) {
-        fl.l_type = F_WRLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = DUMMY_OFFSET;
-        fl.l_len = DUMMY_SIZE;
-        if (fcntl(file->fd, cmd, &fl) < 0) {
-            if (errno == EAGAIN && cmd == F_SETLK) {
-                r = TWOM_LOCKED;
-                goto done;
-            }
-            if (errno == EINTR) continue;
-            db->error("write_lock datalock fcntl failed",
-                      "filename=<%s>", db->fname);
-            r = TWOM_IOERROR;
-            goto done;
-        }
-        file->has_datalock = 2;
-    }
-
-    // release the head section (so readers don't starve)
-    for (;file->has_headlock;) {
-        fl.l_type= F_UNLCK;
-        fl.l_start = 0;
-        fl.l_whence = SEEK_SET;
-        fl.l_len = HEADER_MAGIC_SIZE;
-        if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
-            if (errno == EINTR) continue;
-            db->error("write_lock headunlock fcntl failed",
-                      "filename=<%s>", db->fname);
-            r = TWOM_IOERROR;
-            goto done;
-        }
-        file->has_headlock = 0;
     }
 
     // opening a new file, create the header
@@ -1684,11 +1686,11 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     // tm_ensure above creates an openmap, so we don't need to check again
     else if (file->size < (size_t)sbuf.st_size) {
         if (file->size) munmap(file->base, file->size);
-        file->base = (char *)mmap((caddr_t)0, sbuf.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
         file->size = sbuf.st_size;
+        file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
         if (!file->base) {
             db->error("write_lock mmap failed",
-                      "filename=<%s>", db->fname);
+                      "filename=<%s> size=<%08llX>", db->fname, (LLU)file->size);
             r = TWOM_IOERROR;
             goto done;
         }
@@ -1728,21 +1730,59 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
  restart:
-    for (;!file->has_headlock;) {
-        fl.l_type = F_RDLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = HEADER_MAGIC_SIZE;
-        if (fcntl(file->fd, cmd, &fl) < 0) {
-            if (errno == EINTR) continue;
-            if (errno == EAGAIN && cmd == F_SETLK)
-                return TWOM_LOCKED;
-            db->error("read_lock fcntl failed",
-                      "filename=<%s>", db->fname);
-            return TWOM_IOERROR;
+    for (;;) {
+        // take the headlock
+        for (;!file->has_headlock;) {
+            fl.l_type = F_RDLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = 0;
+            fl.l_len = HEADER_MAGIC_SIZE;
+            if (fcntl(file->fd, cmd, &fl) < 0) {
+                if (errno == EINTR) continue;
+                if (errno == EAGAIN && cmd == F_SETLK)
+                    return TWOM_LOCKED;
+                db->error("read_lock fcntl failed",
+                        "filename=<%s>", db->fname);
+                return TWOM_IOERROR;
+            }
+            file->has_headlock = 1;
         }
 
-        file->has_headlock = 1;
+        // lock the data section
+        for (;!file->has_datalock;) {
+            fl.l_type = F_RDLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = DUMMY_OFFSET;
+            fl.l_len = DUMMY_SIZE;
+            if (fcntl(file->fd, cmd, &fl) < 0) {
+                if (errno == EAGAIN && cmd == F_SETLK) {
+                    r = TWOM_LOCKED;
+                    goto done;
+                }
+                if (errno == EINTR) continue;
+                db->error("read_lock datalock fcntl failed",
+                        "filename=<%s>", db->fname);
+                r = TWOM_IOERROR;
+                goto done;
+            }
+            file->has_datalock = 1;
+        }
+
+        // release the head section (so writers don't starve)
+        for (;file->has_headlock;) {
+            fl.l_type= F_UNLCK;
+            fl.l_whence = SEEK_SET;
+            fl.l_start = 0;
+            fl.l_len = HEADER_MAGIC_SIZE;
+            if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
+                if (errno == EINTR) continue;
+                db->error("read_lock headunlock fcntl failed",
+                        "filename=<%s>", db->fname);
+                r = TWOM_IOERROR;
+                goto done;
+            }
+            file->has_headlock = 0;
+        }
 
         if (fstat(file->fd, &sbuf) == -1) {
             db->error("read_lock fstat failed",
@@ -1785,53 +1825,17 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         db->openfile = file;
     }
 
-    // lock the data section
-    for (;!file->has_datalock;) {
-        fl.l_type = F_RDLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = DUMMY_OFFSET;
-        fl.l_len = DUMMY_SIZE;
-        if (fcntl(file->fd, cmd, &fl) < 0) {
-            if (errno == EAGAIN && cmd == F_SETLK) {
-                r = TWOM_LOCKED;
-                goto done;
-            }
-            if (errno == EINTR) continue;
-            db->error("read_lock datalock fcntl failed",
-                      "filename=<%s>", db->fname);
-            r = TWOM_IOERROR;
-            goto done;
-        }
-        file->has_datalock = 1;
-    }
-
-    // release the head section (so writers don't starve)
-    for (;file->has_headlock;) {
-        fl.l_type= F_UNLCK;
-        fl.l_whence = SEEK_SET;
-        fl.l_start = 0;
-        fl.l_len = HEADER_MAGIC_SIZE;
-        if (fcntl(file->fd, F_SETLKW, &fl) < 0) {
-            if (errno == EINTR) continue;
-            db->error("read_lock headunlock fcntl failed",
-                      "filename=<%s>", db->fname);
-            r = TWOM_IOERROR;
-            goto done;
-        }
-        file->has_headlock = 0;
-    }
-
     // if the existing map it too small, replace it
     if (file->size < (size_t)sbuf.st_size) {
         /* map the new space (note: we map READ|WRITE even for readonly locks,
          * if we might lock for write later and want to reuse the mmap */
         if (file->size) munmap(file->base, file->size);
         int flags = db->readonly ? PROT_READ : PROT_READ|PROT_WRITE;
-        file->base = (char *)mmap((caddr_t)0, sbuf.st_size, flags, MAP_SHARED, file->fd, 0L);
         file->size = sbuf.st_size;
+        file->base = (char *)mmap((caddr_t)0, file->size, flags, MAP_SHARED, file->fd, 0L);
         if (!file->base) {
             db->error("read_lock mmap failed",
-                      "filename=<%s>", db->fname);
+                      "filename=<%s> size=<%08llX>", db->fname, (LLU)file->size);
             r = TWOM_IOERROR;
             goto done;
         }
