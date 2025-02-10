@@ -500,28 +500,29 @@ static inline int tm_ensure(struct twom_db *db, size_t offset)
     assert(file);
     assert(file->has_datalock == 2);
 
-    offset = tm_roundup(offset);
+    size_t newoffset = tm_roundup(offset);
+    assert(newoffset >= offset);
 
     // unmap first
     if (file->size) munmap(file->base, file->size);
 
     // extend (could also use fseek and write a NULL byte, or
-    if (ftruncate(file->fd, offset)) {
+    if (ftruncate(file->fd, newoffset)) {
         db->error("twom failed to extend file during tm_ensure",
                    "filename=<%s> size=<%08llX> newsize=<%08llX>",
-                   db->fname, (LLU)file->size, (LLU)offset);
+                   db->fname, (LLU)file->size, (LLU)newoffset);
         return TWOM_IOERROR;
     }
 
     // map the larger file into new memory
-    file->base = (char *)mmap((caddr_t)0, offset, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
+    file->base = (char *)mmap((caddr_t)0, newoffset, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
     if (!file->base) {
         db->error("twom failed to mmap during tm_ensure",
                    "filename=<%s> newsize=<%08llX>",
-                   db->fname, (LLU)offset);
+                   db->fname, (LLU)newoffset);
         return TWOM_IOERROR;
     }
-    file->size = offset;
+    file->size = newoffset;
 
     return 0;
 }
@@ -650,6 +651,8 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
 
     header->current_size
         = le64toh(*((uint64_t *)(base + OFFSET_CURRENT_SIZE)));
+
+    assert(file->size >= header->current_size);
 
     header->maxlevel
         = le32toh(*((uint32_t *)(base + OFFSET_MAXLEVEL)));
@@ -2031,7 +2034,7 @@ static int commit_locked(struct twom_txn **txnp)
     *((uint64_t *)(base+8)) = htole64(header->current_size);
     *((uint32_t *)(base+16)) = htole32(file->csum(base, headlen));
 
-    file->written_size +=reclen;
+    file->written_size += reclen;
     txn->end = file->written_size;
     loc->end = file->written_size;
     file->dirty = 1;
