@@ -16,7 +16,7 @@ Table of Contents
 
    -  `3.1. Setting Up The Machine <#setting-up-the-machine>`__
    -  `3.2 Configure Script <#configure-scripts>`__
-   -  `3.3 Make <#running-the-tests>`__
+   -  `3.3 Make <#make>`__
    -  `3.4 Using Valgrind <#using-valgrind>`__
    -  `3.5 The Tests Are Failing <#the-tests-are-failing>`__
    -  `3.6 Debugging A Test <#debugging-a-test>`__
@@ -24,9 +24,9 @@ Table of Contents
 -  `4. Adding Your Own Tests <#adding-your-own-tests>`__
 
    -  `4.1 Where To Put Your Tests <#where-to-put-your-tests>`__
-   -  `4.1 Adding A New Suite <#adding-a-new-suite>`__
-   -  `4.2 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
-   -  `4.3 Suite Init And Cleanup <#suite-init-and-cleanup>`__
+   -  `4.2 Adding A New Suite <#adding-a-new-suite>`__
+   -  `4.3 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
+   -  `4.4 Suite Init And Cleanup <#suite-init-and-cleanup>`__
 
 1. Introduction
 ---------------
@@ -70,7 +70,7 @@ be run usefully by people who didn't write them.
 This section takes you through the process of running Cyrus' unit tests.
 
 3.1. Setting Up The Machine
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------
 
 Cyrus' unit tests are all located in a new directory,
 ``cyrus-imapd/cunit/``. They're written in C, like the remainder of
@@ -91,7 +91,7 @@ It's not a complicated or difficult library, this shouldn't take long.
 When you've done, install it in ``/usr/include`` and ``/usr/lib``.
 
 3.2 Configure Script
-~~~~~~~~~~~~~~~~~~~~
+--------------------
 
 Because of the dependency on the CUnit library, the tests are disabled
 by default; this means you need enable them with an option to the
@@ -108,7 +108,7 @@ by default; this means you need enable them with an option to the
     ...
 
 3.3 Make
-~~~~~~~~
+--------
 
 First you need to build Cyrus itself, using the traditional ``all:``
 target.
@@ -184,7 +184,7 @@ Let's take a closer look at what's happening here.
     is the rightmost column, it should be all zero.
 
 3.4 Using Valgrind
-~~~~~~~~~~~~~~~~~~
+------------------
 
 Some failure modes are subtle, and cannot be detected in the C code
 itself; this is where `the Valgrind program <http://valgrind.org/>`__
@@ -245,7 +245,7 @@ option for the ``check:`` target, except that Valgrind is not available
 on all of Cyrus' supported platforms.
 
 3.5 The Tests Are Failing
-~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------
 
 So you've noticed that some of the tests are failing. Let me make the
 guiding principle of unit testing as clear as possible: **THE UNIT TESTS
@@ -272,7 +272,7 @@ most benefit out of unit testing
    and consider writing tests for the existing code.
 
 3.6 Debugging A Test
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
 executable, it's a shell script which sets up some environment variables
@@ -332,7 +332,7 @@ existing tests, the sensible thing to do is to `add a new test to the
 existing suite <#adding-a-test-to-a-suite>`__. Otherwise, you'll need to
 `add a new Suite <#adding-a-new-suite>`__.
 
-4.1 Adding A New Suite
+4.2 Adding A New Suite
 ----------------------
 
 Each Suite is a single C source file in the ``cunit/`` directory. Your
@@ -487,7 +487,7 @@ and this time passing.
     Suite: crc32
       Test: map ... passed
 
-4.2 Adding A Test To A Suite
+4.3 Adding A Test To A Suite
 ----------------------------
 
 Adding a new test to an existing test is easy: all you have to do is add
@@ -570,7 +570,7 @@ Now run ``make check`` and you'll see your test being built and run.
       Test: map ... passed
       Test: iovec ... passed
 
-4.3 Suite Setup And Teardown
+4.4 Suite Setup And Teardown
 ----------------------------
 
 Sometimes the behaviour of the functions under test depend on external
