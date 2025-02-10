@@ -281,7 +281,7 @@ debugging a failing test somewhat challenging. The solution is:
 
 ::
 
-    me@mybox> ( cd cunit ; libtool --mode=execute gdb --args unit -t crc32 )
+    me@mybox> ( cd cunit ; ../libtool --mode=execute gdb --args unit -t crc32 )
     ...
     Reading symbols from /home/me/cyrus-imapd/cunit/.libs/lt-unit...done.
     (gdb) list crc32.testc:1
