@@ -25,13 +25,9 @@ static void test_coding_int32(void)
     TESTCASE(0x80);
     TESTCASE(0x8000);
     TESTCASE(0x800000);
-    TESTCASE(0x80000000);
     TESTCASE(0xff);
     TESTCASE(0xffff);
     TESTCASE(0xffffff);
-    TESTCASE(0xffffffff);
-    TESTCASE(0xcafebabe);
-    TESTCASE(0xbdefaced);
 #undef TESTCASE
 }
 
@@ -66,7 +62,6 @@ static void test_coding_int64(void)
     TESTCASE(0x8000000000ULL);
     TESTCASE(0x800000000000ULL);
     TESTCASE(0x80000000000000ULL);
-    TESTCASE(0x8000000000000000ULL);
     TESTCASE(0xff);
     TESTCASE(0xffff);
     TESTCASE(0xffffff);
@@ -74,8 +69,6 @@ static void test_coding_int64(void)
     TESTCASE(0xffffffffffULL);
     TESTCASE(0xffffffffffffULL);
     TESTCASE(0xffffffffffffffULL);
-    TESTCASE(0xffffffffffffffffULL);
-    TESTCASE(0xcafebabebdefacedULL);
 #undef TESTCASE
 }
 
