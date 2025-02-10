@@ -28,7 +28,7 @@ For example, if you wanted to debug cyr_virusscan:
 
 .. code-block:: bash
 
-    $ libtool --mode=execute gdb imap/cyr_virusscan
+    $ ./libtool --mode=execute gdb imap/cyr_virusscan
 
 Command line arguments for a tool you're debugging, must be given to gdb before
 you run. Use something like `set args [ ... ]
