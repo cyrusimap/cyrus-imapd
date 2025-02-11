@@ -72,6 +72,7 @@ typedef bit64   conversation_id_t;
 struct index_record;
 struct mailbox;
 
+#define CONVERSATIONS_VERSION 1
 #define CONVERSATIONS_KEY_VERSION 0
 #define CONVERSATIONS_STATUS_VERSION 0
 #define CONVERSATIONS_RECORD_VERSION 1
@@ -102,6 +103,7 @@ struct conversations_state {
     hash_table folderstatus;
     struct conv_quota quota;
     int trashfolder;
+    int version;
     char *trashmboxname;
     char *trashmboxid;
     char *path;
