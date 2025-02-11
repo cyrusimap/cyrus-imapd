@@ -19,7 +19,7 @@ struct binary_result
     size_t datalen;
 };
 
-static const char *backend = CUNIT_PARAM("skiplist,flat,twoskip");
+static const char *backend = CUNIT_PARAM("skiplist,flat,twom,twoskip");
 static char *filename;
 static char *filename2;
 
@@ -81,6 +81,15 @@ static char *make_basedir(const char * const *reldirs)
     r = cyrusdb_store(db, key, keylen, data, datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn);
+
+#define CANDELETE(key, keylen) \
+    r = cyrusdb_delete(db, key, keylen, &txn, 1); \
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+#define ISCONSISTENT() \
+    r = cyrusdb_consistent(db); \
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
 #define BADDATA         ((const char *)0xdeadbeef)
 #define BADLEN          ((int)0xcafebabe)
@@ -144,6 +153,18 @@ static char *make_basedir(const char * const *reldirs)
     r = cyrusdb_fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, experror); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
+    CU_ASSERT_PTR_NULL(_data); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
+    CU_ASSERT_EQUAL(_datalen, 0); \
+    CU_ASSERT_NOT_EQUAL(_datalen, BADLEN); \
+}
+
+#define CANNOTFETCH_NOTXN(key, keylen, experror) \
+{ \
+    const char *_data = BADDATA; \
+    size_t _datalen = BADLEN; \
+    r = cyrusdb_fetch(db, key, keylen, &_data, &_datalen, NULL); \
+    CU_ASSERT_EQUAL(r, experror); \
     CU_ASSERT_PTR_NULL(_data); \
     CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
     CU_ASSERT_EQUAL(_datalen, 0); \
@@ -306,6 +327,117 @@ static void test_multiopen(void)
     CANFETCH_NOTXN(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
     CANFETCH_NOTXN(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
 
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+}
+
+static void test_read_and_delete(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    int r;
+    /* data courtesy hipsteripsum.me */
+    static const char KEY1[] = "mustache";
+    static const char DATA1[] = "blog lomo";
+    static const char KEY2[] = "cred";
+    static const char DATA2[] = "beard ethical";
+    static const char KEY3[] = "leggings";
+    static const char DATA3[] = "tumblr salvia";
+    static const char KEY3CHILD[] = "leggings.biodiesel";
+    static const char KEY4[] = "occupy";
+    static const char DATA4[] = "etsy tote bag";
+
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
+
+    /* open() with _CREATE succeeds and creates the db */
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+
+    /* 1st txn starts */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANSTORE(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+    CANCOMMIT();
+    ISCONSISTENT();
+    /* 1st txn ends */
+
+    /* 2nd txn starts - try to fetch the immediately preceding value */
+    CANNOTFETCH(KEY3CHILD, strlen(KEY3CHILD), CYRUSDB_NOTFOUND);
+    CANFETCH(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANDELETE(KEY3, strlen(KEY3));
+    CANFETCH(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANDELETE(KEY1, strlen(KEY1));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* what is left? */
+    CANNOTFETCH_NOTXN(KEY1, strlen(KEY1), CYRUSDB_NOTFOUND);
+    CANFETCH_NOTXN(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANNOTFETCH_NOTXN(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
+    CANFETCH_NOTXN(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+    ISCONSISTENT();
+
+    /* closing succeeds and leaves the file in place */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+}
+
+static void test_replace_before_delete(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    int r;
+    /* data courtesy hipsteripsum.me */
+    static const char KEY1[] = "alphabet";
+    static const char DATA1[] = "blog lomo";
+    static const char KEY2[] = "blanket";
+    static const char DATA2[] = "beard ethical";
+    static const char KEY3[] = "cobra";
+    static const char DATA3[] = "prius toke";
+    static const char KEY4[] = "dynamo";
+    static const char DATA4[] = "etsy tote bag";
+
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
+
+    /* open() with _CREATE succeeds and creates the db */
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+
+    /* 1st txn */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANSTORE(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* 2nd txn */
+    CANDELETE(KEY3, strlen(KEY3));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* 3rd txn */
+    CANSTORE(KEY2, strlen(KEY2), DATA3, strlen(DATA3));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    /* 4th txn (new value) */
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANCOMMIT();
+    ISCONSISTENT();
+
+    CANFETCH_NOTXN(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANFETCH_NOTXN(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANNOTFETCH_NOTXN(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
+    CANFETCH_NOTXN(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+
+    /* closing succeeds and leaves the file in place */
     r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);

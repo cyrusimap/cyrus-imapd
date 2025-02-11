@@ -2,6 +2,7 @@
 
 .. author: Nic Bernstein (Onlight)
 .. author: Jeroen van Meeuwen (Kolab Systems)
+.. author: Bron Gondwana (Fastmail)
 
 .. _imap-reference-manpages-systemcommands-cyr_dbtool:
 
@@ -16,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_dbtool** [ **-C** *config-file* ] [ **-n** ] [ **-o** ] [ **-T** ]
+    **cyr_dbtool** [ **-C** *config-file* ] [ **-c** ] [ **-N** ] [ **-n** ] [ **-R** ] [ **-S** ] [ **-T** ] [ **-t** ]
             *db-file* *db-backend* *action* [ *key* ] [ *value* ]
 
 Description
@@ -32,9 +33,13 @@ Description
 
     **delete** *<key>*
 
-    **consistency**
+    **consistent**
 
     **repack**
+
+    **damage**
+
+    **batch**
 
 You may omit *key* or *key/value* and specify one per line on stdin.
 Keys are terminated by tab or newline, values are terminated by newline.
@@ -42,11 +47,17 @@ Keys are terminated by tab or newline, values are terminated by newline.
 Running without any options will list the available database backends and
 usable actions.
 
-The *consistency* action runs a consistency check on the DB by calling
+The *consistent* action runs a consistency check on the DB by calling
 'myconsistent' on it.
 
 The *repack* action will compress the database by removing stale data
 on backends which support it.  It's a NOOP otherwise.
+
+The *damage* action makes the file dirty and then crashes, so it will need
+to be repaired.  It's useful for testing crash recovery speed.
+
+The *batch* action takes commands as bastrings on stdin, and writes results
+back out as bastrings.
 
 **cyr_dbtool** |default-conf-text|
 
@@ -68,14 +79,39 @@ Options
 
     |cli-dash-c-text|
 
+.. option:: -c, --convert
+
+    Convert the database file if the specified format on the command line
+    doesn't match the database file's format.
+
+.. option:: -N, --no-checksum
+
+    When reading, don't check checksums, and if the database supports it,
+    create with a NULL checksum engine.
+
 .. option:: -n, --create
 
     Create the database file if it doesn't already exist.
 
+.. option:: -R, --readonly
+
+    Open the database readonly.  Even if --create is specified, will not
+    create a database if it doesn't exists (since that needs writing)
+
+.. option:: -S, --no-sync
+
+    If the backend supports it, don't fsync on commit (DANGEROUS).  Useful
+    for benchmarking.
+
 .. option:: -T, --use-transaction
 
     Use a transaction to do the action (most especially for 'show') - the
-    default used to be transactions.
+    default is to run without transactions
+
+.. option:: -t, --no-transaction
+
+    A noop, since no transaction is already the default.
+
 
 Examples
 ========

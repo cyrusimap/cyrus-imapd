@@ -1,0 +1,30 @@
+Description:
+
+twom: a new cyrusdb backend
+
+
+Config changes:
+
+A new backend called 'twom' is added to most of the database engine options
+in imapd.conf.  Twom is a database format similar to twoskip, with some
+performance improvements.
+
+There's also a new boolean option 'cyrusdb_autoconvert', which - if set to
+true, will cause Cyrus to convert the database on first access if the
+existing file can be detected (by looking at the first few bytes for file
+magic).  This works for skiplist, twoskip and twom source formats.  The
+conversions are performed under a global lock, so this can slow the server
+down somewhat while the conversions are happening.
+
+
+Upgrade instructions:
+
+No changes are required if you don't want to switch to twom.  No defaults have
+been changed at this time.  If you do want to change, you can optionally set
+cyrusdb_autoconvert (otherwise watch the logs for files being opened with the
+wrong format and convert them manually), and also update the DB engine for
+individual database types.
+
+GitHub issue:
+
+No issue number.
