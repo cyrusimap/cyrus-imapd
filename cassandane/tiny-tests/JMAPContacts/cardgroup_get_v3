@@ -22,6 +22,7 @@ sub test_cardgroup_get_v3
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $member1 = 'urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af';
     my $member2 = 'urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519';
+    my $member3 = 'urn:uuid:26b4eb84-cc7a-4ede-9802-558bb84dcb8f';
     my $href = "Default/$id.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
@@ -32,6 +33,7 @@ FN:The Doe Family
 N:;;;;
 X-ADDRESSBOOKSERVER-MEMBER:$member1
 X-ADDRESSBOOKSERVER-MEMBER:$member2
+X-FM-OTHERACCOUNT-MEMBER;USERID=account1:$member3
 END:VCARD
 EOF
 
@@ -59,7 +61,8 @@ EOF
         },
         members => {
             $member1 => JSON::true,
-            $member2 => JSON::true
+            $member2 => JSON::true,
+            $member3 => JSON::true,
         }
     };
 

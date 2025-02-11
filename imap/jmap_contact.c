@@ -6679,6 +6679,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         else if (!strcmp(prop_name, "X-ADDRESSBOOKSERVER-MEMBER")) {
             goto member;
         }
+        else if (!strcmp(prop_name, "X-FM-OTHERACCOUNT-MEMBER")) {
+            goto member;
+        }
         else if (prop_group) {
             if (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY)) {
                 kind = "countryCode";
