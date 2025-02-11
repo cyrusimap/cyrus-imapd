@@ -71,7 +71,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, UPGRADE };
 
 static int verbose = 0;
 
@@ -416,13 +416,19 @@ static int audit_counts_cb(const mbentry_t *mbentry,
     return r;
 }
 
-static int do_recalc(const char *userid)
+static int do_recalc(const char *userid, int force)
 {
     struct conversations_state *state = NULL;
-    int r;
 
-    r = conversations_open_user(userid, 0/*shared*/, &state);
+    int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
+
+    if (!force && state->version == CONVERSATIONS_VERSION) {
+        if (verbose)
+            printf("%s already version %d, skipping\n", userid, state->version);
+        conversations_commit(&state);
+        return 0;
+    }
 
     // wipe if it's currently folders_byname, will recreate with byid
     int wipe = state->folders_byname;
@@ -984,7 +990,7 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
         break;
 
     case RECALC:
-        if (do_recalc(userid))
+        if (do_recalc(userid, /*force*/1))
             r = EX_NOINPUT;
         break;
 
@@ -995,6 +1001,11 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
 
     case CHECKFOLDERS:
         if (do_checkfolders(userid))
+            r = EX_NOINPUT;
+        break;
+
+    case UPGRADE:
+        if (do_recalc(userid, /*force*/0))
             r = EX_NOINPUT;
         break;
 
@@ -1027,7 +1038,7 @@ int main(int argc, char **argv)
     int recursive = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FMRST:bdruvzZ:";
+    static const char short_options[] = "AC:FMRST:bdruUvzZ:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
@@ -1041,6 +1052,7 @@ int main(int argc, char **argv)
         { "dump", no_argument, NULL, 'd' },
         { "recursive", no_argument, NULL, 'r' },
         { "undump", no_argument, NULL, 'u' },
+        { "upgrade", no_argument, NULL, 'U' },
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
         { "clearcid", required_argument, NULL, 'Z' },
@@ -1121,6 +1133,12 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN)
                 usage(argv[0]);
             mode = CHECKFOLDERS;
+            break;
+
+        case 'U':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = UPGRADE;
             break;
 
         case 'v':

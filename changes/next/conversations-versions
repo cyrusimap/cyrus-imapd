@@ -1,0 +1,16 @@
+Description:
+
+Added '-U' option to ctl_conversationsdb for version upgrades
+
+
+Config changes:
+
+No config changes
+
+Upgrade instructions:
+
+After any upgrade, running 'ctl_conversationsdb -U -r' will make any
+upgrades that are needed to have the latest version.
+
+
+GitHub issue:
