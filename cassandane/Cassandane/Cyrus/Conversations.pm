@@ -47,6 +47,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::ThreadedGenerator;
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
                                   from_rfc822
                                   to_rfc3501 from_rfc3501);
@@ -336,6 +337,53 @@ sub test_normalise_nonascii_whitespace
     $exp{B} = $self->make_message("Re: hello there", references => [ $exp{A} ]);
     $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
+}
+
+#
+# test upgrade tooling
+#
+sub test_upgrade
+    :min_version_3_12
+{
+    my ($self) = @_;
+    my %exp;
+
+    my $talk = $self->{store}->get_client();
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($talk->capability()->{xconversations});
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    $talk->create('foo');
+
+    # shouldn't reconstruct
+    xlog $self, "Upgrade shouldn't have anything to do";
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/conv-output1.txt";
+    $self->{instance}->run_command({ cyrus => 1, redirects => { stdout => $outfile } }, 'ctl_conversationsdb', '-U', '-r', '-v');
+    my $data = slurp_file($outfile);
+    $self->assert_matches(qr/already version/, $data);
+
+    # nuke the version key
+    my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
+    $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['DELETE', '$VERSION']);
+
+    xlog $self, "Upgrade with deleted VERSION should recalc";
+    $outfile = "$basedir/conv-output2.txt";
+    $self->{instance}->run_command({ cyrus => 1, redirects => { stdout => $outfile } }, 'ctl_conversationsdb', '-U', '-r', '-v');
+    $data = slurp_file($outfile);
+    $self->assert_matches(qr/user.cassandane.foo/, $data);
+
+
+    xlog $self, "Upgrade again should have nothing to do";
+    $outfile = "$basedir/conv-output3.txt";
+    $self->{instance}->run_command({ cyrus => 1, redirects => { stdout => $outfile } }, 'ctl_conversationsdb', '-U', '-r', '-v');
+    $data = slurp_file($outfile);
+    $self->assert_matches(qr/already version/, $data);
 }
 
 #
