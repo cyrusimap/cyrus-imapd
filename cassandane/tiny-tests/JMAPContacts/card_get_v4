@@ -182,6 +182,7 @@ EOF
                 'pref' => 1
             },
             'OS2' => {
+                'vCardName' => 'socialprofile',
                 'user' => 'Simon P.',
                 'uri' => 'https://example.com/@simon',
                 'service' => 'Mastodon'

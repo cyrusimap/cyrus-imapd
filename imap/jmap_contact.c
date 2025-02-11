@@ -6068,6 +6068,7 @@ static const struct comp_kind adr_comp_kinds[] = {
 #define ALLOW_PREF_PARAM          (1<<6)
 #define ALLOW_SERVICETYPE_PARAM   (1<<7)
 #define ALLOW_TYPE_PARAM          (1<<8)
+#define ALLOW_USERNAME_PARAM      (1<<9)
 
 static const char *_prop_id(vcardproperty *prop)
 {
@@ -6365,6 +6366,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             /* Should be handled by the properties that use it */
             continue;
 
+        servicetype:
         case VCARD_SERVICETYPE_PARAMETER:
             if (param_flags & ALLOW_SERVICETYPE_PARAM) {
                 json_object_set_new(obj, "service", json_string(param_value));
@@ -6427,6 +6429,9 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
                         if (prop_kind == VCARD_RELATED_PROPERTY) {
                             type = "relation";
                         }
+                        else if (param_flags & ALLOW_SERVICETYPE_PARAM) {
+                            goto servicetype;
+                        }
                         break;
                     }
 
@@ -6463,10 +6468,28 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             }
             break;
 
+        username:
         case VCARD_USERNAME_PARAMETER:
+            if (param_flags & ALLOW_SERVICETYPE_PARAM) {
+                json_object_set_new(obj, "user", jmap_utf8string(param_value));
+                continue;
+            }
+            break;
+
         case VCARD_VALUE_PARAMETER:
             /* Should be handled by the properties that use it */
             continue;
+
+        case VCARD_X_PARAMETER:
+            if ((param_flags & ALLOW_SERVICETYPE_PARAM) &&
+                !strcasecmp(vcardparameter_get_xname(param), "X-SERVICE-TYPE")) {
+                goto servicetype;
+            }
+            else if ((param_flags & ALLOW_USERNAME_PARAM) &&
+                !strcasecmp(vcardparameter_get_xname(param), "X-USER")) {
+                goto username;
+            }
+            break;
 
         default:
             break;
@@ -6681,6 +6704,13 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         }
         else if (!strcmp(prop_name, "X-FM-OTHERACCOUNT-MEMBER")) {
             goto member;
+        }
+        else if (!strcasecmp(prop_name, "X-SOCIAL-PROFILE")) {
+            kind = "x-social-profile";
+            goto online;
+        }
+        else if (!strcasecmp(prop_name, "X-FM-ONLINE-OTHER")) {
+            goto online;
         }
         else if (prop_group) {
             if (!strcasecmp(prop_name, VCARD_APPLE_ABADR_PROPERTY)) {
@@ -6925,28 +6955,29 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     case VCARD_IMPP_PROPERTY:
         kind = "impp";
 
-        GCC_FALLTHROUGH
+        goto online;
 
     case VCARD_SOCIALPROFILE_PROPERTY: {
+        kind = "socialprofile";
+
+    online:
         json_t *user = NULL, *uri = NULL;
         json_t *services = json_object_get_vanew(obj, "onlineServices", "{}");
 
+        param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
+            ALLOW_LABEL_PARAM | ALLOW_SERVICETYPE_PARAM;
+
         param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
-        if (param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) {
+        if ((param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) ||
+            (prop_value && *prop_value && !strchr(prop_value, ':'))) {
             user = jmap_utf8string(prop_value);
         }
         else {
-            uri = jmap_utf8string(prop_value);
+            if (prop_value && *prop_value)
+                uri = jmap_utf8string(prop_value);
 
-            param = vcardproperty_get_first_parameter(prop,
-                                                      VCARD_USERNAME_PARAMETER);
-            if (param) {
-                user = jmap_utf8string(vcardparameter_get_username(param));
-            }
+            param_flags |= ALLOW_USERNAME_PARAM;
         }
-
-        param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
-            ALLOW_LABEL_PARAM | ALLOW_SERVICETYPE_PARAM;
 
         jprop = json_pack("{s:o* s:o* s:s*}",
                           "user", user, "uri", uri, "vCardName", kind);
