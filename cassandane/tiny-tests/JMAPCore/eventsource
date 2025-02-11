@@ -24,7 +24,7 @@ sub test_eventsource
     my $url = $session->{eventSourceUrl};
     $self->assert_not_null($url);
 
-    $self->assert_num_equals(1, $url =~ s/\{types\}/Email/g);
+    $self->assert_num_equals(1, $url =~ s/\{types\}/Mailbox,Email,Calendar,CalendarEvent,AddressBook,ContactCard/g);
     $self->assert_num_equals(1, $url =~ s/\{closeafter\}/state/g);
     $self->assert_num_equals(1, $url =~ s/\{ping\}/0/g);
 
@@ -51,5 +51,10 @@ sub test_eventsource
     $self->assert_str_equals('StateChange', $data->{'@type'});
     $self->assert_not_null($data->{changed});
     $self->assert_not_null($data->{changed}->{cassandane});
+    $self->assert_not_null($data->{changed}->{cassandane}->{Mailbox});
     $self->assert_not_null($data->{changed}->{cassandane}->{Email});
+    $self->assert_not_null($data->{changed}->{cassandane}->{Calendar});
+    $self->assert_not_null($data->{changed}->{cassandane}->{CalendarEvent});
+    $self->assert_not_null($data->{changed}->{cassandane}->{AddressBook});
+    $self->assert_not_null($data->{changed}->{cassandane}->{ContactCard});
 }

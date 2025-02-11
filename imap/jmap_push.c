@@ -62,9 +62,12 @@ static const struct datatype_t {
     { "EmailSubmission", offsetof(struct mboxname_counters, submissionmodseq)    },
     { "Calendar",        offsetof(struct mboxname_counters, caldavfoldersmodseq) },
     { "CalendarEvent",   offsetof(struct mboxname_counters, caldavmodseq)        },
+    { "AddressBook",     offsetof(struct mboxname_counters, carddavfoldersmodseq)},
+    { "ContactCard",     offsetof(struct mboxname_counters, carddavmodseq)       },
+    { "SieveScript",     offsetof(struct mboxname_counters, sievemodseq)         },
+    /* legacy/non-standard types */
     { "Contact",         offsetof(struct mboxname_counters, carddavmodseq)       },
     { "Note",            offsetof(struct mboxname_counters, notesmodseq)         },
-    { "SieveScript",     offsetof(struct mboxname_counters, sievemodseq)         },
     { NULL,              0 }
 };
 
