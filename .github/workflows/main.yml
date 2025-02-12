@@ -14,6 +14,10 @@ on:
       - 'cyrus-imapd-*'
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [ "gcc", "clang" ]
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
@@ -39,6 +43,8 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
+      env:
+        CC: "${{ matrix.compiler }}"
       shell: bash
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
