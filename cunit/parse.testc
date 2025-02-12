@@ -65,26 +65,30 @@ static void test_parsehex(void)
     CU_ASSERT_EQUAL(r, -1);
 }
 
-#define wrap_int_parser(func, type, s, outp, valp, inp) do          \
-{                                                                   \
-    struct protstream *prot;                                        \
-    char *b;                                                        \
-                                                                    \
-    int *outp__ = (outp);                                           \
-    type *valp__ = (valp);                                          \
-    int *inp__ = (inp);                                             \
-                                                                    \
-    b = xstrdup(s); /* work around bug in prot_ungetc */            \
-    prot = prot_readmap(b, strlen(b));                              \
-                                                                    \
-    *valp__ = (type) CANARY;                                        \
-    *outp__ = func(prot, valp__);                                   \
-    if (inp__) *inp__ = prot_bytes_in(prot);                        \
-                                                                    \
-    prot_free(prot);                                                \
-    free(b);                                                        \
+#define wrap_int_parser_nofree(prot, b, func, type, s, outp, valp, inp); do \
+{                                                                           \
+    int *outp__ = (outp);                                                   \
+    type *valp__ = (valp);                                                  \
+    int *inp__ = (inp);                                                     \
+                                                                            \
+    b = xstrdup(s); /* work around bug in prot_ungetc */                    \
+    prot = prot_readmap(b, strlen(b));                                      \
+                                                                            \
+    *valp__ = (type) CANARY;                                                \
+    *outp__ = func(prot, valp__);                                           \
+    if (inp__) *inp__ = prot_bytes_in(prot);                                \
 } while(0)
 
+#define wrap_int_parser(func, type, s, outp, valp, inp) do           \
+{                                                                    \
+    struct protstream *prot;                                         \
+    char *b;                                                         \
+                                                                     \
+    wrap_int_parser_nofree(prot, b, func, type, s, outp, valp, inp); \
+                                                                     \
+    prot_free(prot);                                                 \
+    free(b);                                                         \
+} while(0)
 
 static void test_getint32(void)
 {
@@ -117,9 +121,17 @@ static void test_getint32(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
-    CU_EXPECT_CYRFATAL_BEGIN;
-        wrap_int_parser(getint32, int32_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+    {
+        struct protstream *prot = NULL;
+        char *b = NULL;
+
+        CU_EXPECT_CYRFATAL_BEGIN;
+            wrap_int_parser_nofree(prot, b, getint32, int32_t, STR3, &c, &val, NULL);
+        CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+
+        free(prot);
+        free(b);
+    }
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getint32, int32_t, STR4, &c, &val, &bytes_in);
@@ -186,9 +198,17 @@ static void test_getsint32(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
-    CU_EXPECT_CYRFATAL_BEGIN;
-        wrap_int_parser(getsint32, int32_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+    {
+        struct protstream *prot = NULL;
+        char *b = NULL;
+
+        CU_EXPECT_CYRFATAL_BEGIN;
+            wrap_int_parser_nofree(prot, b, getsint32, int32_t, STR3, &c, &val, NULL);
+        CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+
+        free(prot);
+        free(b);
+    }
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getsint32, int32_t, STR4, &c, &val, &bytes_in);
@@ -253,9 +273,17 @@ static void test_getuint32(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
-    CU_EXPECT_CYRFATAL_BEGIN;
-        wrap_int_parser(getuint32, uint32_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+    {
+        struct protstream *prot = NULL;
+        char *b = NULL;
+
+        CU_EXPECT_CYRFATAL_BEGIN;
+            wrap_int_parser_nofree(prot, b, getuint32, uint32_t, STR3, &c, &val, NULL);
+        CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+
+        free(prot);
+        free(b);
+    }
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getuint32, uint32_t, STR4, &c, &val, &bytes_in);
@@ -320,9 +348,17 @@ static void test_getint64(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
-    CU_EXPECT_CYRFATAL_BEGIN;
-        wrap_int_parser(getint64, int64_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+    {
+        struct protstream *prot = NULL;
+        char *b = NULL;
+
+        CU_EXPECT_CYRFATAL_BEGIN;
+            wrap_int_parser_nofree(prot, b, getint64, int64_t, STR3, &c, &val, NULL);
+        CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+
+        free(prot);
+        free(b);
+    }
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getint64, int64_t, STR4, &c, &val, &bytes_in);
@@ -389,9 +425,17 @@ static void test_getsint64(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
-    CU_EXPECT_CYRFATAL_BEGIN;
-        wrap_int_parser(getsint64, int64_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+    {
+        struct protstream *prot = NULL;
+        char *b = NULL;
+
+        CU_EXPECT_CYRFATAL_BEGIN;
+            wrap_int_parser_nofree(prot, b, getsint64, int64_t, STR3, &c, &val, NULL);
+        CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+
+        free(prot);
+        free(b);
+    }
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getsint64, int64_t, STR4, &c, &val, &bytes_in);
@@ -456,9 +500,17 @@ static void test_getuint64(void)
     CU_ASSERT_EQUAL(bytes_in, strlen(STR2));
 
     /* test a string with too many digits */
-    CU_EXPECT_CYRFATAL_BEGIN;
-        wrap_int_parser(getuint64, uint64_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+    {
+        struct protstream *prot = NULL;
+        char *b = NULL;
+
+        CU_EXPECT_CYRFATAL_BEGIN;
+            wrap_int_parser_nofree(prot, b, getuint64, uint64_t, STR3, &c, &val, NULL);
+        CU_EXPECT_CYRFATAL_END(EX_PROTOCOL, "num too big");
+
+        free(prot);
+        free(b);
+    }
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getuint64, uint64_t, STR4, &c, &val, &bytes_in);

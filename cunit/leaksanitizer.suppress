@@ -1,0 +1,5 @@
+leak:__cunit_test_bitfield_invalid
+leak:__cunit_test_enum_invalid
+leak:__cunit_test_duration_invalid
+leak:__cunit_test_bytesize_invalid
+leak:__cunit_test_stringlist_invalid

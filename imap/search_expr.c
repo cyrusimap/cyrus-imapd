@@ -72,22 +72,6 @@ static search_expr_t **the_rootp;
 static search_expr_t *the_focus;
 #endif
 
-/* keep this in sync with enum search_op in search_expr.h */
-EXPORTED const char *search_op_name[] = {
-    "SEOP_UNKNOWN",
-    "SEOP_TRUE",
-    "SEOP_FALSE",
-    "SEOP_LT",
-    "SEOP_LE",
-    "SEOP_GT",
-    "SEOP_GE",
-    "SEOP_MATCH",
-    "SEOP_FUZZYMATCH",
-    "SEOP_AND",
-    "SEOP_OR",
-    "SEOP_NOT",
-};
-
 static void split(search_expr_t *e,
                   void (*cb)(const char *, search_expr_t *, search_expr_t *, void *),
                   void *rock);

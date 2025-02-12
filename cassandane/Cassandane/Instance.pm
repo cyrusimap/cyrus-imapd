@@ -1412,6 +1412,56 @@ sub _check_valgrind_logs
     return;
 }
 
+sub _sanitizer_log_dir()
+{
+    my ($self, $sanitizer) = @_;
+
+    my $san_logdir = $self->{basedir} . "/${sanitizer}logs/";
+    mkpath $san_logdir
+        unless ( -d $san_logdir );
+
+    return $san_logdir;
+}
+
+sub _check_sanitizer_logs
+{
+    my ($self, $sanitizer) = @_;
+
+    my $san_logdir = $self->_sanitizer_log_dir($sanitizer);
+
+    opendir my $dirfh, $san_logdir
+        or return "Cannot open directory $san_logdir for reading: $!";
+
+    my @nzlogs;
+    while ($_ = readdir $dirfh)
+    {
+        next if m/^\./;
+        next if m/\.core\./;
+        my $log = "$san_logdir/$_";
+        next if -z $log;
+        push(@nzlogs, $_);
+
+        if (open my $fh, '<', $log) {
+            xlog "$sanitizer errors from file $log";
+            while (<$fh>) {
+                chomp;
+                xlog "$_";
+            }
+            close $fh;
+        }
+        else {
+            xlog "Cannot open $sanitizer log $log for reading: $!";
+        }
+
+    }
+    closedir $dirfh;
+
+    return "Found $sanitizer errors, see log for details"
+        if scalar @nzlogs;
+
+    return;
+}
+
 # The 'file' program seems to consistently misreport cores
 # so we apply a heuristic that seems to work
 sub _detect_core_program
@@ -1692,6 +1742,8 @@ sub stop
     push @errors, $self->_compress_berkeley_crud();
 
     push @errors, $self->_check_valgrind_logs();
+    push @errors, $self->_check_sanitizer_logs("asan");
+    push @errors, $self->_check_sanitizer_logs("ubsan");
     push @errors, $self->_check_cores();
     push @errors, $self->_check_syslog() unless $params{no_check_syslog};
     push @errors, "master ready file still exists" if -e "$self->{basedir}/master.ready";
@@ -1830,6 +1882,13 @@ sub run_command
     if (ref($args[0]) eq 'HASH') {
         $options = shift(@args);
     }
+
+    # Always set these. If they weren't compiled in they won't be used.
+    local $ENV{ASAN_OPTIONS} = ($ENV{ASAN_OPTIONS} // "")
+        . ":log_path=" . $self->_sanitizer_log_dir("asan") . "asan";
+
+    local $ENV{UBSAN_OPTIONS} = ($ENV{UBSAN_OPTIONS} // "")
+        . ":log_path=" . $self->_sanitizer_log_dir("ubsan") . "ubsan";
 
     my ($pid, $got_exit) = $self->_fork_command($options, @args);
 

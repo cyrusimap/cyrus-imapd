@@ -73,22 +73,6 @@
     ...
 }
 {
-    # The parse:getint tests each check for fatal parse errors, but when
-    # this occurs the protstream structure is leaked.
-    parse_getint_protstream_leak
-    Memcheck:Leak
-    match-leak-kinds: definite
-    fun:malloc
-    fun:xmalloc
-    fun:xzmalloc
-    fun:prot_readmap
-    fun:test_get*int*
-    ...
-    obj:*/libcunit*
-    ...
-}
-
-{
    # shush leaked SASL internal state in toy server process
    backend_child_process_sasl_state
    Memcheck:Leak
