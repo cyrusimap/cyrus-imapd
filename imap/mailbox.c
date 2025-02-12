@@ -5536,9 +5536,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                     // didn't manage to store it, so remove the ARCHIVED flag
                     continue;
                 }
-                r = xunlink (srcname);
-                if (r < 0)
-                    syslog(LOG_ERR, "unlink(%s) failed: %m", srcname);
+                xunlink(srcname);
             }
 #endif
             copyrecord.internal_flags |= FLAG_INTERNAL_ARCHIVED | FLAG_INTERNAL_NEEDS_CLEANUP;

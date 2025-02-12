@@ -259,13 +259,8 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
         free(tid->fnamenew);
     } else if (tid->delete) {
         /* delete file */
-        r = xunlink(fname);
-        if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: unlink failed",
-                             "fname=<%s>",
-                             fname);
+        if (xunlink(fname))
             r = CYRUSDB_IOERROR;
-        }
     } else {
         /* read-only txn */
     }

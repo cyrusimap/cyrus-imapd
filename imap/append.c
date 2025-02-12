@@ -1224,10 +1224,7 @@ EXPORTED int append_removestage(struct stagemsg *stage)
 
     while ((p = strarray_pop(&stage->parts))) {
         /* unlink the staging file */
-        if (xunlink(p) != 0) {
-            xsyslog(LOG_ERR, "IOERROR: error unlinking file",
-                             "filename=<%s>", p);
-        }
+        xunlink(p);
         free(p);
     }
 
