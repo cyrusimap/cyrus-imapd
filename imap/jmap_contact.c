@@ -6957,34 +6957,35 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         goto online;
 
-    case VCARD_SOCIALPROFILE_PROPERTY: {
+    case VCARD_SOCIALPROFILE_PROPERTY:
         kind = "socialprofile";
 
     online:
-        json_t *user = NULL, *uri = NULL;
-        json_t *services = json_object_get_vanew(obj, "onlineServices", "{}");
+        {
+            json_t *user = NULL, *uri = NULL;
+            json_t *services = json_object_get_vanew(obj, "onlineServices", "{}");
 
-        param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
-            ALLOW_LABEL_PARAM | ALLOW_SERVICETYPE_PARAM;
+            param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
+                ALLOW_LABEL_PARAM | ALLOW_SERVICETYPE_PARAM;
 
-        param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
-        if ((param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) ||
-            (prop_value && *prop_value && !strchr(prop_value, ':'))) {
-            user = jmap_utf8string(prop_value);
+            param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
+            if ((param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) ||
+                (prop_value && *prop_value && !strchr(prop_value, ':'))) {
+                user = jmap_utf8string(prop_value);
+            }
+            else {
+                if (prop_value && *prop_value)
+                    uri = jmap_utf8string(prop_value);
+
+                param_flags |= ALLOW_USERNAME_PARAM;
+            }
+
+            jprop = json_pack("{s:o* s:o* s:s*}",
+                              "user", user, "uri", uri, "vCardName", kind);
+
+            json_object_set_new(services, prop_id, jprop);
         }
-        else {
-            if (prop_value && *prop_value)
-                uri = jmap_utf8string(prop_value);
-
-            param_flags |= ALLOW_USERNAME_PARAM;
-        }
-
-        jprop = json_pack("{s:o* s:o* s:s*}",
-                          "user", user, "uri", uri, "vCardName", kind);
-
-        json_object_set_new(services, prop_id, jprop);
         break;
-    }
 
     case VCARD_LANG_PROPERTY: {
         json_t *langs = json_object_get_vanew(obj, "preferredLanguages", "{}");
