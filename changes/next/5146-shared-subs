@@ -1,0 +1,24 @@
+Description:
+
+* Fixed :issue:`5146`: can't subscribe to shared mailbox when username is a
+  prefix of owner's username
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+No manual intervention required.
+
+Subscriptions databases will be upgraded the next time they're opened, and any
+bad entries due to the bug will be found and fixed.  You can force this for a
+particular user by connecting to IMAP as them and issuing a command like
+``. LSUB "" "*"`` or similar, but this will happen anyway during normal usage.
+
+
+GitHub issue:
+
+#5146
