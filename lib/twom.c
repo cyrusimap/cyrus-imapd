@@ -1851,16 +1851,14 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     /* we can't read an unclean database */
     if (!db_is_clean(db, file)) {
  badfile:
-        /* we have to be able to re-lock safely */
-        if (db->readonly) {
-            r = TWOM_IOERROR;
-            goto done;
-        }
         /* if we take a write lock, that will repair it */
         unlock(db, file);
         // no txn, release the write_lock after repairing if needed
+        int was_readonly = db->readonly;
+        db->readonly = 0;
         r = write_lock(db, NULL, file, flags);
         if (r) return r;
+        db->readonly = was_readonly;
         /* if we want a transaction, we'll need to re-lock with the readlock */
         if (txnp) {
             goto restart;
