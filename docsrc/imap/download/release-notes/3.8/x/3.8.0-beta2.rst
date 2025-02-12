@@ -34,12 +34,12 @@ Major changes since the 3.6 series
   after it has been sent.
 * Maps JMAP CalendarEvent privacy to the newly introduced iCalendar
   X-JMAP-PRIVACY property rather than CLASS.  See
-  :ref:`upgrade_3.8.0_jmap_caldav_changes` in the upgrade instructions.
+  :cyrus-3.8:`/imap/download/upgrade.html#jmap-caldav-changes` in the upgrade instructions.
 * Improves error handling and reporting from :cyrusman:`mbexamine(8)`.  If you
   have custom tooling that calls mbexamine, it may need updating.
 * Sieve: Remove support for creating scripts with the deprecated
   ``imapflags`` capability and ``mark`` / ``unmark`` actions.  See
-  :ref:`upgrade_3.8.0_sieve_changes` in the upgrade instructions.
+  :cyrus-3.8:`/imap/download/upgrade.html#sieve-changes` in the upgrade instructions.
 * Lock ordering fixes should result in fewer "resource deadlock avoided"
   errors.
 

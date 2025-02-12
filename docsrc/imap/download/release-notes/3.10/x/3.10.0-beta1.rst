@@ -25,7 +25,8 @@ Major changes since the 3.8 series
 * :cyrusman:`cyr_expire(8)` now supports the 'noexpire_until' annotation to
   disable cyr_expire per user
 * JMAP calendar default alarms are now stored in a non-DAV mailbox annotation.
-  See :ref:`upgrade_jmap_default_alarms` for upgrading instructions if you are
+  See :cyrus-3.10:`/imap/download/upgrade.html#default-alarms`
+  for upgrading instructions if you are
   already using the experimental JMAP Calendars API
 * Removes support for parsing and generating bytecode for the deprecated
   denotify action and notify actions using the legacy (pre-:rfc:`5435`) syntax.
@@ -50,9 +51,9 @@ Major changes since the 3.8 series
 * :cyrusman:`squatter(8)` now supports the "wait=y" :cyrusman:`cyrus.conf(5)`
   option when started in rolling mode from the ``DAEMON`` section
 * :cyrusman:`master(8)` now touches a ready file to indicate it is "ready for
-  work".  See :ref:`upgrade_master_pid_ready_files`
+  work".  See :cyrus-3.10:`/imap/download/upgrade.html#master-pid-and-master-ready-files`
 * :cyrusman:`master(8)` now gets its pidfile name from the ``master_pid_file``
-  :cyrusman:`imapd.conf(5)` option.  See :ref:`upgrade_master_pid_ready_files`
+  :cyrusman:`imapd.conf(5)` option.  See :cyrus-3.10:`/imap/download/upgrade.html#master-pid-and-master-ready-files`
 * Adds pcre2 support.  Prefers pcre2 over pcre if both are available. See
   :ref:`upgrade_pcre2_support`
 * The ``proc`` :cyrusman:`cyr_info(8)` subcommand now also reports DAEMON and
