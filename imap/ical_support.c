@@ -419,8 +419,9 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
         cmp = a->by[i].size - b->by[i].size;
         if (cmp) return cmp;
 
-        cmp = memcmp(a->by[i].data, b->by[i].data,
-                     a->by[i].size * sizeof(a->by[i].data[0]));
+        if (a->by[i].size)
+            cmp = memcmp(a->by[i].data, b->by[i].data,
+                         a->by[i].size * sizeof(a->by[i].data[0]));
         if (cmp) return cmp;
     }
 #else /* !HAVE_RECUR_BY_REF */
