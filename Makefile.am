@@ -698,7 +698,7 @@ cunit/registers.h: $(CUNIT_PROJECT)
 	$(AM_V_GEN)$(CUNIT_PL) --generate-register-function $@
 
 # To run under Valgrind, do: make VG=1 check
-VALGRIND = libtool --mode=execute valgrind \
+VALGRIND = ${abs_top_srcdir}/libtool --mode=execute valgrind \
             --tool=memcheck \
             --leak-check=full \
             --suppressions=${abs_top_srcdir}/cunit/vg.supp \

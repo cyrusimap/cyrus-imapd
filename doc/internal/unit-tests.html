@@ -304,7 +304,7 @@ an executable, it's a shell script which sets up some environment variables
 before running the real executable which is hidden away.  This makes debugging
 a failing test somewhat challenging.  The solution is:</p>
 
-<blockquote class="cmds">me@mybox&gt; <b>( cd cunit ; libtool --mode=execute gdb --args unit -t crc32 )</b>
+<blockquote class="cmds">me@mybox&gt; <b>( cd cunit ; ../libtool --mode=execute gdb --args unit -t crc32 )</b>
 ...
 Reading symbols from /home/me/cyrus-imapd/cunit/.libs/lt-unit...done.
 (gdb) <b>list crc32.testc:1</b>
