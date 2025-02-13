@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_contactgroup_set_cardgroup_get
+{
+
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contacts";
+    my $res = $jmap->CallMethods([['Contact/set', {create => {
+                        "1" => { firstName => "foo", lastName => "last1" },
+                        "2" => { firstName => "bar", lastName => "last2" }
+                    }}, "R1"]]);
+    my $contact1 = $res->[0][1]{created}{"1"}{id};
+    my $contact2 = $res->[0][1]{created}{"2"}{id};
+
+    xlog $self, "create contact group";
+    $res = $jmap->CallMethods([['ContactGroup/set', {
+        create => {
+            "1" => {
+                name => "group1",
+                contactIds => [$contact1, $contact2]
+            }
+        }
+    }, "R2"]]);
+    my $group1 = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get contact group $group1";
+    $res = $jmap->CallMethods([['ContactCard/get', { ids => [$group1] }, "R3"]]);
+    $self->assert_str_equals('group', $res->[0][1]{list}[0]{kind});
+    $self->assert_str_equals('group1', $res->[0][1]{list}[0]{name}{full});
+    $self->assert(exists $res->[0][1]{list}[0]{members}{$contact1});
+    $self->assert(exists $res->[0][1]{list}[0]{members}{$contact2});
+}
