@@ -3225,7 +3225,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
 
     r = mailbox_get_annotate_state(pctx->mailbox, pctx->record->uid, &astate);
     if (!r) r = annotate_state_writemask(astate, buf_cstring(&pctx->buf),
-                                         httpd_userid, &value);
+                                         httpd_userisadmin ? "" : httpd_userid, &value);
     /* we need to rewrite the record to update the modseq because the layering
      * of annotations and mailboxes is broken */
     if (!r) r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
@@ -3381,7 +3381,7 @@ static int proppatch_todb_internal(xmlNodePtr prop, unsigned set,
     r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
     if (!r) r = mask ?
         annotate_state_writemask(astate, buf_cstring(&pctx->buf),
-                httpd_userid, &value) :
+                httpd_userisadmin ? "" : httpd_userid, &value) :
         annotate_state_write(astate, buf_cstring(&pctx->buf),
                 httpd_userid, &value);
 
@@ -3716,7 +3716,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                                          DAV_PROT_PROP);
                             *pctx->ret = HTTP_FORBIDDEN;
                         }
-                        else if ((pctx->txn->meth == METH_PROPPATCH) &&
+                        else if ((pctx->txn->meth == METH_PROPPATCH) && !httpd_userisadmin &&
                                  !(rights & ((entry->flags & PROP_PERUSER) ?
                                              DACL_READ : DACL_PROPCOL))) {
                             /* DAV:need-privileges */
