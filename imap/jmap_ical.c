@@ -818,8 +818,8 @@ static void xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
 {
     buf_reset(dst);
     const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+    char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
     if (!id) {
-        char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         id = sha1hexstr(icalproperty_as_ical_string(prop), keybuf);
     }
     if (id) buf_setcstr(dst, id);
