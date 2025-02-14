@@ -9,13 +9,12 @@ const char canary[] = "canary.txt";
 
 static void test_run(void)
 {
-    int r;
+    int r = 0;
     struct stat sb;
 
     /* make sure the file isnt there */
-    r = xunlink(canary);
-    if (r < 0) r = errno;
-    if (r == ENOENT) r = 0;
+    if (xunlink(canary))
+        r = errno;
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     r = run_command("/usr/bin/touch", canary, NULL);
@@ -54,15 +53,14 @@ static void test_popen_r(void)
 static void test_popen_w(void)
 {
 #define WORD0   "semiotics"
-    int r;
+    int r = 0;
     struct command *cmd = NULL;
     FILE *fp;
     char buf[32];
 
     /* make sure the file isnt there */
-    r = xunlink(canary);
-    if (r < 0) r = errno;
-    if (r == ENOENT) r = 0;
+    if (xunlink(canary))
+        r = errno;
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     snprintf(buf, sizeof(buf), "cat > %s", canary);
