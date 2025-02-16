@@ -98,7 +98,7 @@ struct ws_context {
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
 
-    struct buf h2_data;              /* Input data pointer when under HTTP/2 */
+    struct protstream h2_data;       /* Input data when under HTTP/2 */
 
     union {
         struct {
@@ -158,13 +158,15 @@ static const char *wslay_error_as_str(enum wslay_error err_code)
     }
 }
 
-static ssize_t h1_recv_cb(wslay_event_context_ptr ev,
-                          uint8_t *buf, size_t len,
-                          int flags __attribute__((unused)),
-                          void *user_data)
+static ssize_t recv_cb(wslay_event_context_ptr ev,
+                       uint8_t *buf, size_t len,
+                       int flags __attribute__((unused)),
+                       void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
-    struct protstream *pin = txn->conn->pin;
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+    struct protstream *pin =
+        (txn->flags.ver > VER_1_1) ? &ctx->h2_data : txn->conn->pin;
     ssize_t n;
 
     n = prot_read(pin, (char *) buf, len);
@@ -211,49 +213,6 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     }
 
     return len;
-}
-
-static ssize_t h2_recv_cb(wslay_event_context_ptr ev,
-                          uint8_t *buf, size_t len,
-                          int flags __attribute__((unused)),
-                          void *user_data)
-{
-    struct transaction_t *txn = (struct transaction_t *) user_data;
-    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
-    const char *dataptr = buf_base(&ctx->h2_data);
-    size_t datalen = buf_len(&ctx->h2_data);
-    ssize_t n;
-
-    if (!dataptr) {
-        /* New data has been read into the request body */
-        dataptr = buf_base(&txn->req_body.payload);
-        datalen = buf_len(&txn->req_body.payload);
-    }
-
-    if (!datalen) {
-        /* No data */
-        wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
-
-        /* Reset our input data pointer to NULL */
-        buf_free(&ctx->h2_data);
-
-        n = -1;
-    }
-    else {
-        /* Don't return more data than requested */ 
-        n = (datalen > len) ? len : datalen;
-
-        /* Copy the input data into the output buffer */
-        memcpy(buf, dataptr, n);
-
-        /* Set our input data pointer to the remaining payload (if any) */
-        buf_init_ro(&ctx->h2_data, dataptr + n, datalen - n);
-    }
-
-    xsyslog(LOG_DEBUG, "WS recv",
-            "len=<%zu>, datalen=<%zu>, n=<%zd>", len, datalen, n);
-
-    return n;
 }
 
 
@@ -712,7 +671,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
     struct wslay_event_callbacks callbacks = {
-        NULL, /* recv (assigned below)            */
+        recv_cb,
         send_cb,
         NULL, /* genmask                          */
         NULL, /* on_frame_recv_start (debug only) */
@@ -801,15 +760,11 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         txn->conn->ws_ctx = &txn->ws_ctx;
         ptrarray_add(&txn->conn->shutdown_callbacks, &_h1_shutdown);
 
-        callbacks.recv_callback = &h1_recv_cb;
-
         resp_code = HTTP_SWITCH_PROT;
     }
     else {
         /* HTTP/2 - Treat WS data as chunked response */
         txn->flags.te = TE_CHUNKED;
-
-        callbacks.recv_callback = &h2_recv_cb;
 
         resp_code = HTTP_OK;
     }
@@ -831,6 +786,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     ctx->accept_key = accept_key;
     ctx->protocol = protocol;
     ctx->data_cb = data_cb;
+    ctx->h2_data.fixedsize = 1;
     txn->ws_ctx = ctx;
     ptrarray_add(&txn->done_callbacks, &_end_channel);
 
@@ -959,6 +915,13 @@ HIDDEN void ws_input(struct transaction_t *txn)
             goaway, prot_IS_EOF(pin), want_read, want_write);
 
     if (want_read && !goaway) {
+        if (txn->flags.ver > VER_1_1) {
+            /* Data has been read into the request body,
+               which we place into a fixed-size protstream */
+            ctx->h2_data.ptr = (unsigned char *) buf_base(&txn->req_body.payload);
+            ctx->h2_data.cnt = buf_len(&txn->req_body.payload);
+        }
+          
         /* Read frame(s) */
         int r = wslay_event_recv(ev);
 
