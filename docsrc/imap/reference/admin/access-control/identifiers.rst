@@ -82,6 +82,8 @@ a non-/etc/passwd backend. Note that using unix groups in this way
     NSS augmentations, such as ``nss_ldap``, ``pam_ldap`` or ``sssd``
     may be used to provide Cyrus access to group information via NSS.
 
+.. _auth_mech_mboxgroups:
+
 mboxgroups Authorization
 ------------------------
 
