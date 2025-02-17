@@ -10694,8 +10694,8 @@ static unsigned get_mimebody_flags(const char *body, size_t len)
     return body_flags;
 }
 
-static void rewrite_inline_text(const char **bodyp, size_t *body_lenp,
-                                strarray_t *freeme)
+static void expand_bare_cr_lf(const char **bodyp, size_t *body_lenp,
+                              strarray_t *freeme)
 {
     const char *src_body = *bodyp;
     size_t src_len = *body_lenp;
@@ -10947,7 +10947,7 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
 
             // Rewrite inline plain text
             if (!strcasecmp("plain", media_subtype)) {
-                rewrite_inline_text(&body, &body_len, &freeme);
+                expand_bare_cr_lf(&body, &body_len, &freeme);
                 body_flags = get_mimebody_flags(body, body_len);
             }
 
@@ -10971,11 +10971,16 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
         unsigned body_flags = get_mimebody_flags(body, body_len);
 
         if (!strcasecmp("rfc822", media_subtype)) {
-            if (body_flags & (MIMEBODY_HAS_NUL | MIMEBODY_HAS_BARE_LF_CR)) {
+            if (body_flags & MIMEBODY_HAS_NUL) {
                 jmap_parser_invalid(parser, "type");
                 goto done;
             }
-            else if (body_flags & MIMEBODY_HAS_LONG_LINES) {
+            else if (body_flags & MIMEBODY_HAS_BARE_LF_CR) {
+                expand_bare_cr_lf(&body, &body_len, &freeme);
+                body_flags = get_mimebody_flags(body, body_len);
+            }
+
+            if (body_flags & MIMEBODY_HAS_LONG_LINES) {
                 content_transfer_encoding = "binary";
             }
             else if (body_flags & MIMEBODY_HAS_NON_ASCII) {
