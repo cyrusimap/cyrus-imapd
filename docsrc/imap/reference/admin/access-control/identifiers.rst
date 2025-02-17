@@ -1,6 +1,5 @@
 .. _imap-admin-access-control-identifiers:
 
-
 Access Control Identifier (ACI)
 ===============================
 
@@ -14,7 +13,9 @@ distinguished by the prefix "group:".  For example, "group:accounting".
           virtdomains, tips and tricks etc.
 
 There are two special identifiers, "anonymous", and "anyone".  The meaning of
-other identifiers usually depends on the authorization mechanism being used.
+other identifiers usually depends on the
+:ref:`authorization mechanism<imap-admin-access-control-authorization-mechanisms>`
+being used.
 
 ``anonymous`` and ``anyone``
 ----------------------------
@@ -27,6 +28,7 @@ anonymous user.
 Both ``anonymous`` and ``anyone`` may commonly be used with the **post**
 right ``p`` to allow message insertion to mailboxes.
 
+.. _imap-admin-access-control-authorization-mechanisms:
 
 Authorization Mechanisms
 ========================
@@ -81,6 +83,8 @@ a non-/etc/passwd backend. Note that using unix groups in this way
 
     NSS augmentations, such as ``nss_ldap``, ``pam_ldap`` or ``sssd``
     may be used to provide Cyrus access to group information via NSS.
+
+.. _auth_mech_mboxgroups:
 
 mboxgroups Authorization
 ------------------------
