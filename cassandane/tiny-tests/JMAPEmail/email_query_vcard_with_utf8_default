@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_vcard_with_utf8_default
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # Asserts that a text/vcard MIME body part gets indexed
+    # as UTF-8 text, even if the Content-Type header of the
+    # body part does not have an according charset parameter.
+    my $mime = <<'EOF';
+From: alice@local
+To: bob@local
+Subject: test
+Message-ID: <1390d09d-60f7-4840-88a2-9f319024b156@local>
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=ffd749e987fd42b3991e74bf3424e347
+
+--ffd749e987fd42b3991e74bf3424e347
+Content-Type: text/plain
+
+hello
+--ffd749e987fd42b3991e74bf3424e347
+Content-Type: text/vcard
+
+BEGIN:VCARD
+VERSION:3.0
+FN:adoxography
+END:VCARD
+
+--ffd749e987fd42b3991e74bf3424e347
+Content-Type: text/vcard
+Content-Transfer-Encoding: base64
+
+QkVHSU46VkNBUkQNClZFUlNJT046My4wDQpGTjpSw7ZocmljaA0KRU5EOlZDQVJEDQo=
+--ffd749e987fd42b3991e74bf3424e347--
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime);
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+use utf8;
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                body => "adoxography",
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                body => "Röhrich",
+            },
+        }, 'R2'],
+    ]);
+no utf8;
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+}
