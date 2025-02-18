@@ -373,7 +373,6 @@ static int compar_raw(const char *s1, size_t l1, const char *s2, size_t l2)
 static int compar_raw(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
-    if (!min) return 0;
     int r = memcmp(s1, s2, min);
     if (r) return r;
     if (l1 > l2) return 1;
