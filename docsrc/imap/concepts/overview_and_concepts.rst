@@ -150,6 +150,7 @@ Rights are combined through concatenation.  Please see
 
 .. include:: /imap/reference/admin/access-control/identifiers.rst
     :start-after: _imap-admin-access-control-identifiers:
+    :end-before: _imap-admin-access-control-authorization-mechanisms:
 
 Negative Rights
 ===============
