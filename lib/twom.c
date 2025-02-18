@@ -2912,7 +2912,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
     char scratch[80];
     const char *ptr;
     size_t offset = DUMMY_OFFSET;
-    int i;
+    size_t i;
 
     struct tm_header *header = &txn->file->header;
     struct twom_db *db = txn->db;
@@ -2964,7 +2964,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
         else if (type == DELETE) {
             size_t parent_offset = NEXT0(ptr, 0);
             const char *key = KEYPTR(loc->file->base + parent_offset);
-            int len = KEYLEN(loc->file->base + parent_offset);
+            size_t len = KEYLEN(loc->file->base + parent_offset);
             if (len > 79) len = 79;
             if (key) strncpy(scratch, key, len);
             scratch[len] = 0;
@@ -2975,7 +2975,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
         }
         else {
             const char *key = KEYPTR(ptr);
-            int len = KEYLEN(ptr);
+            size_t len = KEYLEN(ptr);
             if (len > 79) len = 79;
             if (key) strncpy(scratch, key, len);
             scratch[len] = 0;
@@ -2998,7 +2998,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
             printf("\n");
             if (detail > 2) {
                 const char *val = VALPTR(ptr);
-                int len = VALLEN(ptr);
+                size_t len = VALLEN(ptr);
                 if (len > 79) len = 79;
                 if (val) strncpy(scratch, val, len);
                 scratch[len] = 0;
