@@ -2839,24 +2839,7 @@ static void reread_conf(struct timeval now)
 
 static void check_undermanned(struct service *s, int si, int wdi)
 {
-    if (s->exec /* enabled */ &&
-        (s->nactive < s->max_workers) &&
-        (s->ready_workers < s->desired_workers))
-    {
-        /* bring us up to desired_workers */
-        int j = s->desired_workers - s->ready_workers;
-
-        if (verbose) {
-            syslog(LOG_DEBUG, "service %s/%s needs %d more ready workers",
-                   s->name, s->familyname, j);
-        }
-
-        while (j-- > 0) {
-            spawn_service(s, si, wdi);
-        }
-    } else if (s->exec
-                && s->babysit
-                && s->nactive == 0) {
+    if (s->exec && s->babysit && s->nactive == 0) {
         if (s->nreadyfails >= MAX_READY_FAILS) {
             // if not yet timed out, just wait
             time_t now = time(NULL);
@@ -2869,11 +2852,28 @@ static void check_undermanned(struct service *s, int si, int wdi)
             s->nreadyfails--;
             s->lastreadyfail = now;
         }
-        syslog(LOG_ERR,
-               "lost all children for service: %s/%s.  " \
-               "Applying babysitter.",
-               s->name, s->familyname);
+        if (s->lastreadyfail) {
+            syslog(LOG_ERR,
+                   "lost all children for service: %s/%s.  " \
+                   "Applying babysitter.",
+                   s->name, s->familyname);
+        }
         spawn_service(s, si, wdi);
+    } else if (s->exec /* enabled */
+               && (s->nactive < s->max_workers)
+               && (s->ready_workers < s->desired_workers))
+    {
+        /* bring us up to desired_workers */
+        int j = s->desired_workers - s->ready_workers;
+
+        if (verbose) {
+            syslog(LOG_DEBUG, "service %s/%s needs %d more ready workers",
+                   s->name, s->familyname, j);
+        }
+
+        while (j-- > 0) {
+            spawn_service(s, si, wdi);
+        }
     } else if (!s->exec /* disabled */ &&
                 s->name /* not yet removed */ &&
                 s->nactive == 0) {
