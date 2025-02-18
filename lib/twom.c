@@ -1821,7 +1821,7 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         r = unlock(db, file);
         if (r) goto done;
 
-        int newfd = open(db->fname, O_RDWR, 0644);
+        int newfd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
         if (newfd == -1) {
             db->error("read_lock open failed",
                       "filename=<%s>", db->fname);
@@ -1840,8 +1840,9 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         /* map the new space (note: we map READ|WRITE even for readonly locks,
          * if we might lock for write later and want to reuse the mmap */
         if (file->size) munmap(file->base, file->size);
+        int flags = db->readonly ? PROT_READ : PROT_READ|PROT_WRITE;
         file->size = sbuf.st_size;
-        file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
+        file->base = (char *)mmap((caddr_t)0, file->size, flags, MAP_SHARED, file->fd, 0L);
         if (!file->base) {
             db->error("read_lock mmap failed",
                       "filename=<%s> size=<%08llX>", db->fname, (LLU)file->size);
@@ -1941,7 +1942,7 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     db->external_csum = setup->csum;
     db->external_compar = setup->compar;
 
-    int fflags = (create && !db->readonly) ? O_RDWR|O_CREAT : O_RDWR;
+    int fflags = db->readonly ? O_RDONLY : (create ? O_RDWR|O_CREAT : O_RDWR);
     int fd = open(db->fname, fflags, 0644);
     if (fd < 0) {
         r = (errno == ENOENT) ? TWOM_NOTFOUND : TWOM_IOERROR;
