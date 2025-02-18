@@ -5493,6 +5493,12 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
     vcardproperty *prop;
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
+    charset_t mycharset = CHARSET_UNKNOWN_CHARSET;
+
+    if (!charset || !strcasecmp(charset_canon_name(charset), "us-ascii")) {
+        mycharset = charset_lookupname("utf-8");
+        charset = mycharset;
+    }
 
     /* Parse the message into a vcard object */
     const struct buf *vcardbuf = NULL;
@@ -5595,6 +5601,7 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
 
 done:
     if (vcard) vcardcomponent_free(vcard);
+    charset_free(&mycharset);
     buf_free(&buf);
     return r;
 }
