@@ -341,13 +341,15 @@ static inline const char *safeptr(struct tm_loc *loc, size_t offset)
 
 /* find the more recent of the forward pointers at level 0 */
 #ifdef HAVE_DECLARE_OPTIMIZE
-static size_t advance0(const char *ptr)
+static size_t advance0(const char *ptr, size_t end)
     __attribute__((optimize("-O3")));
 #endif
-static size_t advance0(const char *ptr)
+static size_t advance0(const char *ptr, size_t end)
 {
     size_t next0 = NEXT0(ptr, 0);
     size_t next1 = NEXT0(ptr, 1);
+    if (next0 >= end) return next1;
+    if (next1 >= end) return next0;
     if (next0 > next1) return next0;
     return next1;
 }
@@ -371,6 +373,7 @@ static int compar_raw(const char *s1, size_t l1, const char *s2, size_t l2)
 static int compar_raw(const char *s1, size_t l1, const char *s2, size_t l2)
 {
     int min = l1 < l2 ? l1 : l2;
+    if (!min) return 0;
     int r = memcmp(s1, s2, min);
     if (r) return r;
     if (l1 > l2) return 1;
@@ -589,13 +592,11 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
     assert(db && file);
     const char *base = file->base;
 
-    if (file->size < HEADER_SIZE) {
+    if (file->size < HEADER_SIZE + DUMMY_SIZE)
         return TWOM_BADFORMAT;
-    }
 
-    if (memcmp(base, HEADER_MAGIC, HEADER_MAGIC_SIZE)) {
+    if (memcmp(base, HEADER_MAGIC, HEADER_MAGIC_SIZE))
         return TWOM_BADFORMAT;
-    }
 
     memcpy(header->uuid, base + OFFSET_UUID, 16);
 
@@ -764,6 +765,7 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
     uint8_t level = MAXLEVEL-1;
     int cmp = -1; /* never found a thing! */
     struct tm_file *file = loc->file;
+    size_t end = loc->end;
     const char *ptr = NULL;
 
     // reset the location
@@ -793,7 +795,7 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
         size_t next = NEXTN(locptr, level);
         /* optimisation: if the next address is the same on levels N and N-1,
          * we don't need to compar the key again */
-        if (next && next != futureoffset) {
+        if (next && next != futureoffset && next < end) {
             ptr = safeptr(loc, next);
             if (!ptr) return TWOM_IOERROR;
 
@@ -817,7 +819,7 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
     }
 
     while (offset) {
-        size_t next = advance0(locptr);
+        size_t next = advance0(locptr, end);
         if (!next) {
             // hit the end!  No match
             loc->backloc[0] = offset;
@@ -919,7 +921,7 @@ static int advance_loc(struct twom_txn *txn, struct tm_loc *loc)
 
     /* advance0 always get the exactly next record in the series, since it finds the level0
      * pointer after using the skip math to pick the highest value */
-    size_t offset = advance0(ptr);
+    size_t offset = advance0(ptr, loc->end);
 
     /* reached the end:
      * will have offset == 0, so will break foreach */
@@ -979,7 +981,7 @@ static int find_loc(struct twom_txn *txn, struct tm_loc *loc, const char *key, s
             loc->offset = 0;
         }
         size_t deleted_offset = 0;
-        size_t offset = advance0(ptr);
+        size_t offset = advance0(ptr, loc->end);
 
         // did we reach the end?
         if (!offset) return 0;
@@ -1067,9 +1069,11 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
 
     struct twom_db *db = txn->db;
     struct tm_loc *loc = &db->loc;
+    size_t end = loc->end;
     struct tm_file *file = loc->file;
     assert(file == txn->file);
     assert(file == db->openfile);
+    assert(file->written_size == end);
     struct tm_header *header = &file->header;
     size_t keyoffset = 0;
     size_t valoffset = 0;
@@ -1077,7 +1081,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
     int r;
     int type = ADD;
 
-    size_t offset = file->written_size;
+    size_t offset = end;
 
     // it's a pointer into our map!  we'll magically re-map it
     if (key > file->base && key < file->base + offset)
@@ -1163,7 +1167,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         // and the forward pointers to the old pointer's next location
         char *backptr = LOCBACKPTR(loc, 0);
         char *prevptr = backptr;
-        *((uint64_t *)(addr)) = htole64(advance0(locptr));
+        *((uint64_t *)(addr)) = htole64(advance0(locptr, end));
         addr += 8;
         SET0(file, backptr, offset);
 
@@ -1185,7 +1189,7 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
         // and the forward pointers to the old pointer's next location
         char *backptr = LOCBACKPTR(loc, 0);
         char *prevptr = backptr;
-        *((uint64_t *)(addr)) = htole64(advance0(backptr));
+        *((uint64_t *)(addr)) = htole64(advance0(backptr, end));
         addr += 8;
         SET0(file, backptr, offset);
 
@@ -1411,9 +1415,17 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
         }
     }
 
-    /* commmit first so all other bits are committed before we undirty the header */
+    /* commit first so all other bits are committed before we undirty the header */
     r = tm_commit(db, loc->end);
     if (r) return r;
+
+    if (ftruncate(file->fd, loc->end)) {
+        db->error("failed to truncate back to committed size",
+                  "fname=<%s> size=<%08llX>", db->fname, (LLU)loc->end);
+        return TWOM_IOERROR;
+    }
+    // this will cause tm_ensure to re-mmap even though the map is bigger
+    loc->file->size = loc->end;
 
     /* clear the dirty flag */
     struct tm_header *header = &file->header;
@@ -1640,59 +1652,6 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         db->openfile = file;
     }
 
-    // opening a new file, create the header
-    if (!sbuf.st_size) {
-        char scratch[512]; // this is big enough, header plus dummy fits in 512
-        struct tm_header header;
-        size_t filesize = HEADER_SIZE + DUMMY_SIZE;
-
-        // zero out our workspace
-        memset(scratch, 0, 512);
-
-        // prepare the header
-        uuid_generate(header.uuid);
-        header.version = TWOM_VERSION;
-        // XXX: other persistent flags?
-        header.flags = set_csum_engine(db, file, flags);
-        header.generation = 1;
-        header.num_records = 0;
-        header.num_commits = 0;
-        header.dirty_size = 0;
-        header.repack_size = filesize;
-        header.current_size = filesize;
-        header.maxlevel = 0;
-        pack_header(&header, file, scratch);
-
-        // write a blank dummy record
-        size_t headlen = HLCALC(DUMMY, MAXLEVEL);
-        char *base = scratch + DUMMY_OFFSET;
-        *((uint8_t *)(base)) = DUMMY;
-        *((uint8_t *)(base+1)) = MAXLEVEL;
-        *((uint32_t *)(base+headlen)) = htole32(file->csum(base, headlen));
-
-        // ensure that the data is written to the file!
-        size_t written;
-        for (written = 0; written < filesize; ) {
-            ssize_t n = write(file->fd, scratch + written, filesize - written);
-            if (n == -1) {
-                if (errno == EINTR) continue;
-                db->error("db creation failed",
-                          "filename=<%s>", db->fname);
-                if (ftruncate(file->fd, 0))
-                    db->error("truncate in create abort failed",
-                              "filename=<%s>", db->fname);
-                if (unlink(db->fname))
-                    db->error("unlink in create abort failed",
-                              "filename=<%s>", db->fname);
-                r = TWOM_IOERROR;
-                goto done;
-            }
-            written += n;
-        }
-
-        sbuf.st_size = written; // set new size so we'll mmap below
-    }
-
     // if we haven't mapped enough space, do it now
     if (file->size < (size_t)sbuf.st_size) {
         if (file->size) munmap(file->base, file->size);
@@ -1739,7 +1698,6 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
- restart:
     for (;;) {
         // take the headlock
         for (;!file->has_headlock;) {
@@ -1801,8 +1759,10 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
             goto done;
         }
 
-        if (sbuf.st_size < HEADER_SIZE + HLCALC(DUMMY, MAXLEVEL) + 8)
-            goto badfile;
+        if (sbuf.st_size < HEADER_SIZE + DUMMY_SIZE) {
+            r = TWOM_BADFORMAT;
+            goto done;
+        }
 
         // we're not interested in getting the latest file
         if (forcefile) break;
@@ -1821,7 +1781,7 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         r = unlock(db, file);
         if (r) goto done;
 
-        int newfd = open(db->fname, O_RDWR, 0644);
+        int newfd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
         if (newfd == -1) {
             db->error("read_lock open failed",
                       "filename=<%s>", db->fname);
@@ -1840,8 +1800,9 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         /* map the new space (note: we map READ|WRITE even for readonly locks,
          * if we might lock for write later and want to reuse the mmap */
         if (file->size) munmap(file->base, file->size);
+        int flags = db->readonly ? PROT_READ : PROT_READ|PROT_WRITE;
         file->size = sbuf.st_size;
-        file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
+        file->base = (char *)mmap((caddr_t)0, file->size, flags, MAP_SHARED, file->fd, 0L);
         if (!file->base) {
             db->error("read_lock mmap failed",
                       "filename=<%s> size=<%08llX>", db->fname, (LLU)file->size);
@@ -1856,23 +1817,6 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
 
     file->committed_size = file->header.current_size;
     file->written_size = file->committed_size;
-
-    /* we can't read an unclean database */
-    if (!db_is_clean(db, file)) {
- badfile:
-        /* if we take a write lock, that will repair it */
-        unlock(db, file);
-        // no txn, release the write_lock after repairing if needed
-        int was_readonly = db->readonly;
-        db->readonly = 0;
-        r = write_lock(db, NULL, file, flags);
-        if (r) return r;
-        db->readonly = was_readonly;
-        /* if we want a transaction, we'll need to re-lock with the readlock */
-        if (txnp) {
-            goto restart;
-        }
-    }
 
     if (txnp) {
         if (!*txnp) *txnp = _newtxn_read(db);
@@ -1921,11 +1865,57 @@ static void dispose_db(struct twom_db *db)
     free(db);
 }
 
+static int initdb(struct twom_db *db, int flags)
+{
+    char scratch[512]; // this is big enough, header plus dummy fits in 512
+    struct tm_header header;
+    size_t filesize = HEADER_SIZE + DUMMY_SIZE;
+    struct tm_file *file = db->openfile;
+
+    // zero out our workspace
+    memset(scratch, 0, 512);
+
+    // prepare the header
+    uuid_generate(header.uuid);
+    header.version = TWOM_VERSION;
+    // XXX: other persistent flags?
+    header.flags = set_csum_engine(db, file, flags);
+    header.generation = 1;
+    header.num_records = 0;
+    header.num_commits = 0;
+    header.dirty_size = 0;
+    header.repack_size = filesize;
+    header.current_size = filesize;
+    header.maxlevel = 0;
+    pack_header(&header, file, scratch);
+
+    // write a blank dummy record
+    size_t headlen = HLCALC(DUMMY, MAXLEVEL);
+    char *base = scratch + DUMMY_OFFSET;
+    *((uint8_t *)(base)) = DUMMY;
+    *((uint8_t *)(base+1)) = MAXLEVEL;
+    *((uint32_t *)(base+headlen)) = htole32(file->csum(base, headlen));
+
+    // ensure that the data is written to the file!
+    size_t written;
+    for (written = 0; written < filesize; ) {
+        ssize_t n = write(file->fd, scratch + written, filesize - written);
+        if (n == -1) {
+            if (errno == EINTR) continue;
+            db->error("db creation failed",
+                      "filename=<%s>", db->fname);
+            return TWOM_IOERROR;
+        }
+        written += n;
+    }
+
+    return 0;
+}
+
 static int opendb(const char *fname, struct twom_open_data *setup, struct twom_db **ret, struct twom_txn **txnp)
 {
     assert(setup);
-    int r;
-    int create = (setup->flags & TWOM_CREATE) ? 1 : 0;
+    int r = TWOM_IOERROR;
 
     assert(fname);
     assert(ret);
@@ -1941,15 +1931,23 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     db->external_csum = setup->csum;
     db->external_compar = setup->compar;
 
-    int fflags = (create && !db->readonly) ? O_RDWR|O_CREAT : O_RDWR;
-    int fd = open(db->fname, fflags, 0644);
-    if (fd < 0) {
-        r = (errno == ENOENT) ? TWOM_NOTFOUND : TWOM_IOERROR;
-        goto done;
-    }
-
     db->openfile = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
+
+    int fd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
     db->openfile->fd = fd;
+    if (fd < 0) {
+        if (setup->flags & TWOM_CREATE) {
+            fd = open(db->fname, O_RDWR|O_CREAT, 0644);
+            db->openfile->fd = fd;
+            if (fd < 0) goto done;
+            r = initdb(db, setup->flags);
+            if (r) goto done;
+        }
+        else {
+            if (errno == ENOENT) r = TWOM_NOTFOUND;
+            goto done;
+        }
+    }
 
     if (db->readonly || !txnp) {
         /* grab a read lock to read the header */
@@ -2282,7 +2280,7 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
                   "fname=<%s>", db->fname);
         return TWOM_IOERROR;
     }
-    next[0] = advance0(ptr);
+    next[0] = advance0(ptr, loc->end);
     for (i = 1; i < MAXLEVEL; i++)
         next[i] = NEXTN(ptr, i);
 
@@ -2358,7 +2356,7 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
             /* and advance to the new pointer */
             next[i] = NEXTN(nextptr, i);
         }
-        next[0] = advance0(nextptr);
+        next[0] = advance0(nextptr, loc->end);
 
         // count if record or tombstone
         if (deleted_offset) dirty_size += RECLEN(nextptr);
@@ -2936,14 +2934,19 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
           (LLU)header->repack_size,
           (LU)header->maxlevel);
 
-    while (offset < txn->end) {
+    while (offset + 24 <= loc->file->size) {
+        if (!loc->file->base[offset]) {
+            // skip NULL blocks
+            offset += 8;
+            continue;
+        }
         printf("%08llX ", (LLU)offset);
 
-        ptr = safeptr(loc, offset);
-        if (!ptr) {
-            printf("ERROR BAD POINTER\n");
-            break;
+        ptr = loc->file->base + offset;
+        if (*ptr & ~7) {
+            printf("BAD TYPE %d AT %08llX\n", (int)*ptr, (LLU)offset);
         }
+        if (loc->file->size < offset + RECLEN(ptr)) break;
 
         if (check_headcsum(txn, loc->file, ptr, offset)) {
             printf("ERROR [HEADCSUM %08lX %08lX] ",
@@ -3204,8 +3207,12 @@ int twom_db_repack(struct twom_db *db)
     // we're just doing small copies, release less frequently
     db->foreach_lock_release *= 64;
 
-    // write lock will create a new header if the file is zero sized.
+    // initdb will create a new header on the new file:
     // It will have a different UUID, no records, and be generation 1
+    r = initdb(db, flags);
+    if (r) goto fail;
+
+    // make sure we have all the locks set up
     r = write_lock(db, &newtxn, db->openfile, flags);
     if (r) goto fail;
 
