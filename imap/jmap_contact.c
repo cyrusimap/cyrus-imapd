@@ -6685,7 +6685,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
     vcardproperty_kind prop_kind = vcardproperty_isa(prop);
     const char *prop_group = vcardproperty_get_group(prop);
-    const char *prop_value = vcardproperty_get_value_as_string(prop);
+    vcardvalue *value = vcardproperty_get_value(prop);
+    const char *prop_value;
     const char *label = prop_group ?  /* Apple label? */
         hash_lookup(prop_group, crock->labels) : NULL;
     unsigned param_flags = 0;
@@ -6695,6 +6696,20 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         const char *key;
         json_t *val;
     } subprop = { 0 };
+
+    switch (vcardvalue_isa(value)) {
+    case VCARD_X_VALUE:
+        prop_value = vcardvalue_get_x(value);
+        break;
+
+    case VCARD_TEXT_VALUE:
+        prop_value = vcardvalue_get_text(value);
+        break;
+
+    default:
+        prop_value = vcardvalue_as_vcard_string(value);
+        break;
+    }
 
     switch (prop_kind) {
         /* Apple Properties */
@@ -6808,9 +6823,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 goto unmapped;
             }
         }
-        else {
-            prop_value = vcardproperty_get_deathplace(prop);
-        }
 
         subprop.key = "place";
         subprop.val = json_pack("{s:o}", comp, jmap_utf8string(prop_value));
@@ -6840,7 +6852,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     }
 
     case VCARD_FN_PROPERTY:
-        prop_value = vcardproperty_get_fn(prop);
         json_object_set_new(json_object_get_vanew(obj, "name", "{}"),
                             "full", jmap_utf8string(prop_value));
         break;
@@ -7184,7 +7195,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             org = hash_lookup(prop_group, crock->orgs);
         }
 
-        prop_value = vcardproperty_get_title(prop);
         json_object_set_new(titles, prop_id,
                             json_pack("{s:s* s:o s:s*}",
                                       "kind", kind,
@@ -7238,7 +7248,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     case VCARD_NOTE_PROPERTY: {
         json_t *notes = json_object_get_vanew(obj, "notes", "{}");
 
-        prop_value = vcardproperty_get_note(prop);
         jprop = json_pack("{s:o}", "note", jmap_utf8string(prop_value));
 
         json_object_set_new(notes, prop_id, jprop);
@@ -7246,7 +7255,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     }
 
     case VCARD_PRODID_PROPERTY:
-        prop_value = vcardproperty_get_prodid(prop);
         json_object_set_new(obj, "prodId", jmap_utf8string(prop_value));
         break;
 
