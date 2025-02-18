@@ -2933,14 +2933,19 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
           (LLU)header->repack_size,
           (LU)header->maxlevel);
 
-    while (offset < txn->end) {
+    while (offset + 24 <= loc->file->size) {
+        if (!loc->file->base[offset]) {
+            // skip NULL blocks
+            offset += 8;
+            continue;
+        }
         printf("%08llX ", (LLU)offset);
 
-        ptr = safeptr(loc, offset);
-        if (!ptr) {
-            printf("ERROR BAD POINTER\n");
-            break;
+        ptr = loc->file->base + offset;
+        if (*ptr & ~7) {
+            printf("BAD TYPE %d AT %08llX\n", (int)*ptr, (LLU)offset);
         }
+        if (loc->file->size < offset + RECLEN(ptr)) break;
 
         if (check_headcsum(txn, loc->file, ptr, offset)) {
             printf("ERROR [HEADCSUM %08lX %08lX] ",
