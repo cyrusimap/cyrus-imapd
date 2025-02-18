@@ -1414,9 +1414,17 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
         }
     }
 
-    /* commmit first so all other bits are committed before we undirty the header */
+    /* commit first so all other bits are committed before we undirty the header */
     r = tm_commit(db, loc->end);
     if (r) return r;
+
+    if (ftruncate(file->fd, loc->end)) {
+        db->error("failed to truncate back to committed size",
+                  "fname=<%s> size=<%08llX>", db->fname, (LLU)loc->end);
+        return TWOM_IOERROR;
+    }
+    // this will cause tm_ensure to re-mmap even though the map is bigger
+    loc->file->size = loc->end;
 
     /* clear the dirty flag */
     struct tm_header *header = &file->header;
