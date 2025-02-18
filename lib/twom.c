@@ -2962,7 +2962,16 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
             printf("COMMIT start=%08llX\n", (LLU)NEXT0(ptr, 0));
         }
         else if (type == DELETE) {
-            printf("DELETE ancestor=%08llX\n", (LLU)NEXT0(ptr, 0));
+            size_t parent_offset = NEXT0(ptr, 0);
+            const char *key = KEYPTR(loc->file->base + parent_offset);
+            int len = KEYLEN(loc->file->base + parent_offset);
+            if (len > 79) len = 79;
+            if (key) strncpy(scratch, key, len);
+            scratch[len] = 0;
+            for (i = 0; i < len; i++)
+                if (!scratch[i]) scratch[i] = '-';
+            printf("DELETE kl=%llu (%s)\n", (LLU)KEYLEN(loc->file->base + parent_offset), scratch);
+            printf("\t%08llX <-\n", (LLU)parent_offset);
         }
         else {
             const char *key = KEYPTR(ptr);
