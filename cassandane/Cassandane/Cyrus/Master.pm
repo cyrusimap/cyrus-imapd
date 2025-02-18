@@ -54,6 +54,7 @@ use Cassandane::Util::Metronome;
 use Cassandane::Instance;
 use Cassandane::Service;
 use Cassandane::Config;
+use Time::HiRes qw(sleep);
 
 my $lemming_bin = getcwd() . '/utils/lemming';
 
@@ -158,6 +159,8 @@ sub lemming_cull
     return unless defined $self->{instance};
     my $coresdir = $self->{instance}->{basedir} . '/conf/cores';
 
+    my $culled;
+
     return unless -d $coresdir;
     opendir LEMM,$coresdir
         or die "cannot open $coresdir for reading: $!";
@@ -166,10 +169,14 @@ sub lemming_cull
         my ($tag, $pid) = m/^lemming\.(\w+).(\d+)$/;
         next
             unless defined $pid;
-        xlog $self, "culled lemming tag=$tag pid=$pid"
-            if kill(9, $pid);
+        if (kill(9, $pid)) {
+            xlog $self, "culled lemming tag=$tag pid=$pid";
+            $culled++;
+        }
     }
     closedir LEMM;
+
+    return $culled;
 }
 
 sub _lemming_args
@@ -1397,6 +1404,55 @@ sub test_daemon_exits
     # then consume and check them
     $self->assert_syslog_matches($self->{instance},
                                  qr{too many failures for});
+}
+
+sub test_babysit
+    :NoCheckSyslog
+{
+    my ($self) = @_;
+
+    my $srv = $self->lemming_service(prefork => 1, babysit => 1);
+    $self->start();
+    $self->lemming_wait(A => { live => 1 });
+
+    xlog $self, "preforked, so one lemming running already";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+                              $self->lemming_census());
+
+    # Quickly kill 5 children to trigger the backoff
+    my $killed = 0;
+
+    for (1..20) {
+      $killed++ if $self->lemming_cull();
+
+      last if $killed >= 5;
+
+      sleep(.5);
+    };
+
+    # make sure it said it's going to wait
+    my @lines = $self->{instance}->getsyslog(qr/ERROR: too many failures .*disabling/);
+    $self->assert_num_equals(1, scalar @lines);
+
+    # master should not have restarted after 5 deaths
+    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+                              $self->lemming_census());
+
+    # wait 5 seconds, we still shouldn't have one
+    sleep 5;
+
+    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+                              $self->lemming_census());
+
+    # wait up to 30 seconds, there should be one
+    for (1..30) {
+      last if $self->lemming_census->{A}{live};
+
+      sleep 1;
+    }
+
+    $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
+                              $self->lemming_census());
 }
 
 1;
