@@ -670,17 +670,11 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
 }
 
 /* given an open, mapped, locked db, write the header information */
-static inline int write_header(struct twom_db *db, struct tm_header *header)
+static void pack_header(struct tm_header *header, struct tm_file *file, char *base)
 {
-    int r = tm_ensure(db, HEADER_SIZE);
-    if (r) return r;
-
-    struct tm_file *file = db->openfile;
-
-    char *base = file->base;
     memcpy(base, HEADER_MAGIC, HEADER_MAGIC_SIZE);
     memcpy(base + OFFSET_UUID, header->uuid, 16);
-    *((uint16_t *)(base + OFFSET_VERSION)) = htole32(header->version);
+    *((uint32_t *)(base + OFFSET_VERSION)) = htole32(header->version);
     *((uint32_t *)(base + OFFSET_FLAGS)) = htole32(header->flags);
     *((uint64_t *)(base + OFFSET_GENERATION)) = htole64(header->generation);
     *((uint64_t *)(base + OFFSET_NUM_RECORDS)) = htole64(header->num_records);
@@ -690,17 +684,14 @@ static inline int write_header(struct twom_db *db, struct tm_header *header)
     *((uint64_t *)(base + OFFSET_CURRENT_SIZE)) = htole64(header->current_size);
     *((uint32_t *)(base + OFFSET_MAXLEVEL)) = htole32(header->maxlevel);
     *((uint32_t *)(base + OFFSET_CSUM)) = htole32(file->csum(base, OFFSET_CSUM));
-
-    file->dirty = 1;
-
-    return 0;
 }
 
 /* simple wrapper to write with an fsync */
-static inline int commit_header(struct twom_db *db, struct tm_header *header)
+static int commit_header(struct twom_db *db, struct tm_header *header)
 {
-    int r = write_header(db, header);
-    if (r) return r;
+    struct tm_file *file = db->openfile;
+    pack_header(header, file, file->base);
+    file->dirty = 1;
     return tm_commit(db, HEADER_SIZE);
 }
 
@@ -1651,40 +1642,59 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
     // opening a new file, create the header
     if (!sbuf.st_size) {
+        char scratch[512]; // this is big enough, header plus dummy fits in 512
         struct tm_header header;
-        size_t headlen = HLCALC(DUMMY, MAXLEVEL);
-        size_t reclen = headlen + /*crcs*/8;
-        uint32_t csum_flags = set_csum_engine(db, file, flags);
+        size_t filesize = HEADER_SIZE + DUMMY_SIZE;
 
-        // make sure there's space in the file
-        r = tm_ensure(db, HEADER_SIZE + reclen);
-        if (r) goto done;
-
-        // write a blank dummy record
-        char *base = file->base + HEADER_SIZE;
-        memset(base, 0, reclen);
-        *((uint8_t *)(base)) = DUMMY;
-        *((uint8_t *)(base+1)) = MAXLEVEL;
-        *((uint32_t *)(base+headlen)) = htole32(file->csum(base, headlen));
+        // zero out our workspace
+        memset(scratch, 0, 512);
 
         // prepare the header
         uuid_generate(header.uuid);
         header.version = TWOM_VERSION;
         // XXX: other persistent flags?
-        header.flags = csum_flags;
+        header.flags = set_csum_engine(db, file, flags);
         header.generation = 1;
         header.num_records = 0;
         header.num_commits = 0;
         header.dirty_size = 0;
-        header.repack_size = HEADER_SIZE + reclen;
-        header.current_size = HEADER_SIZE + reclen;
+        header.repack_size = filesize;
+        header.current_size = filesize;
         header.maxlevel = 0;
+        pack_header(&header, file, scratch);
 
-        r = commit_header(db, &header);
-        if (r) goto done;
+        // write a blank dummy record
+        size_t headlen = HLCALC(DUMMY, MAXLEVEL);
+        char *base = scratch + DUMMY_OFFSET;
+        *((uint8_t *)(base)) = DUMMY;
+        *((uint8_t *)(base+1)) = MAXLEVEL;
+        *((uint32_t *)(base+headlen)) = htole32(file->csum(base, headlen));
+
+        // ensure that the data is written to the file!
+        size_t written;
+        for (written = 0; written < filesize; ) {
+            ssize_t n = write(file->fd, scratch + written, filesize - written);
+            if (n == -1) {
+                if (errno == EINTR) continue;
+                db->error("db creation failed",
+                          "filename=<%s>", db->fname);
+                if (ftruncate(file->fd, 0))
+                    db->error("truncate in create abort failed",
+                              "filename=<%s>", db->fname);
+                if (unlink(db->fname))
+                    db->error("unlink in create abort failed",
+                              "filename=<%s>", db->fname);
+                r = TWOM_IOERROR;
+                goto done;
+            }
+            written += n;
+        }
+
+        sbuf.st_size = written; // set new size so we'll mmap below
     }
-    // tm_ensure above creates an openmap, so we don't need to check again
-    else if (file->size < (size_t)sbuf.st_size) {
+
+    // if we haven't mapped enough space, do it now
+    if (file->size < (size_t)sbuf.st_size) {
         if (file->size) munmap(file->base, file->size);
         file->size = sbuf.st_size;
         file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
