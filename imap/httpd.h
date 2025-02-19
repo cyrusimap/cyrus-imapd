@@ -161,7 +161,7 @@ enum {
 
     ALLOW_READONLY =    (1<<30),/* Allow "unsafe" methods when readonly */
 
-    ALLOW_ISCHEDULE =   (1<<31) /* iSchedule specific methods/features */
+    ALLOW_ISCHEDULE =   (1U<<31) /* iSchedule specific methods/features */
 };
 
 #define ALLOW_READ_MASK ~(ALLOW_POST|ALLOW_WRITE|ALLOW_DELETE|ALLOW_PATCH\

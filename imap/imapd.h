@@ -476,7 +476,7 @@ enum {
     /* non-standard - track for possible deprecation                     */
     CB_ANNOTATE    =  (1<<29),  /* GET/SETANNOTATION or FETCH ANNOTATION */
     CB_XCONV       =  (1<<30),  /* STATUS XCONV*                         */
-    CB_XLIST       =  (1<<31),  /* XLIST                                 */
+    CB_XLIST       =  (1U<<31),  /* XLIST                                */
 };
 
 #endif /* INCLUDED_IMAPD_H */

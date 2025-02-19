@@ -5195,7 +5195,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
-#define PROP_NOVALUE (1<<31)
+#define PROP_NOVALUE (1U<<31)
 
 static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
 {
