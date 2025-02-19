@@ -6979,7 +6979,8 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     }
 
     /* make sure UIDs are sorted for comparison */
-    qsort(files->found, files->nused, sizeof(files->found[0]), sort_found);
+    if (files->nused)
+        qsort(files->found, files->nused, sizeof(files->found[0]), sort_found);
 
     strarray_fini(&paths);
 
@@ -7809,7 +7810,8 @@ static int find_annots(struct mailbox *mailbox, struct found_uids *annots)
     if (r) return r;
 
     /* make sure UIDs are sorted for comparison */
-    qsort(annots->found, annots->nused, sizeof(annots->found[0]), sort_found);
+    if (annots->nused)
+        qsort(annots->found, annots->nused, sizeof(annots->found[0]), sort_found);
 
     return 0;
 }
