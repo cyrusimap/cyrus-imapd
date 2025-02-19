@@ -661,9 +661,9 @@ EXPORTED int msgrecord_set_userflag(msgrecord_t *mr, uint32_t userflag, int val)
         if (r) return r;
     }
     if (val)
-        mr->record.user_flags[userflag/32] |= 1<<(userflag&31);
+        mr->record.user_flags[userflag/32] |= 1U<<(userflag&31);
     else
-        mr->record.user_flags[userflag/32] &= ~(1<<(userflag&31));
+        mr->record.user_flags[userflag/32] &= ~(1U<<(userflag&31));
     return 0;
 }
 

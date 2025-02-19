@@ -6567,7 +6567,7 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
     struct buf buf = BUF_INITIALIZER;
     int i;
     for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
-        if (mbox->h.flagname[i] && (user_flags[i/32] & 1<<(i&31))) {
+        if (mbox->h.flagname[i] && (user_flags[i/32] & 1U<<(i&31))) {
             buf_setcstr(&buf, mbox->h.flagname[i]);
             _email_keywords_add_keyword(keywords, buf_lcase(&buf));
         }
@@ -11622,9 +11622,9 @@ static int _email_setflags(json_t *keywords, int patch_keywords,
             r = mailbox_user_flag(mbox, keyword, &userflag, 1);
             if (r) goto done;
             if (jval == json_true())
-                new_user_flags[userflag/32] |= 1<<(userflag&31);
+                new_user_flags[userflag/32] |= 1U<<(userflag&31);
             else
-                new_user_flags[userflag/32] &= ~(1<<(userflag&31));
+                new_user_flags[userflag/32] &= ~(1U<<(userflag&31));
         }
     }
     if (!patch_keywords && del_seen_uids) {

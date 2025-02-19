@@ -1704,7 +1704,7 @@ void sync_print_flags(struct dlist *kl,
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
         if (!mailbox->h.flagname[flag])
             continue;
-        if (!(record->user_flags[flag/32] & (1<<(flag&31))))
+        if (!(record->user_flags[flag/32] & (1U<<(flag&31))))
             continue;
         dlist_setflag(fl, "FLAG", mailbox->h.flagname[flag]);
     }
@@ -1745,7 +1745,7 @@ int sync_getflags(struct dlist *kl,
                 free(s);
                 return IMAP_IOERROR;
             }
-            record->user_flags[userflag/32] |= 1<<(userflag&31);
+            record->user_flags[userflag/32] |= 1U<<(userflag&31);
         }
 
         free(s);
@@ -5791,7 +5791,7 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
         if (!mailbox->h.flagname[flag])
             continue;
-        if (!(record->user_flags[flag/32] & (1<<(flag&31))))
+        if (!(record->user_flags[flag/32] & (1U<<(flag&31))))
             continue;
         buf_printf(&buf, "%s%s", sep, mailbox->h.flagname[flag]);
         sep = " ";

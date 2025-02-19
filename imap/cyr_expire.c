@@ -361,7 +361,7 @@ static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
     int r;
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
-        if (erock->userflags[i/32] & 1<<(i&31))
+        if (erock->userflags[i/32] & 1U<<(i&31))
             continue;
         if (!mailbox->h.flagname[i])
             continue;

@@ -3199,14 +3199,14 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
         int isset;
         r = mailbox_user_flag(pctx->mailbox, (const char *)prop->name, &userflag, 1);
         if (r) goto done;
-        isset = pctx->record->user_flags[userflag/32] & (1<<userflag%31);
+        isset = pctx->record->user_flags[userflag/32] & (1U<<userflag%31);
         if (set) {
             if (isset) goto done;
-            pctx->record->user_flags[userflag/32] |= (1<<userflag%31);
+            pctx->record->user_flags[userflag/32] |= (1U<<userflag%31);
         }
         else {
             if (!isset) goto done;
-            pctx->record->user_flags[userflag/32] &= ~(1<<userflag%31);
+            pctx->record->user_flags[userflag/32] &= ~(1U<<userflag%31);
         }
         r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
         goto done;
@@ -3278,7 +3278,7 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
         int isset;
         r = mailbox_user_flag(fctx->mailbox, (const char *)name, &userflag, 0);
         if (r) goto done;
-        isset = fctx->record->user_flags[userflag/32] & (1<<userflag%31);
+        isset = fctx->record->user_flags[userflag/32] & (1U<<userflag%31);
         if (isset)
             buf_setcstr(&attrib, "1");
         goto done;

@@ -1367,7 +1367,7 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
 
     if (!r) r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
     if (!r && !(oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-        if (isreplace) oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+        if (isreplace) oldrecord.user_flags[userflag/32] |= 1U<<(userflag&31);
         oldrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);

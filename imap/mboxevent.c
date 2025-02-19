@@ -855,7 +855,7 @@ EXPORTED void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_U
         if ((flag & 31) == 0) {
             flagmask = user_flags[flag/32];
         }
-        if (!(flagnames[flag] && (flagmask & (1<<(flag & 31)))))
+        if (!(flagnames[flag] && (flagmask & (1U<<(flag & 31)))))
             continue;
 
         if (!strarray_contains_case(excluded_flags, flagnames[flag]))
