@@ -1,0 +1,37 @@
+name: Cyrus IMAP CI Doc Gen
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+      - 'cyrus-imapd-*'
+    paths:
+      - 'docsrc/**'
+  pull_request:
+    branches:
+      - master
+      - main
+      - 'cyrus-imapd-*'
+    paths:
+      - 'docsrc/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+        image: ghcr.io/cyrusimap/cyrus-docker:bookworm
+        options: --init
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: setup git safe directory
+      shell: bash
+      run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+    - name: build docs
+      shell: bash
+      env:
+        CYRUS_CLONE_ROOT: /__w/cyrus-imapd/cyrus-imapd
+      run: cyd makedocs
+
