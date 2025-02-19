@@ -3022,9 +3022,6 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 {
     int r;
 
-    // we can't abort with additional references, just have to die
-    assert(mailbox->refcount == 1);
-
 #ifdef WITH_DAV
     r = mailbox_abort_dav(mailbox);
     if (r) return r;
