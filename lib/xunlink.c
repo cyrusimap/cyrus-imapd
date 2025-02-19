@@ -54,30 +54,23 @@ EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
 {
     int saved_errno, r;
 
-    /* n.b. we don't reset errno before calling unlink, so it might contain
-     * stuff from some earlier syscall.  that's fine, because we only examine
-     * it when unlink's return value indicates an error, in which case its
-     * value is definitely ours.  otherwise we just save and restore it
-     * untouched.
-     */
-
-    r = unlink(pathname);
     saved_errno = errno;
+    r = unlink(pathname);
 
     if (r) {
-        if (saved_errno == ENOENT) {
-            /* we usually ignore this case, so reduce errno pollution
+        if (errno == ENOENT) {
+            /* we usually ignore this case, so treat it as not an error
              *
              * this means you can't use this wrapper function when you do care
              * about this case
              */
-            saved_errno = 0;
             r = 0;
         }
         else {
             /* n.b. not simply using xsyslog, because we want to log our
              * caller's location, but xsyslog would log ours
              */
+            saved_errno = errno;
             syslog(LOG_ERR, "IOERROR: unlink failed:"
                             " pathname=<%s> syserror=<%s>"
                             " file=<%s> line=<%d> func=<%s>",
@@ -97,30 +90,23 @@ EXPORTED int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
 {
     int saved_errno, r;
 
-    /* n.b. we don't reset errno before calling unlinkat, so it might contain
-     * stuff from some earlier syscall.  that's fine, because we only examine
-     * it when unlinkat's return value indicates an error, in which case its
-     * value is definitely ours.  otherwise we just save and restore it
-     * untouched.
-     */
-
-    r = unlinkat(dirfd, pathname, flags);
     saved_errno = errno;
+    r = unlinkat(dirfd, pathname, flags);
 
     if (r) {
-        if (saved_errno == ENOENT) {
-            /* we usually ignore this case, so reduce errno pollution
+        if (errno == ENOENT) {
+            /* we usually ignore this case, so treat it as not an error
              *
              * this means you can't use this wrapper function when you do care
              * about this case
              */
-            saved_errno = 0;
             r = 0;
         }
         else {
             /* n.b. not simply using xsyslog, because we want to log our
              * caller's location, but xsyslog would log ours
              */
+            saved_errno = errno;
             syslog(LOG_ERR, "IOERROR: unlinkat failed:"
                             " dirfd=<%d> pathname=<%s> flags=<%d> syserror=<%s>"
                             " file=<%s> line=<%d> func=<%s>",

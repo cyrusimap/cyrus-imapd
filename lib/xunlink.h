@@ -52,7 +52,7 @@
  * These wrappers present almost the same interface as the original functions,
  * except that:
  *  1) errors are logged for you; and
- *  2) ENOENT is treated as not an error: nothing is logged, errno is cleared,
+ *  2) ENOENT is treated as not an error: nothing is logged, errno is not set,
  *     and 0 is returned
  *
  * You cannot use these wrappers if you need to detect ENOENT failures.
