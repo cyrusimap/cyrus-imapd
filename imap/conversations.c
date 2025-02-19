@@ -2060,6 +2060,12 @@ static int _guid_filter_p(void *rock,
     return 0;  // no match
 }
 
+// scratch space to give aligned reads of GUID data
+union cdata_u {
+   bit64 b;
+   char s[32];
+};
+
 static int _guid_cb(void *rock,
                     const char *key,
                     size_t keylen,
@@ -2097,6 +2103,7 @@ static int _guid_cb(void *rock,
     uint32_t internal_flags = 0;
     time_t internaldate = 0;
     char version = 0;
+    union cdata_u scratch;
     if (datalen >= 16) {
         const char *p = data;
 
@@ -2114,6 +2121,8 @@ static int _guid_cb(void *rock,
         case 1: /* OLD - byname version */
         case 2: /* original byid version (no basecid) */
             /* cid */
+            memcpy(scratch.s, p, 24);
+            p = scratch.s;
             cid = ntohll(*((bit64*)p));
             p += 8;
             /* system_flags */
@@ -2128,6 +2137,8 @@ static int _guid_cb(void *rock,
             break;
 
         default:
+            memcpy(scratch.s, p, 32);
+            p = scratch.s;
             /* cid */
             cid = ntohll(*((bit64*)p));
             p += 8;
