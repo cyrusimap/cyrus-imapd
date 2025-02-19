@@ -1,0 +1,217 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_restore_calendars_scheduling
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create calendars";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    color => "coral",
+                    sortOrder => 1,
+                    isVisible => \1
+                },
+                "2" => {
+                    name => "bar",
+                    color => "aqua",
+                    sortOrder => 2,
+                    isVisible => \1
+                }
+            }
+         }, "R1"]
+    ]);
+    my $calid1 = $res->[0][1]{created}{"1"}{id};
+    my $calid2 = $res->[0][1]{created}{"2"}{id};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "send invitation as organizer";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    "calendarIds" => {
+                        $calid1 => JSON::true,
+                    },
+                    "title" => "foo",
+                    "description" => "foo's description",
+                    "freeBusyStatus" => "busy",
+                    "showWithoutTime" => JSON::false,
+                    "start" => "2015-10-06T16:45:00",
+                    "timeZone" => "Australia/Melbourne",
+                    "duration" => "PT15M",
+                    "replyTo" => {
+                        imip => "mailto:cassandane\@example.com",
+                    },
+                    "participants" => {
+                        "org" => {
+                            "name" => "Cassandane",
+                            roles => {
+                                'owner' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        "att" => {
+                            "name" => "Bugs Bunny",
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:bugs@example.com',
+                            },
+                        },
+                    },
+                },
+            }
+        }, "R1"]
+    ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "make sure iMIP REQUEST was sent";
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $payload = decode_json($imip->{MESSAGE});
+    $self->assert_str_equals('REQUEST', $payload->{method});
+    $self->assert_str_equals('bugs@example.com', $payload->{recipient});
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "send another invitation as organizer";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "2" => {
+                    "calendarIds" => {
+                        $calid2 => JSON::true,
+                    },
+                    "title" => "bar",
+                    "description" => "bar's description",
+                    "freeBusyStatus" => "busy",
+                    "showWithoutTime" => JSON::false,
+                    "start" => "2019-10-06T16:45:00",
+                    "timeZone" => "Australia/Melbourne",
+                    "duration" => "PT15M",
+                    "replyTo" => {
+                        imip => "mailto:cassandane\@example.com",
+                    },
+                    "participants" => {
+                        "org" => {
+                            "name" => "Cassandane",
+                            roles => {
+                                'owner' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                        },
+                        "att" => {
+                            "name" => "Roadrunner",
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:rr@example.com',
+                            },
+                        },
+                    },
+                },
+            }
+        }, "R1"]
+    ]);
+
+    xlog "make sure iMIP REQUEST was sent";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $payload = decode_json($imip->{MESSAGE});
+    $self->assert_str_equals('REQUEST', $payload->{method});
+    $self->assert_str_equals('rr@example.com', $payload->{recipient});
+
+    my $mark = time();
+    sleep 2;
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "delete an event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [$id],
+         }, 'R2'],
+    ]);
+
+    xlog "make sure iMIP CANCEL was sent";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $payload = decode_json($imip->{MESSAGE});
+    $self->assert_str_equals('CANCEL', $payload->{method});
+    $self->assert_str_equals('bugs@example.com', $payload->{recipient});
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
+    xlog "restore calendar prior to most recent changes";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            undoPeriod => $period,
+            undoAll => JSON::true
+         }, "R3"]
+    ]);
+
+    xlog "make sure iMIP REQUEST was re-sent";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $payload = decode_json($imip->{MESSAGE});
+    $self->assert_str_equals('REQUEST', $payload->{method});
+    $self->assert_str_equals('bugs@example.com', $payload->{recipient});
+
+    $mark = time();
+    sleep 2;
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "delete a calendar";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            destroy => [$calid2],
+            onDestroyRemoveEvents => JSON::true,
+         }, "R4"],
+    ]);
+
+    xlog "make sure iMIP CANCEL was NOT sent";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($imip);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    $diff = time() - $mark;
+    $period = "PT" . $diff . "S";
+
+    xlog "restore calendar";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            undoPeriod => $period,
+            undoAll => JSON::true
+         }, "R5"]
+    ]);
+
+    xlog "make sure iMIP REQUEST was NOT re-sent";
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($imip);
+}
