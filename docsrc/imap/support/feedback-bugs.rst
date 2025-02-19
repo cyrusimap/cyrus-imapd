@@ -3,6 +3,10 @@
 Reporting Bugs
 ==============
 
+.. note::
+
+    For **Security Issues** please send your reports to our private `security list <security@cyrus.topicbox.com>`
+
 Bug reports can be sent to us through our :ref:`mailing list <feedback-mailing-lists>` or logged in our `GitHub issue tracker <https://github.com/cyrusimap/cyrus-imapd/issues/>`__. (Registration is required)
 When reporting a bug, please provide the following information;
 
