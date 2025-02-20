@@ -265,7 +265,7 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     /* Go back and check headers */
     sawnl = 1;
     const char *cur = buf_base(&tmp);
-    const char *top = buf_base(&tmp) + buf_len(&tmp);
+    const char *top = cur ? cur + buf_len(&tmp) : NULL;
     for (;;) {
         /* Read headers into buffer */
         if (to) {

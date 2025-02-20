@@ -3748,7 +3748,7 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     }
 
     /* Output data */
-    txn->conn->resp_body_chunk(txn, buf + offset, outlen, last_chunk, &ctx);
+    txn->conn->resp_body_chunk(txn, buf ? buf + offset : NULL, outlen, last_chunk, &ctx);
 }
 
 
