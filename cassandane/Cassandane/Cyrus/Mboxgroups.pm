@@ -208,11 +208,12 @@ sub test_list_groupaccess_racl
         $admintalk->get_last_completion_response());
 
     if (get_verbose()) {
+        my $format = $self->{instance}->{config}->get('mboxlist_db');
         $self->{instance}->run_command(
             { cyrus => 1, },
             'cyr_dbtool',
             "$self->{instance}->{basedir}/conf/mailboxes.db",
-            'twoskip',
+            $format,
             'show'
         );
     }
@@ -271,11 +272,12 @@ sub do_test_list_order
     }
 
     if (get_verbose()) {
+        my $format = $self->{instance}->{config}->get('mboxlist_db');
         $self->{instance}->run_command(
             { cyrus => 1, },
             'cyr_dbtool',
             "$self->{instance}->{basedir}/conf/mailboxes.db",
-            'twoskip',
+            $format,
             'show'
         );
     }

@@ -140,7 +140,6 @@ sub list_annotations
     }
 
     my $format = $instance->{config}->get('annotation_db');
-    $format = $format // 'twoskip';
 
     my @annots;
 

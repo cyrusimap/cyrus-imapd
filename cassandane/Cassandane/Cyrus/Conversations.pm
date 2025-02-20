@@ -370,7 +370,8 @@ sub test_upgrade
 
     # nuke the version key
     my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
-    $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['DELETE', '$VERSION']);
+    my $format = $self->{instance}->{config}->get('conversations_db');
+    $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['DELETE', '$VERSION']);
 
     xlog $self, "Upgrade with deleted VERSION should recalc";
     $outfile = "$basedir/conv-output2.txt";
@@ -1190,8 +1191,9 @@ sub test_rename_between_users
     my $res = $talk->status('INBOX.foo', ['mailboxid']);
     my $fooid = $res->{'mailboxid'}->[0];
 
-    my %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
-    my %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    my $format = $self->{instance}->{config}->get('conversations_db');
+    my %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['SHOW']);
+    my %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, $format, ['SHOW']);
 
     my $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
     my $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
@@ -1207,8 +1209,8 @@ sub test_rename_between_users
     $self->{store}->set_folder("user.manifold.extra");
     $self->make_message("Extra Msg");
 
-    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
-    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['SHOW']);
+    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, $format, ['SHOW']);
 
     $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
     $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
@@ -1226,8 +1228,8 @@ sub test_rename_between_users
 
     $talk->rename("user.manifold.foo", "INBOX.foo");
 
-    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, 'twoskip', ['SHOW']);
-    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, 'twoskip', ['SHOW']);
+    %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['SHOW']);
+    %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, $format, ['SHOW']);
     $folders = Cyrus::DList->parse_string($data{'$FOLDER_IDS'})->as_perl;
     $mfolders = Cyrus::DList->parse_string($mdata{'$FOLDER_IDS'})->as_perl;
     $self->assert_num_equals(4, scalar @$folders);

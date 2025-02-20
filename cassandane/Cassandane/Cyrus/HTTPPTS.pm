@@ -263,11 +263,12 @@ sub test_list_groupaccess_racl
     $self->assert_num_not_equals($precounters->{raclmodseq}, $postcounters->{raclmodseq}, "RACL modseq changed");
 
     if (get_verbose()) {
+        my $format = $self->{instance}->{config}->get('mboxlist_db');
         $self->{instance}->run_command(
             { cyrus => 1, },
             'cyr_dbtool',
             "$self->{instance}->{basedir}/conf/mailboxes.db",
-            'twoskip',
+            $format,
             'show'
         );
     }
@@ -327,11 +328,12 @@ sub do_test_list_order
     }
 
     if (get_verbose()) {
+        my $format = $self->{instance}->{config}->get('mboxlist_db');
         $self->{instance}->run_command(
             { cyrus => 1, },
             'cyr_dbtool',
             "$self->{instance}->{basedir}/conf/mailboxes.db",
-            'twoskip',
+            $format,
             'show'
         );
     }

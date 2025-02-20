@@ -119,6 +119,26 @@ sub default
             debug => 'yes',
             httpprettytelemetry => 'yes',
 
+            # from cyr_info conf-default | grep _db:
+            annotation_db => 'twoskip',
+            backup_db => 'twoskip',
+            conversations_db => 'skiplist',
+            duplicate_db => 'twoskip',
+            mboxkey_db => 'twoskip',
+            mboxlist_db => 'twoskip',
+            ptscache_db => 'twoskip',
+            quota_db => 'quotalegacy',
+            search_indexed_db => 'twoskip',
+            seenstate_db => 'twoskip',
+            sortcache_db => 'twoskip',
+            subscription_db => 'flat',
+            statuscache_db => 'twoskip',
+            sync_cache_db => 'twoskip',
+            tlscache_db => 'twoskip',
+            tls_sessions_db => 'twoskip',
+            userdeny_db => 'flat',
+            zoneinfo_db => 'twoskip',
+
             # smtpclient_open should fail by default!
             #
             # If your test fails and writes something like

@@ -857,10 +857,11 @@ sub _match_intermediates
 sub _dbset
 {
     my ($self, $key, $value) = @_;
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
     $self->assert_str_equals('ok', $self->{instance}->run_dbcommand_cb(
         sub { die "got a response!" },
         "$self->{instance}->{basedir}/conf/mailboxes.db",
-        'twoskip',
+        $format,
         defined($value)
           ? ['SET', $key => $value]
           : ['DELETE', $key],
