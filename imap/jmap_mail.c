@@ -13760,7 +13760,7 @@ static time_t _email_import_parse_received_at(const char *blob, size_t blob_len)
             if (hdr)
                 hdr = strchr(hdr + 1, ':');
             xzfree(val);
-        } while (!received_at && hdr++);
+        } while (!received_at && hdr && hdr++); // only do side effect ++ if non-NULL
     }
 
     if (!received_at && !message_get_field(msg, "Date", format, &buf)) {
