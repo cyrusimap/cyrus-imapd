@@ -6954,7 +6954,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
         if (r) goto done;
     }
 
-    if (!expandrecur) {
+    if (!expandrecur && matches->count) {
         struct eventquery_cmp_rock rock = { sort, nsort };
         cyr_qsort_r(matches->data, matches->count, sizeof(void*),
                     (int(*)(const void*, const void*, void*))eventquery_cmp, &rock);
