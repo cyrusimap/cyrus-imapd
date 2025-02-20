@@ -1841,7 +1841,7 @@ static int search_keyword_match(message_t *m,
 
     r = message_get_userflags(m, flags);
     if (!r)
-        r = !!(flags[num/32] & (1U<<(num % 32)));
+        r = !!(flags[num/32] & (1U<<(num&31)));
     else
         r = 0;
 

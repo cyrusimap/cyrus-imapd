@@ -1661,7 +1661,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
         /* Add message to plan for mailbox */
         if (!(rrock->jrestore->mode & DRY_RUN) && userflag >= 0
-            && (record->user_flags[userflag/32] & (1U<<userflag%31))) {
+            && (record->user_flags[userflag/32] & (1U<<userflag&31))) {
             struct mailbox_plan *plan =
                 hash_lookup(mailbox_name(mailbox), mrock->mailboxes);
             if (!plan) {
@@ -2068,13 +2068,13 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
 
         message_set_from_record(mailbox, &record, msg);
         if (!(rrock->jrestore->mode & DRY_RUN)) {
-            if (record.user_flags[userflag/32] & (1U<<userflag%31)) {
+            if (record.user_flags[userflag/32] & (1U<<(userflag&31))) {
                 syslog(log_level,
                        "UID %u: removing $restored flag (%d)", record.uid, userflag);
                 struct index_record newrecord;
                 /* copy the existing index_record */
                 memcpy(&newrecord, &record, sizeof(struct index_record));
-                newrecord.user_flags[userflag/32] &= ~(1U<<userflag%31);
+                newrecord.user_flags[userflag/32] &= ~(1U<<(userflag&31));
                 r = mailbox_rewrite_index_record(mailbox, &newrecord);
                 if (r) {
                     syslog(LOG_ERR,

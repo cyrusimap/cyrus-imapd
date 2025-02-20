@@ -1017,7 +1017,7 @@ static int jmap_note_changes(jmap_req_t *req)
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             /* Skip any notes that have been replaced by an update */
             if (userflag >= 0 &&
-                record->user_flags[userflag/32] & (1U<<(userflag & 31))) continue;
+                record->user_flags[userflag/32] & (1U<<(userflag&31))) continue;
 
             /* Skip any notes created AND deleted since modseq */
             if (record->createdmodseq > changes.since_modseq) continue;

@@ -3317,7 +3317,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
         if ((flag & 31) == 0) {
             flagmask = record.user_flags[flag/32];
         }
-        if (state->flagname[flag] && (flagmask & (1U<<(flag & 31)))) {
+        if (state->flagname[flag] && (flagmask & (1U<<(flag&31)))) {
             prot_printf(pout, "%c%s", sepchar, state->flagname[flag]);
             sepchar = ' ';
         }
@@ -4284,7 +4284,7 @@ static void index_fetchflags(struct index_state *state,
         if ((flag & 31) == 0) {
             flagmask = im->user_flags[flag/32];
         }
-        if (state->flagname[flag] && (flagmask & (1U<<(flag & 31)))) {
+        if (state->flagname[flag] && (flagmask & (1U<<(flag&31)))) {
             prot_printf(state->out, "%c%s", sepchar, state->flagname[flag]);
             sepchar = ' ';
         }
