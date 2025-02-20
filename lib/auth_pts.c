@@ -393,9 +393,12 @@ static int ptload(const char *identifier, struct auth_state **state)
 
     /* if it's expired (or nonexistent),
      * ask the ptloader to reload it and reread it */
-    fetched = (struct auth_state *) data;
+    if (dsize && data) {
+        fetched = (struct auth_state *)xmalloc(dsize);
+        memcpy(fetched, data, dsize);
+    }
 
-    if(fetched) {
+    if (fetched) {
         time_t now = time(NULL);
         int timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
 
@@ -493,15 +496,18 @@ static int ptload(const char *identifier, struct auth_state **state)
         syslog(LOG_ERR, "ptload(): error fetching record: %s"
                "(did ptloader add the record?)",
                cyrusdb_strerror(r));
-      data = NULL;
-      rc = -1;
-      goto done;
+        dsize = 0;
+        data = NULL;
+        rc = -1;
+        goto done;
     }
 
  done:
     /* ok, we got real data, let's use it */
-    if (data != NULL) {
-      fetched = (struct auth_state *) data;
+    if (dsize && data) {
+      free(fetched);
+      fetched = (struct auth_state *)xmalloc(dsize);
+      memcpy(fetched, data, dsize);
     }
 
     if (fetched == NULL) {
@@ -509,8 +515,7 @@ static int ptload(const char *identifier, struct auth_state **state)
       syslog(LOG_DEBUG, "No data available at all from ptload()");
     } else  {
       /* copy it into our structure */
-      *state = (struct auth_state *)xmalloc(dsize);
-      memcpy(*state, fetched, dsize);
+      *state = fetched;
       syslog(LOG_DEBUG, "ptload returning data");
     }
 
