@@ -240,7 +240,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
             int userflag = 0;
             r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
             if (r) break;
-            newrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+            newrecord.user_flags[userflag/32] |= 1U<<(userflag&31);
         }
 
         /* and append the new record */

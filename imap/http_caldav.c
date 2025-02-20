@@ -2307,7 +2307,8 @@ static int list_calendars(struct transaction_t *txn)
     lrock.scheddefault = NULL;
 
     /* Sort calendars by displayname */
-    qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
+    if (lrock.len)
+        qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
     charset_t utf8 = charset_lookupname("utf-8");
     buf_printf_markup(body, level, "<thead>");
     buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Color</th><th>Order</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
@@ -5194,7 +5195,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
-#define PROP_NOVALUE (1<<31)
+#define PROP_NOVALUE (1U<<31)
 
 static struct partial_comp_t *parse_partial_comp(xmlNodePtr node)
 {
@@ -7605,8 +7606,9 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
     memset(&availfilter, 0, sizeof(struct freebusy_filter));
 
     /* Sort VAVAILABILITY periods by priority and start time */
-    qsort(vavail->vav, vavail->len,
-          sizeof(struct vavailability), compare_vavail);
+    if (vavail->len)
+        qsort(vavail->vav, vavail->len,
+              sizeof(struct vavailability), compare_vavail);
 
     /* Maintain a linked list of remaining time ranges
      * to be filled in by lower priority VAV components
@@ -7746,8 +7748,9 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
     if (vavail->len) combine_vavailability(fbfilter);
 
     /* Sort busytime periods by type and start/end times for coalescing */
-    qsort(freebusy->fb, freebusy->len,
-          sizeof(struct freebusy), compare_freebusy_with_type);
+    if (freebusy->len)
+        qsort(freebusy->fb, freebusy->len,
+              sizeof(struct freebusy), compare_freebusy_with_type);
 
     /* Coalesce busytime periods of same type into one */
     for (n = 0; n + 1 < freebusy->len; n++) {
@@ -7800,8 +7803,9 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
     }
 
     /* Sort busytime periods by start/end times for addition to VFREEBUSY */
-    qsort(freebusy->fb, freebusy->len,
-          sizeof(struct freebusy), compare_freebusy);
+    if (freebusy->len)
+        qsort(freebusy->fb, freebusy->len,
+              sizeof(struct freebusy), compare_freebusy);
 
     /* Construct iCalendar object with VFREEBUSY component */
     ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,

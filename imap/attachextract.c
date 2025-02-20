@@ -217,7 +217,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
             "Accept: text/plain\r\n"
             "X-Truncate-Length: " SIZE_T_FMT "\r\n",
             method, url, HTTP_VERSION,
-            (int) hostlen, ext->be->hostname, CYRUS_VERSION,
+            (int) hostlen, ext->hostname, CYRUS_VERSION,
             attachextract_idle_timeout, config_search_maxsize);
 
     if (req_body) {

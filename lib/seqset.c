@@ -466,9 +466,11 @@ EXPORTED void seqset_join(seqset_t *dst, const seqset_t *src)
             xrealloc(dst->set, dst->alloc * sizeof(struct seq_range));
     }
     /* call them char * so the maths works out right */
-    memcpy((char *)dst->set + dst->len * sizeof(struct seq_range),
-           (char *)src->set, src->len * sizeof(struct seq_range));
-    dst->len += src->len;
+    if (src->len) {
+        memcpy((char *)dst->set + dst->len * sizeof(struct seq_range),
+            (char *)src->set, src->len * sizeof(struct seq_range));
+        dst->len += src->len;
+    }
 
     seqset_simplify(dst);
 }
@@ -521,8 +523,9 @@ EXPORTED seqset_t *seqset_dup(const seqset_t *src)
 
     seqset_t *dst = (seqset_t *)xmemdup(src, sizeof(struct seqset));
 
-    dst->set = (struct seq_range *)xmemdup(src->set,
-                    src->alloc * sizeof(struct seq_range));
+    if (src->alloc)
+        dst->set = (struct seq_range *)xmemdup(src->set,
+                        src->alloc * sizeof(struct seq_range));
 
     return dst;
 }

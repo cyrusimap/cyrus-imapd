@@ -3352,13 +3352,20 @@ static int copyindexed_cb(void *rock,
     return r;
 }
 
+union guid_u {
+    uint64_t i;
+    char s[40];
+} guidu;
+
 static int mbdata_exists_cb(const char *cyrusid, void *rock)
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
 
     if (strncmp(cyrusid, "*G*", 3) && strncmp(cyrusid, "*P*", 3)) return 0;
 
-    return bloom_check(&filter->bloom, cyrusid+3, 40);
+    memcpy(guidu.s, cyrusid+3, 40);
+
+    return bloom_check(&filter->bloom, guidu.s, 40);
 }
 
 static int bloomadd_cb(void *rock,
@@ -3368,7 +3375,8 @@ static int bloomadd_cb(void *rock,
                        size_t datalen __attribute__((unused)))
 {
     struct bloom *bloom = (struct bloom *)rock;
-    bloom_add(bloom, key+1, 40);
+    memcpy(guidu.s, key+1, 40);
+    bloom_add(bloom, guidu.s, 40);
     return 0;
 }
 

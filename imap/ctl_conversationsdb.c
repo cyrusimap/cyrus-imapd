@@ -753,11 +753,9 @@ static int fix_modseqs(struct conversations_state *a,
         if (ca.key[0] == 'G') {
             // basecid might be different on the old record, so if they're both v3, then copy the data over
             if (ca.datalen >= 33 && cb.datalen >= 33 && ca.data[0] == (char)0x83 && cb.data[0] == (char)0x83) {
-                conversation_id_t basea = ntohll(*((bit64*)(ca.data+25)));
-                conversation_id_t baseb = ntohll(*((bit64*)(cb.data+25)));
-                if (basea != baseb && cb.datalen < 80) {
+                if (memcmp(ca.data+25, cb.data+25, 8) && cb.datalen < 80) {
                     memcpy(buf, cb.data, cb.datalen);
-                    *((uint64_t *)(buf + 25)) = htonll(basea);
+                    memcpy(buf+25, ca.data+25, 8);
                     r = cyrusdb_store(b->db, cb.key, cb.keylen, buf, cb.datalen, &b->txn);
                     if (r) {
                          fprintf(stderr, "Failed to store conversations "

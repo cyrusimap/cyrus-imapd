@@ -1541,7 +1541,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
             for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
                 bit32 flagmask = src_user_flags[userflag/32];
-                if (mailbox->h.flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+                if (mailbox->h.flagname[userflag] && (flagmask & (1U<<(userflag&31)))) {
                     int num;
                     r = mailbox_user_flag(as->mailbox, mailbox->h.flagname[userflag], &num, 1);
                     if (r)
@@ -1554,7 +1554,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                                          src_uid,
                                          error_message(r));
                     else
-                        dst_user_flags[num/32] |= 1<<(num&31);
+                        dst_user_flags[num/32] |= 1U<<(num&31);
                 }
             }
 

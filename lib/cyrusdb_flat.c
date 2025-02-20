@@ -533,6 +533,8 @@ static int foreach(struct dbengine *db,
         offset = 0;
     }
 
+    if (!dbbase || !db->size) goto done;
+
     p = dbbase + offset;
     pend = dbbase + db->size;
 
@@ -588,6 +590,7 @@ static int foreach(struct dbengine *db,
         p = dataend + 1;
     }
 
+done:
     if (!mytid) {
         /* cleanup the fast method */
         map_free(&dbbase, &dblen);

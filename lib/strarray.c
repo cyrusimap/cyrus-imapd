@@ -427,7 +427,8 @@ EXPORTED char **strarray_safetakevf(strarray_t *sa)
 
 EXPORTED void strarray_sort(strarray_t *sa, strarray_cmp_fn_t *cmp)
 {
-    qsort(sa->data, sa->count, sizeof(char *), cmp);
+    if (sa->count)
+        qsort(sa->data, sa->count, sizeof(char *), cmp);
 }
 
 

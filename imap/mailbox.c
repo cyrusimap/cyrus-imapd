@@ -1742,7 +1742,7 @@ EXPORTED int mailbox_record_hasflag(struct mailbox *mailbox,
     if (mailbox_user_flag(mailbox, flag, &userflag, 0))
         return 0;
 
-    return ((record->user_flags[userflag/32] & (1<<(userflag&31))) ? 1 : 0);
+    return ((record->user_flags[userflag/32] & (1U<<(userflag&31))) ? 1 : 0);
 }
 
 EXPORTED strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
@@ -1769,7 +1769,7 @@ EXPORTED strarray_t *mailbox_extract_flags(const struct mailbox *mailbox,
 
     for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
         if (mailbox->h.flagname[i] &&
-            (record->user_flags[i/32] & 1<<(i&31)))
+            (record->user_flags[i/32] & 1U<<(i&31)))
             strarray_append(flags, mailbox->h.flagname[i]);
     }
 
@@ -3343,7 +3343,7 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
         if (!mailbox->h.flagname[flag])
             continue;
-        if (!(record->user_flags[flag/32] & (1<<(flag&31))))
+        if (!(record->user_flags[flag/32] & (1U<<(flag&31))))
             continue;
         /* need to compare without case being significant */
         strlcpy(buf, mailbox->h.flagname[flag], 4096);
@@ -6979,7 +6979,8 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
     }
 
     /* make sure UIDs are sorted for comparison */
-    qsort(files->found, files->nused, sizeof(files->found[0]), sort_found);
+    if (files->nused)
+        qsort(files->found, files->nused, sizeof(files->found[0]), sort_found);
 
     strarray_fini(&paths);
 
@@ -7809,7 +7810,8 @@ static int find_annots(struct mailbox *mailbox, struct found_uids *annots)
     if (r) return r;
 
     /* make sure UIDs are sorted for comparison */
-    qsort(annots->found, annots->nused, sizeof(annots->found[0]), sort_found);
+    if (annots->nused)
+        qsort(annots->found, annots->nused, sizeof(annots->found[0]), sort_found);
 
     return 0;
 }
@@ -7904,7 +7906,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
             mailbox->header_dirty = 1;
             continue;
         }
-        valid_user_flags[flag/32] |= 1<<(flag&31);
+        valid_user_flags[flag/32] |= 1U<<(flag&31);
     }
 
     /* find cyrus.expunge file if present */

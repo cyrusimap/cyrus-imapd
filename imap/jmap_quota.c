@@ -913,7 +913,7 @@ static int jmap_quota_query(jmap_req_t *req)
     hash_enumerate(&qrock.quotas, &filter_cb, &frock);
 
     /* Sort results */
-    if (arrayu64_size(&sortcrit)) {
+    if (arrayu64_size(&sortcrit) && frock.matches.count) {
         cyr_qsort_r(frock.matches.data, frock.matches.count,
                     sizeof(void *), &quota_cmp, &sortcrit);
     }

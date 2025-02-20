@@ -1379,7 +1379,7 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
     for (i = 0; i < flags->count ; i++) {
         r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
         if (r) goto out;
-        storeargs->user_flags[userflag/32] |= 1<<(userflag&31);
+        storeargs->user_flags[userflag/32] |= 1U<<(userflag&31);
     }
 
     storeargs->update_time = time((time_t *)0);
@@ -3317,7 +3317,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
         if ((flag & 31) == 0) {
             flagmask = record.user_flags[flag/32];
         }
-        if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+        if (state->flagname[flag] && (flagmask & (1U<<(flag&31)))) {
             prot_printf(pout, "%c%s", sepchar, state->flagname[flag]);
             sepchar = ' ';
         }
@@ -4284,7 +4284,7 @@ static void index_fetchflags(struct index_state *state,
         if ((flag & 31) == 0) {
             flagmask = im->user_flags[flag/32];
         }
-        if (state->flagname[flag] && (flagmask & (1<<(flag & 31)))) {
+        if (state->flagname[flag] && (flagmask & (1U<<(flag&31)))) {
             prot_printf(state->out, "%c%s", sepchar, state->flagname[flag]);
             sepchar = ' ';
         }
@@ -6436,14 +6436,14 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_HASFLAG: {
                 const char *name = sortcrit[j].args.flag.name;
                 if (mailbox_record_hasflag(mailbox, &record, name))
-                    cur->hasflag |= (1<<j);
+                    cur->hasflag |= (1U<<j);
                 break;
             }
             case SORT_HASCONVFLAG: {
                 int idx = preload[j];
                 /* flag exists in the conversation at all */
                 if (idx >= 0 && conv.counts[idx] > 0 && j < 31)
-                    cur->hasflag |= (1<<j);
+                    cur->hasflag |= (1U<<j);
                 break;
             }
             case SORT_CONVEXISTS:
@@ -6842,8 +6842,8 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
         case SORT_HASFLAG:
         case SORT_HASCONVFLAG:
             if (i < 31)
-                ret = numcmp(md1->hasflag & (1<<i),
-                             md2->hasflag & (1<<i));
+                ret = numcmp(md1->hasflag & (1U<<i),
+                             md2->hasflag & (1U<<i));
             break;
         case SORT_FOLDER:
             if (md1->folder && md2->folder)
@@ -7053,6 +7053,7 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
 
 void index_msgdata_sort(MsgData **msgdata, int n, const struct sortcrit *sortcrit)
 {
+    if (!n) return;
     if (sortcrit_is_uid(sortcrit)) {
         qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_uid);
     }
