@@ -7053,6 +7053,7 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
 
 void index_msgdata_sort(MsgData **msgdata, int n, const struct sortcrit *sortcrit)
 {
+    if (!n) return;
     if (sortcrit_is_uid(sortcrit)) {
         qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_uid);
     }

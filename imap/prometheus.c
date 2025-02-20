@@ -209,7 +209,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
     r = mappedfile_writelock(doneprocs);
     if (r) goto done;
 
-    memcpy(&accum, mappedfile_base(doneprocs), mappedfile_size(doneprocs));
+    if (mappedfile_size(doneprocs)) {
+        memcpy(&accum, mappedfile_base(doneprocs), mappedfile_size(doneprocs));
+    }
     if (accum.ident[0] == '\0') {
         snprintf(accum.ident, sizeof(accum.ident), "%s", config_ident);
     }
