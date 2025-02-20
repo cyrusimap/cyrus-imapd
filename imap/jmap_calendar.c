@@ -9960,7 +9960,7 @@ static void notifsearch_run(const char *userid,
     }
     mailbox_iter_done(&iter);
 
-    if (search->sort) {
+    if (search->sort && entries->count) {
         cyr_qsort_r(entries->data, entries->count,
                 sizeof(struct notifsearch_entry),
                 (int(*)(const void*, const void*, void*))search->sort,
