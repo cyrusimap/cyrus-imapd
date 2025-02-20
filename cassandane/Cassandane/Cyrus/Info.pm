@@ -102,6 +102,10 @@ sub test_conf
         }
     }
 
+    # remove _db: values which are same as default, but coded in
+    # so that we'll have them in the config
+    delete $imapd_conf{$_} for grep { not $cyr_info_conf{$_} } grep { m/_db$/ } keys %imapd_conf;
+
     $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
 }
 
@@ -178,6 +182,7 @@ sub test_lint
     xlog $self, "test 'cyr_info conf-lint' in the simplest case";
 
     my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
     $self->assert_deep_equals([], \@output);
 }
 
@@ -193,6 +198,7 @@ sub test_lint_junk
     xlog $self, "test 'cyr_info conf-lint' with junk in the config";
 
     my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
@@ -213,6 +219,7 @@ sub test_lint_channels
     xlog $self, "test 'cyr_info conf-lint' with channel-specific sync config";
 
     my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
 
     $self->assert_deep_equals(
         [ sort(
@@ -249,6 +256,7 @@ sub test_lint_partitions
     xlog $self, "test 'cyr_info conf-lint' with partitions configured";
 
     my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
 
     $self->assert_deep_equals(
         [ sort(
