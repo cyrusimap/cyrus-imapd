@@ -633,7 +633,8 @@ sub test_downgrade_upgrade
 }
 
 sub test_upgrade_v19_to_v20
-    :MailboxLegacyDirs :NoAltNameSpace :Replication :needs_component_replication
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations
+    :Replication :needs_component_replication
 {
     my ($self) = @_;
 
@@ -655,8 +656,12 @@ sub test_upgrade_v19_to_v20
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
     $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
     
-    xlog $self, "Upgrade master to version 20";
+    xlog $self, "Upgrade master to mailbox version 20";
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', 'max');
+
+    xlog $self, "Upgrade master to conv.db version 2";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-U', '-r');
 
     # replicate new version to old version
     $self->run_replication();
@@ -664,8 +669,12 @@ sub test_upgrade_v19_to_v20
     # check_replication() will fail here due to the internaldate.nsec annotation
     # being present on the replica but NOT on the master
 
-    xlog $self, "Upgrade replica to version 20";
+    xlog $self, "Upgrade replica to mailbox version 20";
     $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-V', 'max');
+
+    xlog $self, "Upgrade replica to conv.db version 2";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-U', '-r');
 
     $self->run_replication();
     $self->check_replication('cassandane');
