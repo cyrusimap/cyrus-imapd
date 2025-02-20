@@ -132,7 +132,7 @@ sub _external_separator
     my ($self) = @_;
     die "No Config specified"
         unless defined $self->{config};
-    return $self->{config}->get_bool('unixhierarchysep', 'off') ? '/' : '.';
+    return $self->{config}->get_bool('unixhierarchysep', 'on') ? '/' : '.';
 }
 
 sub _external_separator_regexp
@@ -140,10 +140,10 @@ sub _external_separator_regexp
     my ($self) = @_;
     die "No Config specified"
         unless defined $self->{config};
-    return $self->{config}->get_bool('unixhierarchysep', 'off') ? qr/\// : qr/\./;
+    return $self->{config}->get_bool('unixhierarchysep', 'on') ? qr/\// : qr/\./;
 }
 
-
+# XXX assumes input is always in the admin namespace
 sub from_external
 {
     my ($self, $s) = @_;
@@ -161,20 +161,68 @@ sub from_external
     die "Bad external name \"$s\""
         if !defined $userid || $prefix ne 'user';
 
+    s/\./\^/g for @comps;
     $self->_set($domain, $userid, join('.', @comps));
 }
 
 sub to_external
 {
-    my ($self) = @_;
+    my ($self, $namespace) = @_;
 
-    my @comps;
-    push(@comps, 'user', $self->{userid}) if defined $self->{userid};
-    push(@comps, split(/\./, $self->{box})) if defined $self->{box};
-    my $s = join($self->_external_separator, @comps);
-    $s .= '@' . $self->{domain} if defined $self->{domain};
+    $namespace ||= 'admin';
 
-    return ($s eq '' ? undef : $s);
+    my $altnamespace = $self->{config}->get_bool('altnamespace', 'on');
+
+    my @boxes;
+    @boxes = split/\./, $self->{box} if $self->{box};
+    if ($self->{config}->get_bool('unixhierarchysep', 'on')) {
+        map { s/\^/\./g } @boxes;
+    }
+
+    if ($namespace eq 'admin' || !$altnamespace) {
+        my @comps;
+
+        push @comps, 'user', $self->{userid} if defined $self->{userid};
+        push @comps, @boxes;
+
+        my $s = join($self->_external_separator, @comps);
+        $s .= '@' . $self->{domain} if defined $self->{domain};
+
+        return ($s eq '' ? undef : $s);
+    }
+    else {
+        # altnamespace is active, behaviour depends on whether we're
+        # the mailbox's owner or someone else
+        my @comps;
+
+        if ($namespace ne 'owner') {
+            die "Can't make external name for other user without userid"
+                if not $self->{userid};
+
+            my $userprefix = $self->{config}->get('userprefix');
+            $userprefix ||= 'Other Users';
+
+            my $userid = $self->{userid};
+            my $domain = $self->{domain};
+
+            if ($domain) {
+                # XXX assumes crossdomains=yes and crossdomains_onlyother=no!
+                if (!$self->{config}->get_bool('unixhierarchysep', 'on')) {
+                    $domain =~ s/\./^/g;
+                }
+                $userid .= '@' . $domain;
+            }
+
+            push @comps, $userprefix, $userid, @boxes;
+        }
+        else {
+            push @comps, (@boxes ? @boxes : 'INBOX');
+        }
+
+        my $s = join($self->_external_separator, @comps);
+
+        return ($s eq '' ? undef : $s);
+    }
 }
 
 sub from_internal
