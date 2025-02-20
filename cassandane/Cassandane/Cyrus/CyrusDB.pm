@@ -147,10 +147,11 @@ sub test_recover_uniqueid_from_header_legacymb
     # lose that uniqueid from mailboxes.db
     my $I = "I$uniqueid";
     my $N = "Nuser\x1fcassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+    $self->{instance}->run_dbcommand($mailboxes_db, $format,
                                      [ 'DELETE', $I ]);
     my (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         ['SHOW', $N]);
     my $dlist = Cyrus::DList->parse_string($mbentry);
     my $hash = $dlist->as_perl();
@@ -158,11 +159,11 @@ sub test_recover_uniqueid_from_header_legacymb
     $hash->{I} = undef;
     $dlist = Cyrus::DList->new_perl('', $hash);
     $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         [ 'SET', $N, $dlist->as_string() ]);
 
     my %updated = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip", ['SHOW']);
+        $mailboxes_db, $format, ['SHOW']);
     xlog "updated mailboxes.db: " . Dumper \%updated;
 
     # bring service back up
@@ -190,7 +191,7 @@ sub test_recover_uniqueid_from_header_legacymb
 
     # mbentry should have the same uniqueid as before
     (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         ['SHOW', $N]);
     $dlist = Cyrus::DList->parse_string($mbentry);
     $hash = $dlist->as_perl();
@@ -198,7 +199,7 @@ sub test_recover_uniqueid_from_header_legacymb
 
     # $I entry should be back
     my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         ['SHOW', $I]);
     $self->assert_str_equals($I, $key);
     $dlist = Cyrus::DList->parse_string($value);
@@ -235,10 +236,11 @@ sub test_recover_create_missing_uniqueid_legacymb
     # lose that uniqueid from mailboxes.db
     my $I = "I$uniqueid";
     my $N = "Nuser\x1fcassandane";
-    $self->{instance}->run_dbcommand($mailboxes_db, "twoskip",
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+    $self->{instance}->run_dbcommand($mailboxes_db, $format,
                                      [ 'DELETE', $I ]);
     my (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         ['SHOW', $N]);
     my $dlist = Cyrus::DList->parse_string($mbentry);
     my $hash = $dlist->as_perl();
@@ -246,11 +248,11 @@ sub test_recover_create_missing_uniqueid_legacymb
     $hash->{I} = undef;
     $dlist = Cyrus::DList->new_perl('', $hash);
     $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         [ 'SET', $N, $dlist->as_string() ]);
 
     my %updated = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip", ['SHOW']);
+        $mailboxes_db, $format, ['SHOW']);
     xlog "updated mailboxes.db: " . Dumper \%updated;
 
     # lose it from cyrus.header too
@@ -298,7 +300,7 @@ sub test_recover_create_missing_uniqueid_legacymb
 
     # mbentry should have the new uniqueid
     (undef, $mbentry) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         ['SHOW', $N]);
     $dlist = Cyrus::DList->parse_string($mbentry);
     $hash = $dlist->as_perl();
@@ -307,7 +309,7 @@ sub test_recover_create_missing_uniqueid_legacymb
     # new runq entry should exist
     my $newI = "I$newuniqueid";
     my ($key, $value) = $self->{instance}->run_dbcommand(
-        $mailboxes_db, "twoskip",
+        $mailboxes_db, $format,
         ['SHOW', $newI]);
     $self->assert_str_equals($newI, $key);
     $dlist = Cyrus::DList->parse_string($value);

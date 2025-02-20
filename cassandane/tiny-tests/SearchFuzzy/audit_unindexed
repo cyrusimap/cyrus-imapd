@@ -34,6 +34,8 @@ sub test_audit_unindexed
     my $data = $self->{instance}->run_mbpath(-u => 'cassandane');
     my $xapdir = $data->{xapian}{t1};
 
+    my $format = $self->{instance}->{config}->get('search_indexed_db');
+
     xlog $self, "Read current cyrus.indexed.db.";
     my ($key, $val);
     my $result = $self->{instance}->run_dbcommand_cb(sub {
@@ -41,13 +43,13 @@ sub test_audit_unindexed
       return if $k =~ m/\*V\*/;
       $self->assert_null($key);
       ($key, $val) = ($k, $v);
-    }, "$xapdir/xapian/cyrus.indexed.db", "twoskip", ['SHOW']);
+    }, "$xapdir/xapian/cyrus.indexed.db", $format, ['SHOW']);
     $self->assert_str_equals('ok', $result);
     $self->assert_not_null($key);
     $self->assert_not_null($val);
 
     xlog $self, "Add UID 2 to sequence set in cyrus.indexed.db";
-    $self->{instance}->run_dbcommand("$xapdir/xapian/cyrus.indexed.db", "twoskip", ['SET', $key, $val . ':2']);
+    $self->{instance}->run_dbcommand("$xapdir/xapian/cyrus.indexed.db", $format, ['SET', $key, $val . ':2']);
 
     xlog $self, "Run squatter audit";
     $result = $self->{instance}->run_command(

@@ -17,10 +17,11 @@ sub test_reindex_mb_uniqueid
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-z', 't2', '-t', 't1', '-T', 't1:0');
 
     xlog "dump t2:cyrus.indexed.db";
-    # assumes twoskip backend and version 2 format keys
+    # assumes version 2 format keys
+    my $format = $self->{instance}->{config}->get('search_indexed_db');
     my $srcfile = $xapdirs->{t2} . '/xapian/cyrus.indexed.db';
     my $dstfile = $basedir . '/tmp/cyrus.indexed.db.flat';
-    $self->{instance}->run_command({cyrus => 1}, 'cvt_cyrusdb', $srcfile, 'twoskip', $dstfile, 'flat');
+    $self->{instance}->run_command({cyrus => 1}, 'cvt_cyrusdb', $srcfile, $format, $dstfile, 'flat');
 
     xlog "assert reindexed tier contains a mailbox key";
     open(FH, "<$dstfile") || die;
