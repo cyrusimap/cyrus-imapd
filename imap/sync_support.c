@@ -1448,34 +1448,77 @@ void encode_annotations(struct dlist *parent,
         }
     }
 
-    if (record && record->cid && mailbox->i.minor_version >= 13) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
-        dlist_setatom(aa, "USERID", "");
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_sethex64(aa, "VALUE", record->cid);
-    }
+    if (!record) return;
 
-    if (record && record->savedate && mailbox->i.minor_version >= 15) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
-        dlist_setatom(aa, "USERID", "");
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_setnum32(aa, "VALUE", record->savedate);
-    }
+    switch (mailbox->i.minor_version) {
+    case 20:
+        if (record->internaldate.tv_sec != UTIME_OMIT) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "internaldate.nsec");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_setnum64(aa, "VALUE", record->internaldate.tv_nsec);
+        }
 
-    if (record && record->createdmodseq && mailbox->i.minor_version >= 16) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "createdmodseq");
-        dlist_setatom(aa, "USERID", "");
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_setnum64(aa, "VALUE", record->createdmodseq);
+        if (record->basecid) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "basethrid");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_sethex64(aa, "VALUE", record->basecid);
+        }
+
+        GCC_FALLTHROUGH
+
+    case 19:
+    case 18:
+    case 17:
+    case 16:
+        if (record->createdmodseq) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "createdmodseq");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_setnum64(aa, "VALUE", record->createdmodseq);
+        }
+
+        GCC_FALLTHROUGH
+
+    case 15:
+        if (record->savedate) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_setnum32(aa, "VALUE", record->savedate);
+        }
+
+        GCC_FALLTHROUGH
+
+    case 14:
+    case 13:
+        if (record->cid) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_sethex64(aa, "VALUE", record->cid);
+        }
+
+        GCC_FALLTHROUGH
+
+    default:
+        break;
     }
 }
 
@@ -1512,47 +1555,80 @@ int decode_annotations(/*const*/struct dlist *annots,
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getbuf(aa, "VALUE", &value))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!strcmp(entry, IMAP_ANNOT_NS "thrid") &&
-            record && mailbox->i.minor_version >= 13) {
-            const char *p = buf_cstring(&value);
-            parsehex(p, &p, 16, &record->cid);
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate") &&
-                 record && mailbox->i.minor_version >= 15) {
-            const char *p = buf_cstring(&value);
-            bit64 newval;
-            parsenum(p, &p, 0, &newval);
-            record->savedate = newval;
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq") &&
-                 record && mailbox->i.minor_version >= 16) {
-            const char *p = buf_cstring(&value);
-            bit64 newval;
-            parsenum(p, &p, 0, &newval);
-            record->createdmodseq = newval;
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid") && record) {
-            /* this might double-apply the annotation, but oh well.  It does mean that
-             * basethrid is paired in here when we do a comparison against new values
-             * from the replica later! */
-            const char *p = buf_cstring(&value);
-            parsehex(p, &p, 16, &record->basecid);
-            /* XXX - check on p? */
 
-            /* "basethrid" is special, since it is written during mailbox
-             * appends and rewrites, using whatever modseq the index_record
-             * has at this moment. This might differ from the modseq we
-             * just parsed here, causing master and replica annotations
-             * to get out of sync.
-             * The fix is to set the basecid field both on the index
-             * record *and* adding the annotation to the annotation list.
-             * That way the local modseq of basethrid always gets over-
-             * written by whoever wins to be master of this annotation */
+        if (!record) goto realannot;
+
+        const char *p = buf_cstring(&value);
+
+        /* Look for and process "virtual" annotations */
+        switch (mailbox->i.minor_version) {
+        case 20:
+            if (!strcmp(entry, IMAP_ANNOT_NS "internaldate.nsec")) {
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->internaldate.tv_nsec = newval;
+                break;
+            }
+
+            GCC_FALLTHROUGH
+
+        case 19:
+        case 18:
+        case 17:
+        case 16:
+            if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) {
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->createdmodseq = newval;
+                break;
+            }
+
+            GCC_FALLTHROUGH
+
+        case 15:
+            if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->savedate = newval;
+                break;
+            }
+
+            GCC_FALLTHROUGH
+
+        case 14:
+        case 13:
+            if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) {
+                parsehex(p, &p, 16, &record->cid);
+                break;
+            }
+            else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
+                /* this might double-apply the annotation, but oh well.
+                 * It does mean that basethrid is paired in here when we do
+                 * a comparison against new values from the replica later! */
+                parsehex(p, &p, 16, &record->basecid);
+                /* XXX - check on p? */
+
+                if (mailbox->i.minor_version >= 20) break;
+
+                /* "basethrid" is special, since it is written during mailbox
+                 * appends and rewrites, using whatever modseq the index_record
+                 * has at this moment. This might differ from the modseq we
+                 * just parsed here, causing master and replica annotations
+                 * to get out of sync.
+                 * The fix is to set the basecid field both on the index
+                 * record *and* adding the annotation to the annotation list.
+                 * That way the local modseq of basethrid always gets over-
+                 * written by whoever wins to be master of this annotation */
+            }
+
+            GCC_FALLTHROUGH
+
+    realannot:
+        default:
             sync_annot_list_add(*salp, entry, userid, &value, modseq);
+            break;
         }
-        else {
-            sync_annot_list_add(*salp, entry, userid, &value, modseq);
-        }
+
         buf_free(&value);
     }
     return 0;
@@ -1772,13 +1848,14 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kr, "FLAGS", &fl))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate))
+    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate.tv_sec))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum32(kr, "SIZE", &record->size))
+    if (!dlist_getnum64(kr, "SIZE", &record->size))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getguid(kr, "GUID", &tmpguid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    record->internaldate.tv_nsec = UTIME_OMIT;
     record->guid = *tmpguid;
 
     /* parse the flags */
@@ -2126,7 +2203,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             dlist_setnum64(il, "MODSEQ", mymodseq);
             dlist_setdate(il, "LAST_UPDATED", record->last_updated);
             sync_print_flags(il, mailbox, record);
-            dlist_setdate(il, "INTERNALDATE", record->internaldate);
+            dlist_setdate(il, "INTERNALDATE", record->internaldate.tv_sec);
             dlist_setnum32(il, "SIZE", record->size);
             dlist_setatom(il, "GUID", message_guid_encode(&record->guid));
 
@@ -2650,7 +2727,8 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.basecid = mrecord.basecid;
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
-            copy.internaldate = mrecord.internaldate;
+            copy.internaldate.tv_sec  = mrecord.internaldate.tv_sec;
+            copy.internaldate.tv_nsec = mrecord.internaldate.tv_nsec;
             copy.savedate = mrecord.savedate;
             copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;
@@ -3093,11 +3171,14 @@ int sync_apply_mailbox(struct dlist *kin,
         /* skip out now, it's going to mismatch for sure! */
         if (xconvmodseq < ourxconvmodseq) {
             if (opt_force) {
-                syslog(LOG_NOTICE, "forcesync: higher xconvmodseq on replica %s - %llu < %llu",
+                syslog(LOG_NOTICE,
+                       "forcesync: higher xconvmodseq on replica %s - "
+                       MODSEQ_FMT " < " MODSEQ_FMT,
                        mboxname, xconvmodseq, ourxconvmodseq);
             }
             else {
-                syslog(LOG_ERR, "higher xconvmodseq on replica %s - %llu < %llu",
+                syslog(LOG_ERR, "higher xconvmodseq on replica %s - "
+                       MODSEQ_FMT " < " MODSEQ_FMT,
                        mboxname, xconvmodseq, ourxconvmodseq);
                 r = IMAP_SYNC_CHECKSUM;
                 goto done;
@@ -4863,7 +4944,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
             ispartial = calculate_intermediate_state(mailbox, frommodseq, fromuid,
                                                      batchsize, &touid, &tomodseq);
             if (ispartial) {
-                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u) (%llu/%llu/%llu)",
+                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u) "
+                       "(" MODSEQ_FMT "/" MODSEQ_FMT "/" MODSEQ_FMT ")",
                        mailbox_name(mailbox), fromuid, touid, mailbox->i.last_uid,
                        frommodseq, tomodseq, mailbox->i.highestmodseq);
             }
@@ -5806,7 +5888,7 @@ static void log_record(const char *name, struct mailbox *mailbox,
     syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
           "last_updated:" TIME_T_FMT " internaldate:" TIME_T_FMT " flags:(%s) cid:" CONV_FMT,
            name, record->uid, record->modseq,
-           record->last_updated, record->internaldate,
+           record->last_updated, record->internaldate.tv_sec,
            make_flags(mailbox, record), record->cid);
 }
 
@@ -5877,7 +5959,9 @@ static int compare_one_record(struct sync_client_state *sync_cs,
         goto diff;
     if (mp->last_updated != rp->last_updated)
         goto diff;
-    if (mp->internaldate != rp->internaldate)
+    if (mp->internaldate.tv_sec != rp->internaldate.tv_sec)
+        goto diff;
+    if (mp->internaldate.tv_nsec != rp->internaldate.tv_nsec)
         goto diff;
     if (mp->system_flags != rp->system_flags)
         goto diff;
