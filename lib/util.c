@@ -1799,12 +1799,25 @@ EXPORTED int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int
 
 EXPORTED int bin_to_lchex(const void *bin, size_t binlen, char *hex)
 {
-    uint16_t *p = (void *)hex;
+    char *scratch = hex;
+
+    if ((uintptr_t)hex % 2) {
+        scratch = malloc(binlen * 2);
+    }
+
+    uint16_t *p = (void *)scratch;
     const unsigned char *v = bin;
     size_t i;
     for (i = 0; i < binlen; i++)
         *p++ = lchexchars[*v++];
+
+    if ((uintptr_t)hex % 2) {
+        memcpy(hex, scratch, binlen * 2);
+        free(scratch);
+    }
+
     hex[binlen*2] = '\0';
+
     return 2 * binlen;
 }
 
