@@ -54,19 +54,31 @@ EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
 {
     int saved_errno, r;
 
-    r = unlink(pathname);
     saved_errno = errno;
+    r = unlink(pathname);
 
-    if (r && saved_errno != ENOENT) {
-        /* n.b. not simply using xsyslog, because we want to log our caller's
-         * location, but xsyslog would log ours
-         */
-        syslog(LOG_ERR, "IOERROR: unlink failed: pathname=<%s> syserror=<%s>"
-                        " file=<%s> line=<%d> func=<%s>",
-                        pathname, strerror(saved_errno),
-                        sfile, sline, sfunc);
+    if (r) {
+        if (errno == ENOENT) {
+            /* we usually ignore this case, so treat it as not an error
+             *
+             * this means you can't use this wrapper function when you do care
+             * about this case
+             */
+            r = 0;
+        }
+        else {
+            /* n.b. not simply using xsyslog, because we want to log our
+             * caller's location, but xsyslog would log ours
+             */
+            saved_errno = errno;
+            syslog(LOG_ERR, "IOERROR: unlink failed:"
+                            " pathname=<%s> syserror=<%s>"
+                            " file=<%s> line=<%d> func=<%s>",
+                            pathname, strerror(saved_errno),
+                            sfile, sline, sfunc);
 
-        /* if you want to abort() on unlink failure, patch that in here */
+            /* if you want to abort() on unlink failure, patch that in here */
+        }
     }
 
     errno = saved_errno;
@@ -78,20 +90,31 @@ EXPORTED int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
 {
     int saved_errno, r;
 
-    r = unlinkat(dirfd, pathname, flags);
     saved_errno = errno;
+    r = unlinkat(dirfd, pathname, flags);
 
-    if (r && saved_errno != ENOENT) {
-        /* n.b. not simply using xsyslog, because we want to log our caller's
-         * location, but xsyslog would log ours
-         */
-        syslog(LOG_ERR, "IOERROR: unlinkat failed:"
-                        " dirfd=<%d> pathname=<%s> flags=<%d> syserror=<%s>"
-                        " file=<%s> line=<%d> func=<%s>",
-                        dirfd, pathname, flags, strerror(saved_errno),
-                        sfile, sline, sfunc);
+    if (r) {
+        if (errno == ENOENT) {
+            /* we usually ignore this case, so treat it as not an error
+             *
+             * this means you can't use this wrapper function when you do care
+             * about this case
+             */
+            r = 0;
+        }
+        else {
+            /* n.b. not simply using xsyslog, because we want to log our
+             * caller's location, but xsyslog would log ours
+             */
+            saved_errno = errno;
+            syslog(LOG_ERR, "IOERROR: unlinkat failed:"
+                            " dirfd=<%d> pathname=<%s> flags=<%d> syserror=<%s>"
+                            " file=<%s> line=<%d> func=<%s>",
+                            dirfd, pathname, flags, strerror(saved_errno),
+                            sfile, sline, sfunc);
 
-        /* if you want to abort() on unlinkat failure, patch that in here */
+            /* if you want to abort() on unlinkat failure, patch that in here */
+        }
     }
 
     errno = saved_errno;

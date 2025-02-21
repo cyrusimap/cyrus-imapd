@@ -400,10 +400,8 @@ HIDDEN int seen_delete_user(const char *user)
                user);
     }
 
-    if (xunlink(fname) && errno != ENOENT) {
-        syslog(LOG_ERR, "error unlinking %s: %m", fname);
+    if (xunlink(fname))
         r = IMAP_IOERROR;
-    }
 
     free(fname);
     return r;

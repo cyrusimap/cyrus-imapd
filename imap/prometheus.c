@@ -227,8 +227,8 @@ static void prometheus_done(void *rock __attribute__((unused)))
     mappedfile_unlock(promhandle->mf);
 
     /* unlink per-process stats file, we don't need it anymore */
-    r = xunlink(mappedfile_fname(promhandle->mf));
-    if (r && errno != ENOENT) goto done;
+    if (xunlink(mappedfile_fname(promhandle->mf)))
+        goto done;
     unlinked = 1;
 
     /* accumulate the statistics */
