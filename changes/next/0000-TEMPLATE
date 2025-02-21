@@ -6,6 +6,11 @@ Description:
 A one line-ish description of the feature, for the release notes.
 
 
+Documentation:
+
+Where does the full documentation for this feature live?
+
+
 Config changes:
 
 If your PR changes lib/imapoptions at all, list which options you've changed
