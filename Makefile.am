@@ -1645,6 +1645,7 @@ dist_man8_MANS = \
     man/cyr_synclog.8 \
     man/cyr_userseen.8 \
     man/cyr_virusscan.8 \
+    man/cyr_withlock_run.8 \
     man/cyrdump.8 \
     man/deliver.8 \
     man/fud.8 \
@@ -1715,11 +1716,17 @@ dist_man8_MANS += \
     man/sieved.8
 endif
 
+if CALALARMD
+dist_man8_MANS += \
+    man/calalarmd.8
+endif
+
 if MAINTAINER_MODE
 ## make sure feature-dependent man pages are included in distribution
 dist_man1_MANS += \
     man/dav_reconstruct.1
 dist_man8_MANS += \
+    man/calalarmd.8
     man/ctl_zoneinfo.8 \
     man/cyradm.8 \
     man/fetchnews.8 \
