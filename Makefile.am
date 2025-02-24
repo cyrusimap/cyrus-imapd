@@ -63,10 +63,59 @@ AM_CPPFLAGS = \
     $(ICU_CFLAGS)
 
 if HAVE_LDAP
-AM_CPPFLAGS += $(LDAP_CPPFLAGS)
+    AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
+
+if ASAN
+    LSAN_SUPPRESS="env LSAN_OPTIONS=suppressions=leaksanitizer.suppress"
+    AM_CFLAGS += -fsanitize=address -DWITH_ASAN
+    AM_CXXFLAGS += -fsanitize=address -DWITH_ASAN
+    AM_LDFLAGS += -fsanitize=address
+
+if STATIC_ASAN
+        AM_CFLAGS += -DWITH_STATIC_ASAN
+        AM_CXXFLAGS += -DWITH_STATIC_ASAN
+
+if IS_GCC_COMPILER
+            AM_CFLAGS += -static-libasan
+            AM_CXXFLAGS += -static-libasan
+            AM_LDFLAGS += -static-libasan
+endif # IS_GCC_COMPILER
+else # ! STATIC_ASAN
+if IS_GCC_COMPILER
+else # ! IS_GCC_COMPILER
+            AM_CFLAGS += -shared-libsan
+            AM_CXXFLAGS += -shared-libsan
+            AM_LDFLAGS += -shared-libsan
+endif # ! IS_GCC_COMPILER
+endif # STATIC_ASAN
+endif # ASAN
+
+if UBSAN
+    AM_CFLAGS += -fsanitize=undefined -DWITH_UBSAN
+    AM_CXXFLAGS += -fsanitize=undefined -DWITH_UBSAN
+    AM_LDFLAGS += -fsanitize=undefined
+
+if STATIC_UBSAN
+        AM_CFLAGS += -DWITH_STATIC_UBSAN
+        AM_CXXFLAGS += -DWITH_STATIC_UBSAN
+
+if IS_GCC_COMPILER
+            AM_CFLAGS += -static-libubsan
+            AM_CXXFLAGS += -static-libubsan
+            AM_LDFLAGS += -static-libubsan
+endif # IS_GCC_COMPILER
+else # ! STATIC_UBSAN
+if IS_GCC_COMPILER
+else # ! IS_GCC_COMPILER
+            AM_CFLAGS += -shared-libsan
+            AM_CXXFLAGS += -shared-libsan
+            AM_LDFLAGS += -shared-libsan
+endif # ! IS_GCC_COMPILER
+endif # ! STATIC_UBSAN
+endif # UBSAN
 
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
@@ -708,10 +757,11 @@ check-local:
 	@echo "Running unit tests"
 	@vg= ; \
 		test -z "$$VG" || vg="$(VALGRIND)" ; \
+		test -z "$$SUPPRESS" && suppress=$(LSAN_SUPPRESS) ; \
 		f="-v" ; \
 		test "x$$CUFORMAT" = xjunit && f="-x" ; \
 		cd cunit ; \
-		$$vg ./unit $$f ; \
+		$$vg $$suppress ./unit $$f ; \
 		retval=$$? ; \
 		if [ "x$$CUFORMAT" = xjunit ] ; then \
 			$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl ; \

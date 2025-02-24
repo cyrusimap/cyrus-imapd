@@ -514,7 +514,21 @@ int main(int argc, char *argv[])
 
     /* we don't need to read config to handle this one */
     if (!strcmp(argv[optind], "version")) {
-        printf("%s %s\n", PACKAGE_NAME, CYRUS_VERSION);
+        printf("%s %s", PACKAGE_NAME, CYRUS_VERSION);
+
+#if defined WITH_STATIC_ASAN
+        printf(" (built with asan (statically linked))");
+#elif defined WITH_ASAN
+        printf(" (built with asan (dynamically linked))");
+#endif
+
+#if defined WITH_STATIC_UBSAN
+        printf(" (built with ubsan (statically linked))");
+#elif defined WITH_UBSAN
+        printf(" (built with ubsan (dynamically linked))");
+#endif
+
+        printf("\n");
         return 0;
     }
 

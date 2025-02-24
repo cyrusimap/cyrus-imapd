@@ -2127,6 +2127,47 @@ AC_SUBST(LIB_SASL)
 AC_SUBST(LIB_UUID)
 AC_SUBST(PERL)
 
+AC_ARG_ENABLE([asan],
+[AS_HELP_STRING([--enable-asan], [Build with AddressSanitizer (-fsanitize=address)])],
+[case "${enableval}" in
+  yes) asan=true ;;
+  no)  asan=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-asan]) ;;
+esac],[asan=false])
+AM_CONDITIONAL([ASAN], [test "x$asan" = "xtrue"])
+
+AC_ARG_ENABLE([ubsan],
+[AC_HELP_STRING([--enable-ubsan], [Build with UndefinedBehaviorSanitizer (-fsanitize=undefined)])],
+[case "${enableval}" in
+  yes) ubsan=true ;;
+  no)  ubsan=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-ubsan]) ;;
+esac],[ubsan=false])
+AM_CONDITIONAL([UBSAN], [test "x$ubsan" = "xtrue"])
+
+if `$CC -v 2>&1 | grep 'gcc version' >/dev/null 2>&1` ; then
+    is_gcc_compiler=true
+fi
+AM_CONDITIONAL([IS_GCC_COMPILER], [test "x$is_gcc_compiler" = "xtrue"])
+
+AC_ARG_ENABLE([static-asan],
+[AS_HELP_STRING([--disable-static-asan], [If --enable-asan is true, do not link asan statically])],
+[case "${enableval}" in
+  yes) static_asan=true ;;
+  no)  static_asan=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-static-asan]) ;;
+esac],[static_asan=true])
+AM_CONDITIONAL([STATIC_ASAN], [test "x$static_asan" = "xtrue"])
+
+AC_ARG_ENABLE([static-ubsan],
+[AS_HELP_STRING([--disable-static-ubsan], [If --enable-ubsan is true, do not link ubsan statically])],
+[case "${enableval}" in
+  yes) static_ubsan=true ;;
+  no)  static_ubsan=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-static-ubsan]) ;;
+esac],[static_ubsan=true])
+AM_CONDITIONAL([STATIC_UBSAN], [test "x$static_ubsan" = "xtrue"])
+
 dnl
 dnl Enable/disable unit tests.  These are disabled by default, as
 dnl they require an additional library (the CUnit library).
@@ -2589,6 +2630,26 @@ then
         LIBS="$LIBS -lstdc++";
 fi
 
+if test "X$asan" = "Xtrue";
+then
+    if test "X$static_asan" = "Xtrue";
+    then
+       asan_desc="(statically linked)"
+    else
+       asan_desc="(dynamically linked)"
+    fi
+fi
+
+if test "X$ubsan" = "Xtrue";
+then
+    if test "X$static_ubsan" = "Xtrue";
+    then
+       ubsan_desc="(statically linked)"
+    else
+       ubsan_desc="(dynamically linked)"
+    fi
+fi
+
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     libcyrus_imap.pc
@@ -2681,4 +2742,6 @@ Build info:
    unit tests (cunit): $enable_unit_tests
    xxd:                $XXD
    release checks:     $enable_release_checks
+   asan:               $asan $asan_desc
+   ubsan:              $ubsan $ubsan_desc
 "
