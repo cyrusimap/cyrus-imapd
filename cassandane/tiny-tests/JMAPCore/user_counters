@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_user_counters
+    :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/usercounters'
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['UserCounters/get', {}, "R1"]
+    ], $using);
+
+    my %expect = map {; $_ => 1 } qw(
+        highestModSeq
+        quotaModSeq
+        raclModSeq
+        uidValidity
+    );
+
+    my @types = qw(
+        mail
+        calendar
+        contacts
+        notes
+        submission
+        sieveScript
+    );
+
+    for my $type (@types) {
+        $expect{$_} = 1 for (
+            "${type}ModSeq",
+            "${type}DeletedModSeq",
+
+            "${type}FoldersModSeq",
+            "${type}FoldersDeletedModSeq",
+        );
+    }
+
+    $self->assert_equals("singleton", $res->[0][1]{list}[0]{id});
+
+    # Make sure we at least got a count of something
+    for my $k (sort keys %expect) {
+        # sneak the key into a named capture field to make errors more useful
+        $self->assert_matches(qr/^(?<$k>\d+)$/, $res->[0][1]{list}[0]{$k});
+    }
+}
