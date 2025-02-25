@@ -8537,7 +8537,7 @@ static char *principal_state_string(SHA1_CTX *sha1)
     uint8_t digest[SHA1_DIGEST_LENGTH];
     SHA1Final(digest, sha1);
     char hexdigest[SHA1_DIGEST_LENGTH*2 + 1];
-    bin_to_lchex(digest, SHA1_DIGEST_LENGTH, hexdigest);
+    bin_to_hex(digest, SHA1_DIGEST_LENGTH, hexdigest, BH_LOWER);
     hexdigest[SHA1_DIGEST_LENGTH*2] = '\0';
     return xstrdup(hexdigest);
 }
@@ -9026,7 +9026,7 @@ static int principal_query(jmap_req_t *req, struct jmap_query *query, json_t **e
     uint8_t digest[SHA1_DIGEST_LENGTH];
     SHA1Final(digest, &sha1);
     char hexdigest[SHA1_DIGEST_LENGTH*2 + 1];
-    bin_to_lchex(digest, SHA1_DIGEST_LENGTH, hexdigest);
+    bin_to_hex(digest, SHA1_DIGEST_LENGTH, hexdigest, BH_LOWER);
     hexdigest[SHA1_DIGEST_LENGTH*2] = '\0';
     query->query_state = xstrdup(hexdigest);
 
