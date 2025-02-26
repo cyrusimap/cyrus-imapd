@@ -1303,4 +1303,45 @@ sub test_rename_user_nosplitconv
     $self->check_replication('newuser');
 }
 
+sub test_unmap_failed_appends
+    :NoCheckSyslog
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mime = <<'EOF';
+From: from@local
+To: to@local
+Subject: test
+Date: Mon, 14 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    # look up the PID of the imapd process
+    my @lines = grep(/imap\[\d+\]: command: \w+ Append$/,
+        $self->{instance}->getsyslog());
+    $self->assert_num_equals(1, scalar @lines);
+
+    my ($pid) = $lines[0] =~ /imap\[(\d+)\]:/;
+    $self->assert_not_null($pid);
+
+    # append duplicate messages until we reach the GUID limit
+    foreach (1..100) {
+        $imap->append('INBOX', $mime);
+        my $res = $imap->get_last_completion_response;
+        if ('ok' ne $res) {
+            last;
+        }
+    }
+
+    # make sure that conversation.db got unmapped completely
+    my $dangling_maps = `grep conversations.db /proc/$pid/maps 2>&1`;
+    $self->assert_str_equals('', $dangling_maps);
+}
+
 1;
