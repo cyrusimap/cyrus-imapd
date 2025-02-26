@@ -1423,8 +1423,6 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
                   "fname=<%s> size=<%08llX>", db->fname, (LLU)loc->end);
         return TWOM_IOERROR;
     }
-    // this will cause tm_ensure to re-mmap even though the map is bigger
-    loc->file->size = loc->end;
 
     /* clear the dirty flag */
     struct tm_header *header = &file->header;
