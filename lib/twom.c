@@ -1418,12 +1418,6 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
     r = tm_commit(db, loc->end);
     if (r) return r;
 
-    if (ftruncate(file->fd, loc->end)) {
-        db->error("failed to truncate back to committed size",
-                  "fname=<%s> size=<%08llX>", db->fname, (LLU)loc->end);
-        return TWOM_IOERROR;
-    }
-
     /* clear the dirty flag */
     struct tm_header *header = &file->header;
     header->flags &= ~DIRTY;
