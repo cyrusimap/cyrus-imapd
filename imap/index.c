@@ -411,7 +411,12 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
     r = index_lock(state, /*readonly*/0);
     if (r) return r;
 
-    /* XXX - check if not mailbox->i.deleted count and need_deleted */
+    /* If mailbox has no deleted flagged messages return */
+    if (!(state->mailbox->i.deleted > 0 && need_deleted)) {
+        index_unlock(state);
+        return r;
+    }
+    
     seq = _parse_sequence(state, sequence, 1);
 
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
