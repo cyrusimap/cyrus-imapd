@@ -1423,7 +1423,7 @@ sub _sanitizer_log_dir()
 {
     my ($self, $sanitizer) = @_;
 
-    my $san_logdir = $self->{basedir} . "${sanitizer}logs/";
+    my $san_logdir = $self->{basedir} . "/${sanitizer}logs/";
     mkpath $san_logdir
         unless ( -d $san_logdir );
 
