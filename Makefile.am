@@ -630,6 +630,7 @@ cunit_TESTS = \
     cunit/imparse.testc \
     cunit/libconfig.testc \
     cunit/mailbox.testc \
+    cunit/master-event.testc \
     cunit/mboxname.testc \
     cunit/md5.testc \
     cunit/message.testc \
@@ -1739,6 +1740,8 @@ bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
 endif # BENCH
 
 master_master_SOURCES = \
+    master/event.c \
+    master/event.h \
     master/master.c \
     master/master.h \
     master/masterconf.c \
