@@ -38,3 +38,47 @@ static struct event_sched2 *event_sched2;
 static struct event_details *event_details;
 static size_t n_events;
 #endif
+
+uint64_t parse_cron_word(const char *word, unsigned max_value)
+{
+    (void) word; (void) max_value;
+    /* max_value and zero are equivalent
+
+        minute: 0==60, uses bits 0-59 (60 bits)
+        hour:   0==24, uses bits 0-23 (24 bits)
+        dom:    0==31, uses bits 0-30 (31 bits)
+        month:  0==12, uses bits 0-11 (12 bits)
+        dow:    0==7,  uses bits 0-6   (7 bits)
+
+        minute and hour are naturally specified from 0,
+        but dom and month are naturally specified from 1,
+        any interesting consequences?
+        => think about whether we want january=0 or december=12=0
+        => think about whether we want first day of month to be 0, or
+           last day of month to be 0
+    */
+
+    /* flex/bison parser?
+
+    word : list
+         | month_name
+         | weekday_name
+         ;
+
+    list : range
+         | list COMMA range
+         ;
+
+    range : ASTERISK
+          | number
+          | number HYPHEN number
+          | range SLASH number
+          ;
+
+    number : NUMBER+;
+
+    might be able to do all the bit fiddling from a bison parser, if we treat
+    the set-of-bits as the semantic value of everything here
+    */
+    return 0;
+}
