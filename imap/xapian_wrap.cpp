@@ -438,7 +438,7 @@ static uint8_t parse_indexlevel(const std::string& s)
 static std::string format_indexlevel(uint8_t level)
 {
     char hex[4];
-    bin_to_lchex(&level, 1, hex);
+    bin_to_hex(&level, 1, hex, BH_LOWER);
     return std::string(hex, 2);
 }
 

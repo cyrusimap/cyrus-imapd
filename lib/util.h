@@ -371,11 +371,9 @@ char *strconcat(const char *s1, ...);
 #define BH_SEPARATOR(c)     (_BH_SEP|((c)&0x7f))
 #define _BH_GETSEP(flags)   (flags & _BH_SEP ? (char)(flags & 0x7f) : '\0')
 int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
-int bin_to_lchex(const void *bin, size_t binlen, char *hex);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
 
 int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags);
-int buf_bin_to_lchex(struct buf *hex, const void *bin, size_t binlen);
 int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen);
 
 /* use getpassphrase on machines which support it */

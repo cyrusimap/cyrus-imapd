@@ -232,7 +232,7 @@ EXPORTED const char *message_guid_import(struct message_guid *guid,
 EXPORTED const char *message_guid_encode(const struct message_guid *guid)
 {
     static char text[2*MESSAGE_GUID_SIZE+1];
-    int r = bin_to_lchex(&guid->value, MESSAGE_GUID_SIZE, text);
+    int r = bin_to_hex(&guid->value, MESSAGE_GUID_SIZE, text, BH_LOWER);
     assert(r == 2*MESSAGE_GUID_SIZE);
     return text;
 }
