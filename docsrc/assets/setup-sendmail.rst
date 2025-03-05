@@ -45,14 +45,14 @@ Create the file cf/feature/anfi_vcyrus.m4:
   LOCAL_CONFIG
   # cyrus - map for checking cyrus mailbox presence
   Kcyrus socket -T<TMPF> -a<OK> local:/var/imap/socket/smmapd
-  
+
   LOCAL_RULESETS
   SLocal_localaddr
   R$+     $: $1 $| $(cyrus $1 $: $)
-  R$+ $|		$#error $@ 5.1.1 $: "550 User unknown."
-  R$+ $| $*<TMPF>	$#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
-  R$+ $| $*<OK>		$#cyrusv2 $@ $: $1
-  R$+ $| $*		$: $1
+  R$+ $|                $#error $@ 5.1.1 $: "550 User unknown."
+  R$+ $| $*<TMPF>       $#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
+  R$+ $| $*<OK>         $#cyrusv2 $@ $: $1
+  R$+ $| $*             $: $1
 
 Many spaces in a row stand for the tabulator character.
 
@@ -72,15 +72,15 @@ Patching m4/proto.m4
   --- a/cf/m4/proto.m4
   +++ b/cf/m4/proto.m4
   @@ -1147,6 +1147,10 @@ dnl if no match, change marker to prevent a second @domain lookup
-   R<@> $+ + $* < @ $+ . >	$: < $(virtuser @ $3 $@ $1 $@ $2 $@ +$2 $: ! $) > $1 + $2 < @ $3 . >
+   R<@> $+ + $* < @ $+ . >      $: < $(virtuser @ $3 $@ $1 $@ $2 $@ +$2 $: ! $) > $1 + $2 < @ $3 . >
    dnl without +detail
-   R<@> $+ < @ $+ . >		$: < $(virtuser @ $2 $@ $1 $: @ $) > $1 < @ $2 . >
+   R<@> $+ < @ $+ . >           $: < $(virtuser @ $2 $@ $1 $: @ $) > $1 < @ $2 . >
   +dnl If a virtual address is not in the virtusertable, but cyrus knows about the address, deliver it.
-  +R< error : $-.$-.$- : $+ > $+ < @ $={VirtHost} . >		$: < error : $1.$2.$3 : $4 > $5 < $6 . > $| $(cyrus  $5@$6 $: $)
-  +R< error : $-.$-.$- : $+ > $* < $* . > $| $*<OK>		$#cyrusv2 $@ $: $5@$6
-  +R< error : $-.$-.$- : $+ > $* $| $*<TMPFS>		$#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
+  +R< error : $-.$-.$- : $+ > $+ < @ $={VirtHost} . >           $: < error : $1.$2.$3 : $4 > $5 < $6 . > $| $(cyrus  $5@$6 $: $)
+  +R< error : $-.$-.$- : $+ > $* < $* . > $| $*<OK>             $#cyrusv2 $@ $: $5@$6
+  +R< error : $-.$-.$- : $+ > $* $| $*<TMPFS>           $#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
    dnl no match
-   R<@> $+				$: $1
+   R<@> $+                              $: $1
    dnl remove mark
 
 Where many spaces in a row stand for the tabulator key.
@@ -97,13 +97,13 @@ Patching mailer/cyrusv2.m4
   +++ b/cf/mailer/cyrusv2.m4
   @@ -11,7 +11,7 @@ PUSHDIVERT(-1)
    #
-   
+
    _DEFIFNOT(`_DEF_CYRUSV2_MAILER_FLAGS', `lsDFMnqXz')
   -_DEFIFNOT(`CYRUSV2_MAILER_FLAGS', `A@/:|m')
   +_DEFIFNOT(`CYRUSV2_MAILER_FLAGS', `8m')
    ifdef(`CYRUSV2_MAILER_ARGS',, `define(`CYRUSV2_MAILER_ARGS', `FILE /var/imap/socket/lmtp')')
    define(`_CYRUSV2_QGRP', `ifelse(defn(`CYRUSV2_MAILER_QGRP'),`',`', ` Q=CYRUSV2_MAILER_QGRP,')')dnl
- 
+
 
 The `8` flag means, that Cyrus LMTPd can accept 8bit data and sendmail will not convert 8bit data to 7bit before passing it to Cyrus IMAP.  The `A@/:|` functionality will be performed by the `local` mailer, before the `cyrusv2` mailer is called.  The `cyrus2v` mailer is used only to pass data to Cyrus IMAP, after it is verified, that Cyrus IMAP hosts a particular mailbox.  Thus the `cyrus2v` mailer does not call the `localaddr=5` rule set in order to avoid loops. (If the `cyrusv2` mailer calls the `localaddr=5` ruleset and the `localaddr=5` ruleset calls the `cyrusv2` mailer, there is an endless loop).
 
@@ -134,11 +134,11 @@ and recompile them, e.g. by calling `make file.cf` to convert `file.mc` to `file
   # ggg is unqualified address, which exists both in Cyrus’ default domain and in sendmails’ w class
   $ sendmail -C file.cf -bv ggg
   ggg... deliverable: mailer cyrusv2, user ggg
-  
+
   # verify that ggg and ggg@your-primary-domain resolve in the same way, your-primary-domain is the default Cyrus IMAP domain
   $ sendmail -C file.cf -bv ggg@your-primary-domain
   ggg... deliverable: mailer cyrusv2, user ggg
-  
+
   # as above, but here another-domain belongs to class `w` and it is not the default domain for Cyrus IMAP
   $ sendmail -C file.cf -bv ggg@another-domain
   ggg... deliverable: mailer cyrusv2, user ggg

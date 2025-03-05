@@ -43,7 +43,7 @@ If you are using skiplist for your mailboxes.db then you can just copy the file.
 Hard recovery
 -------------
 
-It's not currently possible to recover the master's mailboxes.db with a dump from ``ctl_mboxlist -d``. The mailboxes.db recovered on the master with ``ctl_mboxlist -u`` won't have the "remote" flag set. 
+It's not currently possible to recover the master's mailboxes.db with a dump from ``ctl_mboxlist -d``. The mailboxes.db recovered on the master with ``ctl_mboxlist -u`` won't have the "remote" flag set.
 
 1. Stop Cyrus on your frontends.
 2. Delete the mailboxes.db on the frontends and the mupdate master.

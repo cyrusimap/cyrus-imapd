@@ -10,7 +10,7 @@ Features
 .. toctree::
     :maxdepth: 2
     :glob:
-    
+
     faqs/feature-*
 
 Installation Problems
@@ -19,7 +19,7 @@ Installation Problems
 .. toctree::
     :maxdepth: 2
     :glob:
-    
+
     faqs/install-*
 
 
@@ -29,7 +29,7 @@ Common Feature Requests
 .. toctree::
     :maxdepth: 2
     :glob:
-    
+
     faqs/r-*
 
 
@@ -39,7 +39,7 @@ Common Operational Questions
 .. toctree::
     :maxdepth: 1
     :glob:
-    
+
     faqs/o-*
 
 Common Interoperability Problems
@@ -48,7 +48,7 @@ Common Interoperability Problems
 .. toctree::
     :maxdepth: 2
     :glob:
-    
+
     faqs/interop-*
 
 

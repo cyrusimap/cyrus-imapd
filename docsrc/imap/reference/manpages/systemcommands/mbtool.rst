@@ -70,7 +70,7 @@ Examples
 
 ..
 
-        Normalize ``internaldate`` on all index records in 
+        Normalize ``internaldate`` on all index records in
         *user.jsmith*.
 
 .. only:: html

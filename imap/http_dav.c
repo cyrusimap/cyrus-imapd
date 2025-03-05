@@ -822,7 +822,7 @@ HIDDEN int calcarddav_parse_path(const char *path,
             if (ret == IMAP_MAILBOX_BADNAME)
                 *resultstr = "Invalid name.  Percent encoded HTTP URLs are in theory valid, but in practice not supported.";
             goto done;
-	}
+        }
 
         tgt->allow |= ALLOW_MKCOL;
     }
@@ -1350,7 +1350,7 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                     xmlFree((char *) nsDef->prefix);
                     nsDef->prefix = xmlStrdup(BAD_CAST myprefix);
                     xmlNewNs(root, nsDef->href, BAD_CAST myprefix); // could again return NULL
-		}
+                }
             }
         }
 

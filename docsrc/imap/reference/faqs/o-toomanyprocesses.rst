@@ -18,7 +18,7 @@ By default, Cyrus is allowed to spawn a limitless number of child imapd processe
 3. Clean up connections that are no longer in use
 -------------------------------------------------
 
-While POP connections are short lived, IMAP connections can be long lived. And then there are processes trying to listen to a client that's no longer alive. 
+While POP connections are short lived, IMAP connections can be long lived. And then there are processes trying to listen to a client that's no longer alive.
 
 Setting **tcp_keepalive** option in :cyrusman:`imapd.conf(5)` to **1** can be used to test if connections are still alive. The operating system will send an ACK packet every so often (every 2 hours by default on Linux) which tests if the TCP endpoint is still reachable.
 
@@ -26,5 +26,5 @@ The other **tcp_keepalive_** options help control how and when the test occurs.
 
 
 
- 
- 
+
+

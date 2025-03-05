@@ -18,7 +18,7 @@ Synopsis
 Description
 ===========
 
-**dav_reconstruct** fixes up the dav internal sqlite database which is used for lots of the dav commands to make them more efficient. 
+**dav_reconstruct** fixes up the dav internal sqlite database which is used for lots of the dav commands to make them more efficient.
 
 Any corruption to the dav database can cause the wrong stuff to be returned via caldav/carddav. Using dav_reconstruct can correct these faults.
 

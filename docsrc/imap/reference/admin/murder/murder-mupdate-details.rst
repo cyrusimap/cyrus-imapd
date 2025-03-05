@@ -78,9 +78,9 @@ A tagged DELETE response includes one parameter, the mailbox name. It indicates 
 Server Initial Response
 =======================
 
-The initial response from the server is a two line format. The first line MUST start with ``* OK MUPDATE`` and be followed by three strings: 
-    * the server's hostname, 
-    * an implementation-defined string, 
+The initial response from the server is a two line format. The first line MUST start with ``* OK MUPDATE`` and be followed by three strings:
+    * the server's hostname,
+    * an implementation-defined string,
     * the version of the implementation (also implementation-defined).
 
 The second line of the initial response begins with ``* AUTH`` and is followed by a space-separated list of SASL mechanisms that the server will accept.
@@ -95,9 +95,9 @@ AUTHENTICATE
 
 The AUTHENTICATE command initiates a SASL negotiation session between the client and the server. It has two parameters:
 
-    1. Mandatory: the string for the authentication mechanism desired. 
-    2. Optional: contents of the client first send. 
-    
+    1. Mandatory: the string for the authentication mechanism desired.
+    2. Optional: contents of the client first send.
+
 All SASL blobs sent across the wire must be in base64 encoded format, and followed by a CR and LF combination. Clients may cancel authentication by sending a ``*`` followed by a ``CR`` and ``LF``.
 
 ACTIVATE
@@ -105,8 +105,8 @@ ACTIVATE
 
 The ACTIVATE command takes three parameters:
 
-    1. a mailbox name, 
-    2. a location in ``server!partition`` format, 
+    1. a mailbox name,
+    2. a location in ``server!partition`` format,
     3. and an ACL for the mailbox.
 
 It will tell the server to insert into its database the given mailbox in the given location with the given ACL. An OK response indicates success, a NO response indicates some sort of failure occured. This is not a valid command to issue to a slave.
@@ -116,17 +116,17 @@ DELETE
 
 The DELETE command takes one parameter:
 
-    1. a mailbox name. 
-    
+    1. a mailbox name.
+
 The server should delete the given mailbox from its namespace, and return OK. A NO response indicates that either the session is not currently authenticated or the given mailbox does not exist. The delete command should immediately be sent to all slave databases. This is not a valid command to issue to a slave.
 
 FIND
 ----
 
 The FIND command takes a single parameter:
-    
-    1. a mailbox name. 
-    
+
+    1. a mailbox name.
+
 The server then responds with the current record for the given mailbox, if any and an OK response. A NO response is suitable if the connection is not currently authenticated.
 
 LIST
@@ -134,8 +134,8 @@ LIST
 
 The LIST command is similar to running FIND across the entire database. The LIST command takes an optional parameter:
 
-    1. A prefix to match for the location field. 
- 
+    1. A prefix to match for the location field.
+
 Without the parameter, LIST returns results for all mailboxes in the database. For each mailbox that matches, it issues a MAILBOX or RESERVE response to the client. When all responses are complete, it issues an OK response.
 
 LOGOUT
@@ -151,11 +151,11 @@ The NOOP command takes no parameters. An OK response indicates success. If this 
 RESERVE
 -------
 
-A RESERVE command takes two parameters: 
+A RESERVE command takes two parameters:
 
-    1. the mailbox name 
-    2. a location in ``server!partition`` format. 
-    
+    1. the mailbox name
+    2. a location in ``server!partition`` format.
+
 It will first check for an existing reservation or activation of the given mailbox name, if there does exist such an entity, a NO response is returned, otherwise a reservation entry is put into the database, and an OK response is returned on success. NO is also returned if the connection is unauthenticated. This is not a valid command to issue to a slave.
 
 UPDATE
@@ -166,9 +166,9 @@ The UPDATE command is how a slave initiates an update stream from the master (th
 Database Synchronization
 ========================
 
-A distributed database protocol such as mupdate must address the issues of synchronization. In our case, there are two places where the database can become out of sync if a connection is not dropped cleanly. 
+A distributed database protocol such as mupdate must address the issues of synchronization. In our case, there are two places where the database can become out of sync if a connection is not dropped cleanly.
 
-    1. The master mupdate database can reflect the existence of mailboxes in the namespace that do not exist (or vice versa), 
+    1. The master mupdate database can reflect the existence of mailboxes in the namespace that do not exist (or vice versa),
     2. The slaves need to ensure that their local database is up to date with the master whenever they come up.
 
 Synchronization of Slaves to Master

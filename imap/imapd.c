@@ -7604,12 +7604,12 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
         }
 
         // non-standard output item, but it helps give progress
-	if (text->noisy) {
+        if (text->noisy) {
             prot_printf(imapd_out,
                         "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
                         text->tag, oldextname, newextname);
             prot_flush(imapd_out);
-	}
+        }
     }
 
 done:
@@ -7997,7 +7997,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         rock.newuser = newuser;
         rock.partition = location;
         rock.rename_user = rename_user;
-	    rock.noisy = noisy;
+            rock.noisy = noisy;
 
         /* Check mboxnames to ensure we can write them all BEFORE we start */
         r = mboxlist_allmbox(ombn, checkmboxname, &rock, 0);
@@ -8071,12 +8071,12 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
-	    if (noisy) {
+            if (noisy) {
             prot_printf(imapd_out,
                         "* OK [INPROGRESS (\"%s\" NIL NIL)] rename %s %s\r\n",
                         tag, oldextname, newextname);
             prot_flush(imapd_out);
-	    }
+            }
 
 submboxes:
         strcat(oldmailboxname, ".");

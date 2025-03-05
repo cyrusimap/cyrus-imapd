@@ -90,7 +90,7 @@ if header :matches "subject" "*vacation*"
 vacation :days 5
          :addresses ["me@blah.com" , "me@somewhereelse.com"]
          :subject "i'm at the beach"
-	 "I'll respond in a week or two, when i get back ${0}";
+         "I'll respond in a week or two, when i get back ${0}";
 }
 
 #VACATION-SECONDS

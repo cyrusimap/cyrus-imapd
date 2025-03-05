@@ -7,7 +7,7 @@
 =================
 
 Cyrus build-configuration inspection tool
- 
+
 Synopsis
 ========
 
@@ -31,14 +31,14 @@ Options
 .. option:: -C config-file
 
     This option is ignored, but accepted for compatibility with other Cyrus tools.
-    
+
 .. option:: format
 
-    Specify one of the following: 
-    
+    Specify one of the following:
+
        **pretty** - print the build configuration in indented JSON format. This is the default.
-       
+
        **dense**  - print the build configuration in dense JSON format.
-       
-       **flat**   - print the build configuration as flattened properties. Note that the print order is non-deterministic.    
+
+       **flat**   - print the build configuration as flattened properties. Note that the print order is non-deterministic.
 

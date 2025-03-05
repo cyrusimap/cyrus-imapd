@@ -47,7 +47,7 @@ Available Selection Modes
 
     The partition which has the most free space (counted in KiB units) is selected.
 
-    .. note:: 
+    .. note::
         Example of ``freespace-most`` selection on backend
 
         Suppose that the configured partitions are:
@@ -173,13 +173,13 @@ Partitions listed in the ``partition_mode_exclude`` setting are permanently excl
         partition-partb: /path/to/partb
 
         partition_mode_exclude: parta partb
-        
+
 
         When using a selection mode other than ``random``, partitions are automatically excluded if their usage percentage is beyond the ``partition_mode_soft_usage_limit`` integer setting.
 
 
 * partition_mode_soft_usage_limit
-    
+
     If all partitions are beyond the configured value, this feature is automatically deactivated. A partition is thus selected as if the setting was not set.
 
     .. note::
@@ -261,7 +261,7 @@ Available Selection Modes on Frontend
 
     .. note::
         Example of ``freespace-percent-most`` Selection on Frontend
-     
+
         In the same conditions than <xref linkend="exam-Deployment_Guide-Available_Selection_Modes_on_Frontend-Example_of_freespace_most_Selection_on_Frontend" /> ``backend3`` would be selected as most fitting, since it has a partition with 80% of free space which is the biggest of all backends.
 
 
@@ -298,7 +298,7 @@ Then a weighted choice is performed to select one of the backends.
         * 50 - 50 + 0.5 = 0.5 for ``backend1``
         * 70 - 50 + 0.5 = 20.5 for ``backend2``
         * 80 - 50 + 0.5 = 30.5 for ``backend3``
-     
+
         Then the probability for each backend to be selected as most fitting would be:
 
         * 1.0% for ``backend1``
@@ -312,7 +312,7 @@ Backends Exclusion
 When using a selection mode other than ``random``, backends are automatically excluded if their considered usage percentage is beyond the ``serverlist_mode_soft_usage_limit`` integer setting.
 
 * ``partition_mode_soft_usage_limit``
- 
+
 If all backends are beyond the configured value, this feature is automatically deactivated. A backend is thus selected as if the setting was not set.
 
     .. note::
@@ -323,7 +323,7 @@ If all backends are beyond the configured value, this feature is automatically d
     .. warning::
 
         **Exclusion is not absolute**
-     
+
         Backends are only excluded when creating a new user mailbox according to the configured selection mode.
 
         If you explicitly specify an excluded backend, the mailbox will be created on that backend.

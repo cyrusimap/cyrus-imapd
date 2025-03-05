@@ -1445,7 +1445,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
             *ret = db;
             goto done;
         }
-	/* otherwise fallthrough to unlock and create txn with standard locking path */
+        /* otherwise fallthrough to unlock and create txn with standard locking path */
     }
 
     /* unlock the DB */

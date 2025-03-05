@@ -11,7 +11,7 @@ Combined, this provides powerful mechanisms to enable or restrict access
 to information contained within the Cyrus IMAP mailspool.
 
 .. seealso::
-    
+
     *   :ref:`imap-admin-access-control-lists-rights-reference`
     *   :ref:`imap-admin-access-control-combining-rights`
     *   :ref:`imap-admin-access-control-defaults`

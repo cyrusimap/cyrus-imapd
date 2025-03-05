@@ -333,7 +333,7 @@ extern int conversations_update_record(struct conversations_state *cstate,
                                        struct index_record *new_,
                                        int allowrenumber,
                                        int ignorelimits,
-				       int silent);
+                                       int silent);
 
 extern int conversation_update(struct conversations_state *state,
                                 conversation_t *conv,

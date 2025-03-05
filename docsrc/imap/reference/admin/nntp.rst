@@ -134,7 +134,7 @@ In order for these email messages to be fed into your news server (and subsequen
 
     # mail addressed to post+ goes to lmtp2nntp@localhost
     LOCAL_RULE_0
-    Rpost + $+ < @ $=w . >		$#lmtp2nntp $@ localhost $: $1
+    Rpost + $+ < @ $=w . >              $#lmtp2nntp $@ localhost $: $1
 
 For other configurations, consult the lmtp2nntp and documentation and your MTA documentation.
 

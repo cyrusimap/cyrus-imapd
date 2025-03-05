@@ -26,7 +26,7 @@ Management
     admin/nntp
     admin/protlayer
     admin/sop
-    admin/eventsource    
+    admin/eventsource
     admin/monitoring
     admin/config-mailboxdistribution
     admin/murder/murder

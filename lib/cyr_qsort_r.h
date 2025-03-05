@@ -17,12 +17,12 @@
 #include <stdlib.h>
 
 #if defined(_GNU_SOURCE) && defined (__GLIBC__) && \
-	((__GLIBC__ > 2) || ((__GLIBC__ == 2) && (__GLIBC_MINOR__ >=0)))
+        ((__GLIBC__ > 2) || ((__GLIBC__ == 2) && (__GLIBC_MINOR__ >=0)))
 #define HAVE_GLIBC_QSORT_R
 #endif
 
 #if defined(__NEWLIB__) && \
-	((__NEWLIB__ > 2) || ((__NEWLIB__ == 2) && (__NEWLIB_MINOR__ >= 2)))
+        ((__NEWLIB__ > 2) || ((__NEWLIB__ == 2) && (__NEWLIB_MINOR__ >= 2)))
 #if defined(_GNU_SOURCE)
 #define HAVE_GLIBC_QSORT_R
 #else
@@ -31,7 +31,7 @@
 #endif
 
 #if !defined(HAVE_GLIBC_QSORT_R) && \
-	(defined(__FreeBSD__) || defined(__DragonFly__) || defined(__APPLE__))
+        (defined(__FreeBSD__) || defined(__DragonFly__) || defined(__APPLE__))
 #define HAVE_BSD_QSORT_R
 #endif
 

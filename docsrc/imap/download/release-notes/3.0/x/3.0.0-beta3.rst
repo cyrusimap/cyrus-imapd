@@ -91,7 +91,7 @@ Major changes since the 2.5.x series
 
 *   Under ``delete_mode: delayed``, only the 20 most recently deleted mailboxes are kept
     for any given name.
-    
+
 *   Documentation cleanup: we are moving toward having a single restructured text source for man
     pages and html/text documentation, which are pre-generated for inclusion in release tarballs.
     If you wish to rebuild these, or are building from a git clone in which they are not

@@ -83,7 +83,7 @@ A basic description of these files:
     ..  note::  The ``normal.conf`` file in the ``imapd_conf`` directory
         is intended to work with any of the above files from the
         ``cyrus_conf`` directory.
-        
+
 *   Cyrus Aggregation - Murder -- configurations (these constitute a
     set, with at least one of each required):
 

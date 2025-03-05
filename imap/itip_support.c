@@ -781,7 +781,7 @@ static int deliver_merge_request(const char *attendee,
             }
 
             /* Copy over JMAP privacy from current component to iTIP component */
-			prop =
+                        prop =
                 icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
