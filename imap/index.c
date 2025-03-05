@@ -414,7 +414,7 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
     /* Make sure there is something to expunge */
     if (!sequence && !(state->mailbox->i.deleted > 0 && need_deleted)) {
         index_unlock(state);
-        return r;
+        return 0;
     }
     
     seq = _parse_sequence(state, sequence, 1);
