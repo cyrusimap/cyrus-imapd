@@ -2614,9 +2614,9 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int index_locktype)
     int need_relock = 0;
 
     if (mailbox->index_locktype) {
-	if (mailbox->index_locktype & LOCK_EXCLUSIVE)
+        if (mailbox->index_locktype & LOCK_EXCLUSIVE)
             return 0; // exclusive lock is good for anything
-	if (index_locktype & LOCK_SHARED)
+        if (index_locktype & LOCK_SHARED)
             return 0; // shared lock is OK if that's all we need
         // we're going to need to re-lock
         need_relock = 1;
@@ -6228,7 +6228,7 @@ static int mailbox_delete_conversations(struct mailbox *mailbox)
 
         r = conversations_update_record(cstate, mailbox, record, NULL,
                                         /*allowrenumber*/0, /*ignorelimits*/1,
-					mailbox->silentchanges);
+                                        mailbox->silentchanges);
         if (r) break;
     }
     mailbox_iter_done(&iter);
@@ -7068,7 +7068,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     if (haslock) {
         if (!(haslock & LOCK_EXCLUSIVE)) {
             r = IMAP_MAILBOX_LOCKED;
-	}
+        }
         else {
             local_namespacelock = user_namespacelock_full(userid, LOCK_EXCLUSIVE);
         }

@@ -27,7 +27,7 @@ EXPORTED char *variables_modify_string(const char *string, int modifiers)
     buf_init_ro_cstr(result, string);
 
     if (!buf_len(result)) {
-	if (BFV_LENGTH & modifiers) buf_printf(result, "%zu", (size_t) 0);
+        if (BFV_LENGTH & modifiers) buf_printf(result, "%zu", (size_t) 0);
         return buf_release(result);
     }
 

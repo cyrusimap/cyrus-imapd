@@ -160,8 +160,8 @@ Examples
             # Master sends mailbox updates to mupdate.
             # Replication client runs on Master.
             # Comment these 2 lines out on replicas
-            mupdatepush		cmd="/usr/lib/cyrus/bin/ctl_mboxlist -m"
-            syncclient		cmd="/usr/lib/cyrus/bin/sync_client -r"
+            mupdatepush         cmd="/usr/lib/cyrus/bin/ctl_mboxlist -m"
+            syncclient          cmd="/usr/lib/cyrus/bin/sync_client -r"
             <...>
         }
 ..

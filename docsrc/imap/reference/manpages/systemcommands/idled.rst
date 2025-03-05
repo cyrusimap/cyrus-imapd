@@ -44,7 +44,7 @@ Examples
 :cyrusman:`cyrus.conf(5)` like so::
 
     DAEMON {
-        idled			cmd="/usr/lib/cyrus/bin/idled"
+        idled                   cmd="/usr/lib/cyrus/bin/idled"
     }
 
 Files

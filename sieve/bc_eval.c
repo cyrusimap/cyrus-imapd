@@ -120,7 +120,7 @@ static int sysaddr(const char *addr)
 
 /* look for myaddr and myaddrs in the body of a header - return the match */
 static char* look_for_me(char *myaddr, strarray_t *addresses, const char **body,
-			       variable_list_t *variables, int requires)
+                               variable_list_t *variables, int requires)
 {
     int numaddresses = strarray_size(addresses);
     char *found = NULL;
@@ -176,7 +176,7 @@ static char* look_for_me(char *myaddr, strarray_t *addresses, const char **body,
 /* Determine if we should respond to a vacation message */
 static int shouldRespond(void * m, sieve_interp_t *interp,
                          strarray_t *addresses, char **from, char **to,
-			 variable_list_t *variables, int requires)
+                         variable_list_t *variables, int requires)
 {
     int numaddresses = strarray_size(addresses);
     const char **body;
@@ -288,17 +288,17 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
        but is this message to me?  that is, is my address
        in the [Resent]-To, [Resent]-Cc or [Resent]-Bcc fields? */
     if (interp->getheader(m, "to", &body) == SIEVE_OK)
-	found = look_for_me(myaddr, addresses, body, variables, requires);
+        found = look_for_me(myaddr, addresses, body, variables, requires);
     if (!found && interp->getheader(m, "cc", &body) == SIEVE_OK)
-	found = look_for_me(myaddr, addresses, body, variables, requires);
+        found = look_for_me(myaddr, addresses, body, variables, requires);
     if (!found && interp->getheader(m, "bcc", &body) == SIEVE_OK)
-	found = look_for_me(myaddr, addresses, body, variables, requires);
+        found = look_for_me(myaddr, addresses, body, variables, requires);
     if (!found && interp->getheader(m, "resent-to", &body) == SIEVE_OK)
-	found = look_for_me(myaddr, addresses ,body, variables, requires);
+        found = look_for_me(myaddr, addresses ,body, variables, requires);
     if (!found && interp->getheader(m, "resent-cc", &body) == SIEVE_OK)
-	found = look_for_me(myaddr, addresses, body, variables, requires);
+        found = look_for_me(myaddr, addresses, body, variables, requires);
     if (!found && interp->getheader(m, "resent-bcc", &body) == SIEVE_OK)
-	found = look_for_me(myaddr, addresses, body, variables, requires);
+        found = look_for_me(myaddr, addresses, body, variables, requires);
     if (found)
         l = SIEVE_OK;
 
@@ -480,7 +480,7 @@ static int parse_tzoffset(const char *s, int *offset)
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
-			variable_list_t *variables,
+                        variable_list_t *variables,
                         duptrack_list_t *duptrack_list,
                         int version, int requires)
 {
@@ -896,25 +896,25 @@ envelope_err:
                 if (requires & BFE_VARIABLES) {
                     this_haystack = parse_string(this_haystack, variables);
                 }
-	    } else if (numhaystacks) { // select the var
-		variable_list_t *vl;
-		vl = varlist_select(variables, this_haystack);
-		if (!vl) {
-		    vl = varlist_extend(variables);
-		    vl->name = xstrdup(this_haystack);
-		} else {
-		    variable_list_t *vl_temp = varlist_extend(variables);
-		    strarray_free(vl_temp->var);
-		    vl_temp->var = strarray_dup(vl->var);
-		    verify_flaglist(vl_temp->var);
-		    vl = vl_temp;
-		}
-		this_var = vl->var;
+            } else if (numhaystacks) { // select the var
+                variable_list_t *vl;
+                vl = varlist_select(variables, this_haystack);
+                if (!vl) {
+                    vl = varlist_extend(variables);
+                    vl->name = xstrdup(this_haystack);
+                } else {
+                    variable_list_t *vl_temp = varlist_extend(variables);
+                    strarray_free(vl_temp->var);
+                    vl_temp->var = strarray_dup(vl->var);
+                    verify_flaglist(vl_temp->var);
+                    vl = vl_temp;
+                }
+                this_var = vl->var;
             } else { // internal variable
                 this_var = variables->var;
             }
 
-	    if (match == B_COUNT) {
+            if (match == B_COUNT) {
                 if (op == BC_STRING) {
                     if (this_haystack[0] != '\0') {
                         count += 1;
@@ -929,8 +929,8 @@ envelope_err:
                     continue;
                 }
 
-		snprintf(scount, SCOUNT_SIZE, "%u", count);
-		/* search through all the data */
+                snprintf(scount, SCOUNT_SIZE, "%u", count);
+                /* search through all the data */
                 res = do_comparisons(needles, scount, comp, comprock, match_vars);
                 break;
             }
@@ -986,7 +986,7 @@ envelope_err:
                 free (temp);
             }
 #endif
-	} // loop on each variable or string
+        } // loop on each variable or string
 
       string_err:
         free(strarray_takevf(test.u.hhs.sl));
@@ -2165,10 +2165,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             }
 
 
-	    /* draft-ietf-sieve-notify-12:
-	     * Changes since draft-ietf-sieve-notify-00
-	     * Removed denotify action. */
-	  
+            /* draft-ietf-sieve-notify-12:
+             * Changes since draft-ietf-sieve-notify-00
+             * Removed denotify action. */
+          
             if (comparator == B_REGEX) {
                 char errmsg[1024]; /* Basically unused */
 
@@ -2221,7 +2221,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             int mime = cmd.u.v.mime;
 
             respond = shouldRespond(m, i, cmd.u.v.addresses,
-				    &fromaddr, &toaddr, variables, requires);
+                                    &fromaddr, &toaddr, variables, requires);
 
             if (respond != SIEVE_OK) {
                 if (cmd.u.v.fcc.flags) free(strarray_takevf(cmd.u.v.fcc.flags));
@@ -2326,7 +2326,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             }
 
             res = sieve_eval_bc(exe, &implicit_keep, i, sc, m, variables, actions,
-				notify_list, duptrack_list, errmsg);
+                                notify_list, duptrack_list, errmsg);
             break;
         }
 
@@ -2343,7 +2343,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             const char *name = cmd.u.s.variable;
             const char *value = cmd.u.s.value;
 
-	    /* RFC 5229, 3. Interpretation of Strings
+            /* RFC 5229, 3. Interpretation of Strings
                Strings where no variable substitutions take place are referred to as
                constant strings.  Future extensions may specify that passing non-
                constant strings as arguments to its actions or tests is an error.
@@ -2367,7 +2367,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             strarray_appendm(variable->var,
                              variables_modify_string(value, cmd.u.s.modifiers));
 #if VERBOSE
-	    printf("\nB_SET:%s\n\n", strarray_nth(variable->var, -1));
+            printf("\nB_SET:%s\n\n", strarray_nth(variable->var, -1));
 #endif
             actionflags = NULL;
             break;

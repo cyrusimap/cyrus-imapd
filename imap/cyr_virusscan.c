@@ -261,14 +261,14 @@ static void put_notification_headers(FILE *f, int counter, time_t t,
 static void append_notifications(const struct buf *template);
 
 static const char *default_notification_template =
-	"The following message was deleted from mailbox '%MAILBOX%'\n"
-	"because it was infected with virus '%VIRUS%'\n"
-	"\n"
-	"\tMessage-ID: %MSG_ID%\n"
-	"\tDate: %MSG_DATE%\n"
-	"\tFrom: %MSG_FROM%\n"
-	"\tSubject: %MSG_SUBJECT%\n"
-	"\tIMAP UID: %MSG_UID%\n";
+        "The following message was deleted from mailbox '%MAILBOX%'\n"
+        "because it was infected with virus '%VIRUS%'\n"
+        "\n"
+        "\tMessage-ID: %MSG_ID%\n"
+        "\tDate: %MSG_DATE%\n"
+        "\tFrom: %MSG_FROM%\n"
+        "\tSubject: %MSG_SUBJECT%\n"
+        "\tIMAP UID: %MSG_UID%\n";
 
 int main (int argc, char *argv[])
 {

@@ -23,7 +23,7 @@ Message-ID: <c6da9d16e00f7c3431b75f346a28594ca22a1f7d\@local>
 Content-Type: text/calendar; charset=utf-8; component=VEVENT
 Content-Transfer-Encoding: 8bit
 Content-Disposition: attachment;
-	filename*0="test.ics"
+        filename*0="test.ics"
 Content-Length: 394
 MIME-Version: 1.0
 
