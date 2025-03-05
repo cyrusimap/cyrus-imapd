@@ -68,6 +68,8 @@ endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
+AM_YFLAGS = -d
+
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
@@ -617,6 +619,7 @@ cunit_TESTS = \
     cunit/charset.testc \
     cunit/command.testc \
     cunit/conversations.testc \
+    cunit/cron.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
     cunit/dlist.testc \
@@ -1526,11 +1529,15 @@ libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 nodist_lib_libcyrus_min_la_SOURCES = \
     lib/imapopts.c
 
+BUILT_SOURCES += lib/cron-lex.c lib/cron-parse.c lib/cron-parse.h
+
 lib_libcyrus_min_la_SOURCES = \
     lib/arrayu64.c \
     lib/assert.c \
     lib/bufarray.c \
     lib/byteorder.c \
+    lib/cron-lex.l \
+    lib/cron-parse.y \
     lib/dynarray.c \
     lib/hash.c \
     lib/hashset.c \
