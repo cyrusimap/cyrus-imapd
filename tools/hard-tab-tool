@@ -1,0 +1,130 @@
+#!/usr/bin/perl
+use v5.12.0;
+use warnings;
+use utf8;
+
+binmode *STDOUT, ':encoding(utf-8)';
+binmode *STDERR, ':encoding(utf-8)';
+
+use Getopt::Long;
+use IO::File;
+use IO::Dir;
+
+my @changed;
+my $getopt_ok = GetOptions(
+  "really" => \my $really,
+  "help"   => \my $help,
+);
+
+if (!$getopt_ok || $help) {
+  die "usage: tab-tool [--really] PATH...";
+}
+
+my @paths = @ARGV;
+cleanup(\@paths);
+
+if (@changed) {
+  unless ($really) {
+    say "❌ Hard tabs found in the following files:";
+    say for @changed;
+    exit 1;
+  }
+} else {
+  say "✅ No hard tabs.";
+  exit;
+}
+
+sub cleanup {
+  my ($paths) = @_;
+
+  my @lines = `git ls-files -- @$paths`;
+
+  die "problem running git ls-files\n" if $?;
+
+  chomp @lines;
+  for my $filename (@lines) {
+    process_file($filename);
+  }
+}
+
+sub file_is_interesting {
+  (local $_) = @_;
+
+  return if -l $_;
+
+  return 1 if m{\.rst\z}
+           || m{\.pl\z}
+           || m{\.c\z}
+           || m{\.h\z}
+           || m{\.pm\z}
+           || m{\Acassandane/tiny-tests/}
+           || m{\Atools/};
+
+  return;
+}
+
+sub process_file {
+  my $filename = shift;
+
+  return unless file_is_interesting($filename);
+
+  my $new_content;
+
+  open my $ih, '<', $filename or die "can't read $filename: $!";
+  open my $oh, '>', \$new_content or die "can't open output string: $!"; # !?
+
+  my $changed_file;
+  while (defined(my $line = <$ih>)) {
+    $changed_file++ if expand_tabs_in(\$line);
+    $oh->print($line);
+  }
+
+  close $ih or die "error reading from $filename: $!";
+  close $oh or die "error with string output (!?): $?";
+
+  if ($changed_file) {
+    push @changed, $filename;
+
+    if ($really) {
+      print "$filename\n";
+      open my $real_out, '>', "$filename.new" or die "can't write to $filename: $!";
+      $real_out->print($new_content);
+      close $real_out or die "problem writing to $filename: $!";
+
+      system("chmod", "a+x", "$filename.new") if -x $filename;
+      rename("$filename.new", "$filename") or die "can't rename $filename.new to $filename: $!";
+    }
+  }
+}
+
+sub stream_clean {
+  my ($ih, $oh) = @_;
+  while (<$ih>) {
+    $oh->print( expand_tabs_in($_) );
+  }
+  return 1;
+}
+
+sub expand_tabs_in {
+  my ($line_ref) = @_;
+
+  return unless $$line_ref =~ /\t/;
+
+  my $op = 0;
+  my $out = "";
+  foreach my $i (0..(length($$line_ref)-1)) {
+    my $chr = substr($$line_ref, $i, 1);
+    if ($chr eq "\t") {
+      my $inc = 8 - ($op % 8);
+      $out .= " " x $inc;
+      $op += $inc;
+    }
+    else {
+      $out .= $chr;
+      $op++;
+    }
+  }
+
+  $$line_ref = $out;
+  return 1;
+}
