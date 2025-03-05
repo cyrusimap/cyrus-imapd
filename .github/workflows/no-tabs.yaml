@@ -1,0 +1,22 @@
+name: No hard tabs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+jobs:
+  assert-no-tabs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Assert no tabs
+      shell: bash
+      run: ./tools/hard-tab-tool
