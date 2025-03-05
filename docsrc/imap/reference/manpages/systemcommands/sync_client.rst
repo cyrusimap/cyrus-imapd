@@ -199,7 +199,7 @@ section of :cyrusman:`cyrus.conf(5)`:
 
     ::
 
-        syncclient		cmd="/usr/lib/cyrus/bin/sync_client -r"
+        syncclient              cmd="/usr/lib/cyrus/bin/sync_client -r"
 
 [NB: More examples needed]
 

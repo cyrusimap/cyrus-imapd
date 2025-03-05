@@ -15,7 +15,7 @@ sub test_mailbox_set_create_serverset_props
                 mboxB => {
                     name => 'A',
                     role => undef,
-					# server-set properties
+                    # server-set properties
                     totalEmails => 0,
                     unreadEmails => 0,
                     totalThreads => 0,
@@ -24,9 +24,9 @@ sub test_mailbox_set_create_serverset_props
                         mayReadItems => JSON::true,
                         mayAddItems =>  JSON::true,
                         mayRemoveItems => JSON::true,
-						mayCreateChild => JSON::true,
-						mayDelete => JSON::true,
-						maySubmit => JSON::true,
+                        mayCreateChild => JSON::true,
+                        mayDelete => JSON::true,
+                        maySubmit => JSON::true,
                         maySetSeen => JSON::true,
                         maySetKeywords => JSON::true,
                         mayAdmin => JSON::true,

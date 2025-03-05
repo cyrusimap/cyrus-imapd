@@ -99,7 +99,7 @@ sub test_rename_asuser
 }
 
 sub test_xrename
-	:min_version_3_8_2
+        :min_version_3_8_2
 {
     my ($self) = @_;
 

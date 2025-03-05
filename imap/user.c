@@ -697,9 +697,9 @@ static const char *_namelock_name_from_userid(const char *userid)
 
     buf_setcstr(&buf, "*U*");
     if (userid) {
-	char *inbox = mboxname_user_mbox(userid, NULL);
-	buf_appendcstr(&buf, inbox);
-	free(inbox);
+        char *inbox = mboxname_user_mbox(userid, NULL);
+        buf_appendcstr(&buf, inbox);
+        free(inbox);
     }
 
     if (config_skip_userlock && !strcmp(config_skip_userlock, userid)) {

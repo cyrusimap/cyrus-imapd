@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
     if (optind < argc) {
         int i;
         for (i = optind; i < argc; i++) {
-	    const char *userid = argv[i];
+            const char *userid = argv[i];
             int r = cyrusdb_delete(ptdb, userid, strlen(userid), /*tid*/NULL, /*force*/0);
             syslog(LOG_INFO, "Removing cache for %s (%s)", userid,
                    r == CYRUSDB_OK ? "found" : "not-found");

@@ -94,14 +94,14 @@ can be overridden by setting ``virusscan_notification_subject`` in
 
 Each infected message will be described according to the following template::
 
-	The following message was deleted from mailbox '%MAILBOX%'
-	because it was infected with virus '%VIRUS%'
+        The following message was deleted from mailbox '%MAILBOX%'
+        because it was infected with virus '%VIRUS%'
 
-	    Message-ID: %MSG_ID%
-	    Date: %MSG_DATE%
-	    From: %MSG_FROM%
-	    Subject: %MSG_SUBJECT%
-	    IMAP UID: %MSG_UID%
+            Message-ID: %MSG_ID%
+            Date: %MSG_DATE%
+            From: %MSG_FROM%
+            Subject: %MSG_SUBJECT%
+            IMAP UID: %MSG_UID%
 
 To use a custom template, create a UTF-8 file containing your desired text
 and using the same %-delimited substitutions as above, and set the
@@ -137,16 +137,16 @@ Examples
         Using ClamAV virus scanner
         Loaded 5789330 virus signatures.
 
-        Mailbox Name                            	   Msg UID	Status	Virus Name
-        ----------------------------------------	----------	------	--------------------------------------------------
-        user.betty                              	    185395	  READ	Heuristics.Phishing.Email.SpoofedDomain
-        user.betty.Bank stuff                   	         9	  READ	Html.Phishing.Bank-1172
-        user.betty.Bank stuff                   	        10	  READ	Html.Phishing.Bank-1172
-        user.betty.Bank stuff                   	        11	  READ	Html.Phishing.Bank-1172
+        Mailbox Name                                       Msg UID      Status  Virus Name
+        ----------------------------------------        ----------      ------  --------------------------------------------------
+        user.betty                                          185395        READ  Heuristics.Phishing.Email.SpoofedDomain
+        user.betty.Bank stuff                                    9        READ  Html.Phishing.Bank-1172
+        user.betty.Bank stuff                                   10        READ  Html.Phishing.Bank-1172
+        user.betty.Bank stuff                                   11        READ  Html.Phishing.Bank-1172
 
-        Mailbox Name                            	   Msg UID	Status	Virus Name
-        ----------------------------------------	----------	------	--------------------------------------------------
-        user.bovik                                	     17426	  READ	Email.Trojan.Trojan-1051
+        Mailbox Name                                       Msg UID      Status  Virus Name
+        ----------------------------------------        ----------      ------  --------------------------------------------------
+        user.bovik                                           17426        READ  Email.Trojan.Trojan-1051
 
 .. parsed-literal::
 
@@ -161,9 +161,9 @@ Examples
 
     ::
 
-        Mailbox Name                            	   Msg UID	Status	Virus Name
-        ----------------------------------------	----------	------	--------------------------------------------------
-        user.bovik                                	   17426	  READ	Email.Trojan.Trojan-1051
+        Mailbox Name                                       Msg UID      Status  Virus Name
+        ----------------------------------------        ----------      ------  --------------------------------------------------
+        user.bovik                                         17426          READ  Email.Trojan.Trojan-1051
 
 .. only:: html
 
@@ -196,14 +196,14 @@ Examples
 
     ::
 
-        Mailbox Name                            	   Msg UID	Status	Virus Name
-        ----------------------------------------	----------	------	--------------------------------------------------
-        user.bovik                                	   17185	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
-        user.bovik                                	   17203	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
-        user.bovik                                	   17338	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
-        user.bovik                                	   17373	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
-        user.bovik                                	   19238	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
-        user.bovik                                	   19268	  READ	Cyrus Administrator Targeted Removal (Phish, etc.)
+        Mailbox Name                                       Msg UID      Status  Virus Name
+        ----------------------------------------        ----------      ------  --------------------------------------------------
+        user.bovik                                         17185          READ  Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                         17203          READ  Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                         17338          READ  Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                         17373          READ  Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                         19238          READ  Cyrus Administrator Targeted Removal (Phish, etc.)
+        user.bovik                                         19268          READ  Cyrus Administrator Targeted Removal (Phish, etc.)
 
 ..
 

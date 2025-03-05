@@ -18,16 +18,16 @@ sub test_email_query_unicodefdfx
     my $blobId = $data->{blobId};
 
     my $res = $jmap->CallMethods([
-		['Email/import', {
-			emails => {
-				"1" => {
-					blobId => $blobId,
-					mailboxIds => {
-						'$inbox' =>  JSON::true},
-				},
-			},
-		}, "R1"]
-	]);
+        ['Email/import', {
+            emails => {
+                "1" => {
+                    blobId => $blobId,
+                    mailboxIds => {
+                        '$inbox' =>  JSON::true},
+                },
+            },
+        }, "R1"]
+    ]);
     $self->assert_not_null($res->[0][1]{created}{1});
 
     xlog $self, "run squatter";

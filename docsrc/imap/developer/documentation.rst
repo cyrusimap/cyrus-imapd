@@ -135,9 +135,9 @@ For Unix manual, or "man" pages, we follow the conventions laid out in the man p
     Conventional section names include NAME, SYNOPSIS, CONFIGURATION, DESCRIPTION, OPTIONS, EXIT STATUS, RETURN VALUE, ERRORS, ENVIRONMENT, FILES, VERSIONS, CONFORMING TO, NOTES, BUGS, EXAMPLE, AUTHORS, and SEE ALSO. The following conventions apply to the SYNOPSIS section and can be used as a guide in other sections.
 
 | **bold text** - type exactly as shown.
-| *italic text*	- replace with appropriate argument.
-| [-abc]	- any or all arguments within [ ] are optional.
-| -a|-b	- options delimited by | cannot be used together.
+| *italic text* - replace with appropriate argument.
+| [-abc]        - any or all arguments within [ ] are optional.
+| -a|-b - options delimited by | cannot be used together.
 | argument ... - argument is repeatable.
 | [expression] ... - entire expression within [ ] is repeatable.
 

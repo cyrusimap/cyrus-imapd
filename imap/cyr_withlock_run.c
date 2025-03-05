@@ -103,10 +103,10 @@ int main(int argc, char **argv)
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
-	
-	case 'u':
-	    userid = optarg;
-	    break;
+        
+        case 'u':
+            userid = optarg;
+            break;
 
         default:
             usage(NULL);

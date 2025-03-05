@@ -28,7 +28,7 @@ sub test_email_set_mimeversion
         mailboxIds => { $inboxid => JSON::true },
         from => [{ name => "Test", email => q{foo@bar} }],
         subject => "test",
-	'header:Mime-Version' => '1.1',
+        'header:Mime-Version' => '1.1',
         bodyStructure => {
             partId => '1',
         },
@@ -40,7 +40,7 @@ sub test_email_set_mimeversion
     };
     my $res = $jmap->CallMethods([
         ['Email/set', { create => { '1' => $email1 , 2 => $email2 } }, 'R1'],
-	['Email/get', { ids => ['#1', '#2'], properties => ['header:mime-version'] }, 'R2'],
+        ['Email/get', { ids => ['#1', '#2'], properties => ['header:mime-version'] }, 'R2'],
     ]);
     $self->assert_str_equals(' 1.0', $res->[1][1]{list}[0]{'header:mime-version'});
     $self->assert_str_equals(' 1.1', $res->[1][1]{list}[1]{'header:mime-version'});

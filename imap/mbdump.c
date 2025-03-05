@@ -282,7 +282,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
             if (n == -1) {
                 mailbox_iter_done(&iter);
                 goto fail;
-	    }
+            }
         }
         mailbox_iter_done(&iter);
 

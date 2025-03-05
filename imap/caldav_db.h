@@ -249,22 +249,22 @@ struct caldav_jscal_filter {
 extern struct caldav_jscal_filter *caldav_jscal_filter_new(void);
 
 extern void caldav_jscal_filter_by_ical_uid(struct caldav_jscal_filter*,
-	const char *ical_uid, const char *ical_recurid);
+        const char *ical_uid, const char *ical_recurid);
 
 extern void caldav_jscal_filter_by_mbentry(struct caldav_jscal_filter*,
-	const mbentry_t *mbentry);
+        const mbentry_t *mbentry);
 
 extern void caldav_jscal_filter_by_mbentrym(struct caldav_jscal_filter*,
-	mbentry_t *mbentry);
+        mbentry_t *mbentry);
 
 extern void caldav_jscal_filter_by_imap_uid(struct caldav_jscal_filter*,
-	uint32_t imap_uid);
+        uint32_t imap_uid);
 
 extern void caldav_jscal_filter_by_before(struct caldav_jscal_filter*,
-	const time_t *before);
+        const time_t *before);
 
 extern void caldav_jscal_filter_by_after(struct caldav_jscal_filter*,
-	const time_t *after);
+        const time_t *after);
 
 extern void caldav_jscal_filter_fini(struct caldav_jscal_filter *);
 

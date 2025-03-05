@@ -35,8 +35,8 @@ sub test_sync_log_mailbox_with_spaces
 
     open my $fh, '<', $sync_log_fname or die "open $sync_log_fname: $!";
     while (<$fh>) {
-		# We can take some shortcuts here because we're only testing
-	    # for correct quoting of mailbox names with/without SPACES,
+        # We can take some shortcuts here because we're only testing
+        # for correct quoting of mailbox names with/without SPACES,
         # and not other non-atom characters.
         # We're also only acting on mailboxes, so we don't need this
         # parser to consider any other log entries.

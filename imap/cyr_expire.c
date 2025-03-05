@@ -325,10 +325,10 @@ static int noexpire_mailbox(const mbentry_t *mbentry)
             goto done;
         }
 
-	if (user_isreplicaonly(mbname_userid(mbname))) {
+        if (user_isreplicaonly(mbname_userid(mbname))) {
             ret = 1;
             goto done;
-	}
+        }
 
         // Determine user inbox name
         if (mbname_isdeleted(mbname)) {

@@ -50,7 +50,7 @@ Examples
 :cyrusman:`cyrus.conf(5)` like so::
 
     DAEMON {
-        calalarmd			cmd="/usr/lib/cyrus/bin/calalarmd"
+        calalarmd                       cmd="/usr/lib/cyrus/bin/calalarmd"
     }
 
 Files

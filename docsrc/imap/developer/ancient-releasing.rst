@@ -19,8 +19,8 @@ Prerequisites
 =============
 
 .. include:: /imap/developer/releasing.rst
-	:start-after: startblob releaseprereqs
-	:end-before: endblob releaseprereqs
+        :start-after: startblob releaseprereqs
+        :end-before: endblob releaseprereqs
 
 Release notes and version update
 ================================

@@ -1611,7 +1611,7 @@ EXPORTED int tls_prune_sessions(void)
     }
 
     if (tofree)
-	free(tofree);
+        free(tofree);
 
     return ret;
 }

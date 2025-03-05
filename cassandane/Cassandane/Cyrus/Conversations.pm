@@ -1155,7 +1155,7 @@ sub test_x_me_message_id_nomatch_threading
 }
 
 sub test_rename_between_users
-	:NoAltNameSpace
+        :NoAltNameSpace
 {
     my ($self) = @_;
     my $admintalk = $self->{adminstore}->get_client();

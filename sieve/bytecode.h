@@ -196,19 +196,19 @@ enum bytecode {
     B_UNMARK,                   /* deprecated -
                                    translated to removeflag "\\Flagged";       */
 
-    B_ADDFLAG_ORIG,	        /* legacy addflag w/o support for variables
+    B_ADDFLAG_ORIG,             /* legacy addflag w/o support for variables
 
                                    require "imap4flags"
 
                                    <flag-list: string-list>                    */
 
-    B_SETFLAG_ORIG,	        /* legacy setflag w/o support for variables
+    B_SETFLAG_ORIG,             /* legacy setflag w/o support for variables
 
                                    require "imap4flags"
 
                                    <flag-list: string-list>                    */
 
-    B_REMOVEFLAG_ORIG,	        /* legacy removeflag w/o support for variables
+    B_REMOVEFLAG_ORIG,          /* legacy removeflag w/o support for variables
 
                                    require "imap4flags"
 
@@ -732,13 +732,13 @@ enum bytecode_cal_bitflags {
 };
 
 enum bytecode_variables_bitflags {
-    BFV_LOWER	        = 1<<0,
-    BFV_UPPER	        = 1<<1,
+    BFV_LOWER           = 1<<0,
+    BFV_UPPER           = 1<<1,
     BFV_LOWERFIRST      = 1<<2,
     BFV_UPPERFIRST      = 1<<3,
     BFV_QUOTEWILDCARD   = 1<<4,
-    BFV_ENCODEURL	= 1<<5,
-    BFV_LENGTH		= 1<<6,
+    BFV_ENCODEURL       = 1<<5,
+    BFV_LENGTH          = 1<<6,
     BFV_QUOTEREGEX      = 1<<7
 };
 

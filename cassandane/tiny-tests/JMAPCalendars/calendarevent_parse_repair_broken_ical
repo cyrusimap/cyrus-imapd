@@ -162,7 +162,7 @@ EOF
                     action => "display"
                 }
             },
-	},
+        },
         ical => <<EOF
 BEGIN:VCALENDAR
 BEGIN:VEVENT

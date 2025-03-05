@@ -61,12 +61,12 @@ Examples
 
     ::
 
-        id: <FA6558DA-5287-41D7-BCE8-C38962096A47@gmail.com>	to: .+tech.support@.sieve.	at: 1433518227	uid: 0
-        id: <FA6558DA-5287-41D7-BCE8-C38962096A47@gmail.com>	to: tech.support        	at: 1433518227	uid: 47489
-        id: <cmu-lmtpd-10330-1433633682-0@imap.example.com>	to: .+tech.support@.sieve.	at: 1433633682	uid: 0
-        id: <cmu-lmtpd-10330-1433633682-0@imap.example.com>	to: tech.support        	at: 1433633682	uid: 47513
-        id: <wikidb.5571a7bc1bc865.04482782@smtp.example.org>	to: .+tech.support@.sieve.	at: 1433511915	uid: 0
-        id: <wikidb.5571a7bc1bc865.04482782@smtp.example.org>	to: tech.support        	at: 1433511915	uid: 47481
+        id: <FA6558DA-5287-41D7-BCE8-C38962096A47@gmail.com>    to: .+tech.support@.sieve.      at: 1433518227  uid: 0
+        id: <FA6558DA-5287-41D7-BCE8-C38962096A47@gmail.com>    to: tech.support                at: 1433518227  uid: 47489
+        id: <cmu-lmtpd-10330-1433633682-0@imap.example.com>     to: .+tech.support@.sieve.      at: 1433633682  uid: 0
+        id: <cmu-lmtpd-10330-1433633682-0@imap.example.com>     to: tech.support                at: 1433633682  uid: 47513
+        id: <wikidb.5571a7bc1bc865.04482782@smtp.example.org>   to: .+tech.support@.sieve.      at: 1433511915  uid: 0
+        id: <wikidb.5571a7bc1bc865.04482782@smtp.example.org>   to: tech.support                at: 1433511915  uid: 47481
 
 ..
 
