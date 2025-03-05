@@ -160,6 +160,14 @@ extern const unsigned char convert_to_uppercase[256];
 }
 #endif
 
+#define TIMESPEC_TO_NANOSEC(ts) \
+        ((uint64_t) (ts)->tv_sec * 1000000000 + (ts)->tv_nsec)
+
+#define TIMESPEC_FROM_NANOSEC(ts, nanosec) {    \
+        (ts)->tv_sec  = (nanosec) / 1000000000; \
+        (ts)->tv_nsec = (nanosec) % 1000000000; \
+}
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;
