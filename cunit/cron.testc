@@ -1,0 +1,82 @@
+/* Unit test for lib/cron-parse.c */
+#include <config.h>
+#include "cunit/unit.h"
+#include "crc32.h"
+
+#define SENTINEL UINT64_C(0xcafef00dcafef00d)
+
+/* XXX need to get this from a header */
+extern int cron_parse_datetime(const char *datetime, unsigned max_value,
+                               uint64_t *result);
+
+static void test_cron_parse_datetime(void)
+{
+    const struct {
+        const char *datetime;
+        unsigned max_value;
+        int expect_r;
+        uint64_t expect_result;
+    } tests[] = {
+        { "*", 60 /* 0-59, 60==0 */, 0, UINT64_C(0x0FFFFFFFFFFFFFFF) },
+        { "*", 24 /* 0-23, 24==0 */, 0, UINT64_C(0x0000000000FFFFFF) },
+        { "*", 31 /* 1-31, 31==0 */, 0, UINT64_C(0x000000007FFFFFFF) },
+        { "*", 12 /* 1-12, 12==0 */, 0, UINT64_C(0x0000000000000FFF) },
+        { "*",  7 /* 0-6,   7==0 */, 0, UINT64_C(0x000000000000007F) },
+        { "0",  0, 0, UINT64_C(0b1) },
+        { "1",  0, 0, UINT64_C(0b10) },
+        { "2",  0, 0, UINT64_C(0b100) },
+        { "3",  0, 0, UINT64_C(0b1000) },
+        { "1,3", 0, 0, UINT64_C(0b1010) },
+        { "1-4", 0, 0, UINT64_C(0b11110) },
+        { "2-4,6-7,9", 0, 0, UINT64_C(0b1011011100) },
+        { "*/5", 24, 0, UINT64_C(0b000100001000010000100001) },
+        { "5-15/2", 0, 0, UINT64_C(0b0101010101000000) },
+        { "0-2,5-6,7-23/3", 0, 0, UINT64_C(0b001001001001001001100111) },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    fputs("\n", stderr);
+    for (i = 0; i < n_tests; i++) {
+        uint64_t actual_result;
+        int actual_r;
+
+        actual_r = cron_parse_datetime(tests[i].datetime,
+                                       tests[i].max_value,
+                                       &actual_result);
+        fprintf(stderr, "%u %s %u expected %" PRIx64 " got %" PRIx64 "\n",
+                        i, tests[i].datetime, tests[i].max_value,
+                        tests[i].expect_result, actual_result);
+        CU_ASSERT_EQUAL(actual_r, tests[i].expect_r);
+        CU_ASSERT_EQUAL(actual_result, tests[i].expect_result);
+    }
+}
+
+static void test_cron_parse_datetime_invalid(void)
+{
+    const char *const tests[] = {
+        "",
+        "**",
+        " ",
+        "cat",
+        "1-5/",
+        "1-5/egg",
+        "mon,tue,wed",
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    fputs("\n", stderr);
+    for (i = 0; i < n_tests; i++) {
+        uint64_t actual_result = SENTINEL;
+        int actual_r;
+
+        actual_r = cron_parse_datetime(tests[i], 0, &actual_result);
+        fprintf(stderr, "%s: <%s> returned %d\n",
+                __func__, tests[i], actual_r);
+        CU_ASSERT_EQUAL(actual_r, 1);
+        CU_ASSERT_EQUAL(actual_result, SENTINEL);
+    }
+}
+
+/* vim: set ft=c: */
