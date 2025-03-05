@@ -3212,6 +3212,19 @@ int main(int argc, char **argv)
         struct timeval tv, *tvptr;
         struct notify_message msg;
 
+#if HAVE_PSELECT
+        /* pselect will not reliably/portably deliver pending signals if
+         * a socket is ready or (on some systems) if the timeout is 0.
+         * sigprocmask will cause any unmasked pending signals
+         * to be delivered.
+         * This is essential during shutdown, when undelivered SIGCHLD
+         * signals (and potentially other signals) can prevent shutdown.
+         */
+        sigset_t old_sigmask;
+        sigprocmask(SIG_SETMASK, &pselect_sigmask, &old_sigmask);
+        sigprocmask(SIG_SETMASK, &old_sigmask, &pselect_sigmask);
+#endif
+
         if (gotsigquit) {
             gotsigquit = 0;
             begin_shutdown();
