@@ -4047,7 +4047,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
             strarray_unshift(newdirs, tempreindexdir);
             r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
             if (r) {
-                printf("ERROR: failed to reindex to %s", tempreindexdir);
+                printf("ERROR: failed to reindex to %s\n", tempreindexdir);
                 removedir(tempreindexdir);
                 goto out;
             }
