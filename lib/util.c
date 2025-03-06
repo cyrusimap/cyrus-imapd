@@ -2068,12 +2068,11 @@ EXPORTED void tcp_disable_nagle(int fd)
 EXPORTED void xsyslog_fn(int priority, const char *description,
                          const char *func, const char *extra_fmt, ...)
 {
-    static struct buf buf = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
     int saved_errno = errno;
     int want_diag = (LOG_PRI(priority) != LOG_NOTICE
                      && LOG_PRI(priority) != LOG_INFO);
 
-    buf_reset(&buf);
     buf_appendcstr(&buf, description);
     buf_appendmap(&buf, ": ", 2);
     if (extra_fmt && *extra_fmt) {
