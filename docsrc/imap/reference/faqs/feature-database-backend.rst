@@ -7,8 +7,8 @@ Here's a brief summary of the major database types:
 
 * **Flat**: Easy to maintain format, fast enumeration, very slow write, moderate random access, no binary support
 
-The default database backend for each database is the type currently 
-recommended by the Cyrus developers. Please reference the 
-:cyrusman:`imapd.conf(5)` manpage for your version of Cyrus imapd to see 
-what the defaults are. 
+The default database backend for each database is the type currently
+recommended by the Cyrus developers. Please reference the
+:cyrusman:`imapd.conf(5)` manpage for your version of Cyrus imapd to see
+what the defaults are.
 

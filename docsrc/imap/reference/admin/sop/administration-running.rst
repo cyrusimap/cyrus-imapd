@@ -44,7 +44,7 @@ Security Enhanced Linux
 When running SELinux there are extra steps to take, ...
 
 verify label for the port with semanage port -l <port>
-label the port used: semanage port -a -t <type> -p tcp <port> 
+label the port used: semanage port -a -t <type> -p tcp <port>
 
 .. todo:: Document this fully with example output!
 

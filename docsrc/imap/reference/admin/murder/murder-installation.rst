@@ -48,7 +48,7 @@ Requirements
 
     * One machine to become the MUPDATE Master server. This can be the
       same as one of the frontend servers.
-    
+
 Configuring the MUPDATE Master
 ------------------------------
 
@@ -61,7 +61,7 @@ On the mupdate master :cyrusman:`cyrus.conf(5)` must include a line
 similar to the following in the SERVICES section::
 
     mupdate       cmd="/usr/cyrus/bin/mupdate -m" listen=3905 prefork=1
-    
+
 Note the ``-m`` option to tell mupdate that it should start in master
 mode.
 
@@ -77,7 +77,7 @@ Here is a very simple :cyrusman:`imapd.conf(5)` for a master server::
     partition-default: /tmp
 
     admins: mupdateslave1 backend1
-    
+
 SASL must also be configured as needed to properly allow authentication.
 
 Setting up the backends to push changes to the MUPDATE Master
@@ -96,7 +96,7 @@ following settings in :cyrusman:`imapd.conf(5)` may be required:
     * mupdate_realm
     * mupdate_password
     * servername
-    
+
 Once these settings are made, any mailbox operation on the backend will
 be sent to the mupdate master for confirmation and entry into the
 mupdate database.
@@ -159,7 +159,7 @@ configured by adding the following to the START section of
 :cyrusman:`cyrus.conf(5)` on the backends::
 
     mupdatepush   cmd="ctl_mboxlist -m"
-  
+
 This will perform synchronization with the mupdate master each time the
 backend restarts, bringing the mupdate database up to date with the
 contents of the backend (and performing ACTIVATE and DELETES as needed
@@ -175,7 +175,7 @@ to do so).
     denied if the mupdate master is down), it is possible when first
     creating the mupdate database or when bringing a new backend server
     into the murder.
-    
+
 Configuring the front ends
 --------------------------
 
@@ -187,7 +187,7 @@ SERVICES section of :cyrusman:`cyrus.conf(5)`, like so::
 
   # mupdate database service - must prefork at least 1
   mupdate       cmd="mupdate" listen=3905 prefork=1
-  
+
 As this is a threaded service, prefork at least 1 so that the database
 synchronizes at startup. Otherwise, the service will not start running
 until after receiving a mupdate client connection to the slave (which
@@ -207,7 +207,7 @@ The front end SERVICES section should now look like this::
   https         cmd="httpd -s" listen="https" prefork=0
   sieve         cmd="timsieved" listen="sieve" prefork=0
   lmtp          cmd="lmtpd" listen="/var/imap/socket/lmtp" prefork=0
-  
+
 Note that timsieved does not need a proxy daemon, the managesieve
 protocol deals with the murder with referrals to the backends
 internally.
@@ -223,7 +223,7 @@ auth name of ``mailproxy``::
     mail1_password: foo
     mail2_password: bar
     proxy_authname: mailproxy
-    
+
 For SASL mechanisms not using authnames or passwords (e.g.
 GSSAPI), the password options are not required. Note the use of
 the same authname as configured in the proxyservers line of the
@@ -358,7 +358,7 @@ Backups
     xxx, need to write stuff. You don't need to really backup the data
     on the mupdate master or slaves, since this data can all be
     generated directly from the backends quite easily.
-    
+
 Gotchas
 =======
 
@@ -367,7 +367,7 @@ Gotchas
     pool of imap servers, this isn't a problem, as such, but it may
     mean that you will see many more authentications than you are used
     to.
-    
+
 **Kerberos issues**
     If you are using kerberos authentication, you will want to ensure
     that all your machines are keyed properly, as we have seen problems
@@ -382,13 +382,13 @@ Gotchas
     OK (that is, pine > 4.44), but as referrals have not been
     extensively used by any IMAP server until now, referrals are very
     likely to not work correctly or have surprising effects.
-    
+
 **Clients dealing with getting a NO on LSUB commands**
     Some clients (Outlook, for example) may behave poorly if an LSUB
     command returns a NO, which may be the case if the backend server
     with the user's inbox is down. We have, for example, seen this
     result in the deletion of the disconnected message cache.
-    
+
 **Behavior of cyradm / some mailbox operations**
     The behaviour of some administrative commands might be slightly
     unexpected. For example, you can only issue a SETQUOTA to a
@@ -399,32 +399,32 @@ Gotchas
     backend server that their parent is in. In order to create them on
     a different server (or to create a new top level mailbox) you will
     need to connect directly to the desired backend server.
-    
+
 **Subscriptions**
     If users want subscribe to a mailbox other than on their backend
     home server, they won't be able to, unless you set
     ``allowallsubscribe: t`` in the backend imapd.confs. This
     essentially lets any string be subscribed to successfully.
- 
+
 **Restarting the mupdate master**
     Because ``ctl_cyrusdb -r`` clears reservations on mailbox, if you
     restart the mupdate master (and run recovery), then this could (we
     suspect, very rarely) lead to inconsistencies in the mupdate
     database.
 
-Troubleshooting 
+Troubleshooting
 ===============
 
 **Mailbox operations are being denied**
     This is an indication that the mupdate master may be down. Restart
     it.
-    
+
 **Mailbox operations are not being seen by one or more frontends**
     This indicates that the mupdate process on a slave may have died,
     you may need to restart master. Alternatively, mupdate will retry
     connections every 20 seconds or so for about 20 attempts if the
     master does go down.
-    
+
 **A frontend's mailboxes.db is corrupt or out of sync**
     Restart master on the frontend, and have the mupdate process
     resynch the local database. You may need to remove the local

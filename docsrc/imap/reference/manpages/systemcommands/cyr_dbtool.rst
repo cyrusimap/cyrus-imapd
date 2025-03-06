@@ -166,7 +166,7 @@ provides more convenient way to manage *user_deny.db*.
 
     ::
 
-        baduser	2	pop3,imap	Denied
+        baduser 2       pop3,imap       Denied
 
 .. parsed-literal::
 
@@ -180,7 +180,7 @@ provides more convenient way to manage *user_deny.db*.
 
     ::
 
-        2	pop3,imap	Denied
+        2       pop3,imap       Denied
 
 Files
 =====

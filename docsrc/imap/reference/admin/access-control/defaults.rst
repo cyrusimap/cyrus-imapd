@@ -11,13 +11,13 @@ Regardless of the ACL on a mailbox, users who are listed in the
 have the ``l`` and ``a`` rights on all mailboxes.
 
 Administrators can also see across domains which normal users cannot.
- 
+
 .. warning::
 
-    An admin user should not be a normal email account. 
- 
+    An admin user should not be a normal email account.
+
 Mailbox owners
--------------- 
+--------------
 
 The user who owns a mailbox folder has additional rights which are set
 regardless of any additional ACLs. These are:
@@ -28,7 +28,7 @@ regardless of any additional ACLs. These are:
 * **a** - :ref:`administer <imap-admin-access-control-right-a>`
 
 These are set in ``implicit_owner_rights`` of :cyrusman:`imapd.conf(5)`.
- 
+
 Default
 -------
 

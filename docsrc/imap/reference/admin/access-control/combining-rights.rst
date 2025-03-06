@@ -109,7 +109,7 @@ all (lrswipkxtecda)
 -------------------
 
     Same as write, plus admin rights.
-    
+
 Features and Combined Access Rights
 ===================================
 

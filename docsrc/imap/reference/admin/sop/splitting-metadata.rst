@@ -15,21 +15,21 @@ The mailbox message data, which consists of many (small) message files, is not u
 To transition from the traditional Cyrus IMAP mailbox spool directory tree layout to a split setup, use the following procedure.
 
 **Procedure 13.1. Transition from Traditional Mail Spool to Split Data Mail Spool**
- 
+
      Create a new partition in **/etc/imapd.conf**, aptly named **splitmeta** in the following example configuration snippet::
- 
+
          metapartition_files: header index cache expunge squat
          metapartition-default: /var/spool/cyrus
          metapartition-splitmeta: /var/spool/splitmeta/metadata
          partition-default: /var/spool/cyrus
          partition-splitmeta: /var/spool/splitmeta/partition
- 
+
      Create the directory tree being referred to in the new configuration::
- 
+
          # su -s /bin/bash - cyrus -c '/usr/lib/cyrus-imapd/mkimap /etc/imapd.conf'
- 
+
      Reload the Cyrus IMAP service. Please refer to :ref:`Reloading Cyrus IMAP Services<sop_reloading>` for more details on doing so.
 
      Rename all mailboxes, using the new partition as the location for the renamed mailbox. One example rename command is included below::
- 
+
          cyradm> renamemailbox user/john.doe@example.org user/john.doe@example.org splitmeta

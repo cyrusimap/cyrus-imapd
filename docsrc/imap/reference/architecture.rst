@@ -43,7 +43,7 @@ For security between the user and cyrus, usually SSL is applied.
 
 .. todo:
     - undecided on whether to include idled in here. At the moment I've left it out.
-    
+
 .. _MTA: https://en.wikipedia.org/wiki/Message_transfer_agent
 .. _lmtp: https://en.wikipedia.org/wiki/Local_Mail_Transfer_Protocol
 .. _nginx: http://nginx.org/en/
@@ -63,7 +63,7 @@ and resource sharing for performance.
     :width:  496 px
     :alt: Cyrus Murder architecture.
     :align: center
-    
+
 Consider a set of frontends (F1..Fn) which contain no user data. They
 are essentially stateless.  Users access mailboxes from any frontend.
 Frontends are IMAP/POP3/Sieve/LMTP proxies.
@@ -93,7 +93,7 @@ u2.Trash         b1!data
 u3               b1!bigdisk
 ===============  ===============
 
-Mupdate is multithreaded. 
+Mupdate is multithreaded.
 
 Should each datastore be configured to contain the complete set of all
 data, and any frontend can also behave as a backend (and vice versa),
@@ -102,7 +102,7 @@ this is known as **Unified Murder**: where everything has everything.
 See the :ref:`Cyrus Murder installation and admin guide <murder>`
 for more information.
 
-.. _architecture_replication:    
+.. _architecture_replication:
 
 Replication
 ===========
@@ -113,11 +113,11 @@ servers in a :ref:`murder <architecture_murder>` configuration. It does
 not replicate mupdate master servers: frontends have no state to replicate.
 
 .. image:: images/image3-replication.jpg
-    :height: 385 px 
+    :height: 385 px
     :width:  507 px
     :alt: Cyrus replication architecture
     :align: center
-    
+
 A replication master is configured with a number of **channels**: each
 channel defines the set of replicas the master is replicating to, and
 the configuration (credentials on the replica host, port and hostname)
@@ -181,7 +181,7 @@ with '-m', etc.  All the entries in the sync_log file are triggers to
 replicate with that same value, so a line ``USER vader@darth.net`` is
 the same as running ``sync_client -u vader@darth.net``.
 
-.. _architecture_invoking:   
+.. _architecture_invoking:
 
 Invoking Cyrus
 ==============
@@ -190,7 +190,7 @@ Cyrus has two primary configuration files which control its operation:
 
     1. /etc/imapd.conf
     2. /etc/cyrus.conf
-    
+
 imapd.conf
 ----------
 
@@ -199,7 +199,7 @@ Cyrus is invoked via ``imapd -C path/to/imapd.conf``.
 The format of :cyrusman:`imapd.conf(5)` is in ``key: value`` pairs.
 
 cyrus.conf
-----------    
+----------
 
 This is the config file for the Cyrus master process. The format of
 :cyrusman:`cyrus.conf(5)` defines

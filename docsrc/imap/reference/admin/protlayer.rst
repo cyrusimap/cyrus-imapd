@@ -18,11 +18,11 @@ The prot layer allows "events" to be associated with each prot stream. These eve
 An event is currently represented by the **prot_waitevent** datastructure::
 
     struct prot_waitevent;
-     
+
     typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
                                struct prot_waitevent *ev,
                                void *rock);
-     
+
     struct prot_waitevent {
        time_t mark;
        prot_waiteventcallback_t *proc;
@@ -43,9 +43,9 @@ Use **prot_addwaitevent()** to add an event callback onto the stream::
                        void *rock);
 
 where:
-    * **s** is the stream to add the event to, 
-    * **mark** is the time to trigger the event, 
-    * **proc** is the callback to make, and 
+    * **s** is the stream to add the event to,
+    * **mark** is the time to trigger the event,
+    * **proc** is the callback to make, and
     * **rock** is an opaque data item handed to the callback. It returns a pointer to the event structure; this is the pointer that must be used to remove the event or modify it in some way.
 
 Use **prot_removewaitevent()** to remove an event::

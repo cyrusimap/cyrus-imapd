@@ -29,7 +29,7 @@ Options
 .. option:: -C config-file
 
     Alternate config file.
-    
+
 .. option:: -v, --verbose
 
     Produce verbose output on errors.

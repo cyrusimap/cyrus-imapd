@@ -356,7 +356,7 @@ EXPORTED int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s
 
     /* populate requires field */
     if (s->support & SIEVE_CAPA_VARIABLES) {
-	requires |= BFE_VARIABLES;
+        requires |= BFE_VARIABLES;
     }
     
     *retval = xmalloc(sizeof(bytecode_info_t));

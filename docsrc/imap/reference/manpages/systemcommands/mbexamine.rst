@@ -78,7 +78,7 @@ Examples
         Examining user.jsmith...
          Mailbox Header Info:
           Path to mailbox: /var/spool/cyrus/user/jsmith
-          Mailbox ACL: jsmith	lrswipkxtecda
+          Mailbox ACL: jsmith   lrswipkxtecda
           Unique ID: 3ab4f8d5512e33b1
           User Flags: [none]
 
@@ -117,7 +117,7 @@ Examples
         Examining user.jsmith...
          Mailbox Header Info:
           Path to mailbox: /var/spool/cyrus/user/jsmith
-          Mailbox ACL: jsmith	lrswipkxtecda
+          Mailbox ACL: jsmith   lrswipkxtecda
           Unique ID: 3ab4f8d5512e33b1
           User Flags: [none]
 
@@ -176,7 +176,7 @@ Examples
          Mailbox Header Info:
           Path to mailbox: /var/spool/cyrus/user/jsmith
 
-         Index Record Info:                                     	Message File Info:
+         Index Record Info:                                             Message File Info:
           UID: 00000002
            GUID: 4aa62f540d81395dc7d52518ae8e8c75571c8f11
            Size: 6964
@@ -185,18 +185,18 @@ Examples
            Subj: "Re: hello there"
 
           UID: 00000011
-           GUID: 6aa93fd583f143dde555184d508ab0916e06b026          	739232245980a3efe3df490841221a4b7bac4f27
-           Size: 21427                                             	23450
-           Date: Wed, 30 Nov 2016 12:00:00 -0500                   	Wed, 26 Oct 2005 12:00:00 -0400
-           From: <bar@example.com>                              	<foo@example.com>
-           Subj: "Re: what's up?"                               	"hello there"
+           GUID: 6aa93fd583f143dde555184d508ab0916e06b026               739232245980a3efe3df490841221a4b7bac4f27
+           Size: 21427                                                  23450
+           Date: Wed, 30 Nov 2016 12:00:00 -0500                        Wed, 26 Oct 2005 12:00:00 -0400
+           From: <bar@example.com>                                      <foo@example.com>
+           Subj: "Re: what's up?"                                       "hello there"
 
           UID: 00000022
-           GUID:                                                   	12a62f123451395dc7d52518ae8e8c75571c9876
-           Size:                                                   	5623
-           Date:                                                   	Tue, 29 Mar 2016 12:00:00 -0500
-           From:                                                   	<foo@example.com>
-           Subj:                                                   	"Re: vacation"
+           GUID:                                                        12a62f123451395dc7d52518ae8e8c75571c9876
+           Size:                                                        5623
+           Date:                                                        Tue, 29 Mar 2016 12:00:00 -0500
+           From:                                                        <foo@example.com>
+           Subj:                                                        "Re: vacation"
 
 Files
 =====

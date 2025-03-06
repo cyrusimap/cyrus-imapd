@@ -1,5 +1,5 @@
 require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress",
-	"envelope", "date", "index", "imap4flags", "variables"];
+        "envelope", "date", "index", "imap4flags", "variables"];
 
 #this is for the extra things we have added to sieve
 #test extensions
@@ -9,14 +9,14 @@ require ["regex", "relational", "comparator-i;ascii-numeric", "subaddress",
 #need better relational and comparator tests...
 
 if header :value "gt" 
-	:comparator "i;ascii-numeric" 
-	["number"] ["10"]
+        :comparator "i;ascii-numeric" 
+        ["number"] ["10"]
 {redirect "me+numberover10@blah.com";}
    
   
 if header :count "gt" 
-	:comparator "i;ascii-numeric" 
-	["X"] ["3"]
+        :comparator "i;ascii-numeric" 
+        ["X"] ["3"]
 {redirect "me+X@blah.com";}
        
 #header regex

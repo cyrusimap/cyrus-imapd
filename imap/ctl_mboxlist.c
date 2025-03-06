@@ -1080,7 +1080,7 @@ static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
         // paths on the filesystem.
         do {
             r = -1;
-	    found_path_entry = ptrarray_nth(found, *idx);
+            found_path_entry = ptrarray_nth(found, *idx);
             if (
                     !(found_path_entry->type & MBOX) ||   /* end of mailboxes */
                     (r = strcmp(found_mailbox_entry->mboxname, found_path_entry->mboxname)) < 0
@@ -1103,7 +1103,7 @@ static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
 
     /* now report all unmatched mailboxes found in filesystem */
     for (i = 0; i < ptrarray_size(found); i++) {
-	found_path_entry = ptrarray_nth(found, i);
+        found_path_entry = ptrarray_nth(found, i);
         if (!(found_path_entry->type & MBOX)) break;
         if (!(found_path_entry->type & MATCHED)) {
             printf("'%s' has a directory '%s' but no DB entry\n",

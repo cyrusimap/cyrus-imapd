@@ -203,8 +203,8 @@ sub assert_preserved_by_snooze_alarm
 
     # We actually should also acknowledge the default alarm
     $alarm->add_properties(
-	description => 'useralarm',
-	trigger   => '-PT15M',
+        description => 'useralarm',
+        trigger   => '-PT15M',
         'related-to' => $self->{defaultAlertIds}[0],
         uid => $alarmUid,
     );
@@ -244,8 +244,8 @@ sub assert_disabled_by_user_alarm
     my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
     $alarm->add_properties(
-	description => 'useralarm',
-	trigger   => 'PT15M',
+        description => 'useralarm',
+        trigger   => 'PT15M',
         uid => $alarmUid,
     );
 
@@ -284,8 +284,8 @@ sub assert_preserved_by_apple_alarm
     my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
     $alarm->add_properties(
-	description => 'applealarm',
-	trigger   => '-PT15M',
+        description => 'applealarm',
+        trigger   => '-PT15M',
         uid => $alarmUid,
         'x-apple-default-alarm' => 'TRUE',
     );
@@ -390,8 +390,8 @@ sub assert_not_disabled_if_xheader_set
     my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
     $alarm->add_properties(
-	description => 'useralarm',
-	trigger   => 'PT15M',
+        description => 'useralarm',
+        trigger   => 'PT15M',
         uid => $alarmUid,
     );
 

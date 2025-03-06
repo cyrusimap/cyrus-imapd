@@ -13,10 +13,10 @@ future, should probably just consider using a simple proxy solution.
 
 .. toctree::
     :maxdepth: 2
-    
+
     murder-concepts
     murder-installation
     murder-mupdate-details
     murder-failure-modes
     murder-mail-delivery
-    
+
