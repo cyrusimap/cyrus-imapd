@@ -49,9 +49,13 @@
  * N.B. These are NOT "error-handling" wrappers; you still must check the
  * return value, errno, etc, and handle errors accordingly!
  *
- * These wrappers present the same interface as the original functions,
- * but will also log an error if the original function did anything
- * other than succeed or fail-due-to-ENOENT
+ * These wrappers present almost the same interface as the original functions,
+ * except that:
+ *  1) errors are logged for you; and
+ *  2) ENOENT is treated as not an error: nothing is logged, errno is not set,
+ *     and 0 is returned
+ *
+ * You cannot use these wrappers if you need to detect ENOENT failures.
  **/
 
 #define xunlink(pathname)                                                     \

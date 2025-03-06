@@ -500,9 +500,15 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     if (!nolink) {
         if (link(from, to) == 0) return 0;
         if (errno == EEXIST) {
-            if (xunlink(to) == -1) {
+            /* n.b. unlink rather than xunlink.  at this point we believe
+             * a file definitely exists that we want to remove, so if
+             * unlink tells us ENOENT then that's super weird and we're
+             * probably racing against something
+             */
+            if (unlink(to) == -1) {
                 xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
                                  "filename=<%s>", to);
+                errno = 0;
                 return -1;
             }
             if (link(from, to) == 0) return 0;
