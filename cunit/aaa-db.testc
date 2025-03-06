@@ -22,6 +22,7 @@ struct binary_result
 static const char *backend = CUNIT_PARAM("skiplist,flat,twom,twoskip");
 static char *filename;
 static char *filename2;
+static char *basedir;
 
 static int fexists(const char *fname)
 {
@@ -233,6 +234,36 @@ static void test_openclose(void)
     r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);
+}
+
+static void test_openclose_mkdir(void)
+{
+    struct db *db = NULL;
+    int r;
+
+    char *myfilename = strconcat(basedir, "/inexistent/cyrus.", backend, "-test", (char *)NULL);
+
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
+
+    /* open() without _CREATE fails with NOTFOUND
+     * and doesn't create the db */
+    r = cyrusdb_open(backend, myfilename, 0, &db);
+    CU_ASSERT(r == CYRUSDB_NOTFOUND || r == CYRUSDB_IOERROR);
+    CU_ASSERT_PTR_NULL(db);
+    CU_ASSERT_EQUAL(fexists(myfilename), -ENOENT);
+
+    /* open() with _CREATE succeeds and creates the db */
+    r = cyrusdb_open(backend, myfilename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+    CU_ASSERT_EQUAL_FATAL(fexists(myfilename), 0);
+
+    /* closing succeeds and leaves the file in place */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(myfilename), 0);
+
+    free(myfilename);
 }
 
 static void test_multiopen(void)
@@ -1627,8 +1658,6 @@ static void test_many(void)
     free_hash_table(&exphash, free);
 #undef MAXN
 }
-
-static char *basedir;
 
 static int set_up(void)
 {
