@@ -1930,7 +1930,10 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
         if (setup->flags & TWOM_CREATE) {
             fd = open(db->fname, O_RDWR|O_CREAT, 0644);
             db->openfile->fd = fd;
-            if (fd < 0) goto done;
+            if (fd < 0) {
+                if (errno == ENOENT) r = TWOM_NOTFOUND;
+                goto done;
+            }
             r = initdb(db, setup->flags);
             if (r) goto done;
         }
