@@ -88,6 +88,7 @@ sub tear_down
 
 sub test_tls_login_event
     :TLS :min_version_3_0
+    :SuppressLSAN(libcrypto.so libssl.so)
 {
     my ($self) = @_;
 

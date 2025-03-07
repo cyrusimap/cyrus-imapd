@@ -474,6 +474,24 @@ magic(NoCheckSyslog => sub {
     my $self = shift;
     $self->{no_check_syslog} = 1;
 });
+magic(SuppressLSAN => sub {
+    my ($self, $patterns) = @_;
+
+    my @patterns = split(" ", $patterns);
+    unless (@patterns) {
+        die ":SuppressLSAN requires a list of arguments";
+    }
+
+    my ($fh, $tmp) = tempfile('lsan.suppressXXXXX', OPEN => 1,
+                              DIR => $self->{instance}->{basedir} . "/tmp");
+    for my $pattern (@patterns) {
+        print { $fh } "leak:$pattern\n";
+    }
+
+    close($fh);
+
+    $self->{lsan_suppressions} = $tmp;
+});
 magic(JmapMaxCalendarEventNotifs => sub {
     my $conf = shift;
     # set to some small number
@@ -526,6 +544,11 @@ sub _run_magic
     if (defined $sub) {
         foreach my $a (attributes::get($sub))
         {
+            my $args;
+            if ($a =~ s/\((.*)\)//) {
+                $args = $1;
+            }
+
             my $m = lc($a);
             # ignore min/max version attribution here
             next if $a =~ m/^(?:min|max)_version_/;
@@ -537,7 +560,7 @@ sub _run_magic
                 unless defined $magic_handlers{$m};
             next if $seen{$m};
             $self->{_current_magic} = "Magic attribute $a";
-            $magic_handlers{$m}->($self);
+            $magic_handlers{$m}->($self, $args);
             $self->{_current_magic} = undef;
             $seen{$m} = 1;
         }
@@ -560,6 +583,8 @@ sub _create_instances
 
     my $want = $self->{_want};
     my %instance_params = %{$self->{_instance_params}};
+
+    $instance_params{lsan_suppressions} = "$self->{lsan_suppressions}";
 
     my $cassini = Cassandane::Cassini->instance();
 
