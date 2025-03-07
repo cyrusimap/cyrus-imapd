@@ -3,6 +3,8 @@
 #include "cunit/cyrunit.h"
 #include "crc32.h"
 
+#define SENTINEL UINT64_C(0xcafef00dcafef00d)
+
 /* XXX need to get this from a header */
 extern int cron_parse_datetime(const char *datetime, unsigned max_value,
                                uint64_t *result);
@@ -34,6 +36,7 @@ static void test_cron_parse_datetime(void)
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
 
+    fputs("\n", stderr);
     for (i = 0; i < n_tests; i++) {
         uint64_t actual_result;
         int actual_r;
@@ -46,6 +49,33 @@ static void test_cron_parse_datetime(void)
                         tests[i].expect_result, actual_result);
         CU_ASSERT_EQUAL(actual_r, tests[i].expect_r);
         CU_ASSERT_EQUAL(actual_result, tests[i].expect_result);
+    }
+}
+
+static void test_cron_parse_datetime_invalid(void)
+{
+    const char *const tests[] = {
+        "",
+        "**",
+        " ",
+        "cat",
+        "1-5/",
+        "1-5/egg",
+        "mon,tue,wed",
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    fputs("\n", stderr);
+    for (i = 0; i < n_tests; i++) {
+        uint64_t actual_result = SENTINEL;
+        int actual_r;
+
+        actual_r = cron_parse_datetime(tests[i], 0, &actual_result);
+        fprintf(stderr, "%s: <%s> returned %d\n",
+                __func__, tests[i], actual_r);
+        CU_ASSERT_EQUAL(actual_r, 1);
+        CU_ASSERT_EQUAL(actual_result, SENTINEL);
     }
 }
 
