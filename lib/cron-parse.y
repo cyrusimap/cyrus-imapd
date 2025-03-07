@@ -26,9 +26,8 @@ extern void cron_delete_buffer(struct yy_buffer_state *b);
 
 %%
 
-start : datetime {
+start : datetime YYEOF {
     *result = $$ = $1;
-    return 0;
 };
 
 datetime : list; /* XXX also accept month, weekday names here */
@@ -71,7 +70,6 @@ static void yyerror(uint64_t *result, const char *err)
 {
     fprintf(stderr, "%s: result=<%" PRIu64 "> err=<%s>\n",
                     __func__, *result, err);
-    fatal(err, EX_DATAERR);
 }
 
 EXPORTED int cron_parse_datetime(const char *datetime, unsigned max_value,
@@ -92,7 +90,7 @@ EXPORTED int cron_parse_datetime(const char *datetime, unsigned max_value,
         result &= mask;
     }
 
-    if (presult)
+    if (!r && presult)
         *presult = result;
 
     return r;
