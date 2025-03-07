@@ -619,6 +619,7 @@ cunit_TESTS = \
     cunit/charset.testc \
     cunit/command.testc \
     cunit/conversations.testc \
+    cunit/cron.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
     cunit/dlist.testc \
