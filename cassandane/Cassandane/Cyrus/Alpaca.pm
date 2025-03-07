@@ -312,6 +312,7 @@ sub test_http_post_drop_connection2
 
 sub test_http_post_drop_connection3
     :TLS :needs_dependency_openssl
+    :SuppressLSAN(libcrypto.so)
 {
     my ($self) = @_;
 

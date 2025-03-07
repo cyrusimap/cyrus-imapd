@@ -3,6 +3,7 @@ use Cassandane::Tiny;
 
 sub test_echo_tls
     :TLS :want_service_https :needs_component_httpd
+    :SuppressLSAN(libcrypto.so libssl.so)
 {
     my ($self) = @_;
 
