@@ -411,7 +411,12 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
     r = index_lock(state, /*readonly*/0);
     if (r) return r;
 
-    /* XXX - check if not mailbox->i.deleted count and need_deleted */
+    /* Make sure there is something to expunge */
+    if (!sequence && !(state->mailbox->i.deleted > 0 && need_deleted)) {
+        index_unlock(state);
+        return 0;
+    }
+    
     seq = _parse_sequence(state, sequence, 1);
 
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
