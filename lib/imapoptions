@@ -1815,7 +1815,11 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Path to mailbox name lock files (default $conf/lock) */
 
 { "mboxname_userpath", NULL, STRING, "UNRELEASED" }
-/* Path to mailbox name lock files (default configdirectory/) */
+/* Path to the parent directory of the user and domain directories.
+   This defaults to 'configdir' if not specified.  This option can
+   be used (along with other related options) to place all persistent
+   data outside the configdir, allowing it to be on ephemeral storage
+   without using symlinks */
 
 { "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "annotations", "lock", "dav", "archivecache"), "3.0.0" }
 /* Space-separated list of metadata files to be stored on a
