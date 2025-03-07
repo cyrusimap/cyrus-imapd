@@ -780,6 +780,7 @@ include_HEADERS = \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
+    lib/cron.h \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
