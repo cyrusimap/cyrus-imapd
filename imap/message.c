@@ -3950,7 +3950,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             /* try finding a CID in the match list, or if we came in with it */
             struct buf annotkey = BUF_INITIALIZER;
             struct buf annotval = BUF_INITIALIZER;
-            buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, record->cid);
+            buf_printf(&annotkey, "%snewcid/" CONV_FMT,
+                       IMAP_ANNOT_NS, record->cid);
             r = annotatemore_lookup(state->annotmboxname, buf_cstring(&annotkey), "", &annotval);
             if (annotval.len == 16) {
                 const char *p = buf_cstring(&annotval);
@@ -3982,7 +3983,8 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
 
-        syslog(LOG_NOTICE, "splitting conversation for %s %u base:%016llx was:%016llx now:%016llx",
+        syslog(LOG_NOTICE, "splitting conversation for %s %u "
+               "base:" CONV_FMT " was:" CONV_FMT " now:" CONV_FMT,
                mailbox_name(mailbox), record->uid, record->basecid, was, record->cid);
 
         if (!record->basecid) record->basecid = was;
@@ -4005,8 +4007,9 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
         struct buf annotkey = BUF_INITIALIZER;
         struct buf annotval = BUF_INITIALIZER;
-        buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, record->basecid);
-        buf_printf(&annotval, "%016llx", record->cid);
+        buf_printf(&annotkey, "%snewcid/" CONV_FMT,
+                   IMAP_ANNOT_NS, record->basecid);
+        buf_printf(&annotval, CONV_FMT, record->cid);
         r = annotate_state_write(astate, buf_cstring(&annotkey), "", &annotval);
         buf_free(&annotkey);
         buf_free(&annotval);
@@ -4031,6 +4034,10 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     /* mark that it's split so basecid gets saved */
     if (record->basecid != record->cid)
         record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
+    else {
+        /* otherwise, we DO NOT want/expect basecid to be set */
+        record->basecid = NULLCONVERSATION;
+    }
 
 out:
     message_unref(&msg);
@@ -5282,7 +5289,7 @@ EXPORTED int message_get_savedate(message_t *m, time_t *datep)
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *datep = m->record.savedate;
-    if (!*datep) *datep = m->record.internaldate;
+    if (!*datep) *datep = m->record.internaldate.tv_sec;
     return 0;
 }
 
@@ -5314,7 +5321,7 @@ EXPORTED int message_get_internaldate(message_t *m, time_t *datep)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    *datep = m->record.internaldate;
+    *datep = m->record.internaldate.tv_sec;
     return 0;
 }
 
@@ -5711,7 +5718,8 @@ EXPORTED int message_extract_cids(message_t *msg,
         conversation_id_t newcid = 0;
         buf_reset(&annotkey);
         buf_reset(&annotval);
-        buf_printf(&annotkey, "%snewcid/%016llx", IMAP_ANNOT_NS, (conversation_id_t) arrayu64_nth(cids, i));
+        buf_printf(&annotkey, "%snewcid/" CONV_FMT,
+                   IMAP_ANNOT_NS, (conversation_id_t) arrayu64_nth(cids, i));
         annotatemore_lookup(cstate->annotmboxname, buf_cstring(&annotkey), "", &annotval);
         if (buf_len(&annotval) == 16) {
             const char *p = buf_cstring(&annotval);
