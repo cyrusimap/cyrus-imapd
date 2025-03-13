@@ -787,20 +787,46 @@ static void do_starttls(int ssl, const char *keyfile, unsigned *ssf)
         imtest_fatal("Error setting SASL property (external auth_id)");
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
-    static unsigned char finished[EVP_MAX_MD_SIZE];
     static struct sasl_channel_binding cbinding;
 
-    if (SSL_session_reused(tls_conn)) {
-        cbinding.len = SSL_get_peer_finished(tls_conn,
-                                             finished, sizeof(finished));
-    }
-    else {
-        cbinding.len = SSL_get_finished(tls_conn, finished, sizeof(finished));
-    }
+    if (SSL_version(tls_conn) <= TLS1_2_VERSION) {
+        static unsigned char finished[EVP_MAX_MD_SIZE];
 
-    cbinding.name = "tls-unique";
-    cbinding.critical = 0;
-    cbinding.data = finished;
+        if (SSL_session_reused(tls_conn)) {
+            cbinding.len =
+                SSL_get_peer_finished(tls_conn, finished, sizeof(finished));
+        }
+        else {
+            cbinding.len =
+                SSL_get_finished(tls_conn, finished, sizeof(finished));
+        }
+
+        cbinding.name = "tls-unique";
+        cbinding.critical = 0;
+        cbinding.data = finished;
+    }
+#if (OPENSSL_VERSION_NUMBER >= 0x10100001L)
+    else {
+        /* see RFC 9266 Section 2, Definition of label, context, length */
+        static const char label[] = "EXPORTER-Channel-Binding";
+        static unsigned char exported_key[32];
+        static const size_t key_len = sizeof(exported_key);
+
+        if (1 != SSL_export_keying_material(tls_conn, exported_key, key_len,
+                                            label, sizeof(label)-1, 0, 0, 0)) {
+            imtest_fatal("Error reading EKM for channel binding");
+        }
+        cbinding.name = "tls-exporter";
+        cbinding.critical = 0;
+        cbinding.len = key_len;
+        cbinding.data = exported_key;
+    }
+#else
+    else {
+        /* This case should not happen. It's a strange OpenSSL variant */
+        imtest_fatal("No EKM (channel binding) for TLS 1.3 or higher");
+    }
+#endif /* (OPENSSL_VERSION_NUMBER >= 0x10100001L) */
 
     result = sasl_setprop(conn, SASL_CHANNEL_BINDING, &cbinding);
     if (result!=SASL_OK)
