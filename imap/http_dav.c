@@ -3382,8 +3382,7 @@ static int proppatch_todb_internal(xmlNodePtr prop, unsigned set,
     if (!r) r = mask ?
         annotate_state_writemask(astate, buf_cstring(&pctx->buf),
                 httpd_userid, &value) :
-        annotate_state_write(astate, buf_cstring(&pctx->buf),
-                httpd_userid, &value);
+        annotate_state_write(astate, buf_cstring(&pctx->buf), "", &value);
 
     if (!r) {
         xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
