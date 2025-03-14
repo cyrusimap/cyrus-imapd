@@ -23,6 +23,8 @@ static void yyerror(struct cron_spec *result, const char **, const char *);
 
 %parse-param { struct cron_spec *result } { const char **err }
 
+%header "y.tab.h"
+
 %token NUM
 %token SP
 %token NAMED_MONTH

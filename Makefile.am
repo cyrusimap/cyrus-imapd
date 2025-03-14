@@ -68,8 +68,6 @@ endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
-AM_YFLAGS = -d
-
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
