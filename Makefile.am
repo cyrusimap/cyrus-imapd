@@ -617,6 +617,7 @@ cunit_TESTS = \
     cunit/charset.testc \
     cunit/command.testc \
     cunit/conversations.testc \
+    cunit/cron.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
     cunit/dlist.testc \
@@ -630,6 +631,7 @@ cunit_TESTS = \
     cunit/imparse.testc \
     cunit/libconfig.testc \
     cunit/mailbox.testc \
+    cunit/master-event.testc \
     cunit/mboxname.testc \
     cunit/md5.testc \
     cunit/message.testc \
@@ -1525,11 +1527,15 @@ libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 nodist_lib_libcyrus_min_la_SOURCES = \
     lib/imapopts.c
 
+BUILT_SOURCES += lib/cron-lex.c lib/cron-parse.c lib/cron-parse.h
+
 lib_libcyrus_min_la_SOURCES = \
     lib/arrayu64.c \
     lib/assert.c \
     lib/bufarray.c \
     lib/byteorder.c \
+    lib/cron-lex.l \
+    lib/cron-parse.y \
     lib/dynarray.c \
     lib/hash.c \
     lib/hashset.c \
@@ -1739,6 +1745,8 @@ bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
 endif # BENCH
 
 master_master_SOURCES = \
+    master/event.c \
+    master/event.h \
     master/master.c \
     master/master.h \
     master/masterconf.c \

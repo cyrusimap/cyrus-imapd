@@ -1,0 +1,12 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include "cunit/cyrunit.h"
+
+static void test_foo(void)
+{
+    return;
+}
+
+/* vim: set ft=c :*/
