@@ -982,10 +982,10 @@ HIDDEN void dav_run_notifications()
     for (item = scheduled_notifications; item; item = next) {
         next = item->next;
         dav_send_notification(item->doc, item->extradata, item->userid, item->resource);
-	xmlFreeDoc(item->doc);
-	free(item->userid);
-	free(item->resource);
-	free(item);
+        xmlFreeDoc(item->doc);
+        free(item->userid);
+        free(item->resource);
+        free(item);
     }
     scheduled_notifications = NULL;
 }

@@ -350,7 +350,7 @@ while (<>) {
             print "$save\n"; $save = "";
         } elsif (m|\s*(.*)\s*|) {
             my $stripped = $1;
-	    chomp($stripped);
+            chomp($stripped);
             print print_man2rst($stripped);
         }
     }

@@ -66,28 +66,28 @@ Here's the stock version of the ``SERVICES`` section of
     SERVICES {
         # --- Normal cyrus spool, or Murder backends ---
         # add or remove based on preferences
-        imap		cmd="imapd -U 30" listen="imap" prefork=0 maxchild=100
-        #imaps		cmd="imapd -s -U 30" listen="imaps" prefork=0 maxchild=100
-        pop3		cmd="pop3d -U 30" listen="pop3" prefork=0 maxchild=50
-        #pop3s		cmd="pop3d -s -U 30" listen="pop3s" prefork=0 maxchild=50
-        nntp		cmd="nntpd -U 30" listen="nntp" prefork=0 maxchild=100
-        #nntps		cmd="nntpd -s -U 30" listen="nntps" prefork=0 maxchild=100
-        http		cmd="httpd -U 30" listen="8008" prefork=0 maxchild=100
-        #https		cmd="httpd -s -U 30" listen="8443" prefork=0 maxchild=100
+        imap            cmd="imapd -U 30" listen="imap" prefork=0 maxchild=100
+        #imaps          cmd="imapd -s -U 30" listen="imaps" prefork=0 maxchild=100
+        pop3            cmd="pop3d -U 30" listen="pop3" prefork=0 maxchild=50
+        #pop3s          cmd="pop3d -s -U 30" listen="pop3s" prefork=0 maxchild=50
+        nntp            cmd="nntpd -U 30" listen="nntp" prefork=0 maxchild=100
+        #nntps          cmd="nntpd -s -U 30" listen="nntps" prefork=0 maxchild=100
+        http            cmd="httpd -U 30" listen="8008" prefork=0 maxchild=100
+        #https          cmd="httpd -s -U 30" listen="8443" prefork=0 maxchild=100
 
 
         # At least one form of LMTP is required for delivery
         # (you must keep the Unix socket name in sync with imap.conf)
-        #lmtp		cmd="lmtpd" listen="localhost:lmtp" prefork=0 maxchild=20
-        lmtpunix	cmd="lmtpd" listen="/var/run/cyrus/socket/lmtp" prefork=0 maxchild=20
+        #lmtp           cmd="lmtpd" listen="localhost:lmtp" prefork=0 maxchild=20
+        lmtpunix        cmd="lmtpd" listen="/var/run/cyrus/socket/lmtp" prefork=0 maxchild=20
         # ----------------------------------------------
 
         # useful if you need to give users remote access to sieve
         # by default, we limit this to localhost in Debian
-        sieve		cmd="timsieved" listen="localhost:sieve" prefork=0 maxchild=100
+        sieve           cmd="timsieved" listen="localhost:sieve" prefork=0 maxchild=100
 
         # this one is needed for the notification services
-        notify		cmd="notifyd" listen="/var/run/cyrus/socket/notify" proto="udp" prefork=1
+        notify          cmd="notifyd" listen="/var/run/cyrus/socket/notify" proto="udp" prefork=1
 
         # --- Murder frontends -------------------------
         # enable these and disable the matching services above,
@@ -100,11 +100,11 @@ Here's the stock version of the ``SERVICES`` section of
         #mupdate       cmd="mupdate -m" listen=3905 prefork=1
 
         # proxies that will connect to the backends
-        #imap		cmd="proxyd" listen="imap" prefork=0 maxchild=100
-        #imaps		cmd="proxyd -s" listen="imaps" prefork=0 maxchild=100
-        #pop3		cmd="pop3proxyd" listen="pop3" prefork=0 maxchild=50
-        #pop3s		cmd="pop3proxyd -s" listen="pop3s" prefork=0 maxchild=50
-        #lmtp		cmd="lmtpproxyd" listen="lmtp" prefork=1 maxchild=20
+        #imap           cmd="proxyd" listen="imap" prefork=0 maxchild=100
+        #imaps          cmd="proxyd -s" listen="imaps" prefork=0 maxchild=100
+        #pop3           cmd="pop3proxyd" listen="pop3" prefork=0 maxchild=50
+        #pop3s          cmd="pop3proxyd -s" listen="pop3s" prefork=0 maxchild=50
+        #lmtp           cmd="lmtpproxyd" listen="lmtp" prefork=1 maxchild=20
         # ----------------------------------------------
     }
 

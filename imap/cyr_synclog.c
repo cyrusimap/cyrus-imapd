@@ -76,7 +76,7 @@ void usage(const char *name) {
     fprintf(stderr, "  -b   SUBSCRIPTION\n");
     fprintf(stderr, "\n");
     fprintf(stderr,
-	    "You may omit the type flag and just specify a complete log line\n");
+            "You may omit the type flag and just specify a complete log line\n");
     exit(-1);
 }
 
@@ -154,10 +154,10 @@ int main(int argc, char *argv[])
     if (!argv[optind][0]) usage(argv[0]);
 
     if (cmd == 's' || cmd == 'b') {
-	/* need a second value */
-	if ((argc - optind) < 2) usage(argv[0]);
-	/* and not an empty string */
-	if (!argv[optind+1][0]) usage(argv[0]);
+        /* need a second value */
+        if ((argc - optind) < 2) usage(argv[0]);
+        /* and not an empty string */
+        if (!argv[optind+1][0]) usage(argv[0]);
     }
 
     cyrus_init(alt_config, "cyr_synclog", 0, 0);

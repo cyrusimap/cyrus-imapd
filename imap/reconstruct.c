@@ -538,7 +538,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             else {
                 printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
             }
-	    free(extname);
+            free(extname);
         }
         mailbox_close(&mailbox);
         mboxname_release(&namespacelock);
