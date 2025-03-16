@@ -528,6 +528,10 @@ int main(int argc, char *argv[])
         printf(" (built with ubsan (dynamically linked))");
 #endif
 
+#if defined WITH_GCC
+        printf(" (built with gcc)");
+#endif
+
         printf("\n");
         return 0;
     }

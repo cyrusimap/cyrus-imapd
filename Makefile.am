@@ -79,12 +79,14 @@ if STATIC_ASAN
         AM_CXXFLAGS += -DWITH_STATIC_ASAN
 
 if IS_GCC_COMPILER
-            AM_CFLAGS += -static-libasan
-            AM_CXXFLAGS += -static-libasan
+            AM_CFLAGS += -static-libasan -DWITH_GCC
+            AM_CXXFLAGS += -static-libasan -DWITH_GCC
             AM_LDFLAGS += -static-libasan
 endif # IS_GCC_COMPILER
 else # ! STATIC_ASAN
 if IS_GCC_COMPILER
+            AM_CFLAGS += -DWITH_GCC
+            AM_CXXFLAGS += -DWITH_GCC
 else # ! IS_GCC_COMPILER
             AM_CFLAGS += -shared-libsan
             AM_CXXFLAGS += -shared-libsan
@@ -103,12 +105,14 @@ if STATIC_UBSAN
         AM_CXXFLAGS += -DWITH_STATIC_UBSAN
 
 if IS_GCC_COMPILER
-            AM_CFLAGS += -static-libubsan
-            AM_CXXFLAGS += -static-libubsan
+            AM_CFLAGS += -static-libubsan -DWITH_GCC
+            AM_CXXFLAGS += -static-libubsan -DWITH_GCC
             AM_LDFLAGS += -static-libubsan
 endif # IS_GCC_COMPILER
 else # ! STATIC_UBSAN
 if IS_GCC_COMPILER
+            AM_CFLAGS += -DWITH_GCC
+            AM_CXXFLAGS += -DWITH_GCC
 else # ! IS_GCC_COMPILER
             AM_CFLAGS += -shared-libsan
             AM_CXXFLAGS += -shared-libsan
