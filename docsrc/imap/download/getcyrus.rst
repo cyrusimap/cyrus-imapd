@@ -9,16 +9,12 @@ Where and how do you want to get Cyrus?
 Distribution Package
 ====================
 
-Cyrus IMAP packages are shipped with every major distribution, including
-but not limited to Fedora, Red Hat Enterprise Linux, CentOS, Scientific
-Linux, Debian, Ubuntu, openSUSE, Gentoo, Mageia and ClearOS. They are not
-guaranteed to be up to date.
+Cyrus IMAP packages are packaged by several Linux distrbution.
 
-.. toctree::
-    :maxdepth: 1
-    :glob:
+* Debian provides a "cyrus-imapd" package
+* Fedora provides a "cyrus-imapd" package
+* Ubuntu provides a "cyrus-imapd" package
 
-    installation/distributions/*
 
 Build and Install Yourself
 ==========================
