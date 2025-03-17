@@ -4,7 +4,8 @@ AlignArrayOfStructures: Left
 AllowShortBlocksOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLoopsOnASingleLine: true
-BinPackArguments: true
+BinPackArguments: false
+BinPackParameters: false
 BraceWrapping:
   BeforeElse:      true
 BreakBeforeBraces: Stroustrup
