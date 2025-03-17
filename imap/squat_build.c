@@ -565,7 +565,7 @@ static int init_write_buffer_to_temp(SquatIndex *index,
         return SQUAT_ERR;
     }
 
-    if (xunlink(tmp_path) < 0) {
+    if (xunlink(tmp_path) == -1) {
         squat_set_last_error(SQUAT_ERR_SYSERR);
         goto cleanup_fd;
     }

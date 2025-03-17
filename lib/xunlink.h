@@ -53,9 +53,13 @@
  * except that:
  *  1) errors are logged for you; and
  *  2) ENOENT is treated as not an error: nothing is logged, errno is not set,
- *     and 0 is returned
+ *     and 1 is returned
  *
- * You cannot use these wrappers if you need to detect ENOENT failures.
+ *  Almost all callers of xunlink ignore the return value, but if you're going
+ *  to check it, remember:
+ *  *  0 means a successful unlink
+ *  *  1 means there was no file to unlink
+ *  * <0 means another error, which will be syslogged
  **/
 
 #define xunlink(pathname)                                                     \

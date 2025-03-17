@@ -259,7 +259,7 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
     assert(sievedir);
 
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
-    if (xunlink(active) != 0) {
+    if (xunlink(active) == -1) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
                 "link=<%s>", active);
         return SIEVEDIR_IOERROR;
@@ -276,7 +276,7 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 
     /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    if (xunlink(path) != 0) {
+    if (xunlink(path) == -1) {
         xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
                 "path=<%s>", path);
         return SIEVEDIR_IOERROR;

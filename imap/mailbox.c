@@ -5207,7 +5207,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     for (i = 0; i < cachefiles.count; i++) {
         const char *fname = strarray_nth(&cachefiles, i);
-        if (!xunlink(fname))
+        if (xunlink(fname) == 0)
             syslog(LOG_NOTICE, "Removed unused cache file %s", fname);
     }
 

@@ -400,7 +400,7 @@ HIDDEN int seen_delete_user(const char *user)
                user);
     }
 
-    if (xunlink(fname))
+    if (xunlink(fname) == -1)
         r = IMAP_IOERROR;
 
     free(fname);

@@ -259,7 +259,7 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
         free(tid->fnamenew);
     } else if (tid->delete) {
         /* delete file */
-        if (xunlink(fname))
+        if (xunlink(fname) == -1)
             r = CYRUSDB_IOERROR;
     } else {
         /* read-only txn */
