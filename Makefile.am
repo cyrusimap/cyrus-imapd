@@ -1498,7 +1498,9 @@ lib_libcyrus_la_SOURCES = \
     lib/stristr.c \
     lib/times.c \
     lib/twom.c \
-    lib/wildmat.c
+    lib/wildmat.c \
+    lib/xxhash.h
+
 if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
