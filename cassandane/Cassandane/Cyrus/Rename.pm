@@ -652,7 +652,7 @@ sub test_rename_user
 }
 
 sub test_rename_deepuser
-    :AllowMoves :Replication :SyncLog :needs_component_replication
+    :AllowMoves :Replication :SyncLog
 {
     my ($self) = @_;
 
@@ -686,7 +686,6 @@ sub test_rename_deepuser
 
 sub test_rename_user_sieve
     :AllowMoves :Replication :SyncLog :needs_component_sieve
-    :needs_component_replication
 {
     my ($self) = @_;
 
@@ -798,7 +797,6 @@ sub test_rename_paths
 
 sub test_rename_deepuser_unixhs
     :AllowMoves :Replication :SyncLog :UnixHierarchySep
-    :needs_component_replication
 {
     my ($self) = @_;
 

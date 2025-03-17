@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_mbox_replication_new_mas
-    :needs_component_replication
 {
     my ($self) = @_;
 

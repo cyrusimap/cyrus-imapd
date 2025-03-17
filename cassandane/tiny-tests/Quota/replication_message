@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_message
-    :needs_component_replication
 {
     my ($self) = @_;
 

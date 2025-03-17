@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_comment_repl
-    :Replication :SyncLog :needs_component_replication
+    :Replication :SyncLog
 {
     my ($self) = @_;
 
