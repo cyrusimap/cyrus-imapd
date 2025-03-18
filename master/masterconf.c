@@ -180,7 +180,7 @@ int masterconf_getswitch(struct entry *e, const char *key, int def)
     }
 
     syslog(LOG_DEBUG, "cannot interpret value '%s' for key '%s'. use y/n.",
-	       val, key);
+               val, key);
 
     return def;
 }

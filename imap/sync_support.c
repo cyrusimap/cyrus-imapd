@@ -4002,7 +4002,7 @@ static int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
-	mailbox->silentchanges = 1;
+        mailbox->silentchanges = 1;
         r = sync_mailbox_version_check(&mailbox);
         if (r) goto done;
         r = annotate_state_set_mailbox(astate, mailbox);
@@ -4061,7 +4061,7 @@ static int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
-	mailbox->silentchanges = 1;
+        mailbox->silentchanges = 1;
         r = sync_mailbox_version_check(&mailbox);
         if (r) goto done;
         r = annotate_state_set_mailbox(astate, mailbox);
@@ -6988,7 +6988,7 @@ static int do_folders(struct sync_client_state *sync_cs,
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
         if (mfolder->mark) continue;
         rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
-	/* rfolder may not exist, so we use mfolder->name here */
+        /* rfolder may not exist, so we use mfolder->name here */
         r = sync_do_update_mailbox(sync_cs, mfolder, rfolder, topart, reserve_list);
         if (r) {
             syslog(LOG_ERR, "SYNCERROR: do_folders(): update failed: %s '%s'",

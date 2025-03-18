@@ -249,16 +249,16 @@ sub test_setting_lines
     my ($self) = @_;
     my $m = Cassandane::Message->new();
 
-    my $txt = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+    my $txt = <<"EOF";
+From: Fred J. Bloggs <fbloggs\@fastmail.fm>
+To: Sarah Jane Smith <sjsmith\@tard.is>, Genghis Khan <gkhan\@horde.mo>
 Subject: Hello World
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
-	Fri, 29 Oct 2010 13:05:01 +1100
+\tFri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1])
-	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
-	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
 
 This is a message to let you know
 that I'm alive and well
@@ -312,16 +312,16 @@ sub test_setting_raw
     my ($self) = @_;
     my $m = Cassandane::Message->new();
 
-    my $txt = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+    my $txt = <<"EOF";
+From: Fred J. Bloggs <fbloggs\@fastmail.fm>
+To: Sarah Jane Smith <sjsmith\@tard.is>, Genghis Khan <gkhan\@horde.mo>
 Subject: Hello World
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
-	Fri, 29 Oct 2010 13:05:01 +1100
+\tFri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1])
-	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
-	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
 
 This is a message to let you know
 that I'm alive and well
@@ -431,17 +431,17 @@ sub test_strange_headers
     my ($self) = @_;
     my $m = Cassandane::Message->new();
 
-    my $txt = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+    my $txt = <<"EOF";
+From: Fred J. Bloggs <fbloggs\@fastmail.fm>
+To: Sarah Jane Smith <sjsmith\@tard.is>, Genghis Khan <gkhan\@horde.mo>
 X-Foo_Bar.Baz&Quux: Foonly
 Subject: Hello World
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
-	Fri, 29 Oct 2010 13:05:01 +1100
+\tFri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1])
-	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
-	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
 
 This is a message to let you know
 that I'm alive and well
@@ -770,18 +770,18 @@ sub test_accessors
 {
     my ($self) = @_;
 
-    my $txt = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+    my $txt = <<"EOF";
+From: Fred J. Bloggs <fbloggs\@fastmail.fm>
+To: Sarah Jane Smith <sjsmith\@tard.is>, Genghis Khan <gkhan\@horde.mo>
 Subject: Hello World
 Date: Tue, 06 Dec 2011 13:57:57 +1100
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
-	Fri, 29 Oct 2010 13:05:01 +1100
+\tFri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1])
-	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
-	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
-Message-ID: <fake.1323140278.56086@fastmail.fm>
+\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+Message-ID: <fake.1323140278.56086\@fastmail.fm>
 
 This is a message to let you know
 that I'm alive and well
@@ -828,19 +828,19 @@ sub test_header_normalisation
         "helvetica\rwayfarers keytar\nshoreditch\r\n \t portland");
 
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
-    my $exp = <<'EOF';
+    my $exp = <<"EOF";
 Subject: Hello World
 X-Cliche: sartorial
 X-Cliche: mixtape
-	freegan
+\tfreegan
 X-Cliche: leggings
-	readymade quinoa
+\treadymade quinoa
 X-Cliche: chambray
-	denim
+\tdenim
 X-Vegan: helvetica
-	wayfarers keytar
-	shoreditch
- 	 portland
+\twayfarers keytar
+\tshoreditch
+ \t portland
 
 This is a message to let you know
 that I'm alive and well

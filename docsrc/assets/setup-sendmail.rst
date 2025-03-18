@@ -49,10 +49,10 @@ Create the file cf/feature/anfi_vcyrus.m4:
   LOCAL_RULESETS
   SLocal_localaddr
   R$+     $: $1 $| $(cyrus $1 $: $)
-  R$+ $|		$#error $@ 5.1.1 $: "550 User unknown."
-  R$+ $| $*<TMPF>	$#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
-  R$+ $| $*<OK>		$#cyrusv2 $@ $: $1
-  R$+ $| $*		$: $1
+  R$+ $|                $#error $@ 5.1.1 $: "550 User unknown."
+  R$+ $| $*<TMPF>       $#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
+  R$+ $| $*<OK>         $#cyrusv2 $@ $: $1
+  R$+ $| $*             $: $1
 
 Many spaces in a row stand for the tabulator character.
 
@@ -72,15 +72,15 @@ Patching m4/proto.m4
   --- a/cf/m4/proto.m4
   +++ b/cf/m4/proto.m4
   @@ -1147,6 +1147,10 @@ dnl if no match, change marker to prevent a second @domain lookup
-   R<@> $+ + $* < @ $+ . >	$: < $(virtuser @ $3 $@ $1 $@ $2 $@ +$2 $: ! $) > $1 + $2 < @ $3 . >
+   R<@> $+ + $* < @ $+ . >      $: < $(virtuser @ $3 $@ $1 $@ $2 $@ +$2 $: ! $) > $1 + $2 < @ $3 . >
    dnl without +detail
-   R<@> $+ < @ $+ . >		$: < $(virtuser @ $2 $@ $1 $: @ $) > $1 < @ $2 . >
+   R<@> $+ < @ $+ . >           $: < $(virtuser @ $2 $@ $1 $: @ $) > $1 < @ $2 . >
   +dnl If a virtual address is not in the virtusertable, but cyrus knows about the address, deliver it.
-  +R< error : $-.$-.$- : $+ > $+ < @ $={VirtHost} . >		$: < error : $1.$2.$3 : $4 > $5 < $6 . > $| $(cyrus  $5@$6 $: $)
-  +R< error : $-.$-.$- : $+ > $* < $* . > $| $*<OK>		$#cyrusv2 $@ $: $5@$6
-  +R< error : $-.$-.$- : $+ > $* $| $*<TMPFS>		$#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
+  +R< error : $-.$-.$- : $+ > $+ < @ $={VirtHost} . >           $: < error : $1.$2.$3 : $4 > $5 < $6 . > $| $(cyrus  $5@$6 $: $)
+  +R< error : $-.$-.$- : $+ > $* < $* . > $| $*<OK>             $#cyrusv2 $@ $: $5@$6
+  +R< error : $-.$-.$- : $+ > $* $| $*<TMPFS>           $#error $@ 4.3.0 $: "451 Temporary system failure. Please try again later."
    dnl no match
-   R<@> $+				$: $1
+   R<@> $+                              $: $1
    dnl remove mark
 
 Where many spaces in a row stand for the tabulator key.

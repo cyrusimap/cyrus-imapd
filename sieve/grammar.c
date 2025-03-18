@@ -113,11 +113,11 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
                     temp = xstrdup(variable->var->data[match_var]);
                 } else {
                     temp = strarray_join(variable->var, " ");
-	       	}
+                }
                 if (temp) {
                     strarray_append(&stringparts, temp);
                     free (temp);
-	       	}
+                }
             }
             /* continue search for variable-ref's after the current one */
             test_str = variable_ref_end + 1;

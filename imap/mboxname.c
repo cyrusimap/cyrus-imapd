@@ -269,11 +269,11 @@ EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 {
     if (config_take_globallock && locktype_and_flags & LOCK_EXCLUSIVE) {
         // if we have an exclusive lock, we MUST already be holding
-	// the shared global lock, or we have to open it.
-	if (!mboxname_islocked(GLOBAL_LOCKNAME)) {
-	    int r = mboxname_lock_item(GLOBAL_LOCKNAME, NULL, LOCK_SHARED);
-	    if (r) return r;
-	}
+        // the shared global lock, or we have to open it.
+        if (!mboxname_islocked(GLOBAL_LOCKNAME)) {
+            int r = mboxname_lock_item(GLOBAL_LOCKNAME, NULL, LOCK_SHARED);
+            if (r) return r;
+        }
     }
     return mboxname_lock_item(mboxname, mboxlockptr, locktype_and_flags);
 }

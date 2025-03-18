@@ -10,7 +10,7 @@ sub test_contactgroup_get_deduplicate_contactids
     my $carddav = $self->{carddav};
 
     # define duplicate ids
-	my @ids = qw (
+    my @ids = qw (
         b48259ca-1524-4df0-af54-e65f60bf27b5
         b48259ca-1524-4df0-af54-e65f60bf27b5
         2391c8ef-1cfc-40da-8730-cb5664005973
@@ -28,7 +28,7 @@ sub test_contactgroup_get_deduplicate_contactids
     xlog $self, "create a v3 contact group with duplicate members";
     my $id = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
     my $href = "Default/$id.vcf";
-	my $vgroup = <<EOF;
+    my $vgroup = <<EOF;
 BEGIN:VCARD
 PRODID:-//CyrusIMAP.org//Cyrus 3.7.0-alpha0-828-gb569fe344b//EN
 VERSION:3.0

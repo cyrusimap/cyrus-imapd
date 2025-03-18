@@ -570,19 +570,19 @@ sub get_counters
     }
 
     return {
-	version => $v1,
-	highestmodseq => $all1,
-	mailmodseq => $mail1,
-	calendarmodseq => $cal1,
-	contactsmodseq => $card1,
-	notesmodseq => $notes1,
-	mailfoldersmodseq => $mailfolders1,
-	calendarfoldersmodseq => $calfolders1,
-	contactsfoldersmodseq => $cardfolders1,
-	notesfoldersmodseq => $notesfolders1,
-	quotamodseq => $quota1,
-	raclmodseq => $racl1,
-	uidvalidity => $valid1,
+        version => $v1,
+        highestmodseq => $all1,
+        mailmodseq => $mail1,
+        calendarmodseq => $cal1,
+        contactsmodseq => $card1,
+        notesmodseq => $notes1,
+        mailfoldersmodseq => $mailfolders1,
+        calendarfoldersmodseq => $calfolders1,
+        contactsfoldersmodseq => $cardfolders1,
+        notesfoldersmodseq => $notesfolders1,
+        quotamodseq => $quota1,
+        raclmodseq => $racl1,
+        uidvalidity => $valid1,
     };
 }
 

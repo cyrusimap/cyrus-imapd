@@ -412,7 +412,7 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     strarray_t flags = STRARRAY_INITIALIZER;
     r = append_fromstage(&as, &body, stage, 0,
                          internaldate, &flags, 0, NULL);
-	if (r) {
+        if (r) {
         append_abort(&as);
         goto done;
     }
@@ -427,7 +427,7 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
 done:
     jmap_getblob_ctx_fini(&getblobctx);
     if (stage) append_removestage(stage);
-	if (body) {
+        if (body) {
         message_free_body(body);
         free(body);
     }
@@ -446,7 +446,7 @@ HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
 
     if (!jmapctx->attachments.mbox) {
         char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-	int rw = jmapctx->attachments.lock;
+        int rw = jmapctx->attachments.lock;
         int r = rw ? mailbox_open_iwl(mboxname, &jmapctx->attachments.mbox)
                    : mailbox_open_irl(mboxname, &jmapctx->attachments.mbox);
         if (r) {
@@ -5034,15 +5034,15 @@ static icalcomponent *oldcomp_of(icalcomponent *comp, struct icalcomps *oldcomps
 {
     if (!oldcomps) return NULL;
 
-	icalcomponent *oldcomp = icalcomps_by_uidrecurid(oldcomps, comp);
-	if (!oldcomp) {
-		// fall back using main component
+        icalcomponent *oldcomp = icalcomps_by_uidrecurid(oldcomps, comp);
+        if (!oldcomp) {
+                // fall back using main component
         const char *uid = icalcomponent_get_uid(comp);
-		ptrarray_t *complist = icalcomps_by_uid(oldcomps, uid);
-		if (complist) {
-			oldcomp = ptrarray_nth(complist, 0);
-		}
-	}
+                ptrarray_t *complist = icalcomps_by_uid(oldcomps, uid);
+                if (complist) {
+                        oldcomp = ptrarray_nth(complist, 0);
+                }
+        }
 
     return oldcomp;
 }
@@ -5143,13 +5143,13 @@ static void links_to_ical(icalcomponent *comp, struct icalcomps *oldcomps,
 
         size_t invalid_count = json_array_size(parser->invalid);
 
-		if (!is_valid_jmapid(id)) {
-			jmap_parser_invalid(parser, id);
-		}
+                if (!is_valid_jmapid(id)) {
+                        jmap_parser_invalid(parser, id);
+                }
 
-		jmap_parser_push(parser, id);
-		validate_link(link, parser);
-		jmap_parser_pop(parser);
+                jmap_parser_push(parser, id);
+                validate_link(link, parser);
+                jmap_parser_pop(parser);
 
         buf_free(&newblobid);
         buf_reset(&buf);

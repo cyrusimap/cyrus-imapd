@@ -159,7 +159,7 @@ sub undump_user {
 
   my $mailboxes = $opts{data}{mailboxes};
 
-  my $acl = $opts{acl} || "$opts{username}	lrswipkxtecdan	admin	lrswipkxtecdan	anyone	p	",
+  my $acl = $opts{acl} || "$opts{username}      lrswipkxtecdan  admin   lrswipkxtecdan  anyone  p       ",
 
   my $time = time();
   my @subs;

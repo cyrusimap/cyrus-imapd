@@ -114,7 +114,7 @@ Examples
 
         EVENTS {
             # this is required
-            checkpoint	cmd="/usr/local/bin/ctl_cyrusdb -c" period=30
+            checkpoint  cmd="/usr/local/bin/ctl_cyrusdb -c" period=30
           <...>
 
 Files

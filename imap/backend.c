@@ -76,15 +76,15 @@
 #include "xstrlcat.h"
 
 #ifndef AI_V4MAPPED
-#define AI_V4MAPPED	0
+#define AI_V4MAPPED     0
 #endif
 
 #ifndef AI_ADDRCONFIG
-#define AI_ADDRCONFIG	0
+#define AI_ADDRCONFIG   0
 #endif
 
 #ifndef AI_MASK
-#define AI_MASK	(AI_V4MAPPED | AI_ADDRCONFIG)
+#define AI_MASK (AI_V4MAPPED | AI_ADDRCONFIG)
 #endif
 
 enum {

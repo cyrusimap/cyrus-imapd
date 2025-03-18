@@ -18,16 +18,16 @@
 static int verify_flag(char *f)
 {
     if (f[0] == '\\') {
-	lcase(f);
-	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
-	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
-	    strcmp(f, "\\deleted")) {
-	    return 0;
-	}
-	return 1;
+        lcase(f);
+        if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
+            strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
+            strcmp(f, "\\deleted")) {
+            return 0;
+        }
+        return 1;
     }
     if (!imparse_isatom(f)) {
-	return 0;
+        return 0;
     }
     return 1;
 }
@@ -46,16 +46,16 @@ int verify_flaglist(strarray_t *sl)
 
     // Perform duplicate elimination and flag verification
     for (i = 0; i < resplit->count ; i++) {
-	// has the side effect of lower-casing system flags
-	if (!verify_flag(resplit->data[i])) {
-	    /*  [IMAP4FLAGS] Section 2 "General Requirements for Flag
-	     *  Handling" says "If a flag validity check fails, the
-	     *  flag MUST be ignored", which for us means that we
-	     *  simply remove the invalid flag from the list.
-	     */
-	    continue;
-	}
-	strarray_add_case(sl, resplit->data[i]);
+        // has the side effect of lower-casing system flags
+        if (!verify_flag(resplit->data[i])) {
+            /*  [IMAP4FLAGS] Section 2 "General Requirements for Flag
+             *  Handling" says "If a flag validity check fails, the
+             *  flag MUST be ignored", which for us means that we
+             *  simply remove the invalid flag from the list.
+             */
+            continue;
+        }
+        strarray_add_case(sl, resplit->data[i]);
     }
     strarray_free(resplit);
     free(joined);

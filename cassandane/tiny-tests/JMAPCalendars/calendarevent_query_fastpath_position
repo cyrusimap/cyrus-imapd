@@ -28,7 +28,7 @@ sub test_calendarevent_query_fastpath_position
         };
     }
 
-	my $numEvents = scalar keys %$events;
+    my $numEvents = scalar keys %$events;
 
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -45,7 +45,7 @@ sub test_calendarevent_query_fastpath_position
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
-			position => 3,
+            position => 3,
         }, 'R1'],
     ], $using);
     my @wantIds = @{$eventIds}[3 .. ($numEvents-1)];

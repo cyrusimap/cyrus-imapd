@@ -6939,10 +6939,10 @@ static int eventquery_textsearch_run(jmap_req_t *req,
         }
 
         /* Fetch the CalDAV db records */ // XXX use linear scan for all MsgData
-	struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
+        struct caldav_jscal_filter jscal_filter = CALDAV_JSCAL_FILTER_INITIALIZER;
         if (wantuid) caldav_jscal_filter_by_ical_uid(&jscal_filter, wantuid, NULL);
-	caldav_jscal_filter_by_imap_uid(&jscal_filter, md->uid);
-	caldav_jscal_filter_by_mbentrym(&jscal_filter, mbentry);
+        caldav_jscal_filter_by_imap_uid(&jscal_filter, md->uid);
+        caldav_jscal_filter_by_mbentrym(&jscal_filter, mbentry);
 
         struct eventquery_textsearch_cb_rock rock = {
             req, icalbefore, icalafter, matches, expandrecur, mailbox, is_sharee
@@ -7143,20 +7143,20 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
 
     s = json_string_value(json_object_get(jfilter, "uid"));
     if (s)
-	caldav_jscal_filter_by_ical_uid(filter, s, NULL);
+        caldav_jscal_filter_by_ical_uid(filter, s, NULL);
 
     s = json_string_value(json_object_get(jfilter, "before"));
     if (s) {
         time_t t = eventquery_read_datetime(s, args->zone, caldav_eternity);
         if (t != caldav_eternity)
-	    caldav_jscal_filter_by_before(filter, &t);
+            caldav_jscal_filter_by_before(filter, &t);
     }
 
     s = json_string_value(json_object_get(jfilter, "after"));
     if (s) {
         time_t t = eventquery_read_datetime(s, args->zone, caldav_epoch);
         if (t != caldav_epoch)
-	    caldav_jscal_filter_by_after(filter, &t);
+            caldav_jscal_filter_by_after(filter, &t);
     }
 
     s = json_string_value(json_object_get(jfilter, "operator"));

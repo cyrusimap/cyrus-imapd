@@ -39,14 +39,14 @@ EOF
     );
 
     my $msg1 = $self->{gen}->generate(
-		subject => 'something - otherthing', body => ''
+        subject => 'something - otherthing', body => ''
     );
     $self->{instance}->deliver($msg1);
     my $msg2 = $self->{gen}->generate(
-		subject => 'something', body => ''
+        subject => 'something', body => ''
     );
     my $msg3 = $self->{gen}->generate(
-		subject => 'otherthing', body => ''
+        subject => 'otherthing', body => ''
     );
     $self->{instance}->deliver($msg1);
     $self->{store}->set_fetch_attributes('uid');

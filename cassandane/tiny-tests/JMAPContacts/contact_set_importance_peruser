@@ -20,7 +20,7 @@ sub test_contact_set_importance_peruser
     );
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
-		'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/contacts',
     ]);
     $admin->setacl("user.cassandane.#addressbooks.Default",
         "manifold" => 'lrswipkxtecdn') or die;

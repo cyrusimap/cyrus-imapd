@@ -14,14 +14,14 @@ sub test_email_import_issue3122
     # Not crashing here is enough.
 
     my $res = $jmap->CallMethods([
-		['Email/import', {
-			emails => {
-				"1" => {
-					blobId => $blobId,
-					mailboxIds => {
-						'$inbox' =>  JSON::true},
-				},
-			},
-		}, "R1"]
-	]);
+                ['Email/import', {
+                        emails => {
+                                "1" => {
+                                        blobId => $blobId,
+                                        mailboxIds => {
+                                                '$inbox' =>  JSON::true},
+                                },
+                        },
+                }, "R1"]
+        ]);
 }
