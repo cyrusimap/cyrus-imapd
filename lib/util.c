@@ -499,27 +499,25 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     int keeptime = flags & COPYFILE_KEEPTIME;
     int nodirsync = flags & COPYFILE_NODIRSYNC;
 
-    if (!nodirsync) {
-        char *copy = xstrdup(to);
-        const char *dir = dirname(copy);
+    char *copy = xstrdup(to);
+    const char *dir = dirname(copy);
 #if defined(O_DIRECTORY)
-        dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+    dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
 #else
-        dirfd = open(dir, O_RDONLY, 0600);
+    dirfd = open(dir, O_RDONLY, 0600);
 #endif
-        free(copy);
-        if (dirfd == -1) {
-            if (!(flags & COPYFILE_MKDIR))
-                xsyslog(LOG_ERR, "IOERROR: open directory failed",
-                                 "filename=<%s>", to);
-            r = -1;
-            goto done;
-        }
+    free(copy);
+    if (dirfd == -1) {
+        if (!(flags & COPYFILE_MKDIR))
+            xsyslog(LOG_ERR, "IOERROR: open directory failed",
+                             "filename=<%s>", to);
+        r = -1;
+        goto done;
     }
 
     /* try to hard link, but don't fail - fall back to regular copy */
     if (!nolink) {
-        if (link(from, to) == 0) return 0;
+        if (linkat(AT_FDCWD, from, dirfd, to, 0) == 0) goto sync;
         if (errno == EEXIST) {
             /* n.b. unlink rather than xunlink.  at this point we believe
              * a file definitely exists that we want to remove, so if
@@ -530,9 +528,10 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
                 xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
                                  "filename=<%s>", to);
                 errno = 0;
-                return -1;
+                r = -1;
+                goto done;
             }
-            if (link(from, to) == 0) return 0;
+            if (linkat(AT_FDCWD, from, dirfd, to, 0) == 0) goto sync;
         }
     }
 
@@ -609,7 +608,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         }
     }
 
-    if (dirfd != -1) {
+sync:
+    if (!nodirsync) {
         if (fsync(dirfd) < 0) {
             xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
                              "filename=<%s>", to);
