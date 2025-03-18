@@ -1019,7 +1019,7 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
 
                 const strarray_t *boxes = mbname_boxes(mbname);
                 buf_setcstr(&pctx->buf, strarray_nth(boxes, strarray_size(boxes)-1));
-                r = annotate_state_writemask(astate, annotname, httpd_userid, &pctx->buf);
+                r = annotate_state_writemask(astate, annotname, httpd_userisadmin ? "" : httpd_userid, &pctx->buf);
             }
         }
         mailbox_close(&mailbox);
@@ -6522,7 +6522,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
             buf_reset(&pctx->buf);
             r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
             if (!r) r = annotate_state_writemask(astate, prop_annot,
-                                                 httpd_userid, &pctx->buf);
+                                                 httpd_userisadmin ? "" : httpd_userid, &pctx->buf);
             if (!r) {
                 /* Set CALDAV:calendar-timezone */
                 proppatch_todb(prop, set, pctx, propstat, (void *) tz);
@@ -6824,7 +6824,7 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
             buf_reset(&pctx->buf);
             r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
             if (!r) r = annotate_state_writemask(astate, prop_annot,
-                                                 httpd_userid, &pctx->buf);
+                                                 httpd_userisadmin ? "": httpd_userid, &pctx->buf);
 
             if (r) {
                 xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
