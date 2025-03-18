@@ -10,4 +10,4 @@ Cyrus IMAP 2.4.17-caldav-beta10 Release Notes
 *   Updated http_timezone.c to be compliant with current draft.
 *   Numerous other CalDAV fixes/enhancements.
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

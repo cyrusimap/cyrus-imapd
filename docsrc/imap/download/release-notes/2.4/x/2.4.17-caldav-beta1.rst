@@ -6,4 +6,4 @@ Changes to the Cyrus IMAP Server since 2.4.17
 
 *   Added httpd service with CalDAV, CardDAV, RSS, and iSchedule modules
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

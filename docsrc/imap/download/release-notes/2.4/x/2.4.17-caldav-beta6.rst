@@ -15,4 +15,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta5
 *   Fixed parsing of calendar-query filter
 *   Added several CalDAV/iCalendar validation checks based on CalDAVTester results
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

@@ -8,4 +8,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta8
 *   Fixed telemetry logging bug (old garbage appearing in log).
 *   Added a workaround for the DELETE bug in MacOS X 10.9.0 Calendar client.
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

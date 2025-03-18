@@ -1,8 +1,7 @@
 .. _imap-release-notes-3.13:
 
-====================
-Cyrus IMAP 3.13 Tags
-====================
+Cyrus IMAP 3.13 Snapshots
+=========================
 
 .. warning::
 

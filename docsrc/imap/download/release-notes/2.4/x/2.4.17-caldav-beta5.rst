@@ -12,4 +12,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta4
 *   Added httpprettytelemetry option
 *   Added httpallowcors option (Cross-Origin Resource Sharing)
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

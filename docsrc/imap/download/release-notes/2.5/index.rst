@@ -1,6 +1,5 @@
 .. _imap-release-notes-2.5:
 
-=======================
 Cyrus IMAP 2.5 Releases
 =======================
 
