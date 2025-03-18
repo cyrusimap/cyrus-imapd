@@ -1,4 +1,5 @@
-/* byteorder.c -- convert 32 and 64-bit values between host and network byte order
+/* byteorder.c -- convert 32 and 64-bit values between host and network byte
+ * order
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,8 +41,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <config.h>
 #include "byteorder.h"
+#include <config.h>
 
 #ifdef CYRUS_BYTESWAP
 
@@ -72,7 +73,6 @@ EXPORTED uint64_t _htonll(uint64_t x)
     return u2.a;
 }
 
-
 /* Function to byteswap big endian 64bit unsigned integers
  * back to little endian host order on little endian machines.
  * As above, on big endian machines this will be a null macro.
@@ -99,13 +99,13 @@ EXPORTED uint64_t _ntohll(uint64_t x)
 EXPORTED void *align_htonll(void *dst, uint64_t src)
 {
     uint64_t tmp = htonll(src);
-    return memcpy(dst, (void *) &tmp, sizeof(uint64_t));
+    return memcpy(dst, (void *)&tmp, sizeof(uint64_t));
 }
 
 EXPORTED uint64_t align_ntohll(const void *src)
 {
     uint64_t dst;
 
-    memcpy((void *) &dst, src, sizeof(uint64_t));
+    memcpy((void *)&dst, src, sizeof(uint64_t));
     return ntohll(dst);
 }

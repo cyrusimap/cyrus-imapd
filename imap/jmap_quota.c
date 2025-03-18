@@ -55,54 +55,35 @@
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
 
-
 static int jmap_legacy_quota_get(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 static int jmap_quota_changes(jmap_req_t *req);
 static int jmap_quota_query(jmap_req_t *req);
 
 static jmap_method_t jmap_quota_methods_standard[] = {
-    {
-        "Quota/get",
-        JMAP_URN_QUOTA,
-        &jmap_quota_get,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "Quota/changes",
-        JMAP_URN_QUOTA,
-        &jmap_quota_changes,
-        JMAP_NEED_CSTATE
-    },
-    {
-        "Quota/query",
-        JMAP_URN_QUOTA,
-        &jmap_quota_query,
-        JMAP_NEED_CSTATE
-    },
-    { NULL, NULL, NULL, 0}
+    {"Quota/get",     JMAP_URN_QUOTA, &jmap_quota_get,     JMAP_NEED_CSTATE},
+    {"Quota/changes", JMAP_URN_QUOTA, &jmap_quota_changes, JMAP_NEED_CSTATE},
+    {"Quota/query",   JMAP_URN_QUOTA, &jmap_quota_query,   JMAP_NEED_CSTATE},
+    {NULL,            NULL,           NULL,                0               }
 };
 
 static jmap_method_t jmap_quota_methods_nonstandard[] = {
-    {
-        "Quota/get",
-        JMAP_QUOTA_EXTENSION,
-        &jmap_legacy_quota_get,
-        JMAP_NEED_CSTATE
-    },
-    { NULL, NULL, NULL, 0}
+    {"Quota/get",
+     JMAP_QUOTA_EXTENSION, &jmap_legacy_quota_get,
+     JMAP_NEED_CSTATE                               },
+    {NULL,        NULL,    NULL,                   0}
 };
 
 HIDDEN void jmap_quota_init(jmap_settings_t *settings)
 {
-    json_object_set_new(settings->server_capabilities,
-                        JMAP_URN_QUOTA, json_object());
+    json_object_set_new(
+        settings->server_capabilities, JMAP_URN_QUOTA, json_object());
 
     jmap_add_methods(jmap_quota_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(settings->server_capabilities,
-                JMAP_QUOTA_EXTENSION, json_object());
+        json_object_set_new(
+            settings->server_capabilities, JMAP_QUOTA_EXTENSION, json_object());
 
         jmap_add_methods(jmap_quota_methods_nonstandard, settings);
     }
@@ -113,29 +94,17 @@ HIDDEN void jmap_quota_capabilities(json_t *account_capabilities)
     json_object_set_new(account_capabilities, JMAP_URN_QUOTA, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities,
-                JMAP_QUOTA_EXTENSION, json_object());
+        json_object_set_new(
+            account_capabilities, JMAP_QUOTA_EXTENSION, json_object());
     }
 }
 
 /* Legacy Quota/get method */
 static const jmap_property_t legacy_quota_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "used",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "total",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
+    {"id",    NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"used",  NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"total", NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {NULL,    NULL, 0                                         }
 };
 
 static int jmap_legacy_quota_get(jmap_req_t *req)
@@ -146,8 +115,14 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
 
     /* Parse request */
-    jmap_get_parse(req, &parser, legacy_quota_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
+    jmap_get_parse(req,
+                   &parser,
+                   legacy_quota_props,
+                   /*allow_null_ids*/ 1,
+                   NULL,
+                   NULL,
+                   &get,
+                   &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -156,11 +131,13 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
     int want_mail_quota = !get.ids || json_is_null(get.ids);
     size_t i;
     json_t *jval;
-    json_array_foreach(get.ids, i, jval) {
+    json_array_foreach(get.ids, i, jval)
+    {
         if (strcmp("mail", json_string_value(jval))) {
             json_array_append(get.not_found, jval);
         }
-        else want_mail_quota = 1;
+        else
+            want_mail_quota = 1;
     }
 
     if (want_mail_quota) {
@@ -168,7 +145,8 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
         quota_init(&quota, inboxname);
         int r = quota_read_withconversations(&quota);
         if (!r) {
-            quota_t total = quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
+            quota_t total =
+                quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
             quota_t used = quota.useds[QUOTA_STORAGE];
             json_t *jquota = json_object();
             json_object_set_new(jquota, "id", json_string("mail"));
@@ -177,13 +155,14 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
             json_array_append_new(get.list, jquota);
         }
         else {
-            syslog(LOG_ERR, "jmap_quota_get: can't read quota for %s: %s",
-                    inboxname, error_message(r));
+            syslog(LOG_ERR,
+                   "jmap_quota_get: can't read quota for %s: %s",
+                   inboxname,
+                   error_message(r));
             json_array_append_new(get.not_found, json_string("mail"));
         }
         quota_free(&quota);
     }
-
 
     modseq_t quotamodseq = mboxname_readquotamodseq(inboxname);
     struct buf buf = BUF_INITIALIZER;
@@ -202,33 +181,33 @@ done:
 /*
  * RFC 9425 methods
  */
-#define JMAP_TYPE_EMAIL            (1<<0)
-#define JMAP_TYPE_MAILBOX          (1<<1)
-#define JMAP_TYPE_EMAILSUBMISSION  (1<<2)
-#define JMAP_TYPE_VACATIONRESPONSE (1<<3)
-#define JMAP_TYPE_SIEVESCRIPT      (1<<4)
-#define JMAP_TYPE_CALENDAR         (1<<5)
-#define JMAP_TYPE_CALENDAREVENT    (1<<6)
-#define JMAP_TYPE_ADDRESSBOOK      (1<<7)
-#define JMAP_TYPE_CONTACT          (1<<8)
-#define JMAP_TYPE_CONTACTGROUP     (1<<9)
+#define JMAP_TYPE_EMAIL (1 << 0)
+#define JMAP_TYPE_MAILBOX (1 << 1)
+#define JMAP_TYPE_EMAILSUBMISSION (1 << 2)
+#define JMAP_TYPE_VACATIONRESPONSE (1 << 3)
+#define JMAP_TYPE_SIEVESCRIPT (1 << 4)
+#define JMAP_TYPE_CALENDAR (1 << 5)
+#define JMAP_TYPE_CALENDAREVENT (1 << 6)
+#define JMAP_TYPE_ADDRESSBOOK (1 << 7)
+#define JMAP_TYPE_CONTACT (1 << 8)
+#define JMAP_TYPE_CONTACTGROUP (1 << 9)
 
 static const struct jtype_t {
     unsigned long bit;
     const char *name;
 
 } jtypes[] = {
-    { JMAP_TYPE_EMAIL,            "Email"            },
-    { JMAP_TYPE_MAILBOX,          "Mailbox"          },
-    { JMAP_TYPE_EMAILSUBMISSION,  "EmailSubmission"  },
-    { JMAP_TYPE_VACATIONRESPONSE, "VacationResponse" },
-    { JMAP_TYPE_SIEVESCRIPT,      "SieveScript"      },
-    { JMAP_TYPE_CALENDAR,         "Calendar"         },
-    { JMAP_TYPE_CALENDAREVENT,    "CalendarEvent"    },
-    { JMAP_TYPE_ADDRESSBOOK,      "AddressBook"      },
-    { JMAP_TYPE_CONTACT,          "Contact"          },
-    { JMAP_TYPE_CONTACTGROUP,     "ContactGroup"     },
-    { 0,                          NULL               }
+    {JMAP_TYPE_EMAIL,            "Email"           },
+    {JMAP_TYPE_MAILBOX,          "Mailbox"         },
+    {JMAP_TYPE_EMAILSUBMISSION,  "EmailSubmission" },
+    {JMAP_TYPE_VACATIONRESPONSE, "VacationResponse"},
+    {JMAP_TYPE_SIEVESCRIPT,      "SieveScript"     },
+    {JMAP_TYPE_CALENDAR,         "Calendar"        },
+    {JMAP_TYPE_CALENDAREVENT,    "CalendarEvent"   },
+    {JMAP_TYPE_ADDRESSBOOK,      "AddressBook"     },
+    {JMAP_TYPE_CONTACT,          "Contact"         },
+    {JMAP_TYPE_CONTACTGROUP,     "ContactGroup"    },
+    {0,                          NULL              }
 };
 
 static const struct jquota_type_t {
@@ -236,10 +215,10 @@ static const struct jquota_type_t {
     const char *junits;
 
 } jquota_types[QUOTA_NUMRESOURCES] = {
-    { 'S', "octets" },
-    { 'M', "count"  },
-    {  0,  "octets" },
-    { 'F', "count"  }
+    {'S', "octets"},
+    {'M', "count" },
+    {0,   "octets"},
+    {'F', "count" }
 };
 
 struct jquota_root_t {
@@ -263,7 +242,7 @@ struct qrock_t {
 static int fetch_quotas_cb(struct quota *q, void *rock)
 {
     struct qrock_t *qrock = rock;
-    unsigned long type_masks[QUOTA_NUMRESOURCES] = { 0 };
+    unsigned long type_masks[QUOTA_NUMRESOURCES] = {0};
     enum quota_resource qres;
     struct buf buf = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
@@ -282,8 +261,8 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (strcmp(mbentry->name, qrock->inboxname)) goto done;
 
         name = "root";
-        type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_EMAIL;
-        type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_EMAIL;
+        type_masks[QUOTA_STORAGE] |= JMAP_TYPE_EMAIL;
+        type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_EMAIL;
         type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_MAILBOX;
 
         /* Add all other requests types
@@ -299,8 +278,8 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
             type_masks[QUOTA_STORAGE] |= JMAP_TYPE_SIEVESCRIPT;
         }
         if (jmap_is_using(qrock->req, JMAP_URN_CALENDARS)) {
-            type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_CALENDAREVENT;
-            type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CALENDAREVENT;
+            type_masks[QUOTA_STORAGE] |= JMAP_TYPE_CALENDAREVENT;
+            type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_CALENDAREVENT;
             type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_CALENDAR;
         }
         if (jmap_is_using(qrock->req, JMAP_CONTACTS_EXTENSION)) {
@@ -322,7 +301,8 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 
     case MBTYPE_SIEVE:
         if (!jmap_is_using(qrock->req, JMAP_URN_VACATION) &&
-            !jmap_is_using(qrock->req, JMAP_URN_SIEVE)) goto done;
+            !jmap_is_using(qrock->req, JMAP_URN_SIEVE))
+            goto done;
 
         name = "sieve";
         if (jmap_is_using(qrock->req, JMAP_URN_VACATION)) {
@@ -339,8 +319,8 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (!jmap_is_using(qrock->req, JMAP_URN_CALENDARS)) goto done;
 
         name = "calendars";
-        type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_CALENDAREVENT;
-        type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CALENDAREVENT;
+        type_masks[QUOTA_STORAGE] |= JMAP_TYPE_CALENDAREVENT;
+        type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_CALENDAREVENT;
         type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_CALENDAR;
         break;
 
@@ -391,7 +371,7 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         }
     }
 
-  done:
+done:
     mboxlist_entry_free(&mbentry);
     buf_free(&buf);
     free(id);
@@ -401,65 +381,25 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 
 /* Quota/get method */
 static const jmap_property_t quota_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "resourceType",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "used",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "hardLimit",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "warnLimit",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "softLimit",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "scope",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "name",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "description",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "types",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
+    {"id",           NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"resourceType", NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"used",         NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"hardLimit",    NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"warnLimit",    NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"softLimit",    NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"scope",        NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"name",         NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"description",  NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {"types",        NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE},
+    {NULL,           NULL, 0                                         }
 };
 
 static void fetch_quotas(struct qrock_t *qrock)
 {
     int maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
-    quota_foreach(qrock->inboxname,
-                  &fetch_quotas_cb, qrock, NULL, QUOTA_USE_CONV);
+    quota_foreach(
+        qrock->inboxname, &fetch_quotas_cb, qrock, NULL, QUOTA_USE_CONV);
 
     if (maxscripts) {
         /* Add sieve count quota limit */
@@ -473,13 +413,14 @@ static void fetch_quotas(struct qrock_t *qrock)
             if (mbentry) {
                 struct buf id = BUF_INITIALIZER;
 
-                qrock->sieve_count =
-                    xzmalloc(sizeof(struct jquota_root_t));
+                qrock->sieve_count = xzmalloc(sizeof(struct jquota_root_t));
 
-                buf_printf(&id, "%c%s",
-                           jquota_types[QUOTA_MESSAGE].idkey, mbentry->uniqueid);
-                hash_insert(buf_cstring(&id),
-                            qrock->sieve_count, &qrock->quotas);
+                buf_printf(&id,
+                           "%c%s",
+                           jquota_types[QUOTA_MESSAGE].idkey,
+                           mbentry->uniqueid);
+                hash_insert(
+                    buf_cstring(&id), qrock->sieve_count, &qrock->quotas);
 
                 qrock->sieve_count->name = "sieve";
                 qrock->sieve_count->type_mask = JMAP_TYPE_SIEVESCRIPT;
@@ -515,9 +456,7 @@ static void getquota(const char *id, void *val, void *rock)
     struct jmap_get *get = rock;
 
     if (jmap_wantprop(get->props, "resourceType")) {
-        json_object_set_new(jquota,
-                            "resourceType",
-                            json_string(jroot->junits));
+        json_object_set_new(jquota, "resourceType", json_string(jroot->junits));
     }
 
     if (jmap_wantprop(get->props, "used")) {
@@ -572,11 +511,17 @@ static int jmap_quota_get(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
-    struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
+    struct qrock_t qrock = {req, NULL, {0}, NULL, HASH_TABLE_INITIALIZER};
 
     /* Parse request */
-    jmap_get_parse(req, &parser, quota_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
+    jmap_get_parse(req,
+                   &parser,
+                   quota_props,
+                   /*allow_null_ids*/ 1,
+                   NULL,
+                   NULL,
+                   &get,
+                   &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -593,7 +538,8 @@ static int jmap_quota_get(jmap_req_t *req)
         json_t *jval;
         size_t i;
 
-        json_array_foreach(get.ids, i, jval) {
+        json_array_foreach(get.ids, i, jval)
+        {
             const char *id = json_string_value(jval);
             struct jquota_root_t *jroot = hash_lookup(id, &qrock.quotas);
 
@@ -642,7 +588,7 @@ static int jmap_quota_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
-    struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
+    struct qrock_t qrock = {req, NULL, {0}, NULL, HASH_TABLE_INITIALIZER};
 
     json_t *err = NULL;
     jmap_changes_parse(req, &parser, 0, NULL, NULL, &changes, &err);
@@ -655,8 +601,8 @@ static int jmap_quota_changes(jmap_req_t *req)
     construct_hash_table(&qrock.quotas, 20, 0);
 
     /* Fetch quotaroots for the user */
-    quota_foreach(qrock.inboxname,
-                  &fetch_quotas_cb, &qrock, NULL, QUOTA_USE_CONV);
+    quota_foreach(
+        qrock.inboxname, &fetch_quotas_cb, &qrock, NULL, QUOTA_USE_CONV);
 
     hash_enumerate(&qrock.quotas, &changes_cb, &changes);
 
@@ -682,7 +628,8 @@ static void filter_parse(jmap_req_t *req __attribute__((unused)),
     const char *field;
     json_t *arg;
 
-    json_object_foreach(filter, field, arg) {
+    json_object_foreach(filter, field, arg)
+    {
         if (!strcmp(field, "name")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
@@ -709,7 +656,6 @@ static void filter_parse(jmap_req_t *req __attribute__((unused)),
     }
 }
 
-
 static int comparator_parse(jmap_req_t *req __attribute__((unused)),
                             struct jmap_comparator *comp,
                             void *rock __attribute__((unused)),
@@ -718,8 +664,7 @@ static int comparator_parse(jmap_req_t *req __attribute__((unused)),
     if (comp->collation) {
         return 0;
     }
-    if (!strcmp(comp->property, "name") ||
-        !strcmp(comp->property, "used")) {
+    if (!strcmp(comp->property, "name") || !strcmp(comp->property, "used")) {
         return 1;
     }
     return 0;
@@ -734,7 +679,7 @@ typedef struct filter {
 
 static void *filter_build(json_t *arg)
 {
-    filter *f = (filter *) xzmalloc(sizeof(struct filter));
+    filter *f = (filter *)xzmalloc(sizeof(struct filter));
 
     /* name */
     if (JNOTNULL(json_object_get(arg, "name"))) {
@@ -762,8 +707,8 @@ static void *filter_build(json_t *arg)
 /* Match the script in rock against filter. */
 static int filter_match(void *vf, void *rock)
 {
-    filter *f = (filter *) vf;
-    struct jquota_root_t *jroot = (struct jquota_root_t *) rock;
+    filter *f = (filter *)vf;
+    struct jquota_root_t *jroot = (struct jquota_root_t *)rock;
 
     /* name */
     if (f->name && !strstr(jroot->name, f->name)) return 0;
@@ -779,7 +724,8 @@ static int filter_match(void *vf, void *rock)
         const struct jtype_t *jtype;
 
         for (jtype = jtypes; jtype->name; jtype++) {
-            if ((jroot->type_mask & jtype->bit) && strstr(jtype->name, f->type)) {
+            if ((jroot->type_mask & jtype->bit) &&
+                strstr(jtype->name, f->type)) {
                 break;
             }
         }
@@ -800,7 +746,7 @@ typedef struct filter_rock {
 static void filter_cb(const char *id, void *val, void *rock)
 {
     struct jquota_root_t *jroot = val;
-    struct filter_rock *frock = (struct filter_rock *) rock;
+    struct filter_rock *frock = (struct filter_rock *)rock;
     struct jmap_query *query = frock->query;
 
     if (query->filter &&
@@ -828,12 +774,13 @@ enum quota_sort {
     QUOTA_SORT_DESC = 0x80 /* bit-flag for descending sort */
 };
 
-static int quota_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb,
+static int quota_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                         const void *vb,
                                          void *rock)
 {
-    arrayu64_t *sortcrit = (arrayu64_t *) rock;
-    struct jquota_root_t *qa = (struct jquota_root_t *) *(void **) va;
-    struct jquota_root_t *qb = (struct jquota_root_t *) *(void **) vb;
+    arrayu64_t *sortcrit = (arrayu64_t *)rock;
+    struct jquota_root_t *qa = (struct jquota_root_t *)*(void **)va;
+    struct jquota_root_t *qb = (struct jquota_root_t *)*(void **)vb;
     size_t i, nsort = arrayu64_size(sortcrit);
 
     for (i = 0; i < nsort; i++) {
@@ -862,13 +809,21 @@ static int jmap_quota_query(jmap_req_t *req)
     struct jmap_query query;
     jmap_filter *parsed_filter = NULL;
     arrayu64_t sortcrit = ARRAYU64_INITIALIZER;
-    struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
+    struct qrock_t qrock = {req, NULL, {0}, NULL, HASH_TABLE_INITIALIZER};
     int r = 0;
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_query_parse(req, &parser, NULL, NULL,
-                     filter_parse, NULL, comparator_parse, NULL, &query, &err);
+    jmap_query_parse(req,
+                     &parser,
+                     NULL,
+                     NULL,
+                     filter_parse,
+                     NULL,
+                     comparator_parse,
+                     NULL,
+                     &query,
+                     &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -883,14 +838,16 @@ static int jmap_quota_query(jmap_req_t *req)
     if (json_array_size(query.sort)) {
         json_t *jval;
         size_t i;
-        json_array_foreach(query.sort, i, jval) {
+        json_array_foreach(query.sort, i, jval)
+        {
             const char *prop =
-              json_string_value(json_object_get(jval, "property"));
+                json_string_value(json_object_get(jval, "property"));
             enum quota_sort sort = QUOTA_SORT_NONE;
 
             if (!strcmp(prop, "name")) {
                 sort = QUOTA_SORT_NAME;
-            } else if (!strcmp(prop, "used")) {
+            }
+            else if (!strcmp(prop, "used")) {
                 sort = QUOTA_SORT_USED;
             }
 
@@ -908,14 +865,17 @@ static int jmap_quota_query(jmap_req_t *req)
     fetch_quotas(&qrock);
 
     /* Filter the scripts */
-    filter_rock frock = { &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
+    filter_rock frock = {&query, parsed_filter, PTRARRAY_INITIALIZER, NULL};
 
     hash_enumerate(&qrock.quotas, &filter_cb, &frock);
 
     /* Sort results */
     if (arrayu64_size(&sortcrit) && frock.matches.count) {
-        cyr_qsort_r(frock.matches.data, frock.matches.count,
-                    sizeof(void *), &quota_cmp, &sortcrit);
+        cyr_qsort_r(frock.matches.data,
+                    frock.matches.count,
+                    sizeof(void *),
+                    &quota_cmp,
+                    &sortcrit);
     }
     arrayu64_fini(&sortcrit);
 
@@ -939,7 +899,7 @@ static int jmap_quota_query(jmap_req_t *req)
         struct jquota_root_t *match = ptrarray_nth(&frock.matches, i);
 
         /* Apply position and limit */
-        if (i >= (size_t) query.position &&
+        if (i >= (size_t)query.position &&
             (!query.limit || query.limit > json_array_size(query.ids))) {
             /* Add the quota identifier */
             json_array_append_new(query.ids, json_string(match->id));

@@ -47,12 +47,11 @@
 #include "bytecode.h"
 #include "tree.h"
 
-
 extern int bc_header_parse(bytecode_input_t *bc, int *version, int *requires);
 
-extern int bc_action_parse(bytecode_input_t *bc, int pos, int version,
-                           commandlist_t *cmd);
-extern int bc_test_parse(bytecode_input_t *bc, int pos, int version,
-                         test_t *test);
+extern int
+bc_action_parse(bytecode_input_t *bc, int pos, int version, commandlist_t *cmd);
+extern int
+bc_test_parse(bytecode_input_t *bc, int pos, int version, test_t *test);
 
 #endif

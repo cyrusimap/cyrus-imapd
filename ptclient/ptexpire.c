@@ -54,13 +54,13 @@
 #define MAXPATHLEN MAXPATHNAMELEN
 #endif
 
-#include <getopt.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
 
@@ -72,7 +72,7 @@
 
 /* global */
 static time_t timenow;
-static time_t expire_time = (3*60*60); /* 3 Hours */
+static time_t expire_time = (3 * 60 * 60); /* 3 Hours */
 
 static int expire_p(void *rockp __attribute__((unused)),
                     const char *key __attribute__((unused)),
@@ -88,7 +88,8 @@ static int expire_p(void *rockp __attribute__((unused)),
 }
 
 static int expire_cb(void *rockp,
-                     const char *key, size_t keylen,
+                     const char *key,
+                     size_t keylen,
                      const char *data __attribute__((unused)),
                      size_t datalen __attribute__((unused)))
 {
@@ -115,14 +116,13 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "expire-duration", required_argument, NULL, 'E' },
+        {"expire-duration", required_argument, NULL, 'E'},
 
-        { 0, 0, 0, 0 },
+        {0,                 0,                 0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -131,7 +131,8 @@ int main(int argc, char *argv[])
             expire_time = atoi(optarg);
             break;
         default:
-            fprintf(stderr,"usage: [-C filename] [-E time]"
+            fprintf(stderr,
+                    "usage: [-C filename] [-E time]"
                     "\n\t-C <filename>\tAlternate Config File"
                     "\n\t-E <seconds>\tExpiration time"
                     "\n");
@@ -154,25 +155,29 @@ int main(int argc, char *argv[])
     }
 
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
-    if(r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "error opening %s (%s)", fname,
-               cyrusdb_strerror(r));
+    if (r != CYRUSDB_OK) {
+        syslog(LOG_ERR, "error opening %s (%s)", fname, cyrusdb_strerror(r));
         exit(1);
     }
 
     if (optind < argc) {
         int i;
         for (i = optind; i < argc; i++) {
-	    const char *userid = argv[i];
-            int r = cyrusdb_delete(ptdb, userid, strlen(userid), /*tid*/NULL, /*force*/0);
-            syslog(LOG_INFO, "Removing cache for %s (%s)", userid,
+            const char *userid = argv[i];
+            int r = cyrusdb_delete(
+                ptdb, userid, strlen(userid), /*tid*/ NULL, /*force*/ 0);
+            syslog(LOG_INFO,
+                   "Removing cache for %s (%s)",
+                   userid,
                    r == CYRUSDB_OK ? "found" : "not-found");
         }
     }
     else {
         timenow = time(0);
-        syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
-               (int)expire_time, (int)timenow);
+        syslog(LOG_INFO,
+               "Expiring entries older than %d seconds (currently %d)",
+               (int)expire_time,
+               (int)timenow);
 
         /* iterate through db, wiping expired entries */
         cyrusdb_foreach(ptdb, "", 0, expire_p, expire_cb, ptdb, NULL);

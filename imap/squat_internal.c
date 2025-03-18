@@ -41,32 +41,26 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include "config.h"
-#include "assert.h"
 #include "squat_internal.h"
+#include "assert.h"
+#include "config.h"
 
 static int last_err = SQUAT_ERR_OK;
 
 EXPORTED char const squat_index_file_header[8] = "SQUAT 1\n";
 
-EXPORTED void squat_set_last_error(int err)
-{
-    last_err = err;
-}
+EXPORTED void squat_set_last_error(int err) { last_err = err; }
 
-EXPORTED int squat_get_last_error(void)
-{
-    return last_err;
-}
+EXPORTED int squat_get_last_error(void) { return last_err; }
 
-EXPORTED SquatInt32 squat_decode_32(char const* s)
+EXPORTED SquatInt32 squat_decode_32(char const *s)
 {
-    unsigned char* v = (unsigned char*)s;
+    unsigned char *v = (unsigned char *)s;
     return ((SquatInt32)v[0] << 24) | ((SquatInt32)v[1] << 16) |
            ((SquatInt32)v[2] << 8) | (SquatInt32)v[3];
 }
 
-EXPORTED char *squat_encode_32(char* s, SquatInt32 v)
+EXPORTED char *squat_encode_32(char *s, SquatInt32 v)
 {
     s[0] = (unsigned char)(v >> 24);
     s[1] = (unsigned char)(v >> 16);
@@ -77,14 +71,14 @@ EXPORTED char *squat_encode_32(char* s, SquatInt32 v)
 
 EXPORTED SquatInt64 squat_decode_64(char const *s)
 {
-    unsigned char* v = (unsigned char*)s;
+    unsigned char *v = (unsigned char *)s;
     return ((SquatInt64)v[0] << 56) | ((SquatInt64)v[1] << 48) |
            ((SquatInt64)v[2] << 40) | ((SquatInt64)v[3] << 32) |
            ((SquatInt64)v[4] << 24) | ((SquatInt64)v[5] << 16) |
            ((SquatInt64)v[6] << 8) | (SquatInt64)v[7];
 }
 
-EXPORTED char *squat_encode_64(char* s, SquatInt64 v)
+EXPORTED char *squat_encode_64(char *s, SquatInt64 v)
 {
     s[0] = (unsigned char)(v >> 56);
     s[1] = (unsigned char)(v >> 48);
@@ -97,7 +91,7 @@ EXPORTED char *squat_encode_64(char* s, SquatInt64 v)
     return s + 8;
 }
 
-EXPORTED SquatInt64 squat_decode_I(char const** s)
+EXPORTED SquatInt64 squat_decode_I(char const **s)
 {
     int ch;
     SquatInt64 r;
@@ -112,7 +106,7 @@ EXPORTED SquatInt64 squat_decode_I(char const** s)
     return r;
 }
 
-HIDDEN char const *squat_decode_skip_I(char const* s, int num_to_skip)
+HIDDEN char const *squat_decode_skip_I(char const *s, int num_to_skip)
 {
     while (num_to_skip > 0) {
         while ((*s & 0x80) != 0) {
@@ -136,11 +130,14 @@ EXPORTED int squat_count_encode_I(SquatInt64 v64)
     if (v == v64) {
         if (v < (1 << 7)) {
             return 1;
-        } else if (v < (1 << 14)) {
+        }
+        else if (v < (1 << 14)) {
             return 2;
-        } else if (v < (1 << 21)) {
+        }
+        else if (v < (1 << 21)) {
             return 3;
-        } else if (v < (1 << 28)) {
+        }
+        else if (v < (1 << 28)) {
             return 4;
         }
     }
@@ -158,7 +155,7 @@ EXPORTED int squat_count_encode_I(SquatInt64 v64)
     return result;
 }
 
-EXPORTED char *squat_encode_I(char* s, SquatInt64 v64)
+EXPORTED char *squat_encode_I(char *s, SquatInt64 v64)
 {
     int v = (int)v64;
     int shift = 56;
@@ -170,16 +167,19 @@ EXPORTED char *squat_encode_I(char* s, SquatInt64 v64)
         if (v < (1 << 7)) {
             s[0] = (unsigned char)v;
             return s + 1;
-        } else if (v < (1 << 14)) {
+        }
+        else if (v < (1 << 14)) {
             s[0] = (unsigned char)((v >> 7) | 0x80);
             s[1] = (unsigned char)(v & 0x7F);
             return s + 2;
-        } else if (v < (1 << 21)) {
+        }
+        else if (v < (1 << 21)) {
             s[0] = (unsigned char)((v >> 14) | 0x80);
             s[1] = (unsigned char)(((v >> 7) & 0x7F) | 0x80);
             s[2] = (unsigned char)(v & 0x7F);
             return s + 3;
-        } else if (v < (1 << 28)) {
+        }
+        else if (v < (1 << 28)) {
             s[0] = (unsigned char)((v >> 21) | 0x80);
             s[1] = (unsigned char)(((v >> 14) & 0x7F) | 0x80);
             s[2] = (unsigned char)(((v >> 7) & 0x7F) | 0x80);
@@ -200,4 +200,3 @@ EXPORTED char *squat_encode_I(char* s, SquatInt64 v64)
     s[1] = (unsigned char)(v & 0x7F);
     return s + 2;
 }
-

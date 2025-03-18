@@ -90,8 +90,7 @@ EXPORTED const char *prometheus_stats_dir(void)
 
         buf_setcstr(&statsdir, tmp);
 
-        if (statsdir.s[statsdir.len-1] != '/')
-            buf_putc(&statsdir, '/');
+        if (statsdir.s[statsdir.len - 1] != '/') buf_putc(&statsdir, '/');
     }
     else {
         buf_setcstr(&statsdir, config_dir);
@@ -115,19 +114,24 @@ static void prometheus_init(void)
     if (!prometheus_enabled) return;
 
     r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
-    if (r < 0 || (size_t) r >= sizeof(stats.ident))
-        syslog(LOG_WARNING, "service name '%s' is longer than " SIZE_T_FMT
-                            " characters - prometheus label will be truncated",
-                            config_ident,
-                            sizeof(stats.ident) - 1);
+    if (r < 0 || (size_t)r >= sizeof(stats.ident))
+        syslog(LOG_WARNING,
+               "service name '%s' is longer than " SIZE_T_FMT
+               " characters - prometheus label will be truncated",
+               config_ident,
+               sizeof(stats.ident) - 1);
 
-    r = snprintf(fname, sizeof(fname), "%s%jd",
-                 prometheus_stats_dir(), (intmax_t) getpid());
-    if (r < 0 || (size_t) r >= sizeof(fname))
+    r = snprintf(fname,
+                 sizeof(fname),
+                 "%s%jd",
+                 prometheus_stats_dir(),
+                 (intmax_t)getpid());
+    if (r < 0 || (size_t)r >= sizeof(fname))
         fatal("unable to register stats for prometheus", EX_CONFIG);
 
     r = cyrus_mkdir(fname, 0755);
-    if (r) goto error;;
+    if (r) goto error;
+    ;
 
     handle = xzmalloc(sizeof(*handle));
     r = mappedfile_open(&handle->mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
@@ -138,9 +142,12 @@ static void prometheus_init(void)
 
     r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
     if (r != sizeof(stats)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
-                        "actually wrote %d",
-                        sizeof(stats), r);
+        syslog(LOG_ERR,
+               "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT
+               "bytes, "
+               "actually wrote %d",
+               sizeof(stats),
+               r);
         goto error;
     }
 
@@ -181,15 +188,19 @@ static void prometheus_done(void *rock __attribute__((unused)))
 
     /* hold a lock on .doneprocs.lock - this keeps promstatsd from double
      * counting while we're juggling files */
-    doneprocs_lock_fname = strconcat(prometheus_stats_dir(), ".",
-                                     FNAME_PROM_DONEPROCS, ".lock", NULL);
+    doneprocs_lock_fname = strconcat(
+        prometheus_stats_dir(), ".", FNAME_PROM_DONEPROCS, ".lock", NULL);
 
-    doneprocs_lock_fd = open(doneprocs_lock_fname, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    doneprocs_lock_fd =
+        open(doneprocs_lock_fname, O_CREAT | O_TRUNC | O_RDWR, 0644);
     if (doneprocs_lock_fd == -1) {
-        syslog(LOG_ERR, "can't open doneprocs lock: %s (%m)", doneprocs_lock_fname);
+        syslog(LOG_ERR,
+               "can't open doneprocs lock: %s (%m)",
+               doneprocs_lock_fname);
         goto done;
     }
-    if (lock_setlock(doneprocs_lock_fd, /*ex*/1, /*nb*/0, doneprocs_lock_fname)) {
+    if (lock_setlock(
+            doneprocs_lock_fd, /*ex*/ 1, /*nb*/ 0, doneprocs_lock_fname)) {
         syslog(LOG_ERR, "can't get exclusive lock on %s", doneprocs_lock_fname);
         close(doneprocs_lock_fd);
         doneprocs_lock_fd = -1;
@@ -197,12 +208,15 @@ static void prometheus_done(void *rock __attribute__((unused)))
     }
 
     /* load existing doneprocs stats */
-    doneprocs_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_DONEPROCS,
-                                ".", config_ident, NULL);
-    r = mappedfile_open(&doneprocs, doneprocs_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+    doneprocs_fname = strconcat(
+        prometheus_stats_dir(), FNAME_PROM_DONEPROCS, ".", config_ident, NULL);
+    r = mappedfile_open(
+        &doneprocs, doneprocs_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
-                        doneprocs_fname, error_message(r));
+        syslog(LOG_ERR,
+               "IOERROR: mappedfile_open(%s): %s",
+               doneprocs_fname,
+               error_message(r));
         goto done;
     }
 
@@ -219,16 +233,19 @@ static void prometheus_done(void *rock __attribute__((unused)))
     /* read stats from this process */
     r = mappedfile_readlock(promhandle->mf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
-                        doneprocs_fname, error_message(r));
+        syslog(LOG_ERR,
+               "IOERROR: mappedfile_open(%s): %s",
+               doneprocs_fname,
+               error_message(r));
         goto done;
     }
-    memcpy(&thisproc, mappedfile_base(promhandle->mf), mappedfile_size(promhandle->mf));
+    memcpy(&thisproc,
+           mappedfile_base(promhandle->mf),
+           mappedfile_size(promhandle->mf));
     mappedfile_unlock(promhandle->mf);
 
     /* unlink per-process stats file, we don't need it anymore */
-    if (xunlink(mappedfile_fname(promhandle->mf)))
-        goto done;
+    if (xunlink(mappedfile_fname(promhandle->mf))) goto done;
     unlinked = 1;
 
     /* accumulate the statistics */
@@ -241,9 +258,12 @@ static void prometheus_done(void *rock __attribute__((unused)))
     /* and write it out */
     r = mappedfile_pwrite(doneprocs, &accum, sizeof(accum), 0);
     if (r != sizeof(accum)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
-                        "actually wrote %d",
-                        sizeof(accum), r);
+        syslog(LOG_ERR,
+               "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT
+               "bytes, "
+               "actually wrote %d",
+               sizeof(accum),
+               r);
         goto done;
     }
 
@@ -253,7 +273,8 @@ done:
     free(doneprocs_fname);
 
     if (!unlinked) {
-        syslog(LOG_NOTICE, "per-process prometheus statistics file not removed");
+        syslog(LOG_NOTICE,
+               "per-process prometheus statistics file not removed");
     }
     mappedfile_close(&promhandle->mf);
 
@@ -292,8 +313,9 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
 
     r = mappedfile_writelock(promhandle->mf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_writelock unable to obtain lock on %s",
-                        mappedfile_fname(promhandle->mf));
+        syslog(LOG_ERR,
+               "IOERROR: mappedfile_writelock unable to obtain lock on %s",
+               mappedfile_fname(promhandle->mf));
         return;
     }
 
@@ -308,9 +330,11 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
 
     r = mappedfile_pwrite(promhandle->mf, &metric, sizeof(metric), offset);
     if (r != sizeof(metric)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
-                        SIZE_T_FMT " bytes, actually wrote %d",
-                        sizeof(metric), r);
+        syslog(LOG_ERR,
+               "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT
+               " bytes, actually wrote %d",
+               sizeof(metric),
+               r);
     }
     else {
         mappedfile_commit(promhandle->mf);
@@ -325,9 +349,9 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
         int required;
         const char *fname;
     } reports[] = {
-        { 1, FNAME_PROM_SERVICE_REPORT },
-        { 0, FNAME_PROM_USAGE_REPORT   },
-        { 0, FNAME_PROM_MASTER_REPORT  },
+        {1, FNAME_PROM_SERVICE_REPORT},
+        {0, FNAME_PROM_USAGE_REPORT  },
+        {0, FNAME_PROM_MASTER_REPORT },
     };
     const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
     unsigned i;
@@ -341,9 +365,8 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
         char *report_fname = NULL;
         struct mappedfile *mf = NULL;
 
-        report_fname = strconcat(prometheus_stats_dir(),
-                                 reports[i].fname,
-                                 NULL);
+        report_fname =
+            strconcat(prometheus_stats_dir(), reports[i].fname, NULL);
 
         r = mappedfile_open(&mf, report_fname, 0);
         if (r && reports[i].required) {
@@ -361,21 +384,21 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
         free(report_fname);
     }
 
-    if (!r && mimetype)
-        *mimetype = "text/plain; version=0.0.4";
+    if (!r && mimetype) *mimetype = "text/plain; version=0.0.4";
 
     return r;
 }
 
-EXPORTED enum prom_metric_id prometheus_lookup_label(enum prom_labelled_metric metric,
-                                                     const char *value)
+EXPORTED enum prom_metric_id
+prometheus_lookup_label(enum prom_labelled_metric metric, const char *value)
 {
     size_t i;
 
     assert(metric >= 0 && metric < PROM_NUM_LABELLED_METRICS);
 
     for (i = 0; prom_label_lookup_table[metric][i].value != NULL; i++) {
-        const struct prom_label_lookup_value *v = &prom_label_lookup_table[metric][i];
+        const struct prom_label_lookup_value *v =
+            &prom_label_lookup_table[metric][i];
 
         int cmp = strcmp(v->value, value);
         if (cmp == 0) /* found it */

@@ -44,8 +44,8 @@
 
 #include <errno.h>
 #include <libgen.h>
-#include <syslog.h>
 #include <sys/mman.h>
+#include <syslog.h>
 
 #include "bsearch.h"
 #include "cyrusdb.h"
@@ -74,8 +74,7 @@ static void _twom_error_callback(const char *msg, const char *fmt, ...)
         va_end(args);
     }
 
-    if (saved_errno)
-        buf_printf(&buf, " syserror=<%s>",  strerror(saved_errno));
+    if (saved_errno) buf_printf(&buf, " syserror=<%s>", strerror(saved_errno));
 
     syslog(LOG_ERR, "%s", buf_cstring(&buf));
     buf_free(&buf);
@@ -83,21 +82,34 @@ static void _twom_error_callback(const char *msg, const char *fmt, ...)
     errno = saved_errno;
 }
 
-static int _errormap(int r) {
-    switch(r) {
-    case TWOM_OK: return CYRUSDB_OK;
-    case TWOM_DONE: return CYRUSDB_DONE;
-    case TWOM_EXISTS: return CYRUSDB_EXISTS;
-    case TWOM_IOERROR: return CYRUSDB_IOERROR;
-    case TWOM_INTERNAL: return CYRUSDB_INTERNAL;
-    case TWOM_LOCKED: return CYRUSDB_LOCKED;
-    case TWOM_NOTFOUND: return CYRUSDB_NOTFOUND;
-    case TWOM_READONLY: return CYRUSDB_READONLY;
-    case TWOM_BADFORMAT: return CYRUSDB_BADFORMAT;
-    case TWOM_BADUSAGE: return CYRUSDB_INTERNAL;
-    case TWOM_BADCHECKSUM: return CYRUSDB_IOERROR;
+static int _errormap(int r)
+{
+    switch (r) {
+    case TWOM_OK:
+        return CYRUSDB_OK;
+    case TWOM_DONE:
+        return CYRUSDB_DONE;
+    case TWOM_EXISTS:
+        return CYRUSDB_EXISTS;
+    case TWOM_IOERROR:
+        return CYRUSDB_IOERROR;
+    case TWOM_INTERNAL:
+        return CYRUSDB_INTERNAL;
+    case TWOM_LOCKED:
+        return CYRUSDB_LOCKED;
+    case TWOM_NOTFOUND:
+        return CYRUSDB_NOTFOUND;
+    case TWOM_READONLY:
+        return CYRUSDB_READONLY;
+    case TWOM_BADFORMAT:
+        return CYRUSDB_BADFORMAT;
+    case TWOM_BADUSAGE:
+        return CYRUSDB_INTERNAL;
+    case TWOM_BADCHECKSUM:
+        return CYRUSDB_IOERROR;
     // must be a foreach result
-    default: return r;
+    default:
+        return r;
     }
 }
 
@@ -122,18 +134,28 @@ static int checkpoint(struct twom_db *db)
     size_t postsize = twom_db_size(db);
     size_t num = twom_db_num_records(db);
     if (r == CYRUSDB_LOCKED) {
-        xsyslog(LOG_INFO, "twom: repack already locked",
-               "filename=<%s>", twom_db_fname(db));
+        xsyslog(LOG_INFO,
+                "twom: repack already locked",
+                "filename=<%s>",
+                twom_db_fname(db));
     }
     else if (r) {
-        xsyslog(LOG_ERR, "twom: failed to checkpoint",
-               "filename=<%s> error=<%s>", twom_db_fname(db), cyrusdb_strerror(r));
+        xsyslog(LOG_ERR,
+                "twom: failed to checkpoint",
+                "filename=<%s> error=<%s>",
+                twom_db_fname(db),
+                cyrusdb_strerror(r));
     }
     else {
         syslog(LOG_INFO,
-               "twom: repacked %s (%llu record%s, %llu => %llu bytes) in %2.3f seconds",
-               twom_db_fname(db), (LLU)num, num == 1 ? "" : "s", (LLU)presize, (LLU)(postsize),
-               (sclock() - start) / (double) CLOCKS_PER_SEC);
+               "twom: repacked %s (%llu record%s, %llu => %llu bytes) in %2.3f "
+               "seconds",
+               twom_db_fname(db),
+               (LLU)num,
+               num == 1 ? "" : "s",
+               (LLU)presize,
+               (LLU)(postsize),
+               (sclock() - start) / (double)CLOCKS_PER_SEC);
     }
     return r;
 }
@@ -147,21 +169,24 @@ static void _delayed_checkpoint(void *rock)
     init.flags = drock->flags;
     int r = _errormap(twom_db_open(drock->fname, &init, &db, NULL));
     if (r == CYRUSDB_NOTFOUND) {
-        syslog(LOG_INFO, "twom: no file to delayed checkpoint for %s",
+        syslog(LOG_INFO,
+               "twom: no file to delayed checkpoint for %s",
                drock->fname);
         return;
     }
     else if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
-               drock->fname, cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "DBERROR: opening %s for checkpoint: %s",
+               drock->fname,
+               cyrusdb_strerror(r));
         return;
     }
     if (twom_db_should_repack(db)) {
         checkpoint(db);
     }
     else {
-        syslog(LOG_INFO, "twom: delayed checkpoint already done %s",
-               drock->fname);
+        syslog(
+            LOG_INFO, "twom: delayed checkpoint already done %s", drock->fname);
     }
     twom_db_close(&db);
 }
@@ -177,29 +202,29 @@ static int mylock(struct dbengine *db, struct txn **tidptr, int flags)
     return _errormap(tmr);
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **tidptr)
+static int
+myopen(const char *fname, int flags, struct dbengine **ret, struct txn **tidptr)
 {
     struct twom_db *tmdb = NULL;
     struct twom_txn *tmtxn = NULL;
     struct twom_open_data init = TWOM_OPEN_DATA_INITIALIZER;
     init.error = _twom_error_callback;
     init.flags = 0;
-    if (flags & CYRUSDB_NOSYNC)
-        init.flags |= TWOM_NOSYNC;
+    if (flags & CYRUSDB_NOSYNC) init.flags |= TWOM_NOSYNC;
     if (flags & CYRUSDB_NOCRC) {
         init.flags |= TWOM_CSUM_NULL;
         init.flags |= TWOM_NOCSUM;
     }
-    if (flags & CYRUSDB_CREATE)
-        init.flags |= TWOM_CREATE;
-    if (flags & CYRUSDB_SHARED)
-        init.flags |= TWOM_SHARED;
+    if (flags & CYRUSDB_CREATE) init.flags |= TWOM_CREATE;
+    if (flags & CYRUSDB_SHARED) init.flags |= TWOM_SHARED;
     int tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
     if (tmr == TWOM_NOTFOUND && (flags & CYRUSDB_CREATE)) {
         int r = cyrus_mkdir(fname, 0755);
         if (r < 0) {
-            xsyslog(LOG_ERR, "IOERROR: twom cyrus_mkdir failed",
-                             "filename=<%s>", fname);
+            xsyslog(LOG_ERR,
+                    "IOERROR: twom cyrus_mkdir failed",
+                    "filename=<%s>",
+                    fname);
             return r;
         }
         tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
@@ -236,8 +261,8 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         struct dcrock *drock = xzmalloc(sizeof(struct dcrock));
         drock->fname = xstrdup(twom_db_fname(tmdb));
         drock->flags = 0;
-        libcyrus_delayed_action(drock->fname, _delayed_checkpoint,
-                                _delayed_checkpoint_free, drock);
+        libcyrus_delayed_action(
+            drock->fname, _delayed_checkpoint, _delayed_checkpoint_free, drock);
     }
     int tmr = twom_txn_commit(&tmtid);
     return _errormap(tmr);
@@ -261,9 +286,11 @@ static int mybegin(struct dbengine *db, struct txn **tidptr)
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,
-                     const char *prefix, size_t prefixlen,
+                     const char *prefix,
+                     size_t prefixlen,
                      foreach_p *goodp,
-                     foreach_cb *cb, void *rock,
+                     foreach_cb *cb,
+                     void *rock,
                      struct txn **tidptr)
 {
     int tmflags = 0;
@@ -275,16 +302,16 @@ static int myforeach(struct dbengine *db,
         // to match twoskip/skiplist et al behaviour
         tmflags |= TWOM_ALWAYSYIELD;
         struct twom_db *tmdb = (struct twom_db *)db;
-        return _errormap(twom_db_foreach(tmdb, prefix, prefixlen,
-                                         goodp, cb, rock, tmflags));
+        return _errormap(
+            twom_db_foreach(tmdb, prefix, prefixlen, goodp, cb, rock, tmflags));
     }
 
     int r = mybegin(db, tidptr);
     if (r) return r;
 
     struct twom_txn *tmtxn = (struct twom_txn *)*tidptr;
-    return _errormap(twom_txn_foreach(tmtxn, prefix, prefixlen,
-                                      goodp, cb, rock, tmflags));
+    return _errormap(
+        twom_txn_foreach(tmtxn, prefix, prefixlen, goodp, cb, rock, tmflags));
 }
 
 static int mycheckpoint(struct dbengine *db)
@@ -309,63 +336,87 @@ static int myconsistent(struct dbengine *db)
 }
 
 static int myread(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  const char **foundkey, size_t *fklen,
-                  const char **data, size_t *datalen,
-                  struct txn **tidptr, int tmflags)
+                  const char *key,
+                  size_t keylen,
+                  const char **foundkey,
+                  size_t *fklen,
+                  const char **data,
+                  size_t *datalen,
+                  struct txn **tidptr,
+                  int tmflags)
 {
     if (keylen) assert(key);
     struct twom_db *tmdb = (struct twom_db *)db;
 
     if (!tidptr)
-        return _errormap(twom_db_fetch(tmdb, key, keylen, foundkey, fklen,
-                                       data, datalen, tmflags));
+        return _errormap(twom_db_fetch(
+            tmdb, key, keylen, foundkey, fklen, data, datalen, tmflags));
 
     int r = mybegin(db, tidptr);
     if (r) return r;
 
     struct twom_txn *tmtxn = (struct twom_txn *)*tidptr;
-    return _errormap(twom_txn_fetch(tmtxn, key, keylen, foundkey, fklen,
-                                    data, datalen, tmflags));
+    return _errormap(twom_txn_fetch(
+        tmtxn, key, keylen, foundkey, fklen, data, datalen, tmflags));
 }
 
 static int fetch(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 const char **data, size_t *datalen,
+                 const char *key,
+                 size_t keylen,
+                 const char **data,
+                 size_t *datalen,
                  struct txn **tidptr)
 {
     return myread(db, key, keylen, NULL, NULL, data, datalen, tidptr, 0);
 }
 
 static int fetchnext(struct dbengine *db,
-                     const char *key, size_t keylen,
-                     const char **foundkey, size_t *fklen,
-                     const char **data, size_t *datalen,
+                     const char *key,
+                     size_t keylen,
+                     const char **foundkey,
+                     size_t *fklen,
+                     const char **data,
+                     size_t *datalen,
                      struct txn **tidptr)
 {
-    return myread(db, key, keylen, foundkey, fklen, data, datalen, tidptr, TWOM_FETCHNEXT);
+    return myread(db,
+                  key,
+                  keylen,
+                  foundkey,
+                  fklen,
+                  data,
+                  datalen,
+                  tidptr,
+                  TWOM_FETCHNEXT);
 }
 
 static int mywrite(struct dbengine *db,
-                   const char *key, size_t keylen,
-                   const char *data, size_t datalen,
-                   struct txn **tidptr, int tmflags)
+                   const char *key,
+                   size_t keylen,
+                   const char *data,
+                   size_t datalen,
+                   struct txn **tidptr,
+                   int tmflags)
 {
     struct twom_db *tmdb = (struct twom_db *)db;
 
     if (!tidptr)
-        return _errormap(twom_db_store(tmdb, key, keylen, data, datalen, tmflags));
+        return _errormap(
+            twom_db_store(tmdb, key, keylen, data, datalen, tmflags));
 
     int r = mybegin(db, tidptr);
     if (r) return r;
 
     struct twom_txn *tmtxn = (struct twom_txn *)*tidptr;
-    return _errormap(twom_txn_store(tmtxn, key, keylen, data, datalen, tmflags));
+    return _errormap(
+        twom_txn_store(tmtxn, key, keylen, data, datalen, tmflags));
 }
 
 static int create(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  const char *data, size_t datalen,
+                  const char *key,
+                  size_t keylen,
+                  const char *data,
+                  size_t datalen,
                   struct txn **tidptr)
 {
     if (!data) data = "";
@@ -373,8 +424,10 @@ static int create(struct dbengine *db,
 }
 
 static int store(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 const char *data, size_t datalen,
+                 const char *key,
+                 size_t keylen,
+                 const char *data,
+                 size_t datalen,
                  struct txn **tidptr)
 {
     if (!data) data = "";
@@ -382,16 +435,17 @@ static int store(struct dbengine *db,
 }
 
 static int delete(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 struct txn **tidptr, int force)
+                  const char *key,
+                  size_t keylen,
+                  struct txn **tidptr,
+                  int force)
 {
     int tmflags = force ? 0 : TWOM_IFEXIST;
     return mywrite(db, key, keylen, NULL, 0, tidptr, tmflags);
 }
 
-HIDDEN struct cyrusdb_backend cyrusdb_twom =
-{
-    "twom",                  /* name */
+HIDDEN struct cyrusdb_backend cyrusdb_twom = {
+    "twom", /* name */
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,

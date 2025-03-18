@@ -48,31 +48,31 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <fcntl.h>
 #include <getopt.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <sysexits.h>
-#include <time.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <fcntl.h>
-#include <string.h>
 #include <sys/wait.h>
-#include <sys/resource.h>
+#include <sysexits.h>
+#include <time.h>
 
 #include "global.h"
-#include "mboxlist.h"
+#include "imapd.h"
 #include "mailbox.h"
-#include "seen.h"
-#include "mboxname.h"
 #include "map.h"
+#include "mboxlist.h"
+#include "mboxname.h"
 #include "proc.h"
+#include "seen.h"
+#include "sync_support.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
-#include "imapd.h"
-#include "user.h"
-#include "sync_support.h"
 /*#include "cdb.h"*/
 
 /* generated headers are not necessarily in current directory */
@@ -95,7 +95,7 @@ static void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    if (sync_userid)    free(sync_userid);
+    if (sync_userid) free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
 
     seen_done();
@@ -107,13 +107,12 @@ static void shut_down(int code)
 
 static int usage(const char *name)
 {
-    fprintf(stderr,
-            "usage: %s [-C <alt_config>] [-v] [-f] user...\n", name);
+    fprintf(stderr, "usage: %s [-C <alt_config>] [-v] [-f] user...\n", name);
 
     exit(EX_USAGE);
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "sync_reset: %s\n", s);
 
@@ -142,8 +141,9 @@ static int reset_single(const char *userid)
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (i = sublist->count; i; i--) {
-        const char *name = strarray_nth(sublist, i-1);
-        (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0, /*silent*/1);
+        const char *name = strarray_nth(sublist, i - 1);
+        (void)mboxlist_changesub(
+            name, userid, sync_authstate, 0, 0, 0, /*silent*/ 1);
     }
 
     mbentry_t *mbentry = NULL;
@@ -152,24 +152,26 @@ static int reset_single(const char *userid)
     free(inbox);
     if (r) goto fail;
 
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(
+        userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
     if (r) goto fail;
 
     for (i = mblist->count; i; i--) {
-        const char *name = strarray_nth(mblist, i-1);
-	int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT |
-		       MBOXLIST_DELETE_LOCALONLY | MBOXLIST_DELETE_ENTIRELY;
-        r = mboxlist_deletemailbox(name, 1, sync_userid, sync_authstate,
-                                   NULL, delflags);
+        const char *name = strarray_nth(mblist, i - 1);
+        int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT |
+                       MBOXLIST_DELETE_LOCALONLY | MBOXLIST_DELETE_ENTIRELY;
+        r = mboxlist_deletemailbox(
+            name, 1, sync_userid, sync_authstate, NULL, delflags);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             printf("skipping already removed mailbox %s\n", name);
         }
-        else if (r) goto fail;
+        else if (r)
+            goto fail;
     }
 
     if (mbentry) r = user_deletedata(mbentry, 1);
 
- fail:
+fail:
     mboxname_release(&namespacelock);
     mboxlist_entry_free(&mbentry);
     strarray_free(mblist);
@@ -180,10 +182,9 @@ static int reset_single(const char *userid)
 
 /* ====================================================================== */
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
-    int   opt;
+    int opt;
     char *alt_config = NULL;
     int r = 0;
     int force = 0;
@@ -196,16 +197,15 @@ main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "local-only", no_argument, NULL, 'L' },
-        { "force", no_argument, NULL, 'f' },
-        { "verbose", no_argument, NULL, 'v' },
+        {"local-only", no_argument, NULL, 'L'},
+        {"force",      no_argument, NULL, 'f'},
+        {"verbose",    no_argument, NULL, 'v'},
 
-        { 0, 0, 0, 0 },
+        {0,            0,           0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -233,7 +233,8 @@ main(int argc, char **argv)
     cyrus_init(alt_config, "sync_reset", 0, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(sync_namespacep, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(sync_namespacep,
+                                     NAMESPACE_OPTION_ADMIN))) {
         fatal(error_message(r), EX_CONFIG);
     }
 

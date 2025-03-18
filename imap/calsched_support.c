@@ -57,7 +57,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-
 EXPORTED int caldav_caluseraddr_read(const char *mboxname,
                                      const char *userid,
                                      struct caldav_caluseraddr *addr)
@@ -86,7 +85,8 @@ EXPORTED int caldav_caluseraddr_read(const char *mboxname,
         }
         val[j] = '\0';
     }
-    else lpref = INT_MAX;
+    else
+        lpref = INT_MAX;
 
     strarray_fini(&addr->uris);
     strarray_splitm(&addr->uris, val, ",", STRARRAY_TRIM);
@@ -138,7 +138,8 @@ EXPORTED void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr)
 }
 
 EXPORTED void get_schedule_addresses(const char *mboxname,
-                                     const char *userid, strarray_t *addresses)
+                                     const char *userid,
+                                     strarray_t *addresses)
 {
     struct buf buf = BUF_INITIALIZER;
 

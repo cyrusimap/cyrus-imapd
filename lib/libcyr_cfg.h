@@ -44,10 +44,10 @@
 #define INCLUDED_LIBCYR_CFG_H
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <sys/types.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 /* This is basically a simplified version of the configuration system
  * that is used for the application level of Cyrus IMAPd */
@@ -116,8 +116,8 @@ enum cyrus_opt {
 
 union cyrus_config_value {
     const char *s; /* string */
-    long i; /* int */
-    long b; /* switch */
+    long i;        /* int */
+    long b;        /* switch */
 };
 
 struct cyrusopt_s {
@@ -136,7 +136,10 @@ void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);
 void libcyrus_config_setint(enum cyrus_opt opt, int val);
 void libcyrus_config_setswitch(enum cyrus_opt opt, int val);
 
-extern void libcyrus_delayed_action(const char *key, void (*cb)(void *), void (*free)(void *), void *rock);
+extern void libcyrus_delayed_action(const char *key,
+                                    void (*cb)(void *),
+                                    void (*free)(void *),
+                                    void *rock);
 extern void libcyrus_run_delayed(void);
 
 /* Start/Stop the Library */

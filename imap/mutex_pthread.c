@@ -56,10 +56,7 @@ EXPORTED void *cyrus_mutex_alloc(void)
     return ret;
 }
 
-EXPORTED int cyrus_mutex_lock(void *mutex)
-{
-    return pthread_mutex_lock(mutex);
-}
+EXPORTED int cyrus_mutex_lock(void *mutex) { return pthread_mutex_lock(mutex); }
 
 EXPORTED int cyrus_mutex_unlock(void *mutex)
 {
@@ -68,7 +65,7 @@ EXPORTED int cyrus_mutex_unlock(void *mutex)
 
 EXPORTED void cyrus_mutex_free(void *mutex)
 {
-    if(!mutex) return;
+    if (!mutex) return;
 
     pthread_mutex_destroy(mutex);
     free(mutex);

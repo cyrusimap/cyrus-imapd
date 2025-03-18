@@ -58,14 +58,19 @@
  * You cannot use these wrappers if you need to detect ENOENT failures.
  **/
 
-#define xunlink(pathname)                                                     \
-    xunlink_fn(__FILE__, __LINE__, __func__, (pathname))
-#define xunlinkat(dirfd, pathname, flags)                                     \
+#define xunlink(pathname) xunlink_fn(__FILE__, __LINE__, __func__, (pathname))
+#define xunlinkat(dirfd, pathname, flags)                                      \
     xunlinkat_fn(__FILE__, __LINE__, __func__, (dirfd), (pathname), (flags))
 
-extern int xunlink_fn(const char *sfile, int sline, const char *sfunc,
+extern int xunlink_fn(const char *sfile,
+                      int sline,
+                      const char *sfunc,
                       const char *pathname);
-extern int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
-                        int dirfd, const char *pathname, int flags);
+extern int xunlinkat_fn(const char *sfile,
+                        int sline,
+                        const char *sfunc,
+                        int dirfd,
+                        const char *pathname,
+                        int flags);
 
 #endif

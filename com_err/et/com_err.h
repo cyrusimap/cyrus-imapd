@@ -74,7 +74,7 @@
  */
 #ifndef INTERFACE
 #ifdef _WINDOWS
-#define INTERFACE   __far __export __pascal
+#define INTERFACE __far __export __pascal
 #define INTERFACE_C __far __export __cdecl
 #else
 #define INTERFACE
@@ -87,20 +87,21 @@
 
 #if defined(__STDC__) || defined(_WINDOWS)
 /* ANSI C -- use prototypes etc */
-extern void INTERFACE_C com_err (const char FAR *, long, const char FAR *, ...)
-                                __attribute__((format(printf, 3, 4)));
-extern char const FAR * INTERFACE error_message (long);
-extern void (*com_err_hook) (const char *, long, const char *, va_list);
-extern void (*set_com_err_hook (void (*) (const char *, long, const char *, va_list)))
-    (const char *, long, const char *, va_list);
-extern void (*reset_com_err_hook ()) (const char *, long, const char *, va_list);
+extern void INTERFACE_C com_err(const char FAR *, long, const char FAR *, ...)
+    __attribute__((format(printf, 3, 4)));
+extern char const FAR *INTERFACE error_message(long);
+extern void (*com_err_hook)(const char *, long, const char *, va_list);
+extern void (
+    *set_com_err_hook(void (*)(const char *, long, const char *, va_list)))(
+    const char *, long, const char *, va_list);
+extern void (*reset_com_err_hook())(const char *, long, const char *, va_list);
 #else
 /* no prototypes */
-extern void INTERFACE_C com_err ();
-extern char * INTERFACE error_message ();
-extern void (*com_err_hook) ();
-extern void (*set_com_err_hook ()) ();
-extern void (*reset_com_err_hook ()) ();
+extern void INTERFACE_C com_err();
+extern char *INTERFACE error_message();
+extern void (*com_err_hook)();
+extern void (*set_com_err_hook())();
+extern void (*reset_com_err_hook())();
 #endif
 
 #define __COM_ERR_H

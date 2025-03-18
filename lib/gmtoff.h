@@ -48,4 +48,3 @@
 extern int gmtoff_of(struct tm *tm, time_t time);
 
 #endif /* INCLUDED_GMTOFF_H */
-

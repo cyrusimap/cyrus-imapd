@@ -48,4 +48,3 @@ char *strerror(int errnum)
     if (errnum < 0 || errnum > sys_nerr) return 0;
     return sys_errlist[errnum];
 }
-

@@ -50,8 +50,9 @@ struct pts_module {
 
     void (*init)(void);
     struct auth_state *(*make_authstate)(const char *identifier,
-                size_t size,
-                const char **reply, int *dsize);
+                                         size_t size,
+                                         const char **reply,
+                                         int *dsize);
 };
 
 extern struct pts_module *pts_modules[];
@@ -64,7 +65,8 @@ extern struct pts_module pts_afskrb;
 
 struct auth_state *ptsmodule_make_authstate(const char *identifier,
                                             size_t size,
-                                            const char **reply, int *dsize);
+                                            const char **reply,
+                                            int *dsize);
 char *ptsmodule_unix_canonifyid(const char *identifier, size_t len);
 void ptsmodule_init(void);
 

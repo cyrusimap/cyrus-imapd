@@ -44,57 +44,58 @@
 #include <config.h>
 #endif
 
+#include <errno.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sys/stat.h>
-#include <stdlib.h>
-#include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <signal.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "acl.h"
 #include "arrayu64.h"
+#include "global.h"
 #include "idle.h"
 #include "idlemsg.h"
-#include "global.h"
 #include "json_support.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "sqldb.h"
 #include "xmalloc.h"
 
-#define CMD_CREATE                                  \
-    "CREATE TABLE event_groups ("                   \
-    " rowid   INTEGER PRIMARY KEY,"                 \
-    " pid     INTEGER,"                             \
-    " events  INTEGER,"                             \
-    " timeout INTEGER,"                             \
-    " filter  INTEGER,"                             \
-    " keys    TEXT,"                                \
-    " client  BLOB,"                                \
+#define CMD_CREATE                                                             \
+    "CREATE TABLE event_groups ("                                              \
+    " rowid   INTEGER PRIMARY KEY,"                                            \
+    " pid     INTEGER,"                                                        \
+    " events  INTEGER,"                                                        \
+    " timeout INTEGER,"                                                        \
+    " filter  INTEGER,"                                                        \
+    " keys    TEXT,"                                                           \
+    " client  BLOB,"                                                           \
     " UNIQUE ( pid, filter ) );"
 
-#define CMD_INSERT                                                      \
-    "INSERT INTO event_groups"                                          \
-    " ( pid, events, timeout, filter, keys, client )"                   \
+#define CMD_INSERT                                                             \
+    "INSERT INTO event_groups"                                                 \
+    " ( pid, events, timeout, filter, keys, client )"                          \
     " VALUES ( :pid, :events, :timeout, :filter, :keys, :client );"
 
-#define CMD_SELECT                                                      \
-    "SELECT pid, events, timeout, filter, keys, client"                 \
-    " FROM event_groups WHERE events & :events"                         \
+#define CMD_SELECT                                                             \
+    "SELECT pid, events, timeout, filter, keys, client"                        \
+    " FROM event_groups WHERE events & :events"                                \
     " ORDER BY pid;"
 
-#define CMD_SELECT_ALL                          \
-    "SELECT DISTINCT client FROM event_groups;"
+#define CMD_SELECT_ALL "SELECT DISTINCT client FROM event_groups;"
 
-#define CMD_DELETE_EVENT "DELETE FROM event_groups"     \
+#define CMD_DELETE_EVENT                                                       \
+    "DELETE FROM event_groups"                                                 \
     " WHERE pid = :pid AND filter = :filter;"
 
-#define CMD_DELETE_PIDS "DELETE FROM event_groups"      \
+#define CMD_DELETE_PIDS                                                        \
+    "DELETE FROM event_groups"                                                 \
     " WHERE pid IN ( :pid );"
 
 extern int optind;
@@ -107,7 +108,7 @@ static sqldb_t *db = NULL;
 
 EXPORTED void fatal(const char *msg, int err)
 {
-    if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
+    if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
@@ -122,7 +123,7 @@ static int alert_cb(sqlite3_stmt *stmt, void *rock)
 {
     json_t *msg = rock;
     struct sockaddr_un *client =
-        (struct sockaddr_un *) sqlite3_column_blob(stmt, 0);
+        (struct sockaddr_un *)sqlite3_column_blob(stmt, 0);
 
     idle_send(client, msg);
     return 0;
@@ -147,7 +148,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     time_t timeout = sqlite3_column_int(stmt, 2);
     mailbox_filter_t filter = sqlite3_column_int(stmt, 3);
     struct sockaddr_un *client =
-        (struct sockaddr_un *) sqlite3_column_blob(stmt, 5);
+        (struct sockaddr_un *)sqlite3_column_blob(stmt, 5);
 
     if (timeout && (timeout < time(NULL))) {
         /* This process has been idling for longer than the timeout
@@ -159,14 +160,15 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
         return 0;
     }
 
-    /* XXX  Should we check /proc/pid to make sure the client is still active? */
+    /* XXX  Should we check /proc/pid to make sure the client is still active?
+     */
 
     /* Don't notify the same client more than once */
     if (pid == nrock->last_pid) return 0;
 
     json_error_t jerr;
     json_t *keys =
-        json_loads((const char *) sqlite3_column_text(stmt, 4), 0, &jerr);
+        json_loads((const char *)sqlite3_column_text(stmt, 4), 0, &jerr);
     json_t *key = json_array_get(keys, 0);
     const char *keyval = json_string_value(key);
     mbentry_t *mbentry = NULL;
@@ -176,14 +178,13 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     /* Is it a mailbox in which the client has interest? */
     if (filter == FILTER_SELECTED) {
         /* keyval is currently selected mailbox id */
-        if (!strcmp(mboxid, keyval))
-            notify = 1;
+        if (!strcmp(mboxid, keyval)) notify = 1;
     }
     else if (!mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL)) {
         switch (filter) {
         case FILTER_INBOXES:
             /* Is it an INBOX or postable by anonymous? */
-            if (!mboxname_isusermailbox(mbentry->name, /*isinbox*/1) &&
+            if (!mboxname_isusermailbox(mbentry->name, /*isinbox*/ 1) &&
                 !(cyrus_acl_myrights(NULL, mbentry->acl) & ACL_POST))
                 break;
 
@@ -191,21 +192,20 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
 
         case FILTER_PERSONAL:
             /* keyval is userid */
-            if (mboxname_userownsmailbox(keyval, mbentry->name))
-                notify = 1;
+            if (mboxname_userownsmailbox(keyval, mbentry->name)) notify = 1;
             break;
 
         case FILTER_SUBSCRIBED: {
             /* keyval is userid */
             strarray_t *sublist = mboxlist_sublist(keyval);
-            if (strarray_contains(sublist, mbentry->name))
-                notify = 1;
+            if (strarray_contains(sublist, mbentry->name)) notify = 1;
             strarray_free(sublist);
             break;
         }
 
         case FILTER_SUBTREE:
-            json_array_foreach(keys, i, key) {
+            json_array_foreach(keys, i, key)
+            {
                 const char *mboxname = json_string_value(key);
                 if (mboxname_is_prefix(mbentry->name, mboxname)) {
                     notify = 1;
@@ -215,8 +215,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
             break;
 
         case FILTER_MAILBOXES:
-            if (json_array_find(keys, mbentry->name) >= 0)
-                notify = 1;
+            if (json_array_find(keys, mbentry->name) >= 0) notify = 1;
             break;
 
         default:
@@ -240,9 +239,14 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
          * through it's graceful shutdown path, so don't syslog.
          * Either way, remove it from the list. */
         if (r != ENOENT)
-            syslog(LOG_ERR, "IDLE: error sending message "
-                   "NOTIFY to imapd %s events=<%lu> filter=<%u>: %s, forgetting.",
-                   idle_id_from_addr(client), events, filter, error_message(r));
+            syslog(
+                LOG_ERR,
+                "IDLE: error sending message "
+                "NOTIFY to imapd %s events=<%lu> filter=<%u>: %s, forgetting.",
+                idle_id_from_addr(client),
+                events,
+                filter,
+                error_message(r));
 
         if (verbose || debugmode)
             syslog(LOG_DEBUG, "    forgetting %s", idle_id_from_addr(client));
@@ -250,7 +254,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
         arrayu64_add(nrock->failed_pids, pid);
     }
 
-  done:
+done:
     mboxlist_entry_free(&mbentry);
     json_decref(keys);
 
@@ -262,25 +266,32 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
     const char *type = json_string_value(json_object_get(msg, "@type"));
     pid_t pid = json_integer_value(json_object_get(msg, "pid"));
     struct sqldb_bindval bval[] = {
-        { ":pid", SQLITE_INTEGER, { .i = pid } },
-        { NULL,   SQLITE_INTEGER, { 0        } },
-        { NULL,   SQLITE_INTEGER, { 0        } },
-        { NULL,   SQLITE_INTEGER, { 0        } },
-        { NULL,   SQLITE_TEXT,    { 0        } },
-        { NULL,   SQLITE_BLOB,    { 0        } },
-        { NULL,   SQLITE_NULL,    { 0        } } };
+        {":pid", SQLITE_INTEGER, {.i = pid}},
+        {NULL,   SQLITE_INTEGER, {0}       },
+        {NULL,   SQLITE_INTEGER, {0}       },
+        {NULL,   SQLITE_INTEGER, {0}       },
+        {NULL,   SQLITE_TEXT,    {0}       },
+        {NULL,   SQLITE_BLOB,    {0}       },
+        {NULL,   SQLITE_NULL,    {0}       }
+    };
 
     if (!strcmp(type, "start")) {
-        unsigned long events = json_integer_value(json_object_get(msg, "events"));
+        unsigned long events =
+            json_integer_value(json_object_get(msg, "events"));
         time_t timeout = json_integer_value(json_object_get(msg, "timeout"));
         mailbox_filter_t filter =
             json_integer_value(json_object_get(msg, "filter"));
         char *keys = json_dumps(json_object_get(msg, "keys"), JSON_COMPACT);
 
         if (verbose || debugmode) {
-            syslog(LOG_DEBUG, "imapd[%s]: idle start"
+            syslog(LOG_DEBUG,
+                   "imapd[%s]: idle start"
                    " pid=<%d> events=<%lu> filter=<%u> keys=%s",
-                   idle_id_from_addr(remote), pid, events, filter, keys);
+                   idle_id_from_addr(remote),
+                   pid,
+                   events,
+                   filter,
+                   keys);
         }
 
         /* add client and events to db */
@@ -293,7 +304,7 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         bval[4].name = ":keys";
         bval[4].val.s = keys;
         bval[5].name = ":client";
-        buf_init_ro(&bval[5].val.b, (void *) remote, sizeof(*remote));
+        buf_init_ro(&bval[5].val.b, (void *)remote, sizeof(*remote));
 
         sqldb_exec(db, CMD_INSERT, bval, NULL, NULL);
 
@@ -304,9 +315,12 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
             json_integer_value(json_object_get(msg, "filter"));
 
         if (verbose || debugmode) {
-            syslog(LOG_DEBUG, "imapd[%s]: idle stop"
+            syslog(LOG_DEBUG,
+                   "imapd[%s]: idle stop"
                    " pid=<%d> filter=<%u>",
-                   idle_id_from_addr(remote), pid, filter);
+                   idle_id_from_addr(remote),
+                   pid,
+                   filter);
         }
 
         /* remove client from db */
@@ -324,7 +338,7 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         const char *jevent = json_string_value(json_object_get(msg, "event"));
         enum event_type event = name_to_mboxevent(jevent);
         arrayu64_t failed_pids = ARRAYU64_INITIALIZER;
-        struct notify_rock nrock = { msg, 0, &failed_pids };
+        struct notify_rock nrock = {msg, 0, &failed_pids};
 
         if (verbose || debugmode) {
             syslog(LOG_DEBUG, "idle notify '%s'", jevent);
@@ -342,9 +356,10 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
             struct buf buf = BUF_INITIALIZER;
             const char *sep = "";
             size_t i;
-            
+
             for (i = 0; i < arrayu64_size(&failed_pids); i++) {
-                buf_printf(&buf, "%s%" PRIu64, sep, arrayu64_nth(&failed_pids, i));
+                buf_printf(
+                    &buf, "%s%" PRIu64, sep, arrayu64_nth(&failed_pids, i));
                 sep = ", ";
             }
 
@@ -368,8 +383,12 @@ static void shut_down(int ec)
 {
     /* signal all clients to check ALERTs */
     json_t *msg = json_pack("{s:s s:i s:s}",
-                            "@type", "alert", "pid", getpid(),
-                            "message", "idled shutting down");
+                            "@type",
+                            "alert",
+                            "pid",
+                            getpid(),
+                            "message",
+                            "idled shutting down");
 
     sqldb_exec(db, CMD_SELECT_ALL, NULL, &alert_cb, msg);
     json_decref(msg);
@@ -417,8 +436,7 @@ int main(int argc, char **argv)
     signals_set_shutdown(shut_down);
     signals_add_handlers(0);
 
-    if (!idle_make_server_address(&local) ||
-        !idle_init_sock(&local)) {
+    if (!idle_make_server_address(&local) || !idle_init_sock(&local)) {
         cyrus_done();
         exit(1);
     }
@@ -480,7 +498,7 @@ int main(int argc, char **argv)
             /* uh oh */
             syslog(LOG_ERR, "select(): %m");
             close(s);
-            fatal("select error",-1);
+            fatal("select error", -1);
         }
 
         /* read and process a message */
@@ -493,10 +511,8 @@ int main(int argc, char **argv)
                 json_decref(msg);
             }
         }
-
     }
 
     /* NOTREACHED */
     shut_down(1);
 }
-

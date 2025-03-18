@@ -46,15 +46,15 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <assert.h>
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 
 #include "command.h"
 #include "global.h"
-#include "httpd.h"
 #include "http_proxy.h"
+#include "httpd.h"
 #include "proxy.h"
 #include "tok.h"
 #include "util.h"
@@ -68,40 +68,47 @@ static void cgi_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
 
-
 /* Namespace for CGI */
 struct namespace_t namespace_cgi = {
-    URL_NS_CGI, 0, "cgi", "/cgi-bin", NULL,
-    http_allow_noauth, /*authschemes*/0,
-    /*mbtype*/0,
+    URL_NS_CGI,
+    0,
+    "cgi",
+    "/cgi-bin",
+    NULL,
+    http_allow_noauth,
+ /*authschemes*/ 0,
+    /*mbtype*/ 0,
     ALLOW_READ | ALLOW_POST,
-    cgi_init, NULL, NULL, NULL, NULL,
+    cgi_init,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     {
-        { NULL,                 NULL },                 /* ACL          */
-        { NULL,                 NULL },                 /* BIND         */
-        { NULL,                 NULL },                 /* CONNECT      */
-        { NULL,                 NULL },                 /* COPY         */
-        { NULL,                 NULL },                 /* DELETE       */
-        { &meth_get,            NULL },                 /* GET          */
-        { &meth_get,            NULL },                 /* HEAD         */
-        { NULL,                 NULL },                 /* LOCK         */
-        { NULL,                 NULL },                 /* MKCALENDAR   */
-        { NULL,                 NULL },                 /* MKCOL        */
-        { NULL,                 NULL },                 /* MOVE         */
-        { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
-        { &meth_post,           NULL },                 /* POST         */
-        { NULL,                 NULL },                 /* PROPFIND     */
-        { NULL,                 NULL },                 /* PROPPATCH    */
-        { NULL,                 NULL },                 /* PUT          */
-        { NULL,                 NULL },                 /* REPORT       */
-        { NULL,                 NULL },                 /* SEARCH       */
-        { &meth_trace,          NULL },                 /* TRACE        */
-        { NULL,                 NULL },                 /* UNBIND       */
-        { NULL,                 NULL }                  /* UNLOCK       */
+      {NULL, NULL},          /* ACL          */
+        {NULL, NULL},          /* BIND         */
+        {NULL, NULL},          /* CONNECT      */
+        {NULL, NULL},          /* COPY         */
+        {NULL, NULL},          /* DELETE       */
+        {&meth_get, NULL},     /* GET          */
+        {&meth_get, NULL},     /* HEAD         */
+        {NULL, NULL},          /* LOCK         */
+        {NULL, NULL},          /* MKCALENDAR   */
+        {NULL, NULL},          /* MKCOL        */
+        {NULL, NULL},          /* MOVE         */
+        {&meth_options, NULL}, /* OPTIONS      */
+        {NULL, NULL},          /* PATCH        */
+        {&meth_post, NULL},    /* POST         */
+        {NULL, NULL},          /* PROPFIND     */
+        {NULL, NULL},          /* PROPPATCH    */
+        {NULL, NULL},          /* PUT          */
+        {NULL, NULL},          /* REPORT       */
+        {NULL, NULL},          /* SEARCH       */
+        {&meth_trace, NULL},   /* TRACE        */
+        {NULL, NULL},          /* UNBIND       */
+        {NULL, NULL}           /* UNLOCK       */
     }
 };
-
 
 static void cgi_init(struct buf *serverinfo __attribute__((unused)))
 {
@@ -109,13 +116,20 @@ static void cgi_init(struct buf *serverinfo __attribute__((unused)))
 }
 
 /* Add request headers to environment for script */
-static void req_hdr_to_env(const char *name, const char *contents,
-                           const char *raw __attribute__((unused)), void *rock)
+static void req_hdr_to_env(const char *name,
+                           const char *contents,
+                           const char *raw __attribute__((unused)),
+                           void *rock)
 {
-    struct buf *environ = (struct buf *) rock;
-    const char **hdr, *skip[] =
-        { "authorization", "cookie", "expect", "http2-settings",
-          "proxy-authorization", "transfer-encoding", "upgrade", NULL };
+    struct buf *environ = (struct buf *)rock;
+    const char **hdr, *skip[] = {"authorization",
+                                 "cookie",
+                                 "expect",
+                                 "http2-settings",
+                                 "proxy-authorization",
+                                 "transfer-encoding",
+                                 "upgrade",
+                                 NULL};
 
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
@@ -137,8 +151,8 @@ static void req_hdr_to_env(const char *name, const char *contents,
         if (exists) {
             /* Append value to existing value(s) */
             const char *next = strchr(exists + 1, '\t');
-            unsigned offset = next ? (unsigned) (next - env_str)
-                                   : (unsigned) strlen(env_str);
+            unsigned offset =
+                next ? (unsigned)(next - env_str) : (unsigned)strlen(env_str);
 
             buf_insertcstr(environ, offset, ", ");
             buf_insertcstr(environ, offset + 2, contents);
@@ -166,14 +180,14 @@ static int meth_get(struct transaction_t *txn,
     struct body_t resp_body;
     long code = 0;
     extern char **environ;
-    
+
     memset(&resp_body, 0, sizeof(struct body_t));
 
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
     if (!prefix) return HTTP_NOT_FOUND;
 
     if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
-        tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT | TOK_TRIMRIGHT);
         char *token;
 
         while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
@@ -186,8 +200,10 @@ static int meth_get(struct transaction_t *txn,
     extra = strchr(txn->req_uri->path + strlen(namespace_cgi.prefix) + 1, '/');
     buf_setcstr(&txn->buf, prefix);
     if (extra)
-        buf_appendmap(&txn->buf, txn->req_uri->path, extra - txn->req_uri->path);
-    else buf_appendcstr(&txn->buf, txn->req_uri->path);
+        buf_appendmap(
+            &txn->buf, txn->req_uri->path, extra - txn->req_uri->path);
+    else
+        buf_appendcstr(&txn->buf, txn->req_uri->path);
     script = buf_release(&txn->buf);
     cwd = strconcat(prefix, namespace_cgi.prefix, NULL);
 
@@ -199,8 +215,7 @@ static int meth_get(struct transaction_t *txn,
 
     /* See if script is executable */
     if (access(script, X_OK)) {
-        syslog(LOG_ERR, "CGI script %s is not executable",
-               txn->req_uri->path);
+        syslog(LOG_ERR, "CGI script %s is not executable", txn->req_uri->path);
         txn->error.desc = "CGI script is not executable";
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -218,28 +233,34 @@ static int meth_get(struct transaction_t *txn,
     if (extra) {
         buf_printf(&txn->buf, "\tPATH_TRANSLATED=%s%s", prefix, extra);
     }
-    buf_printf(&txn->buf, "\tQUERY_STRING=%s",
+    buf_printf(&txn->buf,
+               "\tQUERY_STRING=%s",
                (query = URI_QUERY(txn->req_uri)) ? query : "");
-    buf_printf(&txn->buf, "\tREMOTE_ADDR=%.*s",
-               (int) (httpd_remoteip ? strcspn(httpd_remoteip, ";") : 0),
+    buf_printf(&txn->buf,
+               "\tREMOTE_ADDR=%.*s",
+               (int)(httpd_remoteip ? strcspn(httpd_remoteip, ";") : 0),
                httpd_remoteip);
-    buf_printf(&txn->buf, "\tREMOTE_HOST=%.*s",
-               (int) (txn->conn->clienthost ?
-                      strcspn(txn->conn->clienthost, " ") : 0),
-               txn->conn->clienthost);
+    buf_printf(
+        &txn->buf,
+        "\tREMOTE_HOST=%.*s",
+        (int)(txn->conn->clienthost ? strcspn(txn->conn->clienthost, " ") : 0),
+        txn->conn->clienthost);
     if (httpd_userid) {
         buf_printf(&txn->buf, "\tREMOTE_USER=%s", httpd_userid);
 
         if (txn->auth_chal.scheme) {
-            buf_printf(&txn->buf, "\tAUTH_TYPE=%s", txn->auth_chal.scheme->name);
+            buf_printf(
+                &txn->buf, "\tAUTH_TYPE=%s", txn->auth_chal.scheme->name);
         }
     }
     buf_printf(&txn->buf, "\tREQUEST_METHOD=%s", http_methods[txn->meth].name);
     buf_printf(&txn->buf, "\tSCRIPT_NAME=%s", script + strlen(prefix));
     buf_printf(&txn->buf, "\tSERVER_NAME=%s", config_servername);
-    buf_printf(&txn->buf, "\tSERVER_PORT=%s",
-               (port = strchr(httpd_localip ? httpd_localip : "", ';')) ?
-               port + 1 : (https ? "443" : "80"));
+    buf_printf(&txn->buf,
+               "\tSERVER_PORT=%s",
+               (port = strchr(httpd_localip ? httpd_localip : "", ';'))
+                   ? port + 1
+                   : (https ? "443" : "80"));
     buf_printf(&txn->buf, "\tSERVER_PROTOCOL=%s", HTTP_VERSION);
     buf_printf(&txn->buf, "\tSERVER_SOFTWARE=%s", buf_cstring(&serverinfo));
 
@@ -264,10 +285,11 @@ static int meth_get(struct transaction_t *txn,
     prot_flush(cmd->stdin_prot);
 
     /* Read response headers */
-    ret = http_read_headers(cmd->stdout_prot,
-                            0 /* read_sep */, &resp_hdrs, &errstr);
+    ret = http_read_headers(
+        cmd->stdout_prot, 0 /* read_sep */, &resp_hdrs, &errstr);
     if (ret) {
-        syslog(LOG_ERR, "Failed to read headers from CGI script %s",
+        syslog(LOG_ERR,
+               "Failed to read headers from CGI script %s",
                txn->req_uri->path);
         txn->error.desc = "Failed to read headers from CGI script";
         ret = HTTP_SERVER_ERROR;
@@ -278,7 +300,8 @@ static int meth_get(struct transaction_t *txn,
 
         if (c == '\r') c = prot_getc(cmd->stdout_prot);
         if (c != '\n') {
-            syslog(LOG_ERR, "Failed to read newline from CGI script %s",
+            syslog(LOG_ERR,
+                   "Failed to read newline from CGI script %s",
                    txn->req_uri->path);
             txn->error.desc = "Failed to read newline from CGI script";
             ret = HTTP_SERVER_ERROR;
@@ -291,10 +314,11 @@ static int meth_get(struct transaction_t *txn,
                 txn->resp_body.type = hdr[0];
 
                 resp_body.flags = BODY_RESPONSE | BODY_CLOSE;
-                ret = http_read_body(cmd->stdout_prot,
-                                     resp_hdrs, &resp_body, &errstr);
+                ret = http_read_body(
+                    cmd->stdout_prot, resp_hdrs, &resp_body, &errstr);
                 if (ret) {
-                    syslog(LOG_ERR, "Failed to body from CGI script %s",
+                    syslog(LOG_ERR,
+                           "Failed to body from CGI script %s",
                            txn->req_uri->path);
                     txn->error.desc = "Failed to read body from CGI script";
                     ret = HTTP_SERVER_ERROR;
@@ -321,7 +345,7 @@ static int meth_get(struct transaction_t *txn,
 
             /* Reset the URI part of our current transaction */
             xmlFreeURI(txn->req_uri);
-            free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
+            free_hash_table(&txn->req_qparams, (void (*)(void *))&freestrlist);
 
             /* Examine new request */
             ret = examine_request(txn, hdr[0]);
@@ -344,10 +368,10 @@ static int meth_get(struct transaction_t *txn,
 
     /* Output response */
     txn->resp_body.extra_hdrs = resp_hdrs;
-    write_body(code, txn,
-               buf_base(&resp_body.payload), buf_len(&resp_body.payload));
+    write_body(
+        code, txn, buf_base(&resp_body.payload), buf_len(&resp_body.payload));
 
-  done:
+done:
     spool_free_hdrcache(resp_hdrs);
     buf_free(&resp_body.payload);
     strarray_free(env);

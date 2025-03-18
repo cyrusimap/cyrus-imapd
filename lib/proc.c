@@ -42,16 +42,16 @@
 
 #include <config.h>
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <signal.h>
-#include <sysexits.h>
-#include <syslog.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sysexits.h>
+#include <syslog.h>
 
 #include "assert.h"
 #include "libconfig.h"
@@ -62,22 +62,21 @@
 #include "xunlink.h"
 
 #ifdef HAVE_DIRENT_H
-# include <dirent.h>
-# define NAMLEN(dirent) strlen((dirent)->d_name)
+#include <dirent.h>
+#define NAMLEN(dirent) strlen((dirent)->d_name)
 #else
-# define dirent direct
-# define NAMLEN(dirent) (dirent)->d_namlen
-# if HAVE_SYS_NDIR_H
-#  include <sys/ndir.h>
-# endif
-# if HAVE_SYS_DIR_H
-#  include <sys/dir.h>
-# endif
-# if HAVE_NDIR_H
-#  include <ndir.h>
-# endif
+#define dirent direct
+#define NAMLEN(dirent) (dirent)->d_namlen
+#if HAVE_SYS_NDIR_H
+#include <sys/ndir.h>
 #endif
-
+#if HAVE_SYS_DIR_H
+#include <sys/dir.h>
+#endif
+#if HAVE_NDIR_H
+#include <ndir.h>
+#endif
+#endif
 
 #define FNAME_PROCDIR "/proc"
 
@@ -85,7 +84,7 @@
  * system library
  */
 extern void setproctitle(const char *fmt, ...)
-                         __attribute__((format(printf, 1, 2)));
+    __attribute__((format(printf, 1, 2)));
 
 static char *proc_getpath(pid_t pid, int isnew)
 {
@@ -97,13 +96,11 @@ static char *proc_getpath(pid_t pid, int isnew)
         if (procpath[0] != '/')
             fatal("proc path must be fully qualified", EX_CONFIG);
 
-        if (strlen(procpath) < 2)
-            fatal("proc path must not be '/'", EX_CONFIG);
+        if (strlen(procpath) < 2) fatal("proc path must not be '/'", EX_CONFIG);
 
         buf_setcstr(&buf, procpath);
 
-        if (buf.s[buf.len-1] != '/')
-            buf_putc(&buf, '/');
+        if (buf.s[buf.len - 1] != '/') buf_putc(&buf, '/');
     }
     else {
         buf_setcstr(&buf, config_dir);
@@ -111,19 +108,14 @@ static char *proc_getpath(pid_t pid, int isnew)
         buf_putc(&buf, '/');
     }
 
-    if (pid)
-        buf_printf(&buf, "%u", pid);
+    if (pid) buf_printf(&buf, "%u", pid);
 
-    if (isnew)
-        buf_appendcstr(&buf, ".new");
+    if (isnew) buf_appendcstr(&buf, ".new");
 
     return buf_release(&buf);
 }
 
-static char *proc_getdir(void)
-{
-    return proc_getpath(0, 0);
-}
+static char *proc_getdir(void) { return proc_getpath(0, 0); }
 
 struct proc_handle {
     pid_t pid;
@@ -154,25 +146,29 @@ EXPORTED int proc_register(struct proc_handle **handlep,
         handle_is_new = 1;
         if (!pid) pid = getpid();
         handle->pid = pid;
-        handle->fname = proc_getpath(pid, /*isnew*/0);
+        handle->fname = proc_getpath(pid, /*isnew*/ 0);
         *handlep = handle;
     }
 
-    newfname = proc_getpath(pid, /*isnew*/1);
+    newfname = proc_getpath(pid, /*isnew*/ 1);
 
     procfile = fopen(newfname, "w+");
     if (!procfile) {
         if (cyrus_mkdir(newfname, 0755) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: failed to create proc directory",
-                               "fname=<%s>", newfname);
+            xsyslog(LOG_ERR,
+                    "IOERROR: failed to create proc directory",
+                    "fname=<%s>",
+                    newfname);
             goto error;
         }
         else {
             syslog(LOG_NOTICE, "created proc directory");
             procfile = fopen(newfname, "w+");
             if (!procfile) {
-                xsyslog(LOG_ERR, "IOERROR: failed to create proc file",
-                                 "fname=<%s>", newfname);
+                xsyslog(LOG_ERR,
+                        "IOERROR: failed to create proc file",
+                        "fname=<%s>",
+                        newfname);
                 goto error;
             }
         }
@@ -183,14 +179,21 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     if (!userid) userid = "";
     if (!mailbox) mailbox = "";
     if (!cmd) cmd = "";
-    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n",
-                      servicename, clienthost, userid, mailbox, cmd);
+    fprintf(procfile,
+            "%s\t%s\t%s\t%s\t%s\n",
+            servicename,
+            clienthost,
+            userid,
+            mailbox,
+            cmd);
     fclose(procfile);
 
     if (rename(newfname, handle->fname)) {
-        xsyslog(LOG_ERR, "IOERROR: rename failed",
-                         "source=<%s> dest=<%s>",
-                         newfname, handle->fname);
+        xsyslog(LOG_ERR,
+                "IOERROR: rename failed",
+                "source=<%s> dest=<%s>",
+                newfname,
+                handle->fname);
         xunlink(newfname);
         goto error;
     }
@@ -228,10 +231,9 @@ EXPORTED void proc_cleanup(struct proc_handle **handlep)
 /* used by master to remove proc files after service processes crash */
 EXPORTED void proc_force_cleanup(pid_t pid)
 {
-    char *fname = proc_getpath(pid, /*isnew*/0);
+    char *fname = proc_getpath(pid, /*isnew*/ 0);
 
-    if (fname)
-        xunlink(fname);
+    if (fname) xunlink(fname);
     free(fname);
 }
 
@@ -242,7 +244,7 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
     char *path = NULL;
     int fd = -1;
 
-    path = proc_getpath(pid, /*isnew*/0);
+    path = proc_getpath(pid, /*isnew*/ 0);
 
     fd = open(path, O_RDONLY, 0);
     if (fd != -1) {
@@ -256,16 +258,13 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
         char *mailbox = NULL;
         char *cmd = NULL;
 
-        if (fstat(fd, &sbuf))
-            goto done;
-        if (!S_ISREG(sbuf.st_mode))
-            goto done;
+        if (fstat(fd, &sbuf)) goto done;
+        if (!S_ISREG(sbuf.st_mode)) goto done;
 
         /* grab a copy of the file contents */
-        buf = xmalloc(sbuf.st_size+1);
+        buf = xmalloc(sbuf.st_size + 1);
         n = retry_read(fd, buf, sbuf.st_size);
-        if (n != sbuf.st_size)
-            goto done;
+        if (n != sbuf.st_size) goto done;
 
         buf[sbuf.st_size] = '\0';
 
@@ -322,11 +321,14 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
             p = dirent->d_name;
             if (*p == '.') continue; /* dot files */
             len = strlen(p);
-            if (len > 4 && !strcmp(p + len - 4, ".new")) continue; /* temporary new file */
+            if (len > 4 && !strcmp(p + len - 4, ".new"))
+                continue; /* temporary new file */
             pid = strtoul(p, &end, 10);
             if (pid == 0 || end == NULL || *end || end == p) {
-                syslog(LOG_ERR, "IOERROR: bogus filename \"%s/%s\" in proc_foreach",
-                                path, p);
+                syslog(LOG_ERR,
+                       "IOERROR: bogus filename \"%s/%s\" in proc_foreach",
+                       path,
+                       p);
                 continue;
             }
             r = proc_foreach_helper(pid, func, rock);
@@ -358,8 +360,7 @@ static int procusage_cb(pid_t pid __attribute__((unused)),
 
     if (limitsp->clienthost && !strcmp(clienthost, limitsp->clienthost))
         limitsp->host++;
-    if (limitsp->userid && !strcmp(userid, limitsp->userid))
-        limitsp->user++;
+    if (limitsp->userid && !strcmp(userid, limitsp->userid)) limitsp->user++;
 
     return 0;
 }
@@ -369,8 +370,7 @@ EXPORTED int proc_checklimits(struct proc_limits *limitsp)
     limitsp->maxhost = config_getint(IMAPOPT_MAXLOGINS_PER_HOST);
     limitsp->maxuser = config_getint(IMAPOPT_MAXLOGINS_PER_USER);
 
-    if (!limitsp->maxuser && !limitsp->maxhost)
-        return 0;
+    if (!limitsp->maxuser && !limitsp->maxhost) return 0;
 
     limitsp->host = 0;
     limitsp->user = 0;
@@ -391,7 +391,7 @@ struct prockill_data {
     int sig;
 };
 
-#define PROCKILL_INIT { NULL, NULL, NULL, NULL, NULL, 0 }
+#define PROCKILL_INIT {NULL, NULL, NULL, NULL, NULL, 0}
 
 static int prockill_cb(pid_t pid,
                        const char *servicename,
@@ -405,23 +405,17 @@ static int prockill_cb(pid_t pid,
     pid_t mypid = getpid();
 
     /* don't kill myself */
-    if (mypid == pid)
-        return 0;
+    if (mypid == pid) return 0;
 
-    if (dat->servicename && strcmpsafe(servicename, dat->servicename))
-        return 0;
+    if (dat->servicename && strcmpsafe(servicename, dat->servicename)) return 0;
 
-    if (dat->clienthost && strcmpsafe(clienthost, dat->clienthost))
-        return 0;
+    if (dat->clienthost && strcmpsafe(clienthost, dat->clienthost)) return 0;
 
-    if (dat->userid && strcmpsafe(userid, dat->userid))
-        return 0;
+    if (dat->userid && strcmpsafe(userid, dat->userid)) return 0;
 
-    if (dat->mboxname && strcmpsafe(mboxname, dat->mboxname))
-        return 0;
+    if (dat->mboxname && strcmpsafe(mboxname, dat->mboxname)) return 0;
 
-    if (dat->cmd && strcmpsafe(cmd, dat->cmd))
-        return 0;
+    if (dat->cmd && strcmpsafe(cmd, dat->cmd)) return 0;
 
     if (dat->sig)
         kill(pid, dat->sig);
@@ -430,7 +424,6 @@ static int prockill_cb(pid_t pid,
 
     return 0;
 }
-
 
 EXPORTED void proc_killuser(const char *userid)
 {
@@ -474,8 +467,10 @@ EXPORTED void proc_killusercmd(const char *userid, const char *cmd, int sig)
 
 /* n.b. proc_settitle_init() is defined in setproctitle.c */
 
-EXPORTED void proc_settitle(const char *servicename, const char *clienthost,
-                            const char *userid, const char *mailbox,
+EXPORTED void proc_settitle(const char *servicename,
+                            const char *clienthost,
+                            const char *userid,
+                            const char *mailbox,
                             const char *cmd)
 {
     if (!servicename) servicename = "";
@@ -484,6 +479,6 @@ EXPORTED void proc_settitle(const char *servicename, const char *clienthost,
     if (!mailbox) mailbox = "";
     if (!cmd) cmd = "";
 
-    setproctitle("%s: %s %s %s %s",
-                 servicename, clienthost, userid, mailbox, cmd);
+    setproctitle(
+        "%s: %s %s %s %s", servicename, clienthost, userid, mailbox, cmd);
 }

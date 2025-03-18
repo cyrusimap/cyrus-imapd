@@ -41,13 +41,13 @@
 
 #include <config.h>
 
-#include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <syslog.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -55,12 +55,12 @@
 #include <string.h>
 
 #include "assert.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "idlemsg.h"
 #include "global.h"
-#include "xunlink.h"
+#include "idlemsg.h"
 #include "util.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
+#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -93,8 +93,12 @@ HIDDEN int idle_make_client_address(struct sockaddr_un *mysun)
     memset(mysun, 0, sizeof(*mysun));
     mysun->sun_family = AF_UNIX;
     /* TODO: detect overflow and fail */
-    snprintf(mysun->sun_path, sizeof(mysun->sun_path), "%s%s/idle.%d",
-             config_dir, FNAME_IDLE_SOCK_DIR, (int)getpid());
+    snprintf(mysun->sun_path,
+             sizeof(mysun->sun_path),
+             "%s%s/idle.%d",
+             config_dir,
+             FNAME_IDLE_SOCK_DIR,
+             (int)getpid());
     return 1;
 }
 
@@ -109,7 +113,7 @@ EXPORTED const char *idle_id_from_addr(const struct sockaddr_un *mysun)
     assert(tail);
     tail++;
     p = strchr(tail, '.');
-    return (p ? p+1 : tail);
+    return (p ? p + 1 : tail);
 }
 
 EXPORTED int idle_init_sock(const struct sockaddr_un *local)
@@ -130,14 +134,14 @@ EXPORTED int idle_init_sock(const struct sockaddr_un *local)
     xunlink(local->sun_path);
     len = sizeof(local->sun_family) + strlen(local->sun_path) + 1;
 
-    oldumask = umask((mode_t) 0); /* for Linux */
+    oldumask = umask((mode_t)0); /* for Linux */
 
     if (bind(s, (struct sockaddr *)local, len) == -1) {
         perror("bind");
         close(s);
         return 0;
     }
-    umask(oldumask); /* for Linux */
+    umask(oldumask);              /* for Linux */
     chmod(local->sun_path, 0777); /* for DUX */
 
     idle_sock = s;
@@ -158,10 +162,7 @@ EXPORTED void idle_done_sock(void)
     buf_free(&buf);
 }
 
-EXPORTED int idle_get_sock(void)
-{
-    return idle_sock;
-}
+EXPORTED int idle_get_sock(void) { return idle_sock; }
 
 /*
  * Send a message to a peer (idled or imapd).
@@ -177,8 +178,7 @@ EXPORTED int idle_send(const struct sockaddr_un *remote, json_t *msg)
     flags |= MSG_DONTWAIT;
 #endif
 
-    if (idle_sock < 0)
-        return IMAP_SERVER_UNAVAILABLE;
+    if (idle_sock < 0) return IMAP_SERVER_UNAVAILABLE;
 
     /* Determine size of encoded message */
     size = json_dumpb(msg, NULL, 0, JSON_COMPACT);
@@ -186,7 +186,7 @@ EXPORTED int idle_send(const struct sockaddr_un *remote, json_t *msg)
 
     /* Make sure we have enough space for message and its prepended size*/
     buf_truncate(&buf, size + SIZEOF_SIZE_T);
-    base = (char *) buf_base(&buf);
+    base = (char *)buf_base(&buf);
 
     /* Copy size into buffer */
     memcpy(base, &size, SIZEOF_SIZE_T);
@@ -194,8 +194,12 @@ EXPORTED int idle_send(const struct sockaddr_un *remote, json_t *msg)
     /* Encode message into buffer */
     json_dumpb(msg, base + SIZEOF_SIZE_T, size, JSON_COMPACT);
 
-    if (sendto(idle_sock, (void *) base, buf_len(&buf),
-               flags, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
+    if (sendto(idle_sock,
+               (void *)base,
+               buf_len(&buf),
+               flags,
+               (struct sockaddr *)remote,
+               sizeof(*remote)) == -1) {
         return errno;
     }
 
@@ -211,14 +215,17 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
     char *base;
     ssize_t n;
 
-    if (idle_sock < 0)
-        return NULL;
+    if (idle_sock < 0) return NULL;
 
     memset(remote, 0, remote_len);
 
     /* Read the size of the message */
-    n = recvfrom(idle_sock, (void *) &size, SIZEOF_SIZE_T, MSG_PEEK,
-                 (struct sockaddr *) remote, &remote_len);
+    n = recvfrom(idle_sock,
+                 (void *)&size,
+                 SIZEOF_SIZE_T,
+                 MSG_PEEK,
+                 (struct sockaddr *)remote,
+                 &remote_len);
 
     if (n < 0) {
         syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
@@ -232,11 +239,15 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
 
     /* Make sure we have enough space for message */
     buf_truncate(&buf, size + SIZEOF_SIZE_T);
-    base = (char *) buf_base(&buf);
+    base = (char *)buf_base(&buf);
 
     /* Read actual message */
-    n = recvfrom(idle_sock, (void *) base, buf_len(&buf), 0,
-                 (struct sockaddr *) remote, &remote_len);
+    n = recvfrom(idle_sock,
+                 (void *)base,
+                 buf_len(&buf),
+                 0,
+                 (struct sockaddr *)remote,
+                 &remote_len);
 
     if (n < 0) {
         syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
@@ -251,4 +262,3 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
 
     return msg;
 }
-

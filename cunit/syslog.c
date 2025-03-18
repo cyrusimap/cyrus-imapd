@@ -39,16 +39,16 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "cunit-syslog.h"
+#include <CUnit/CUnit.h>
 #include <config.h>
+#include <memory.h>
+#include <regex.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <syslog.h>
 #include <unistd.h>
-#include <regex.h>
-#include <memory.h>
-#include <CUnit/CUnit.h>
-#include "cunit-syslog.h"
 
 // Don't let util.h override our regex include
 #ifdef ENABLE_REGEX
@@ -61,23 +61,22 @@
 
 extern int verbose;
 
-struct slmatch
-{
-    int is_used;            /* is this slot claimed? */
+struct slmatch {
+    int is_used; /* is this slot claimed? */
     char re[1025];
     unsigned int count;
-    regex_t cre;            /* compiled regex */
+    regex_t cre; /* compiled regex */
 };
 #define MAX_SLMATCH 32
 static unsigned int nslmatches = 0;
 static struct slmatch slmatches[MAX_SLMATCH];
 
 #if !defined(va_copy)
-#    if defined(__va_copy)
-#        define va_copy __va_copy
-#    else
-#        define va_copy(d,s) (d) = (s)
-#    endif
+#if defined(__va_copy)
+#define va_copy __va_copy
+#else
+#define va_copy(d, s) (d) = (s)
+#endif
 #endif
 
 static char *match_error(struct slmatch *sl, int r)
@@ -86,22 +85,20 @@ static char *match_error(struct slmatch *sl, int r)
     int n;
 
     buf[0] = '\0';
-    if (*(sl->re))
-        snprintf(buf, sizeof(buf)-100, "/%s/: ", sl->re);
+    if (*(sl->re)) snprintf(buf, sizeof(buf) - 100, "/%s/: ", sl->re);
 
     n = strlen(buf);
-    regerror(r, &sl->cre, buf+n, sizeof(buf)-n-1);
+    regerror(r, &sl->cre, buf + n, sizeof(buf) - n - 1);
     strcat(buf, "\n");
 
     return buf;
 }
 
-static void
-__attribute__((format(printf, 2, 0)))
+static void __attribute__((format(printf, 2, 0)))
 vlog(int prio, const char *fmt, va_list args)
 {
     if (nslmatches) {
-        int e = errno;      /* save errno Just In Case */
+        int e = errno; /* save errno Just In Case */
         va_list args2;
         unsigned int i;
         int r;
@@ -113,9 +110,8 @@ vlog(int prio, const char *fmt, va_list args)
         vsnprintf(line, sizeof(line), fmt, args2);
         va_end(args2);
 
-        for (i = 0 ; i < MAX_SLMATCH ; i++) {
-            if (!slmatches[i].is_used)
-                continue; /* empty slot */
+        for (i = 0; i < MAX_SLMATCH; i++) {
+            if (!slmatches[i].is_used) continue; /* empty slot */
             r = regexec(&slmatches[i].cre, line, 0, NULL, 0);
             if (!r) {
                 /* found */
@@ -123,16 +119,22 @@ vlog(int prio, const char *fmt, va_list args)
                     fprintf(stderr, "\nSYSLOG matched /%s/\n", slmatches[i].re);
                 slmatches[i].count++;
                 break;
-            } else {
-                /* don't naively report mismatches when we're looking for multiple patterns */
+            }
+            else {
+                /* don't naively report mismatches when we're looking for
+                 * multiple patterns */
                 if (nslmatches == 1 || verbose >= 2)
-                    fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
+                    fprintf(stderr,
+                            "\nSYSLOG didn't match '%s' against '%s'\n",
+                            line,
+                            slmatches[i].re);
             }
 
             if (r != REG_NOMATCH) {
                 /* error */
                 const char *msg = match_error(&slmatches[i], r);
-                CU_assertImplementation(0, __LINE__, msg, __FILE__, NULL, CU_TRUE);
+                CU_assertImplementation(
+                    0, __LINE__, msg, __FILE__, NULL, CU_TRUE);
                 /* NOTREACHED */
                 break;
             }
@@ -143,10 +145,9 @@ vlog(int prio, const char *fmt, va_list args)
 
     /* glibc handles %m in vfprintf() so we don't need to do
      * anything special to simulate that feature of syslog() */
-     /* TODO: find and expand %m on non-glibc platforms */
+    /* TODO: find and expand %m on non-glibc platforms */
 
-    if (verbose < 2)
-        return;
+    if (verbose < 2) return;
     fprintf(stderr, "\nSYSLOG %d[", prio & LOG_PRIMASK);
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "]\n");
@@ -156,10 +157,8 @@ vlog(int prio, const char *fmt, va_list args)
 #if defined(__GLIBC__)
 /* Under some but not all combinations of options, glibc
  * defines syslog() as an inline that calls this function */
-EXPORTED void
-__attribute__((format(printf, 3, 4)))
-__syslog_chk(int prio, int whatever __attribute__((unused)),
-             const char *fmt, ...)
+EXPORTED void __attribute__((format(printf, 3, 4))) __syslog_chk(
+    int prio, int whatever __attribute__((unused)), const char *fmt, ...)
 {
     va_list args;
 
@@ -178,8 +177,10 @@ EXPORTED void syslog(int prio, const char *fmt, ...)
     va_end(args);
 }
 
-unsigned int CU_syslogMatchBegin(const char *match, const char *filename,
-                                 unsigned int lineno, int issubstr)
+unsigned int CU_syslogMatchBegin(const char *match,
+                                 const char *filename,
+                                 unsigned int lineno,
+                                 int issubstr)
 {
     unsigned int i;
     int r;
@@ -207,20 +208,27 @@ unsigned int CU_syslogMatchBegin(const char *match, const char *filename,
     }
 
     if (strlen(re) > 1024) {
-        CU_assertImplementation(0, lineno, "match too long, increase buffer size in syslog.c..", filename, NULL, CU_TRUE);
+        CU_assertImplementation(
+            0,
+            lineno,
+            "match too long, increase buffer size in syslog.c..",
+            filename,
+            NULL,
+            CU_TRUE);
     }
 
     /* find an empty slot */
-    for (i = 0 ; i < MAX_SLMATCH ; i++) {
+    for (i = 0; i < MAX_SLMATCH; i++) {
         if (!slmatches[i].is_used) {
             /* found */
-            r = regcomp(&slmatches[i].cre, re, REG_EXTENDED|REG_ICASE|REG_NOSUB);
+            r = regcomp(
+                &slmatches[i].cre, re, REG_EXTENDED | REG_ICASE | REG_NOSUB);
             if (r) {
-                if (issubstr)
-                    free((char*)re);
+                if (issubstr) free((char *)re);
                 const char *msg = match_error(&slmatches[i], r);
                 memset(&slmatches[i], 0, sizeof(slmatches[i]));
-                CU_assertImplementation(0, lineno, msg, filename, NULL, CU_TRUE);
+                CU_assertImplementation(
+                    0, lineno, msg, filename, NULL, CU_TRUE);
                 /* NOTREACHED */
                 return 0;
             }
@@ -228,14 +236,13 @@ unsigned int CU_syslogMatchBegin(const char *match, const char *filename,
             slmatches[i].count = 0;
             slmatches[i].is_used = 1;
             nslmatches++;
-            if (issubstr)
-                free((char*)re);
-            return i+1;
+            if (issubstr) free((char *)re);
+            return i + 1;
         }
     }
-    if (issubstr)
-        free((char*)re);
-    CU_assertImplementation(0, lineno, "No free syslog match slots", filename, NULL, CU_TRUE);
+    if (issubstr) free((char *)re);
+    CU_assertImplementation(
+        0, lineno, "No free syslog match slots", filename, NULL, CU_TRUE);
     /* NOTREACHED */
     return 0;
 }
@@ -246,11 +253,9 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
     unsigned int count = 0;
     const char *s = NULL;
 
-    for (i = 0 ; i < MAX_SLMATCH ; i++) {
-        if (!slmatches[i].is_used)
-            continue; /* empty slot */
-        if (match && match != i+1)
-            continue; /* not the slot for @match */
+    for (i = 0; i < MAX_SLMATCH; i++) {
+        if (!slmatches[i].is_used) continue;   /* empty slot */
+        if (match && match != i + 1) continue; /* not the slot for @match */
 
         if (!s)
             s = slmatches[i].re;
@@ -266,8 +271,7 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
         slmatches[i].is_used = 0;
 
         nslmatches--;
-        if (match)
-            break;      /* only looking for a single slot */
+        if (match) break; /* only looking for a single slot */
     }
 
     if (match && !s) {
@@ -275,8 +279,7 @@ unsigned int CU_syslogMatchEnd(unsigned int match, const char **sp)
         count = ~0U;
     }
 
-    if (sp)
-        *sp = s;
+    if (sp) *sp = s;
     return count;
 }
 

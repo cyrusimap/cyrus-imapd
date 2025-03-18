@@ -45,26 +45,26 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <getopt.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <signal.h>
 
 #include "annotate.h"
 #include "global.h"
 #include "index.h"
 #include "libcyr_cfg.h"
-#include "map.h"
 #include "mailbox.h"
+#include "map.h"
 #include "mboxlist.h"
+#include "sync_log.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "sync_log.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -80,27 +80,23 @@ static void usage(void)
 {
     fprintf(stderr,
             "unexpunge [-C <altconfig>] -l <mailbox> [<uid>...]\n"
-            "unexpunge [-C <altconfig>] -t time-interval [-d] [-v] [-f flag] mailbox\n"
+            "unexpunge [-C <altconfig>] -t time-interval [-d] [-v] [-f flag] "
+            "mailbox\n"
             "unexpunge [-C <altconfig>] -a [-d] [-v] [-f flag] <mailbox>\n"
-            "unexpunge [-C <altconfig>] -u [-d] [-v] [-f flag] <mailbox> <uid>...\n");
+            "unexpunge [-C <altconfig>] -u [-d] [-v] [-f flag] <mailbox> "
+            "<uid>...\n");
     exit(-1);
 }
 
 static int compare_uid(const void *a, const void *b)
 {
-    return *((unsigned long *) a) - *((unsigned long *) b);
+    return *((unsigned long *)a) - *((unsigned long *)b);
 }
 
-enum {
-    MODE_UNKNOWN = -1,
-    MODE_LIST,
-    MODE_ALL,
-    MODE_TIME,
-    MODE_UID
-};
+enum { MODE_UNKNOWN = -1, MODE_LIST, MODE_ALL, MODE_TIME, MODE_UID };
 
-static void list_expunged(const char *mboxname,
-                          unsigned long *uids, unsigned nuids)
+static void
+list_expunged(const char *mboxname, unsigned long *uids, unsigned nuids)
 {
     struct mailbox *mailbox = NULL;
     struct index_record *records = NULL;
@@ -112,28 +108,24 @@ static void list_expunged(const char *mboxname,
 
     r = mailbox_open_irl(mboxname, &mailbox);
     if (r) {
-        printf("Failed to open mailbox %s: %s",
-               mboxname, error_message(r));
+        printf("Failed to open mailbox %s: %s", mboxname, error_message(r));
         return;
     }
 
     /* first pass - read the records.  Don't print until we release the
      * lock */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
-        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
-            continue;
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) continue;
 
         if (nuids) {
-            while (uidnum < nuids && record->uid > uids[uidnum])
-                uidnum++;
-            if (uidnum >= nuids)
-                continue;
-            if (record->uid != uids[uidnum])
-                continue;
+            while (uidnum < nuids && record->uid > uids[uidnum]) uidnum++;
+            if (uidnum >= nuids) continue;
+            if (record->uid != uids[uidnum]) continue;
             /* otherwise we want this one */
         }
 
@@ -164,25 +156,34 @@ static void list_expunged(const char *mboxname,
             continue;
         }
 
-        printf("\tFrom: %.*s\n", cacheitem_size(record, CACHE_FROM),
-                cacheitem_base(record, CACHE_FROM));
-        printf("\tTo  : %.*s\n", cacheitem_size(record, CACHE_TO),
-                cacheitem_base(record, CACHE_TO));
-        printf("\tCc  : %.*s\n", cacheitem_size(record, CACHE_CC),
-                cacheitem_base(record, CACHE_CC));
-        printf("\tBcc : %.*s\n", cacheitem_size(record, CACHE_BCC),
-                cacheitem_base(record, CACHE_BCC));
-        printf("\tSubj: %.*s\n\n", cacheitem_size(record, CACHE_SUBJECT),
-                cacheitem_base(record, CACHE_SUBJECT));
+        printf("\tFrom: %.*s\n",
+               cacheitem_size(record, CACHE_FROM),
+               cacheitem_base(record, CACHE_FROM));
+        printf("\tTo  : %.*s\n",
+               cacheitem_size(record, CACHE_TO),
+               cacheitem_base(record, CACHE_TO));
+        printf("\tCc  : %.*s\n",
+               cacheitem_size(record, CACHE_CC),
+               cacheitem_base(record, CACHE_CC));
+        printf("\tBcc : %.*s\n",
+               cacheitem_size(record, CACHE_BCC),
+               cacheitem_base(record, CACHE_BCC));
+        printf("\tSubj: %.*s\n\n",
+               cacheitem_size(record, CACHE_SUBJECT),
+               cacheitem_base(record, CACHE_SUBJECT));
     }
 
     free(records);
     mailbox_close(&mailbox);
 }
 
-static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
-                     unsigned nuids, time_t time_since, unsigned *numrestored,
-                     const char *extname)
+static int restore_expunged(struct mailbox *mailbox,
+                            int mode,
+                            unsigned long *uids,
+                            unsigned nuids,
+                            time_t time_since,
+                            unsigned *numrestored,
+                            const char *extname)
 {
     struct index_record newrecord;
     annotate_state_t *astate = NULL;
@@ -194,26 +195,22 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
     *numrestored = 0;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
-        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
-            continue;
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) continue;
 
         if (mode == MODE_UID) {
-            while (uidnum < nuids && record->uid > uids[uidnum])
-                uidnum++;
-            if (uidnum >= nuids)
-                continue;
-            if (record->uid != uids[uidnum])
-                continue;
+            while (uidnum < nuids && record->uid > uids[uidnum]) uidnum++;
+            if (uidnum >= nuids) continue;
+            if (record->uid != uids[uidnum]) continue;
             /* otherwise we want this one */
         }
         else if (mode == MODE_TIME) {
-            if (record->last_updated < time_since)
-                continue;
+            if (record->last_updated < time_since) continue;
             /* otherwise we want this one */
         }
 
@@ -227,8 +224,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
         /* bump the UID, strip the flags */
         newrecord.uid = mailbox->i.last_uid + 1;
         newrecord.internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
-        if (unsetdeleted)
-            newrecord.system_flags &= ~FLAG_DELETED;
+        if (unsetdeleted) newrecord.system_flags &= ~FLAG_DELETED;
 
         /* copy the message file */
         fname = mailbox_record_fname(mailbox, &newrecord);
@@ -240,7 +236,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
             int userflag = 0;
             r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
             if (r) break;
-            newrecord.user_flags[userflag/32] |= 1U<<(userflag&31);
+            newrecord.user_flags[userflag / 32] |= 1U << (userflag & 31);
         }
 
         /* and append the new record */
@@ -254,19 +250,20 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
         if (r) break;
 
         /* and copy over any annotations */
-        r = annotate_msg_copy(mailbox, record->uid,
-                              mailbox, newrecord.uid,
-                              userid);
+        r = annotate_msg_copy(
+            mailbox, record->uid, mailbox, newrecord.uid, userid);
         if (r) break;
 
         if (verbose)
             printf("Unexpunged %s: %u => %u\n",
-                   extname, record->uid, newrecord.uid);
+                   extname,
+                   record->uid,
+                   newrecord.uid);
 
         /* mark the old one unlinked so we don't see it again */
         struct index_record oldrecord = *record;
-        oldrecord.internal_flags |= FLAG_INTERNAL_UNLINKED |
-            FLAG_INTERNAL_NEEDS_CLEANUP;
+        oldrecord.internal_flags |=
+            FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
         if (r) break;
 
@@ -274,8 +271,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     }
 
     /* better get that seen to */
-    if (*numrestored)
-        mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+    if (*numrestored) mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
     mailbox_iter_done(&iter);
     free(userid);
@@ -300,20 +296,19 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "all", no_argument, NULL, 'a' },
-        { "unset-deleted", no_argument, NULL, 'd' },
-        { "set-flag", required_argument, NULL, 'f' },
-        { "list", no_argument, NULL, 'l' },
-        { "within-time-interval", required_argument, NULL, 't' },
-        { "uids", no_argument, NULL, 'u' },
-        { "verbose", no_argument, NULL, 'v' },
+        {"all",                  no_argument,       NULL, 'a'},
+        {"unset-deleted",        no_argument,       NULL, 'd'},
+        {"set-flag",             required_argument, NULL, 'f'},
+        {"list",                 no_argument,       NULL, 'l'},
+        {"within-time-interval", required_argument, NULL, 't'},
+        {"uids",                 no_argument,       NULL, 'u'},
+        {"verbose",              no_argument,       NULL, 'v'},
 
-        { 0, 0, 0, 0 },
+        {0,                      0,                 0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -334,21 +329,21 @@ int main(int argc, char *argv[])
 
             mode = MODE_TIME;
             secs = atoi(optarg);
-            len  = strlen(optarg);
+            len = strlen(optarg);
 
             if ((secs > 0) && (len > 1)) {
-                switch (optarg[len-1]) {
+                switch (optarg[len - 1]) {
                 case 'm':
                     secs *= 60;
                     break;
                 case 'h':
-                    secs *= (60*60);
+                    secs *= (60 * 60);
                     break;
                 case 'd':
-                    secs *= (24*60*60);
+                    secs *= (24 * 60 * 60);
                     break;
                 case 'w':
-                    secs *= (7*24*60*60);
+                    secs *= (7 * 24 * 60 * 60);
                     break;
                 }
             }
@@ -379,9 +374,8 @@ int main(int argc, char *argv[])
     }
 
     /* sanity check */
-    if (mode == MODE_UNKNOWN ||
-        (optind + (mode == MODE_UID ? 1 : 0)) >= argc) usage();
-
+    if (mode == MODE_UNKNOWN || (optind + (mode == MODE_UID ? 1 : 0)) >= argc)
+        usage();
 
     cyrus_init(alt_config, "unexpunge", 0, 0);
 
@@ -393,7 +387,8 @@ int main(int argc, char *argv[])
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&unex_namespace, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(&unex_namespace,
+                                     NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -405,10 +400,10 @@ int main(int argc, char *argv[])
     if (nuids) {
         unsigned i;
 
-        uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));
+        uids = (unsigned long *)xmalloc(nuids * sizeof(unsigned long));
 
         for (i = 0; i < nuids; i++)
-            uids[i] = strtoul(argv[optind+i], NULL, 10);
+            uids[i] = strtoul(argv[optind + i], NULL, 10);
 
         /* Sort the UIDs so we can binary search */
         qsort(uids, nuids, sizeof(unsigned long), compare_uid);
@@ -429,16 +424,18 @@ int main(int argc, char *argv[])
     extname = mboxname_to_external(intname, &unex_namespace, NULL);
 
     printf("restoring %sexpunged messages in mailbox '%s'\n",
-            mode == MODE_ALL ? "all " : "", extname);
+           mode == MODE_ALL ? "all " : "",
+           extname);
 
-    r = restore_expunged(mailbox, mode, uids, nuids, time_since, &numrestored, extname);
+    r = restore_expunged(
+        mailbox, mode, uids, nuids, time_since, &numrestored, extname);
 
     if (!r) {
-        printf("restored %u expunged messages\n",
-                numrestored);
+        printf("restored %u expunged messages\n", numrestored);
         syslog(LOG_NOTICE,
                "restored %u expunged messages in mailbox '%s'",
-               numrestored, extname);
+               numrestored,
+               extname);
     }
 
     mailbox_close(&mailbox);

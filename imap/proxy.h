@@ -44,34 +44,39 @@
 #define _PROXY_H
 
 #include "backend.h"
-#include "protocol.h"
 #include "prot.h"
+#include "protocol.h"
 
 #define IDLE_TIMEOUT (5 * 60)
 
 /* a final destination for a message */
 struct rcpt {
     char rcpt[MAX_MAILBOX_BUFFER]; /* where? */
-    int rcpt_num;                   /* credit this to who? */
+    int rcpt_num;                  /* credit this to who? */
     struct rcpt *next;
 };
 
 struct dest {
-    char server[MAX_MAILBOX_BUFFER];  /* where? */
-    char authas[MAX_MAILBOX_BUFFER];  /* as who? */
-    int rnum;                         /* number of rcpts */
+    char server[MAX_MAILBOX_BUFFER]; /* where? */
+    char authas[MAX_MAILBOX_BUFFER]; /* as who? */
+    int rnum;                        /* number of rcpts */
     struct rcpt *to;
     struct dest *next;
 };
 
-void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
-                   const char *server, const char *authas);
+void proxy_adddest(struct dest **dlist,
+                   const char *rcpt,
+                   int rcpt_num,
+                   const char *server,
+                   const char *authas);
 
-struct backend *
-proxy_findserver(const char *server, struct protocol_t *prot,
-                 const char *userid, ptrarray_t *cache,
-                 struct backend **current, struct backend **inbox,
-                 struct protstream *clientin);
+struct backend *proxy_findserver(const char *server,
+                                 struct protocol_t *prot,
+                                 const char *userid,
+                                 ptrarray_t *cache,
+                                 struct backend **current,
+                                 struct backend **inbox,
+                                 struct protstream *clientin);
 
 void proxy_downserver(struct backend *s);
 
@@ -89,7 +94,9 @@ struct mbox_refer {
     void *rock;
 };
 
-extern int proxy_mlookup(const char *name, mbentry_t **mbentryp,
-                         void *tid, struct mbox_refer *refer);
+extern int proxy_mlookup(const char *name,
+                         mbentry_t **mbentryp,
+                         void *tid,
+                         struct mbox_refer *refer);
 
 #endif /* _PROXY_H */

@@ -59,9 +59,8 @@ extern seqset_t *seqset_init(unsigned maxval, int flags);
 void seqset_add(seqset_t *seq, unsigned num, int ismember);
 void seqset_remove(seqset_t *seq, unsigned num);
 
-extern seqset_t *seqset_parse(const char *sequence,
-                              seqset_t *set,
-                              unsigned maxval);
+extern seqset_t *
+seqset_parse(const char *sequence, seqset_t *set, unsigned maxval);
 extern void seqset_join(seqset_t *dst, const seqset_t *src);
 extern int seqset_ismember(const seqset_t *set, unsigned num);
 extern void seqset_reset(const seqset_t *set);

@@ -52,26 +52,26 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <stdlib.h>
-#include <stdio.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <fcntl.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <string.h>
 
 #include "assert.h"
 #include "global.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "mboxlist.h"
 #include "mailbox.h"
+#include "mboxlist.h"
 #include "mboxname.h"
 #include "squat.h"
 #include "util.h"
+#include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -81,9 +81,7 @@ extern int optind;
 
 static int usage(const char *name)
 {
-    fprintf(stderr,
-            "usage: %s [-C <alt_config>] mailbox [...]\n",
-            name);
+    fprintf(stderr, "usage: %s [-C <alt_config>] mailbox [...]\n", name);
 
     exit(EX_USAGE);
 }
@@ -123,8 +121,10 @@ static int dump_one(char *name)
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
-        fprintf(stderr, "error opening looking up %s: %s\n",
-                name, error_message(r));
+        fprintf(stderr,
+                "error opening looking up %s: %s\n",
+                name,
+                error_message(r));
         return 1;
     }
 
@@ -137,8 +137,8 @@ static int dump_one(char *name)
 
     r = mailbox_open_irl(name, &mailbox);
     if (r) {
-        fprintf(stderr, "error opening mailbox %s: %s\n",
-                name, error_message(r));
+        fprintf(
+            stderr, "error opening mailbox %s: %s\n", name, error_message(r));
         return 1;
     }
 
@@ -148,15 +148,17 @@ static int dump_one(char *name)
 
     fd = open(fname, O_RDONLY, 0);
     if (fd < 0) {
-        fprintf(stderr, "error opening file %s: %s\n",
-                fname, error_message(errno));
+        fprintf(
+            stderr, "error opening file %s: %s\n", fname, error_message(errno));
         goto out;
     }
 
     index = squat_search_open(fd);
     if (index == NULL) {
-        fprintf(stderr, "error opening index %s: %s\n",
-                fname, squat_strerror(squat_get_last_error()));
+        fprintf(stderr,
+                "error opening index %s: %s\n",
+                fname,
+                squat_strerror(squat_get_last_error()));
         goto out;
     }
 
@@ -164,8 +166,8 @@ static int dump_one(char *name)
 
     r = squat_search_list_docs(index, dump_doc, NULL);
     if (r != SQUAT_OK) {
-        fprintf(stderr, "error listing index %s: %s\n",
-                fname, squat_strerror(r));
+        fprintf(
+            stderr, "error listing index %s: %s\n", fname, squat_strerror(r));
         goto out;
     }
 
@@ -184,7 +186,7 @@ int main(int argc, char **argv)
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
         switch (opt) {
-        case 'C':               /* alt config file */
+        case 'C': /* alt config file */
             alt_config = optarg;
             break;
 
@@ -195,11 +197,9 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "squat_dump", 0, CONFIG_NEED_PARTITION_DATA);
 
-    if (optind == argc)
-        usage(argv[0]);
+    if (optind == argc) usage(argv[0]);
 
-    for (i = optind; i < argc; i++)
-        dump_one(argv[i]);
+    for (i = optind; i < argc; i++) dump_one(argv[i]);
 
     cyrus_done();
 

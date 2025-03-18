@@ -48,43 +48,49 @@
 #include <strings.h>
 
 #include "assert.h"
-#include "times.h"
-#include "util.h"
 #include "gmtoff.h"
 #include "mkgmtime.h"
+#include "times.h"
+#include "util.h"
 
-EXPORTED const char monthname[][4] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
+EXPORTED const char monthname[][4] = {"Jan",
+                                      "Feb",
+                                      "Mar",
+                                      "Apr",
+                                      "May",
+                                      "Jun",
+                                      "Jul",
+                                      "Aug",
+                                      "Sep",
+                                      "Oct",
+                                      "Nov",
+                                      "Dec"};
 EXPORTED const char wday[][4] = {
-    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-};
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
-
-#define EOB (-1)            /* End Of Buffer */
+#define EOB (-1) /* End Of Buffer */
 
 static const char rfc5322_special[256] = {
-    [' ']  = 1,
+    [' '] = 1,
     ['\t'] = 1,
     ['\r'] = 1,
     ['\n'] = 1,
 };
 
 static const char rfc5322_separators[256] = {
-    [' ']  = 1,
-    [',']  = 1,
-    ['-']  = 1,
-    ['+']  = 1,
-    [':']  = 1,
+    [' '] = 1,
+    [','] = 1,
+    ['-'] = 1,
+    ['+'] = 1,
+    [':'] = 1,
 };
 
 enum {
-    Alpha = 1,              /* Alphabet */
-    UAlpha = 2,             /* Uppercase Alphabet */
-    LAlpha = 4,             /* Lowercase Alphabet */
-    Digit = 8,              /* Digits/Numbers */
-    TZSign = 16,            /* Timezone sign +/- */
+    Alpha = 1,   /* Alphabet */
+    UAlpha = 2,  /* Uppercase Alphabet */
+    LAlpha = 4,  /* Lowercase Alphabet */
+    Digit = 8,   /* Digits/Numbers */
+    TZSign = 16, /* Timezone sign +/- */
 };
 
 static const long rfc5322_usascii_charset[257] = {
@@ -92,8 +98,7 @@ static const long rfc5322_usascii_charset[257] = {
     ['A' + 1 ... 'Z' + 1] = Alpha | UAlpha,
     ['a' + 1 ... 'z' + 1] = Alpha | LAlpha,
     ['+' + 1] = TZSign,
-    ['-' + 1] = TZSign
-};
+    ['-' + 1] = TZSign};
 
 struct rfc5322dtbuf {
     const char *str;
@@ -103,38 +108,40 @@ struct rfc5322dtbuf {
 
 #define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
 
-static int monthdays(int year/*since 1900*/, int month/*0-based*/)
+static int monthdays(int year /*since 1900*/, int month /*0-based*/)
 {
     int leapday;
     static const int mdays[12] = {
-        31, 28, 31, 30, 31, 30,
-        31, 31, 30, 31, 30, 31
-    };
+        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
-    leapday = (month == 1 && isleap(year+1900));
+    leapday = (month == 1 && isleap(year + 1900));
     return mdays[month] + leapday;
 }
 
-static int dayofyear(int year/*since 1900*/, int month/*0-based*/, int day)
+static int dayofyear(int year /*since 1900*/, int month /*0-based*/, int day)
 {
     static const int ydays[2][13] = {
         {0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},
         {0, 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}
     };
-    return ydays[isleap(year+1900)][month+1] + day;
+    return ydays[isleap(year + 1900)][month + 1] + day;
 }
 
 #undef isleap
 
-static int dayofweek(int year/*since 1900*/, int month/*0-based*/, int day)
+static int dayofweek(int year /*since 1900*/, int month /*0-based*/, int day)
 {
     /* Uses Zeller's congruence for the Gregorian calendar
      * https://en.wikipedia.org/wiki/Zeller%27s_congruence
      * h is the day of the week with Saturday = 0 */
     int q = day; // day of month
-    int m = month <= 1 ? month + 13 : month + 1; // month, (3 = March, 4 = April, ..., 14 = February)
+    int m =
+        month <= 1
+            ? month + 13
+            : month + 1; // month, (3 = March, 4 = April, ..., 14 = February)
     int Y = month <= 1 ? 1900 + year - 1 : 1900 + year; // year
-    int h = (q + ((13 * (m + 1)) / 5) + Y + (Y / 4) - (Y / 100) + (Y / 400)) % 7;
+    int h =
+        (q + ((13 * (m + 1)) / 5) + Y + (Y / 4) - (Y / 100) + (Y / 400)) % 7;
     return (h + 6) % 7;
 }
 
@@ -155,13 +162,20 @@ EXPORTED int time_to_rfc822(time_t t, char *buf, size_t len)
     }
     gmtoff /= 60;
 
-    return snprintf(buf, len, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
-             wday[tm->tm_wday],
-             tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
-             tm->tm_hour, tm->tm_min, tm->tm_sec,
-             gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
+    return snprintf(buf,
+                    len,
+                    "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
+                    wday[tm->tm_wday],
+                    tm->tm_mday,
+                    monthname[tm->tm_mon],
+                    tm->tm_year + 1900,
+                    tm->tm_hour,
+                    tm->tm_min,
+                    tm->tm_sec,
+                    gmtnegative ? '-' : '+',
+                    gmtoff / 60,
+                    gmtoff % 60);
 }
-
 
 /*
  * Skip RFC 822 FWS = Folding White Space.  This is the white
@@ -176,14 +190,12 @@ EXPORTED int time_to_rfc822(time_t t, char *buf, size_t len)
  */
 static const char *skip_fws(const char *p)
 {
-    if (!p)
-        return NULL;
+    if (!p) return NULL;
     while (*p && Uisspace(*p)) {
         /* check for end of an RFC 822 header line */
         if (*p == '\n') {
             p++;
-            if (*p != ' ' && *p != '\t')
-                return NULL;
+            if (*p != ' ' && *p != '\t') return NULL;
         }
         else
             p++;
@@ -199,76 +211,61 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
     char month[4];
     int zone_off = 0;
 
-    if (!s)
-        goto baddate;
+    if (!s) goto baddate;
 
     memset(&tm, 0, sizeof(tm));
 
     s = skip_fws(s);
-    if (!s)
-        goto baddate;
+    if (!s) goto baddate;
 
     if (Uisalpha(*s)) {
         /* Day name -- skip over it */
         s++;
-        if (!Uisalpha(*s))
-            goto baddate;
+        if (!Uisalpha(*s)) goto baddate;
         s++;
-        if (!Uisalpha(*s))
-            goto baddate;
+        if (!Uisalpha(*s)) goto baddate;
         s++;
         s = skip_fws(s);
-        if (!s || *s++ != ',')
-            goto baddate;
+        if (!s || *s++ != ',') goto baddate;
         s = skip_fws(s);
-        if (!s)
-            goto baddate;
+        if (!s) goto baddate;
     }
 
-    if (!Uisdigit(*s))
-        goto baddate;
+    if (!Uisdigit(*s)) goto baddate;
     tm.tm_mday = *s++ - '0';
     if (Uisdigit(*s)) {
-        tm.tm_mday = tm.tm_mday*10 + *s++ - '0';
+        tm.tm_mday = tm.tm_mday * 10 + *s++ - '0';
     }
 
     /* Parse month name */
     s = skip_fws(s);
-    if (!s)
-        goto baddate;
+    if (!s) goto baddate;
     month[0] = *s++;
-    if (!Uisalpha(month[0]))
-        goto baddate;
+    if (!Uisalpha(month[0])) goto baddate;
     month[1] = *s++;
-    if (!Uisalpha(month[1]))
-        goto baddate;
+    if (!Uisalpha(month[1])) goto baddate;
     month[2] = *s++;
-    if (!Uisalpha(month[2]))
-        goto baddate;
+    if (!Uisalpha(month[2])) goto baddate;
     month[3] = '\0';
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
         if (!strcasecmp(month, monthname[tm.tm_mon])) break;
     }
-    if (tm.tm_mon == 12)
-        goto baddate;
+    if (tm.tm_mon == 12) goto baddate;
 
     /* Parse year */
     s = skip_fws(s);
-    if (!s || !Uisdigit(*s))
-        goto baddate;
+    if (!s || !Uisdigit(*s)) goto baddate;
     tm.tm_year = *s++ - '0';
-    if (!Uisdigit(*s))
-        goto baddate;
+    if (!Uisdigit(*s)) goto baddate;
     tm.tm_year = tm.tm_year * 10 + *s++ - '0';
     if (Uisdigit(*s)) {
-        if (tm.tm_year < 19)
-            goto baddate;
+        if (tm.tm_year < 19) goto baddate;
         tm.tm_year -= 19;
         tm.tm_year = tm.tm_year * 10 + *s++ - '0';
-        if (!Uisdigit(*s))
-            goto baddate;
+        if (!Uisdigit(*s)) goto baddate;
         tm.tm_year = tm.tm_year * 10 + *s++ - '0';
-    } else {
+    }
+    else {
         if (tm.tm_year < 70) {
             /* two-digit year, probably after 2000.
              * This patent was overturned, right?
@@ -277,40 +274,32 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
         }
     }
     if (Uisdigit(*s)) {
-       /* five-digit date */
-       goto baddate;
-     }
-
-    if (tm.tm_mday > monthdays(tm.tm_year, tm.tm_mon))
+        /* five-digit date */
         goto baddate;
+    }
+
+    if (tm.tm_mday > monthdays(tm.tm_year, tm.tm_mon)) goto baddate;
 
     s = skip_fws(s);
     if (s && !dayonly) {
         /* Parse hour */
-        if (!s || !Uisdigit(*s))
-            goto badtime;
+        if (!s || !Uisdigit(*s)) goto badtime;
         tm.tm_hour = *s++ - '0';
-        if (!Uisdigit(*s))
-            goto badtime;
+        if (!Uisdigit(*s)) goto badtime;
         tm.tm_hour = tm.tm_hour * 10 + *s++ - '0';
-        if (!s || *s++ != ':')
-            goto badtime;
+        if (!s || *s++ != ':') goto badtime;
 
         /* Parse min */
-        if (!s || !Uisdigit(*s))
-            goto badtime;
+        if (!s || !Uisdigit(*s)) goto badtime;
         tm.tm_min = *s++ - '0';
-        if (!Uisdigit(*s))
-            goto badtime;
+        if (!Uisdigit(*s)) goto badtime;
         tm.tm_min = tm.tm_min * 10 + *s++ - '0';
 
         if (*s == ':') {
             /* Parse sec */
-            if (!++s || !Uisdigit(*s))
-                goto badtime;
+            if (!++s || !Uisdigit(*s)) goto badtime;
             tm.tm_sec = *s++ - '0';
-            if (!Uisdigit(*s))
-                goto badtime;
+            if (!Uisdigit(*s)) goto badtime;
             tm.tm_sec = tm.tm_sec * 10 + *s++ - '0';
         }
 
@@ -321,21 +310,16 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
                 /* Parse numeric offset */
                 int east = (*s++ == '-');
 
-                if (!s || !Uisdigit(*s))
-                    goto badzone;
+                if (!s || !Uisdigit(*s)) goto badzone;
                 zone_off = *s++ - '0';
-                if (!s || !Uisdigit(*s))
-                    goto badzone;
+                if (!s || !Uisdigit(*s)) goto badzone;
                 zone_off = zone_off * 10 + *s++ - '0';
-                if (!s || !Uisdigit(*s))
-                    goto badzone;
+                if (!s || !Uisdigit(*s)) goto badzone;
                 zone_off = zone_off * 6 + *s++ - '0';
-                if (!s || !Uisdigit(*s))
-                    goto badzone;
+                if (!s || !Uisdigit(*s)) goto badzone;
                 zone_off = zone_off * 10 + *s++ - '0';
 
-                if (east)
-                    zone_off = -zone_off;
+                if (east) zone_off = -zone_off;
             }
             else if (Uisalpha(*s)) {
                 char zone[4];
@@ -362,8 +346,7 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
                         /* Parse UT (universal time) */
                         zone[2] = '\0';
                         lcase(zone);
-                        if (strcmp(zone, "ut"))
-                            goto badzone;
+                        if (strcmp(zone, "ut")) goto badzone;
                         zone_off = 0;
                     }
                     else {
@@ -374,14 +357,12 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
                         zone[3] = '\0';
                         lcase(zone);
                         /* GMT (Greenwich mean time) */
-                        if (!strcmp(zone, "gmt"))
-                            zone_off = 0;
+                        if (!strcmp(zone, "gmt")) zone_off = 0;
 
                         /* US time zone */
                         else {
                             p = strchr("aecmpyhb", zone[0]);
-                            if (!p || zone[2] != 't')
-                                goto badzone;
+                            if (!p || zone[2] != 't') goto badzone;
                             zone_off = (strlen(p) - 12) * 60;
                             if (zone[1] == 'd')
                                 zone_off += 60;
@@ -392,12 +373,12 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
                 }
             }
             else
- badzone:
+            badzone:
                 zone_off = 0;
         }
     }
     else
- badtime:
+    badtime:
         tm.tm_hour = 12;
 
     tm.tm_isdst = -1;
@@ -413,7 +394,7 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
         return s - origs;
     }
 
- baddate:
+baddate:
     return -1;
 }
 
@@ -449,8 +430,7 @@ EXPORTED int day_from_rfc822(const char *s, time_t *tp)
 static int offsettime_normalize(struct offsettime *t)
 {
     /* sanity check the date/time (including leap day & second) */
-    if (t->tm.tm_mon < 0 || t->tm.tm_mon > 11 ||
-        t->tm.tm_mday < 1 ||
+    if (t->tm.tm_mon < 0 || t->tm.tm_mon > 11 || t->tm.tm_mday < 1 ||
         t->tm.tm_mday > monthdays(t->tm.tm_year, t->tm.tm_mon) ||
         t->tm.tm_hour > 23 || t->tm.tm_min > 59 || t->tm.tm_sec > 60) {
         return 0;
@@ -475,11 +455,15 @@ EXPORTED int offsettime_from_iso8601(const char *s, struct offsettime *t)
     /* parse the ISO 8601 date/time */
     /* XXX should use strptime ? */
     memset(t, 0, sizeof(struct offsettime));
-    n = sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2d",
-               &t->tm.tm_year, &t->tm.tm_mon, &t->tm.tm_mday,
-               &t->tm.tm_hour, &t->tm.tm_min, &t->tm.tm_sec);
-    if (n != 6)
-        return -1;
+    n = sscanf(s,
+               "%4d-%2d-%2dT%2d:%2d:%2d",
+               &t->tm.tm_year,
+               &t->tm.tm_mon,
+               &t->tm.tm_mday,
+               &t->tm.tm_hour,
+               &t->tm.tm_min,
+               &t->tm.tm_sec);
+    if (n != 6) return -1;
 
     s += 19;
     if (*s == '.') {
@@ -489,30 +473,34 @@ EXPORTED int offsettime_from_iso8601(const char *s, struct offsettime *t)
 
     /* handle offset */
     switch (*s++) {
-    case 'Z': t->tm_off = 0; break;
-    case '-': t->tm_off = -1; break;
-    case '+': t->tm_off = 1; break;
-    default: return -1;
+    case 'Z':
+        t->tm_off = 0;
+        break;
+    case '-':
+        t->tm_off = -1;
+        break;
+    case '+':
+        t->tm_off = 1;
+        break;
+    default:
+        return -1;
     }
     if (t->tm_off) {
         int tm_houroff, tm_minoff;
 
         n = sscanf(s, "%2d:%2d", &tm_houroff, &tm_minoff);
-        if (n != 2)
-            return -1;
+        if (n != 2) return -1;
         t->tm_off *= 60 * (60 * tm_houroff + tm_minoff);
         s += 5;
     }
 
     t->tm.tm_year -= 1900; /* normalize to years since 1900 */
-    t->tm.tm_mon--; /* normalize to months since January */
+    t->tm.tm_mon--;        /* normalize to months since January */
 
-    if (!offsettime_normalize(t))
-        return -1;
+    if (!offsettime_normalize(t)) return -1;
 
     return s - origs;
 }
-
 
 /*
  * Parse an RFC 3339 = ISO 8601 format date-time string.
@@ -530,9 +518,12 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
     return r;
 }
 
-static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
+static int breakdown_time_to_iso8601(const struct timeval *t,
+                                     struct tm *tm,
                                      enum timeval_precision tv_precision,
-                                     long gmtoff, char *buf, size_t len,
+                                     long gmtoff,
+                                     char *buf,
+                                     size_t len,
                                      int withsep)
 {
     int gmtnegative = 0;
@@ -550,15 +541,18 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
 
     rlen = strftime(buf, len, datefmt, tm);
     if (rlen > 0) {
-        switch(tv_precision) {
+        switch (tv_precision) {
         case timeval_ms:
-            /* no portable format conversion for tv_usec, just cast to int64_t */
-            rlen += snprintf(buf+rlen, len-rlen, ".%.3" PRIi64,
-                             (int64_t) t->tv_usec/1000);
+            /* no portable format conversion for tv_usec, just cast to int64_t
+             */
+            rlen += snprintf(buf + rlen,
+                             len - rlen,
+                             ".%.3" PRIi64,
+                             (int64_t)t->tv_usec / 1000);
             break;
         case timeval_us:
-            rlen += snprintf(buf+rlen, len-rlen, ".%.6" PRIi64,
-                             (int64_t) t->tv_usec);
+            rlen += snprintf(
+                buf + rlen, len - rlen, ".%.6" PRIi64, (int64_t)t->tv_usec);
             break;
         case timeval_s:
             break;
@@ -566,10 +560,14 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
 
         /* UTC can be written "Z" or "+00:00" */
         if (gmtoff == 0)
-            rlen += snprintf(buf+rlen, len-rlen, "Z");
+            rlen += snprintf(buf + rlen, len - rlen, "Z");
         else
-            rlen += snprintf(buf+rlen, len-rlen, "%c%.2lu:%.2lu",
-                             gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+            rlen += snprintf(buf + rlen,
+                             len - rlen,
+                             "%c%.2lu:%.2lu",
+                             gmtnegative ? '-' : '+',
+                             gmtoff / 60,
+                             gmtoff % 60);
     }
 
     return rlen;
@@ -582,17 +580,20 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
  */
 EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len, int withsep)
 {
-    struct tm *tm = (struct tm *) gmtime(&t);
-    struct timeval tv = { t, 0 };
+    struct tm *tm = (struct tm *)gmtime(&t);
+    struct timeval tv = {t, 0};
     long gmtoff = gmtoff_of(tm, tv.tv_sec);
 
-    return breakdown_time_to_iso8601(&tv, tm, timeval_s, gmtoff, buf, len, withsep);
+    return breakdown_time_to_iso8601(
+        &tv, tm, timeval_s, gmtoff, buf, len, withsep);
 }
 
-EXPORTED int offsettime_to_iso8601(struct offsettime *t, char *buf, size_t len, int withsep)
+EXPORTED int
+offsettime_to_iso8601(struct offsettime *t, char *buf, size_t len, int withsep)
 {
-    struct timeval tv = { mktime(&t->tm), 0 };
-    return breakdown_time_to_iso8601(&tv, &t->tm, timeval_s, t->tm_off, buf, len, withsep);
+    struct timeval tv = {mktime(&t->tm), 0};
+    return breakdown_time_to_iso8601(
+        &tv, &t->tm, timeval_s, t->tm_off, buf, len, withsep);
 }
 
 /*
@@ -601,8 +602,10 @@ EXPORTED int offsettime_to_iso8601(struct offsettime *t, char *buf, size_t len, 
  *
  * Returns: number of characters in @buf generated, or -1 on error.
  */
-EXPORTED int timeval_to_iso8601(const struct timeval *tv, enum timeval_precision tv_prec,
-                       char *buf, size_t len)
+EXPORTED int timeval_to_iso8601(const struct timeval *tv,
+                                enum timeval_precision tv_prec,
+                                char *buf,
+                                size_t len)
 {
     struct tm *tm = localtime(&(tv->tv_sec));
     long gmtoff = gmtoff_of(tm, tv->tv_sec);
@@ -613,9 +616,15 @@ EXPORTED int time_to_rfc3339(time_t t, char *buf, size_t len)
 {
     struct tm *tm = gmtime(&t);
 
-    return snprintf(buf, len, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-                    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-                    tm->tm_hour, tm->tm_min, tm->tm_sec);
+    return snprintf(buf,
+                    len,
+                    "%04d-%02d-%02dT%02d:%02d:%02dZ",
+                    tm->tm_year + 1900,
+                    tm->tm_mon + 1,
+                    tm->tm_mday,
+                    tm->tm_hour,
+                    tm->tm_min,
+                    tm->tm_sec);
 }
 
 /*
@@ -638,13 +647,19 @@ EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
         gmtnegative = 1;
     }
     gmtoff /= 60;
-    return snprintf(buf, len,
-            "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
-            tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
-            tm->tm_hour, tm->tm_min, tm->tm_sec,
-            gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+    return snprintf(buf,
+                    len,
+                    "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
+                    tm->tm_mday,
+                    monthname[tm->tm_mon],
+                    tm->tm_year + 1900,
+                    tm->tm_hour,
+                    tm->tm_min,
+                    tm->tm_sec,
+                    gmtnegative ? '-' : '+',
+                    gmtoff / 60,
+                    gmtoff % 60);
 }
-
 
 /*
  * Parse a string in IMAP date-time format (and some more
@@ -724,7 +739,7 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
     int old_format = 0;
     char month[4], zone[4], *p;
     time_t tmp_gmtime;
-    int zone_off;   /* timezone offset in minutes */
+    int zone_off; /* timezone offset in minutes */
 
     memset(&tm, 0, sizeof tm);
 
@@ -740,119 +755,92 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
     if (isdigit(c)) {
         tm.tm_mday = tm.tm_mday * 10 + c - '0';
         c = *s++;
-        if (tm.tm_mday <= 0 || tm.tm_mday > 31)
-            goto baddate;
+        if (tm.tm_mday <= 0 || tm.tm_mday > 31) goto baddate;
     }
 
-    if (c != '-')
-        goto baddate;
+    if (c != '-') goto baddate;
     c = *s++;
 
     /* Month name */
-    if (!isalpha(c))
-        goto baddate;
+    if (!isalpha(c)) goto baddate;
     month[0] = c;
     c = *s++;
-    if (!isalpha(c))
-        goto baddate;
+    if (!isalpha(c)) goto baddate;
     month[1] = c;
     c = *s++;
-    if (!isalpha(c))
-        goto baddate;
+    if (!isalpha(c)) goto baddate;
     month[2] = c;
     c = *s++;
     month[3] = '\0';
 
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-        if (!strcasecmp(month, monthname[tm.tm_mon]))
-            break;
+        if (!strcasecmp(month, monthname[tm.tm_mon])) break;
     }
-    if (tm.tm_mon == 12)
-        goto baddate;
+    if (tm.tm_mon == 12) goto baddate;
 
-    if (c != '-')
-        goto baddate;
+    if (c != '-') goto baddate;
     c = *s++;
 
     /* Year */
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_year = c - '0';
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_year = tm.tm_year * 10 + c - '0';
     c = *s++;
     if (isdigit(c)) {
-        if (tm.tm_year < 19)
-            goto baddate;
+        if (tm.tm_year < 19) goto baddate;
         tm.tm_year -= 19;
         tm.tm_year = tm.tm_year * 10 + c - '0';
         c = *s++;
-        if (!isdigit(c))
-            goto baddate;
+        if (!isdigit(c)) goto baddate;
         tm.tm_year = tm.tm_year * 10 + c - '0';
         c = *s++;
     }
     else
         old_format++;
 
-    if (tm.tm_mday > monthdays(tm.tm_year, tm.tm_mon))
-        goto baddate;
+    if (tm.tm_mday > monthdays(tm.tm_year, tm.tm_mon)) goto baddate;
 
     /* Hour */
-    if (c != ' ')
-        goto baddate;
+    if (c != ' ') goto baddate;
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_hour = c - '0';
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_hour = tm.tm_hour * 10 + c - '0';
     c = *s++;
-    if (tm.tm_hour > 23)
-        goto baddate;
+    if (tm.tm_hour > 23) goto baddate;
 
     /* Minute */
-    if (c != ':')
-        goto baddate;
+    if (c != ':') goto baddate;
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_min = c - '0';
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_min = tm.tm_min * 10 + c - '0';
     c = *s++;
-    if (tm.tm_min > 59)
-        goto baddate;
+    if (tm.tm_min > 59) goto baddate;
 
     /* Second */
-    if (c != ':')
-        goto baddate;
+    if (c != ':') goto baddate;
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_sec = c - '0';
     c = *s++;
-    if (!isdigit(c))
-        goto baddate;
+    if (!isdigit(c)) goto baddate;
     tm.tm_sec = tm.tm_sec * 10 + c - '0';
     c = *s++;
-    if (tm.tm_min > 60)
-        goto baddate;
+    if (tm.tm_min > 60) goto baddate;
 
     /* Time zone */
     if (old_format) {
-        if (c != ' ')
-            goto baddate;
+        if (c != ' ') goto baddate;
         c = *s++;
 
-        if (!isalpha(c))
-            goto baddate;
+        if (!isalpha(c)) goto baddate;
         zone[0] = c;
         c = *s++;
 
@@ -861,18 +849,18 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
             zone[1] = '\0';
             lcase(zone);
             if (zone[0] <= 'i') {
-                zone_off = (zone[0] - 'a' + 1)*60;
+                zone_off = (zone[0] - 'a' + 1) * 60;
             }
             else if (zone[0] == 'j') {
                 goto baddate;
             }
             else if (zone[0] <= 'm') {
-                zone_off = (zone[0] - 'k' + 10)*60;
+                zone_off = (zone[0] - 'k' + 10) * 60;
             }
             else if (zone[0] < 'z') {
-                zone_off = ('m' - zone[0])*60;
+                zone_off = ('m' - zone[0]) * 60;
             }
-            else    /* 'z' */
+            else /* 'z' */
                 zone_off = 0;
         }
         else {
@@ -882,22 +870,19 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
             if (c == '\0') {
                 zone[2] = '\0';
                 lcase(zone);
-                if (!strcmp(zone, "ut"))
-                    goto baddate;
+                if (!strcmp(zone, "ut")) goto baddate;
                 zone_off = 0;
             }
             else {
                 /* 3-char time zone */
                 zone[2] = c;
                 c = *s++;
-                if (c != '\0')
-                    goto baddate;
+                if (c != '\0') goto baddate;
                 zone[3] = '\0';
                 lcase(zone);
                 p = strchr("aecmpyhb", zone[0]);
-                if (c != '\0' || zone[2] != 't' || !p)
-                    goto baddate;
-                zone_off = (strlen(p) - 12)*60;
+                if (c != '\0' || zone[2] != 't' || !p) goto baddate;
+                zone_off = (strlen(p) - 12) * 60;
                 if (zone[1] == 'd')
                     zone_off += 60;
                 else if (zone[1] != 's')
@@ -906,48 +891,39 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
         }
     }
     else {
-        if (c != ' ')
-            goto baddate;
+        if (c != ' ') goto baddate;
         c = *s++;
 
-        if (c != '+' && c != '-')
-            goto baddate;
+        if (c != '+' && c != '-') goto baddate;
         zone[0] = c;
 
         c = *s++;
-        if (!isdigit(c))
-            goto baddate;
+        if (!isdigit(c)) goto baddate;
         zone_off = c - '0';
         c = *s++;
-        if (!isdigit(c))
-            goto baddate;
+        if (!isdigit(c)) goto baddate;
         zone_off = zone_off * 10 + c - '0';
         c = *s++;
-        if (!isdigit(c))
-            goto baddate;
+        if (!isdigit(c)) goto baddate;
         zone_off = zone_off * 6 + c - '0';
         c = *s++;
-        if (!isdigit(c))
-            goto baddate;
+        if (!isdigit(c)) goto baddate;
         zone_off = zone_off * 10 + c - '0';
 
-        if (zone[0] == '-')
-            zone_off = -zone_off;
+        if (zone[0] == '-') zone_off = -zone_off;
 
         c = *s++;
-        if (c != '\0')
-            goto baddate;
+        if (c != '\0') goto baddate;
     }
 
     tm.tm_isdst = -1;
 
     tmp_gmtime = mkgmtime(&tm);
-    if (tmp_gmtime == -1)
-        goto baddate;
+    if (tmp_gmtime == -1) goto baddate;
 
-    *date = tmp_gmtime - zone_off*60;
+    *date = tmp_gmtime - zone_off * 60;
 
-    return s-1 - origs;
+    return s - 1 - origs;
 
 baddate:
     return -1;
@@ -1015,15 +991,12 @@ static int get_next_token(struct rfc5322dtbuf *buf, char **str, int *len)
 
     *len = 0;
     for (;;) {
-        if (rfc5322_special[c] || rfc5322_separators[c])
-            break;
+        if (rfc5322_special[c] || rfc5322_separators[c]) break;
 
         ch = rfc5322_usascii_charset[c + 1];
-        if (!(ch & (Alpha | Digit)))
-            break;
+        if (!(ch & (Alpha | Digit))) break;
 
-        if (*len >= RFC5322_DATETIME_MAX)
-            break;
+        if (*len >= RFC5322_DATETIME_MAX) break;
 
         cache[*len] = c;
         *len += 1;
@@ -1035,7 +1008,7 @@ static int get_next_token(struct rfc5322dtbuf *buf, char **str, int *len)
         }
     }
 
- failed:
+failed:
     *str = cache;
 
     return ret;
@@ -1059,16 +1032,14 @@ static inline int to_int(char *str, int len)
 
 static inline int to_upper(char ch)
 {
-    if (rfc5322_usascii_charset[ch + 1] & LAlpha)
-        ch =  ch - 32;
+    if (rfc5322_usascii_charset[ch + 1] & LAlpha) ch = ch - 32;
 
     return ch;
 }
 
 static inline int to_lower(char ch)
 {
-    if (rfc5322_usascii_charset[ch + 1] & UAlpha)
-        ch = ch + 32;
+    if (rfc5322_usascii_charset[ch + 1] & UAlpha) ch = ch + 32;
 
     return ch;
 }
@@ -1077,55 +1048,44 @@ static int compute_tzoffset(char *str, int len, int sign)
 {
     int offset = 0;
 
-    if (len == 1) {         /* Military timezone */
+    if (len == 1) { /* Military timezone */
         int ch;
         ch = to_upper(str[0]);
-        if (ch < 'J')
-            return (str[0] - 'A' + 1) * 60;
-        if (ch == 'J')
-            return 0;
-        if (ch <= 'M')
-            return (str[0] - 'A') * 60;
-        if (ch < 'Z')
-            return ('M' - str[0]) * 60;
+        if (ch < 'J') return (str[0] - 'A' + 1) * 60;
+        if (ch == 'J') return 0;
+        if (ch <= 'M') return (str[0] - 'A') * 60;
+        if (ch < 'Z') return ('M' - str[0]) * 60;
 
         return 0;
     }
 
-    if (len == 2 &&
-        to_upper(str[0]) == 'U' &&
-        to_upper(str[1]) == 'T') {         /* Universal Time zone (UT) */
+    if (len == 2 && to_upper(str[0]) == 'U' &&
+        to_upper(str[1]) == 'T') { /* Universal Time zone (UT) */
         return 0;
     }
 
     if (len == 3) {
         char *p;
 
-        if (to_upper(str[2]) != 'T')
-            return 0;
+        if (to_upper(str[2]) != 'T') return 0;
 
         p = strchr("AECMPYHB", to_upper(str[0]));
-        if (!p)
-            return 0;
-        offset = (strlen(p) - 12) *  60;
+        if (!p) return 0;
+        offset = (strlen(p) - 12) * 60;
 
-        if (to_upper(str[1]) == 'D')
-            return offset + 60;
-        if (to_upper(str[1]) == 'S')
-            return offset;
+        if (to_upper(str[1]) == 'D') return offset + 60;
+        if (to_upper(str[1]) == 'S') return offset;
     }
 
-    if (len == 4) {         /* The number timezone offset */
+    if (len == 4) { /* The number timezone offset */
         int i;
 
         for (i = 0; i < len; i++) {
-            if (!(rfc5322_usascii_charset[str[i] + 1] & Digit))
-                return 0;
+            if (!(rfc5322_usascii_charset[str[i] + 1] & Digit)) return 0;
         }
 
         offset = ((str[0] - '0') * 10 + (str[1] - '0')) * 60 +
-            (str[2] - '0') * 10 +
-            (str[3] - '0');
+                 (str[2] - '0') * 10 + (str[3] - '0');
 
         return (sign == '+') ? offset : -offset;
     }
@@ -1150,7 +1110,8 @@ static int compute_tzoffset(char *str, int len, int sign)
  *
  */
 
-static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
+static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf,
+                                      struct tm *tm,
                                       long *tz_offset,
                                       enum datetime_parse_mode mode)
 {
@@ -1158,25 +1119,21 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     int c, i, len;
     char *str_token = NULL;
 
-
     /* Skip leading WS, if any */
     skip_ws(buf, 0);
 
     c = get_current_char(buf);
-    if (c == EOB)
-        goto failed;
+    if (c == EOB) goto failed;
 
     ch = rfc5322_usascii_charset[c + 1];
-    if (ch & Alpha) {       /* Most likely a weekday at the start. */
-        if (!get_next_token(buf, &str_token, &len))
-            goto failed;
+    if (ch & Alpha) { /* Most likely a weekday at the start. */
+        if (!get_next_token(buf, &str_token, &len)) goto failed;
 
         /* We might have a weekday token here */
-        if (len != 3)
-            goto failed;
+        if (len != 3) goto failed;
 
         /* Determine week day */
-        int i ;
+        int i;
         for (i = 0; i < 7; i++) {
             if (!strncasecmp(wday[i], str_token, len)) {
                 tm->tm_wday = i;
@@ -1195,25 +1152,21 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
 
     /** DATE **/
     /* date (1 or 2 digits) */
-    if (!get_next_token(buf, &str_token, &len))
-        goto failed;
+    if (!get_next_token(buf, &str_token, &len)) goto failed;
 
     if (len < 1 || len > 2 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
         goto failed;
 
     tm->tm_mday = to_int(str_token, len);
-    if (tm->tm_mday == -9999)
-        goto failed;
+    if (tm->tm_mday == -9999) goto failed;
 
     /* the separator here is either '-' or FWS */
     c = get_next_char(buf);
-    if (rfc5322_special[c])
-        skip_ws(buf, 0);
+    if (rfc5322_special[c]) skip_ws(buf, 0);
 
     /* month name */
-    if (!get_next_token(buf, &str_token, &len) ||
-        len != 3 ||
+    if (!get_next_token(buf, &str_token, &len) || len != 3 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Alpha))
         goto failed;
 
@@ -1226,29 +1179,24 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
             break;
         }
     }
-    if (i == 12)
-        goto failed;
+    if (i == 12) goto failed;
 
     /* the separator here is either '-' or FWS */
     c = get_next_char(buf);
-    if (rfc5322_special[c])
-        skip_ws(buf, 0);
+    if (rfc5322_special[c]) skip_ws(buf, 0);
 
     /* year 2, 4 or >4 digits */
-    if (!get_next_token(buf, &str_token, &len))
-        goto failed;
+    if (!get_next_token(buf, &str_token, &len)) goto failed;
 
     tm->tm_year = to_int(str_token, len);
-    if (tm->tm_year == -9999)
-        goto failed;
+    if (tm->tm_year == -9999) goto failed;
 
     if (len == 2) {
         /* A 2 digit year */
-        if (tm->tm_year < 70)
-            tm->tm_year += 100;
-    } else {
-        if (tm->tm_year < 1900)
-            goto failed;
+        if (tm->tm_year < 70) tm->tm_year += 100;
+    }
+    else {
+        if (tm->tm_year < 1900) goto failed;
         tm->tm_year -= 1900;
     }
 
@@ -1260,77 +1208,67 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     /** TIME **/
     skip_ws(buf, 0);
     /* hour */
-    if (!get_next_token(buf, &str_token, &len))
-        goto failed;
+    if (!get_next_token(buf, &str_token, &len)) goto failed;
 
     if (len < 1 || len > 2 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
         goto failed;
 
     tm->tm_hour = to_int(str_token, len);
-    if (tm->tm_hour == -9999)
-        goto failed;
+    if (tm->tm_hour == -9999) goto failed;
 
     /* minutes */
-    if (get_current_char(buf) == ':' ||
-        get_current_char(buf) == '.')
+    if (get_current_char(buf) == ':' || get_current_char(buf) == '.')
         get_next_char(buf); /* Consume ':'/'.' */
     else
-        goto failed;    /* Something is broken */
+        goto failed; /* Something is broken */
 
-    if (!get_next_token(buf, &str_token, &len))
-        goto failed;
+    if (!get_next_token(buf, &str_token, &len)) goto failed;
 
     if (len < 1 || len > 2 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
         goto failed;
 
     tm->tm_min = to_int(str_token, len);
-    if (tm->tm_min == -9999)
-        goto failed;
-
+    if (tm->tm_min == -9999) goto failed;
 
     /* seconds[optional] */
-    if (get_current_char(buf) == ':' ||
-        get_current_char(buf) == '.') {
+    if (get_current_char(buf) == ':' || get_current_char(buf) == '.') {
         get_next_char(buf); /* Consume ':'/'.' */
 
-        if (!get_next_token(buf, &str_token, &len))
-            goto failed;
+        if (!get_next_token(buf, &str_token, &len)) goto failed;
 
         if (len < 1 || len > 2 ||
             !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
             goto failed;
 
         tm->tm_sec = to_int(str_token, len);
-        if (tm->tm_sec == -9999)
-            goto failed;
-
+        if (tm->tm_sec == -9999) goto failed;
     }
 
     /* timezone */
     skip_ws(buf, 0);
     c = get_current_char(buf);
-    if (c == '+' || c == '-') {    /* the '+' or '-' in the timezone */
-        get_next_char(buf);        /* consume '+' or '-' */
+    if (c == '+' || c == '-') { /* the '+' or '-' in the timezone */
+        get_next_char(buf);     /* consume '+' or '-' */
     }
 
     if (!get_next_token(buf, &str_token, &len)) {
         *tz_offset = 0;
-    } else {
+    }
+    else {
         *tz_offset = compute_tzoffset(str_token, len, c);
     }
 
- done:
+done:
     /* dst */
     tm->tm_isdst = -1;
     *tz_offset *= 60;
     return buf->offset;
 
- failed:
+failed:
     return -1;
 }
-
 
 /*
  * time_from_rfc5322()
@@ -1346,16 +1284,15 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
  * Returns: Number of characters consumed from @s on success,
  *          or -1 on error.
  */
-EXPORTED int time_from_rfc5322(const char *s, time_t *date,
-                               enum datetime_parse_mode mode)
+EXPORTED int
+time_from_rfc5322(const char *s, time_t *date, enum datetime_parse_mode mode)
 {
     struct rfc5322dtbuf buf;
     struct tm tm;
     time_t tmp_time;
     long tzone_offset = 0;
 
-    if (!s)
-        goto baddate;
+    if (!s) goto baddate;
 
     memset(&tm, 0, sizeof(struct tm));
     *date = 0;
@@ -1372,15 +1309,15 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     else
         tmp_time = mkgmtime(&tm);
 
-    /* -1 is an error, but anything else below zero is also a negative time which we can't handle */
-    if (tmp_time < 0)
-        goto baddate;
+    /* -1 is an error, but anything else below zero is also a negative time
+     * which we can't handle */
+    if (tmp_time < 0) goto baddate;
 
     *date = tmp_time - tzone_offset;
 
     return buf.offset;
 
- baddate:
+baddate:
     return -1;
 }
 
@@ -1391,13 +1328,13 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
  * Returns: Number of characters consumed from @s on success,
  *          or -1 on error.
  */
-EXPORTED int offsettime_from_rfc5322(const char *s, struct offsettime *t,
+EXPORTED int offsettime_from_rfc5322(const char *s,
+                                     struct offsettime *t,
                                      enum datetime_parse_mode mode)
 {
     struct rfc5322dtbuf buf;
 
-    if (!s)
-        goto baddate;
+    if (!s) goto baddate;
 
     memset(t, 0, sizeof(struct offsettime));
 
@@ -1408,12 +1345,11 @@ EXPORTED int offsettime_from_rfc5322(const char *s, struct offsettime *t,
     if (tokenise_str_and_create_tm(&buf, &t->tm, &t->tm_off, mode) == -1)
         goto baddate;
 
-    if (!offsettime_normalize(t))
-        goto baddate;
+    if (!offsettime_normalize(t)) goto baddate;
 
     return buf.offset;
 
- baddate:
+baddate:
     return -1;
 }
 
@@ -1437,12 +1373,19 @@ EXPORTED int time_to_rfc5322(time_t date, char *buf, size_t len)
 
     gmtoff /= 60;
 
-    return snprintf(buf, len,
-             "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
-             wday[tm->tm_wday],
-             tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
-             tm->tm_hour, tm->tm_min, tm->tm_sec,
-             gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+    return snprintf(buf,
+                    len,
+                    "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
+                    wday[tm->tm_wday],
+                    tm->tm_mday,
+                    monthname[tm->tm_mon],
+                    tm->tm_year + 1900,
+                    tm->tm_hour,
+                    tm->tm_min,
+                    tm->tm_sec,
+                    gmtnegative ? '-' : '+',
+                    gmtoff / 60,
+                    gmtoff % 60);
 }
 
 EXPORTED int offsettime_to_rfc5322(struct offsettime *t, char *buf, size_t len)
@@ -1457,10 +1400,17 @@ EXPORTED int offsettime_to_rfc5322(struct offsettime *t, char *buf, size_t len)
 
     gmtoff /= 60;
 
-    return snprintf(buf, len,
-             "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
-             wday[t->tm.tm_wday],
-             t->tm.tm_mday, monthname[t->tm.tm_mon], t->tm.tm_year + 1900,
-             t->tm.tm_hour, t->tm.tm_min, t->tm.tm_sec,
-             gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+    return snprintf(buf,
+                    len,
+                    "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
+                    wday[t->tm.tm_wday],
+                    t->tm.tm_mday,
+                    monthname[t->tm.tm_mon],
+                    t->tm.tm_year + 1900,
+                    t->tm.tm_hour,
+                    t->tm.tm_min,
+                    t->tm.tm_sec,
+                    gmtnegative ? '-' : '+',
+                    gmtoff / 60,
+                    gmtoff % 60);
 }

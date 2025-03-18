@@ -41,39 +41,39 @@
  */
 
 #include <config.h>
-#include <stdio.h>
-#include <string.h>
-#include <signal.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <stdarg.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/stat.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
 
-#include "prot.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "global.h"
 #include "mpool.h"
 #include "mupdate.h"
+#include "prot.h"
+#include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "xunlink.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)
 {
-    int r,s,len;
+    int r, s, len;
     char fnamebuf[2048];
     struct sockaddr_un srvaddr;
     mode_t oldumask;
@@ -87,14 +87,14 @@ static int open_kick_socket(void)
     strlcpy(fnamebuf, config_dir, sizeof(fnamebuf));
     strlcat(fnamebuf, FNAME_MUPDATE_TARGET_SOCK, sizeof(fnamebuf));
 
-    (void) xunlink(fnamebuf);
+    (void)xunlink(fnamebuf);
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strlcpy(srvaddr.sun_path, fnamebuf, sizeof(srvaddr.sun_path));
     len = strlen(srvaddr.sun_path) + sizeof(srvaddr.sun_family) + 1;
-    oldumask = umask((mode_t) 0); /* for Linux */
+    oldumask = umask((mode_t)0); /* for Linux */
     r = bind(s, (struct sockaddr *)&srvaddr, len);
-    umask(oldumask); /* for Linux */
+    umask(oldumask);       /* for Linux */
     chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
         syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
@@ -112,8 +112,7 @@ static int open_kick_socket(void)
 /* Accept up to max_fds connections on kicksock, put the fds into
  * the array fd_list (atleast max_fds big), and the number of connections
  * into num_fds */
-static int get_kick_fds(int kicksock,
-                        int *fd_list, int *num_fds, int max_fds)
+static int get_kick_fds(int kicksock, int *fd_list, int *num_fds, int max_fds)
 {
     fd_set read_set;
     int highest_fd = kicksock + 1;
@@ -135,22 +134,25 @@ static int get_kick_fds(int kicksock,
         gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
 
         if (gotdata == -1) {
-          /* Select Error! */
-          syslog(LOG_ERR, "kicksock select failed");
-          return -1;
-        } else if (gotdata != 0 && FD_ISSET(kicksock, &rset)) {
-          struct sockaddr_un clientaddr;
-          int len = sizeof(clientaddr);
-
-          fd_list[*num_fds] = accept(kicksock,
-                (struct sockaddr *)&clientaddr, (socklen_t *)&len);
-          if (fd_list[*num_fds] == -1) {
-            syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
+            /* Select Error! */
+            syslog(LOG_ERR, "kicksock select failed");
             return -1;
-          }
-        } else {
-          /* Timeout Expired, we're done! */
-          break;
+        }
+        else if (gotdata != 0 && FD_ISSET(kicksock, &rset)) {
+            struct sockaddr_un clientaddr;
+            int len = sizeof(clientaddr);
+
+            fd_list[*num_fds] = accept(
+                kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
+            if (fd_list[*num_fds] == -1) {
+                syslog(
+                    LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
+                return -1;
+            }
+        }
+        else {
+            /* Timeout Expired, we're done! */
+            break;
         }
     }
 
@@ -198,7 +200,8 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     mupdate_ready();
 
     kicksock = open_kick_socket();
-    highest_fd = ((kicksock > handle->conn->sock) ? kicksock : handle->conn->sock) + 1;
+    highest_fd =
+        ((kicksock > handle->conn->sock) ? kicksock : handle->conn->sock) + 1;
 
     FD_ZERO(&read_set);
     FD_SET(handle->conn->sock, &read_set);
@@ -221,12 +224,16 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
             /* Oops? */
             syslog(LOG_ERR, "select failed");
             break;
-        } else if (gotdata != 0) {
+        }
+        else if (gotdata != 0) {
             if (FD_ISSET(handle->conn->sock, &rset)) {
                 /* If there is a fatal error, die, other errors ignore */
                 response = MUPDATE_NONE;
-                if ((r = mupdate_scarf(handle, cmd_change, NULL,
-                                  waiting_for_noop, &response)) != 0) {
+                if ((r = mupdate_scarf(handle,
+                                       cmd_change,
+                                       NULL,
+                                       waiting_for_noop,
+                                       &response)) != 0) {
                     syslog(LOG_ERR, "mupdate_scarf: %d", r);
                     break;
                 }
@@ -241,19 +248,19 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
                     waiting_for_noop = 0;
 
                     for (; num_kick_fds; num_kick_fds--) {
-                        if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
+                        if (write(kick_fds[num_kick_fds - 1], "ok", 2) < 0) {
                             syslog(LOG_WARNING,
                                    "can't write to IPC socket (ignoring)");
                         }
-                        (void)close(kick_fds[num_kick_fds-1]);
+                        (void)close(kick_fds[num_kick_fds - 1]);
                     }
                 }
             }
 
             if (waiting_for_noop == 0 && FD_ISSET(kicksock, &rset)) {
                 /* We were kicked--collect outstanding kicks! */
-                if (get_kick_fds(kicksock,
-                                kick_fds, &num_kick_fds, KICK_FDS_LEN)) {
+                if (get_kick_fds(
+                        kicksock, kick_fds, &num_kick_fds, KICK_FDS_LEN)) {
                     /* Nonzero return code -- Error */
                     break;
                 }
@@ -265,7 +272,8 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
                 }
                 waiting_for_noop = 1;
             }
-        } else /* (gotdata == 0) */ {
+        }
+        else /* (gotdata == 0) */ {
             /* Timeout, send a NOOP */
             if (!waiting_for_noop) {
                 prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
@@ -274,7 +282,8 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
                     break;
                 }
                 waiting_for_noop = 1;
-            } else {
+            }
+            else {
                 /* We were already waiting on a noop! */
                 syslog(LOG_ERR, "connection to master timed out.");
                 break;
@@ -284,7 +293,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
     /* Don't leak the descriptors! */
     for (; num_kick_fds; num_kick_fds--) {
-        (void)close(kick_fds[num_kick_fds-1]);
+        (void)close(kick_fds[num_kick_fds - 1]);
     }
     (void)close(kicksock);
     return;
@@ -298,23 +307,24 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 
     srand(time(NULL) * getpid());
 
-    if(!config_mupdate_server) {
+    if (!config_mupdate_server) {
         fatal("couldn't get mupdate server name", EX_UNAVAILABLE);
     }
 
     retry_delay = config_getint(IMAPOPT_MUPDATE_RETRY_DELAY);
-    if(retry_delay < 0) {
+    if (retry_delay < 0) {
         fatal("invalid value for mupdate_retry_delay", EX_UNAVAILABLE);
     }
 
-    while(1) {
+    while (1) {
         ret = mupdate_connect(config_mupdate_server, NULL, &h, NULL);
-        if(ret) {
-            syslog(LOG_ERR,"couldn't connect to mupdate server");
+        if (ret) {
+            syslog(LOG_ERR, "couldn't connect to mupdate server");
             goto retry;
         }
 
-        syslog(LOG_ERR, "successful mupdate connection to %s",
+        syslog(LOG_ERR,
+               "successful mupdate connection to %s",
                config_mupdate_server);
 
         mupdate_listen(h, retry_delay);
@@ -343,7 +353,7 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
     kicksock = open_kick_socket();
 
     /* Now just listen to the rest of the updates */
-    while(1) {
+    while (1) {
         struct sockaddr_un clientaddr;
         int len;
 
@@ -353,22 +363,21 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
             accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
 
         if (kickconn == -1) {
-          syslog(LOG_WARNING, "accept(): %m");
-          break;
-        } else {
-          if (write(kickconn, "ok", 2) < 0) {
-            syslog(LOG_WARNING, "can't write to IPC socket?");
-          }
-          close(kickconn);
-          kickconn = -1;
+            syslog(LOG_WARNING, "accept(): %m");
+            break;
+        }
+        else {
+            if (write(kickconn, "ok", 2) < 0) {
+                syslog(LOG_WARNING, "can't write to IPC socket?");
+            }
+            close(kickconn);
+            kickconn = -1;
         }
     } /* Loop */
 
     /* Don't leak the descriptor! */
-    if(kickconn >= 0) close(kickconn);
+    if (kickconn >= 0) close(kickconn);
     close(kicksock);
 
     return NULL;
 }
-
-

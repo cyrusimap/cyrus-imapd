@@ -46,7 +46,7 @@
 unsigned strhash_seeded_djb2(uint32_t seed, const char *string);
 unsigned strhash_legacy(const char *string);
 
-#define strhash(in)             strhash_seeded_djb2((0),  (in))
-#define strhash_seeded(sd, in)  strhash_seeded_djb2((sd), (in))
+#define strhash(in) strhash_seeded_djb2((0), (in))
+#define strhash_seeded(sd, in) strhash_seeded_djb2((sd), (in))
 
 #endif /* _STRHASH_H_ */

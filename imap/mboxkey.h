@@ -50,22 +50,26 @@ struct mboxkey;
 #define MBOXKEY_CREATE 0x01
 
 /* get a database handle corresponding to user pair */
-int mboxkey_open(const char *user,
-                 int flags,
-                 struct mboxkey **mboxkeydbptr);
+int mboxkey_open(const char *user, int flags, struct mboxkey **mboxkeydbptr);
 
 /* read an entry from 'mboxkeydb' */
-int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
-                 const char **mboxkey, size_t *mboxkeylen);
+int mboxkey_read(struct mboxkey *mboxkeydb,
+                 const char *mailbox,
+                 const char **mboxkey,
+                 size_t *mboxkeylen);
 
 /* read an entry from 'mboxkeydb' and leave that record (or some superset
    of it) locked for update */
-int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
-                     const char **mboxkey, size_t *mboxkeylen);
+int mboxkey_lockread(struct mboxkey *mboxkeydb,
+                     const char *mailbox,
+                     const char **mboxkey,
+                     size_t *mboxkeylen);
 
 /* write an entry to 'mboxkeydb' */
-int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
-                  const char *mboxkey, size_t mboxkeylen);
+int mboxkey_write(struct mboxkey *mboxkeydb,
+                  const char *mailbox,
+                  const char *mboxkey,
+                  size_t mboxkeylen);
 
 /* close this handle */
 int mboxkey_close(struct mboxkey *mboxkeydb);

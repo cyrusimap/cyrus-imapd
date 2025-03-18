@@ -48,8 +48,7 @@ EXPORTED size_t strlcat(char *dst, const char *src, size_t len)
     size_t i, j, o;
 
     o = strlen(dst);
-    if (len < o + 1)
-        return o + strlen(src);
+    if (len < o + 1) return o + strlen(src);
     len -= o + 1;
     for (i = 0, j = o; i < len; i++, j++) {
         if ((dst[j] = src[i]) == '\0') break;
@@ -57,7 +56,8 @@ EXPORTED size_t strlcat(char *dst, const char *src, size_t len)
     dst[j] = '\0';
     if (src[i] == '\0') {
         return j;
-    } else {
+    }
+    else {
         return j + strlen(src + i);
     }
 }

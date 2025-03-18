@@ -42,40 +42,39 @@
 
 #include <config.h>
 
+#include <fcntl.h>
 #include <signal.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sysexits.h>
-#include <syslog.h>
+#include <string.h>
+#include <sys/param.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/param.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <sys/uio.h>
+#include <sys/un.h>
+#include <sysexits.h>
+#include <syslog.h>
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "imap/global.h"
 #include "libconfig.h"
 #include "proc.h"
+#include "ptloader.h"
 #include "retry.h"
 #include "xmalloc.h"
-#include "ptloader.h"
 
 #include "master/service.h"
 
-struct pts_module *pts_modules[] = {
-    &pts_http,
+struct pts_module *pts_modules[] = {&pts_http,
 #ifdef HAVE_LDAP
-    &pts_ldap,
+                                    &pts_ldap,
 #endif
 #ifdef HAVE_AFSKRB
-    &pts_afskrb,
+                                    &pts_afskrb,
 #endif
-    NULL };
+                                    NULL};
 
 static struct pts_module *pts_fromname()
 {
@@ -83,19 +82,18 @@ static struct pts_module *pts_fromname()
     const char *name = config_getstring(IMAPOPT_PTS_MODULE);
     static struct pts_module *pts = NULL;
 
-    if (pts)
-        return pts;
+    if (pts) return pts;
 
     for (i = 0; pts_modules[i]; i++) {
         if (!strcmp(pts_modules[i]->name, name)) {
-            pts = pts_modules[i]; break;
+            pts = pts_modules[i];
+            break;
         }
     }
 
     if (!pts) {
         char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "PTS module %s not supported", name);
+        snprintf(errbuf, sizeof(errbuf), "PTS module %s not supported", name);
         fatal(errbuf, EX_CONFIG);
     }
 
@@ -111,7 +109,8 @@ void ptsmodule_init(void)
 
 struct auth_state *ptsmodule_make_authstate(const char *identifier,
                                             size_t size,
-                                            const char **reply, int *dsize)
+                                            const char **reply,
+                                            int *dsize)
 {
     struct pts_module *pts = pts_fromname();
 
@@ -148,7 +147,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
  * relaxed, too.
  */
 static char allowedchars[256] = {
- /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
     1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 20-2F */
@@ -159,16 +158,13 @@ static char allowedchars[256] = {
     1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 60-6F */
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, /* 70-7F */
 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /*
  * Convert 'identifier' into canonical form.
@@ -188,14 +184,13 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
     int username_tolower = 0;
     int i = 0;
 
-    if(!len) len = strlen(identifier);
-    if(len >= sizeof(retbuf)) return NULL;
+    if (!len) len = strlen(identifier);
+    if (len >= sizeof(retbuf)) return NULL;
 
     memcpy(retbuf, identifier, len);
     retbuf[len] = '\0';
 
-    if (!strncmp(retbuf, "group:", 6))
-        i = 6;
+    if (!strncmp(retbuf, "group:", 6)) i = 6;
 
     /* Copy the string and look up values in the allowedchars array above.
      * If we see any we don't like, reject the string.
@@ -203,11 +198,10 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
      */
     username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
     sawalpha = 0;
-    for(p = retbuf+i; *p; p++) {
-        if (username_tolower && Uisupper(*p))
-            *p = tolower((unsigned char)*p);
+    for (p = retbuf + i; *p; p++) {
+        if (username_tolower && Uisupper(*p)) *p = tolower((unsigned char)*p);
 
-        switch (allowedchars[*(unsigned char*) p]) {
+        switch (allowedchars[*(unsigned char *)p]) {
         case 0:
             return NULL;
 
@@ -215,12 +209,11 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
             sawalpha = 1;
             /* FALL THROUGH */
 
-        default:
-            ;
+        default:;
         }
     }
 
-    if (!sawalpha) return NULL;  /* has to be one alpha char */
+    if (!sawalpha) return NULL; /* has to be one alpha char */
 
     return retbuf;
 }
@@ -270,8 +263,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, cyrusdb_strerror(r));
         fatal("can't read pts database", EX_TEMPFAIL);
     }
 
@@ -289,8 +281,8 @@ void service_abort(int error)
 
     r = cyrusdb_close(ptsdb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error closing ptsdb: %s",
-               cyrusdb_strerror(r));
+        syslog(
+            LOG_ERR, "DBERROR: error closing ptsdb: %s", cyrusdb_strerror(r));
     }
 
     cyrusdb_done();
@@ -300,7 +292,8 @@ void service_abort(int error)
 
 /* we're a 'threaded' service, but since we never fork or create any
    threads, we're just one-person-at-a-time based */
-int service_main_fd(int c, int argc __attribute__((unused)),
+int service_main_fd(int c,
+                    int argc __attribute__((unused)),
                     char **argv __attribute__((unused)),
                     char **envp __attribute__((unused)))
 {
@@ -317,9 +310,11 @@ int service_main_fd(int c, int argc __attribute__((unused)),
         goto sendreply;
     }
 
-    if (size > PTS_DB_KEYSIZE)  {
-        syslog(LOG_ERR, "size sent %d is greater than buffer size %d",
-               (int)size, PTS_DB_KEYSIZE);
+    if (size > PTS_DB_KEYSIZE) {
+        syslog(LOG_ERR,
+               "size sent %d is greater than buffer size %d",
+               (int)size,
+               PTS_DB_KEYSIZE);
         reply = "Error: invalid request size";
         goto sendreply;
     }
@@ -343,7 +338,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
     newstate = ptsmodule_make_authstate(user, size, &reply, &dsize);
 
-    if(newstate) {
+    if (newstate) {
         /* Success! */
         rc = cyrusdb_store(ptsdb, user, size, (void *)newstate, dsize, NULL);
         (void)rc;
@@ -351,15 +346,16 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
         /* and we're done */
         reply = "OK";
-    } else {
+    }
+    else {
         /* Failure */
-        if ( reply == NULL ) {
+        if (reply == NULL) {
             reply = "Error making authstate";
         }
     }
 
- sendreply:
-    if (retry_write(c, reply, strlen(reply) + 1) <0) {
+sendreply:
+    if (retry_write(c, reply, strlen(reply) + 1) < 0) {
         syslog(LOG_WARNING, "retry_write: %m");
     }
     close(c);

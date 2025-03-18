@@ -61,7 +61,7 @@ static void usage(void)
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt,r;
+    int opt, r;
     char *alt_config = NULL;
 
     /* keep this in alphabetical order */
@@ -70,12 +70,11 @@ int main(int argc, char *argv[])
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
 
-        { 0, 0, 0, 0 },
+        {0, 0, 0, 0},
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;

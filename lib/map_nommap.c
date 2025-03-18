@@ -42,27 +42,30 @@
 
 #include <config.h>
 #include <stdio.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
+#include <unistd.h>
 
+#include "map.h"
 #include "slowio.h"
 #include "xmalloc.h"
-#include "map.h"
 
-#define SLOP (8*1024)
+#define SLOP (8 * 1024)
 
 EXPORTED const char map_method_desc[] = "nommap";
 
 /*
  * Create/refresh mapping of file
  */
-void
-EXPORTED map_refresh(int fd, int onceonly, const char **base,
-                     size_t *len, size_t newlen, const char *name,
-                     const char *mboxname)
+void EXPORTED map_refresh(int fd,
+                          int onceonly,
+                          const char **base,
+                          size_t *len,
+                          size_t newlen,
+                          const char *name,
+                          const char *mboxname)
 {
     char *p;
     int n, left;
@@ -71,8 +74,11 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
     if (newlen == MAP_UNKNOWN_LEN) {
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            syslog(LOG_ERR,
+                   "IOERROR: fstating %s file%s%s: %m",
+                   name,
+                   mboxname ? " for " : "",
+                   mboxname ? mboxname : "");
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -87,31 +93,35 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
          * memory as a cstring */
         if (onceonly) {
             *len = newlen;
-            *base = xmalloc(*len+1);
+            *base = xmalloc(*len + 1);
         }
         else {
-            *len = (newlen + 2*SLOP) & ~(SLOP-1);
+            *len = (newlen + 2 * SLOP) & ~(SLOP - 1);
             *base = xmalloc(*len);
         }
     }
 
     lseek(fd, 0L, 0);
     left = newlen;
-    p = (char*) *base;
+    p = (char *)*base;
 
     /* XXX this should probably just use retry_read()... */
     while (left) {
         n = read(fd, p, left);
         if (n <= 0) {
             if (n == 0) {
-                syslog(LOG_ERR, "IOERROR: reading %s file%s%s: end of file",
+                syslog(LOG_ERR,
+                       "IOERROR: reading %s file%s%s: end of file",
                        name,
-                       mboxname ? " for " : "", mboxname ? mboxname : "");
+                       mboxname ? " for " : "",
+                       mboxname ? mboxname : "");
             }
             else {
-                syslog(LOG_ERR, "IOERROR: reading %s file%s%s: %m",
+                syslog(LOG_ERR,
+                       "IOERROR: reading %s file%s%s: %m",
                        name,
-                       mboxname ? " for " : "", mboxname ? mboxname : "");
+                       mboxname ? " for " : "",
+                       mboxname ? mboxname : "");
             }
             snprintf(buf, sizeof(buf), "failed to read %s file", name);
             fatal(buf, EX_IOERR);
@@ -129,8 +139,7 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 /*
  * Destroy mapping of file
  */
-void
-EXPORTED map_free(const char **base, size_t *len)
+void EXPORTED map_free(const char **base, size_t *len)
 {
     if (*len) free((char *)*base);
     *base = 0;

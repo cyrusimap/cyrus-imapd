@@ -31,21 +31,21 @@
 typedef void (*real_openlog_t)(const char *, int, int);
 static void real_openlog(const char *ident, int option, int facility)
 {
-    real_openlog_t p = (real_openlog_t) dlsym(RTLD_NEXT, "openlog");
+    real_openlog_t p = (real_openlog_t)dlsym(RTLD_NEXT, "openlog");
     p(ident, option, facility);
 }
 
 typedef void (*real_vsyslog_t)(int, const char *, va_list);
 static void real_vsyslog(int priority, const char *format, va_list ap)
 {
-    real_vsyslog_t p = (real_vsyslog_t) dlsym(RTLD_NEXT, "vsyslog");
+    real_vsyslog_t p = (real_vsyslog_t)dlsym(RTLD_NEXT, "vsyslog");
     p(priority, format, ap);
 }
 
 typedef void (*real_closelog_t)(void);
 static void real_closelog(void)
 {
-    real_closelog_t p = (real_closelog_t) dlsym(RTLD_NEXT, "closelog");
+    real_closelog_t p = (real_closelog_t)dlsym(RTLD_NEXT, "closelog");
     p();
 }
 
@@ -104,9 +104,13 @@ static void fake_vsyslog(int priority, const char *format, va_list ap)
     gettimeofday(&now, NULL);
 
     strftime(timestamp, sizeof(timestamp), "%b %d %T", localtime(&now.tv_sec));
-    fprintf(out, "%s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
-                 timestamp, (intmax_t) now.tv_usec,
-                 hostname, myident, (intmax_t) pid);
+    fprintf(out,
+            "%s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
+            timestamp,
+            (intmax_t)now.tv_usec,
+            hostname,
+            myident,
+            (intmax_t)pid);
     errno = saved_errno;
 
     /* glibc handles %m in vfprintf() so we don't need to do

@@ -21,8 +21,8 @@ void CRYPTO_thread_cleanup(void);
 static void pthreads_locking_callback(int mode,int type,char *file,int line);
 static unsigned long pthreads_thread_id(void );
 */
-void pthreads_locking_callback(int mode,int type,char *file,int line);
-unsigned long pthreads_thread_id(void );
+void pthreads_locking_callback(int mode, int type, char *file, int line);
+unsigned long pthreads_thread_id(void);
 
 #endif /* OPENSSL_VERSION_NUMBER */
 

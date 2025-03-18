@@ -45,13 +45,13 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <getopt.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <sysexits.h>
 #include "string.h"
+#include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
+#include <sysexits.h>
 
 #include "global.h"
 #include "util.h"
@@ -72,13 +72,12 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "metadata", no_argument, NULL, 'm' },
-        { 0, 0, 0, 0 },
+        {"metadata", no_argument, NULL, 'm'},
+        {0,          0,           0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -95,8 +94,13 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_df", 0, 0);
 
-    printf("%-12s %12s %12s %12s %3s %s\n", "Partition",
-           "1k-blocks", "Used", "Available", "Use%", "Location");
+    printf("%-12s %12s %12s %12s %3s %s\n",
+           "Partition",
+           "1k-blocks",
+           "Used",
+           "Available",
+           "Use%",
+           "Location");
 
     config_foreachoverflowstring(get_part_stats, &meta);
 
@@ -105,14 +109,11 @@ int main(int argc, char *argv[])
     exit(code);
 }
 
-
 static void usage(void)
 {
-    fprintf(stderr,
-            "usage: cyr_df [-C <alt_config>] [-m]\n");
+    fprintf(stderr, "usage: cyr_df [-C <alt_config>] [-m]\n");
     exit(EX_USAGE);
 }
-
 
 /*
  * config_foreachoverflowstring() callback function to find partition-
@@ -120,7 +121,7 @@ static void usage(void)
  */
 static void get_part_stats(const char *key, const char *val, void *rock)
 {
-    int meta = *((int*) rock);
+    int meta = *((int *)rock);
     const char *part, *path;
     struct statvfs s;
     long blocks_used;
@@ -132,19 +133,20 @@ static void get_part_stats(const char *key, const char *val, void *rock)
     }
     if (strncmp("partition-", key, 10)) return;
 
-    part = key+10;
+    part = key + 10;
     path = val;
 
     if (statvfs(path, &s)) return;
 
     blocks_used = s.f_blocks - s.f_bfree;
-    blocks_percent_used = (long)
-        (blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
+    blocks_percent_used =
+        (long)(blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
 
     printf("%-12s %12ld %12ld %12ld %3ld%% %s\n",
            part,
-           (long) (s.f_blocks * (s.f_frsize / 1024.0)),
-           (long) ((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)),
-           (long) (s.f_bavail * (s.f_frsize / 1024.0)),
-           blocks_percent_used, path);
+           (long)(s.f_blocks * (s.f_frsize / 1024.0)),
+           (long)((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)),
+           (long)(s.f_bavail * (s.f_frsize / 1024.0)),
+           blocks_percent_used,
+           path);
 }

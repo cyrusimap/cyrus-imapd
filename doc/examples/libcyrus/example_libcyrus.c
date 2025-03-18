@@ -4,10 +4,10 @@
  *
    export LD_LIBRARY_PATH=/path/to/cyrus/lib
    export PKG_CONFIG_PATH=/path/to/cyrus/lib/pkgconfig
-   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus libcyrus_min)
-   export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other libcyrus libcyrus_min)
-   export LDLIBS=$(pkg-config --libs-only-l libcyrus libcyrus_min)
-   make example_libcyrus
+   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus
+ libcyrus_min) export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other
+ libcyrus libcyrus_min) export LDLIBS=$(pkg-config --libs-only-l libcyrus
+ libcyrus_min) make example_libcyrus
    ./example_libcyrus
  */
 
@@ -20,12 +20,12 @@
 #include "bitvector.h"
 #include "bloom.h"
 #include "bsearch.h"
-/* #include "charset.h" */  /* XXX bogus: needs util.h for struct buf */
-/* #include "command.h" */  /* XXX bogus: needs prot.h for struct protstream */
+/* #include "charset.h" */ /* XXX bogus: needs util.h for struct buf */
+/* #include "command.h" */ /* XXX bogus: needs prot.h for struct protstream */
 #include "cyr_qsort_r.h"
 #include "cyrusdb.h"
 #include "glob.h"
-/* #include "imapurl.h" */  /* XXX bogus: needs util.h for struct buf */
+/* #include "imapurl.h" */ /* XXX bogus: needs util.h for struct buf */
 #include "imclient.h"
 #include "imparse.h"
 #include "iostat.h"
@@ -77,7 +77,7 @@ void test_acl(void)
     free(errstr);
 
     mask = cyrus_acl_strtomask(str, &mask);
-    (void) mask;
+    (void)mask;
 
     puts("acl ok");
 }
@@ -88,7 +88,7 @@ void test_auth(void)
     const char *canonid;
 
     canonid = auth_canonifyid(id, strlen(id));
-    (void) canonid;
+    (void)canonid;
 
     puts("auth ok");
 }
@@ -100,8 +100,7 @@ void test_bitvector(void)
     unsigned u;
 
     for (u = 0; u < 20; u++) {
-        if (u % 5 == 0 || u % 3 == 0)
-            bv_set(&bv, u);
+        if (u % 5 == 0 || u % 3 == 0) bv_set(&bv, u);
     }
 
     str = bv_cstring(&bv);
@@ -137,15 +136,16 @@ void test_bsearch(void)
 
     cmp = cmpstringp_raw(&s1, &s2);
     cmp = cmpstringp_mbox(&s1, &s2);
-    (void) cmp;
+    (void)cmp;
 
     puts("bsearch ok");
 }
 
-static int cmp QSORT_R_COMPAR_ARGS(const void *a, const void *b,
+static int cmp QSORT_R_COMPAR_ARGS(const void *a,
+                                   const void *b,
                                    void *thunk __attribute__((unused)))
 {
-    return *(const int *) a - *(const int *) b;
+    return *(const int *)a - *(const int *)b;
 }
 
 void test_cyr_qsort_r(void)
@@ -184,7 +184,7 @@ void test_cyrusdb(void)
     if (!r) r = cyrusdb_commit(db, tid);
 
     r = cyrusdb_close(db);
-    (void) r;
+    (void)r;
 
     puts("cyrusdb ok");
 }
@@ -197,7 +197,7 @@ void test_glob(void)
     g = glob_init("fo*", '.');
 
     r = glob_test(g, "foo");
-    (void) r;
+    (void)r;
 
     glob_free(&g);
     puts("glob ok");
@@ -225,7 +225,7 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;

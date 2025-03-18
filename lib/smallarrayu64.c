@@ -49,7 +49,7 @@ EXPORTED size_t smallarrayu64_size(smallarrayu64_t *sa)
 static inline int adjust_index_ro(const smallarrayu64_t *sa, int idx)
 {
     size_t count = sa->count + arrayu64_size(&sa->spillover);
-    if (idx >= 0 && (unsigned) idx >= count)
+    if (idx >= 0 && (unsigned)idx >= count)
         return -1;
     else if (idx < 0)
         idx += count;
@@ -58,8 +58,7 @@ static inline int adjust_index_ro(const smallarrayu64_t *sa, int idx)
 
 EXPORTED uint64_t smallarrayu64_nth(smallarrayu64_t *sa, int idx)
 {
-    if ((idx = adjust_index_ro(sa, idx)) < 0)
-        return 0;
+    if ((idx = adjust_index_ro(sa, idx)) < 0) return 0;
     if ((size_t)idx < sa->count) {
         return sa->data[idx];
     }

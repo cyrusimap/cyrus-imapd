@@ -46,8 +46,8 @@
 
 #include <config.h>
 
-#include "sqldb.h"
 #include "mailbox.h"
+#include "sqldb.h"
 #include <libical/ical.h>
 
 enum alarm_type {

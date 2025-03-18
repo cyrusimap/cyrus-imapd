@@ -42,10 +42,7 @@
 #ifndef SERVICE_H
 #define SERVICE_H
 
-enum {
-    STATUS_FD = 3,
-    LISTEN_FD = 4
-};
+enum { STATUS_FD = 3, LISTEN_FD = 4 };
 
 enum {
     MASTER_SERVICE_AVAILABLE = 0x01,
@@ -59,10 +56,7 @@ extern int service_main(int argc, char **argv, char **envp);
 extern int service_main_fd(int fd, int argc, char **argv, char **envp);
 extern void service_abort(int error) __attribute__((noreturn));
 
-enum {
-    MAX_USE = 250,
-    REUSE_TIMEOUT = 60
-};
+enum { MAX_USE = 250, REUSE_TIMEOUT = 60 };
 
 struct notify_message {
     int message;

@@ -44,12 +44,12 @@
 #ifndef INCLUDED_PROT_H
 #define INCLUDED_PROT_H
 
-#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
-#include <sasl/sasl.h>
 #include <config.h>
+#include <sasl/sasl.h>
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -77,7 +77,7 @@ struct protstream {
     unsigned char *buf;
     unsigned buf_size;
     unsigned char *ptr; /* The end of data in the buffer */
-    unsigned cnt; /* Space Remaining in buffer */
+    unsigned cnt;       /* Space Remaining in buffer */
 
     /* File Descriptors */
     int fd;         /* The Socket */
@@ -105,10 +105,10 @@ struct protstream {
 #endif /* HAVE_ZLIB */
 
     /* Big Buffer Information */
-    const char *bigbuf_base;  /* Base Pointer */
-    size_t bigbuf_siz; /* Overall Size of Buffer */
-    size_t bigbuf_len; /* Length of mapped file */
-    size_t bigbuf_pos; /* Current Position */
+    const char *bigbuf_base; /* Base Pointer */
+    size_t bigbuf_siz;       /* Overall Size of Buffer */
+    size_t bigbuf_len;       /* Length of mapped file */
+    size_t bigbuf_pos;       /* Current Position */
 
     /* Callback-fill information */
     prot_fillcallback_t *fillcallback_proc;
@@ -122,7 +122,7 @@ struct protstream {
 
     /* Parameters */
     int write;
-    int dontblock; /* Application requested nonblocking */
+    int dontblock;       /* Application requested nonblocking */
     int dontblock_isset; /* write only, we've fcntl(O_NONBLOCK)'d */
     int read_timeout;
     time_t timeout_mark;
@@ -144,9 +144,8 @@ struct protstream {
     void *userdata;
 };
 
-typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
-                                                        struct prot_waitevent *ev,
-                                                        void *rock);
+typedef struct prot_waitevent *prot_waiteventcallback_t(
+    struct protstream *s, struct prot_waitevent *ev, void *rock);
 
 struct prot_waitevent {
     time_t mark;
@@ -185,10 +184,8 @@ extern int prot_putc(int c, struct protstream *s);
  *
  * The internal buffer will ONLY be filled if it is currently empty.
  */
-extern size_t prot_lookahead(struct protstream *s,
-                             const char *str,
-                             size_t len,
-                             int *sep);
+extern size_t
+prot_lookahead(struct protstream *s, const char *str, size_t len, int *sep);
 
 /* The following two macros control the blocking nature of
  * the protstream.
@@ -263,12 +260,11 @@ extern int prot_resettimeout(struct protstream *s);
 
 /* Connect two streams so that when you block on reading s, the layer
  * will automatically flush flushs */
-extern int prot_setflushonread(struct protstream *s,
-                               struct protstream *flushs);
-
+extern int prot_setflushonread(struct protstream *s, struct protstream *flushs);
 
 int prot_setreadcallback(struct protstream *s,
-                                prot_readcallback_t *proc, void *rock);
+                         prot_readcallback_t *proc,
+                         void *rock);
 extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
                                                 time_t mark,
                                                 prot_waiteventcallback_t *proc,
@@ -293,8 +289,8 @@ extern int prot_vprintf(struct protstream *, const char *, va_list)
     __attribute__((format(printf, 2, 0)));
 extern int prot_printf(struct protstream *, const char *, ...)
     __attribute__((format(printf, 2, 3)));
-extern int prot_printliteral(struct protstream *out, const char *s,
-                             size_t size);
+extern int
+prot_printliteral(struct protstream *out, const char *s, size_t size);
 extern int prot_printstring(struct protstream *out, const char *s);
 extern int prot_printmap(struct protstream *out, const char *s, size_t n);
 extern int prot_printamap(struct protstream *out, const char *s, size_t n);
@@ -304,8 +300,10 @@ extern int prot_readbuf(struct protstream *s, struct buf *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
 /* select() for protstreams */
-extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
-                       struct protgroup **out, int *extra_read_flag,
+extern int prot_select(struct protgroup *readstreams,
+                       int extra_read_fd,
+                       struct protgroup **out,
+                       int *extra_read_flag,
                        struct timeval *timeout);
 
 /* Protgroup manipulations */

@@ -42,34 +42,34 @@
 
 #include <config.h>
 
+#include <ctype.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <sysexits.h>
-#include <syslog.h>
+#include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/stat.h>
+#include <sysexits.h>
+#include <syslog.h>
 
 #ifdef HAVE_SSL
 #include <openssl/rand.h>
 #endif
 
 #if HAVE_UNISTD_H
-# include <unistd.h>
+#include <unistd.h>
 #endif
 
 #include "acl.h"
 #include "assert.h"
 #include "charset.h"
 #include "cyr_lock.h"
+#include "global.h"
 #include "gmtoff.h"
 #include "haproxy.h"
-#include "iptostring.h"
-#include "global.h"
 #include "ical_support.h"
+#include "iptostring.h"
 #include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -97,9 +97,9 @@ static int cyrus_init_nodb = 0;
 
 EXPORTED volatile sig_atomic_t in_shutdown = 0;
 
-EXPORTED int config_fulldirhash;                                /* 0 */
-EXPORTED int config_implicitrights;                     /* "lkxa" */
-EXPORTED unsigned long config_metapartition_files;      /* 0 */
+EXPORTED int config_fulldirhash;                   /* 0 */
+EXPORTED int config_implicitrights;                /* "lkxa" */
+EXPORTED unsigned long config_metapartition_files; /* 0 */
 EXPORTED const char *config_mboxlist_db;
 EXPORTED const char *config_quota_db;
 EXPORTED const char *config_subscription_db;
@@ -130,30 +130,18 @@ static strarray_t *suppressed_capabilities = NULL;
 
 static int get_facility(const char *name)
 {
-    if (!strcasecmp(name, "DAEMON"))
-        return LOG_DAEMON;
-    if (!strcasecmp(name, "MAIL"))
-        return LOG_MAIL;
-    if (!strcasecmp(name, "NEWS"))
-        return LOG_NEWS;
-    if (!strcasecmp(name, "USER"))
-        return LOG_USER;
-    if (!strcasecmp(name, "LOCAL0"))
-        return LOG_LOCAL0;
-    if (!strcasecmp(name, "LOCAL1"))
-        return LOG_LOCAL1;
-    if (!strcasecmp(name, "LOCAL2"))
-        return LOG_LOCAL2;
-    if (!strcasecmp(name, "LOCAL3"))
-        return LOG_LOCAL3;
-    if (!strcasecmp(name, "LOCAL4"))
-        return LOG_LOCAL4;
-    if (!strcasecmp(name, "LOCAL5"))
-        return LOG_LOCAL5;
-    if (!strcasecmp(name, "LOCAL6"))
-        return LOG_LOCAL6;
-    if (!strcasecmp(name, "LOCAL7"))
-        return LOG_LOCAL7;
+    if (!strcasecmp(name, "DAEMON")) return LOG_DAEMON;
+    if (!strcasecmp(name, "MAIL")) return LOG_MAIL;
+    if (!strcasecmp(name, "NEWS")) return LOG_NEWS;
+    if (!strcasecmp(name, "USER")) return LOG_USER;
+    if (!strcasecmp(name, "LOCAL0")) return LOG_LOCAL0;
+    if (!strcasecmp(name, "LOCAL1")) return LOG_LOCAL1;
+    if (!strcasecmp(name, "LOCAL2")) return LOG_LOCAL2;
+    if (!strcasecmp(name, "LOCAL3")) return LOG_LOCAL3;
+    if (!strcasecmp(name, "LOCAL4")) return LOG_LOCAL4;
+    if (!strcasecmp(name, "LOCAL5")) return LOG_LOCAL5;
+    if (!strcasecmp(name, "LOCAL6")) return LOG_LOCAL6;
+    if (!strcasecmp(name, "LOCAL7")) return LOG_LOCAL7;
 
     /* fall back to the default.  This will work because we already have
        this log open when we call out */
@@ -170,7 +158,7 @@ struct cyrus_module {
 
 static ptrarray_t cyrus_modules = PTRARRAY_INITIALIZER;
 
-EXPORTED void cyrus_modules_add(void (*done)(void*), void *rock)
+EXPORTED void cyrus_modules_add(void (*done)(void *), void *rock)
 {
     struct cyrus_module *cm = xmalloc(sizeof(struct cyrus_module));
     cm->done = done;
@@ -196,15 +184,17 @@ static void debug_toggled(void)
     else
         logmask &= ~LOG_MASK(LOG_DEBUG);
 
-    syslog(LOG_INFO, "debug logging turned %s",
-                     config_debug ? "on" : "off");
+    syslog(LOG_INFO, "debug logging turned %s", config_debug ? "on" : "off");
 
     setlogmask(logmask);
 }
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
-EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
+EXPORTED int cyrus_init(const char *alt_config,
+                        const char *ident,
+                        unsigned flags,
+                        int config_need_data)
 {
     char *p;
     const char *val;
@@ -216,7 +206,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     if (cyrus_init_run != NOT_RUNNING) {
         fatal("cyrus_init called twice!", EX_CONFIG);
-    } else {
+    }
+    else {
         cyrus_init_run = RUNNING;
     }
 
@@ -224,16 +215,16 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     cyrus_init_nodb = (flags & CYRUSINIT_NODB);
 #ifdef LOG_PERROR
-    if ((flags & CYRUSINIT_PERROR))
-        syslog_opts |= LOG_PERROR;
+    if ((flags & CYRUSINIT_PERROR)) syslog_opts |= LOG_PERROR;
 #endif
 
     initialize_http_error_table();
     initialize_imap_error_table();
     initialize_mupd_error_table();
 
-    /* various things can run our commands with only two file descriptors, e.g. old strace on FreeBSD,
-     * or IPC::Run from Perl.  Make sure we don't accidentally reuse low FD numbers */
+    /* various things can run our commands with only two file descriptors, e.g.
+     * old strace on FreeBSD, or IPC::Run from Perl.  Make sure we don't
+     * accidentally reuse low FD numbers */
     while (1) {
         int fd = open("/dev/null", 0);
         if (fd == -1) fatal("can't open /dev/null", EX_SOFTWARE);
@@ -266,7 +257,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     config_read(alt_config, config_need_data);
 
     /* changed user if needed */
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/ 0) != 0)) {
         fatal("must run as the Cyrus user", EX_USAGE);
     }
 
@@ -294,15 +285,15 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; p && *p; p++) {
         if (!Uisalnum(*p))
-          fatal("defaultpartition option contains non-alphanumeric character",
-                EX_CONFIG);
-        if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+            fatal("defaultpartition option contains non-alphanumeric character",
+                  EX_CONFIG);
+        if (Uisupper(*p)) *p = tolower((unsigned char)*p);
     }
 
     /* Look up umask */
     val = config_getstring(IMAPOPT_UMASK);
     while (*val) {
-        if (*val >= '0' && *val <= '7') umaskval = umaskval*8 + *val - '0';
+        if (*val >= '0' && *val <= '7') umaskval = umaskval * 8 + *val - '0';
         val++;
     }
     umask(umaskval);
@@ -314,23 +305,23 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                         &config_implicitrights);
     /* XXX and if strtomask fails? */
 
-    config_metapartition_files = config_getbitfield(IMAPOPT_METAPARTITION_FILES);
+    config_metapartition_files =
+        config_getbitfield(IMAPOPT_METAPARTITION_FILES);
 
     val = config_getstring(IMAPOPT_SUPPRESS_CAPABILITIES);
-    if (val)
-        suppressed_capabilities = strarray_split(val, NULL, 0);
+    if (val) suppressed_capabilities = strarray_split(val, NULL, 0);
     if (config_getswitch(IMAPOPT_SEARCH_SKIPDIACRIT))
         charset_flags |= CHARSET_SKIPDIACRIT;
 
     switch (config_getenum(IMAPOPT_SEARCH_WHITESPACE)) {
-        case IMAP_ENUM_SEARCH_WHITESPACE_MERGE:
-            charset_flags |= CHARSET_MERGESPACE;
-            break;
-        case IMAP_ENUM_SEARCH_WHITESPACE_SKIP:
-            charset_flags |= CHARSET_SKIPSPACE;
-            break;
-        default:
-            break;
+    case IMAP_ENUM_SEARCH_WHITESPACE_MERGE:
+        charset_flags |= CHARSET_MERGESPACE;
+        break;
+    case IMAP_ENUM_SEARCH_WHITESPACE_SKIP:
+        charset_flags |= CHARSET_SKIPSPACE;
+        break;
+    default:
+        break;
     }
 
     if (config_getswitch(IMAPOPT_SEARCH_SKIPHTML))
@@ -341,7 +332,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     /* Set snippet conversion flags. */
     charset_snippet_flags = CHARSET_KEEPCASE;
-    if (config_getenum(IMAPOPT_SEARCH_ENGINE) != IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
+    if (config_getenum(IMAPOPT_SEARCH_ENGINE) !=
+        IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
         /* All search engines other than Xapian require escaped HTML */
         charset_snippet_flags |= CHARSET_ESCAPEHTML;
     }
@@ -377,8 +369,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
         libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
                                   config_getstring(IMAPOPT_TEMP_PATH));
-        libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT, /* <-- n.b. still an int */
-                               config_getduration(IMAPOPT_PTSCACHE_TIMEOUT, 's'));
+        libcyrus_config_setint(
+            CYRUSOPT_PTS_CACHE_TIMEOUT, /* <-- n.b. still an int */
+            config_getduration(IMAPOPT_PTSCACHE_TIMEOUT, 's'));
         libcyrus_config_setswitch(CYRUSOPT_FULLDIRHASH,
                                   config_getswitch(IMAPOPT_FULLDIRHASH));
         libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,
@@ -405,12 +398,15 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getstring(IMAPOPT_SQL_PASSWD));
         libcyrus_config_setswitch(CYRUSOPT_SQL_USESSL,
                                   config_getswitch(IMAPOPT_SQL_USESSL));
-        libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
-                                  config_getswitch(IMAPOPT_SKIPLIST_ALWAYS_CHECKPOINT));
-        libcyrus_config_setswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
-                                  config_getswitch(IMAPOPT_ACL_ADMIN_IMPLIES_WRITE));
-        libcyrus_config_setswitch(CYRUSOPT_CYRUSDB_AUTOCONVERT,
-                                  config_getswitch(IMAPOPT_CYRUSDB_AUTOCONVERT));
+        libcyrus_config_setswitch(
+            CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
+            config_getswitch(IMAPOPT_SKIPLIST_ALWAYS_CHECKPOINT));
+        libcyrus_config_setswitch(
+            CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
+            config_getswitch(IMAPOPT_ACL_ADMIN_IMPLIES_WRITE));
+        libcyrus_config_setswitch(
+            CYRUSOPT_CYRUSDB_AUTOCONVERT,
+            config_getswitch(IMAPOPT_CYRUSDB_AUTOCONVERT));
 
         /* Not until all configuration parameters are set! */
         libcyrus_init();
@@ -443,7 +439,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     return 0;
 }
 
-EXPORTED void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
+EXPORTED void
+global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
 {
     static int called_already = 0;
 
@@ -453,38 +450,38 @@ EXPORTED void global_sasl_init(int client, int server, const sasl_callback_t *ca
     called_already = 1;
 
     /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc,
-                   (sasl_calloc_t *) &xcalloc,
-                   (sasl_realloc_t *) &xrealloc,
-                   (sasl_free_t *) &free);
+    sasl_set_alloc((sasl_malloc_t *)&xmalloc,
+                   (sasl_calloc_t *)&xcalloc,
+                   (sasl_realloc_t *)&xrealloc,
+                   (sasl_free_t *)&free);
 
     /* set the SASL mutex functions */
-    sasl_set_mutex((sasl_mutex_alloc_t *) &cyrus_mutex_alloc,
-                   (sasl_mutex_lock_t *) &cyrus_mutex_lock,
-                   (sasl_mutex_unlock_t *) &cyrus_mutex_unlock,
-                   (sasl_mutex_free_t *) &cyrus_mutex_free);
+    sasl_set_mutex((sasl_mutex_alloc_t *)&cyrus_mutex_alloc,
+                   (sasl_mutex_lock_t *)&cyrus_mutex_lock,
+                   (sasl_mutex_unlock_t *)&cyrus_mutex_unlock,
+                   (sasl_mutex_free_t *)&cyrus_mutex_free);
 
-    if(client && sasl_client_init(callbacks)) {
+    if (client && sasl_client_init(callbacks)) {
         fatal("could not init sasl (client)", EX_SOFTWARE);
     }
 
-    if(server && sasl_server_init(callbacks, "Cyrus")) {
+    if (server && sasl_server_init(callbacks, "Cyrus")) {
         fatal("could not init sasl (server)", EX_SOFTWARE);
     }
 }
 
 /* this is a wrapper to call the cyrus configuration from SASL */
 EXPORTED int mysasl_config(void *context __attribute__((unused)),
-                  const char *plugin_name,
-                  const char *option,
-                  const char **result,
-                  unsigned *len)
+                           const char *plugin_name,
+                           const char *option,
+                           const char **result,
+                           unsigned *len)
 {
     *result = NULL;
 
     if (plugin_name) {
         /* first try it with the plugin name */
-        char *opt = strconcat("sasl_", plugin_name, "_", option, (char*)NULL);
+        char *opt = strconcat("sasl_", plugin_name, "_", option, (char *)NULL);
         *result = config_getoverflowstring(opt, NULL);
         free(opt);
     }
@@ -497,7 +494,9 @@ EXPORTED int mysasl_config(void *context __attribute__((unused)),
     }
 
     if (*result != NULL) {
-        if (len) { *len = strlen(*result); }
+        if (len) {
+            *len = strlen(*result);
+        }
         return SASL_OK;
     }
 
@@ -513,9 +512,9 @@ EXPORTED sasl_security_properties_t *mysasl_secprops(int flags)
 
     ret.maxbufsize = PROT_BUFSIZE;
     ret.min_ssf = config_getint(IMAPOPT_SASL_MINIMUM_LAYER);
-                                /* minimum allowable security strength */
+    /* minimum allowable security strength */
     ret.max_ssf = config_getint(IMAPOPT_SASL_MAXIMUM_LAYER);
-                                /* maximum allowable security strength */
+    /* maximum allowable security strength */
 
     ret.security_flags = flags;
     if (!config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
@@ -538,15 +537,14 @@ EXPORTED int global_authisa(struct auth_state *authstate, enum imapopt opt)
     size_t len;
 
     /* Is the option defined? */
-    if(!val) return 0;
+    if (!val) return 0;
 
     while (*val) {
         char *p;
 
-        for (p = (char *) val; *p && !Uisspace(*p); p++);
-        len = p-val;
-        if(len >= sizeof(buf))
-            len = sizeof(buf) - 1;
+        for (p = (char *)val; *p && !Uisspace(*p); p++);
+        len = p - val;
+        if (len >= sizeof(buf)) len = sizeof(buf) - 1;
         memcpy(buf, val, len);
         buf[len] = '\0';
 
@@ -562,8 +560,8 @@ EXPORTED int global_authisa(struct auth_state *authstate, enum imapopt opt)
 
 /* Note: This function is not idempotent! Only call it once for a given ID
  * or you will be unhappy (think IP hosting). */
-EXPORTED const char *canonify_userid(char *user, const char *loginid,
-                            int *domain_from_ip)
+EXPORTED const char *
+canonify_userid(char *user, const char *loginid, int *domain_from_ip)
 {
     char *domain = NULL;
     int len = strlen(user);
@@ -587,14 +585,14 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
 
     if (config_virtdomains) {
         if (domain) {
-            if (config_defdomain && !strcasecmp(config_defdomain, domain+1)) {
+            if (config_defdomain && !strcasecmp(config_defdomain, domain + 1)) {
                 *domain = '\0'; /* trim the default domain */
             }
         }
         else if (loginid) { /* used for LISTRIGHTS */
             if ((domain = strrchr(loginid, '@'))) {
                 /* append the domain from the login id */
-                snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
+                snprintf(buf, sizeof(buf), "%s@%s", user, domain + 1);
                 user = buf;
             }
         }
@@ -606,12 +604,18 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
 
             salen = sizeof(localaddr);
             if (getsockname(0, (struct sockaddr *)&localaddr, &salen) == 0) {
-                error = getnameinfo((struct sockaddr *)&localaddr, salen,
-                                    hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD);
+                error = getnameinfo((struct sockaddr *)&localaddr,
+                                    salen,
+                                    hbuf,
+                                    sizeof(hbuf),
+                                    NULL,
+                                    0,
+                                    NI_NAMEREQD);
                 if (error == 0 && (domain = strchr(hbuf, '.')) &&
-                    !(config_defdomain && !strcasecmp(config_defdomain, domain+1))) {
+                    !(config_defdomain &&
+                      !strcasecmp(config_defdomain, domain + 1))) {
                     /* append the domain from our IP */
-                    snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
+                    snprintf(buf, sizeof(buf), "%s@%s", user, domain + 1);
                     user = buf;
 
                     if (domain_from_ip) *domain_from_ip = 1;
@@ -624,16 +628,18 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
 }
 
 EXPORTED int mysasl_canon_user(sasl_conn_t *conn,
-                      void *context,
-                      const char *user, unsigned ulen,
-                      unsigned flags __attribute__((unused)),
-                      const char *user_realm __attribute__((unused)),
-                      char *out,
-                      unsigned out_max, unsigned *out_ulen)
+                               void *context,
+                               const char *user,
+                               unsigned ulen,
+                               unsigned flags __attribute__((unused)),
+                               const char *user_realm __attribute__((unused)),
+                               char *out,
+                               unsigned out_max,
+                               unsigned *out_ulen)
 {
     const char *canonuser = NULL;
 
-    if (ulen+1 > out_max) {
+    if (ulen + 1 > out_max) {
         sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
         return SASL_BUFOVER;
     }
@@ -646,7 +652,7 @@ EXPORTED int mysasl_canon_user(sasl_conn_t *conn,
     }
     out[ulen] = '\0';
 
-    canonuser = canonify_userid(out, NULL, (int*) context);
+    canonuser = canonify_userid(out, NULL, (int *)context);
     if (!canonuser) {
         sasl_seterror(conn, 0, "bad userid authenticated");
         return SASL_BADAUTH;
@@ -678,7 +684,8 @@ EXPORTED int is_userid_anonymous(const char *user)
     /* check if we are anonymous */
     if (len == 9 && strncasecmp(user, "anonymous", len) == 0) {
         return 1;
-    } else {
+    }
+    else {
         return 0;
     }
 }
@@ -707,14 +714,17 @@ static int acl_ok(const char *userid, struct auth_state *authstate)
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
-                        void *context,
-                        const char *requested_user, unsigned rlen,
-                        const char *auth_identity, unsigned alen,
-                        const char *def_realm __attribute__((unused)),
-                        unsigned urlen __attribute__((unused)),
-                        struct propctx *propctx __attribute__((unused)))
+                                 void *context,
+                                 const char *requested_user,
+                                 unsigned rlen,
+                                 const char *auth_identity,
+                                 unsigned alen,
+                                 const char *def_realm __attribute__((unused)),
+                                 unsigned urlen __attribute__((unused)),
+                                 struct propctx *propctx
+                                 __attribute__((unused)))
 {
-    struct proxy_context *ctx = (struct proxy_context *) context;
+    struct proxy_context *ctx = (struct proxy_context *)context;
     const char *val = config_getstring(IMAPOPT_LOGINREALMS);
     struct auth_state *authstate;
     int userisadmin = 0;
@@ -722,7 +732,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 
     /* check if remote realm */
     if ((!config_virtdomains || *val) &&
-        (realm = strchr(auth_identity, '@'))!=NULL) {
+        (realm = strchr(auth_identity, '@')) != NULL) {
         realm++;
         while (*val) {
             if (!strncasecmp(val, realm, strlen(realm)) &&
@@ -734,8 +744,8 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
             while (*val && Uisspace(*val)) val++;
         }
         if (!*val) {
-            sasl_seterror(conn, 0, "cross-realm login %s denied",
-                          auth_identity);
+            sasl_seterror(
+                conn, 0, "cross-realm login %s denied", auth_identity);
             return SASL_BADAUTH;
         }
     }
@@ -760,11 +770,15 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 
     /* is requested_user denied access?  authenticated admins are exempt */
     if (!userisadmin && userdeny(requested_user, config_ident, NULL, 0)) {
-        syslog(LOG_ERR, "user '%s' denied access to service '%s'",
-               requested_user, config_ident);
-        sasl_seterror(conn, SASL_NOLOG,
+        syslog(LOG_ERR,
+               "user '%s' denied access to service '%s'",
+               requested_user,
+               config_ident);
+        sasl_seterror(conn,
+                      SASL_NOLOG,
                       "user '%s' is denied access to service '%s'",
-                      requested_user, config_ident);
+                      requested_user,
+                      config_ident);
 
         auth_freestate(authstate);
 
@@ -776,13 +790,12 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
            if we're an admin or if we've allowed ACL proxy logins */
         int use_acl = ctx->use_acl && config_getswitch(IMAPOPT_LOGINUSEACL);
 
-        if (userisadmin ||
-            (use_acl && acl_ok(requested_user, authstate)) ||
+        if (userisadmin || (use_acl && acl_ok(requested_user, authstate)) ||
             (ctx->proxy_servers &&
              global_authisa(authstate, IMAPOPT_PROXYSERVERS))) {
             /* proxy ok! */
 
-            userisadmin = 0;    /* no longer admin */
+            userisadmin = 0; /* no longer admin */
             auth_freestate(authstate);
 
             authstate = auth_newstate(requested_user);
@@ -791,9 +804,10 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
             if (ctx->userisproxyadmin)
                 *(ctx->userisproxyadmin) =
                     global_authisa(authstate, IMAPOPT_ADMINS);
-        } else {
-            sasl_seterror(conn, 0, "user %s is not allowed to proxy",
-                          auth_identity);
+        }
+        else {
+            sasl_seterror(
+                conn, 0, "user %s is not allowed to proxy", auth_identity);
 
             auth_freestate(authstate);
 
@@ -810,17 +824,14 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-
 /* call before a cyrus application exits */
 EXPORTED void cyrus_done(void)
 {
     cyrus_modules_done();
-    if (cyrus_init_run != RUNNING)
-        return;
+    if (cyrus_init_run != RUNNING) return;
     cyrus_init_run = DONE;
 
-    if (!cyrus_init_nodb)
-        libcyrus_done();
+    if (!cyrus_init_nodb) libcyrus_done();
 
     xzfree(config_skip_userlock);
 }
@@ -903,20 +914,30 @@ EXPORTED void session_new_id(void)
 
 #ifdef HAVE_SSL
     unsigned long long random;
-    RAND_bytes((unsigned char *) &random, sizeof(random));
-    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
-             base, session_id_time, getpid(), session_id_count, random);
+    RAND_bytes((unsigned char *)&random, sizeof(random));
+    snprintf(session_id_buf,
+             MAX_SESSIONID_SIZE,
+             "%.128s-%d-%d-%d-%llu",
+             base,
+             session_id_time,
+             getpid(),
+             session_id_count,
+             random);
 #else
-    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
-             base, session_id_time, getpid(), session_id_count);
+    snprintf(session_id_buf,
+             MAX_SESSIONID_SIZE,
+             "%.128s-%d-%d-%d",
+             base,
+             session_id_time,
+             getpid(),
+             session_id_count);
 #endif
 }
 
 /* Return the session id */
 EXPORTED const char *session_id(void)
 {
-    if (!session_id_count)
-        session_new_id();
+    if (!session_id_count) session_new_id();
     return (const char *)session_id_buf;
 }
 
@@ -926,12 +947,10 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
     char *sp, *ep;
     int len;
 
-    if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>')))
-    {
+    if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>'))) {
         sp += 11;
         len = ep - sp;
-        if (len < MAX_SESSIONID_SIZE)
-        {
+        if (len < MAX_SESSIONID_SIZE) {
             strncpy(sessionid, sp, len);
             ep = sessionid + len;
             *ep = '\0';
@@ -952,11 +971,12 @@ EXPORTED int capa_is_disabled(const char *str)
  * Get name of client host on socket 's'.
  * Also returns local IP port and remote IP port on inet connections.
  */
-EXPORTED const char *get_clienthost(int s, const char **localip, const char **remoteip)
+EXPORTED const char *
+get_clienthost(int s, const char **localip, const char **remoteip)
 {
-#define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
+#define IPBUF_SIZE (NI_MAXHOST + NI_MAXSERV + 2)
     socklen_t salen;
-    struct sockaddr_storage localaddr = { 0 }, remoteaddr = { 0 };
+    struct sockaddr_storage localaddr = {0}, remoteaddr = {0};
     struct sockaddr *localsock = (struct sockaddr *)&localaddr;
     struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
     static struct buf clientbuf = BUF_INITIALIZER;
@@ -980,22 +1000,21 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
         r = getpeername(s, remotesock, &salen);
     }
 
-    if (r == 0 &&
-        (remotesock->sa_family == AF_INET ||
-         remotesock->sa_family == AF_INET6)) {
+    if (r == 0 && (remotesock->sa_family == AF_INET ||
+                   remotesock->sa_family == AF_INET6)) {
         /* connected to an internet socket */
-        if (getnameinfo(remotesock, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+        if (getnameinfo(
+                remotesock, salen, hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) ==
+            0) {
             buf_printf(&clientbuf, "%s ", hbuf);
         }
 
         niflags = NI_NUMERICHOST;
 #ifdef NI_WITHSCOPEID
-        if (remotesock->sa_family == AF_INET6)
-            niflags |= NI_WITHSCOPEID;
+        if (remotesock->sa_family == AF_INET6) niflags |= NI_WITHSCOPEID;
 #endif
-        if (getnameinfo(remotesock, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
+        if (getnameinfo(
+                remotesock, salen, hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
             strlcpy(hbuf, "unknown", sizeof(hbuf));
         }
         buf_printf(&clientbuf, "[%s]", hbuf);
@@ -1008,18 +1027,18 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
 
         if (r == 0) {
             /* set the ip addresses here */
-            if (iptostring(localsock, salen,
-                          lipbuf, sizeof(lipbuf)) == 0) {
+            if (iptostring(localsock, salen, lipbuf, sizeof(lipbuf)) == 0) {
                 *localip = lipbuf;
             }
-            if (iptostring(remotesock, salen,
-                          ripbuf, sizeof(ripbuf)) == 0) {
+            if (iptostring(remotesock, salen, ripbuf, sizeof(ripbuf)) == 0) {
                 *remoteip = ripbuf;
             }
-        } else {
+        }
+        else {
             fatal("can't get local addr", EX_SOFTWARE);
         }
-    } else {
+    }
+    else {
         /* we're not connected to an internet socket! */
         buf_setcstr(&clientbuf, UNIX_SOCKET);
     }
@@ -1029,10 +1048,8 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
 
 EXPORTED int cmd_cancelled(int insearch)
 {
-    if (signals_cancelled())
-        return IMAP_CANCELLED;
-    if (insearch && cmdtime_checksearch())
-        return IMAP_SEARCH_SLOW;
+    if (signals_cancelled()) return IMAP_CANCELLED;
+    if (insearch && cmdtime_checksearch()) return IMAP_SEARCH_SLOW;
     return 0;
 }
 
@@ -1063,8 +1080,8 @@ EXPORTED int saslprops_set_tls(struct saslprops_t *saslprops,
         return r;
     }
 
-    r = sasl_setprop(saslconn, SASL_AUTH_EXTERNAL,
-                     buf_cstringnull(&saslprops->authid));
+    r = sasl_setprop(
+        saslconn, SASL_AUTH_EXTERNAL, buf_cstringnull(&saslprops->authid));
     if (r != SASL_OK) {
         syslog(LOG_NOTICE, "sasl_setprop(AUTH_EXTERNAL) failed");
         return r;

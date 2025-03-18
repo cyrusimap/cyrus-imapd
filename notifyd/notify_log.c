@@ -44,15 +44,18 @@
 
 #include "notify_log.h"
 
-#include <syslog.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
+#include <syslog.h>
 
 #include "lib/util.h"
 
-char* notify_log(const char *class, const char *priority,
-                 const char *user, const char *mailbox,
-                 int nopt, char **options,
+char *notify_log(const char *class,
+                 const char *priority,
+                 const char *user,
+                 const char *mailbox,
+                 int nopt,
+                 char **options,
                  const char *message,
                  const char *fname __attribute__((unused)))
 {
@@ -68,8 +71,14 @@ char* notify_log(const char *class, const char *priority,
         buf_putc(&opt_str, ')');
     }
 
-    syslog(LOG_INFO, "%s, %s, %s, %s, %s \"%s\"",
-           class, priority, user, mailbox, buf_cstring(&opt_str), message);
+    syslog(LOG_INFO,
+           "%s, %s, %s, %s, %s \"%s\"",
+           class,
+           priority,
+           user,
+           mailbox,
+           buf_cstring(&opt_str),
+           message);
 
     buf_free(&opt_str);
     return strdup("OK log notification successful");

@@ -43,13 +43,13 @@
  * Start Date: 4/5/93
  */
 
+#include "glob.h"
+#include "assert.h"
+#include "util.h"
+#include "xmalloc.h"
 #include <config.h>
 #include <stdio.h>
 #include <string.h>
-#include "assert.h"
-#include "util.h"
-#include "glob.h"
-#include "xmalloc.h"
 
 /* "compiled" glob structure: may change
  */
@@ -92,7 +92,8 @@ EXPORTED glob *glob_init(const char *str, char sep)
          * that you need to escape to suppress their meaning:
          * .^$*
          * (and we're already handling * above)
-         * also discovered that prceposix will segfault if we don't escape +, ?, and of course \
+         * also discovered that prceposix will segfault if we don't escape +, ?,
+         * and of course \
          */
         case '.':
         case '^':
@@ -149,8 +150,7 @@ EXPORTED int glob_test(glob *g, const char *str)
 {
     regmatch_t match[3];
 
-    if (regexec(&g->regex, str, 2, match, 0))
-        return -1;
+    if (regexec(&g->regex, str, 2, match, 0)) return -1;
 
     return match[1].rm_eo;
 }

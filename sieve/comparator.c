@@ -46,17 +46,17 @@
 #include <config.h>
 #endif
 
-#include <stdlib.h>
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "comparator.h"
-#include "charset.h"
-#include "interp.h"
-#include "tree.h"
-#include "sieve/sieve_interface.h"
-#include "sieve/sieve.h"
 #include "bytecode.h"
+#include "charset.h"
+#include "comparator.h"
+#include "interp.h"
+#include "sieve/sieve.h"
+#include "sieve/sieve_interface.h"
+#include "tree.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -68,66 +68,77 @@ typedef int (*compare_t)(const void *, size_t, const void *);
 
 /* these are generic wrappers in which 'rock' is the compare function */
 
-static int rel_eq(const char *text, size_t tlen, const char *pat,
+static int rel_eq(const char *text,
+                  size_t tlen,
+                  const char *pat,
                   strarray_t *match_vars __attribute__((unused)),
                   void *rock)
 {
-    compare_t compar = (compare_t) rock;
+    compare_t compar = (compare_t)rock;
 
     return (compar(text, tlen, pat) == 0);
 }
 
-static int rel_ne(const char *text, size_t tlen, const char *pat,
+static int rel_ne(const char *text,
+                  size_t tlen,
+                  const char *pat,
                   strarray_t *match_vars __attribute__((unused)),
                   void *rock)
 {
-    compare_t compar = (compare_t) rock;
+    compare_t compar = (compare_t)rock;
 
     return (compar(text, tlen, pat) != 0);
 }
 
-static int rel_gt(const char *text, size_t tlen, const char *pat,
+static int rel_gt(const char *text,
+                  size_t tlen,
+                  const char *pat,
                   strarray_t *match_vars __attribute__((unused)),
                   void *rock)
 {
-    compare_t compar = (compare_t) rock;
+    compare_t compar = (compare_t)rock;
 
     return (compar(text, tlen, pat) > 0);
 }
 
-static int rel_ge(const char *text, size_t tlen, const char *pat,
+static int rel_ge(const char *text,
+                  size_t tlen,
+                  const char *pat,
                   strarray_t *match_vars __attribute__((unused)),
                   void *rock)
 {
-    compare_t compar = (compare_t) rock;
+    compare_t compar = (compare_t)rock;
 
     return (compar(text, tlen, pat) >= 0);
 }
 
-static int rel_lt(const char *text, size_t tlen, const char *pat,
+static int rel_lt(const char *text,
+                  size_t tlen,
+                  const char *pat,
                   strarray_t *match_vars __attribute__((unused)),
                   void *rock)
 {
-    compare_t compar = (compare_t) rock;
+    compare_t compar = (compare_t)rock;
 
     return (compar(text, tlen, pat) < 0);
 }
 
-static int rel_le(const char *text, size_t tlen, const char *pat,
+static int rel_le(const char *text,
+                  size_t tlen,
+                  const char *pat,
                   strarray_t *match_vars __attribute__((unused)),
                   void *rock)
 {
-    compare_t compar = (compare_t) rock;
+    compare_t compar = (compare_t)rock;
 
     return (compar(text, tlen, pat) <= 0);
 }
 
-
 /* --- i;octet comparators (RFC 4790, Section 9.3) --- */
 
 /* just compare the two; pat should be NULL terminated */
-static int octet_cmp_(const char *text, size_t tlen,
-                      const char *pat, int casemap)
+static int
+octet_cmp_(const char *text, size_t tlen, const char *pat, int casemap)
 {
     size_t plen, sl, i;
     int r = 0;
@@ -151,8 +162,8 @@ static int octet_cmp(const char *text, size_t tlen, const char *pat)
 }
 
 /* we do a brute force attack */
-static int octet_contains_(const char *text, size_t tlen,
-                           const char *pat, int casemap)
+static int
+octet_contains_(const char *text, size_t tlen, const char *pat, int casemap)
 {
     int N = tlen;
     int M = strlen(pat);
@@ -161,8 +172,10 @@ static int octet_contains_(const char *text, size_t tlen,
     while ((j < M) && (i < N)) {
         if ((text[i] == pat[j]) ||
             (casemap && (toupper(text[i]) == toupper(pat[j])))) {
-            i++; j++;
-        } else {
+            i++;
+            j++;
+        }
+        else {
             i = i - j + 1;
             j = 0;
         }
@@ -171,7 +184,9 @@ static int octet_contains_(const char *text, size_t tlen,
     return (j == M); /* we found a match! */
 }
 
-static int octet_contains(const char *text, size_t tlen, const char *pat,
+static int octet_contains(const char *text,
+                          size_t tlen,
+                          const char *pat,
                           strarray_t *match_vars __attribute__((unused)),
                           void *rock __attribute__((unused)))
 {
@@ -182,12 +197,14 @@ static int new_var(strarray_t *match_vars)
 {
     int size = strarray_size(match_vars);
 
-    if (size-1 > MAX_MATCH_VARS) return size;
+    if (size - 1 > MAX_MATCH_VARS) return size;
 
     return strarray_append(match_vars, "");
 }
 
-static void set_var(int var_num, const char* val_start, const char* val_end,
+static void set_var(int var_num,
+                    const char *val_start,
+                    const char *val_end,
                     strarray_t *match_vars)
 {
     if (var_num > MAX_MATCH_VARS) return;
@@ -196,19 +213,22 @@ static void set_var(int var_num, const char* val_start, const char* val_end,
     strarray_setm(match_vars, var_num, val);
 }
 
-static int append_var(const char* val_start, const char* val_end,
-                       strarray_t *match_vars)
+static int
+append_var(const char *val_start, const char *val_end, strarray_t *match_vars)
 {
     int size = strarray_size(match_vars);
 
-    if (size-1 > MAX_MATCH_VARS) return size;
+    if (size - 1 > MAX_MATCH_VARS) return size;
 
     char *val = xstrndup(val_start, val_end - val_start);
     return strarray_appendm(match_vars, val);
 }
 
-static int octet_matches_(const char *text, size_t tlen,
-                          const char *pat, int casemap, strarray_t *match_vars)
+static int octet_matches_(const char *text,
+                          size_t tlen,
+                          const char *pat,
+                          int casemap,
+                          strarray_t *match_vars)
 {
     const char *p;
     const char *t;
@@ -233,7 +253,8 @@ static int octet_matches_(const char *text, size_t tlen,
             if (!tlen) {
                 return 0;
             }
-            t++; tlen--;
+            t++;
+            tlen--;
             set_var(var_num, val_start, t, match_vars);
             break;
         case '*':
@@ -245,8 +266,11 @@ static int octet_matches_(const char *text, size_t tlen,
                     if (!tlen) {
                         return 0;
                     }
-                    t++; tlen--; eaten_chars++;
-                } else {
+                    t++;
+                    tlen--;
+                    eaten_chars++;
+                }
+                else {
                     for (t -= eaten_chars; eaten_chars; eaten_chars--) {
                         t++;
                         var_num = append_var(val_start, t, match_vars);
@@ -292,7 +316,8 @@ static int octet_matches_(const char *text, size_t tlen,
                     return 1;
                 }
                 strarray_fini(&returned_vars);
-                t++; tlen--;
+                t++;
+                tlen--;
             }
             set_var(var_num, val_start, t, match_vars);
             break;
@@ -301,8 +326,10 @@ static int octet_matches_(const char *text, size_t tlen,
             /* falls through */
         default:
             if ((c == *t) || (casemap && (toupper(c) == toupper(*t)))) {
-                t++; tlen--;
-            } else {
+                t++;
+                tlen--;
+            }
+            else {
                 /* literal char doesn't match */
                 return 0;
             }
@@ -312,8 +339,10 @@ static int octet_matches_(const char *text, size_t tlen,
     /* never reaches */
 }
 
-static int octet_matches_exec(const char *text, size_t tlen,
-                              const char *pat, int casemap,
+static int octet_matches_exec(const char *text,
+                              size_t tlen,
+                              const char *pat,
+                              int casemap,
                               strarray_t *match_vars)
 {
     int ret;
@@ -321,7 +350,8 @@ static int octet_matches_exec(const char *text, size_t tlen,
     strarray_t temp = STRARRAY_INITIALIZER;
     if (match_vars) {
         strarray_fini(match_vars);
-    } else {
+    }
+    else {
         match_vars = &temp;
         needs_free = 1;
     }
@@ -333,26 +363,29 @@ static int octet_matches_exec(const char *text, size_t tlen,
     return ret;
 }
 
-static int octet_matches(const char *text, size_t tlen, const char *pat,
+static int octet_matches(const char *text,
+                         size_t tlen,
+                         const char *pat,
                          strarray_t *match_vars,
                          void *rock __attribute__((unused)))
 {
     return octet_matches_exec(text, tlen, pat, 0, match_vars);
 }
 
-
 #ifdef ENABLE_REGEX
-static int octet_regex(const char *text, size_t tlen, const char *pat,
+static int octet_regex(const char *text,
+                       size_t tlen,
+                       const char *pat,
                        strarray_t *match_vars,
                        void *rock __attribute__((unused)))
 {
-    regmatch_t pm[MAX_MATCH_VARS+1];
+    regmatch_t pm[MAX_MATCH_VARS + 1];
     size_t nmatch = 0;
     int r;
 
     if (match_vars) {
         strarray_fini(match_vars);
-        nmatch = MAX_MATCH_VARS+1;
+        nmatch = MAX_MATCH_VARS + 1;
         memset(&pm, 0, sizeof(pm));
     }
 
@@ -360,16 +393,16 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
     /* pcre, BSD, some linuxes support this handy trick */
     pm[0].rm_so = 0;
     pm[0].rm_eo = tlen;
-    r = !regexec((regex_t *) pat, text, nmatch, pm, REG_STARTEND);
+    r = !regexec((regex_t *)pat, text, nmatch, pm, REG_STARTEND);
 #elif defined(HAVE_RX_POSIX_H)
     /* rx provides regnexec, that will work too */
-    r = !regnexec((regex_t *) pat, text, tlen, nmatch, pm, 0);
+    r = !regnexec((regex_t *)pat, text, tlen, nmatch, pm, 0);
 #else
     /* regexec() requires a NUL-terminated string, and we have no
      * guarantee that "text" is one.  Also, it may be only exactly
      * tlen's length, so we can't safely check.  Always dup. */
-    char *buf = (char *) xstrndup(text, tlen);
-    r = !regexec((regex_t *) pat, buf, nmatch, pm, 0);
+    char *buf = (char *)xstrndup(text, tlen);
+    r = !regexec((regex_t *)pat, buf, nmatch, pm, 0);
     free(buf);
 #endif /* REG_STARTEND */
 
@@ -380,14 +413,15 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
         for (var_num = 0; var_num < nmatch; var_num++) {
             regmatch_t *m = &pm[var_num];
 
-            if (m->rm_so < 0) new_var(match_vars);
-            else append_var(text + m->rm_so, text + m->rm_eo, match_vars);
+            if (m->rm_so < 0)
+                new_var(match_vars);
+            else
+                append_var(text + m->rm_so, text + m->rm_eo, match_vars);
         }
     }
     return r;
 }
 #endif
-
 
 /* --- i;ascii-casemap comparators (RFC 4790, Section 9.2) --- */
 
@@ -396,21 +430,24 @@ static int ascii_casemap_cmp(const char *text, size_t tlen, const char *pat)
     return octet_cmp_(text, tlen, pat, 1);
 }
 
-static int ascii_casemap_contains(const char *text, size_t tlen,
+static int ascii_casemap_contains(const char *text,
+                                  size_t tlen,
                                   const char *pat,
-                                  strarray_t *match_vars __attribute__((unused)),
+                                  strarray_t *match_vars
+                                  __attribute__((unused)),
                                   void *rock __attribute__((unused)))
 {
     return octet_contains_(text, tlen, pat, 1);
 }
 
-static int ascii_casemap_matches(const char *text, size_t tlen,
-                                 const char *pat, strarray_t *match_vars,
+static int ascii_casemap_matches(const char *text,
+                                 size_t tlen,
+                                 const char *pat,
+                                 strarray_t *match_vars,
                                  void *rock __attribute__((unused)))
 {
     return octet_matches_exec(text, tlen, pat, 1, match_vars);
 }
-
 
 /* --- i;ascii-numeric comparator (RFC 4790, Section 9.1) --- */
 
@@ -428,8 +465,7 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
     if (Uisdigit(*pat)) {
         if (Uisdigit(*text)) {
             /* Count how many digits each string has */
-            for (text_digit_len = 0;
-                 tlen-- && Uisdigit(text[text_digit_len]);
+            for (text_digit_len = 0; tlen-- && Uisdigit(text[text_digit_len]);
                  text_digit_len++);
             pat_digit_len = strspn(pat, "0123456789");
 
@@ -439,31 +475,36 @@ static int ascii_numeric_cmp(const char *text, size_t tlen, const char *pat)
             do {
                 /* Pad the shorter string with leading 0s */
                 const char t = text_digit_len < num_digits ? '0' : *text++;
-                const char p =  pat_digit_len < num_digits ? '0' : *pat++;
+                const char p = pat_digit_len < num_digits ? '0' : *pat++;
 
                 r = t - p;
 
             } while (!r && --num_digits);
 
             return r;
-        } else {
+        }
+        else {
             return 1;
         }
-    } else if (Uisdigit(*text)) {
+    }
+    else if (Uisdigit(*text)) {
         return -1;
-    } else {
+    }
+    else {
         return 0; /* both not digits */
     }
 }
 
-
 /* --- i;unicode-casemap comparators (RFC 5051, Section 2) --- */
 
-static int unicode_casemap_xxx(const char *text, size_t tlen, const char *pat,
-                               strarray_t *match_vars, void *rock)
+static int unicode_casemap_xxx(const char *text,
+                               size_t tlen,
+                               const char *pat,
+                               strarray_t *match_vars,
+                               void *rock)
 {
     char *uni = unicode_casemap(text, tlen);
-    long mode = (long) rock;
+    long mode = (long)rock;
     int r;
 
     switch (mode) {
@@ -496,38 +537,36 @@ static int unicode_casemap_cmp(const char *text, size_t tlen, const char *pat)
     return unicode_casemap_xxx(text, tlen, pat, NULL, 0);
 }
 
-
 static comparator_t *lookup_rel(int relation)
 {
     comparator_t *ret;
 
     ret = NULL;
-    switch (relation)
-      {
-      case B_EQ:
+    switch (relation) {
+    case B_EQ:
         ret = &rel_eq;
         break;
-      case B_NE:
+    case B_NE:
         ret = &rel_ne;
         break;
-      case B_GT:
+    case B_GT:
         ret = &rel_gt;
         break;
-      case B_GE:
-         ret = &rel_ge;
-         break;
-      case B_LT:
+    case B_GE:
+        ret = &rel_ge;
+        break;
+    case B_LT:
         ret = &rel_lt;
         break;
-      case B_LE:
+    case B_LE:
         ret = &rel_le;
-      }
+    }
 
     return ret;
 }
 
-EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
-                                   int relation, void **comprock)
+EXPORTED comparator_t *lookup_comp(
+    sieve_interp_t *i, int comp, int mode, int relation, void **comprock)
 {
     comparator_t *ret;
 
@@ -537,8 +576,8 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
     printf("comp%d mode%d relat%d     \n", comp, mode, relation);
 #endif
     if (mode == B_LIST) {
-        *comprock = (void **) i->interp_context;
-        return (comparator_t *) i->listcompare;
+        *comprock = (void **)i->interp_context;
+        return (comparator_t *)i->listcompare;
     }
     else if (mode == B_IS) {
         relation = B_EQ;
@@ -550,7 +589,7 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
         case B_IS:
         case B_VALUE:
             ret = lookup_rel(relation);
-            *comprock = (void **) &octet_cmp;
+            *comprock = (void **)&octet_cmp;
             break;
 
         case B_CONTAINS:
@@ -574,7 +613,7 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
         case B_IS:
         case B_VALUE:
             ret = lookup_rel(relation);
-            *comprock = (void **) &ascii_casemap_cmp;
+            *comprock = (void **)&ascii_casemap_cmp;
             break;
 
         case B_CONTAINS:
@@ -597,7 +636,7 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
 
     case B_ASCIINUMERIC:
         ret = lookup_rel(relation);
-        *comprock = (void **) &ascii_numeric_cmp;
+        *comprock = (void **)&ascii_numeric_cmp;
         break;
 
     case B_UNICODECASEMAP:
@@ -605,12 +644,12 @@ EXPORTED comparator_t *lookup_comp(sieve_interp_t *i, int comp, int mode,
         case B_IS:
         case B_VALUE:
             ret = lookup_rel(relation);
-            *comprock = (void **) &unicode_casemap_cmp;
+            *comprock = (void **)&unicode_casemap_cmp;
             break;
 
         default:
             ret = &unicode_casemap_xxx;
-            *comprock = (void *) ((long) mode);
+            *comprock = (void *)((long)mode);
             break;
         }
         break;

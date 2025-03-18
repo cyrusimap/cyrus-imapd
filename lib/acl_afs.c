@@ -50,22 +50,24 @@
 
 #include <config.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "acl.h"
 #include "auth.h"
-#include "xmalloc.h"
-#include "strarray.h"
-#include "libconfig.h"
 #include "lib/libcyr_cfg.h"
+#include "libconfig.h"
+#include "strarray.h"
+#include "xmalloc.h"
 
 /*
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  */
-EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char *origacl)
+EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state,
+                                const char *origacl)
 {
-    int admin_implies_write = libcyrus_config_getswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE);
+    int admin_implies_write =
+        libcyrus_config_getswitch(CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE);
     char *acl = xstrdupsafe(origacl);
     char *thisid, *rights, *nextid;
     long acl_positive = 0, acl_negative = 0;
@@ -101,8 +103,8 @@ EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char 
     free(acl);
 
     if (admin_implies_write && (acl_positive & ACL_ADMIN)) {
-        acl_positive |= ACL_SETSEEN | ACL_WRITE | ACL_INSERT
-                     | ACL_DELETEMSG | ACL_EXPUNGE | ACL_ANNOTATEMSG;
+        acl_positive |= ACL_SETSEEN | ACL_WRITE | ACL_INSERT | ACL_DELETEMSG |
+                        ACL_EXPUNGE | ACL_ANNOTATEMSG;
     }
 
     return acl_positive & ~acl_negative;
@@ -113,10 +115,12 @@ EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char 
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
-                  int mode, int access,
-                  cyrus_acl_canonproc_t *canonproc,
-                  void *canonrock)
+EXPORTED int cyrus_acl_set(char **acl,
+                           const char *identifier,
+                           int mode,
+                           int access,
+                           cyrus_acl_canonproc_t *canonproc,
+                           void *canonrock)
 {
     const char *canonid;
     char *newidentifier = 0;
@@ -125,23 +129,26 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
     int oldaccess = 0;
     char *rights;
 
-    if (!identifier)
-        return -1;
+    if (!identifier) return -1;
 
     /* Convert 'identifier' into canonical form */
-    canonid = auth_canonifyid(*identifier == '-' ? identifier+1 : identifier, 0);
+    canonid =
+        auth_canonifyid(*identifier == '-' ? identifier + 1 : identifier, 0);
     if (canonid) {
         if (*identifier == '-') {
-            newidentifier = xmalloc(strlen(canonid)+2);
+            newidentifier = xmalloc(strlen(canonid) + 2);
             newidentifier[0] = '-';
-            strcpy(newidentifier+1, canonid);
+            strcpy(newidentifier + 1, canonid);
             identifier = newidentifier;
-        } else {
+        }
+        else {
             identifier = canonid;
         }
-    } else if (access != 0L) {
+    }
+    else if (access != 0L) {
         return -1;
-    } else {
+    }
+    else {
         /* trying to delete invalid/non-existent identifier */
     }
 
@@ -195,15 +202,15 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
 
     if (canonproc) {
         if (*identifier == '-')
-            access = ~(canonproc(canonrock, identifier+1, ~access));
+            access = ~(canonproc(canonrock, identifier + 1, ~access));
         else
             access = canonproc(canonrock, identifier, access);
     }
 
     if (access == 0L) {
         /* Remove any existing entry for 'identifier'.
-           Special case: When we try to delete an invalid/non-existent identifier,
-           both 'thisid' and 'nextid' point to the end of *acl. */
+           Special case: When we try to delete an invalid/non-existent
+           identifier, both 'thisid' and 'nextid' point to the end of *acl. */
         newacl = xmalloc(strlen(*acl) + strlen(nextid) - strlen(thisid) + 1);
         /* Copy existing ACLs without the current identifier.
            Note: The buffer will not be zero terminated. */
@@ -216,12 +223,12 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
     }
     else {
         /* Replace any existing entry for 'identifier' */
-        newacl = xmalloc((thisid - *acl) + strlen(identifier) + 40 +
-                         strlen(nextid));
+        newacl =
+            xmalloc((thisid - *acl) + strlen(identifier) + 40 + strlen(nextid));
         strncpy(newacl, *acl, (thisid - *acl));
         strcpy(newacl + (thisid - *acl), identifier);
         strcat(newacl, "\t");
-        (void) cyrus_acl_masktostr(access, newacl + strlen(newacl));
+        (void)cyrus_acl_masktostr(access, newacl + strlen(newacl));
         strcat(newacl, "\t");
         strcat(newacl, nextid);
         free(*acl);
@@ -236,17 +243,22 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  */
-EXPORTED int cyrus_acl_remove(char **acl, const char *identifier,
-               cyrus_acl_canonproc_t canonproc, void *canonrock)
+EXPORTED int cyrus_acl_remove(char **acl,
+                              const char *identifier,
+                              cyrus_acl_canonproc_t canonproc,
+                              void *canonrock)
 {
-    return cyrus_acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
+    return cyrus_acl_set(
+        acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);
 }
 
 EXPORTED int is_system_user(const char *userid)
 {
     static strarray_t *admins = NULL;
 
-    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, STRARRAY_TRIM);
+    if (!admins)
+        admins = strarray_split(
+            config_getstring(IMAPOPT_ADMINS), NULL, STRARRAY_TRIM);
 
     if (*userid == '-') userid++;
 

@@ -45,8 +45,8 @@
 #include "util.h"
 
 struct imapurl {
-    char *freeme;               /* copy of original URL + decoded mailbox;
-                                   caller must free() */
+    char *freeme; /* copy of original URL + decoded mailbox;
+                     caller must free() */
 
     /* RFC 2192 */
     const char *user;

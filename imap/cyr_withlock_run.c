@@ -52,9 +52,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "command.h"
 #include "global.h"
 #include "mboxname.h"
-#include "command.h"
 #include "strarray.h"
 #include "user.h"
 
@@ -92,21 +92,20 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "user", required_argument, NULL, 'u' },
-        { 0, 0, 0, 0 },
+        {"user", required_argument, NULL, 'u'},
+        {0,      0,                 0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
-        switch(opt) {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
-	
-	case 'u':
-	    userid = optarg;
-	    break;
+
+        case 'u':
+            userid = optarg;
+            break;
 
         default:
             usage(NULL);
@@ -122,11 +121,13 @@ int main(int argc, char **argv)
 
     strarray_t args = STRARRAY_INITIALIZER;
     int i;
-    for (i = optind; i < argc; i++)
-        strarray_append(&args, argv[i]);
+    for (i = optind; i < argc; i++) strarray_append(&args, argv[i]);
     if (userid) {
-        static char env_userlock[MAX_MAILBOX_NAME+30];
-        snprintf(env_userlock, sizeof(env_userlock), "CYRUS_HAVELOCK_USER=%s", userid);
+        static char env_userlock[MAX_MAILBOX_NAME + 30];
+        snprintf(env_userlock,
+                 sizeof(env_userlock),
+                 "CYRUS_HAVELOCK_USER=%s",
+                 userid);
         putenv(env_userlock);
         r = user_run_with_lock(userid, runcmd, &args);
     }

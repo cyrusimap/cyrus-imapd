@@ -43,10 +43,10 @@
 
 #include <config.h>
 
-#include <stdlib.h>
-#include <syslog.h>
-#include <string.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -86,7 +86,7 @@ EXPORTED int sqldb_done(void)
 
 static void _debug(void *fname, const char *sql)
 {
-    syslog(LOG_DEBUG, "sqldb_exec(%s): %s", (const char *) fname, sql);
+    syslog(LOG_DEBUG, "sqldb_exec(%s): %s", (const char *)fname, sql);
 }
 
 static int _free_open(sqldb_t *open)
@@ -98,7 +98,10 @@ static int _free_open(sqldb_t *open)
     return r;
 }
 
-static int _version_cb(void *rock, int ncol, char **vals, char **names __attribute__((unused)))
+static int _version_cb(void *rock,
+                       int ncol,
+                       char **vals,
+                       char **names __attribute__((unused)))
 {
     int *vptr = (int *)rock;
     if (ncol == 1 && vals[0])
@@ -109,8 +112,10 @@ static int _version_cb(void *rock, int ncol, char **vals, char **names __attribu
 }
 
 /* Open DAV DB corresponding in file */
-EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
-                             int version, const struct sqldb_upgrade *upgrade,
+EXPORTED sqldb_t *sqldb_open(const char *fname,
+                             const char *initsql,
+                             int version,
+                             const struct sqldb_upgrade *upgrade,
                              int timeout_ms)
 {
     int rc = SQLITE_OK;
@@ -136,13 +141,16 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         }
     }
 
-    rc = sqlite3_open_v2(open->fname, &open->db,
-                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+    rc = sqlite3_open_v2(open->fname,
+                         &open->db,
+                         SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                         NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: sqldb open failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname,
-                         open->db ? sqlite3_errmsg(open->db) : "unknown");
+        xsyslog(LOG_ERR,
+                "DBERROR: sqldb open failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                open->db ? sqlite3_errmsg(open->db) : "unknown");
         _free_open(open);
         return NULL;
     }
@@ -154,9 +162,11 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
 
     rc = sqlite3_exec(open->db, "PRAGMA foreign_keys = ON;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: enable foreign keys failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: enable foreign keys failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
@@ -165,11 +175,14 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
      *  sqlite-efficient-way-to-drop-lots-of-rows/19536232#19536232>
      * it's expensive and not needed here
      */
-    rc = sqlite3_exec(open->db, "PRAGMA secure_delete = OFF;", NULL, NULL, NULL);
+    rc =
+        sqlite3_exec(open->db, "PRAGMA secure_delete = OFF;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: disable secure delete failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: disable secure delete failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
@@ -180,18 +193,23 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
      */
     rc = sqlite3_exec(open->db, "PRAGMA temp_store = 2;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: enable foreign keys failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: enable foreign keys failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
 
-    rc = sqlite3_exec(open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
+    rc = sqlite3_exec(
+        open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: get user version failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: get user version failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
@@ -201,27 +219,33 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
     if (!initsql) {
         /* just keep the version we already have */
         if (open->version) goto out;
-        xsyslog(LOG_ERR, "DBERROR: no initsql and no DB",
-                         "fname=<%s>",
-                         open->fname);
+        xsyslog(LOG_ERR,
+                "DBERROR: no initsql and no DB",
+                "fname=<%s>",
+                open->fname);
         _free_open(open);
         return NULL;
     }
 
     rc = sqlite3_exec(open->db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: begin failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: begin failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
 
-    rc = sqlite3_exec(open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
+    rc = sqlite3_exec(
+        open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: get user version locked failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: get user version locked failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
@@ -232,19 +256,24 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         syslog(LOG_NOTICE, "creating sql_db %s", open->fname);
         rc = sqlite3_exec(open->db, initsql, NULL, NULL, NULL);
         if (rc != SQLITE_OK) {
-            xsyslog(LOG_ERR, "DBERROR: create failed",
-                             "fname=<%s> error=<%s>",
-                             open->fname, sqlite3_errmsg(open->db));
+            xsyslog(LOG_ERR,
+                    "DBERROR: create failed",
+                    "fname=<%s> error=<%s>",
+                    open->fname,
+                    sqlite3_errmsg(open->db));
             _free_open(open);
             return NULL;
         }
     }
     else {
         if (!upgrade) {
-            xsyslog(LOG_ERR, "DBERROR: database needs upgrade",
-                             "fname=<%s> have=<%d> want=<%d> error=<%s>",
-                             open->fname, open->version, version,
-                             sqlite3_errmsg(open->db));
+            xsyslog(LOG_ERR,
+                    "DBERROR: database needs upgrade",
+                    "fname=<%s> have=<%d> want=<%d> error=<%s>",
+                    open->fname,
+                    open->version,
+                    version,
+                    sqlite3_errmsg(open->db));
             _free_open(open);
             return NULL;
         }
@@ -255,14 +284,19 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
 
             if (upgrade[i].to <= open->version) continue;
 
-            syslog(LOG_NOTICE, "sqldb_open(%s) upgrade to v%d", open->fname, upgrade[i].to);
+            syslog(LOG_NOTICE,
+                   "sqldb_open(%s) upgrade to v%d",
+                   open->fname,
+                   upgrade[i].to);
             if (upgrade[i].sql) {
                 rc = sqlite3_exec(open->db, upgrade[i].sql, NULL, NULL, NULL);
                 if (rc != SQLITE_OK) {
-                    xsyslog(LOG_ERR, "DBERROR: upgrade failed",
-                                     "fname=<%s> to=<%d> error=<%s>",
-                                     open->fname, upgrade[i].to,
-                                     sqlite3_errmsg(open->db));
+                    xsyslog(LOG_ERR,
+                            "DBERROR: upgrade failed",
+                            "fname=<%s> to=<%d> error=<%s>",
+                            open->fname,
+                            upgrade[i].to,
+                            sqlite3_errmsg(open->db));
                     _free_open(open);
                     return NULL;
                 }
@@ -270,10 +304,12 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
             if (upgrade[i].cb) {
                 rc = upgrade[i].cb(open);
                 if (rc != SQLITE_OK) {
-                    xsyslog(LOG_ERR, "DBERROR: upgrade failed",
-                                     "fname=<%s> to=<%d> error=<%s>",
-                                     open->fname, upgrade[i].to,
-                                     sqlite3_errmsg(open->db));
+                    xsyslog(LOG_ERR,
+                            "DBERROR: upgrade failed",
+                            "fname=<%s> to=<%d> error=<%s>",
+                            open->fname,
+                            upgrade[i].to,
+                            sqlite3_errmsg(open->db));
                     _free_open(open);
                     return NULL;
                 }
@@ -286,9 +322,11 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
     rc = sqlite3_exec(open->db, buf_cstring(&buf), NULL, NULL, NULL);
     buf_free(&buf);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: user version failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: user version failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
@@ -298,9 +336,11 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
 transout:
     rc = sqlite3_exec(open->db, "COMMIT;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: commit failed",
-                         "fname=<%s> error=<%s>",
-                         open->fname, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: commit failed",
+                "fname=<%s> error=<%s>",
+                open->fname,
+                sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
     }
@@ -320,23 +360,26 @@ static sqlite3_stmt *_prepare_stmt(sqldb_t *open, const char *cmd, int *rp)
     sqlite3_stmt *stmt;
     for (i = 0; i < open->stmts.count; i++) {
         stmt = ptrarray_nth(&open->stmts, i);
-        if (!strcmp(cmd, sqlite3_sql(stmt)))
-            return stmt;
+        if (!strcmp(cmd, sqlite3_sql(stmt))) return stmt;
     }
     /* prepare new statement */
     int rc = sqlite3_prepare_v2(open->db, cmd, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: prepare failed",
-                         "fname=<%s> cmd=<%s> error=<%s>",
-                         open->fname, cmd, sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: prepare failed",
+                "fname=<%s> cmd=<%s> error=<%s>",
+                open->fname,
+                cmd,
+                sqlite3_errmsg(open->db));
 
         if (rc == SQLITE_TOOBIG ||
-                // sqlite3 uses generic SQLITE_ERROR for large trees
-                !strncasecmpsafe(sqlite3_errmsg(open->db),
-                    "Expression tree is too large", 28)) {
+            // sqlite3 uses generic SQLITE_ERROR for large trees
+            !strncasecmpsafe(
+                sqlite3_errmsg(open->db), "Expression tree is too large", 28)) {
             *rp = SQLDB_ERR_LIMIT;
         }
-        else *rp = SQLDB_ERR_UNKNOWN;
+        else
+            *rp = SQLDB_ERR_UNKNOWN;
 
         return NULL;
     }
@@ -399,8 +442,11 @@ static void buf_replace_bindvals(struct buf *cmd, struct sqldb_bindval bval[])
     buf_free(&buf);
 }
 
-EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bvals[],
-                        int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock)
+EXPORTED int sqldb_exec(sqldb_t *open,
+                        const char *cmd,
+                        struct sqldb_bindval bvals[],
+                        int (*cb)(sqlite3_stmt *stmt, void *rock),
+                        void *rock)
 {
     int rc, r = 0;
     struct sqldb_bindval *bval;
@@ -421,8 +467,11 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
             break;
 
         case SQLITE_BLOB:
-            sqlite3_bind_blob(stmt, cidx,
-                              buf_base(&bval->val.b), buf_len(&bval->val.b), NULL);
+            sqlite3_bind_blob(stmt,
+                              cidx,
+                              buf_base(&bval->val.b),
+                              buf_len(&bval->val.b),
+                              NULL);
             break;
         }
     }
@@ -441,9 +490,12 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
 
         buf_setcstr(&newcmd, cmd);
         buf_replace_bindvals(&newcmd, bvals);
-        xsyslog(LOG_ERR, "DBERROR: step failed",
-                         "fname=<%s> cmd=<%s> error=<%s>",
-                open->fname, buf_cstring(&newcmd), sqlite3_errmsg(open->db));
+        xsyslog(LOG_ERR,
+                "DBERROR: step failed",
+                "fname=<%s> cmd=<%s> error=<%s>",
+                open->fname,
+                buf_cstring(&newcmd),
+                sqlite3_errmsg(open->db));
         buf_free(&newcmd);
         r = SQLDB_ERR_UNKNOWN;
     }
@@ -498,8 +550,8 @@ EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
 
 EXPORTED int sqldb_writelock(sqldb_t *open)
 {
-    assert (!open->writelock);
-    assert (!open->trans.count);
+    assert(!open->writelock);
+    assert(!open->trans.count);
     int r = sqldb_exec(open, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
     if (!r) open->writelock = 1;
     return r;
@@ -523,16 +575,12 @@ EXPORTED int sqldb_writeabort(sqldb_t *open)
     return r;
 }
 
-
 EXPORTED int sqldb_lastid(sqldb_t *open)
 {
     return sqlite3_last_insert_rowid(open->db);
 }
 
-EXPORTED int sqldb_changes(sqldb_t *open)
-{
-    return sqlite3_changes(open->db);
-}
+EXPORTED int sqldb_changes(sqldb_t *open) { return sqlite3_changes(open->db); }
 
 EXPORTED int sqldb_close(sqldb_t **dbp)
 {
@@ -567,13 +615,15 @@ EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)
 {
     if (open->attached) return SQLITE_MISUSE;
     struct sqldb_bindval bval[] = {
-        { ":fname",  SQLITE_TEXT, { .s = fname         } },
-        { NULL,      SQLITE_NULL, { .s = NULL          } } };
+        {":fname", SQLITE_TEXT, {.s = fname}},
+        {NULL,     SQLITE_NULL, {.s = NULL} }
+    };
 
     struct stat sbuf;
     if (stat(fname, &sbuf)) return SQLITE_NOTFOUND;
 
-    int r = sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
+    int r =
+        sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
     if (r) return r;
     open->attached = 1;
     return SQLDB_OK;

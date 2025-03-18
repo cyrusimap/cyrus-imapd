@@ -45,11 +45,11 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "prot.h"
 #include "imap/global.h" /* for saslprops_t */
+#include "prot.h"
 
 int parser(struct protstream *sieved_out,
-           struct protstream *sieved_in, struct saslprops_t *saslprops);
-
+           struct protstream *sieved_in,
+           struct saslprops_t *saslprops);
 
 #endif /* PARSER_H */

@@ -77,15 +77,20 @@ int tls_init_clientengine(int verifydepth,
                           const char *var_server_key);
 
 /* start tls negotiation */
-int tls_start_servertls(int readfd, int writefd, int timeout,
+int tls_start_servertls(int readfd,
+                        int writefd,
+                        int timeout,
                         struct saslprops_t *saslprops,
                         const struct tls_alpn_t *alpn_map,
                         SSL **ret);
 
-int tls_start_clienttls(int readfd, int writefd,
-                        int *layerbits, char **authid,
+int tls_start_clienttls(int readfd,
+                        int writefd,
+                        int *layerbits,
+                        char **authid,
                         const struct tls_alpn_t *alpn_map,
-                        SSL **ret, SSL_SESSION **sess);
+                        SSL **ret,
+                        SSL_SESSION **sess);
 
 /* query which (if any) ALPN protocol was chosen
  * caller must free the returned string

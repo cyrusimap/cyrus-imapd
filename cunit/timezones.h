@@ -43,12 +43,12 @@
 #ifndef __CYRUS_CUNIT_TIMEZONES_H__
 #define __CYRUS_CUNIT_TIMEZONES_H__
 
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 
-#define TZ_UTC          "UTC+00"
-#define TZ_NEWYORK      "EST+05"
-#define TZ_MELBOURNE    "AEST-11"
+#define TZ_UTC "UTC+00"
+#define TZ_NEWYORK "EST+05"
+#define TZ_MELBOURNE "AEST-11"
 
 extern void push_tz(const char *tz);
 extern void pop_tz(void);

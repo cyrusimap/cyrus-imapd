@@ -40,13 +40,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "xmalloc.h"
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
-#include "xmalloc.h"
-
 
 EXPORTED void *xmalloc(size_t size)
 {
@@ -86,15 +85,14 @@ EXPORTED void *xzrealloc(void *ptr, size_t orig_size, size_t new_size)
 {
     void *ret = xrealloc(ptr, new_size);
 
-    if (orig_size < new_size)
-        memset(ret + orig_size, 0, new_size - orig_size);
+    if (orig_size < new_size) memset(ret + orig_size, 0, new_size - orig_size);
 
     return ret;
 }
 
-EXPORTED char *xstrdup(const char* str)
+EXPORTED char *xstrdup(const char *str)
 {
-    char *p = xmalloc(strlen(str)+1);
+    char *p = xmalloc(strlen(str) + 1);
     strcpy(p, str);
     return p;
 }
@@ -111,9 +109,9 @@ EXPORTED char *xstrdupnull(const char *str)
     return str ? xstrdup(str) : NULL;
 }
 
-EXPORTED char *xstrndup(const char* str, size_t len)
+EXPORTED char *xstrndup(const char *str, size_t len)
 {
-    char *p = xmalloc(len+1);
+    char *p = xmalloc(len + 1);
     if (len) strncpy(p, str, len);
     p[len] = '\0';
     return p;

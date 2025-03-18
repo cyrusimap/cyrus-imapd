@@ -45,13 +45,13 @@
  * RFC 4314 support added by Ken Murchison
  */
 
+#include "lib/acl.h"
+#include "imap/imap_err.h"
+#include "lib/libcyr_cfg.h"
+#include "lib/util.h"
 #include <config.h>
 #include <stdio.h>
 #include <syslog.h>
-#include "lib/acl.h"
-#include "lib/libcyr_cfg.h"
-#include "lib/util.h"
-#include "imap/imap_err.h"
 
 /* check a string, with meaningful description of error */
 EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
@@ -66,8 +66,11 @@ EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
         if (strchr(rights, *p) == NULL) {
             struct buf errbuf = BUF_INITIALIZER;
 
-            syslog(LOG_DEBUG, "%s: unrecognised right '%c' in string \"%s\"",
-                              __func__, *p, str);
+            syslog(LOG_DEBUG,
+                   "%s: unrecognised right '%c' in string \"%s\"",
+                   __func__,
+                   *p,
+                   str);
 
             buf_printf(&errbuf, "The %c right is not supported", *p);
             *errstr = buf_release(&errbuf);
@@ -103,48 +106,103 @@ EXPORTED int cyrus_acl_strtomask(const char *str, int *mask)
         int nomatch = 0;
 
         switch (*p) {
-            case 'l': result |= ACL_LOOKUP; break;
-            case 'r': result |= ACL_READ; break;
-            case 's': result |= ACL_SETSEEN; break;
-            case 'w': result |= ACL_WRITE; break;
-            case 'i': result |= ACL_INSERT; break;
-            case 'p': result |= ACL_POST; break;
-            case 'c': /* legacy CREATE macro - build member rights */
-                legacy_create = ACL_CREATE; break;
-            case 'k': result |= ACL_CREATE; break;
-            case 'x': result |= ACL_DELETEMBOX; break;
-            case 't': result |= ACL_DELETEMSG; break;
-            case 'e': result |= ACL_EXPUNGE; break;
-            case 'd': /* legacy DELETE macro - build member rights */
-                legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE); break;
-            case 'a': result |= ACL_ADMIN; break;
-            case 'n': result |= ACL_ANNOTATEMSG; break;
-            case '0': result |= ACL_USER0; break;
-            case '1': result |= ACL_USER1; break;
-            case '2': result |= ACL_USER2; break;
-            case '3': result |= ACL_USER3; break;
-            case '4': result |= ACL_USER4; break;
-            case '5': result |= ACL_USER5; break;
-            case '6': result |= ACL_USER6; break;
-            case '7': result |= ACL_USER7; break;
-            case '8': result |= ACL_USER8; break;
-            case '9': result |= ACL_USER9; break;
-            default: nomatch = 1; break;
+        case 'l':
+            result |= ACL_LOOKUP;
+            break;
+        case 'r':
+            result |= ACL_READ;
+            break;
+        case 's':
+            result |= ACL_SETSEEN;
+            break;
+        case 'w':
+            result |= ACL_WRITE;
+            break;
+        case 'i':
+            result |= ACL_INSERT;
+            break;
+        case 'p':
+            result |= ACL_POST;
+            break;
+        case 'c': /* legacy CREATE macro - build member rights */
+            legacy_create = ACL_CREATE;
+            break;
+        case 'k':
+            result |= ACL_CREATE;
+            break;
+        case 'x':
+            result |= ACL_DELETEMBOX;
+            break;
+        case 't':
+            result |= ACL_DELETEMSG;
+            break;
+        case 'e':
+            result |= ACL_EXPUNGE;
+            break;
+        case 'd': /* legacy DELETE macro - build member rights */
+            legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE);
+            break;
+        case 'a':
+            result |= ACL_ADMIN;
+            break;
+        case 'n':
+            result |= ACL_ANNOTATEMSG;
+            break;
+        case '0':
+            result |= ACL_USER0;
+            break;
+        case '1':
+            result |= ACL_USER1;
+            break;
+        case '2':
+            result |= ACL_USER2;
+            break;
+        case '3':
+            result |= ACL_USER3;
+            break;
+        case '4':
+            result |= ACL_USER4;
+            break;
+        case '5':
+            result |= ACL_USER5;
+            break;
+        case '6':
+            result |= ACL_USER6;
+            break;
+        case '7':
+            result |= ACL_USER7;
+            break;
+        case '8':
+            result |= ACL_USER8;
+            break;
+        case '9':
+            result |= ACL_USER9;
+            break;
+        default:
+            nomatch = 1;
+            break;
         }
 
         if (*p == *deleteright) {
             switch (*deleteright) {
             case 'c': /* legacy CREATE macro - build member rights */
-                legacy_create |= ACL_DELETEMBOX; break;
+                legacy_create |= ACL_DELETEMBOX;
+                break;
             case 'd': /* legacy DELETE macro - build member rights */
-                legacy_delete |= ACL_DELETEMBOX; break;
-            default: result |= ACL_DELETEMBOX; break;
+                legacy_delete |= ACL_DELETEMBOX;
+                break;
+            default:
+                result |= ACL_DELETEMBOX;
+                break;
             }
         }
         else if (nomatch) {
             /* unrecognised right character, bad! */
-            syslog(LOG_INFO, "%s: ACL string \"%s\" contains unrecognised right '%c'",
-                             __func__, str, *p);
+            syslog(LOG_INFO,
+                   "%s: ACL string \"%s\" contains unrecognised right '%c'",
+                   __func__,
+                   str,
+                   *p);
             r = IMAP_INVALID_RIGHTS;
         }
     }
@@ -170,9 +228,14 @@ EXPORTED char *cyrus_acl_masktostr(int acl, char *str)
     int legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE);
 
     switch (*deleteright) {
-    case 'c': legacy_create |= ACL_DELETEMBOX; break;
-    case 'd': legacy_delete |= ACL_DELETEMBOX; break;
-    default: /* XXX  we have backwards compatibility problems */ break;
+    case 'c':
+        legacy_create |= ACL_DELETEMBOX;
+        break;
+    case 'd':
+        legacy_delete |= ACL_DELETEMBOX;
+        break;
+    default: /* XXX  we have backwards compatibility problems */
+        break;
     }
 
     if (acl & ACL_LOOKUP) *pos++ = 'l';

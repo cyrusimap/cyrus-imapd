@@ -48,21 +48,19 @@
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 
-struct auth_mech *auth_mechs[] = {
-    &auth_unix,
-    &auth_pts,
-    &auth_mboxgroups,
+struct auth_mech *auth_mechs[] = {&auth_unix,
+                                  &auth_pts,
+                                  &auth_mboxgroups,
 #ifdef HAVE_GSSAPI_H
-    &auth_krb5,
+                                  &auth_krb5,
 #endif
-    NULL };
+                                  NULL};
 
 static struct auth_mech *auth_fromname(void)
 {
     static struct auth_mech *auth;
 
-    if (auth)
-        return auth;
+    if (auth) return auth;
 
     const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
 
@@ -73,12 +71,15 @@ static struct auth_mech *auth_fromname(void)
     }
 
     char errbuf[1024];
-    snprintf(errbuf, sizeof(errbuf),
-             "Authorization mechanism %s not supported", name);
+    snprintf(errbuf,
+             sizeof(errbuf),
+             "Authorization mechanism %s not supported",
+             name);
     fatal(errbuf, EX_CONFIG);
 }
 
-EXPORTED int auth_memberof(const struct auth_state *auth_state, const char *identifier)
+EXPORTED int auth_memberof(const struct auth_state *auth_state,
+                           const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 

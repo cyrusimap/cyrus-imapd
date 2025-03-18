@@ -42,19 +42,19 @@
 
 #include <config.h>
 
-#include <stdlib.h>
-#include <unistd.h>
+#include <errno.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <string.h>
-#include <errno.h>
+#include <unistd.h>
 
 #include "assert.h"
 #include "libconfig.h"
 #include "signals.h"
-#include "xmalloc.h"
 #include "util.h"
+#include "xmalloc.h"
 
 #ifndef _NSIG
 #define _NSIG 65
@@ -62,16 +62,14 @@
 static volatile sig_atomic_t gotsignal[_NSIG];
 static volatile pid_t killer_pid;
 
-static void sighandler(int sig, siginfo_t *si,
-                       void *ucontext __attribute__((unused)))
+static void
+sighandler(int sig, siginfo_t *si, void *ucontext __attribute__((unused)))
 {
-    if (sig < 1 || sig >= _NSIG)
-        sig = _NSIG-1;
+    if (sig < 1 || sig >= _NSIG) sig = _NSIG - 1;
     gotsignal[sig] = 1;
 
     /* remember a process that sent us a fatal signal */
-    if ((sig == SIGINT || sig == SIGQUIT || sig == SIGTERM) &&
-        si &&
+    if ((sig == SIGINT || sig == SIGQUIT || sig == SIGTERM) && si &&
         si->si_code == SI_USER)
         killer_pid = si->si_pid;
 }
@@ -139,10 +137,7 @@ EXPORTED void signals_reset_sighup_handler(int restartable)
 static shutdownfn *shutdown_cb = NULL;
 static int signals_in_shutdown = 0;
 
-EXPORTED void signals_set_shutdown(shutdownfn *s)
-{
-    shutdown_cb = s;
-}
+EXPORTED void signals_set_shutdown(shutdownfn *s) { shutdown_cb = s; }
 
 /* Build a human-readable description of another process from just the
  * process id.  On some platforms this is enough to tell us something
@@ -154,27 +149,24 @@ static char *describe_process(pid_t pid)
     int i;
     int fd;
     int n;
-    char buf[1024+32];
+    char buf[1024 + 32];
     char cmdline[1024];
 
     snprintf(buf, sizeof(buf), "/proc/%d/cmdline", (int)pid);
     cmdline[0] = '\0';
     fd = open(buf, O_RDONLY, 0);
     if (fd >= 0) {
-        n = read(fd, cmdline, sizeof(cmdline)-1);
+        n = read(fd, cmdline, sizeof(cmdline) - 1);
         if (n > 0) {
-            if (!cmdline[n-1])
-                n--;        /* ignore trailing nul */
-            for (i = 0 ; i < n ; i++) {
-                if (cmdline[i] == '\0')
-                    cmdline[i] = ' ';
+            if (!cmdline[n - 1]) n--; /* ignore trailing nul */
+            for (i = 0; i < n; i++) {
+                if (cmdline[i] == '\0') cmdline[i] = ' ';
             }
             cmdline[n] = '\0';
         }
         close(fd);
     }
-    if (!cmdline[0])
-        strcpy(cmdline, "unknown");
+    if (!cmdline[0]) strcpy(cmdline, "unknown");
     snprintf(buf, sizeof(buf), "%d (%s)", (int)pid, cmdline);
     return xstrdup(buf);
 #else
@@ -195,23 +187,25 @@ static int signals_poll_mask(sigset_t *oldmaskp)
             /* whine in syslog if we were sent a graceful shutdown signal
              * by anyone other than the master process.  */
             char *desc = describe_process(killer_pid);
-            syslog(LOG_NOTICE, "graceful shutdown initiated by "
-                               "unexpected process %s", desc);
+            syslog(LOG_NOTICE,
+                   "graceful shutdown initiated by "
+                   "unexpected process %s",
+                   desc);
             free(desc);
         }
         else {
             syslog(LOG_NOTICE, "graceful shutdown");
         }
 
-        if (oldmaskp)
-            sigprocmask(SIG_SETMASK, oldmaskp, NULL);
+        if (oldmaskp) sigprocmask(SIG_SETMASK, oldmaskp, NULL);
         if (shutdown_cb) {
             signals_in_shutdown = 1;
             shutdown_cb(EX_TEMPFAIL);
         }
-        else exit(EX_TEMPFAIL);
+        else
+            exit(EX_TEMPFAIL);
     }
-    for (sig = 1 ; sig < _NSIG ; sig++) {
+    for (sig = 1; sig < _NSIG; sig++) {
         switch (sig) {
         case SIGUSR1:
             if (gotsignal[sig]) {
@@ -229,10 +223,7 @@ static int signals_poll_mask(sigset_t *oldmaskp)
     return 0;
 }
 
-EXPORTED int signals_poll(void)
-{
-    return signals_poll_mask(NULL);
-}
+EXPORTED int signals_poll(void) { return signals_poll_mask(NULL); }
 
 /*
  * Same interface as select() but closes the race between
@@ -240,8 +231,8 @@ EXPORTED int signals_poll(void)
  * like SIGTERM.  This is necessary to ensure clean shutdown
  * of Cyrus processes.
  */
-EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
-                            fd_set *efds, struct timeval *tout)
+EXPORTED int signals_select(
+    int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds, struct timeval *tout)
 {
     if (nfds > 0.9 * FD_SETSIZE) {
         syslog(LOG_WARNING, "signals_select: nfds = %d/%d", nfds, FD_SETSIZE);
@@ -250,7 +241,7 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
 
 #if HAVE_PSELECT
     /* pselect() closes the race between SIGCHLD arriving
-    * and select() sleeping for up to 10 seconds. */
+     * and select() sleeping for up to 10 seconds. */
     struct timespec ts, *tsptr = NULL;
     sigset_t blocked;
     sigset_t oldmask;
@@ -293,8 +284,7 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
     int r;
 
     r = select(nfds, rfds, wfds, efds, tout);
-    if (r < 0 && (errno == EAGAIN || errno == EINTR))
-        signals_poll();
+    if (r < 0 && (errno == EAGAIN || errno == EINTR)) signals_poll();
 
     return r;
 #endif
@@ -302,8 +292,7 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
 
 EXPORTED void signals_clear(int sig)
 {
-    if (sig >= 0 && sig < _NSIG)
-        gotsignal[sig] = 0;
+    if (sig >= 0 && sig < _NSIG) gotsignal[sig] = 0;
 }
 
 EXPORTED int signals_cancelled()

@@ -61,20 +61,19 @@ extern int64_t config_getbytesize(enum imapopt opt, int defunit);
 /* these work on additional strings that are not defined in the
  * imapoptions table */
 extern const char *config_getoverflowstring(const char *key, const char *def);
-extern void config_foreachoverflowstring(
-    void (*func)(const char *, const char *, void *), void *rock);
+extern void
+config_foreachoverflowstring(void (*func)(const char *, const char *, void *),
+                             void *rock);
 extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
 
 /* for parsing duration/bytesize-format strings obtained elsewhere,
  * such as from an overflow string */
-extern int config_parseduration(const char *str,
-                                int defunit,
-                                int *out_duration);
-extern int config_parsebytesize(const char *str,
-                                int defunit,
-                                int64_t *out_bytesize);
+extern int
+config_parseduration(const char *str, int defunit, int *out_duration);
+extern int
+config_parsebytesize(const char *str, int defunit, int64_t *out_bytesize);
 
 /* for parsing boolean switch values, returns -1 on error */
 extern int config_parse_switch(const char *p);
@@ -109,7 +108,7 @@ extern toggle_debug_cb config_toggle_debug_cb;
 extern void config_toggle_debug(void);
 
 /* config requirement flags */
-#define CONFIG_NEED_PARTITION_DATA (1<<0)
+#define CONFIG_NEED_PARTITION_DATA (1 << 0)
 
 /* what it really means when a byte size option treats 0 as "unlimited" */
 #define BYTESIZE_UNLIMITED (INT_MAX)
