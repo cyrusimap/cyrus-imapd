@@ -2196,19 +2196,17 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
     int r = 0;
     int dirfd = -1;
 
-    if (!db->nosync) {
-    #if defined(O_DIRECTORY)
-        dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#if defined(O_DIRECTORY)
+    dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
 #else
-        dirfd = open(dir, O_RDONLY, 0600);
+    dirfd = open(dir, O_RDONLY, 0600);
 #endif
-        if (dirfd < 0) {
-            db->error("open directory failed",
-                      "filename=<%s> newname=<%s> directory=<%s>",
-                      db->fname, newname, dir);
-            r = TWOM_IOERROR;
-            goto done;
-        }
+    if (dirfd < 0) {
+        db->error("open directory failed",
+                  "filename=<%s> newname=<%s> directory=<%s>",
+                  db->fname, newname, dir);
+        r = TWOM_IOERROR;
+        goto done;
     }
 
     if (fstat(oldfile->fd, &sbuf) == -1) {
@@ -2232,7 +2230,7 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
         goto done;
     }
 
-    r = rename(newname, db->fname);
+    r = renameat(AT_FDCWD, newname, dirfd, db->fname);
     if (r) goto done;
 
     if (!db->nosync) {
