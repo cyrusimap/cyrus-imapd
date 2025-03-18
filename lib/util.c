@@ -46,6 +46,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <grp.h>
+#include <libgen.h>
 #include <limits.h>
 #include <pwd.h>
 #include <string.h>
@@ -488,6 +489,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
 {
     int srcfd = -1;
     int destfd = -1;
+    int dirfd = -1;
     const char *src_base = 0;
     size_t src_size = 0;
     struct stat sbuf;
@@ -495,6 +497,25 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     int r = 0;
     int nolink = flags & COPYFILE_NOLINK;
     int keeptime = flags & COPYFILE_KEEPTIME;
+    int nodirsync = flags & COPYFILE_NODIRSYNC;
+
+    if (!nodirsync) {
+        char *copy = xstrdup(to);
+        const char *dir = dirname(copy);
+#if defined(O_DIRECTORY)
+        dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+        dirfd = open(dir, O_RDONLY, 0600);
+#endif
+        free(copy);
+        if (dirfd == -1) {
+            if (!(flags & COPYFILE_MKDIR))
+                xsyslog(LOG_ERR, "IOERROR: open directory failed",
+                                 "filename=<%s>", to);
+            r = -1;
+            goto done;
+        }
+    }
 
     /* try to hard link, but don't fail - fall back to regular copy */
     if (!nolink) {
@@ -583,6 +604,18 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
             xsyslog(LOG_ERR, "IOERROR: setting times failed",
                              "filename=<%s>", to);
             r = -1;
+            xunlink(to);  /* remove any rubbish we created */
+            goto done;
+        }
+    }
+
+    if (dirfd != -1) {
+        if (fsync(dirfd) < 0) {
+            xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
+                             "filename=<%s>", to);
+            r = -1;
+            xunlink(to);  /* remove any rubbish we created */
+            goto done;
         }
     }
 
@@ -591,6 +624,7 @@ done:
 
     if (srcfd != -1) close(srcfd);
     if (destfd != -1) close(destfd);
+    if (dirfd != -1) close(dirfd);
 
     return r;
 }
