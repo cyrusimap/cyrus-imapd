@@ -650,7 +650,7 @@ if test "x$enable_xapian" != xno ; then
         fi
 
         dnl Xapian requires CXX11
-        AX_CXX_COMPILE_STDCXX_11([], [mandatory])
+        AX_CXX_COMPILE_STDCXX(11)
 
         dnl If AC_PROG_LIBTOOL (or the deprecated older version AM_PROG_LIBTOOL)
         dnl has already been expanded, enable libtool support now, otherwise add

@@ -93,19 +93,3 @@ else
 fi
 AC_MSG_RESULT($ipv6_cv_sa_len)])
 
-
-dnl See whether sys/socket.h has socklen_t
-AC_DEFUN([IPv6_CHECK_SOCKLEN_T], [
-AC_MSG_CHECKING(for socklen_t)
-AC_CACHE_VAL(ipv6_cv_socklen_t, [dnl
-AC_TRY_LINK([#include <sys/types.h>
-#include <sys/socket.h>],
-            [socklen_t len = 0;],
-            [ipv6_cv_socklen_t=yes], [ipv6_cv_socklen_t=no])])dnl
-if test $ipv6_cv_socklen_t = yes; then
-  ifelse([$1], , AC_DEFINE(HAVE_SOCKLEN_T,[],[Do we have a socklen_t?]), [$1])
-else
-  ifelse([$2], , :, [$2])
-fi
-AC_MSG_RESULT($ipv6_cv_socklen_t)])
-
