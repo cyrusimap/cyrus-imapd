@@ -1095,18 +1095,6 @@ havefile:
     r = mailbox_copyfile(linkfile ? linkfile : stagefile, fname, nolink);
     if (r) goto out;
 
-    FILE *destfile = fopen(fname, "r");
-    if (destfile) {
-        /* this will hopefully ensure that the link() actually happened
-           and makes sure that the file actually hits disk */
-        fsync(fileno(destfile));
-        fclose(destfile);
-    }
-    else {
-        r = IMAP_IOERROR;
-        goto out;
-    }
-
     if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
         (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)) {
         if (flags)
