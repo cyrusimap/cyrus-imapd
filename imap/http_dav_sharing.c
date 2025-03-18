@@ -1145,7 +1145,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
             buf_init_ro_cstr(&value, (char *) resp->name);
             r = annotate_state_writemask(astate, annot,
-                                         txn->req_tgt.userid, &value);
+                                         httpd_userisadmin ? "" : txn->req_tgt.userid, &value);
 
             if (mbtype_isa(mailbox_mbtype(shared)) == MBTYPE_CALENDAR) {
                 /* Sharee's copy of calendar SHOULD default to transparent */
@@ -1153,7 +1153,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
                     DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
                 buf_init_ro_cstr(&value, "transparent");
                 r = annotate_state_writemask(astate, annot,
-                                             txn->req_tgt.userid, &value);
+                                             httpd_userisadmin ? "" : txn->req_tgt.userid, &value);
             }
         }
 
