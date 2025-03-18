@@ -1206,12 +1206,20 @@ sub start_httpd {
 
 sub start
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
     my $created = 0;
 
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
+
+    if ($params{lsan_suppressions}) {
+        my $current = $ENV{LSAN_OPTIONS} // "";
+
+        $ENV{LSAN_OPTIONS} = "$current:suppressions=$params{lsan_suppressions}";
+
+        xlog "running with LSAN_OPTIONS=$ENV{LSAN_OPTIONS}";
+    }
 
     # arrange for fakesmtpd to be started by Cassandane if we need it
     # XXX should make it a Cyrus waitdaemon instead like fakesaslauthd
@@ -1446,10 +1454,84 @@ sub _check_sanitizer_logs
         next if m/\.core\./;
         my $log = "$san_logdir/$_";
         next if -z $log;
-        push(@nzlogs, $_);
 
         if (open my $fh, '<', $log) {
             xlog "$sanitizer errors from file $log";
+
+            # First pass, see if it's only suppressions output. If so, ignore.
+            # be strict so as to avoid false negatives. We can adjust in the
+            # future if this becomes an annoyance. We expect suppressions
+            # look like the following (for lsan at least...)
+            #
+            # -----------------------------------------------------
+            # Suppressions used:
+            #   count      bytes template
+            #      10       2120 libcrypto.so
+            #       2       1856 libssl.so
+            # -----------------------------------------------------
+
+            my $has_errors;
+
+            my (
+                $have_open_delim,
+                $have_header,
+                $have_columns,
+                $have_closing_delim
+            );
+
+            while (<$fh>) {
+                # Ignore whitespace
+                next if /^\s*$/;
+
+                if (! $have_open_delim) {
+                    if (! /^---+$/) {
+                        $has_errors = 1;
+                        last;
+                    }
+
+                    $have_open_delim = 1;
+                    next;
+                }
+
+                if (! $have_header) {
+                    if (! /^Suppressions used:/) {
+                        $has_errors = 1;
+                        last;
+                    }
+
+                    $have_header = 1;
+                    next;
+                }
+
+                if (! $have_columns) {
+                    if (! /^\s+count\s+bytes\s+template/) {
+                        $has_errors = 1;
+                        last;
+                    }
+
+                    $have_columns = 1;
+                    next;
+                }
+
+                if (/^---+$/ && ! $have_closing_delim) {
+                    $have_closing_delim = 1;
+                    next;
+                }
+
+                if (! $have_closing_delim) {
+                    next if /^\s+\d+\s+\d+\w+/;
+                }
+
+                # Didn't get our closing delim and doesn't look like a
+                # suppression? Uh-oh, probably a real error
+                $has_errors = 1;
+                last;
+            }
+
+            seek $fh, 0, 0;
+
+            push(@nzlogs, $_) if $has_errors;
+
             while (<$fh>) {
                 chomp;
                 xlog "$_";
@@ -1458,6 +1540,9 @@ sub _check_sanitizer_logs
         }
         else {
             xlog "Cannot open $sanitizer log $log for reading: $!";
+
+            # Adding this in forces errors
+            push(@nzlogs, $_);
         }
 
     }
