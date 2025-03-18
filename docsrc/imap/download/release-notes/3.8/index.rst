@@ -1,6 +1,5 @@
 .. _imap-release-notes-3.8:
 
-=======================
 Cyrus IMAP 3.8 Releases
 =======================
 

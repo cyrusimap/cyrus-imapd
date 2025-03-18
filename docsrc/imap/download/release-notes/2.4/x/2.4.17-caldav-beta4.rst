@@ -10,4 +10,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta3
 *   Better handling of Connection:keep-alive
 *   Added httpallowedurls option
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`
