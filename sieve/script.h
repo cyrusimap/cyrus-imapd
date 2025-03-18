@@ -46,8 +46,8 @@
 
 #include <sys/types.h>
 
-#include "sieve_interface.h"
 #include "interp.h"
+#include "sieve_interface.h"
 #include "tree.h"
 #include "util.h"
 
@@ -68,19 +68,19 @@ struct sieve_script {
 typedef struct sieve_bytecode sieve_bytecode_t;
 
 struct sieve_bytecode {
-    ino_t inode;                /* used to prevent mmapping the same script */
+    ino_t inode; /* used to prevent mmapping the same script */
     const char *data;
     size_t len;
     int fd;
 
-    int is_executing;           /* used to prevent recursive INCLUDEs */
+    int is_executing; /* used to prevent recursive INCLUDEs */
 
     sieve_bytecode_t *next;
 };
 
 struct sieve_execute {
-    sieve_bytecode_t *bc_list;  /* list of loaded bytecode buffers */
-    sieve_bytecode_t *bc_cur;   /* currently active bytecode buffer */
+    sieve_bytecode_t *bc_list; /* list of loaded bytecode buffers */
+    sieve_bytecode_t *bc_cur;  /* currently active bytecode buffer */
 };
 
 int script_require(sieve_script_t *s, const char *req);

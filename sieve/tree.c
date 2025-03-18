@@ -45,13 +45,13 @@
 #include <config.h>
 #endif
 
-#include <stdlib.h>
 #include "xmalloc.h"
+#include <stdlib.h>
 
-#include "tree.h"
 #include "script.h"
-#include "sieve/sieve_interface.h"
 #include "sieve/bytecode.h"
+#include "sieve/sieve_interface.h"
+#include "tree.h"
 
 extern void sieveerror_c(sieve_script_t *parse_script, int code, ...);
 
@@ -70,27 +70,41 @@ comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
         const char *invalid_match = NULL;
 
         switch (c->match) {
-        case B_CONTAINS: invalid_match = ":contains"; break;
-        case B_MATCHES:  invalid_match = ":matches";  break;
-        case B_REGEX:    invalid_match = ":regex";    break;
+        case B_CONTAINS:
+            invalid_match = ":contains";
+            break;
+        case B_MATCHES:
+            invalid_match = ":matches";
+            break;
+        case B_REGEX:
+            invalid_match = ":regex";
+            break;
         }
 
         if (invalid_match) {
-            sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
-                         invalid_match, "i;ascii-numeric");
+            sieveerror_c(parse_script,
+                         SIEVE_MATCH_INCOMPAT,
+                         invalid_match,
+                         "i;ascii-numeric");
         }
     }
     else if (c->match == B_COUNT) {
         const char *invalid_collation;
 
         switch (c->collation) {
-        case B_OCTET:          invalid_collation = "i;octet";           break;
-        case B_UNICODECASEMAP: invalid_collation = "i;unicode-casemap"; break;
-        default:               invalid_collation = "i;ascii-casemap";   break;
+        case B_OCTET:
+            invalid_collation = "i;octet";
+            break;
+        case B_UNICODECASEMAP:
+            invalid_collation = "i;unicode-casemap";
+            break;
+        default:
+            invalid_collation = "i;ascii-casemap";
+            break;
         }
 
-        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
-                     ":count", invalid_collation);
+        sieveerror_c(
+            parse_script, SIEVE_MATCH_INCOMPAT, ":count", invalid_collation);
     }
 
     return c;
@@ -98,7 +112,7 @@ comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
 
 test_t *new_test(int type, sieve_script_t *parse_script)
 {
-    test_t *p = (test_t *) xzmalloc(sizeof(test_t));
+    test_t *p = (test_t *)xzmalloc(sizeof(test_t));
     const char *capability = "";
     unsigned long long supported = SIEVE_CAPA_BASE;
 
@@ -231,7 +245,7 @@ test_t *new_test(int type, sieve_script_t *parse_script)
 
 testlist_t *new_testlist(test_t *t, testlist_t *n)
 {
-    testlist_t *p = (testlist_t *) xmalloc(sizeof(testlist_t));
+    testlist_t *p = (testlist_t *)xmalloc(sizeof(testlist_t));
     p->t = t;
     p->next = n;
     return p;
@@ -239,9 +253,9 @@ testlist_t *new_testlist(test_t *t, testlist_t *n)
 
 commandlist_t *new_command(int type, sieve_script_t *parse_script)
 {
-    commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
+    commandlist_t *p = (commandlist_t *)xzmalloc(sizeof(commandlist_t));
     const char *capability = "";
-    unsigned long long  supported = SIEVE_CAPA_BASE;
+    unsigned long long supported = SIEVE_CAPA_BASE;
 
     p->type = type;
     p->next = NULL;
@@ -339,7 +353,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
 {
-    commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
+    commandlist_t *p = (commandlist_t *)xzmalloc(sizeof(commandlist_t));
 
     p->type = B_IF;
     p->u.i.t = t;

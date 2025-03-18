@@ -45,9 +45,9 @@
 
 /* Sort criterion */
 struct sortcrit {
-    unsigned key;               /* sort key */
-    int flags;                  /* key modifiers as defined below */
-    union {                     /* argument(s) to the sort key */
+    unsigned key; /* sort key */
+    int flags;    /* key modifiers as defined below */
+    union {       /* argument(s) to the sort key */
         struct {
             char *entry;
             char *userid;
@@ -94,7 +94,6 @@ enum {
 };
 
 /* Sort key modifier flag bits */
-#define SORT_REVERSE            (1<<0)      /* RFC 5256 */
-
+#define SORT_REVERSE (1 << 0) /* RFC 5256 */
 
 #endif /* __CYRUS_SEARCH_SORT_H__ */

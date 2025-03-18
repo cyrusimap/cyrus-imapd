@@ -51,18 +51,18 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <math.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
-#include <errno.h>
 
 #include "global.h"
 #include "hash.h"
-#include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
+#include "httpd.h"
 #include "ical_support.h"
 #include "jcal.h"
 #include "map.h"
@@ -94,74 +94,90 @@ static int action_leap(struct transaction_t *txn);
 static int action_list(struct transaction_t *txn);
 static int action_get(struct transaction_t *txn);
 static int action_expand(struct transaction_t *txn);
-static int json_response(int code, struct transaction_t *txn, json_t *root,
-                         char **resp);
-static int json_error_response(struct transaction_t *txn, long tz_code,
-                               struct strlist *param, icaltimetype *time);
-static struct buf *icaltimezone_as_tzif(icalcomponent* comp);
-static struct buf *icaltimezone_as_tzif_leap(icalcomponent* comp);
-static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
-                                         icaltimetype *startp, icaltimetype *endp);
+static int
+json_response(int code, struct transaction_t *txn, json_t *root, char **resp);
+static int json_error_response(struct transaction_t *txn,
+                               long tz_code,
+                               struct strlist *param,
+                               icaltimetype *time);
+static struct buf *icaltimezone_as_tzif(icalcomponent *comp);
+static struct buf *icaltimezone_as_tzif_leap(icalcomponent *comp);
+static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
+                                         bit32 leapcnt,
+                                         icaltimetype *startp,
+                                         icaltimetype *endp);
 
 static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/calendar; charset=utf-8", "2.0", "ics",
-      (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
-      NULL, NULL, NULL, NULL
-    },
-    { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
-      NULL, NULL, NULL, NULL
-    },
-    { "application/calendar+json; charset=utf-8", NULL, "jcs",
-      (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
-      NULL, NULL, NULL, NULL
-    },
-    { "application/tzif", NULL, NULL,
-      (struct buf* (*)(void *)) &icaltimezone_as_tzif,
-      NULL, NULL, NULL, NULL
-    },
-    { "application/tzif-leap", NULL, NULL,
-      (struct buf* (*)(void *)) &icaltimezone_as_tzif_leap,
-      NULL, NULL, NULL, NULL
-    },
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    {"text/calendar; charset=utf-8",
+     "2.0",                                            "ics",
+     (struct buf * (*)(void *)) & my_icalcomponent_as_ical_string,
+     NULL,                                                                NULL,
+     NULL,                                                                            NULL},
+    {"application/calendar+xml; charset=utf-8",
+     NULL,                                             "xcs",
+     (struct buf * (*)(void *)) & icalcomponent_as_xcal_string,
+     NULL,                                                                NULL,
+     NULL,                                                                            NULL},
+    {"application/calendar+json; charset=utf-8",
+     NULL,                                             "jcs",
+     (struct buf * (*)(void *)) & icalcomponent_as_jcal_string,
+     NULL,                                                                NULL,
+     NULL,                                                                            NULL},
+    {"application/tzif",
+     NULL,                                             NULL,
+     (struct buf * (*)(void *)) & icaltimezone_as_tzif,
+     NULL,                                                                NULL,
+     NULL,                                                                            NULL},
+    {"application/tzif-leap",
+     NULL,                                             NULL,
+     (struct buf * (*)(void *)) & icaltimezone_as_tzif_leap,
+     NULL,                                                                NULL,
+     NULL,                                                                            NULL},
+    {NULL,                                       NULL, NULL,  NULL, NULL, NULL, NULL, NULL}
 };
-
 
 /* Namespace for tzdist service */
 struct namespace_t namespace_tzdist = {
-    URL_NS_TZDIST, 0, "tzdist", "/tzdist", TZDIST_WELLKNOWN_URI,
-    http_allow_noauth, /*authschemes*/0,
-    /*mbtype*/0,
+    URL_NS_TZDIST,
+    0,
+    "tzdist",
+    "/tzdist",
+    TZDIST_WELLKNOWN_URI,
+    http_allow_noauth,
+ /*authschemes*/ 0,
+    /*mbtype*/ 0,
     ALLOW_READ,
-    tzdist_init, NULL, NULL, tzdist_shutdown, NULL,
+    tzdist_init,
+    NULL,
+    NULL,
+    tzdist_shutdown,
+    NULL,
     {
-        { NULL,                 NULL },                 /* ACL          */
-        { NULL,                 NULL },                 /* BIND         */
-        { NULL,                 NULL },                 /* CONNECT      */
-        { NULL,                 NULL },                 /* COPY         */
-        { NULL,                 NULL },                 /* DELETE       */
-        { &meth_get,            NULL },                 /* GET          */
-        { &meth_get,            NULL },                 /* HEAD         */
-        { NULL,                 NULL },                 /* LOCK         */
-        { NULL,                 NULL },                 /* MKCALENDAR   */
-        { NULL,                 NULL },                 /* MKCOL        */
-        { NULL,                 NULL },                 /* MOVE         */
-        { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* POST         */
-        { NULL,                 NULL },                 /* PATCH        */
-        { NULL,                 NULL },                 /* PROPFIND     */
-        { NULL,                 NULL },                 /* PROPPATCH    */
-        { NULL,                 NULL },                 /* PUT          */
-        { NULL,                 NULL },                 /* REPORT       */
-        { NULL,                 NULL },                 /* SEARCH       */
-        { &meth_trace,          NULL },                 /* TRACE        */
-        { NULL,                 NULL },                 /* UNBIND       */
-        { NULL,                 NULL }                  /* UNLOCK       */
+      {NULL, NULL},          /* ACL          */
+        {NULL, NULL},          /* BIND         */
+        {NULL, NULL},          /* CONNECT      */
+        {NULL, NULL},          /* COPY         */
+        {NULL, NULL},          /* DELETE       */
+        {&meth_get, NULL},     /* GET          */
+        {&meth_get, NULL},     /* HEAD         */
+        {NULL, NULL},          /* LOCK         */
+        {NULL, NULL},          /* MKCALENDAR   */
+        {NULL, NULL},          /* MKCOL        */
+        {NULL, NULL},          /* MOVE         */
+        {&meth_options, NULL}, /* OPTIONS      */
+        {NULL, NULL},          /* POST         */
+        {NULL, NULL},          /* PATCH        */
+        {NULL, NULL},          /* PROPFIND     */
+        {NULL, NULL},          /* PROPPATCH    */
+        {NULL, NULL},          /* PUT          */
+        {NULL, NULL},          /* REPORT       */
+        {NULL, NULL},          /* SEARCH       */
+        {&meth_trace, NULL},   /* TRACE        */
+        {NULL, NULL},          /* UNBIND       */
+        {NULL, NULL}           /* UNLOCK       */
     }
 };
-
 
 #ifdef HAVE_SHAPELIB
 #include <shapefil.h>
@@ -172,8 +188,8 @@ struct tz_shape_t {
     DBFHandle dbf;
 };
 
-static struct tz_shape_t tz_world = { 0, NULL, NULL };
-static struct tz_shape_t tz_aq    = { 0, NULL, NULL };
+static struct tz_shape_t tz_world = {0, NULL, NULL};
+static struct tz_shape_t tz_aq = {0, NULL, NULL};
 
 static void open_shape_file(struct buf *serverinfo)
 {
@@ -198,16 +214,17 @@ static void open_shape_file(struct buf *serverinfo)
 
     /* Sanity check the shape files */
     SHPGetInfo(tz_world.shp, &nrecords, &shapetype, minbound, maxbound);
-    if (!nrecords || shapetype != SHPT_POLYGON ||       /* polygons */
-        minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
-        minbound[1] <  -90.0 || maxbound[1] >  90.0 ||  /* latitude range */
-        nrecords != DBFGetRecordCount(tz_world.dbf)) {  /* record counts */
+    if (!nrecords || shapetype != SHPT_POLYGON ||      /* polygons */
+        minbound[0] < -180.0 || maxbound[0] > 180.0 || /* longitude range */
+        minbound[1] < -90.0 || maxbound[1] > 90.0 ||   /* latitude range */
+        nrecords != DBFGetRecordCount(tz_world.dbf)) { /* record counts */
         syslog(LOG_ERR, "%s appears to contain invalid data", buf);
         return;
     }
 
-    fieldtype = DBFGetFieldInfo(tz_world.dbf, 0 /* column 1 */, buf, NULL, NULL);
-    if (fieldtype != FTString || strcasecmp(buf, "TZID")) {   /* TZIDs */
+    fieldtype =
+        DBFGetFieldInfo(tz_world.dbf, 0 /* column 1 */, buf, NULL, NULL);
+    if (fieldtype != FTString || strcasecmp(buf, "TZID")) { /* TZIDs */
         syslog(LOG_ERR, "%s appears to contain invalid data", buf);
         return;
     }
@@ -229,16 +246,16 @@ static void open_shape_file(struct buf *serverinfo)
 
     /* Sanity check the shape files */
     SHPGetInfo(tz_aq.shp, &nrecords, &shapetype, minbound, maxbound);
-    if (!nrecords || shapetype != SHPT_POINT ||         /* points */
-        minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
-        minbound[1] <  -90.0 || maxbound[1] > -60.0 ||  /* latitude range */
-        nrecords != DBFGetRecordCount(tz_aq.dbf)) {     /* record counts */
+    if (!nrecords || shapetype != SHPT_POINT ||        /* points */
+        minbound[0] < -180.0 || maxbound[0] > 180.0 || /* longitude range */
+        minbound[1] < -90.0 || maxbound[1] > -60.0 ||  /* latitude range */
+        nrecords != DBFGetRecordCount(tz_aq.dbf)) {    /* record counts */
         syslog(LOG_ERR, "%s appears to contain invalid data", buf);
         return;
     }
 
     fieldtype = DBFGetFieldInfo(tz_aq.dbf, 1 /* column 2 */, buf, NULL, NULL);
-    if (fieldtype != FTString || strcasecmp(buf, "TZID")) {  /* TZIDs */
+    if (fieldtype != FTString || strcasecmp(buf, "TZID")) { /* TZIDs */
         syslog(LOG_ERR, "%s appears to contain invalid data", buf);
         return;
     }
@@ -268,16 +285,15 @@ static int pt_in_poly(int nvert, double *vx, double *vy, double px, double py)
     return in;
 }
 
+#define M_EARTH_RADIUS 6371008.7 /* mean radius (meters) */
 
-#define M_EARTH_RADIUS    6371008.7                    /* mean radius (meters) */
+#define M_PI_180 0.01745329251994329547 /* pi / 180             */
 
-#define M_PI_180          0.01745329251994329547       /* pi / 180             */
+#define deg2rad(deg) (deg * M_PI_180) /* degrees -> radians   */
 
-#define deg2rad(deg)      (deg * M_PI_180)             /* degrees -> radians   */
+#define vec_normal(v) vec_mult(1 / vec_mag(v), v) /* normalize vector     */
 
-#define vec_normal(v)     vec_mult(1 / vec_mag(v), v)  /* normalize vector     */
-
-#define vec_diff(v1, v2)  acos(vec_dot_prod(v1, v2))   /* angular difference   */
+#define vec_diff(v1, v2) acos(vec_dot_prod(v1, v2)) /* angular difference   */
 
 struct vector {
     double x, y, z;
@@ -317,8 +333,8 @@ static double vec_dot_prod(const struct vector *v1, const struct vector *v2)
 }
 
 static struct vector *vec_cross_prod(const struct vector *v1,
-                                    const struct vector *v2,
-                                    struct vector *r)
+                                     const struct vector *v2,
+                                     struct vector *r)
 {
     r->x = v1->y * v2->z - v1->z * v2->y;
     r->y = v1->z * v2->x - v1->x * v2->z;
@@ -327,8 +343,8 @@ static struct vector *vec_cross_prod(const struct vector *v1,
     return r;
 }
 
-static int pt_near_poly(int nvert, double *vx, double *vy,
-                        struct vector *p, double range)
+static int
+pt_near_poly(int nvert, double *vx, double *vy, struct vector *p, double range)
 {
     int i, j;
 
@@ -344,7 +360,8 @@ static int pt_near_poly(int nvert, double *vx, double *vy,
         /* Find unit normal vector (n) for plane passing through a & b */
         vec_normal(vec_cross_prod(&a, &b, &n));
 
-        /* Shortest distance between p and geodesic passing through a & b (ab) */
+        /* Shortest distance between p and geodesic passing through a & b (ab)
+         */
         if (asin(fabs(vec_dot_prod(&n, p))) <= range) {
             struct vector c, d;
             double ab_len;
@@ -367,7 +384,8 @@ static int pt_near_poly(int nvert, double *vx, double *vy,
 }
 
 static strarray_t *tzid_from_geo(struct transaction_t *txn,
-                                 double latitude, double longitude,
+                                 double latitude,
+                                 double longitude,
                                  double uncertainty)
 {
     strarray_t *tzids = strarray_new();
@@ -378,8 +396,8 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
 
     /* using unit vectors */
     uncertainty /= M_EARTH_RADIUS;
-    geo2vec(latitude, longitude, &p);  /* vector for point */
-    geo2vec(-60, longitude, &a);       /* perpendicular vector to Antarctic */
+    geo2vec(latitude, longitude, &p); /* vector for point */
+    geo2vec(-60, longitude, &a);      /* perpendicular vector to Antarctic */
 
     if (tz_aq.valid &&
         /* Check if point is within or near Antarctic region */
@@ -397,7 +415,7 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
             SHPObject *base = SHPReadObject(tz_aq.shp, i);
             struct vector b;
 
-            geo2vec(base->padfY[0], base->padfX[0], &b);  /* vector for base */
+            geo2vec(base->padfY[0], base->padfX[0], &b); /* vector for base */
 
             if (vec_diff(&p, &b) <= dist) {
                 /* Point is near a base, check if it has a known time zone */
@@ -414,10 +432,10 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
     /* Check if point is within or near bounding box of tz_world */
     SHPGetInfo(tz_world.shp, &npoly, NULL, minbound, maxbound);
 
-    double WbbX[5] =
-        { minbound[0], minbound[0], maxbound[0], maxbound[0], minbound[0] };
-    double WbbY[5] =
-        { minbound[1], maxbound[1], maxbound[1], minbound[1], minbound[1] };
+    double WbbX[5] = {
+        minbound[0], minbound[0], maxbound[0], maxbound[0], minbound[0]};
+    double WbbY[5] = {
+        minbound[1], maxbound[1], maxbound[1], minbound[1], minbound[1]};
 
     if (pt_in_poly(5, WbbX, WbbY, longitude, latitude) ||
         (uncertainty && pt_near_poly(5, WbbX, WbbY, &p, uncertainty))) {
@@ -425,32 +443,46 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
 
         for (i = 0; i < npoly; i++) {
             SHPObject *poly = SHPReadObject(tz_world.shp, i);
-            double bbX[5] = { poly->dfXMin, poly->dfXMin,
-                              poly->dfXMax, poly->dfXMax, poly->dfXMin };
-            double bbY[5] = { poly->dfYMin, poly->dfYMax,
-                              poly->dfYMax, poly->dfYMin, poly->dfYMin };
+            double bbX[5] = {poly->dfXMin,
+                             poly->dfXMin,
+                             poly->dfXMax,
+                             poly->dfXMax,
+                             poly->dfXMin};
+            double bbY[5] = {poly->dfYMin,
+                             poly->dfYMax,
+                             poly->dfYMax,
+                             poly->dfYMin,
+                             poly->dfYMin};
 
             /* Check if point is within or near bounding box of boundary */
             int within = pt_in_poly(5, bbX, bbY, longitude, latitude);
-            int near = uncertainty && pt_near_poly(5, bbX, bbY, &p, uncertainty);
+            int near =
+                uncertainty && pt_near_poly(5, bbX, bbY, &p, uncertainty);
             int r = 0;
 
             if (within || near) {
                 if (within) {
                     /* Check if point is within boundary */
-                    r = pt_in_poly(poly->nVertices, poly->padfX, poly->padfY,
-                                   longitude, latitude);
+                    r = pt_in_poly(poly->nVertices,
+                                   poly->padfX,
+                                   poly->padfY,
+                                   longitude,
+                                   latitude);
                 }
 
                 if (!r && uncertainty) {
                     /* Check if point is near boundary */
-                    r = pt_near_poly(poly->nVertices, poly->padfX, poly->padfY,
-                                     &p, uncertainty);
+                    r = pt_near_poly(poly->nVertices,
+                                     poly->padfX,
+                                     poly->padfY,
+                                     &p,
+                                     uncertainty);
                 }
             }
 
             if (r) {
-                tzid = DBFReadStringAttribute(tz_world.dbf, i, 0 /* column 1 */);
+                tzid =
+                    DBFReadStringAttribute(tz_world.dbf, i, 0 /* column 1 */);
                 strarray_append(tzids, tzid);
             }
 
@@ -485,22 +517,23 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
                 /* Uninhabited */
                 tzid = "Etc/GMT";
             }
-            else if (longitude >= 142.033333) {     /* 142° 2' */
+            else if (longitude >= 142.033333) { /* 142° 2' */
                 /* Australian Claim (George V / Oates Lands) */
                 tzid = "Etc/GMT+10";
             }
-            else if (longitude >= 136.183333) {     /* 136° 11' */
+            else if (longitude >= 136.183333) { /* 136° 11' */
                 /* French Claim (Adelie Land) */
                 tzid = "Etc/GMT+10";
             }
-            else if (longitude >= 44.633333) {      /*  44° 38' */
+            else if (longitude >= 44.633333) { /*  44° 38' */
                 /* Australian Claim */
-                if (longitude >= 100.5) {           /* 100° 30' */
+                if (longitude >= 100.5) { /* 100° 30' */
                     /* Wilkes Land */
                     tzid = "Etc/GMT+8";
                 }
-                else if (longitude >= 72.583333) {  /*  72° 35' */
-                    /* Princess Elizabeth / Kaiser Wilhelm II / Queen Mary Lands */
+                else if (longitude >= 72.583333) { /*  72° 35' */
+                    /* Princess Elizabeth / Kaiser Wilhelm II / Queen Mary Lands
+                     */
                     tzid = "Etc/GMT+7";
                 }
                 else {
@@ -537,18 +570,21 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
                     /* Uninhabited */
                     tzid = "Etc/GMT";
                 }
-                else tzid = "Etc/GMT-6";
+                else
+                    tzid = "Etc/GMT-6";
             }
         }
         else {
-            /* Assume international waters - 
+            /* Assume international waters -
                calculate offset from GMT based on longitude
 
                XXX  Which offset does an exact multiple of +/- 7.5
                and +/- 180 degrees belong to?
             */
-            snprintf(tzid_buf, sizeof(tzid_buf), "Etc/GMT%+d",
-                    (short) (longitude + copysign(1.0, longitude) * 7.5) / 15);
+            snprintf(tzid_buf,
+                     sizeof(tzid_buf),
+                     "Etc/GMT%+d",
+                     (short)(longitude + copysign(1.0, longitude) * 7.5) / 15);
             tzid = tzid_buf;
         }
 
@@ -564,12 +600,10 @@ static void open_shape_file(struct buf *serverinfo __attribute__((unused)))
     return;
 }
 
-static void close_shape_file()
-{
-    return;
-}
+static void close_shape_file() { return; }
 
-static strarray_t *tzid_from_geo(struct transaction_t *txn __attribute__((unused)),
+static strarray_t *tzid_from_geo(struct transaction_t *txn
+                                 __attribute__((unused)),
                                  double latitude __attribute__((unused)),
                                  double longitude __attribute__((unused)),
                                  double uncertainty __attribute__((unused)))
@@ -579,10 +613,9 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn __attribute__((unused
 
 #endif /* HAVE_SHAPELIB */
 
-
 struct leapsec {
-    long long int t;      /* transition time */
-    long int sec;         /* leap seconds */
+    long long int t; /* transition time */
+    long int sec;    /* leap seconds */
 };
 
 static void read_leap_seconds()
@@ -609,7 +642,7 @@ static void read_leap_seconds()
             if (buf[1] == '@') {
                 /* expires */
                 leap = ptrarray_nth(leap_seconds, 0);
-                sscanf(buf+2, "\t%lld", &leap->t);
+                sscanf(buf + 2, "\t%lld", &leap->t);
                 leap->t -= NIST_EPOCH_OFFSET;
             }
         }
@@ -623,7 +656,6 @@ static void read_leap_seconds()
     }
     fclose(fp);
 }
-
 
 static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 {
@@ -672,7 +704,6 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
     }
 }
 
-
 static void tzdist_shutdown(void)
 {
     struct leapsec *leap;
@@ -686,7 +717,6 @@ static void tzdist_shutdown(void)
     while ((leap = ptrarray_pop(leap_seconds))) free(leap);
     ptrarray_free(leap_seconds);
 }
-
 
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
@@ -740,7 +770,8 @@ static int meth_get(struct transaction_t *txn,
 
                 /* XXX  Hack - probably need to check for %2F vs '/'
                    Count the number of "levels".  Current tzid have max of 3. */
-                for (p = tgt->resource; p && ++levels; (p = strchr(p+1, '/')));
+                for (p = tgt->resource; p && ++levels;
+                     (p = strchr(p + 1, '/')));
             }
         }
     }
@@ -748,12 +779,11 @@ static int meth_get(struct transaction_t *txn,
     if (!action || levels > 3)
         return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
 
-    if (tgt->resource && strchr(tgt->resource, '.'))  /* paranoia */
+    if (tgt->resource && strchr(tgt->resource, '.')) /* paranoia */
         return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
 
     return action(txn);
 }
-
 
 /* Perform a capabilities action */
 static int action_capa(struct transaction_t *txn)
@@ -784,7 +814,7 @@ static int action_capa(struct transaction_t *txn)
         /* Fill in Etag,  Last-Modified, Expires */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = compile_time;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
@@ -809,67 +839,105 @@ static int action_capa(struct transaction_t *txn)
         buf_printf(&txn->buf, "%s:%s", info.data->s, info.data->next->s);
 
         /* Construct our response */
-        root = json_pack("{ s:i"                        /* version */
-                         "  s:{"                        /* info */
-                         "      s:s"                    /*   primary-source */
-                         "      s:[]"                   /*   formats */
-                         "      s:{s:b s:b}"            /*   truncated */
-//                       "      s:s"                    /*   provider-details */
-//                       "      s:[]"                   /*   contacts */
-                         "    }"
-                         "  s:["                        /* actions */
-                         "    {s:s s:s s:["             /*   capabilities */
-                         "    ]}"
-                         "    {s:s s:s s:["             /*   list */
-                         "      {s:s}"                  /*     changedsince */
-                         "    ]}"
-                         "    {s:s s:s s:["             /*   get */
-                         "      {s:s}"                  /*     start */
-                         "      {s:s}"                  /*     end */
-                         "    ]}"
-                         "    {s:s s:s s:["             /*   expand */
-                         "      {s:s s:b}"              /*     start */
-                         "      {s:s s:b}"              /*     end */
-                         "    ]}"
-                         "    {s:s s:s s:["             /*   find */
-                         "      {s:s s:b}"              /*     pattern */
-                         "    ]}"
-                         "    {s:s s:s s:["             /*   leapseconds */
-                         "    ]}"
-                         "  ]}",
+        root = json_pack(
+            "{ s:i"             /* version */
+            "  s:{"             /* info */
+            "      s:s"         /*   primary-source */
+            "      s:[]"        /*   formats */
+            "      s:{s:b s:b}" /*   truncated */
+            //                       "      s:s"                    /*
+            //                       provider-details */ "      s:[]" /*
+            //                       contacts */
+            "    }"
+            "  s:["            /* actions */
+            "    {s:s s:s s:[" /*   capabilities */
+            "    ]}"
+            "    {s:s s:s s:[" /*   list */
+            "      {s:s}"      /*     changedsince */
+            "    ]}"
+            "    {s:s s:s s:[" /*   get */
+            "      {s:s}"      /*     start */
+            "      {s:s}"      /*     end */
+            "    ]}"
+            "    {s:s s:s s:[" /*   expand */
+            "      {s:s s:b}"  /*     start */
+            "      {s:s s:b}"  /*     end */
+            "    ]}"
+            "    {s:s s:s s:[" /*   find */
+            "      {s:s s:b}"  /*     pattern */
+            "    ]}"
+            "    {s:s s:s s:[" /*   leapseconds */
+            "    ]}"
+            "  ]}",
 
-                         "version", 1,
+            "version",
+            1,
 
-                         "info",
-                         "primary-source", buf_cstring(&txn->buf), "formats",
-                         "truncated", "any", 1, "untruncated", 1,
-//                       "provider-details", "", "contacts",
+            "info",
+            "primary-source",
+            buf_cstring(&txn->buf),
+            "formats",
+            "truncated",
+            "any",
+            1,
+            "untruncated",
+            1,
+            //                       "provider-details", "", "contacts",
 
-                         "actions",
-                         "name", "capabilities",
-                         "uri-template", "/capabilities", "parameters",
+            "actions",
+            "name",
+            "capabilities",
+            "uri-template",
+            "/capabilities",
+            "parameters",
 
-                         "name", "list",
-                         "uri-template", "/zones{?changedsince}", "parameters",
-                         "name", "changedsince",
+            "name",
+            "list",
+            "uri-template",
+            "/zones{?changedsince}",
+            "parameters",
+            "name",
+            "changedsince",
 
-                         "name", "get", "uri-template",
-                         "/zones{/tzid}{?start,end}", "parameters",
-                         "name", "start",
-                         "name", "end",
+            "name",
+            "get",
+            "uri-template",
+            "/zones{/tzid}{?start,end}",
+            "parameters",
+            "name",
+            "start",
+            "name",
+            "end",
 
-                         "name", "expand", "uri-template",
-                         "/zones{/tzid}/observances{?start,end}",
-                         "parameters",
-                         "name", "start", "required", 1,
-                         "name", "end", "required", 1,
+            "name",
+            "expand",
+            "uri-template",
+            "/zones{/tzid}/observances{?start,end}",
+            "parameters",
+            "name",
+            "start",
+            "required",
+            1,
+            "name",
+            "end",
+            "required",
+            1,
 
-                         "name", "find",
-                         "uri-template", "/zones{?pattern}", "parameters",
-                         "name", "pattern", "required", 1,
+            "name",
+            "find",
+            "uri-template",
+            "/zones{?pattern}",
+            "parameters",
+            "name",
+            "pattern",
+            "required",
+            1,
 
-                         "name", "leapseconds",
-                         "uri-template", "/leapseconds", "parameters");
+            "name",
+            "leapseconds",
+            "uri-template",
+            "/leapseconds",
+            "parameters");
 
         freestrlist(info.data);
 
@@ -886,10 +954,15 @@ static int action_capa(struct transaction_t *txn)
                                   json_pack("{s:s s:s s:["
                                             "  {s:s s:b}"
                                             "]}",
-                                            "name", "geolocate", "uri-template",
+                                            "name",
+                                            "geolocate",
+                                            "uri-template",
                                             "/zones{?location}",
                                             "parameters",
-                                            "name", "location", "required", 1));
+                                            "name",
+                                            "location",
+                                            "required",
+                                            1));
         }
 
         /* Add supported formats */
@@ -936,7 +1009,7 @@ static int action_leap(struct transaction_t *txn)
         /* Fill in ETag, Last-Modified, and Expires */
         resp_body->etag = leap.data->s;
         resp_body->lastmod = leap.dtstamp;
-        resp_body->maxage = 86400;  /* 24 hrs */
+        resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
@@ -951,7 +1024,6 @@ static int action_leap(struct transaction_t *txn)
         goto done;
     }
 
-
     if (txn->meth != METH_HEAD) {
         json_t *root, *expires, *leapseconds;
         struct leapsec *leapsec;
@@ -965,8 +1037,13 @@ static int action_leap(struct transaction_t *txn)
 
         /* Construct our response */
         root = json_pack("{s:s s:s s:s s:[]}",
-                         "expires", "", "publisher", info.data->s,
-                         "version", info.data->next->s, "leapseconds");
+                         "expires",
+                         "",
+                         "publisher",
+                         info.data->s,
+                         "version",
+                         info.data->next->s,
+                         "leapseconds");
         if (!root) {
             txn->error.desc = "Unable to create JSON response";
             ret = HTTP_SERVER_ERROR;
@@ -987,8 +1064,8 @@ static int action_leap(struct transaction_t *txn)
 
             leapsec = ptrarray_nth(leap_seconds, n);
             time_to_rfc3339(leapsec->t, buf, 11 /* clip time */);
-            leap = json_pack("{s:i s:s}",
-                             "utc-offset", leapsec->sec, "onset", buf);
+            leap = json_pack(
+                "{s:i s:s}", "utc-offset", leapsec->sec, "onset", buf);
             json_array_append_new(leapseconds, leap);
         }
 
@@ -996,12 +1073,11 @@ static int action_leap(struct transaction_t *txn)
         ret = json_response(precond, txn, root, NULL);
     }
 
-  done:
+done:
     freestrlist(leap.data);
     freestrlist(info.data);
     return ret;
 }
-
 
 struct list_rock {
     struct strlist *meta;
@@ -1009,10 +1085,10 @@ struct list_rock {
     struct hash_table *tztable;
 };
 
-static int list_cb(const char *tzid, int tzidlen,
-                   struct zoneinfo *zi, void *rock)
+static int
+list_cb(const char *tzid, int tzidlen, struct zoneinfo *zi, void *rock)
 {
-    struct list_rock *lrock = (struct list_rock *) rock;
+    struct list_rock *lrock = (struct list_rock *)rock;
     char tzidbuf[200], etag[32], lastmod[RFC3339_DATETIME_MAX];
     json_t *tz;
 
@@ -1020,15 +1096,23 @@ static int list_cb(const char *tzid, int tzidlen,
 
     if (lrock->tztable) {
         if (hash_lookup(tzidbuf, lrock->tztable)) return 0;
-        hash_insert(tzidbuf, (void *) 0xDEADBEEF, lrock->tztable);
+        hash_insert(tzidbuf, (void *)0xDEADBEEF, lrock->tztable);
     }
 
     sprintf(etag, "%u-" TIME_T_FMT, strhash(tzidbuf), zi->dtstamp);
     time_to_rfc3339(zi->dtstamp, lastmod, RFC3339_DATETIME_MAX);
 
     tz = json_pack("{s:s s:s s:s s:s s:s}",
-                   "tzid", tzidbuf, "etag", etag, "last-modified", lastmod,
-                   "publisher", lrock->meta->s, "version", lrock->meta->next->s);
+                   "tzid",
+                   tzidbuf,
+                   "etag",
+                   etag,
+                   "last-modified",
+                   lastmod,
+                   "publisher",
+                   lrock->meta->s,
+                   "version",
+                   lrock->meta->next->s);
     json_array_append_new(lrock->tzarray, tz);
 
     if (zi->data) {
@@ -1063,9 +1147,9 @@ static int action_list(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("pattern", &txn->req_qparams))) {
-        if (param->next                   /* once only */
-            || !param->s || !*param->s    /* not empty */
-            || strspn(param->s, "*") == strlen(param->s)) {  /* not (*)+ */
+        if (param->next                                     /* once only */
+            || !param->s || !*param->s                      /* not empty */
+            || strspn(param->s, "*") == strlen(param->s)) { /* not (*)+ */
             return json_error_response(txn, TZ_INVALID_PATTERN, param, NULL);
         }
         pattern = param->s;
@@ -1075,58 +1159,61 @@ static int action_list(struct transaction_t *txn)
         /* Parse 'geo' URI */
         char *endptr;
 
-        if (param->next                         /* once only */
-            || strncmp(param->s, "geo:", 4)) {  /* value value */
+        if (param->next                        /* once only */
+            || strncmp(param->s, "geo:", 4)) { /* value value */
             return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
 
         latitude = strtod(param->s + 4, &endptr);
-        if (errno || *endptr != ','
-            || latitude < -90.0 || latitude > 90.0) {  /* valid value */ 
+        if (errno || *endptr != ',' || latitude < -90.0 ||
+            latitude > 90.0) { /* valid value */
             return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
 
         longitude = strtod(++endptr, &endptr);
-        if (errno || (*endptr && !strchr(",;", *endptr))
-            || longitude < -180.0 || longitude > 180.0) {  /* valid value */ 
+        if (errno || (*endptr && !strchr(",;", *endptr)) ||
+            longitude < -180.0 || longitude > 180.0) { /* valid value */
             return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
 
         if (*endptr == ',') {
             altitude = strtod(++endptr, &endptr);
-            if (*endptr && *endptr != ';') {  /* valid value */
-                return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+            if (*endptr && *endptr != ';') { /* valid value */
+                return json_error_response(
+                    txn, TZ_INVALID_LOCATION, param, NULL);
             }
-            (void) altitude;
+            (void)altitude;
         }
 
         if (!strncmp(endptr, ";crs=", 5)) {
             char *crs = endptr + 5;
             size_t len = strcspn(crs, ";");
 
-            if (len != 5 || strncmp(crs, "wgs84", 5)) {  /* unsupported value */
-                return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+            if (len != 5 || strncmp(crs, "wgs84", 5)) { /* unsupported value */
+                return json_error_response(
+                    txn, TZ_INVALID_LOCATION, param, NULL);
             }
             endptr = crs + len;
         }
 
         if (!strncmp(endptr, ";u=", 3)) {
             uncertainty = strtod(endptr + 3, &endptr);
-            if (errno || uncertainty < 0) {  /* valid value */ 
-                return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
+            if (errno || uncertainty < 0) { /* valid value */
+                return json_error_response(
+                    txn, TZ_INVALID_LOCATION, param, NULL);
             }
         }
 
-        if (*endptr && *endptr != ';') {  /* valid value */
+        if (*endptr && *endptr != ';') { /* valid value */
             return json_error_response(txn, TZ_INVALID_LOCATION, param, NULL);
         }
     }
     else if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
         unsigned prefix = 0;
 
-        if (param->next) {  /* once only */
-            return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
-                                       param, NULL);
+        if (param->next) { /* once only */
+            return json_error_response(
+                txn, TZ_INVALID_CHANGEDSINCE, param, NULL);
         }
 
         /* Parse and sanity check the changedsince token */
@@ -1155,7 +1242,7 @@ static int action_list(struct transaction_t *txn)
         /* Fill in ETag, Last-Modified, and Expires */
         resp_body->etag = buf_cstring(&txn->buf);
         resp_body->lastmod = lastmod;
-        resp_body->maxage = 86400;  /* 24 hrs */
+        resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
@@ -1170,15 +1257,14 @@ static int action_list(struct transaction_t *txn)
         goto done;
     }
 
-
     if (txn->meth != METH_HEAD) {
-        struct list_rock lrock = { NULL, NULL, NULL };
+        struct list_rock lrock = {NULL, NULL, NULL};
         struct hash_table tzids = HASH_TABLE_INITIALIZER;
         int i = 0;
 
         /* Start constructing our response */
-        root = json_pack("{s:s s:[]}",
-                         "synctoken", resp_body->etag, "timezones");
+        root =
+            json_pack("{s:s s:[]}", "synctoken", resp_body->etag, "timezones");
         if (!root) {
             txn->error.desc = "Unable to create JSON response";
             ret = HTTP_SERVER_ERROR;
@@ -1191,7 +1277,7 @@ static int action_list(struct transaction_t *txn)
         if (latitude <= 90) {
             geo_tzids = tzid_from_geo(txn, latitude, longitude, uncertainty);
             pattern = strarray_nth(geo_tzids, 0);
-            if (!pattern) pattern = "/";  /* force lookup failure */
+            if (!pattern) pattern = "/"; /* force lookup failure */
         }
 
         if (pattern) {
@@ -1211,12 +1297,11 @@ static int action_list(struct transaction_t *txn)
     /* Output the JSON object */
     ret = json_response(precond, txn, root, NULL);
 
-  done:
+done:
     strarray_free(geo_tzids);
     freestrlist(info.data);
     return ret;
 }
-
 
 /* Perform a get action */
 static int action_get(struct transaction_t *txn)
@@ -1242,7 +1327,8 @@ static int action_get(struct transaction_t *txn)
     }
     else if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
         mime = get_accept_type(hdr, tz_mime_types);
-    else mime = tz_mime_types;
+    else
+        mime = tz_mime_types;
 
     if (!mime || !mime->content_type)
         return json_error_response(txn, TZ_INVALID_FORMAT, NULL, NULL);
@@ -1250,24 +1336,24 @@ static int action_get(struct transaction_t *txn)
     /* Sanity check the parameters */
     if ((param = hash_lookup("start", &txn->req_qparams))) {
         start = icaltime_from_string(param->s);
-        if (param->next || !icaltime_is_utc(start)) {  /* once only, UTC */
+        if (param->next || !icaltime_is_utc(start)) { /* once only, UTC */
             return json_error_response(txn, TZ_INVALID_START, param, &start);
         }
     }
 
     if ((param = hash_lookup("end", &txn->req_qparams))) {
         end = icaltime_from_string(param->s);
-        if (param->next || !icaltime_is_utc(end)  /* once only, UTC */
-            || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
+        if (param->next || !icaltime_is_utc(end)    /* once only, UTC */
+            || icaltime_compare(end, start) <= 0) { /* end MUST be > start */
             return json_error_response(txn, TZ_INVALID_END, param, &end);
         }
     }
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi))) {
-        return (r == CYRUSDB_NOTFOUND ?
-                json_error_response(txn, TZ_NOT_FOUND, NULL, NULL)
-                : HTTP_SERVER_ERROR);
+        return (r == CYRUSDB_NOTFOUND
+                    ? json_error_response(txn, TZ_NOT_FOUND, NULL, NULL)
+                    : HTTP_SERVER_ERROR);
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -1288,7 +1374,7 @@ static int action_get(struct transaction_t *txn)
         resp_body->type = mime->content_type;
         resp_body->etag = buf_cstring(&txn->buf);
         resp_body->lastmod = lastmod;
-        resp_body->maxage = 86400;  /* 24 hrs */
+        resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
@@ -1301,7 +1387,6 @@ static int action_get(struct transaction_t *txn)
         resp_body->type = NULL;
         return precond;
     }
-
 
     if (txn->meth != METH_HEAD) {
         static struct buf pathbuf = BUF_INITIALIZER;
@@ -1343,8 +1428,8 @@ static int action_get(struct transaction_t *txn)
         /* Start constructing TZURL */
         buf_reset(&pathbuf);
         http_proto_host(txn->req_hdrs, &proto, &host);
-        buf_printf(&pathbuf, "%s://%s%s/zones/",
-                   proto, host, namespace_tzdist.prefix);
+        buf_printf(
+            &pathbuf, "%s://%s%s/zones/", proto, host, namespace_tzdist.prefix);
 
         /* Escape '/' and ' ' in tzid */
         for (p = tzid; *p; p++) {
@@ -1378,12 +1463,12 @@ static int action_get(struct transaction_t *txn)
                 if (!strcmp(mime->content_type + 16, "-leap"))
                     leapcnt = leap_seconds->count - 2;
 
-                buf =_icaltimezone_as_tzif(ical, leapcnt, &start, &end);
+                buf = _icaltimezone_as_tzif(ical, leapcnt, &start, &end);
             }
             else {
                 /* Truncate the VTIMEZONE */
-                icaltimezone_truncate_vtimezone_advanced(vtz, &start, &end,
-                        NULL, NULL, NULL, NULL, NULL, 0);
+                icaltimezone_truncate_vtimezone_advanced(
+                    vtz, &start, &end, NULL, NULL, NULL, NULL, NULL, 0);
             }
         }
 
@@ -1414,12 +1499,10 @@ static int action_get(struct transaction_t *txn)
     return 0;
 }
 
-
 #define CTIME_FMT "%s %s %2d %02d:%02d:%02d %4d"
-#define CTIME_ARGS(tt) \
-    wday[icaltime_day_of_week(tt)-1], monthname[tt.month-1], \
-    tt.day, tt.hour, tt.minute, tt.second, tt.year
-
+#define CTIME_ARGS(tt)                                                         \
+    wday[icaltime_day_of_week(tt) - 1], monthname[tt.month - 1], tt.day,       \
+        tt.hour, tt.minute, tt.second, tt.year
 
 /* Perform an expand action */
 static int action_expand(struct transaction_t *txn)
@@ -1435,20 +1518,20 @@ static int action_expand(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     param = hash_lookup("start", &txn->req_qparams);
-    if (!param || param->next)  /* mandatory, once only */
+    if (!param || param->next) /* mandatory, once only */
         return json_error_response(txn, TZ_INVALID_START, param, NULL);
 
     start = icaltime_from_string(param->s);
-    if (!icaltime_is_utc(start))  /* MUST be UTC */
+    if (!icaltime_is_utc(start)) /* MUST be UTC */
         return json_error_response(txn, TZ_INVALID_START, param, &start);
 
     param = hash_lookup("end", &txn->req_qparams);
-    if (!param || param->next)  /* mandatory, once only */
+    if (!param || param->next) /* mandatory, once only */
         return json_error_response(txn, TZ_INVALID_END, param, NULL);
 
     end = icaltime_from_string(param->s);
-    if (!icaltime_is_utc(end)  /* MUST be UTC */
-        || icaltime_compare(end, start) <= 0) {  /* end MUST be > start */
+    if (!icaltime_is_utc(end)                   /* MUST be UTC */
+        || icaltime_compare(end, start) <= 0) { /* end MUST be > start */
         return json_error_response(txn, TZ_INVALID_END, param, &end);
     }
 
@@ -1472,9 +1555,9 @@ static int action_expand(struct transaction_t *txn)
 
     /* Get info record from the database */
     if ((r = zoneinfo_lookup(tzid, &zi))) {
-        return (r == CYRUSDB_NOTFOUND ?
-                json_error_response(txn, TZ_NOT_FOUND, NULL, NULL)
-                : HTTP_SERVER_ERROR);
+        return (r == CYRUSDB_NOTFOUND
+                    ? json_error_response(txn, TZ_NOT_FOUND, NULL, NULL)
+                    : HTTP_SERVER_ERROR);
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -1494,7 +1577,7 @@ static int action_expand(struct transaction_t *txn)
         /* Fill in ETag, Last-Modified, and Expires */
         resp_body->etag = buf_cstring(&txn->buf);
         resp_body->lastmod = lastmod;
-        resp_body->maxage = 86400;  /* 24 hrs */
+        resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
         if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
 
@@ -1507,7 +1590,6 @@ static int action_expand(struct transaction_t *txn)
         resp_body->type = NULL;
         return precond;
     }
-
 
     if (txn->meth != METH_HEAD) {
         static struct buf pathbuf = BUF_INITIALIZER;
@@ -1533,13 +1615,11 @@ static int action_expand(struct transaction_t *txn)
         map_free(&msg_base, &msg_size);
         close(fd);
 
-
         /* Create an array of observances */
         obsarray = icalarray_new(sizeof(struct observance), 20);
         vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-        icaltimezone_truncate_vtimezone_advanced(vtz, &start, &end, obsarray,
-                &proleptic, NULL, NULL, NULL, 0);
-
+        icaltimezone_truncate_vtimezone_advanced(
+            vtz, &start, &end, obsarray, &proleptic, NULL, NULL, NULL, 0);
 
         if (zdump) {
             struct buf *body = &txn->resp_body.payload;
@@ -1552,9 +1632,10 @@ static int action_expand(struct transaction_t *txn)
                 struct icaltimetype local, ut;
 
                 /* Skip any no-ops as zdump doesn't output them */
-                if (obs->offset_from == obs->offset_to
-                    && prev_isdst == obs->is_daylight
-                    && !strcmp(prev_name, obs->name)) continue;
+                if (obs->offset_from == obs->offset_to &&
+                    prev_isdst == obs->is_daylight &&
+                    !strcmp(prev_name, obs->name))
+                    continue;
 
                 /* UT and local time 1 second before onset */
                 off.seconds = -1;
@@ -1566,8 +1647,12 @@ static int action_expand(struct transaction_t *txn)
                 buf_printf(body,
                            "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
                            " isdst=%d gmtoff=%d\n",
-                           tzid, CTIME_ARGS(ut), CTIME_ARGS(local),
-                           prev_name, prev_isdst, obs->offset_from);
+                           tzid,
+                           CTIME_ARGS(ut),
+                           CTIME_ARGS(local),
+                           prev_name,
+                           prev_isdst,
+                           obs->offset_from);
 
                 /* UT and local time at onset */
                 icaltime_adjust(&ut, 0, 0, 0, 1);
@@ -1578,8 +1663,12 @@ static int action_expand(struct transaction_t *txn)
                 buf_printf(body,
                            "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
                            " isdst=%d gmtoff=%d\n",
-                           tzid, CTIME_ARGS(ut), CTIME_ARGS(local),
-                           obs->name, obs->is_daylight, obs->offset_to);
+                           tzid,
+                           CTIME_ARGS(ut),
+                           CTIME_ARGS(local),
+                           obs->name,
+                           obs->is_daylight,
+                           obs->offset_to);
 
                 prev_name = obs->name;
                 prev_isdst = obs->is_daylight;
@@ -1593,24 +1682,27 @@ static int action_expand(struct transaction_t *txn)
                 return HTTP_SERVER_ERROR;
             }
 
-            json_object_set_new(root, "start",
-                                json_string(icaltime_as_iso_string(start)));
-            json_object_set_new(root, "end",
-                                json_string(icaltime_as_iso_string(end)));
+            json_object_set_new(
+                root, "start", json_string(icaltime_as_iso_string(start)));
+            json_object_set_new(
+                root, "end", json_string(icaltime_as_iso_string(end)));
 
             /* Add observances to JSON array */
             jobsarray = json_array();
             for (n = 0; n < obsarray->num_elements; n++) {
                 struct observance *obs = icalarray_element_at(obsarray, n);
 
-                json_array_append_new(jobsarray,
-                                      json_pack(
-                                          "{s:s s:s s:i s:i}",
-                                          "name", obs->name,
-                                          "onset",
-                                          icaltime_as_iso_string(obs->onset),
-                                          "utc-offset-from", obs->offset_from,
-                                          "utc-offset-to", obs->offset_to));
+                json_array_append_new(
+                    jobsarray,
+                    json_pack("{s:s s:s s:i s:i}",
+                              "name",
+                              obs->name,
+                              "onset",
+                              icaltime_as_iso_string(obs->onset),
+                              "utc-offset-from",
+                              obs->offset_from,
+                              "utc-offset-to",
+                              obs->offset_to));
             }
             json_object_set_new(root, "observances", jobsarray);
         }
@@ -1624,8 +1716,8 @@ static int action_expand(struct transaction_t *txn)
 
         body->type = "text/plain; charset=us-ascii";
 
-        write_body(precond, txn,
-                   buf_cstring(&body->payload), buf_len(&body->payload));
+        write_body(
+            precond, txn, buf_cstring(&body->payload), buf_len(&body->payload));
 
         return 0;
     }
@@ -1635,12 +1727,11 @@ static int action_expand(struct transaction_t *txn)
     }
 }
 
-
-static int json_response(int code, struct transaction_t *txn, json_t *root,
-                         char **resp)
+static int
+json_response(int code, struct transaction_t *txn, json_t *root, char **resp)
 {
     size_t flags = JSON_PRESERVE_ORDER;
-    static char *buf = NULL;  /* keep generated data until next call */
+    static char *buf = NULL; /* keep generated data until next call */
     char *json = NULL;
 
     free(buf);
@@ -1661,7 +1752,8 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
             buf = NULL;
         }
     }
-    else if (resp) json = *resp;
+    else if (resp)
+        json = *resp;
 
     /* Output the JSON object */
     if (code == HTTP_OK)
@@ -1673,22 +1765,21 @@ static int json_response(int code, struct transaction_t *txn, json_t *root,
     return 0;
 }
 
-
 /* Array of parameter names - MUST be kept in sync with tz_err.et */
-static const char *param_names[] = {
-    "action",
-    "pattern",
-    "format",
-    "start",
-    "end",
-    "changedsince",
-    "latitude",
-    "longitude",
-    "tzid"
-};
+static const char *param_names[] = {"action",
+                                    "pattern",
+                                    "format",
+                                    "start",
+                                    "end",
+                                    "changedsince",
+                                    "latitude",
+                                    "longitude",
+                                    "tzid"};
 
-static int json_error_response(struct transaction_t *txn, long tz_code,
-                               struct strlist *param, icaltimetype *time)
+static int json_error_response(struct transaction_t *txn,
+                               long tz_code,
+                               struct strlist *param,
+                               icaltimetype *time)
 {
     long http_code = HTTP_BAD_REQUEST;
     const char *param_name, *fmt = NULL;
@@ -1717,18 +1808,27 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
             break;
         }
     }
-    else if (param->next) fmt = "Multiple %s parameters";
-    else if (!param->s || !param->s[0]) fmt = "Missing %s value";
-    else if (!time) fmt = "Invalid %s value";
-    else if (!icaltime_is_utc(*time)) fmt = "Invalid %s UTC value";
-    else fmt = "End date-time <= start date-time";
+    else if (param->next)
+        fmt = "Multiple %s parameters";
+    else if (!param->s || !param->s[0])
+        fmt = "Missing %s value";
+    else if (!time)
+        fmt = "Invalid %s value";
+    else if (!icaltime_is_utc(*time))
+        fmt = "Invalid %s UTC value";
+    else
+        fmt = "End date-time <= start date-time";
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, fmt, param_name);
 
-    root = json_pack("{s:s s:s s:i}", "title", buf_cstring(&txn->buf),
-                     "type", error_message(tz_code),
-                     "status", atoi(error_message(http_code)));
+    root = json_pack("{s:s s:s s:i}",
+                     "title",
+                     buf_cstring(&txn->buf),
+                     "type",
+                     error_message(tz_code),
+                     "status",
+                     atoi(error_message(http_code)));
     if (!root) {
         txn->error.desc = "Unable to create JSON response";
         return HTTP_SERVER_ERROR;
@@ -1737,9 +1837,8 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
     return json_response(http_code, txn, root, NULL);
 }
 
-
 #ifndef BIG_BANG
-#define BIG_BANG (- (1LL << 59))  /* from zic.c */
+#define BIG_BANG (-(1LL << 59)) /* from zic.c */
 #endif
 
 #ifndef INT32_MAX
@@ -1749,14 +1848,14 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
 #define INT32_MIN (-INT32_MAX - 1)
 #endif
 
-#define NUM_LEAP_DAYS(y) ((y-1) / 4 - (y-1) / 100 + (y-1) / 400)
+#define NUM_LEAP_DAYS(y) ((y - 1) / 4 - (y - 1) / 100 + (y - 1) / 400)
 #define NUM_YEAR_DAYS(y) (365 * y + NUM_LEAP_DAYS(y))
 
 /* Day of year offsets for each month.  Second array is for leap years. */
 static const int month_doy_offsets[2][12] = {
     /* jan  feb  mar  apr  may  jun  jul  aug  sep  oct  nov  dec */
-    {    0,  31,  59,  90, 120, 151, 181, 212, 243, 273, 304, 334 },
-    {    0,  31,  60,  91, 121, 152, 182, 213, 244, 274, 305, 335 }
+    {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},
+    {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}
 };
 
 /* Convert icaltimetype to 64-bit time_t.  0 = Jan 1 00:00:00 1970 UTC */
@@ -1772,15 +1871,16 @@ static long long int icaltime_to_gmtime64(const struct icaltimetype tt)
 }
 
 struct ttinfo {
-    long int offset;      /* offset from GMT */
-    unsigned char isdst;  /* transition time is for DST */
-    unsigned char idx;    /* index into 'abbrev' buffer */
-    unsigned char isstd;  /* transition time is in standard time */
-    unsigned char isgmt;  /* transition time is in GMT */
+    long int offset;     /* offset from GMT */
+    unsigned char isdst; /* transition time is for DST */
+    unsigned char idx;   /* index into 'abbrev' buffer */
+    unsigned char isstd; /* transition time is in standard time */
+    unsigned char isgmt; /* transition time is in GMT */
 };
 
 static void set_ttinfo(struct ttinfo *ttinfo,
-                       const struct observance *obs, unsigned char idx)
+                       const struct observance *obs,
+                       unsigned char idx)
 {
     ttinfo->offset = obs->offset_to;
     ttinfo->isdst = obs->is_daylight;
@@ -1793,7 +1893,7 @@ static void buf_append_utcoffset_as_iso_string(struct buf *buf, int off)
 {
     int h, m, s;
 
-    h = -off/3600;
+    h = -off / 3600;
     m = (abs(off) % 3600) / 60;
     s = abs(off) % 60;
     buf_printf(buf, "%d", h);
@@ -1864,7 +1964,8 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
         else {
             /* BYMONTH */
             short *by_month = icalrecur_byrule_data(rrule, ICAL_BY_MONTH);
-            short *by_month_day = icalrecur_byrule_data(rrule, ICAL_BY_MONTH_DAY);
+            short *by_month_day =
+                icalrecur_byrule_data(rrule, ICAL_BY_MONTH_DAY);
             int mday = by_month_day[0];
 
             month = by_month[0];
@@ -1894,9 +1995,11 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
         }
 
         /* date - month, week, wday */
-        buf_printf(buf, ",M%u.%u.%u", month,
-                   (week + 6) % 6,   /* normalize; POSIX uses 5 for last (-1) */
-                   (wday + 6) % 7);  /* normalize; POSIX is 0-based */
+        buf_printf(buf,
+                   ",M%u.%u.%u",
+                   month,
+                   (week + 6) % 6,  /* normalize; POSIX uses 5 for last (-1) */
+                   (wday + 6) % 7); /* normalize; POSIX is 0-based */
     }
 
     /* time - default is 02:00:00 */
@@ -1912,8 +2015,10 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 }
 
 /* Convert VTIMEZONE into tzif format (RFC 9636) */
-static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
-                                         icaltimetype *startp, icaltimetype *endp)
+static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
+                                         bit32 leapcnt,
+                                         icaltimetype *startp,
+                                         icaltimetype *endp)
 {
     icalcomponent *vtz, *eternal_std = NULL, *eternal_dst = NULL;
     icalarray *obsarray;
@@ -1921,16 +2026,16 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
     icaltimetype start = icaltime_null_time();
     icaltimetype end = icaltime_from_day_of_year(1, 2100);
     icaltimetype last_dtstart = icaltime_null_time();
-    char header[] =  {
-        'T', 'Z', 'i', 'f',   /* magic */
-        '2',                  /* version */
-        0, 0, 0, 0, 0,        /* reserved */
-        0, 0, 0, 0, 0,        /* reserved */
-        0, 0, 0, 0, 0         /* reserved */
+    char header[] = {
+        'T', 'Z', 'i', 'f',    /* magic */
+        '2',                   /* version */
+        0,   0,   0,   0,   0, /* reserved */
+        0,   0,   0,   0,   0, /* reserved */
+        0,   0,   0,   0,   0  /* reserved */
     };
     struct transition {
-        long long int t;      /* transition time */
-        unsigned char idx;    /* index into 'types' array */
+        long long int t;   /* transition time */
+        unsigned char idx; /* index into 'types' array */
     } *times = NULL;
     struct ttinfo types[256]; /* only indexed by unsigned char */
     struct buf *tzif, posix = BUF_INITIALIZER, abbrev = BUF_INITIALIZER;
@@ -1954,11 +2059,18 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
 
     /* Create an array of observances */
     obsarray = icalarray_new(sizeof(struct observance), 100);
-    icaltimezone_truncate_vtimezone_advanced(vtz, startp, endp, obsarray,
-            &proleptic, &eternal_std, &eternal_dst, &last_dtstart, 0);
+    icaltimezone_truncate_vtimezone_advanced(vtz,
+                                             startp,
+                                             endp,
+                                             obsarray,
+                                             &proleptic,
+                                             &eternal_std,
+                                             &eternal_dst,
+                                             &last_dtstart,
+                                             0);
 
     /* Create an array of transitions */
-    times = xmalloc((obsarray->num_elements+1) * sizeof(struct transition));
+    times = xmalloc((obsarray->num_elements + 1) * sizeof(struct transition));
 
     /* Try to create POSIX tz rule */
     if (eternal_dst) {
@@ -2009,7 +2121,7 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                     /* Insert a tombstone prior to first real transition */
                     t = epoch;
                     obs = prev_obs;
-                    
+
                     /* Need to reprocess current observance */
                     n--;
                 }
@@ -2023,11 +2135,11 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                 /* Skip vzic tombstone for YEAR_MINIMUM */
                 continue;
             }
-            else if (obs->offset_from == obs->offset_to
-                && prev_obs->is_daylight == obs->is_daylight
-                && prev_obs->is_std == obs->is_std
-                && prev_obs->is_gmt == obs->is_gmt
-                && !strcmp(prev_obs->name, obs->name)) {
+            else if (obs->offset_from == obs->offset_to &&
+                     prev_obs->is_daylight == obs->is_daylight &&
+                     prev_obs->is_std == obs->is_std &&
+                     prev_obs->is_gmt == obs->is_gmt &&
+                     !strcmp(prev_obs->name, obs->name)) {
                 /* Skip any no-ops */
                 continue;
             }
@@ -2039,7 +2151,8 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                     (obs->is_daylight == types[typeidx].isdst) &&
                     (obs->is_std == types[typeidx].isstd) &&
                     (obs->is_gmt == types[typeidx].isgmt) &&
-                    !strcmp(obs->name, buf_cstring(&abbrev) + types[typeidx].idx))
+                    !strcmp(obs->name,
+                            buf_cstring(&abbrev) + types[typeidx].idx))
                     break;
             }
 
@@ -2082,22 +2195,23 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
             timecnt++;
         }
 
-
         /* Output dataset */
 
         /* Header */
         buf_appendmap(tzif, header, sizeof(header));
-        buf_appendbit32(tzif, typecnt);           /* isgmtcnt */
-        buf_appendbit32(tzif, typecnt);           /* isstdcnt */
-        buf_appendbit32(tzif, leapcnt);           /* leapcnt */
-        buf_appendbit32(tzif, timecnt);           /* timecnt */
-        buf_appendbit32(tzif, typecnt);           /* typecnt */
-        buf_appendbit32(tzif, buf_len(&abbrev));  /* charcnt */
+        buf_appendbit32(tzif, typecnt);          /* isgmtcnt */
+        buf_appendbit32(tzif, typecnt);          /* isstdcnt */
+        buf_appendbit32(tzif, leapcnt);          /* leapcnt */
+        buf_appendbit32(tzif, timecnt);          /* timecnt */
+        buf_appendbit32(tzif, typecnt);          /* typecnt */
+        buf_appendbit32(tzif, buf_len(&abbrev)); /* charcnt */
 
         /* Transition times */
         for (n = 0; n < timecnt; n++) {
-            if (do_bit64) buf_appendbit64(tzif, times[n].t);
-            else buf_appendbit32(tzif, times[n].t);
+            if (do_bit64)
+                buf_appendbit64(tzif, times[n].t);
+            else
+                buf_appendbit32(tzif, times[n].t);
         }
 
         /* Transition time indices */
@@ -2122,8 +2236,10 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
 
                 leap = ptrarray_nth(leap_seconds, leapidx);
                 t = leap->t + leap_sec;
-                if (do_bit64) buf_appendbit64(tzif, t);
-                else buf_appendbit32(tzif, t);
+                if (do_bit64)
+                    buf_appendbit64(tzif, t);
+                else
+                    buf_appendbit32(tzif, t);
 
                 leap_sec = leap->sec - leap_init;
                 buf_appendbit32(tzif, leap_sec);
@@ -2140,7 +2256,6 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
     free(times);
     buf_free(&abbrev);
 
-
     /* POSIX timezone string */
     buf_putc(tzif, '\n');
 
@@ -2151,8 +2266,8 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
         int stdoff, dstoff;
 
         /* std name */
-        prop = icalcomponent_get_first_property(eternal_std,
-                                                ICAL_TZNAME_PROPERTY);
+        prop =
+            icalcomponent_get_first_property(eternal_std, ICAL_TZNAME_PROPERTY);
         buf_appendcstr(tzif, icalproperty_get_tzname(prop));
 
         /* std offset */
@@ -2162,23 +2277,22 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
         buf_append_utcoffset_as_iso_string(tzif, stdoff);
 
         /* dst name */
-        prop = icalcomponent_get_first_property(eternal_dst,
-                                                ICAL_TZNAME_PROPERTY);
+        prop =
+            icalcomponent_get_first_property(eternal_dst, ICAL_TZNAME_PROPERTY);
         buf_appendcstr(tzif, icalproperty_get_tzname(prop));
 
         /* dst offset */
         prop = icalcomponent_get_first_property(eternal_dst,
                                                 ICAL_TZOFFSETTO_PROPERTY);
         dstoff = icalproperty_get_tzoffsetto(prop);
-        if (dstoff - stdoff != 3600) {  /* default is 1hr from std */
+        if (dstoff - stdoff != 3600) { /* default is 1hr from std */
             buf_append_utcoffset_as_iso_string(tzif, dstoff);
         }
 
         /* rule */
         buf_append(tzif, &posix);
     }
-    else if (!eternal_dst &&
-             !icalcomponent_get_tzuntil_property(vtz)) {
+    else if (!eternal_dst && !icalcomponent_get_tzuntil_property(vtz)) {
         /* Use last observance as fixed offset */
         obs = icalarray_element_at(obsarray, obsarray->num_elements - 1);
 
@@ -2187,7 +2301,8 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
             strcspn(obs->name, ",+-0123456789") < strlen(obs->name)) {
             buf_printf(tzif, "<%s>", obs->name);
         }
-        else buf_appendcstr(tzif, obs->name);
+        else
+            buf_appendcstr(tzif, obs->name);
 
         /* std offset */
         buf_append_utcoffset_as_iso_string(tzif, obs->offset_to);
@@ -2200,13 +2315,12 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
     return tzif;
 }
 
-static struct buf *icaltimezone_as_tzif(icalcomponent* ical)
+static struct buf *icaltimezone_as_tzif(icalcomponent *ical)
 {
     return _icaltimezone_as_tzif(ical, 0, NULL, NULL);
 }
 
-static struct buf *icaltimezone_as_tzif_leap(icalcomponent* ical)
+static struct buf *icaltimezone_as_tzif_leap(icalcomponent *ical)
 {
     return _icaltimezone_as_tzif(ical, leap_seconds->count - 2, NULL, NULL);
 }
-

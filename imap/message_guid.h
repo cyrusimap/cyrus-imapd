@@ -48,12 +48,12 @@
 
 /* Public interface */
 
-#define MESSAGE_GUID_SIZE         (20)    /* Size of GUID byte sequence */
+#define MESSAGE_GUID_SIZE (20) /* Size of GUID byte sequence */
 
 enum guid_status {
     GUID_UNKNOWN = -1, /* Unknown if GUID is [non-]NULL (not yet tested) */
-    GUID_NULL =     0, /* GUID is NULL */
-    GUID_NONNULL =  1, /* GUID is non-NULL */
+    GUID_NULL = 0,     /* GUID is NULL */
+    GUID_NONNULL = 1,  /* GUID is non-NULL */
 };
 
 struct message_guid {
@@ -61,14 +61,16 @@ struct message_guid {
     unsigned char value[MESSAGE_GUID_SIZE];
 };
 
-#define MESSAGE_GUID_INITIALIZER { GUID_UNKNOWN, { 0 } }
+#define MESSAGE_GUID_INITIALIZER {GUID_UNKNOWN, {0}}
 
 /* Generate GUID from message */
 void message_guid_generate(struct message_guid *guid,
-                           const char *msg_base, unsigned long msg_len);
+                           const char *msg_base,
+                           unsigned long msg_len);
 
 /* Copy a GUID */
-void message_guid_copy(struct message_guid *dst, const struct message_guid *src);
+void message_guid_copy(struct message_guid *dst,
+                       const struct message_guid *src);
 struct message_guid message_guid_clone(const struct message_guid *src);
 
 /* Compare a pair of GUIDs: Returns 1 => match. */
@@ -82,7 +84,7 @@ int message_guid_cmp(const struct message_guid *guid1,
  */
 unsigned long message_guid_hash(const struct message_guid *guid, int hash_size);
 
-  /* Create a NULL GUID */
+/* Create a NULL GUID */
 void message_guid_set_null(struct message_guid *guid);
 
 /* Returns 1 if GUID is NULL value */
@@ -96,9 +98,7 @@ void message_guid_export(const struct message_guid *guid, char *buf);
 /* Import Message GUID from packed sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-const char *message_guid_import(struct message_guid *guid,
-                                const char *buf);
-
+const char *message_guid_import(struct message_guid *guid, const char *buf);
 
 /* Routines for manipulating text value */
 
@@ -107,7 +107,8 @@ const char *message_guid_import(struct message_guid *guid,
  */
 const char *message_guid_encode(const struct message_guid *guid);
 
-const char *message_guid_encode_short(const struct message_guid *guid, size_t len);
+const char *message_guid_encode_short(const struct message_guid *guid,
+                                      size_t len);
 
 /* Sets Message GUID from text form. Returns 1 if valid
  */

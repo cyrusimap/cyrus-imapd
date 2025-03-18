@@ -61,9 +61,9 @@ typedef struct {
     int use_spillover;
 } smallarrayu64_t;
 
-#define SMALLARRAYU64_INITIALIZER { 0, { 0 }, ARRAYU64_INITIALIZER, 0 }
+#define SMALLARRAYU64_INITIALIZER {0, {0}, ARRAYU64_INITIALIZER, 0}
 
-#define smallarrayu64_init(sa)   (memset((sa), 0, sizeof(smallarrayu64_t)))
+#define smallarrayu64_init(sa) (memset((sa), 0, sizeof(smallarrayu64_t)))
 extern void smallarrayu64_fini(smallarrayu64_t *sa);
 
 extern smallarrayu64_t *smallarrayu64_new(void);

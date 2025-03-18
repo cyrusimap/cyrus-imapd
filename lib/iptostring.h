@@ -42,13 +42,15 @@
 #ifndef IPTOSTRING_H
 #define IPTOSTRING_H
 
-#include <stdlib.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdlib.h>
+#include <sys/socket.h>
 
-int iptostring(const struct sockaddr *addr, socklen_t addrlen,
-               char *out, unsigned outlen);
+int iptostring(const struct sockaddr *addr,
+               socklen_t addrlen,
+               char *out,
+               unsigned outlen);
 
 #endif /* IPTOSTRING_H */

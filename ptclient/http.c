@@ -41,9 +41,9 @@
  */
 
 #include <config.h>
+#include <jansson.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <jansson.h>
 
 #include "auth_pts.h"
 #include "libconfig.h"
@@ -56,7 +56,6 @@
 #include "imap/backend.h"
 #include "imap/http_client.h"
 #include "imap/spool.h"
-
 
 static struct {
     struct backend *conn;
@@ -73,9 +72,9 @@ static struct {
         char *raw;
     } uri;
 
-} state = { NULL, BUF_INITIALIZER, NULL, NULL,
-            { 0, 0, NULL, NULL, NULL, NULL } };
-
+} state = {
+    NULL, BUF_INITIALIZER, NULL, NULL, {0, 0, NULL, NULL, NULL, NULL}
+};
 
 static int login(struct backend *be __attribute__((unused)),
                  const char *userid __attribute__((unused)),
@@ -106,8 +105,8 @@ static int ping(struct backend *be, const char *userid __attribute__((unused)))
     memset(&resp_body, 0, sizeof(struct body_t));
     do {
         resp_body.flags = BODY_DISCARD;
-        if (http_read_response(be, METH_OPTIONS, &code,
-                               &resp_hdrs, &resp_body, &errstr)) {
+        if (http_read_response(
+                be, METH_OPTIONS, &code, &resp_hdrs, &resp_body, &errstr)) {
             break;
         }
     } while (code < 200);
@@ -124,15 +123,15 @@ static int logout(struct backend *be __attribute__((unused)))
 }
 
 static const struct tls_alpn_t http_alpn_map[] = {
-    { "http/1.1", NULL, NULL },
-    { "",         NULL, NULL },
+    {"http/1.1", NULL, NULL},
+    {"",         NULL, NULL},
 };
 
-static struct protocol_t protocol =
-{ "http", "HTTP", http_alpn_map, TYPE_SPEC,
-  { .spec = { &login, &ping, &logout } }
-};
-
+static struct protocol_t protocol = {"http",
+                                     "HTTP",
+                                     http_alpn_map,
+                                     TYPE_SPEC,
+                                     {.spec = {&login, &ping, &logout}}};
 
 /* API */
 
@@ -156,7 +155,8 @@ static void myinit(void)
         state.uri.host = p += 7;
         state.uri.port = 80;
     }
-    else fatal("Invalid 'httppts_uri' scheme", EX_CONFIG);
+    else
+        fatal("Invalid 'httppts_uri' scheme", EX_CONFIG);
 
     n = strcspn(p, ":/");
     if (!n) fatal("Missing 'httppts_uri' authority", EX_CONFIG);
@@ -180,8 +180,11 @@ static void myinit(void)
     *p++ = '\0';
     state.uri.suffix = p += 8;
 
-    buf_printf(&state.buf, "%s:%lu/noauth%s",
-               state.uri.host, state.uri.port, state.uri.https ? "/tls" : "");
+    buf_printf(&state.buf,
+               "%s:%lu/noauth%s",
+               state.uri.host,
+               state.uri.port,
+               state.uri.https ? "/tls" : "");
     state.service = buf_release(&state.buf);
 
     buf_setcstr(&state.buf, state.uri.host);
@@ -189,18 +192,19 @@ static void myinit(void)
         buf_printf(&state.buf, ":%lu", state.uri.port);
     state.hosthdr = buf_release(&state.buf);
 
-    state.conn = backend_connect(state.conn, state.service,
-                                 &protocol, NULL, NULL, NULL, -1);
+    state.conn = backend_connect(
+        state.conn, state.service, &protocol, NULL, NULL, NULL, -1);
     if (!state.conn) {
-        syslog(LOG_NOTICE, "ptloader failed to connect to HTTP service %s",
+        syslog(LOG_NOTICE,
+               "ptloader failed to connect to HTTP service %s",
                state.service);
     }
 
     return;
 }
 
-static struct auth_state *myauthstate(const char *identifier, size_t size,
-                                      const char **reply, int *dsize)
+static struct auth_state *
+myauthstate(const char *identifier, size_t size, const char **reply, int *dsize)
 {
     const char *canon_id = ptsmodule_unix_canonifyid(identifier, size);
     struct backend *be = state.conn;
@@ -214,8 +218,8 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
     int i;
 
     if (canon_id == NULL) {
-       syslog(LOG_ERR, "http_canonifyid failed for %s", identifier);
-       return NULL;
+        syslog(LOG_ERR, "http_canonifyid failed for %s", identifier);
+        return NULL;
     }
 
     *reply = NULL;
@@ -228,8 +232,8 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
 
     if (!be || (be->sock == -1)) {
         /* need to reestablish connection to server */
-        be = backend_connect(be, state.service,
-                                    &protocol, NULL, NULL, NULL, -1);
+        be =
+            backend_connect(be, state.service, &protocol, NULL, NULL, NULL, -1);
         if (!be) return NULL;
     }
 
@@ -256,8 +260,8 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
     memset(&resp_body, 0, sizeof(struct body_t));
     do {
         resp_body.flags = BODY_DECODE;
-        if (http_read_response(be, METH_GET, &code,
-                               &resp_hdrs, &resp_body, &errstr)) {
+        if (http_read_response(
+                be, METH_GET, &code, &resp_hdrs, &resp_body, &errstr)) {
             break;
         }
     } while (code < 200);
@@ -275,18 +279,21 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
     // allow returning NULL for group lookups that aren't found
     if (code == 200 || strncmp(canon_id, "group:", 6)) {
         /* fill in our new state structure */
-        *dsize = sizeof(struct auth_state) + (ngroups * sizeof(struct auth_ident));
-        newstate = (struct auth_state *) xzmalloc(*dsize);
+        *dsize =
+            sizeof(struct auth_state) + (ngroups * sizeof(struct auth_ident));
+        newstate = (struct auth_state *)xzmalloc(*dsize);
 
         strlcpy(newstate->userid.id, canon_id, sizeof(newstate->userid.id));
         newstate->userid.hash = strhash(canon_id);
         newstate->ngroups = ngroups;
         newstate->mark = time(0);
 
-        /* store group list in contiguous array for easy storage in the database */
+        /* store group list in contiguous array for easy storage in the database
+         */
         for (i = 0; i < newstate->ngroups; i++) {
             const char *name = json_string_value(json_array_get(groups, i));
-            strlcpy(newstate->groups[i].id, name, sizeof(newstate->groups[i].id));
+            strlcpy(
+                newstate->groups[i].id, name, sizeof(newstate->groups[i].id));
             newstate->groups[i].hash = strhash(name);
         }
     }
@@ -298,9 +305,8 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
     return newstate;
 }
 
-struct pts_module pts_http =
-{
-    "http",           /* name */
+struct pts_module pts_http = {
+    "http", /* name */
 
     &myinit,
     &myauthstate,

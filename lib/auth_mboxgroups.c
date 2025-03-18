@@ -47,9 +47,9 @@
 
 #include "auth.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
 #include "strarray.h"
 #include "util.h"
+#include "xmalloc.h"
 
 static int (*our_mboxlookup)(const char *userid, strarray_t *sa);
 
@@ -58,9 +58,7 @@ struct auth_state {
     strarray_t groups;
 };
 
-static struct auth_state auth_anonymous = {
-    "anonymous", STRARRAY_INITIALIZER
-};
+static struct auth_state auth_anonymous = {"anonymous", STRARRAY_INITIALIZER};
 
 /*
  * Determine if the user is a member of 'identifier'
@@ -70,7 +68,8 @@ static struct auth_state auth_anonymous = {
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-static int mymemberof(const struct auth_state *auth_state, const char *identifier)
+static int mymemberof(const struct auth_state *auth_state,
+                      const char *identifier)
 {
     if (!auth_state) auth_state = &auth_anonymous;
 
@@ -110,7 +109,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
  * relaxed, too.
  */
 static const char allowedchars[256] = {
- /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
     1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 20-2F */
@@ -121,16 +120,13 @@ static const char allowedchars[256] = {
     1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 60-6F */
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, /* 70-7F */
 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /*
  * Convert 'identifier' into canonical form.
@@ -172,10 +168,9 @@ static const char *mycanonifyid(const char *identifier, size_t len)
      */
     username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
     for (p = retbuf; *p; p++) {
-        if (username_tolower && Uisupper(*p))
-            *p = tolower((unsigned char)*p);
+        if (username_tolower && Uisupper(*p)) *p = tolower((unsigned char)*p);
 
-        switch (allowedchars[*(unsigned char*) p]) {
+        switch (allowedchars[*(unsigned char *)p]) {
         case 0:
             return NULL;
         default:
@@ -230,9 +225,8 @@ EXPORTED void register_mboxgroups_cb(int (*l)(const char *, strarray_t *))
     our_mboxlookup = l;
 }
 
-HIDDEN struct auth_mech auth_mboxgroups =
-{
-    "mboxgroups",             /* name */
+HIDDEN struct auth_mech auth_mboxgroups = {
+    "mboxgroups", /* name */
 
     &mycanonifyid,
     &mymemberof,

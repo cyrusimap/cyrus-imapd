@@ -42,24 +42,26 @@
 
 #include <config.h>
 
-
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <syslog.h>
-#include <errno.h>
+#include <unistd.h>
 
 #include "imap/global.h"
 #include "libconfig.h"
 #include "notify_external.h"
 
-char* notify_external(const char *class, const char *priority,
-                      const char *user, const char *mailbox,
+char *notify_external(const char *class,
+                      const char *priority,
+                      const char *user,
+                      const char *mailbox,
                       int nopt __attribute__((unused)),
                       char **options __attribute__((unused)),
-                      const char *message, const char *fname)
+                      const char *message,
+                      const char *fname)
 {
     const char *notify;
     const char *buf[12];
@@ -87,9 +89,8 @@ char* notify_external(const char *class, const char *priority,
     buf[11] = NULL;
 
     if (pipe(fds) < 0) {
-       syslog(LOG_ERR,
-              "notify_external: pipe() returned %s", strerror(errno));
-       return strdup("NO notify_external pipe failed");
+        syslog(LOG_ERR, "notify_external: pipe() returned %s", strerror(errno));
+        return strdup("NO notify_external pipe failed");
     }
 
     if ((child_pid = fork()) == 0) {
@@ -97,7 +98,7 @@ char* notify_external(const char *class, const char *priority,
         close(fds[1]);
         /* make the pipe be stdin */
         dup2(fds[0], STDIN_FILENO);
-        execv(notify, (char **) buf);
+        execv(notify, (char **)buf);
 
         /* should never reach here */
         syslog(LOG_ERR, "notify_external: exec returned %s", strerror(errno));

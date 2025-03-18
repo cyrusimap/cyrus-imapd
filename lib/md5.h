@@ -40,38 +40,38 @@
  */
 
 #ifdef HAVE_SSL
-#include <openssl/md5.h>
 #include <openssl/evp.h>
+#include <openssl/md5.h>
 
-#define md5(d,l,h)        assert(EVP_Digest(d, l, h, NULL, EVP_md5(), NULL))
+#define md5(d, l, h) assert(EVP_Digest(d, l, h, NULL, EVP_md5(), NULL))
 
-#define MD5_CTX           EVP_MD_CTX*
+#define MD5_CTX EVP_MD_CTX *
 
-#define MD5Init(c)        assert((*c = EVP_MD_CTX_new())           \
-                                 && EVP_DigestInit(*c, EVP_md5()))
-#define MD5Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
-#define MD5Final(h,c)                  \
-    do {                               \
-        EVP_DigestFinal(*c, h, NULL);  \
-        EVP_MD_CTX_free(*c);           \
-    } while(0);
+#define MD5Init(c)                                                             \
+    assert((*c = EVP_MD_CTX_new()) && EVP_DigestInit(*c, EVP_md5()))
+#define MD5Update(c, d, l) EVP_DigestUpdate(*c, d, l)
+#define MD5Final(h, c)                                                         \
+    do {                                                                       \
+        EVP_DigestFinal(*c, h, NULL);                                          \
+        EVP_MD_CTX_free(*c);                                                   \
+    } while (0);
 
 #else
 
-#include <sasl/md5global.h>
 #include <sasl/md5.h>
+#include <sasl/md5global.h>
 
-#define md5(d,l,h)                              \
-    do {                                        \
-        MD5_CTX c;                              \
-        _sasl_MD5Init(&c);                      \
-        _sasl_MD5Update(&c, d, l);              \
-        _sasl_MD5Final(h, &c);                  \
-    } while(0);
+#define md5(d, l, h)                                                           \
+    do {                                                                       \
+        MD5_CTX c;                                                             \
+        _sasl_MD5Init(&c);                                                     \
+        _sasl_MD5Update(&c, d, l);                                             \
+        _sasl_MD5Final(h, &c);                                                 \
+    } while (0);
 
-#define MD5Init                     _sasl_MD5Init
-#define MD5Update(c,d,l)            _sasl_MD5Update(c, (unsigned char*)d, l)
-#define MD5Final                    _sasl_MD5Final
+#define MD5Init _sasl_MD5Init
+#define MD5Update(c, d, l) _sasl_MD5Update(c, (unsigned char *)d, l)
+#define MD5Final _sasl_MD5Final
 
 #endif /* !HAVE_SSL */
 

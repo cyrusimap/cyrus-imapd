@@ -41,16 +41,16 @@
  */
 
 #include <config.h>
-#include <sys/types.h>
-#include <sys/file.h>
 #include <fcntl.h>
+#include <sys/file.h>
+#include <sys/types.h>
 #include <sysexits.h>
 
-#include "xmalloc.h"
 #include "nonblock.h"
+#include "xmalloc.h"
 
 #ifndef FNDELAY
-#define FNDELAY         O_NDELAY
+#define FNDELAY O_NDELAY
 #endif
 
 #ifdef O_NONBLOCK

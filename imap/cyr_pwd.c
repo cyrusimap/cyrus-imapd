@@ -82,13 +82,12 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { 0, 0, 0, 0 },
+        {0, 0, 0, 0},
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
-        switch(opt) {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -111,8 +110,7 @@ int main(int argc, char **argv)
 
     mbname = mbname_from_path(".");
 
-    if (mbname) 
-        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+    if (mbname) extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
 
     if (extname)
         printf("%s\n", extname);

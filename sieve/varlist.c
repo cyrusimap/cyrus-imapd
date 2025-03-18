@@ -8,7 +8,6 @@
 #include "varlist.h"
 #include "xmalloc.h"
 
-
 variable_list_t *varlist_new(void)
 {
     variable_list_t *vl;
@@ -39,7 +38,6 @@ variable_list_t *varlist_end(variable_list_t *vl)
     }
     return varlist_end(vl->next);
 }
-
 
 variable_list_t *varlist_extend(variable_list_t *vl)
 {
@@ -82,4 +80,3 @@ void varlist_free(variable_list_t *vl)
     free(vl);
     varlist_free(next);
 }
-

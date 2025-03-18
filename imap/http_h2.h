@@ -52,7 +52,7 @@
 
 #include "util.h"
 
-#define HTTP2_CLEARTEXT_ID  "h2c"
+#define HTTP2_CLEARTEXT_ID "h2c"
 
 extern int http2_init(struct http_connection *conn, struct buf *serverinfo);
 

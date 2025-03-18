@@ -4,10 +4,10 @@
  *
    export LD_LIBRARY_PATH=/path/to/cyrus/lib
    export PKG_CONFIG_PATH=/path/to/cyrus/lib/pkgconfig
-   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus_min)
-   export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other libcyrus_min)
-   export LDLIBS=$(pkg-config --libs-only-l libcyrus_min)
-   make example_libcyrus_min
+   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags
+ libcyrus_min) export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other
+ libcyrus_min) export LDLIBS=$(pkg-config --libs-only-l libcyrus_min) make
+ example_libcyrus_min
    ./example_libcyrus_min
  */
 
@@ -28,8 +28,8 @@
 #include "strhash.h"
 #include "tok.h"
 #include "xmalloc.h"
-#include "xunlink.h"
 #include "xsha1.h"
+#include "xunlink.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -90,7 +90,7 @@ void test_hash(void)
     for (u = 0; u < 20; u++) {
         char key[128] = "";
         snprintf(key, sizeof key, "%" PRIuPTR, u);
-        hash_insert(key, (void *) u, &ht);
+        hash_insert(key, (void *)u, &ht);
     }
 
     free_hash_table(&ht, NULL);
@@ -122,7 +122,7 @@ void test_hashu64(void)
     construct_hashu64_table(&ht, 20, 0);
 
     for (u = 0; u < 20; u++) {
-        hashu64_insert(u, (void *) u, &ht);
+        hashu64_insert(u, (void *)u, &ht);
     }
 
     free_hashu64_table(&ht, NULL);
@@ -152,13 +152,8 @@ void test_proc(void)
 {
     struct proc_handle *handle = NULL;
 
-    proc_register(&handle,
-                  0,
-                  "servicename",
-                  "clienthost",
-                  "userid",
-                  "mailbox",
-                  "cmd");
+    proc_register(
+        &handle, 0, "servicename", "clienthost", "userid", "mailbox", "cmd");
 
     proc_cleanup(&handle);
 
@@ -208,7 +203,7 @@ void test_strhash(void)
     unsigned hash;
 
     hash = strhash_seeded_djb2(time(NULL), "some string");
-    (void) hash;
+    (void)hash;
 
     puts("strhash ok");
 }
@@ -261,7 +256,7 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;

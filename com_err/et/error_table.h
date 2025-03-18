@@ -52,12 +52,15 @@
    it differently.
 */
 #ifdef _WINDOWS
-#define INTERFACE             __far __export __pascal
-#define INTERFACE_C           __far __export __cdecl
-#define sys_nerr              _sys_nerr
-#define sys_errlist           _sys_errlist
-int __far __pascal MessageBox (void __far *, const char __far*, const char __far*, unsigned int);
-#define MB_ICONEXCLAMATION    0x0030
+#define INTERFACE __far __export __pascal
+#define INTERFACE_C __far __export __cdecl
+#define sys_nerr _sys_nerr
+#define sys_errlist _sys_errlist
+int __far __pascal MessageBox(void __far *,
+                              const char __far *,
+                              const char __far *,
+                              unsigned int);
+#define MB_ICONEXCLAMATION 0x0030
 #else
 #define INTERFACE
 #define INTERFACE_C
@@ -65,7 +68,7 @@ int __far __pascal MessageBox (void __far *, const char __far*, const char __far
 #endif
 
 struct error_table {
-    char const * const * msgs;
+    char const *const *msgs;
     long base;
     int n_msgs;
 };
@@ -73,15 +76,15 @@ struct et_list {
     struct et_list *next;
     const struct error_table *table;
 };
-extern struct et_list * _et_list;
+extern struct et_list *_et_list;
 
-#define ERRCODE_RANGE   8       /* # of bits to shift table number */
-#define BITS_PER_CHAR   6       /* # bits to shift per character in name */
+#define ERRCODE_RANGE 8 /* # of bits to shift table number */
+#define BITS_PER_CHAR 6 /* # bits to shift per character in name */
 
 #if defined(__STDC__) || defined(KRB5_PROVIDE_PROTOTYPES) || defined(_WINDOWS)
-extern const char *error_table_name (long);
+extern const char *error_table_name(long);
 #else
-extern const char *error_table_name ();
+extern const char *error_table_name();
 #endif
 
 #define _ET_H

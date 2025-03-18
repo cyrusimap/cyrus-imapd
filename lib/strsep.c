@@ -65,4 +65,3 @@ char *strsep(char **stringp, const char *delim)
 
     return start;
 }
-

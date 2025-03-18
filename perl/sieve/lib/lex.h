@@ -49,12 +49,12 @@
 #include "util.h"
 
 typedef struct lexstate_s {
-  char *str;
-  int number;
+    char *str;
+    int number;
 
 } lexstate_t;
 
-int yylex(lexstate_t * lvalp, void * client);
+int yylex(lexstate_t *lvalp, void *client);
 
 enum {
     TAG = 258,

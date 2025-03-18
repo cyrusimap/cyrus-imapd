@@ -46,11 +46,11 @@
 
 #include <jansson.h>
 
+#include "arrayu64.h"
 #include "comparator.h"
 #include "strarray.h"
-#include "arrayu64.h"
 
-#define MAX_CMD_ARGS 12  /* bump if required (currently vacation needs 11) */
+#define MAX_CMD_ARGS 12 /* bump if required (currently vacation needs 11) */
 
 /* abstract syntax tree for sieve */
 typedef struct Commandlist commandlist_t;
@@ -61,7 +61,7 @@ typedef struct Zone zone_t;
 typedef struct CmdArg cmdarg_t;
 
 struct CmdArg {
-    unsigned char type;  /* argument data type */
+    unsigned char type; /* argument data type */
     union {
         int i;
         const char *s;
@@ -74,34 +74,34 @@ struct CmdArg {
 };
 
 enum argument_data_type {
-    AT_INT      = 'i',
-    AT_STR      = 's',
+    AT_INT = 'i',
+    AT_STR = 's',
     AT_STRARRAY = 'S',
     AT_ARRAYU64 = 'U',
-    AT_TEST     = 't',
+    AT_TEST = 't',
     AT_TESTLIST = 'T'
 };
 
 struct Comp {
     int match;
     int relation;
-    int collation;  /* only used where :comparator can be defined */
-    int index;      /* only used where index extension is defined */
+    int collation; /* only used where :comparator can be defined */
+    int index;     /* only used where index extension is defined */
 };
 
 struct Zone {
     int tag;
-    char *offset;   /* time-zone offset string (+/-hhmm) */
+    char *offset; /* time-zone offset string (+/-hhmm) */
 };
 
 struct Test {
     unsigned type;
     int ignore_err;
     union {
-        test_t *t; /* not */
-        strarray_t *sl; /* exists, ihave, valid_ext_list */
-        testlist_t *tl; /* anyof, allof (bytecode generation only) */
-        struct { /* anyof, allof (bytecode parsing/eval only) */
+        test_t *t;        /* not */
+        strarray_t *sl;   /* exists, ihave, valid_ext_list */
+        testlist_t *tl;   /* anyof, allof (bytecode generation only) */
+        struct {          /* anyof, allof (bytecode parsing/eval only) */
             int ntests;   /* number of tests */
             int endtests; /* offset to end of tests */
         } aa;
@@ -123,7 +123,7 @@ struct Test {
             strarray_t *content_types;
             strarray_t *pl;
         } b;
-        struct { /* size */
+        struct {   /* size */
             int t; /* tag */
             int n; /* param */
         } sz;
@@ -175,11 +175,12 @@ struct Fileinto {
 struct Commandlist {
     unsigned type;
     union {
-        int jump; /* bytecode parsing/eval only */
+        int jump;  /* bytecode parsing/eval only */
         char *str; /* it's a reject or error action */
-        struct { /* it's an if statement */
+        struct {   /* it's an if statement */
             test_t *t;
-            int testend; /* offset to end of test (bytecode parsing/eval only) */
+            int testend; /* offset to end of test (bytecode parsing/eval only)
+                          */
             commandlist_t *do_then;
             commandlist_t *do_else;
         } i;
@@ -198,7 +199,7 @@ struct Commandlist {
             strarray_t *flags;
         } k;
         struct Fileinto f; /* it's a fileinto action */
-        struct { /* it's a flag action */
+        struct {           /* it's a flag action */
             char *variable;
             strarray_t *flags;
         } fl;
@@ -251,7 +252,7 @@ struct Commandlist {
         } l;
         struct { /* it's a snooze action */
             struct Fileinto f;
-            int is_mboxid;  /* only used for parsing pre- 0x1D scripts */
+            int is_mboxid; /* only used for parsing pre- 0x1D scripts */
             strarray_t *addflags;
             strarray_t *removeflags;
             unsigned char days;

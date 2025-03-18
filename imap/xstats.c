@@ -40,9 +40,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <config.h>
 #include "xstats.h"
-
+#include <config.h>
 
 EXPORTED uint32_t xstats[XSTATS_NUM_METRICS];
 EXPORTED const char *xstats_names[XSTATS_NUM_METRICS] = {

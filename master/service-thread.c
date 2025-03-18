@@ -49,25 +49,25 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <syslog.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <signal.h>
 #include <stdlib.h>
-#include <sysexits.h>
 #include <string.h>
+#include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sysexits.h>
+#include <syslog.h>
 
-#include "service.h"
 #include "libconfig.h"
-#include "xmalloc.h"
-#include "strarray.h"
+#include "service.h"
 #include "signals.h"
+#include "strarray.h"
+#include "xmalloc.h"
 
 extern int optind;
 extern char *optarg;
@@ -130,12 +130,13 @@ static int libwrap_ask(struct request_info *req, int fd)
 }
 
 #else
-struct request_info { int x; };
+struct request_info {
+    int x;
+};
 
 static void libwrap_init(struct request_info *r __attribute__((unused)),
                          char *service __attribute__((unused)))
 {
-
 }
 
 static int libwrap_ask(struct request_info *r __attribute__((unused)),
@@ -187,7 +188,7 @@ int main(int argc, char **argv, char **envp)
             call_debugger = 1;
             break;
         default:
-            strarray_appendm(&service_argv, argv[optind-1]);
+            strarray_appendm(&service_argv, argv[optind - 1]);
 
             /* option has an argument */
             if (optind < argc && argv[optind][0] != '-')
@@ -235,8 +236,12 @@ int main(int argc, char **argv, char **envp)
              * they're about to attach a debugger, so worrying about leaking
              * contents of memory here is a little silly! :)
              */
-            snprintf(debugbuf, sizeof(debugbuf), debugger,
-                     argv[0], getpid(), service);
+            snprintf(debugbuf,
+                     sizeof(debugbuf),
+                     debugger,
+                     argv[0],
+                     getpid(),
+                     service);
 #pragma GCC diagnostic pop
             syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
             ret = system(debugbuf); /* run debugger */
@@ -247,8 +252,8 @@ int main(int argc, char **argv, char **envp)
 
     /* set close on exec */
     fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
-                                       fdflags | FD_CLOEXEC);
+    if (fdflags != -1)
+        fdflags = fcntl(LISTEN_FD, F_SETFD, fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
         syslog(LOG_ERR, "unable to set close on exec: %m");
         if (MESSAGE_MASTER_ON_EXIT)
@@ -256,8 +261,8 @@ int main(int argc, char **argv, char **envp)
         return 1;
     }
     fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
-                                       fdflags | FD_CLOEXEC);
+    if (fdflags != -1)
+        fdflags = fcntl(STATUS_FD, F_SETFD, fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
         syslog(LOG_ERR, "unable to set close on exec: %m");
         if (MESSAGE_MASTER_ON_EXIT)
@@ -279,7 +284,7 @@ int main(int argc, char **argv, char **envp)
             if (fd < 0) {
                 switch (errno) {
                 case EINTR:
-        signals_poll();
+                    signals_poll();
                 case ENETDOWN:
 #ifdef EPROTO
                 case EPROTO:
@@ -317,7 +322,8 @@ int main(int argc, char **argv, char **envp)
 
         use_count++;
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);
-        if (service_main_fd(fd, service_argv.count, service_argv.data, envp) < 0) {
+        if (service_main_fd(fd, service_argv.count, service_argv.data, envp) <
+            0) {
             break;
         }
     }

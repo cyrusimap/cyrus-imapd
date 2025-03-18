@@ -44,17 +44,17 @@
 #include <config.h>
 #endif
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <errno.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/un.h>
 #ifdef HAVE_UNISTD_H
-# include <unistd.h>
+#include <unistd.h>
 #endif
 #include <signal.h>
 #include <string.h>
@@ -62,10 +62,10 @@
 #include "notifyd.h"
 
 #include "imap/global.h"
-#include "libconfig.h"
 #include "imap/notify.h"
-#include "xmalloc.h"
+#include "libconfig.h"
 #include "strarray.h"
+#include "xmalloc.h"
 
 #include "master/service.h"
 
@@ -74,11 +74,10 @@ const int config_need_data = 0;
 
 static int soc = 0; /* master has handed us the port as stdin */
 
-static notifymethod_t *default_method;  /* default method daemon is using */
-
+static notifymethod_t *default_method; /* default method daemon is using */
 
 /* Cleanly shut down and exit */
-void shut_down(int code) __attribute__ ((noreturn));
+void shut_down(int code) __attribute__((noreturn));
 EXPORTED void shut_down(int code)
 {
     in_shutdown = 1;
@@ -89,7 +88,7 @@ EXPORTED void shut_down(int code)
     exit(code);
 }
 
-static char *fetch_arg(char *head, char* tail)
+static char *fetch_arg(char *head, char *tail)
 {
     char *cp;
 
@@ -101,7 +100,7 @@ static int do_notify(void)
 {
     struct sockaddr_un sun_data;
     socklen_t sunlen = sizeof(sun_data);
-    char buf[NOTIFY_MAXSIZE+1], *cp, *tail;
+    char buf[NOTIFY_MAXSIZE + 1], *cp, *tail;
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
     strarray_t options = STRARRAY_INITIALIZER;
@@ -131,8 +130,8 @@ static int do_notify(void)
             /* caught a SIGHUP, return */
             return 0;
         }
-        r = recvfrom(soc, buf, bufsiz, 0,
-                     (struct sockaddr *) &sun_data, &sunlen);
+        r = recvfrom(
+            soc, buf, bufsiz, 0, (struct sockaddr *)&sun_data, &sunlen);
         if (r == -1) {
             return (errno);
         }
@@ -179,14 +178,21 @@ static int do_notify(void)
             }
         }
 
-        syslog(LOG_DEBUG, "do_notify using method '%s'",
-               nmethod->name ? nmethod->name: "unknown");
+        syslog(LOG_DEBUG,
+               "do_notify using method '%s'",
+               nmethod->name ? nmethod->name : "unknown");
 
         if (nmethod->name) {
-            reply = nmethod->notify(class, priority, user, mailbox,
-                                    nopt, options.data, message, fname);
+            reply = nmethod->notify(class,
+                                    priority,
+                                    user,
+                                    mailbox,
+                                    nopt,
+                                    options.data,
+                                    message,
+                                    fname);
         }
-#if 0  /* we don't care about responses right now */
+#if 0 /* we don't care about responses right now */
         else {
             reply = strdup("NO unknown notification method");
             if (!reply) {
@@ -201,7 +207,6 @@ static int do_notify(void)
 
     /* never reached */
 }
-
 
 EXPORTED void fatal(const char *s, int code)
 {
@@ -222,11 +227,14 @@ EXPORTED void fatal(const char *s, int code)
 
 static void usage(void)
 {
-    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] [-D] [-X] [-m method].  method defaults to null");
+    syslog(LOG_ERR,
+           "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] "
+           "[-D] [-X] [-m method].  method defaults to null");
     exit(EX_USAGE);
 }
 
-EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unused)))
+EXPORTED int
+service_init(int argc, char **argv, char **envp __attribute__((unused)))
 {
     int opt;
     const char *method = "null";
@@ -234,7 +242,7 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     while ((opt = getopt(argc, argv, "m:")) != EOF) {
-        switch(opt) {
+        switch (opt) {
         case 'm':
             method = optarg;
             break;
@@ -257,14 +265,11 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
 }
 
 /* Called by service API to shut down the service */
-EXPORTED void service_abort(int error)
-{
-    shut_down(error);
-}
+EXPORTED void service_abort(int error) { shut_down(error); }
 
 EXPORTED int service_main(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
-                 char **envp __attribute__((unused)))
+                          char **argv __attribute__((unused)),
+                          char **envp __attribute__((unused)))
 {
     int r = 0;
 

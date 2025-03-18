@@ -46,9 +46,9 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/un.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sys/un.h>
 
 #include "backend.h"
 #include "global.h"
@@ -60,8 +60,11 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-EXPORTED void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
-                   const char *server, const char *authas)
+EXPORTED void proxy_adddest(struct dest **dlist,
+                            const char *rcpt,
+                            int rcpt_num,
+                            const char *server,
+                            const char *authas)
 {
     struct dest *d;
 
@@ -69,7 +72,8 @@ EXPORTED void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
        combination. */
     for (d = *dlist; d != NULL; d = d->next) {
         if (!strcmp(d->server, server) &&
-            !strcmp(d->authas, authas ? authas : "")) break;
+            !strcmp(d->authas, authas ? authas : ""))
+            break;
     }
 
     if (d == NULL) {
@@ -117,12 +121,13 @@ EXPORTED void proxy_downserver(struct backend *s)
     s->clientin = NULL;
 }
 
-static struct prot_waitevent *
-backend_timeout(struct protstream *s __attribute__((unused)),
-                struct prot_waitevent *ev, void *rock)
+static struct prot_waitevent *backend_timeout(struct protstream *s
+                                              __attribute__((unused)),
+                                              struct prot_waitevent *ev,
+                                              void *rock)
 {
-    struct backend *be = (struct backend *) rock;
-    int is_active = (be->context ? *((int *) be->context) : 0);
+    struct backend *be = (struct backend *)rock;
+    int is_active = (be->context ? *((int *)be->context) : 0);
 
     if ((!be->current || (be != *(be->current))) && !is_active) {
         /* server is not our current server, and idle too long.
@@ -139,21 +144,22 @@ backend_timeout(struct protstream *s __attribute__((unused)),
 }
 
 /* return the connection to the server */
-EXPORTED struct backend * proxy_findserver(const char *server,          /* hostname of backend */
-                 struct protocol_t *prot,       /* protocol we're speaking */
-                 const char *userid,            /* proxy as userid (ext form)*/
-                 ptrarray_t *cache,             /* ptr to backend cache */
-                 struct backend **current,      /* ptr to current backend */
-                 struct backend **inbox,        /* ptr to inbox backend */
-                 struct protstream *clientin)   /* protstream from client to
-                                                   proxy (if non-NULL a timeout
-                                                   will be setup) */
+EXPORTED struct backend *
+proxy_findserver(const char *server,          /* hostname of backend */
+                 struct protocol_t *prot,     /* protocol we're speaking */
+                 const char *userid,          /* proxy as userid (ext form)*/
+                 ptrarray_t *cache,           /* ptr to backend cache */
+                 struct backend **current,    /* ptr to current backend */
+                 struct backend **inbox,      /* ptr to inbox backend */
+                 struct protstream *clientin) /* protstream from client to
+                                                 proxy (if non-NULL a timeout
+                                                 will be setup) */
 {
     int i = 0;
     struct backend *ret = NULL;
 
-    if (current && *current && !strcmp(server, (*current)->hostname)
-                && !strcmp(prot->service, (*current)->prot->service)) {
+    if (current && *current && !strcmp(server, (*current)->hostname) &&
+        !strcmp(prot->service, (*current)->prot->service)) {
         /* this is our current backend */
         return *current;
     }
@@ -188,9 +194,8 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
         if (clientin) {
             /* add the timeout */
             ret->clientin = clientin;
-            ret->timeout = prot_addwaitevent(clientin,
-                                             time(NULL) + IDLE_TIMEOUT,
-                                             backend_timeout, ret);
+            ret->timeout = prot_addwaitevent(
+                clientin, time(NULL) + IDLE_TIMEOUT, backend_timeout, ret);
         }
     }
 
@@ -214,19 +219,22 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
  *   - returns 1 if input from clientin is pending, otherwise returns 0.
  */
 EXPORTED int proxy_check_input(struct protgroup *protin,
-                      struct protstream *clientin,
-                      struct protstream *clientout,
-                      struct protstream *serverin,
-                      struct protstream *serverout,
-                      int extra_read_fd,
-                      int *extra_read_flag,
-                      unsigned long timeout_sec)
+                               struct protstream *clientin,
+                               struct protstream *clientout,
+                               struct protstream *serverin,
+                               struct protstream *serverout,
+                               int extra_read_fd,
+                               int *extra_read_flag,
+                               unsigned long timeout_sec)
 {
     struct protgroup *protout = NULL;
-    struct timeval timeout = { timeout_sec, 0 };
+    struct timeval timeout = {timeout_sec, 0};
     int n, ret = 0;
 
-    n = prot_select(protin, extra_read_fd, &protout, extra_read_flag,
+    n = prot_select(protin,
+                    extra_read_fd,
+                    &protout,
+                    extra_read_flag,
                     timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
         syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
@@ -238,7 +246,7 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
     if (n && protout) {
         /* see who has input */
         for (; n; n--) {
-            struct protstream *pin = protgroup_getelement(protout, n-1);
+            struct protstream *pin = protgroup_getelement(protout, n - 1);
             struct protstream *pout = NULL;
 
             if (pin == clientin) {
@@ -246,7 +254,8 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
                 if (serverout) {
                     /* stream it to server */
                     pout = serverout;
-                } else {
+                }
+                else {
                     /* notify the caller */
                     ret = 1;
                 }
@@ -257,7 +266,8 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
             }
             else {
                 /* XXX shouldn't get here !!! */
-                fatal("unknown protstream returned by prot_select in proxy_check_input()",
+                fatal("unknown protstream returned by prot_select in "
+                      "proxy_check_input()",
                       EX_SOFTWARE);
             }
 
@@ -299,8 +309,10 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
  * machine to make a roundtrip to the master mailbox server to make
  * sure it's up to date
  */
-EXPORTED int proxy_mlookup(const char *name, mbentry_t **mbentryp,
-                           void *tid, struct mbox_refer *refer)
+EXPORTED int proxy_mlookup(const char *name,
+                           mbentry_t **mbentryp,
+                           void *tid,
+                           struct mbox_refer *refer)
 {
     mbentry_t *mbentry = NULL;
     int r;
@@ -332,9 +344,11 @@ EXPORTED int proxy_mlookup(const char *name, mbentry_t **mbentryp,
         r = IMAP_MAILBOX_NONEXISTENT;
     }
 
- done:
-    if (!r && mbentryp) *mbentryp = mbentry;
-    else mboxlist_entry_free(&mbentry);
+done:
+    if (!r && mbentryp)
+        *mbentryp = mbentry;
+    else
+        mboxlist_entry_free(&mbentry);
 
     return r;
 }

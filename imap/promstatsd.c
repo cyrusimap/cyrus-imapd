@@ -84,12 +84,16 @@ static struct report {
     int frequency;
     int64_t prev_report_time;
 } reports[] = {
-    { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
-      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 10,
-      NULL, BUF_INITIALIZER, 0, 0 },
-    { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
-      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ, 0,
-      NULL, BUF_INITIALIZER, 0, 0 },
+    {FNAME_PROM_SERVICE_REPORT,
+     "service", &do_collate_service_report,
+     IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 10,
+     NULL, BUF_INITIALIZER,
+     0, 0},
+    {FNAME_PROM_USAGE_REPORT,
+     "usage",   &do_collate_usage_report,
+     IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ,   0,
+     NULL, BUF_INITIALIZER,
+     0, 0},
 };
 const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
 
@@ -120,7 +124,9 @@ static const char *argv0 = NULL;
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    %s [-C alt_config] [-v] [-f service_frequency] [-d]\n", argv0);
+    fprintf(stderr,
+            "    %s [-C alt_config] [-v] [-f service_frequency] [-d]\n",
+            argv0);
     fprintf(stderr, "    %s [-C alt_config] [-v] -c\n", argv0);
     exit(EX_USAGE);
 }
@@ -154,8 +160,11 @@ static int do_cleanup(void)
         if (dirent->d_name[0] == '.') continue;
 
         r = snprintf(path, sizeof(path), "%s%s", basedir, dirent->d_name);
-        if (r < 0 || (size_t) r >= sizeof(path)) {
-            syslog(LOG_ERR, "IOERROR: path too long: %s%s", basedir, dirent->d_name);
+        if (r < 0 || (size_t)r >= sizeof(path)) {
+            syslog(LOG_ERR,
+                   "IOERROR: path too long: %s%s",
+                   basedir,
+                   dirent->d_name);
             continue;
         }
 
@@ -195,12 +204,17 @@ static int promdir_foreach(promdir_foreach_cb *proc,
 
         /* skip filenames we don't care about */
         if (dirent->d_name[0] == '.') continue;
-        if (mode == PROMDIR_FOREACH_PIDS && !cyrus_isdigit(dirent->d_name[0])) continue;
-        if (mode == PROMDIR_FOREACH_DONEPROCS && dirent->d_name[0] != 'd') continue;
+        if (mode == PROMDIR_FOREACH_PIDS && !cyrus_isdigit(dirent->d_name[0]))
+            continue;
+        if (mode == PROMDIR_FOREACH_DONEPROCS && dirent->d_name[0] != 'd')
+            continue;
 
         r = snprintf(fname, sizeof(fname), "%s%s", basedir, dirent->d_name);
-        if (r < 0 || (size_t) r >= sizeof(fname)) {
-            syslog(LOG_ERR, "IOERROR: path too long: %s%s", basedir, dirent->d_name);
+        if (r < 0 || (size_t)r >= sizeof(fname)) {
+            syslog(LOG_ERR,
+                   "IOERROR: path too long: %s%s",
+                   basedir,
+                   dirent->d_name);
             continue;
         }
 
@@ -227,7 +241,7 @@ static int promdir_foreach(promdir_foreach_cb *proc,
 static int accum_stats(const struct prom_stats *stats, void *rock)
 {
     struct prom_stats *stats_copy;
-    hash_table *h = (hash_table *) rock;
+    hash_table *h = (hash_table *)rock;
     int i;
 
     stats_copy = hash_lookup(stats->ident, h);
@@ -239,8 +253,9 @@ static int accum_stats(const struct prom_stats *stats, void *rock)
 
     for (i = 0; i < PROM_NUM_METRICS; i++) {
         stats_copy->metrics[i].value += stats->metrics[i].value;
-        stats_copy->metrics[i].last_updated = MAX(stats_copy->metrics[i].last_updated,
-                                                  stats->metrics[i].last_updated);
+        stats_copy->metrics[i].last_updated =
+            MAX(stats_copy->metrics[i].last_updated,
+                stats->metrics[i].last_updated);
     }
 
     return 0;
@@ -251,23 +266,23 @@ struct format_metric_rock {
     enum prom_metric_id metric;
 };
 
-static void format_metric(const char *key __attribute__((unused)),
-                          void *data, void *rock)
+static void
+format_metric(const char *key __attribute__((unused)), void *data, void *rock)
 {
-    struct prom_stats *stats = (struct prom_stats *) data;
-    struct format_metric_rock *fmrock = (struct format_metric_rock *) rock;
+    struct prom_stats *stats = (struct prom_stats *)data;
+    struct format_metric_rock *fmrock = (struct format_metric_rock *)rock;
 
     /* don't report service/metric combinations that have never been seen */
-    if (!stats->metrics[fmrock->metric].last_updated)
-        return;
+    if (!stats->metrics[fmrock->metric].last_updated) return;
 
     buf_appendcstr(fmrock->buf, prom_metric_descs[fmrock->metric].name);
     buf_printf(fmrock->buf, "{service=\"%s\"", stats->ident);
     if (prom_metric_descs[fmrock->metric].label)
         buf_printf(fmrock->buf, ",%s", prom_metric_descs[fmrock->metric].label);
-    buf_printf(fmrock->buf, "} %0.f %" PRId64 "\n",
-                            stats->metrics[fmrock->metric].value,
-                            stats->metrics[fmrock->metric].last_updated);
+    buf_printf(fmrock->buf,
+               "} %0.f %" PRId64 "\n",
+               stats->metrics[fmrock->metric].value,
+               stats->metrics[fmrock->metric].last_updated);
 }
 
 static void do_collate_service_report(struct buf *buf)
@@ -282,16 +297,20 @@ static void do_collate_service_report(struct buf *buf)
 
     /* hold a lock on .doneprocs.lock while reading stats files - this ensures
      * process cleanups won't lead to double counts while we're collating */
-    doneprocs_lock_fname = strconcat(prometheus_stats_dir(), ".",
-                                     FNAME_PROM_DONEPROCS, ".lock", NULL);
+    doneprocs_lock_fname = strconcat(
+        prometheus_stats_dir(), ".", FNAME_PROM_DONEPROCS, ".lock", NULL);
 
-    doneprocs_lock_fd = open(doneprocs_lock_fname, O_CREAT|O_TRUNC|O_RDWR, 0644);
+    doneprocs_lock_fd =
+        open(doneprocs_lock_fname, O_CREAT | O_TRUNC | O_RDWR, 0644);
     if (doneprocs_lock_fd == -1) {
-        syslog(LOG_ERR, "can't open doneprocs lock: %s (%m)", doneprocs_lock_fname);
+        syslog(LOG_ERR,
+               "can't open doneprocs lock: %s (%m)",
+               doneprocs_lock_fname);
         free_hash_table(&all_stats, NULL);
         return;
     }
-    if (lock_setlock(doneprocs_lock_fd, /*ex*/1, /*nb*/0, doneprocs_lock_fname)) {
+    if (lock_setlock(
+            doneprocs_lock_fd, /*ex*/ 1, /*nb*/ 0, doneprocs_lock_fname)) {
         syslog(LOG_ERR, "can't get exclusive lock on %s", doneprocs_lock_fname);
         close(doneprocs_lock_fd);
         doneprocs_lock_fd = -1;
@@ -306,8 +325,9 @@ static void do_collate_service_report(struct buf *buf)
     /* slurp up and accumulate current stats */
     promdir_foreach(&accum_stats, PROMDIR_FOREACH_PIDS, &all_stats);
 
-    syslog(LOG_DEBUG, "updating prometheus report for %d services",
-                      hash_numrecords(&all_stats));
+    syslog(LOG_DEBUG,
+           "updating prometheus report for %d services",
+           hash_numrecords(&all_stats));
 
     /* release .doneprocs.lock */
     xunlink(doneprocs_lock_fname);
@@ -318,15 +338,19 @@ static void do_collate_service_report(struct buf *buf)
     /* format it into buf */
     for (i = 0; i < PROM_NUM_METRICS; i++) {
         if (prom_metric_descs[i].help) {
-            buf_printf(buf, "# HELP %s %s\n", prom_metric_descs[i].name,
-                            prom_metric_descs[i].help);
+            buf_printf(buf,
+                       "# HELP %s %s\n",
+                       prom_metric_descs[i].name,
+                       prom_metric_descs[i].help);
         }
         if (prom_metric_descs[i].type != PROM_METRIC_CONTINUED) {
-            buf_printf(buf, "# TYPE %s %s\n", prom_metric_descs[i].name,
-                            prom_metric_type_names[prom_metric_descs[i].type]);
+            buf_printf(buf,
+                       "# TYPE %s %s\n",
+                       prom_metric_descs[i].name,
+                       prom_metric_type_names[prom_metric_descs[i].type]);
         }
 
-        struct format_metric_rock fmrock = { buf, i };
+        struct format_metric_rock fmrock = {buf, i};
         hash_enumerate(&all_stats, &format_metric, &fmrock);
     }
 
@@ -347,7 +371,7 @@ struct partition_data {
 
 static void free_partition_data(void *ptr)
 {
-    struct partition_data *pdata = (struct partition_data *) ptr;
+    struct partition_data *pdata = (struct partition_data *)ptr;
 
     free_hash_table(&pdata->shared, free);
     memset(pdata, 0, sizeof *pdata);
@@ -360,7 +384,7 @@ static void free_partition_data(void *ptr)
  */
 static int count_users_mailboxes(struct findall_data *data, void *rock)
 {
-    hash_table *h = (hash_table *) rock;
+    hash_table *h = (hash_table *)rock;
     struct partition_data *pdata;
 
     /* don't want partial matches */
@@ -372,16 +396,18 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     pdata = hash_lookup(data->mbentry->partition, h);
     if (!pdata) {
         pdata = xzmalloc(sizeof *pdata);
-        construct_hash_table(&pdata->shared, 10, 0); /* 10 shared namespaces probably enough */
+        construct_hash_table(
+            &pdata->shared, 10, 0); /* 10 shared namespaces probably enough */
         hash_insert(data->mbentry->partition, pdata, h);
     }
 
     if (mbname_isdeleted(data->mbname)) {
-        pdata->n_deleted ++;
+        pdata->n_deleted++;
         pdata->timestamp = now_ms();
     }
-    else if (mbname_category(data->mbname, mboxname_get_adminnamespace(), NULL)
-             == MBNAME_SHARED) {
+    else if (mbname_category(data->mbname,
+                             mboxname_get_adminnamespace(),
+                             NULL) == MBNAME_SHARED) {
         const char *namespace = strarray_nth(mbname_boxes(data->mbname), 0);
         int64_t *n_shared = hash_lookup(namespace, &pdata->shared);
         if (!n_shared) {
@@ -393,13 +419,13 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
         pdata->timestamp = now_ms();
     }
     else if (mbname_userid(data->mbname) &&
-        !strarray_size(mbname_boxes(data->mbname))) {
-        pdata->n_users ++;
-        pdata->n_mailboxes ++; /* an inbox is also a mailbox */
+             !strarray_size(mbname_boxes(data->mbname))) {
+        pdata->n_users++;
+        pdata->n_mailboxes++; /* an inbox is also a mailbox */
         pdata->timestamp = now_ms();
     }
     else {
-        pdata->n_mailboxes ++;
+        pdata->n_mailboxes++;
         pdata->timestamp = now_ms();
     }
 
@@ -414,15 +440,15 @@ struct quota_rock {
 
 static int quota_cb(const mbentry_t *mbentry, void *rock)
 {
-    struct quota_rock *qrock = (struct quota_rock *) rock;
+    struct quota_rock *qrock = (struct quota_rock *)rock;
     struct partition_data *pdata;
     const char *partition;
     char qroot[MAX_MAILBOX_NAME];
     int res;
 
     /* don't count if it belongs to a different quotaroot */
-    if (quota_findroot(qroot, sizeof(qroot), mbentry->name)
-        && strcmp(qroot, qrock->quota->root) != 0) {
+    if (quota_findroot(qroot, sizeof(qroot), mbentry->name) &&
+        strcmp(qroot, qrock->quota->root) != 0) {
         return 0;
     }
 
@@ -433,7 +459,8 @@ static int quota_cb(const mbentry_t *mbentry, void *rock)
 
     partition = mbentry->partition;
     if (hash_lookup(partition, qrock->seen)) {
-        /* seen this partition for this quotaroot already, don't double count it */
+        /* seen this partition for this quotaroot already, don't double count it
+         */
         return 0;
     }
 
@@ -447,13 +474,13 @@ static int quota_cb(const mbentry_t *mbentry, void *rock)
     }
     pdata->timestamp = now_ms();
 
-    hash_insert(partition, (void *) 1, qrock->seen);
+    hash_insert(partition, (void *)1, qrock->seen);
     return 0;
 }
 
 static int count_quota_commitments(struct quota *quota, void *rock)
 {
-    struct quota_rock *qrock = (struct quota_rock *) rock;
+    struct quota_rock *qrock = (struct quota_rock *)rock;
     hash_table seen = HASH_TABLE_INITIALIZER;
     int r;
 
@@ -470,11 +497,10 @@ static int count_quota_commitments(struct quota *quota, void *rock)
     return r;
 }
 
-static void pname_cb(const char *key,
-                     void *data __attribute__((unused)),
-                     void *rock)
+static void
+pname_cb(const char *key, void *data __attribute__((unused)), void *rock)
 {
-    strarray_append((strarray_t *) rock, key);
+    strarray_append((strarray_t *)rock, key);
 }
 
 static strarray_t *get_partition_names(hash_table *h)
@@ -485,30 +511,31 @@ static strarray_t *get_partition_names(hash_table *h)
     return names;
 }
 
-#define FORMAT_USAGE_INT64(metric, type, help, member, buf, pnames, h) \
-do {                                                                         \
-    const char *___metric = (metric);                                        \
-    const char *___type = (type);                                            \
-    const char *___help = (help);                                            \
-    struct buf *___buf = (buf);                                              \
-    const strarray_t *___pnames = (pnames);                                  \
-    hash_table *___h = (h);                                                  \
-    int i;                                                                   \
-                                                                             \
-    buf_printf(___buf, "# HELP %s %s\n", ___metric, ___help);                \
-    buf_printf(___buf, "# TYPE %s %s\n", ___metric, ___type);                \
-                                                                             \
-    for (i = 0; i < strarray_size(___pnames); i++) {                         \
-        struct partition_data *pdata =                                       \
-            hash_lookup(strarray_nth(___pnames, i), ___h);                   \
-                                                                             \
-        buf_printf(___buf, "%s{partition=\"%s\"} %" PRId64 " %" PRId64 "\n", \
-                        ___metric,                                           \
-                        strarray_nth(___pnames, i),                          \
-                        pdata->member,                                       \
-                        pdata->timestamp);                                   \
-    }                                                                        \
-} while(0)
+#define FORMAT_USAGE_INT64(metric, type, help, member, buf, pnames, h)         \
+    do {                                                                       \
+        const char *___metric = (metric);                                      \
+        const char *___type = (type);                                          \
+        const char *___help = (help);                                          \
+        struct buf *___buf = (buf);                                            \
+        const strarray_t *___pnames = (pnames);                                \
+        hash_table *___h = (h);                                                \
+        int i;                                                                 \
+                                                                               \
+        buf_printf(___buf, "# HELP %s %s\n", ___metric, ___help);              \
+        buf_printf(___buf, "# TYPE %s %s\n", ___metric, ___type);              \
+                                                                               \
+        for (i = 0; i < strarray_size(___pnames); i++) {                       \
+            struct partition_data *pdata =                                     \
+                hash_lookup(strarray_nth(___pnames, i), ___h);                 \
+                                                                               \
+            buf_printf(___buf,                                                 \
+                       "%s{partition=\"%s\"} %" PRId64 " %" PRId64 "\n",       \
+                       ___metric,                                              \
+                       strarray_nth(___pnames, i),                             \
+                       pdata->member,                                          \
+                       pdata->timestamp);                                      \
+        }                                                                      \
+    } while (0)
 
 struct shared_mailbox_rock {
     struct buf *buf;
@@ -518,16 +545,16 @@ struct shared_mailbox_rock {
 
 static void format_usage_shared_mailbox(const char *key, void *data, void *rock)
 {
-    struct shared_mailbox_rock *smrock = (struct shared_mailbox_rock *) rock;
-    int64_t n_shared = *(int64_t *) data;
+    struct shared_mailbox_rock *smrock = (struct shared_mailbox_rock *)rock;
+    int64_t n_shared = *(int64_t *)data;
 
-    buf_printf(smrock->buf, "%s{partition=\"%s\",namespace=\"%s\"}",
-                            "cyrus_usage_shared_mailboxes",
-                            smrock->partition,
-                            key);
-    buf_printf(smrock->buf, " %" PRId64 " %" PRId64 "\n",
-                            n_shared,
-                            smrock->timestamp);
+    buf_printf(smrock->buf,
+               "%s{partition=\"%s\",namespace=\"%s\"}",
+               "cyrus_usage_shared_mailboxes",
+               smrock->partition,
+               key);
+    buf_printf(
+        smrock->buf, " %" PRId64 " %" PRId64 "\n", n_shared, smrock->timestamp);
 }
 
 static void format_usage_shared_mailboxes(struct buf *buf,
@@ -536,9 +563,10 @@ static void format_usage_shared_mailboxes(struct buf *buf,
 {
     int i;
 
-    buf_printf(buf, "# HELP %s %s\n",
-                    "cyrus_usage_shared_mailboxes",
-                    "The number of shared Cyrus mailboxes");
+    buf_printf(buf,
+               "# HELP %s %s\n",
+               "cyrus_usage_shared_mailboxes",
+               "The number of shared Cyrus mailboxes");
     buf_appendcstr(buf, "# TYPE cyrus_usage_shared_mailboxes gauge\n");
 
     for (i = 0; i < strarray_size(pnames); i++) {
@@ -546,7 +574,8 @@ static void format_usage_shared_mailboxes(struct buf *buf,
         struct partition_data *pdata;
 
         smrock.buf = buf;
-        smrock.partition = (char *) strarray_nth(pnames, i); /* n.b. casting away const */
+        smrock.partition =
+            (char *)strarray_nth(pnames, i); /* n.b. casting away const */
 
         pdata = hash_lookup(smrock.partition, h);
         smrock.timestamp = pdata->timestamp;
@@ -560,22 +589,25 @@ static void format_usage_quota_commitment(struct buf *buf,
                                           hash_table *h)
 {
     int i, res;
-    buf_printf(buf, "# HELP %s %s\n",
-                    "cyrus_usage_quota_commitment",
-                    "The amount of quota committed");
+    buf_printf(buf,
+               "# HELP %s %s\n",
+               "cyrus_usage_quota_commitment",
+               "The amount of quota committed");
     buf_appendcstr(buf, "# TYPE cyrus_usage_quota_commitment gauge\n");
 
     for (i = 0; i < strarray_size(pnames); i++) {
         struct partition_data *pdata = hash_lookup(strarray_nth(pnames, i), h);
 
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            buf_printf(buf, "%s{partition=\"%s\",resource=\"%s\"}",
-                            "cyrus_usage_quota_commitment",
-                            strarray_nth(pnames, i),
-                            quota_names[res]);
-            buf_printf(buf, " %.0f %" PRId64 "\n",
-                            pdata->quota_commitment[res],
-                            pdata->timestamp);
+            buf_printf(buf,
+                       "%s{partition=\"%s\",resource=\"%s\"}",
+                       "cyrus_usage_quota_commitment",
+                       strarray_nth(pnames, i),
+                       quota_names[res]);
+            buf_printf(buf,
+                       " %.0f %" PRId64 "\n",
+                       pdata->quota_commitment[res],
+                       pdata->timestamp);
         }
     }
 }
@@ -588,43 +620,58 @@ static void do_collate_usage_report(struct buf *buf)
     int64_t starttime;
 
     buf_reset(buf);
-    construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
+    construct_hash_table(
+        &h, 10, 0); /* 10 partitions is probably enough right */
 
     starttime = now_ms();
     r = mboxlist_findall_withp(NULL /* admin namespace */,
-                               "*", 1,
-                               NULL, NULL,
-                               count_users_mailboxes, NULL, &h);
-    syslog(LOG_DEBUG, "counted users and mailboxes in %f seconds",
-                      (now_ms() - starttime) / 1000.0);
+                               "*",
+                               1,
+                               NULL,
+                               NULL,
+                               count_users_mailboxes,
+                               NULL,
+                               &h);
+    syslog(LOG_DEBUG,
+           "counted users and mailboxes in %f seconds",
+           (now_ms() - starttime) / 1000.0);
 
     if (!r) {
-        struct quota_rock rock = { NULL, &h, NULL };
+        struct quota_rock rock = {NULL, &h, NULL};
 
         starttime = now_ms();
         r = quota_foreach(NULL, count_quota_commitments, &rock, NULL, 0);
-        syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
-                          (now_ms() - starttime) / 1000.0);
-
+        syslog(LOG_DEBUG,
+               "counted quota commitments in %f seconds",
+               (now_ms() - starttime) / 1000.0);
     }
 
     /* need to invert the hash table on output, so build a list of its keys */
     partition_names = get_partition_names(&h);
 
-    FORMAT_USAGE_INT64("cyrus_usage_deleted_mailboxes", "gauge",
+    FORMAT_USAGE_INT64("cyrus_usage_deleted_mailboxes",
+                       "gauge",
                        "The number of deleted Cyrus mailboxes",
                        n_deleted,
-                       buf, partition_names, &h);
+                       buf,
+                       partition_names,
+                       &h);
 
-    FORMAT_USAGE_INT64("cyrus_usage_users", "gauge",
+    FORMAT_USAGE_INT64("cyrus_usage_users",
+                       "gauge",
                        "The number of Cyrus user Inboxes",
                        n_users,
-                       buf, partition_names, &h);
+                       buf,
+                       partition_names,
+                       &h);
 
-    FORMAT_USAGE_INT64("cyrus_usage_mailboxes", "gauge",
+    FORMAT_USAGE_INT64("cyrus_usage_mailboxes",
+                       "gauge",
                        "The number of Cyrus mailboxes",
                        n_mailboxes,
-                       buf, partition_names, &h);
+                       buf,
+                       partition_names,
+                       &h);
 
     format_usage_shared_mailboxes(buf, partition_names, &h);
 
@@ -704,7 +751,7 @@ int main(int argc, char **argv)
             break;
 
         case 'v': /* verbose */
-            verbose ++;
+            verbose++;
             break;
 
         default:
@@ -745,8 +792,12 @@ int main(int argc, char **argv)
         int ret;
         const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
         if (debugger) {
-            snprintf(debugbuf, sizeof(debugbuf), debugger,
-                     argv[0], getpid(), "promstatsd");
+            snprintf(debugbuf,
+                     sizeof(debugbuf),
+                     debugger,
+                     argv[0],
+                     getpid(),
+                     "promstatsd");
             syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
             ret = system(debugbuf); /* run debugger */
             syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
@@ -754,9 +805,7 @@ int main(int argc, char **argv)
     }
 
     for (i = 0; i < n_reports; i++) {
-        char *fname = strconcat(prometheus_stats_dir(),
-                                reports[i].fname,
-                                NULL);
+        char *fname = strconcat(prometheus_stats_dir(), reports[i].fname, NULL);
 
         if (reports[i].frequency <= 0)
             reports[i].frequency = config_getduration(reports[i].freq_opt, 's');
@@ -764,8 +813,10 @@ int main(int argc, char **argv)
             reports[i].frequency = reports[i].default_frequency;
 
         if (reports[i].frequency) {
-            syslog(LOG_DEBUG, "updating %s every %d seconds",
-                              fname, reports[i].frequency);
+            syslog(LOG_DEBUG,
+                   "updating %s every %d seconds",
+                   fname,
+                   reports[i].frequency);
             if (reports[i].frequency < min_frequency)
                 min_frequency = reports[i].frequency;
         }
@@ -774,8 +825,8 @@ int main(int argc, char **argv)
         }
 
         xunlink(fname);
-        r = mappedfile_open(&reports[i].mf, fname,
-                            MAPPEDFILE_CREATE | MAPPEDFILE_RW);
+        r = mappedfile_open(
+            &reports[i].mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
         free(fname);
         if (r) fatal("couldn't open report file", EX_IOERR);
     }
@@ -800,14 +851,14 @@ int main(int argc, char **argv)
 
         tick = now_ms();
         for (i = 0; i < n_reports; i++) {
-            if (reports[i].frequency
-                && (oneshot || report_due(&reports[i], tick)))
-            {
+            if (reports[i].frequency &&
+                (oneshot || report_due(&reports[i], tick))) {
                 int64_t profile_starttime = now_ms();
                 reports[i].collate_fn(&reports[i].buf);
-                syslog(LOG_DEBUG, "collated %s report in %f seconds",
-                                  reports[i].desc,
-                                  (now_ms() - profile_starttime) / 1000.0);
+                syslog(LOG_DEBUG,
+                       "collated %s report in %f seconds",
+                       reports[i].desc,
+                       (now_ms() - profile_starttime) / 1000.0);
                 do_write_report(reports[i].mf, &reports[i].buf);
                 reports[i].prev_report_time = tick;
             }

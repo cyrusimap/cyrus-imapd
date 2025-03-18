@@ -3,8 +3,8 @@
 #include <config.h>
 #endif
 
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <syslog.h>
 
 #include "assert.h"
@@ -40,52 +40,59 @@
 ** of the table to 0.
 */
 
-EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
+EXPORTED hash_table *
+construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
-      assert(table);
-      assert(size);
+    assert(table);
+    assert(size);
 
-      table->size = size;
-      table->count = 0;
-      table->seed = rand(); /* might be zero, that's okay */
-      table->hash_load_warned_at = 0;
+    table->size = size;
+    table->count = 0;
+    table->seed = rand(); /* might be zero, that's okay */
+    table->hash_load_warned_at = 0;
 
-      /* Allocate the table -- different for using memory pools and not */
-      if (use_mpool) {
-          /* Allocate an initial memory pool for 32 byte keys + the hash table
-           * + the buckets themselves */
-          table->pool =
-              new_mpool(size * (32 + sizeof(bucket*) + sizeof(bucket)));
-          table->table =
-              (bucket **)mpool_malloc(table->pool,sizeof(bucket *) * size);
-      } else {
-          table->pool = NULL;
-          table->table = xmalloc(sizeof(bucket *) * size);
-      }
+    /* Allocate the table -- different for using memory pools and not */
+    if (use_mpool) {
+        /* Allocate an initial memory pool for 32 byte keys + the hash table
+         * + the buckets themselves */
+        table->pool =
+            new_mpool(size * (32 + sizeof(bucket *) + sizeof(bucket)));
+        table->table =
+            (bucket **)mpool_malloc(table->pool, sizeof(bucket *) * size);
+    }
+    else {
+        table->pool = NULL;
+        table->table = xmalloc(sizeof(bucket *) * size);
+    }
 
-      /* Allocate the table and initialize it */
-      memset(table->table, 0, sizeof(bucket *) * size);
+    /* Allocate the table and initialize it */
+    memset(table->table, 0, sizeof(bucket *) * size);
 
-      return table;
+    return table;
 }
 
-#define check_load_factor(table) do {                                   \
-    hash_table *t = (table);                                            \
-    const double load_factor = t->count * 1.0 / t->size;                \
-    if (load_factor > 3.0) {                                            \
-        if (t->hash_load_warned_at == 0                                 \
-            || (int) load_factor > t->hash_load_warned_at) {            \
-            xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
-                               "table=<%p> entries=<" SIZE_T_FMT ">"    \
-                               " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
-                               t, t->count, t->size, load_factor);      \
-            t->hash_load_warned_at = (int) load_factor;                 \
-        }                                                               \
-    }                                                                   \
-    else {                                                              \
-        t->hash_load_warned_at = 0;                                     \
-    }                                                                   \
-} while(0)
+#define check_load_factor(table)                                               \
+    do {                                                                       \
+        hash_table *t = (table);                                               \
+        const double load_factor = t->count * 1.0 / t->size;                   \
+        if (load_factor > 3.0) {                                               \
+            if (t->hash_load_warned_at == 0 ||                                 \
+                (int)load_factor > t->hash_load_warned_at) {                   \
+                xsyslog(LOG_DEBUG,                                             \
+                        "hash table load factor exceeds 3.0",                  \
+                        "table=<%p> entries=<" SIZE_T_FMT ">"                  \
+                        " buckets=<" SIZE_T_FMT "> load=<%.2g>",               \
+                        t,                                                     \
+                        t->count,                                              \
+                        t->size,                                               \
+                        load_factor);                                          \
+                t->hash_load_warned_at = (int)load_factor;                     \
+            }                                                                  \
+        }                                                                      \
+        else {                                                                 \
+            t->hash_load_warned_at = 0;                                        \
+        }                                                                      \
+    } while (0)
 
 /*
 ** Insert 'key' into hash table.
@@ -94,83 +101,85 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 */
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
-      unsigned val = strhash_seeded(table->seed, key) % table->size;
-      bucket *ptr, *newptr;
-      bucket **prev;
+    unsigned val = strhash_seeded(table->seed, key) % table->size;
+    bucket *ptr, *newptr;
+    bucket **prev;
 
-      /*
-      ** NULL means this bucket hasn't been used yet.  We'll simply
-      ** allocate space for our new bucket and put our data there, with
-      ** the table pointing at it.
-      */
-      if (!((table->table)[val]))
-      {
-          if(table->pool) {
-              (table->table)[val] =
-                  (bucket *)mpool_malloc(table->pool, sizeof(bucket));
-              (table->table)[val] -> key = mpool_strdup(table->pool, key);
-          } else {
-              (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
-              (table->table)[val] -> key = xstrdup(key);
-          }
-          (table->table)[val] -> next = NULL;
-          (table->table)[val] -> data = data;
-          table->count++;
-          check_load_factor(table);
-          return (table->table)[val] -> data;
-      }
+    /*
+    ** NULL means this bucket hasn't been used yet.  We'll simply
+    ** allocate space for our new bucket and put our data there, with
+    ** the table pointing at it.
+    */
+    if (!((table->table)[val])) {
+        if (table->pool) {
+            (table->table)[val] =
+                (bucket *)mpool_malloc(table->pool, sizeof(bucket));
+            (table->table)[val]->key = mpool_strdup(table->pool, key);
+        }
+        else {
+            (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
+            (table->table)[val]->key = xstrdup(key);
+        }
+        (table->table)[val]->next = NULL;
+        (table->table)[val]->data = data;
+        table->count++;
+        check_load_factor(table);
+        return (table->table)[val]->data;
+    }
 
-      /*
-      ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, replace its data
-      */
-      for (prev = &((table->table)[val]), ptr=(table->table)[val];
-           ptr;
-           prev=&(ptr->next),ptr=ptr->next) {
-          int cmpresult = strcmp(key,ptr->key);
-          if (!cmpresult) {
-              /* Match! Replace this value and return the old */
-              void *old_data;
+    /*
+    ** This spot in the table is already in use.  See if the current string
+    ** has already been inserted, and if so, replace its data
+    */
+    for (prev = &((table->table)[val]), ptr = (table->table)[val]; ptr;
+         prev = &(ptr->next), ptr = ptr->next) {
+        int cmpresult = strcmp(key, ptr->key);
+        if (!cmpresult) {
+            /* Match! Replace this value and return the old */
+            void *old_data;
 
-              old_data = ptr->data;
-              ptr -> data = data;
-              return old_data;
-          } else if (cmpresult < 0) {
-              /* The new key is smaller than the current key--
-               * insert a node and return this data */
-              if(table->pool) {
-                  newptr = (bucket *)mpool_malloc(table->pool, sizeof(bucket));
-                  newptr->key = mpool_strdup(table->pool, key);
-              } else {
-                  newptr = (bucket *)xmalloc(sizeof(bucket));
-                  newptr->key = xstrdup(key);
-              }
-              newptr->data = data;
-              newptr->next = ptr;
-              *prev = newptr;
-              table->count++;
-              check_load_factor(table);
-              return data;
-          }
-      }
+            old_data = ptr->data;
+            ptr->data = data;
+            return old_data;
+        }
+        else if (cmpresult < 0) {
+            /* The new key is smaller than the current key--
+             * insert a node and return this data */
+            if (table->pool) {
+                newptr = (bucket *)mpool_malloc(table->pool, sizeof(bucket));
+                newptr->key = mpool_strdup(table->pool, key);
+            }
+            else {
+                newptr = (bucket *)xmalloc(sizeof(bucket));
+                newptr->key = xstrdup(key);
+            }
+            newptr->data = data;
+            newptr->next = ptr;
+            *prev = newptr;
+            table->count++;
+            check_load_factor(table);
+            return data;
+        }
+    }
 
-      /*
-      ** This key is the largest one so far.  Add it to the end
-      ** of the list (*prev should be correct)
-      */
-      if(table->pool) {
-          newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
-          newptr->key = mpool_strdup(table->pool,key);
-      } else {
-          newptr=(bucket *)xmalloc(sizeof(bucket));
-          newptr->key = xstrdup(key);
-      }
-      newptr->data = data;
-      newptr->next = NULL;
-      *prev = newptr;
-      table->count++;
-      check_load_factor(table);
-      return data;
+    /*
+    ** This key is the largest one so far.  Add it to the end
+    ** of the list (*prev should be correct)
+    */
+    if (table->pool) {
+        newptr = (bucket *)mpool_malloc(table->pool, sizeof(bucket));
+        newptr->key = mpool_strdup(table->pool, key);
+    }
+    else {
+        newptr = (bucket *)xmalloc(sizeof(bucket));
+        newptr->key = xstrdup(key);
+    }
+    newptr->data = data;
+    newptr->next = NULL;
+    *prev = newptr;
+    table->count++;
+    check_load_factor(table);
+    return data;
 }
 
 /*
@@ -180,26 +189,23 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 
 EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
-      unsigned val;
-      bucket *ptr;
+    unsigned val;
+    bucket *ptr;
 
-      if (!table->size)
-          return NULL;
+    if (!table->size) return NULL;
 
-      val = strhash_seeded(table->seed, key) % table->size;
+    val = strhash_seeded(table->seed, key) % table->size;
 
-      if (!(table->table)[val])
+    if (!(table->table)[val]) return NULL;
+
+    for (ptr = (table->table)[val]; NULL != ptr; ptr = ptr->next) {
+        int cmpresult = strcmp(key, ptr->key);
+        if (!cmpresult)
+            return ptr->data;
+        else if (cmpresult < 0) /* key < ptr->key -- we passed it */
             return NULL;
-
-      for ( ptr = (table->table)[val];NULL != ptr; ptr = ptr->next )
-      {
-          int cmpresult = strcmp(key, ptr->key);
-          if (!cmpresult)
-              return ptr->data;
-          else if(cmpresult < 0) /* key < ptr->key -- we passed it */
-              return NULL;
-      }
-      return NULL;
+    }
+    return NULL;
 }
 
 /*
@@ -210,63 +216,57 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
-      unsigned val = strhash_seeded(table->seed, key) % table->size;
-      bucket *ptr, *last = NULL;
+    unsigned val = strhash_seeded(table->seed, key) % table->size;
+    bucket *ptr, *last = NULL;
 
-      if (!(table->table)[val])
+    if (!(table->table)[val]) return NULL;
+
+    /*
+    ** Traverse the list, keeping track of the previous node in the list.
+    ** When we find the node to delete, we set the previous node's next
+    ** pointer to point to the node after ourself instead.  We then delete
+    ** the key from the present node, and return a pointer to the data it
+    ** contains.
+    */
+
+    for (last = NULL, ptr = (table->table)[val]; NULL != ptr;
+         last = ptr, ptr = ptr->next) {
+        int cmpresult = strcmp(key, ptr->key);
+        if (!cmpresult) {
+            void *data = ptr->data;
+            if (last != NULL) {
+                last->next = ptr->next;
+            }
+
+            /*
+            ** If 'last' still equals NULL, it means that we need to
+            ** delete the first node in the list. This simply consists
+            ** of putting our own 'next' pointer in the array holding
+            ** the head of the list.  We then dispose of the current
+            ** node as above.
+            */
+
+            else {
+                (table->table)[val] = ptr->next;
+            }
+            if (!table->pool) {
+                free(ptr->key);
+                free(ptr);
+            }
+            table->count--;
+            return data;
+        }
+        if (cmpresult < 0) {
+            /* its not here! */
             return NULL;
+        }
+    }
 
-      /*
-      ** Traverse the list, keeping track of the previous node in the list.
-      ** When we find the node to delete, we set the previous node's next
-      ** pointer to point to the node after ourself instead.  We then delete
-      ** the key from the present node, and return a pointer to the data it
-      ** contains.
-      */
-
-      for (last = NULL, ptr = (table->table)[val];
-            NULL != ptr;
-            last = ptr, ptr = ptr->next)
-      {
-          int cmpresult = strcmp(key, ptr->key);
-          if (!cmpresult)
-          {
-              void *data = ptr->data;
-              if (last != NULL )
-              {
-                  last -> next = ptr -> next;
-              }
-
-              /*
-              ** If 'last' still equals NULL, it means that we need to
-              ** delete the first node in the list. This simply consists
-              ** of putting our own 'next' pointer in the array holding
-              ** the head of the list.  We then dispose of the current
-              ** node as above.
-              */
-
-              else
-              {
-                  (table->table)[val] = ptr->next;
-              }
-              if(!table->pool) {
-                  free(ptr->key);
-                  free(ptr);
-              }
-              table->count--;
-              return data;
-          }
-          if (cmpresult < 0) {
-              /* its not here! */
-              return NULL;
-          }
-      }
-
-      /*
-      ** If we get here, it means we didn't find the item in the table.
-      ** Signal this by returning NULL.
-      */
-      return NULL;
+    /*
+    ** If we get here, it means we didn't find the item in the table.
+    ** Signal this by returning NULL.
+    */
+    return NULL;
 }
 
 /*
@@ -279,42 +279,40 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
 
 EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 {
-      unsigned i;
-      bucket *ptr, *temp;
+    unsigned i;
+    bucket *ptr, *temp;
 
-      if (!table) return;
+    if (!table) return;
 
-      /* If we have a function to free the data, apply it everywhere */
-      /* We also need to traverse this anyway if we aren't using a memory
-       * pool */
-      if(func || !table->pool) {
-          for (i=0;i<table->size; i++)
-          {
-              ptr = (table->table)[i];
-              while (ptr)
-              {
-                  temp = ptr;
-                  ptr = ptr->next;
-                  if (func)
-                      func(temp->data);
-                  if(!table->pool) {
-                      free(temp->key);
-                      free(temp);
-                  }
-              }
-          }
-      }
+    /* If we have a function to free the data, apply it everywhere */
+    /* We also need to traverse this anyway if we aren't using a memory
+     * pool */
+    if (func || !table->pool) {
+        for (i = 0; i < table->size; i++) {
+            ptr = (table->table)[i];
+            while (ptr) {
+                temp = ptr;
+                ptr = ptr->next;
+                if (func) func(temp->data);
+                if (!table->pool) {
+                    free(temp->key);
+                    free(temp);
+                }
+            }
+        }
+    }
 
-      /* Free the main structures */
-      if(table->pool) {
-          free_mpool(table->pool);
-          table->pool = NULL;
-      } else {
-          free(table->table);
-      }
-      table->table = NULL;
-      table->size = 0;
-      table->count = 0;
+    /* Free the main structures */
+    if (table->pool) {
+        free_mpool(table->pool);
+        table->pool = NULL;
+    }
+    else {
+        free(table->table);
+    }
+    table->table = NULL;
+    table->size = 0;
+    table->count = 0;
 }
 
 /*
@@ -322,25 +320,21 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 ** node in the table, passing it the key, the associated data and 'rock'.
 */
 
-EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void *, void *),
-                    void *rock)
+EXPORTED void hash_enumerate(hash_table *table,
+                             void (*func)(const char *, void *, void *),
+                             void *rock)
 {
-      unsigned i;
-      bucket *temp, *temp_next;
+    unsigned i;
+    bucket *temp, *temp_next;
 
-      for (i=0;i<table->size; i++)
-      {
-            if ((table->table)[i] != NULL)
-            {
-                  for (temp = (table->table)[i];
-                        NULL != temp;
-                        temp = temp_next)
-                  {
-                        temp_next = temp->next;
-                        func(temp -> key, temp->data, rock);
-                  }
+    for (i = 0; i < table->size; i++) {
+        if ((table->table)[i] != NULL) {
+            for (temp = (table->table)[i]; NULL != temp; temp = temp_next) {
+                temp_next = temp->next;
+                func(temp->key, temp->data, rock);
             }
-      }
+        }
+    }
 }
 
 EXPORTED strarray_t *hash_keys(hash_table *table)
@@ -367,8 +361,10 @@ EXPORTED int hash_numrecords(hash_table *table)
     return table->count;
 }
 
-EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),
-                    void *rock, strarray_cmp_fn_t *cmp)
+EXPORTED void hash_enumerate_sorted(hash_table *table,
+                                    void (*func)(const char *, void *, void *),
+                                    void *rock,
+                                    strarray_cmp_fn_t *cmp)
 {
     strarray_t *sa = hash_keys(table);
     strarray_sort(sa, cmp);
@@ -380,7 +376,6 @@ EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *
     }
     strarray_free(sa);
 }
-
 
 struct hash_iter {
     hash_table *table;
@@ -409,10 +404,7 @@ EXPORTED void hash_iter_reset(hash_iter *iter)
     }
 }
 
-EXPORTED int hash_iter_has_next(hash_iter *iter)
-{
-    return iter->peek != NULL;
-}
+EXPORTED int hash_iter_has_next(hash_iter *iter) { return iter->peek != NULL; }
 
 EXPORTED const char *hash_iter_next(hash_iter *iter)
 {
@@ -433,15 +425,9 @@ EXPORTED const char *hash_iter_next(hash_iter *iter)
     return iter->curr->key;
 }
 
-EXPORTED const char *hash_iter_key(hash_iter *iter)
-{
-    return iter->curr->key;
-}
+EXPORTED const char *hash_iter_key(hash_iter *iter) { return iter->curr->key; }
 
-EXPORTED void *hash_iter_val(hash_iter *iter)
-{
-    return iter->curr->data;
-}
+EXPORTED void *hash_iter_val(hash_iter *iter) { return iter->curr->data; }
 
 EXPORTED void hash_iter_free(hash_iter **iterptr)
 {

@@ -49,12 +49,12 @@
 #include <string.h>
 
 #include "assert.h"
+#include "global.h"
+#include "hash.h"
+#include "ptrarray.h"
 #include "spool.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "global.h"
-#include "ptrarray.h"
-#include "hash.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -68,11 +68,12 @@ struct header_t {
 };
 
 struct hdrcache_t {
-    hash_table cache;       /* hash table of headers for quick retrieval     */
-    struct header_t *head;  /* head of double-linked list of ordered headers */
-    struct header_t *tail;  /* tail of double-linked list of ordered headers */
-    ptrarray_t getheader_cache;  /* header bodies returned by spool_getheader()   */
-    struct buf buf;         /* buffer for lowercasing header names */
+    hash_table cache;      /* hash table of headers for quick retrieval     */
+    struct header_t *head; /* head of double-linked list of ordered headers */
+    struct header_t *tail; /* tail of double-linked list of ordered headers */
+    ptrarray_t
+        getheader_cache; /* header bodies returned by spool_getheader()   */
+    struct buf buf;      /* buffer for lowercasing header names */
 };
 
 EXPORTED hdrcache_t spool_new_hdrcache(void)
@@ -93,13 +94,7 @@ EXPORTED hdrcache_t spool_new_hdrcache(void)
    copies fin to fout, massaging
 
    returns 0 on success, negative on failure */
-typedef enum {
-    NAME_START,
-    NAME,
-    COLON,
-    BODY_START,
-    BODY
-} state;
+typedef enum { NAME_START, NAME, COLON, BODY_START, BODY } state;
 
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot!
@@ -111,11 +106,13 @@ typedef enum {
 
    on error, returns < 0
 */
-__attribute__((nonnull(3,4,5)))
-static int parseheader(struct protstream *fin, FILE *fout,
-                       char **headname, char **contents,
-                       char **rawvalue,
-                       const char **skipheaders)
+__attribute__((nonnull(3, 4, 5))) static int
+parseheader(struct protstream *fin,
+            FILE *fout,
+            char **headname,
+            char **contents,
+            char **rawvalue,
+            const char **skipheaders)
 {
     int c;
     static struct buf name = BUF_INITIALIZER;
@@ -179,7 +176,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
                 buf_cstring(&name);
                 /* see if this header is in our skip list */
                 for (skip = skipheaders;
-                     skip && *skip && strcasecmp(name.s, *skip); skip++);
+                     skip && *skip && strcasecmp(name.s, *skip);
+                     skip++);
                 if (!skip || !*skip) {
                     /* write the header name to the output */
                     buf_appendcstr(&raw, name.s);
@@ -198,7 +196,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
         case COLON:
             if (c == ':') {
                 s = BODY_START;
-            } else if (c != ' ' && c != '\t') {
+            }
+            else if (c != ' ' && c != '\t') {
                 /* i want to avoid confusing dot-stuffing later */
                 while (c == '.') {
                     if (!skip) buf_putc(&raw, c);
@@ -251,7 +250,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
                 /* we should peek ahead to see if it's folded whitespace */
                 if (c == '\r' && peek == '\n') {
                     c = prot_getc(fin);
-                } else {
+                }
+                else {
                     c = peek; /* single newline separator */
                 }
                 if (c != ' ' && c != '\t') {
@@ -268,7 +268,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
                        form. */
                     r = IMAP_MESSAGE_CONTAINS8BIT;
                     goto ph_error;
-                } else if (munge8bit) {
+                }
+                else if (munge8bit) {
                     /* We have been configured to munge all mail of this
                        form. */
                     c = 'X';
@@ -285,7 +286,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* if we fall off the end of the loop, we hit some sort of error
        condition */
 
- ph_error:
+ph_error:
     /* we still output on error */
     if (fout) fputs(buf_cstring(&raw), fout);
 
@@ -299,7 +300,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
     return r;
 
- got_header:
+got_header:
     if (fout) fputs(buf_cstring(&raw), fout);
 
     /* Note: xstrdup()ing the string ensures we return
@@ -312,8 +313,8 @@ static int parseheader(struct protstream *fin, FILE *fout,
     return 0;
 }
 
-static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
-                                             hdrcache_t cache)
+static struct header_t *
+__spool_cache_header(char *name, char *body, char *raw, hdrcache_t cache)
 {
     ptrarray_t *contents;
     struct header_t *hdr = xzmalloc(sizeof(struct header_t));
@@ -326,7 +327,7 @@ static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
     buf_setcstr(&cache->buf, name);
     const char *lcname = buf_lcase(&cache->buf);
     hash_table *table = &cache->cache;
-    contents = (ptrarray_t *) hash_lookup(lcname, table);
+    contents = (ptrarray_t *)hash_lookup(lcname, table);
 
     if (!contents) contents = hash_insert(lcname, ptrarray_new(), table);
     ptrarray_append(contents, hdr);
@@ -334,34 +335,39 @@ static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
     return hdr;
 }
 
-EXPORTED void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
+EXPORTED void
+spool_prepend_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
 {
     struct header_t *hdr = __spool_cache_header(name, body, raw, cache);
 
     /* link header at head of list */
     hdr->next = cache->head;
 
-    if (cache->head) cache->head->prev = hdr;
-    else cache->tail = hdr;
+    if (cache->head)
+        cache->head->prev = hdr;
+    else
+        cache->tail = hdr;
 
     cache->head = hdr;
 }
-
 
 EXPORTED void spool_prepend_header(char *name, char *body, hdrcache_t cache)
 {
     spool_prepend_header_raw(name, body, NULL, cache);
 }
 
-EXPORTED void spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
+EXPORTED void
+spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
 {
     struct header_t *hdr = __spool_cache_header(name, body, raw, cache);
 
     /* link header at tail of list */
     hdr->prev = cache->tail;
 
-    if (cache->tail) cache->tail->next = hdr;
-    else cache->head = hdr;
+    if (cache->tail)
+        cache->tail->next = hdr;
+    else
+        cache->head = hdr;
 
     cache->tail = hdr;
 }
@@ -377,13 +383,13 @@ EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
     spool_append_header(name, body, cache);
 }
 
-static void __spool_remove_header(const char *name, int first, int last,
-                                  hdrcache_t cache)
+static void
+__spool_remove_header(const char *name, int first, int last, hdrcache_t cache)
 {
     buf_setcstr(&cache->buf, name);
 
     ptrarray_t *contents =
-        (ptrarray_t *) hash_lookup(buf_lcase(&cache->buf), &cache->cache);
+        (ptrarray_t *)hash_lookup(buf_lcase(&cache->buf), &cache->cache);
 
     if (contents) {
         int idx;
@@ -394,17 +400,22 @@ static void __spool_remove_header(const char *name, int first, int last,
             last += ptrarray_size(contents);
             if (last < 0) first = 0;
         }
-        else if (last >= ptrarray_size(contents)) first = last + 1;
+        else if (last >= ptrarray_size(contents))
+            first = last + 1;
 
         for (idx = last; idx >= first; idx--) {
             /* remove header from ptrarray */
             struct header_t *hdr = ptrarray_remove(contents, idx);
 
             /* unlink header from list */
-            if (hdr->prev) hdr->prev->next = hdr->next;
-            else cache->head = hdr->next;
-            if (hdr->next) hdr->next->prev = hdr->prev;
-            else cache->tail = hdr->prev;
+            if (hdr->prev)
+                hdr->prev->next = hdr->next;
+            else
+                cache->head = hdr->next;
+            if (hdr->next)
+                hdr->next->prev = hdr->prev;
+            else
+                cache->tail = hdr->prev;
 
             /* free header_t */
             free(hdr->name);
@@ -420,8 +431,8 @@ EXPORTED void spool_remove_header(const char *name, hdrcache_t cache)
     __spool_remove_header(name, 0, -1, cache);
 }
 
-EXPORTED void spool_remove_header_instance(const char *name, int n,
-                                           hdrcache_t cache)
+EXPORTED void
+spool_remove_header_instance(const char *name, int n, hdrcache_t cache)
 {
     if (!n) return;
     if (n > 0) n--; /* normalize to zero */
@@ -429,8 +440,10 @@ EXPORTED void spool_remove_header_instance(const char *name, int n,
     __spool_remove_header(name, n, n, cache);
 }
 
-EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
-                                 hdrcache_t cache, const char **skipheaders)
+EXPORTED int spool_fill_hdrcache(struct protstream *fin,
+                                 FILE *fout,
+                                 hdrcache_t cache,
+                                 const char **skipheaders)
 {
     int r = 0;
 
@@ -466,7 +479,7 @@ EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
     head = buf_lcase(&cache->buf);
 
     /* check the cache */
-    contents = (ptrarray_t *) hash_lookup(head, &cache->cache);
+    contents = (ptrarray_t *)hash_lookup(head, &cache->cache);
 
     if (contents && ptrarray_size(contents)) {
         strarray_t *array = strarray_new();
@@ -481,7 +494,7 @@ EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
         /* cache the response so we clean it up later */
         ptrarray_append(&cache->getheader_cache, array);
 
-        return (const char **) array->data;
+        return (const char **)array->data;
     }
 
     return NULL;
@@ -508,7 +521,7 @@ EXPORTED void spool_free_hdrcache(hdrcache_t cache)
 
     if (!cache) return;
 
-    free_hash_table(&cache->cache, (void (*)(void *)) __spool_free_hdrcache);
+    free_hash_table(&cache->cache, (void (*)(void *))__spool_free_hdrcache);
 
     for (i = 0; i < cache->getheader_cache.count; i++) {
         strarray_t *item = ptrarray_nth(&cache->getheader_cache, i);
@@ -520,9 +533,10 @@ EXPORTED void spool_free_hdrcache(hdrcache_t cache)
     free(cache);
 }
 
-EXPORTED void spool_enum_hdrcache(hdrcache_t cache,
-                         void (*proc)(const char *, const char *, const char *, void *),
-                         void *rock)
+EXPORTED void spool_enum_hdrcache(
+    hdrcache_t cache,
+    void (*proc)(const char *, const char *, const char *, void *),
+    void *rock)
 {
     struct header_t *hdr;
 
@@ -545,7 +559,7 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
     int r = 0;
 
     /* -2: Might need room to add a \r\n\0 set */
-    while (prot_fgets(buf, sizeof(buf)-2, fin)) {
+    while (prot_fgets(buf, sizeof(buf) - 2, fin)) {
         p = buf + strlen(buf) - 1;
         if (p < buf) {
             /* buffer start with a \0 */
@@ -571,7 +585,7 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
             p[1] = '\n';
             p[2] = '\0';
         }
-        else if (p[0] != '\n' && (strlen(buf) < sizeof(buf)-3)) {
+        else if (p[0] != '\n' && (strlen(buf) < sizeof(buf) - 3)) {
             /* line contained a \0 not at the end */
             r = IMAP_MESSAGE_CONTAINSNULL;
             continue;
@@ -581,7 +595,7 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
         while ((p = strchr(buf, '\r')) && p[1] != '\n') {
             /* Src/Target overlap, use memmove */
             /* strlen(p) will result in copying the NUL byte as well */
-            memmove(p, p+1, strlen(p));
+            memmove(p, p + 1, strlen(p));
         }
 
         if (buf[0] == '.') {
@@ -590,8 +604,9 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
                 goto dot;
             }
             /* Remove the dot-stuffing */
-            if (fout) fputs(buf+1, fout);
-        } else {
+            if (fout) fputs(buf + 1, fout);
+        }
+        else {
             if (fout) fputs(buf, fout);
         }
     }
@@ -599,6 +614,6 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
     /* wow, serious error---got a premature EOF. */
     return IMAP_IOERROR;
 
-  dot:
+dot:
     return r;
 }

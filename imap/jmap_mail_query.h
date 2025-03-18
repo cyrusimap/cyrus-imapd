@@ -78,9 +78,10 @@ extern void jmap_email_contactfilter_init(const char *accountid,
                                           struct email_contactfilter *cfilter);
 extern void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter);
 
-extern int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *parser,
-                                                         json_t *filter,
-                                                         struct email_contactfilter *cfilter);
+extern int jmap_email_contactfilter_from_filtercondition(
+    struct jmap_parser *parser,
+    json_t *filter,
+    struct email_contactfilter *cfilter);
 
 struct emailbodies {
     ptrarray_t attslist;
@@ -88,11 +89,8 @@ struct emailbodies {
     ptrarray_t htmllist;
 };
 
-#define EMAILBODIES_INITIALIZER { \
-    PTRARRAY_INITIALIZER, \
-    PTRARRAY_INITIALIZER, \
-    PTRARRAY_INITIALIZER \
-}
+#define EMAILBODIES_INITIALIZER                                                \
+    {PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER}
 
 extern void jmap_emailbodies_fini(struct emailbodies *bodies);
 
@@ -108,11 +106,13 @@ struct jmap_email_filter_parser_rock {
 };
 
 extern void jmap_filter_parser_invalid(const char *field, void *rock);
-extern void jmap_filter_parser_push_index(const char *field, size_t index,
-                                          const char *name, void *rock);
+extern void jmap_filter_parser_push_index(const char *field,
+                                          size_t index,
+                                          const char *name,
+                                          void *rock);
 extern void jmap_filter_parser_pop(void *rock);
-extern void jmap_email_filtercondition_validate(const char *field, json_t *arg,
-                                                void *rock);
+extern void
+jmap_email_filtercondition_validate(const char *field, json_t *arg, void *rock);
 
 /* Matches MIME message mime against the JMAP Email query
  * filter.
@@ -124,7 +124,8 @@ extern void jmap_email_filtercondition_validate(const char *field, json_t *arg,
  * Returns non-zero if filter matches.
  * On error, sets the JMAP error in err. */
 typedef struct matchmime matchmime_t;
-extern matchmime_t *jmap_email_matchmime_new(const struct buf *buf, json_t **err);
+extern matchmime_t *jmap_email_matchmime_new(const struct buf *buf,
+                                             json_t **err);
 extern void jmap_email_matchmime_free(matchmime_t **matchmimep);
 extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 json_t *jfilter,
@@ -150,16 +151,15 @@ struct jmap_headermatch {
     struct buf tmp[3];
 };
 
-extern struct jmap_headermatch *jmap_headermatch_new(const char *header,
-                                                     const char *value,
-                                                     const char *strop);
+extern struct jmap_headermatch *
+jmap_headermatch_new(const char *header, const char *value, const char *strop);
 
 extern void jmap_headermatch_free(struct jmap_headermatch **hmp);
 
-extern struct jmap_headermatch *jmap_headermatch_dup(struct jmap_headermatch *hm);
+extern struct jmap_headermatch *
+jmap_headermatch_dup(struct jmap_headermatch *hm);
 
 extern int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg);
-
 
 #endif /* WITH_DAV */
 

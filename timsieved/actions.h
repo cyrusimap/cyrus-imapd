@@ -1,6 +1,5 @@
-/* actions.h -- executes the commands (creating, deleting scripts etc..) for timsieved
- * Tim Martin
- * 9/21/99
+/* actions.h -- executes the commands (creating, deleting scripts etc..) for
+ * timsieved Tim Martin 9/21/99
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -45,7 +44,6 @@
 #ifndef _ACTIONS_H_
 #define _ACTIONS_H_
 
-
 #include "prot.h"
 #include "util.h"
 
@@ -56,8 +54,11 @@ extern int sieved_tls_required;
  *
  */
 
-int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
-                 int starttls_done, int authenticated, sasl_ssf_t sasl_ssf);
+int capabilities(struct protstream *conn,
+                 sasl_conn_t *saslconn,
+                 int starttls_done,
+                 int authenticated,
+                 sasl_ssf_t sasl_ssf);
 
 /*
  * Get a sieve script with name "name" and output it's contents
@@ -71,8 +72,10 @@ int getscript(struct protstream *conn, const struct buf *name);
  *
  */
 
-int putscript(struct protstream *conn, const struct buf *name,
-              const struct buf *data, int verify_only);
+int putscript(struct protstream *conn,
+              const struct buf *name,
+              const struct buf *data,
+              int verify_only);
 
 /*
  * Rename the script with name 'oldname' to 'newname'
@@ -80,7 +83,8 @@ int putscript(struct protstream *conn, const struct buf *name,
  */
 
 int renamescript(struct protstream *conn,
-                 const struct buf *oldname, const struct buf *newname);
+                 const struct buf *oldname,
+                 const struct buf *newname);
 
 /*
  * Delete the script with name 'name'
@@ -94,7 +98,9 @@ int deletescript(struct protstream *conn, const struct buf *name);
  *
  */
 
-int cmd_havespace(struct protstream *sieved_out, const struct buf *sieve_name, unsigned long num);
+int cmd_havespace(struct protstream *sieved_out,
+                  const struct buf *sieve_name,
+                  unsigned long num);
 
 /*
  * List all the scripts for the user. place a '*' next to the active one

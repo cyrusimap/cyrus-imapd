@@ -64,10 +64,10 @@
 #define FNAME_ZONEINFODB "/zoneinfo.db"
 #define ZONEINFO_VERSION 1
 
-#define INFO_TZID    ".info"
+#define INFO_TZID ".info"
 #define zoneinfo_lookup_info(zi) zoneinfo_lookup(INFO_TZID, zi)
 
-#define LEAP_TZID    ".leap"
+#define LEAP_TZID ".leap"
 #define zoneinfo_lookup_leap(zi) zoneinfo_lookup(LEAP_TZID, zi)
 
 struct zoneinfo {
@@ -77,12 +77,7 @@ struct zoneinfo {
 };
 
 /* zoneinfo record types */
-enum {
-    ZI_ZONE = 0,
-    ZI_LINK,
-    ZI_INFO,
-    ZI_LEAP
-};
+enum { ZI_ZONE = 0, ZI_LINK, ZI_INFO, ZI_LEAP };
 
 /* open the zoneinfo db */
 extern int zoneinfo_open(const char *name);
@@ -92,14 +87,16 @@ extern int zoneinfo_open(const char *name);
 extern int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi);
 
 /* store a zoneinfo entry */
-extern int zoneinfo_store(const char *tzid, struct zoneinfo *zi,
-                          struct txn **tid);
+extern int
+zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid);
 
 /* process all zoneinfo entries (optionally matching 'find') */
-extern int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
-                         int (*proc)(const char *tzid, int tzidlen,
-                                     struct zoneinfo *zi, void *rock),
-                         void *rock);
+extern int zoneinfo_find(
+    const char *find,
+    int tzid_only,
+    time_t changedsince,
+    int (*proc)(const char *tzid, int tzidlen, struct zoneinfo *zi, void *rock),
+    void *rock);
 
 /* close the database (optionally committing txn) */
 extern void zoneinfo_close(struct txn *tid);

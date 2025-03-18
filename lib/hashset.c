@@ -49,8 +49,8 @@
 
 #include "assert.h"
 #include "hashset.h"
-#include "xmalloc.h"
 #include "util.h"
+#include "xmalloc.h"
 
 EXPORTED struct hashset *hashset_new(size_t bytesize)
 {
@@ -71,7 +71,7 @@ EXPORTED int hashset_add(struct hashset *hs, const void *value)
     size_t offset = 0;
     while (*pos) {
         offset = hs->recsize * (*pos - 1);
-        if (!memcmp(hs->data+offset, value, hs->bytesize))
+        if (!memcmp(hs->data + offset, value, hs->bytesize))
             return 0; // found it
         pos = hs->data + offset + hs->bytesize;
     }
@@ -83,14 +83,12 @@ EXPORTED int hashset_add(struct hashset *hs, const void *value)
             hs->data = xmalloc(hs->alloc * hs->recsize);
         }
         else {
-            hs->alloc *= 2;  // double the allocation each time
+            hs->alloc *= 2; // double the allocation each time
             hs->data = xrealloc(hs->data, hs->alloc * hs->recsize);
 
             // relocate after realloc if necessary
-            if (pos != base)
-                pos = hs->data + offset + hs->bytesize;
+            if (pos != base) pos = hs->data + offset + hs->bytesize;
         }
-
     }
 
     offset = hs->recsize * hs->count;
@@ -112,9 +110,9 @@ EXPORTED int hashset_exists(struct hashset *hs, const void *data)
     uint32_t pos = hs->starts[*((uint16_t *)data)];
     while (pos) {
         size_t offset = hs->recsize * (pos - 1);
-        if (!memcmp(hs->data+offset, data, hs->bytesize))
+        if (!memcmp(hs->data + offset, data, hs->bytesize))
             return 1; // found it
-        pos = *(uint32_t *) (hs->data + offset + hs->bytesize);
+        pos = *(uint32_t *)(hs->data + offset + hs->bytesize);
     }
 
     return 0; // not found

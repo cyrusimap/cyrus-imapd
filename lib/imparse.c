@@ -129,7 +129,7 @@ EXPORTED int imparse_astring(char **s, char **retval)
         (*s)++;
         while (Uisdigit(c = *(*s)++)) {
             sawdigit = 1;
-            len = len*10 + c - '0';
+            len = len * 10 + c - '0';
         }
         if (!sawdigit || c != '}' || *(*s)++ != '\r' || *(*s)++ != '\n') {
             *retval = NULL;
@@ -138,7 +138,7 @@ EXPORTED int imparse_astring(char **s, char **retval)
         *retval = *s;
         *s += len;
         c = **s;
-        *(*s)++ = '\0';  /* Note that 0 and '\0' mean the same thing */
+        *(*s)++ = '\0'; /* Note that 0 and '\0' mean the same thing */
         return c;
     }
 }
@@ -157,23 +157,21 @@ EXPORTED int imparse_isnatom(const char *s, int len)
     for (; len || *s; s++) {
         count++;
         if (len && count > len) break;
-        if (*s & 0x80 || *s <= 0x1f || *s == 0x7f ||
-            *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
-            *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
+        if (*s & 0x80 || *s <= 0x1f || *s == 0x7f || *s == ' ' || *s == '{' ||
+            *s == '(' || *s == ')' || *s == '\"' || *s == '%' || *s == '*' ||
+            *s == '\\')
+            return 0;
     }
     if (count >= 1024) return 0;
     return count;
 }
 
-EXPORTED int imparse_isatom(const char *s)
-{
-    return imparse_isnatom(s, 0);
-}
+EXPORTED int imparse_isatom(const char *s) { return imparse_isnatom(s, 0); }
 
 /*
  * Return nonzero if 's' matches the grammar for a sequence
  */
-EXPORTED int imparse_issequence(const char* s)
+EXPORTED int imparse_issequence(const char *s)
 {
     int c;
     int len = 0;
@@ -225,16 +223,13 @@ static int reject_http_method_tag(const char *s)
      */
     switch (s[0]) {
     case 'A':
-        if (0 == strcmp(s, "ACL"))
-            return 1;
+        if (0 == strcmp(s, "ACL")) return 1;
         break;
     case 'B':
-        if (0 == strcmp(s, "BIND"))
-            return 1;
+        if (0 == strcmp(s, "BIND")) return 1;
         break;
     case 'L':
-        if (0 == strcmp(s, "LOCK"))
-            return 1;
+        if (0 == strcmp(s, "LOCK")) return 1;
         break;
     case 'M':
         if (0 == strcmp(s, "MKCALENDAR"))
@@ -255,16 +250,13 @@ static int reject_http_method_tag(const char *s)
             return 1;
         break;
     case 'R':
-        if (0 == strcmp(s, "REPORT"))
-            return 1;
+        if (0 == strcmp(s, "REPORT")) return 1;
         break;
     case 'S':
-        if (0 == strcmp(s, "SEARCH"))
-            return 1;
+        if (0 == strcmp(s, "SEARCH")) return 1;
         break;
     case 'U':
-        if (0 == strcmp(s, "UNBIND"))
-            return 1;
+        if (0 == strcmp(s, "UNBIND")) return 1;
         break;
     }
 
@@ -277,28 +269,25 @@ static int reject_http_method_tag(const char *s)
 EXPORTED int imparse_istag(const char *s, unsigned command_count)
 {
     static const char reject[] = {
-    /*       0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
-    /* 0_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    /* 1_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    /* 2_ */ 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
-    /* 3_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0,
-    /* 4_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    /* 5_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-    /* 6_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    /* 7_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
+        /*       0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+        /* 0_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        /* 1_ */ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        /* 2_ */ 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0,
+        /* 3_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0,
+        /* 4_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        /* 5_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        /* 6_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        /* 7_ */ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
     };
     const unsigned char *p;
 
-    if (!s || !*s)
-        return 0;
+    if (!s || !*s) return 0;
 
-    for (p = (const unsigned char *) s; p && *p; p++) {
-        if ((*p & 0x80) || reject[*p])
-            return 0;
+    for (p = (const unsigned char *)s; p && *p; p++) {
+        if ((*p & 0x80) || reject[*p]) return 0;
     }
 
-    if (command_count == 0 && reject_http_method_tag(s))
-        return 0;
+    if (command_count == 0 && reject_http_method_tag(s)) return 0;
 
     return 1;
 }
@@ -333,7 +322,7 @@ EXPORTED int imparse_range(const char *s, range_t *range)
     if (!Uisdigit(*s)) return -1;
 
     range->high = strtoul(s, &rem, 10);
-    if (!range->high || range->high > UINT32_MAX  || errno || *rem) {
+    if (!range->high || range->high > UINT32_MAX || errno || *rem) {
         errno = 0;
         return -1;
     }

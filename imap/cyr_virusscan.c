@@ -46,27 +46,27 @@
 #include <unistd.h>
 #endif
 #include <getopt.h>
-#include <stdlib.h>
+#include <netinet/in.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <string.h>
-#include <netinet/in.h>
 
 /* cyrus includes */
+#include "append.h"
 #include "assert.h"
 #include "global.h"
-#include "append.h"
 #include "index.h"
 #include "mailbox.h"
 #include "map.h"
-#include "message.h"
-#include "xmalloc.h"
 #include "mboxlist.h"
+#include "message.h"
 #include "parseaddr.h"
 #include "prot.h"
-#include "util.h"
 #include "times.h"
+#include "util.h"
+#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -115,12 +115,12 @@ static int verbose = 0;
 struct scan_engine {
     const char *name;
     void *state;
-    void *(*init)(void);  /* initialize state */
-    int (*scanfile)(void *state,  /* scan fname & return non-zero if infected */
-                    const char *fname, const char **virname);
-    void (*destroy)(void *state);  /* destroy state */
+    void *(*init)(void);         /* initialize state */
+    int (*scanfile)(void *state, /* scan fname & return non-zero if infected */
+                    const char *fname,
+                    const char **virname);
+    void (*destroy)(void *state); /* destroy state */
 };
-
 
 #ifdef HAVE_CLAMAV
 /* ClamAV implementation */
@@ -148,7 +148,7 @@ void *clamav_init()
     }
 
     st->av_engine = cl_engine_new();
-    if ( ! st->av_engine ) {
+    if (!st->av_engine) {
         fatal("Failed to initialize AV engine", EX_SOFTWARE);
     }
 
@@ -161,12 +161,12 @@ void *clamav_init()
     }
 
     printf("Loaded %d virus signatures (%.3f seconds).\n",
-           sigs, (now_ms() - starttime)/1000.0);
+           sigs,
+           (now_ms() - starttime) / 1000.0);
 
     /* build av_engine */
     if ((r = cl_engine_compile(st->av_engine))) {
-        syslog(LOG_ERR,
-               "Database initialization error: %s", cl_strerror(r));
+        syslog(LOG_ERR, "Database initialization error: %s", cl_strerror(r));
         cl_engine_free(st->av_engine);
         fatal(cl_strerror(r), EX_SOFTWARE);
     }
@@ -185,20 +185,17 @@ void *clamav_init()
     /* maximum recursion level for archives */
     cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_RECURSION, 16);
 
-    return (void *) st;
+    return (void *)st;
 }
 
-
-int clamav_scanfile(void *state, const char *fname,
-                    const char **virname)
+int clamav_scanfile(void *state, const char *fname, const char **virname)
 {
-    struct clamav_state *st = (struct clamav_state *) state;
+    struct clamav_state *st = (struct clamav_state *)state;
     int r;
 
     /* scan file */
 #ifdef CL_SCAN_STDOPT
-    r = cl_scanfile(fname, virname, NULL, st->av_engine,
-                    CL_SCAN_STDOPT);
+    r = cl_scanfile(fname, virname, NULL, st->av_engine, CL_SCAN_STDOPT);
 #else
     static struct cl_scan_options options;
 
@@ -227,7 +224,7 @@ int clamav_scanfile(void *state, const char *fname,
 
 void clamav_destroy(void *state)
 {
-    struct clamav_state *st = (struct clamav_state *) state;
+    struct clamav_state *st = (struct clamav_state *)state;
 
     if (st->av_engine) {
         /* free memory */
@@ -236,17 +233,17 @@ void clamav_destroy(void *state)
     free(st);
 }
 
-static struct scan_engine engine =
-{ "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy };
+static struct scan_engine engine = {
+    "ClamAV", NULL, &clamav_init, &clamav_scanfile, &clamav_destroy};
 
 #elif defined(HAVE_SOME_UNKNOWN_VIRUS_SCANNER)
 /* XXX  Add other implementations here */
 
 #else
 /* NO configured virus scanner */
-static struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL };
+static struct scan_engine engine = {
+    "<None Configured>", NULL, NULL, NULL, NULL};
 #endif
-
 
 /* forward declarations */
 void usage(char *name) __attribute__((noreturn));
@@ -256,21 +253,23 @@ unsigned virus_check(struct mailbox *mailbox,
                      void *rock);
 static int load_notification_template(struct buf *dst);
 static int check_notification_template(const struct buf *template);
-static void put_notification_headers(FILE *f, int counter, time_t t,
+static void put_notification_headers(FILE *f,
+                                     int counter,
+                                     time_t t,
                                      const mbname_t *mbname);
 static void append_notifications(const struct buf *template);
 
 static const char *default_notification_template =
-	"The following message was deleted from mailbox '%MAILBOX%'\n"
-	"because it was infected with virus '%VIRUS%'\n"
-	"\n"
-	"\tMessage-ID: %MSG_ID%\n"
-	"\tDate: %MSG_DATE%\n"
-	"\tFrom: %MSG_FROM%\n"
-	"\tSubject: %MSG_SUBJECT%\n"
-	"\tIMAP UID: %MSG_UID%\n";
+    "The following message was deleted from mailbox '%MAILBOX%'\n"
+    "because it was infected with virus '%VIRUS%'\n"
+    "\n"
+    "\tMessage-ID: %MSG_ID%\n"
+    "\tDate: %MSG_DATE%\n"
+    "\tFrom: %MSG_FROM%\n"
+    "\tSubject: %MSG_SUBJECT%\n"
+    "\tIMAP UID: %MSG_UID%\n";
 
-int main (int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     int opt;
     char *alt_config = NULL;
@@ -285,16 +284,15 @@ int main (int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "notify", no_argument, NULL, 'n' },
-        { "remove-infected", no_argument, NULL, 'r' },
-        { "search", required_argument, NULL, 's' },
-        { "verbose", no_argument, NULL, 'v' },
-        { 0, 0, 0, 0 },
+        {"notify",          no_argument,       NULL, 'n'},
+        {"remove-infected", no_argument,       NULL, 'r'},
+        {"search",          required_argument, NULL, 's'},
+        {"verbose",         no_argument,       NULL, 'v'},
+        {0,                 0,                 0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -313,11 +311,12 @@ int main (int argc, char *argv[])
             break;
 
         case 'v':
-            verbose ++;
+            verbose++;
             break;
 
         case 'h':
-        default: usage(argv[0]);
+        default:
+            usage(argv[0]);
         }
     }
 
@@ -335,7 +334,8 @@ int main (int argc, char *argv[])
     }
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&scan_namespace, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(&scan_namespace,
+                                     NAMESPACE_OPTION_ADMIN))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -346,11 +346,12 @@ int main (int argc, char *argv[])
         struct protstream *scan_in = NULL;
         struct protstream *scan_out = NULL;
 
-        scan_in = prot_readmap(search_str, strlen(search_str)+1); /* inc NUL */
+        scan_in =
+            prot_readmap(search_str, strlen(search_str) + 1); /* inc NUL */
         scan_out = prot_new(2, 1);
 
-        srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
-                                          &scan_namespace, NULL, NULL, 1);
+        srock.searchargs = new_searchargs(
+            "*", GETSEARCH_CHARSET_KEYWORD, &scan_namespace, NULL, NULL, 1);
         c = get_search_program(scan_in, scan_out, srock.searchargs);
         prot_free(scan_in);
         prot_flush(scan_out);
@@ -369,7 +370,8 @@ int main (int argc, char *argv[])
 
     if (optind == argc) { /* do the whole partition */
         mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, &srock);
-    } else {
+    }
+    else {
         strarray_t *array = strarray_new();
         for (; optind < argc; optind++) {
             strarray_append(array, argv[optind]);
@@ -387,8 +389,10 @@ int main (int argc, char *argv[])
            srock.total_infected,
            disinfect ? "removed" : "found");
 
-    if (srock.searchargs) freesearchargs(srock.searchargs);
-    else if (engine.destroy) engine.destroy(engine.state);
+    if (srock.searchargs)
+        freesearchargs(srock.searchargs);
+    else if (engine.destroy)
+        engine.destroy(engine.state);
 
     cyrus_done();
 
@@ -397,12 +401,16 @@ int main (int argc, char *argv[])
 
 void usage(char *name)
 {
-    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ] [-v]\n"
-           "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ] "
+           "[-v]\n"
+           "\t[mboxpattern1 ... [mboxpatternN]]\n",
+           name);
     printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
     printf("\t -s imap-search-string  Rather than scanning for viruses,\n"
-           "\t    messages matching the search criteria will be treated as infected.\n"
-           "\t    Useful for removing messages without a distinct signature, such as Phish.\n");
+           "\t    messages matching the search criteria will be treated as "
+           "infected.\n"
+           "\t    Useful for removing messages without a distinct signature, "
+           "such as Phish.\n");
     printf("\t -r remove infected messages\n");
     printf("\t -n notify mailbox owner of deleted messages via email\n");
     printf("\t -v verbose output\n");
@@ -412,7 +420,10 @@ void usage(char *name)
 static void print_header(void)
 {
     printf("\n%-40s\t%10s\t%6s\t%s\n",
-           "Mailbox Name", "Msg UID", "Status", "Virus Name");
+           "Mailbox Name",
+           "Msg UID",
+           "Status",
+           "Virus Name");
     printf("----------------------------------------\t"
            "----------\t------\t"
            "--------------------------------------------------\n");
@@ -428,7 +439,7 @@ int scan_me(struct findall_data *data, void *rock)
     struct infected_mbox *i_mbox = NULL;
     const char *name = mbname_intname(data->mbname);
     const char *userid = mbname_userid(data->mbname);
-    struct scan_rock *srock = (struct scan_rock *) rock;
+    struct scan_rock *srock = (struct scan_rock *)rock;
 
     /* reset infected count when user changes, without choking
      * on shared mailboxes, which don't have a user. */
@@ -466,15 +477,17 @@ int scan_me(struct findall_data *data, void *rock)
             if (user && !strcmp(owner, user->owner)) {
                 i_mbox = user;
                 free(owner);
-            } else {
+            }
+            else {
                 /* new owner (Inbox) */
-                struct infected_mbox *new = xzmalloc(sizeof(struct infected_mbox));
+                struct infected_mbox *new =
+                    xzmalloc(sizeof(struct infected_mbox));
                 new->owner = owner;
                 new->next = user;
                 i_mbox = user = new;
             }
         }
-#if 0  /* XXX what to do with public mailboxes (bboards)? */
+#if 0 /* XXX what to do with public mailboxes (bboards)? */
         else {
             if (!public) {
                 public = xzmalloc(sizeof(struct infected_mbox));
@@ -489,17 +502,27 @@ int scan_me(struct findall_data *data, void *rock)
     srock->i_mbox = i_mbox;
 
     if (verbose) printf("Scanning %s...\n", name);
-    mailbox_expunge(mailbox, NULL, virus_check, srock, NULL, EVENT_MESSAGE_EXPUNGE, /*limit*/0);
-    if (srock->idx_state) index_close(&srock->idx_state);  /* closes mailbox */
-    else mailbox_close(&mailbox);
+    mailbox_expunge(mailbox,
+                    NULL,
+                    virus_check,
+                    srock,
+                    NULL,
+                    EVENT_MESSAGE_EXPUNGE,
+                    /*limit*/ 0);
+    if (srock->idx_state)
+        index_close(&srock->idx_state); /* closes mailbox */
+    else
+        mailbox_close(&mailbox);
 
     srock->mailboxes_scanned++;
 
     return 0;
 }
 
-void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
-                   const struct index_record *record, const char *virname)
+void create_digest(struct infected_mbox *i_mbox,
+                   struct mailbox *mailbox,
+                   const struct index_record *record,
+                   const char *virname)
 {
     struct infected_msg *i_msg = xzmalloc(sizeof(struct infected_msg));
     char *tmp;
@@ -517,8 +540,7 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
     /* decode the FROM header */
     tmp = mailbox_cache_get_env(mailbox, record, ENV_FROM);
     message_parse_env_address(tmp, &addr);
-    if (addr.name)
-        buf_printf(&from, "\"%s\" ", addr.name);
+    if (addr.name) buf_printf(&from, "\"%s\" ", addr.name);
     buf_printf(&from, "<%s@%s>", addr.mailbox, addr.domain);
     free(tmp);
     i_msg->from = buf_release(&from);
@@ -533,16 +555,15 @@ unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *deciderock)
 {
-    struct scan_rock *srock = (struct scan_rock *) deciderock;
+    struct scan_rock *srock = (struct scan_rock *)deciderock;
     struct infected_mbox *i_mbox = srock->i_mbox;
-    const char *virname =
-        "Cyrus Administrator Targeted Removal (Phish, etc.)";
+    const char *virname = "Cyrus Administrator Targeted Removal (Phish, etc.)";
     int r = 0;
 
     if (srock->searchargs) {
         /* run the search program against this message */
-        r = index_search_evaluate(srock->idx_state,
-                                  srock->searchargs->root, srock->msgno++);
+        r = index_search_evaluate(
+            srock->idx_state, srock->searchargs->root, srock->msgno++);
     }
     else if (engine.scanfile) {
         const char *fname = mailbox_record_fname(mailbox, record);
@@ -555,25 +576,27 @@ unsigned virus_check(struct mailbox *mailbox,
         /* print header if this is the first infection seen for this user */
         if (verbose || !srock->user_infected) print_header();
 
-        char *extname = mboxname_to_external(mailbox_name(mailbox),
-                                             srock->namespace,
-                                             NULL);
+        char *extname =
+            mboxname_to_external(mailbox_name(mailbox), srock->namespace, NULL);
 
-        printf("%-40s\t%10u\t%6s\t%s\n", extname, record->uid,
+        printf("%-40s\t%10u\t%6s\t%s\n",
+               extname,
+               record->uid,
                (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
                virname);
 
         free(extname);
 
-        srock->user_infected ++;
-        srock->total_infected ++;
+        srock->user_infected++;
+        srock->total_infected++;
 
         if (disinfect) {
             if (email_notification && i_mbox) {
                 create_digest(i_mbox, mailbox, record, virname);
             }
         }
-        else r = 0;
+        else
+            r = 0;
     }
 
     return r;
@@ -592,9 +615,10 @@ static int load_notification_template(struct buf *dst)
 
     int fd = open(template_fname, O_RDONLY);
     if (fd == -1) {
-        syslog(LOG_WARNING, "unable to read notification template file %s (%m), "
-                            "using default instead",
-                            template_fname);
+        syslog(LOG_WARNING,
+               "unable to read notification template file %s (%m), "
+               "using default instead",
+               template_fname);
         buf_setcstr(dst, default_notification_template);
         return 0;
     }
@@ -632,10 +656,13 @@ static int check_notification_template(const struct buf *template)
 
     /* warn about missing fields, but they're not catastrophic */
     for (i = 0; i < sizeof(subs) / sizeof(subs[0]); i++) {
-        if (!memmem(buf_base(template), buf_len(template),
-                    subs[i], strlen(subs[i])))
-            syslog(LOG_WARNING, "notification template is missing %s substitution",
-                                subs[i]);
+        if (!memmem(buf_base(template),
+                    buf_len(template),
+                    subs[i],
+                    strlen(subs[i])))
+            syslog(LOG_WARNING,
+                   "notification template is missing %s substitution",
+                   subs[i]);
     }
 
     /* stub a message, and do minimal checking for RFC 822 compliance */
@@ -658,7 +685,8 @@ static int check_notification_template(const struct buf *template)
     /* not bothering to perform substitutions */
     char *encoded_chunk = charset_qpencode_mimebody(buf_base(&chunk),
                                                     buf_len(&chunk),
-                                                    /* force_quote */ 0, NULL);
+                                                    /* force_quote */ 0,
+                                                    NULL);
     fputs(encoded_chunk, f);
     fputs("\r\n", f);
     free(encoded_chunk);
@@ -678,11 +706,11 @@ done:
     return r;
 }
 
-static void put_notification_headers(FILE *f, int counter, time_t t,
-                                     const mbname_t *mbname)
+static void
+put_notification_headers(FILE *f, int counter, time_t t, const mbname_t *mbname)
 {
     pid_t p = getpid();
-    char datestr[RFC5322_DATETIME_MAX+1];
+    char datestr[RFC5322_DATETIME_MAX + 1];
     char *encoded_subject;
 
     time_to_rfc5322(t, datestr, sizeof(datestr));
@@ -690,11 +718,16 @@ static void put_notification_headers(FILE *f, int counter, time_t t,
         config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_SUBJECT), 0, 0);
 
     fprintf(f, "Return-Path: <>\r\n");
-    fprintf(f, "Message-ID: <cmu-cyrus-%d-%d-%d@%s>\r\n",
-               (int) p, (int) t, counter, config_servername);
+    fprintf(f,
+            "Message-ID: <cmu-cyrus-%d-%d-%d@%s>\r\n",
+            (int)p,
+            (int)t,
+            counter,
+            config_servername);
     fprintf(f, "Date: %s\r\n", datestr);
-    fprintf(f, "From: Mail System Administrator <%s>\r\n",
-               config_getstring(IMAPOPT_POSTMASTER));
+    fprintf(f,
+            "From: Mail System Administrator <%s>\r\n",
+            config_getstring(IMAPOPT_POSTMASTER));
     fprintf(f, "To: <%s>\r\n", mbname_userid(mbname));
     fprintf(f, "Subject: %s\r\n", encoded_subject);
     fprintf(f, "MIME-Version: 1.0\r\n");
@@ -711,7 +744,7 @@ static void append_notifications(const struct buf *template)
     int outgoing_count = 0;
     struct namespace notification_namespace;
 
-    mboxname_init_namespace(&notification_namespace, /*options*/0);
+    mboxname_init_namespace(&notification_namespace, /*options*/ 0);
 
     while ((i_mbox = user)) {
         if (i_mbox->msgs) {
@@ -750,15 +783,14 @@ static void append_notifications(const struct buf *template)
 
                 /* stringify the uid */
                 n = snprintf(uidbuf, sizeof(uidbuf), "%lu", msg->uid);
-                assert(n > 0 && (unsigned) n < sizeof(uidbuf));
+                assert(n > 0 && (unsigned)n < sizeof(uidbuf));
 
                 buf_copy(&chunk, template);
                 buf_tocrlf(&chunk);
 
                 mbname_t *mailbox = mbname_from_intname(msg->mboxname);
-                const char *extname = mbname_extname(mailbox,
-                                                     &notification_namespace,
-                                                     mbname_userid(owner));
+                const char *extname = mbname_extname(
+                    mailbox, &notification_namespace, mbname_userid(owner));
                 buf_replace_all(&chunk, "%MAILBOX%", extname);
                 buf_replace_all(&chunk, "%VIRUS%", msg->virname);
                 buf_replace_all(&chunk, "%MSG_ID%", msg->msgid);
@@ -787,9 +819,11 @@ static void append_notifications(const struct buf *template)
                 free(msg);
             }
 
-            char *encoded_message = charset_qpencode_mimebody(
-                                        buf_base(&message), buf_len(&message),
-                                        /* force_quote */ 0, NULL);
+            char *encoded_message =
+                charset_qpencode_mimebody(buf_base(&message),
+                                          buf_len(&message),
+                                          /* force_quote */ 0,
+                                          NULL);
             fputs(encoded_message, f);
             fflush(f);
             msgsize = ftell(f);
@@ -798,14 +832,22 @@ static void append_notifications(const struct buf *template)
             buf_free(&message);
 
             /* send MessageAppend event notification */
-            r = append_setup(&as, mbname_intname(owner), NULL, NULL, 0, NULL, NULL, 0,
+            r = append_setup(&as,
+                             mbname_intname(owner),
+                             NULL,
+                             NULL,
+                             0,
+                             NULL,
+                             NULL,
+                             0,
                              EVENT_MESSAGE_APPEND);
 
             if (!r) {
                 pout = prot_new(fd, 0);
                 prot_rewind(pout);
                 r = append_fromstream(&as, &body, pout, msgsize, t, NULL);
-                /* n.b. append_fromstream calls append_abort itself if it fails */
+                /* n.b. append_fromstream calls append_abort itself if it fails
+                 */
                 if (!r) r = append_commit(&as);
 
                 if (body) {
@@ -816,11 +858,12 @@ static void append_notifications(const struct buf *template)
             }
 
             fclose(f);
-user_done:
+        user_done:
             if (r) {
-                syslog(LOG_ERR, "couldn't send notification to user %s: %s",
-                                mbname_userid(owner),
-                                error_message(r));
+                syslog(LOG_ERR,
+                       "couldn't send notification to user %s: %s",
+                       mbname_userid(owner),
+                       error_message(r));
             }
 
             mbname_free(&owner);

@@ -42,27 +42,27 @@
 
 #include <config.h>
 
-#include <sys/types.h>
 #include <stdlib.h>
-#include <syslog.h>
 #include <string.h>
+#include <sys/types.h>
+#include <syslog.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
+#include "annotate.h"
 #include "assert.h"
+#include "bsearch.h"
 #include "cyr_qsort_r.h"
-#include "search_expr.h"
-#include "search_query.h"
+#include "global.h"
 #include "imapd.h"
 #include "message.h"
-#include "annotate.h"
-#include "global.h"
-#include "bsearch.h"
-#include "xstrlcpy.h"
-#include "xmalloc.h"
+#include "search_expr.h"
+#include "search_query.h"
 #include "smallarrayu64.h"
 #include "statuscache.h"
+#include "xmalloc.h"
+#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -123,8 +123,9 @@ EXPORTED void search_query_free(search_query_t *query)
     ptrarray_fini(&query->merged_msgdata);
 
     /* free pending MsgData arrays */
-    for (i = 0 ; i < query->saved_msgdata.count ; i++) {
-        struct search_saved_msgdata *saved = ptrarray_nth(&query->saved_msgdata, i);
+    for (i = 0; i < query->saved_msgdata.count; i++) {
+        struct search_saved_msgdata *saved =
+            ptrarray_nth(&query->saved_msgdata, i);
         index_msgdata_free(saved->msgdata, saved->n);
         free(saved);
     }
@@ -157,15 +158,16 @@ EXPORTED search_folder_t *search_query_find_folder(search_query_t *query,
 /*
  * Switch the folder over to reporting MSNs rather than UIDs.
  */
-EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state *state)
+EXPORTED void search_folder_use_msn(search_folder_t *folder,
+                                    struct index_state *state)
 {
     int uid;
     unsigned msgno;
     bitvector_t msns = BV_INITIALIZER;
 
-    search_folder_foreach(folder, uid) {
-        if ((msgno = index_finduid(state, uid, FIND_EQ)))
-            bv_set(&msns, msgno);
+    search_folder_foreach(folder, uid)
+    {
+        if ((msgno = index_finduid(state, uid, FIND_EQ))) bv_set(&msns, msgno);
     }
     bv_fini(&folder->uids);
     folder->uids = msns;
@@ -187,9 +189,8 @@ static seqset_t *_search_folder_get_seqset(const bitvector_t *uids)
     seqset_t *seq = seqset_init(0, SEQ_SPARSE);
     int uid;
 
-    for (uid = bv_next_set(uids, 0) ;
-         uid != -1 ;
-         uid = bv_next_set(uids, uid+1))
+    for (uid = bv_next_set(uids, 0); uid != -1;
+         uid = bv_next_set(uids, uid + 1))
         seqset_add(seq, uid, 1);
 
     return seq;
@@ -211,7 +212,8 @@ EXPORTED seqset_t *search_folder_get_all_seqset(const search_folder_t *folder)
  * results or zero, and the newly allocated array in *'arrayp'.  The
  * caller is responsible for freeing the result using free().
  */
-EXPORTED int search_folder_get_array(const search_folder_t *folder, unsigned int **arrayp)
+EXPORTED int search_folder_get_array(const search_folder_t *folder,
+                                     unsigned int **arrayp)
 {
     int n = search_folder_get_count(folder);
     unsigned int *p;
@@ -220,9 +222,8 @@ EXPORTED int search_folder_get_array(const search_folder_t *folder, unsigned int
     if (n) {
 
         p = *arrayp = xzmalloc(sizeof(unsigned int) * n);
-        for (uid = bv_next_set(&folder->uids, 0) ;
-             uid != -1 ;
-             uid = bv_next_set(&folder->uids, uid+1))
+        for (uid = bv_next_set(&folder->uids, 0); uid != -1;
+             uid = bv_next_set(&folder->uids, uid + 1))
             *p++ = (unsigned)uid;
     }
 
@@ -260,7 +261,8 @@ EXPORTED unsigned int search_folder_get_all_count(const search_folder_t *folder)
     return folder->esearch.all_count;
 }
 
-EXPORTED uint64_t search_folder_get_highest_modseq(const search_folder_t *folder)
+EXPORTED uint64_t
+search_folder_get_highest_modseq(const search_folder_t *folder)
 {
     return folder->esearch.highest_modseq;
 }
@@ -277,7 +279,8 @@ EXPORTED uint64_t search_folder_get_last_modseq(const search_folder_t *folder)
 
 /* ====================================================================== */
 
-static search_folder_t *query_get_folder(search_query_t *query, const char *mboxname)
+static search_folder_t *query_get_folder(search_query_t *query,
+                                         const char *mboxname)
 {
     search_folder_t *folder;
 
@@ -326,8 +329,8 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
         }
         if (uidvalidity > folder->uidvalidity) {
             /* these uids are newer than what we have,
-            * forget the old ones; or none at all and
-            * remember the uidvalidity for later */
+             * forget the old ones; or none at all and
+             * remember the uidvalidity for later */
             if (folder->uidvalidity) {
                 bv_clearall(&folder->uids);
                 bv_clearall(&folder->found_uids);
@@ -385,8 +388,7 @@ out:
     return r;
 }
 
-static void query_end_index(search_query_t *query,
-                            struct index_state **statep)
+static void query_end_index(search_query_t *query, struct index_state **statep)
 {
     if (*statep != query->state)
         index_close(statep);
@@ -396,8 +398,8 @@ static void query_end_index(search_query_t *query,
 
 /* ====================================================================== */
 
-static void add_folder(const char *key __attribute__((unused)),
-                       void *data, void *rock)
+static void
+add_folder(const char *key __attribute__((unused)), void *data, void *rock)
 {
     search_folder_t *folder = data;
     ptrarray_t *array = rock;
@@ -429,7 +431,7 @@ static void query_assign_folder_ids(search_query_t *query)
 
     ptrarray_sort(&folders, compare_folders);
 
-    for (i = 0 ; i < folders.count ; i++) {
+    for (i = 0; i < folders.count; i++) {
         search_folder_t *folder = ptrarray_nth(&folders, i);
 
         if (search_folder_get_count(folder) && folder->id < 0) {
@@ -446,16 +448,18 @@ static void query_assign_folder_ids(search_query_t *query)
 static void query_load_msgdata(search_query_t *query,
                                search_folder_t *folder,
                                struct index_state *state,
-                               unsigned *msgno_list, unsigned nmsgs)
+                               unsigned *msgno_list,
+                               unsigned nmsgs)
 {
     unsigned i;
     MsgData **msgdata;
     struct search_saved_msgdata *saved;
 
-    msgdata = index_msgdata_load(state, msgno_list, nmsgs, query->sortcrit, 0, NULL);
+    msgdata =
+        index_msgdata_load(state, msgno_list, nmsgs, query->sortcrit, 0, NULL);
 
     /* add the new messages to the global list */
-    for (i = 0 ; i < nmsgs ; i++) {
+    for (i = 0; i < nmsgs; i++) {
         ptrarray_append(&query->merged_msgdata, msgdata[i]);
         msgdata[i]->folder = folder;
     }
@@ -475,7 +479,8 @@ struct subquery_rock {
 
 static int folder_partnum_cmp QSORT_R_COMPAR_ARGS(const void *va,
                                                   const void *vb,
-                                                  void *rock __attribute__((unused)))
+                                                  void *rock
+                                                  __attribute__((unused)))
 {
     const struct search_folder_partnum *a = va;
     const struct search_folder_partnum *b = vb;
@@ -486,7 +491,8 @@ static int folder_partnum_cmp QSORT_R_COMPAR_ARGS(const void *va,
         else
             return a->partnum < b->partnum ? -1 : 1;
     }
-    else return a->uid < b->uid ? -1 : 1;
+    else
+        return a->uid < b->uid ? -1 : 1;
 }
 
 static int _subquery_run_one_folder(search_query_t *query,
@@ -507,15 +513,17 @@ static int _subquery_run_one_folder(search_query_t *query,
 
     if (e && query->verbose) {
         char *s = search_expr_serialise(e);
-        syslog(LOG_INFO, "Folder %s: applying scan expression: %s",
-                mboxname, s);
+        syslog(
+            LOG_INFO, "Folder %s: applying scan expression: %s", mboxname, s);
         free(s);
     }
 
     if (query->sortcrit && query->verbose) {
         char *s = sortcrit_as_string(query->sortcrit);
-        syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
-               mboxname, s);
+        syslog(LOG_INFO,
+               "Folder %s: loading MsgData for sort criteria %s",
+               mboxname,
+               s);
         free(s);
     }
 
@@ -532,12 +540,12 @@ static int _subquery_run_one_folder(search_query_t *query,
     if (!state->exists) goto out;
 
     search_expr_internalise(state, e);
- 
+
     start = 1;
     end = state->exists;
 
     /* Compress the search range down if a sequence was given at toplevel */
-    for (child = e->children ; child ; child = child->next) {
+    for (child = e->children; child; child = child->next) {
         if (child->op == SEOP_MATCH && child->attr &&
             (!strcmp("uid", child->attr->name) ||
              !strcmp("msgno", child->attr->name))) {
@@ -546,8 +554,7 @@ static int _subquery_run_one_folder(search_query_t *query,
             unsigned last = seqset_last(seq);
 
             if (child->attr->name[0] == 'u') {
-                if (first > 1)
-                    first = index_finduid(state, first, FIND_LE);
+                if (first > 1) first = index_finduid(state, first, FIND_LE);
                 if (last < state->last_uid)
                     last = index_finduid(state, last, FIND_LE);
             }
@@ -561,9 +568,10 @@ static int _subquery_run_one_folder(search_query_t *query,
     msgno = start;
 
     if (query->sortcrit)
-        msgno_list = (unsigned *) xmalloc(range_size * sizeof(unsigned));
+        msgno_list = (unsigned *)xmalloc(range_size * sizeof(unsigned));
 
-    switch (searchargs->returnopts & ~(SEARCH_RETURN_SAVE | SEARCH_RETURN_RELEVANCY)) {
+    switch (searchargs->returnopts &
+            ~(SEARCH_RETURN_SAVE | SEARCH_RETURN_RELEVANCY)) {
 
     case SEARCH_RETURN_MAX:
         searchargs->partial.range.is_last = 1;
@@ -599,9 +607,9 @@ static int _subquery_run_one_folder(search_query_t *query,
 
     /* One pass through the folder's message list */
     for (; msgno >= start && msgno <= end &&
-             (do_all || (count < searchargs->partial.range.high));
+           (do_all || (count < searchargs->partial.range.high));
          msgno += inc) {
-        struct index_map *im = &state->map[msgno-1];
+        struct index_map *im = &state->map[msgno - 1];
 
         if (query->prock) {
             if (inc < 0)
@@ -623,19 +631,19 @@ static int _subquery_run_one_folder(search_query_t *query,
         }
 
         /* moot if already in the uids set */
-        if (folder && bv_isset(&folder->uids, im->uid))
-            continue;
+        if (folder && bv_isset(&folder->uids, im->uid)) continue;
 
         /* can happen if we didn't "tellchanges" yet */
-        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+            !query->want_expunged)
             continue;
 
         /* run the search program */
-        if (!index_search_evaluate(state, e, msgno))
-            continue;
+        if (!index_search_evaluate(state, e, msgno)) continue;
 
         if (!folder) {
-            folder = query_get_valid_folder(query, mboxname, state->uidvalidity);
+            folder =
+                query_get_valid_folder(query, mboxname, state->uidvalidity);
             if (!folder) {
                 if (query->checkfolder) {
                     /* filtered out */
@@ -643,7 +651,7 @@ static int _subquery_run_one_folder(search_query_t *query,
                 }
                 else {
                     r = IMAP_INTERNAL;
-                    goto out;   /* can't happen */
+                    goto out; /* can't happen */
                 }
             }
 
@@ -675,8 +683,7 @@ static int _subquery_run_one_folder(search_query_t *query,
         folder->esearch.last_match = msgno;
         folder->esearch.uid_count++;
 
-        if (query->sortcrit)
-            msgno_list[nmsgs++] = msgno;
+        if (query->sortcrit) msgno_list[nmsgs++] = msgno;
     }
 
     /* msgno_list contains only the MSNs for newly
@@ -709,7 +716,8 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
     if (query->error) return;
     if (!folder->found_dirty) return;
 
-    if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
+    if (config_getenum(IMAPOPT_SEARCH_ENGINE) ==
+        IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
         /* The squat engine is unable to evaluate unindexed messages, and so
          * returns them in the results whether they match or not.  It relies
          * on this post-processing stage applying the indexed term as well.
@@ -750,9 +758,11 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
 
     /* sort partnums by uid */
     if (dynarray_size(&folder->partnums)) {
-        cyr_qsort_r(folder->partnums.data, folder->partnums.count,
-                sizeof(struct search_folder_partnum),
-                folder_partnum_cmp, NULL);
+        cyr_qsort_r(folder->partnums.data,
+                    folder->partnums.count,
+                    sizeof(struct search_folder_partnum),
+                    folder_partnum_cmp,
+                    NULL);
     }
 
     folder->found_dirty = 0;
@@ -773,8 +783,8 @@ static int subquery_post_excluded(const mbentry_t *mbentry, void *rock)
 }
 
 static void subquery_clear_found(const char *key __attribute__((unused)),
-                                     void *data,
-                                     void *rock __attribute__((unused)))
+                                 void *data,
+                                 void *rock __attribute__((unused)))
 {
     search_folder_t *folder = data;
     bv_clearall(&folder->found_uids);
@@ -812,7 +822,8 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
         if (e->attr && search_can_match(e->op, e->attr->part)) {
             if (e->attr->flags & SEA_ISLIST) {
                 bx->matchlist(bx, e->attr->part, e->value.list);
-            } else {
+            }
+            else {
                 bx->match(bx, e->attr->part, e->value.s);
             }
         }
@@ -824,32 +835,40 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
 
     if (bop != -1) {
         bx->begin_boolean(bx, bop);
-        for (child = e->children ; child ; child = child->next)
+        for (child = e->children; child; child = child->next)
             search_build_query(bx, child);
         bx->end_boolean(bx, bop);
     }
 }
 
-static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
-                             uint32_t uid, const char *partid,
-                             void *rock)
+static int add_found_uid(const char *mboxname,
+                         uint32_t uidvalidity,
+                         uint32_t uid,
+                         const char *partid,
+                         void *rock)
 {
     struct subquery_rock *qr = rock;
-    search_folder_t *folder = query_get_valid_folder(qr->query, mboxname, uidvalidity);
+    search_folder_t *folder =
+        query_get_valid_folder(qr->query, mboxname, uidvalidity);
     if (folder) {
         bv_set(&folder->found_uids, uid);
         folder->found_dirty = 1;
         if (partid && qr->query->want_partids && !qr->is_excluded) {
-            uint32_t partnum = (uint32_t)(uintptr_t) hash_lookup(partid, &qr->query->partnum_by_id);
+            uint32_t partnum = (uint32_t)(uintptr_t)hash_lookup(
+                partid, &qr->query->partnum_by_id);
             if (!partnum) {
                 partnum = ++qr->query->partnum_seq;
-                hash_insert(partid, (void*)(uintptr_t) partnum, &qr->query->partnum_by_id);
-                hashu64_insert(partnum, xstrdup(partid), &qr->query->partid_by_num);
+                hash_insert(partid,
+                            (void *)(uintptr_t)partnum,
+                            &qr->query->partnum_by_id);
+                hashu64_insert(
+                    partnum, xstrdup(partid), &qr->query->partid_by_num);
             }
             if (!folder->partnums.membsize) {
-                dynarray_init(&folder->partnums, sizeof(struct search_folder_partnum));
+                dynarray_init(&folder->partnums,
+                              sizeof(struct search_folder_partnum));
             }
-            struct search_folder_partnum pnumuid = { uid, partnum };
+            struct search_folder_partnum pnumuid = {uid, partnum};
             dynarray_append(&folder->partnums, &pnumuid);
         }
     }
@@ -857,9 +876,10 @@ static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
 }
 
 static void subquery_run_indexed(const char *key __attribute__((unused)),
-                                 void *data, void *rock)
+                                 void *data,
+                                 void *rock)
 {
-//     const char *mboxname = key;
+    //     const char *mboxname = key;
     search_subquery_t *sub = data;
     search_query_t *query = rock;
     search_expr_t *excluded = NULL;
@@ -908,8 +928,10 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
 
     bx = search_begin_search(query->state->mailbox, opts);
     if (!bx) {
-        if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
-            r = subquery_run_one_folder(query, index_mboxname(query->state), sub->indexed);
+        if (config_getenum(IMAPOPT_SEARCH_ENGINE) ==
+            IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
+            r = subquery_run_one_folder(
+                query, index_mboxname(query->state), sub->indexed);
         }
         else {
             r = IMAP_INTERNAL;
@@ -929,8 +951,8 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
     if (excluded) {
         if (query->multiple) {
             char *userid = mboxname_to_userid(index_mboxname(query->state));
-            r = mboxlist_usermboxtree(userid, NULL, subquery_post_excluded,
-                    &qr, /*flags*/0);
+            r = mboxlist_usermboxtree(
+                userid, NULL, subquery_post_excluded, &qr, /*flags*/ 0);
             free(userid);
         }
         else {
@@ -940,7 +962,9 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
             mboxlist_entry_free(&mbentry);
         }
     }
-    else hash_enumerate(&query->folders_by_name, subquery_post_enginesearch, &qr);
+    else
+        hash_enumerate(
+            &query->folders_by_name, subquery_post_enginesearch, &qr);
     hash_enumerate(&query->folders_by_name, subquery_clear_found, NULL);
 
 out:
@@ -955,7 +979,7 @@ static modseq_t _get_sincemodseq(search_expr_t *e)
     if (e->op == SEOP_AND) {
         search_expr_t *child;
 
-        for (child = e->children ; child ; child = child->next) {
+        for (child = e->children; child; child = child->next) {
             modseq_t res = _get_sincemodseq(child);
             if (res) return res;
         }
@@ -966,7 +990,6 @@ static modseq_t _get_sincemodseq(search_expr_t *e)
 
     return 0;
 }
-
 
 static int subquery_run_one_folder(search_query_t *query,
                                    const char *mboxname,
@@ -981,8 +1004,8 @@ static int subquery_run_one_folder(search_query_t *query,
     modseq_t sincemodseq = _get_sincemodseq(e);
     if (sincemodseq) {
         struct statusdata sdata = STATUSDATA_INIT;
-        int r = status_lookup_mboxname(mboxname, query->state->userid,
-                                       STATUS_HIGHESTMODSEQ, &sdata);
+        int r = status_lookup_mboxname(
+            mboxname, query->state->userid, STATUS_HIGHESTMODSEQ, &sdata);
         // if unchangedsince, then we can skip the index query
         if (!r && sdata.highestmodseq <= sincemodseq) return 0;
     }
@@ -1073,7 +1096,8 @@ static void query_add_subquery(const char *mboxname,
         free(key);
     }
     else if (mboxname) {
-        sub = (search_subquery_t *)hash_lookup(mboxname, &query->subs_by_folder);
+        sub =
+            (search_subquery_t *)hash_lookup(mboxname, &query->subs_by_folder);
         if (!sub) {
             sub = subquery_new();
             sub->mboxname = xstrdup(mboxname);
@@ -1106,7 +1130,8 @@ EXPORTED int search_query_run(search_query_t *query)
 {
     int r = 0;
 
-    search_expr_split_by_folder_and_index(query->searchargs->root, query_add_subquery, query);
+    search_expr_split_by_folder_and_index(
+        query->searchargs->root, query_add_subquery, query);
     query->searchargs->root = NULL;
 
     if (query->indexed_count) {
@@ -1126,8 +1151,8 @@ EXPORTED int search_query_run(search_query_t *query)
          * Walk over every folder, applying the scan expression. */
         if (query->multiple) {
             char *userid = mboxname_to_userid(index_mboxname(query->state));
-            r = mboxlist_usermboxtree(userid, NULL, subquery_run_global_cb,
-                                      query, /*flags*/0);
+            r = mboxlist_usermboxtree(
+                userid, NULL, subquery_run_global_cb, query, /*flags*/ 0);
             free(userid);
         }
         else {
@@ -1143,8 +1168,7 @@ EXPORTED int search_query_run(search_query_t *query)
         if (r) goto out;
     }
 
-    if (query->need_ids)
-        query_assign_folder_ids(query);
+    if (query->need_ids) query_assign_folder_ids(query);
 
     if (query->sortcrit) {
         /*
@@ -1177,17 +1201,17 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
 
     for (i = 0; sortcrit[i].key; i++) {
         switch (sortcrit[i].key) {
-            /* these are the mutable fields */
-            case SORT_ANNOTATION:
-            case SORT_MODSEQ:
-            case SORT_HASFLAG:
-            case SORT_CONVMODSEQ:
-            case SORT_CONVEXISTS:
-            case SORT_CONVSIZE:
-            case SORT_HASCONVFLAG:
-                return 1;
-            default:
-                break;
+        /* these are the mutable fields */
+        case SORT_ANNOTATION:
+        case SORT_MODSEQ:
+        case SORT_HASFLAG:
+        case SORT_CONVMODSEQ:
+        case SORT_CONVEXISTS:
+        case SORT_CONVSIZE:
+        case SORT_HASCONVFLAG:
+            return 1;
+        default:
+            break;
         }
     }
 
@@ -1204,10 +1228,7 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
 EXPORTED int search_is_mutable(struct sortcrit *sortcrit, search_expr_t *expr)
 {
     int res = 0;
-    if (search_expr_is_mutable(expr))
-        res |= 2;
-    if (is_mutable_sort(sortcrit))
-        res |= 1;
+    if (search_expr_is_mutable(expr)) res |= 2;
+    if (is_mutable_sort(sortcrit)) res |= 1;
     return res;
 }
-

@@ -2,7 +2,7 @@
 #ifndef __CYRUS_HASHU64_H__
 #define __CYRUS_HASHU64_H__
 
-#include <stddef.h>           /* For size_t     */
+#include <stddef.h> /* For size_t     */
 
 #define HASHU64_TABLE_INITIALIZER {0, NULL, NULL}
 
@@ -39,8 +39,8 @@ typedef struct hashu64_table {
 ** the table's size to 0, and the pointer to the table to NULL.
 */
 
-hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size,
-                                 int use_mpool);
+hashu64_table *
+construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool);
 
 /*
 ** Inserts a pointer to 'data' in the table, with a copy of 'key' as its
@@ -48,14 +48,14 @@ hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size,
 ** associated data.
 */
 
-void *hashu64_insert(uint64_t key,void *data,hashu64_table *table);
+void *hashu64_insert(uint64_t key, void *data, hashu64_table *table);
 
 /*
 ** Returns a pointer to the data associated with a key.  If the key has
 ** not been inserted in the table, returns NULL.
 */
 
-void *hashu64_lookup(uint64_t key,hashu64_table *table);
+void *hashu64_lookup(uint64_t key, hashu64_table *table);
 
 /*
 ** Deletes an entry from the table.  Returns a pointer to the data that
@@ -64,7 +64,7 @@ void *hashu64_lookup(uint64_t key,hashu64_table *table);
 */
 /* Warning: use this function judiciously if you are using memory pools,
  * since it will leak memory until you get rid of the entire hash table */
-void *hashu64_del(uint64_t key,hashu64_table *table);
+void *hashu64_del(uint64_t key, hashu64_table *table);
 
 /*
 ** Goes through a hash table and calls the function passed to it
@@ -73,9 +73,9 @@ void *hashu64_del(uint64_t key,hashu64_table *table);
 ** with it and 'rock'.
 */
 
-void hashu64_enumerate(hashu64_table *table,void (*func)(uint64_t ,void *,void *),
-                    void *rock);
-
+void hashu64_enumerate(hashu64_table *table,
+                       void (*func)(uint64_t, void *, void *),
+                       void *rock);
 
 /* just count how many items are in the table */
 size_t hashu64_count(hashu64_table *table);

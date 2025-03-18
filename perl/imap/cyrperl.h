@@ -49,11 +49,11 @@
  */
 
 struct xsccb {
-  SV *pcb;                      /* Perl callback PV */
-  SV *prock;                    /* Perl rock SV */
-  /* gack.  but otherwise we're in even more pain */
-  struct xscyrus *client;       /* client object, pre-Perlization */
-  int autofree;                 /* nonzero if callback should free it */
+    SV *pcb;   /* Perl callback PV */
+    SV *prock; /* Perl rock SV */
+    /* gack.  but otherwise we're in even more pain */
+    struct xscyrus *client; /* client object, pre-Perlization */
+    int autofree;           /* nonzero if callback should free it */
 };
 
 #ifdef CYRPERL_INTERNAL
@@ -68,27 +68,27 @@ struct xsccb {
  */
 
 struct xscb {
-  struct xscb *prev;
-  char *name;
-  int flags;
-  struct xsccb *rock;
-  struct xscb *next;
+    struct xscb *prev;
+    char *name;
+    int flags;
+    struct xsccb *rock;
+    struct xscb *next;
 };
 
 #define NUM_SUPPORTED_CALLBACKS 4
 
 struct xscyrus {
-  struct imclient *imclient;
-  char *class;
-  struct xscb *cb;
-  int flags;
-  int authenticated;
-  int cnt;                      /* hack */
-  /* For holding per-connection information during authentication */
-  /* We need to initialize this when we create a new connection */
-  sasl_callback_t callbacks[NUM_SUPPORTED_CALLBACKS];
-  const char *username, *authname;
-  sasl_secret_t *password;
+    struct imclient *imclient;
+    char *class;
+    struct xscb *cb;
+    int flags;
+    int authenticated;
+    int cnt; /* hack */
+    /* For holding per-connection information during authentication */
+    /* We need to initialize this when we create a new connection */
+    sasl_callback_t callbacks[NUM_SUPPORTED_CALLBACKS];
+    const char *username, *authname;
+    sasl_secret_t *password;
 };
 
 /* C callback to invoke a Perl callback on behalf of imclient */

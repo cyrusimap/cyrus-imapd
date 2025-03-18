@@ -4,4 +4,3 @@ struct io_count {
 };
 
 void read_io_count(struct io_count *iocount);
-

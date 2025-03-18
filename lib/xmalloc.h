@@ -65,15 +65,16 @@ extern void *xmemdup(const void *ptr, size_t size);
  *
  * CAUTION: ptr argument is evaluated multiple times, beware side effects!
  */
-#define xzfree(ptr) do {    \
-    assert((ptr) == (ptr)); \
-    free(ptr);              \
-    (ptr) = NULL;           \
-} while (0)
+#define xzfree(ptr)                                                            \
+    do {                                                                       \
+        assert((ptr) == (ptr));                                                \
+        free(ptr);                                                             \
+        (ptr) = NULL;                                                          \
+    } while (0)
 
 /* Functions using xmalloc.h must provide a function called fatal() conforming
    to the following: */
 extern void fatal(const char *fatal_message, int fatal_code)
-   __attribute__ ((noreturn));
+    __attribute__((noreturn));
 
 #endif /* INCLUDED_XMALLOC_H */

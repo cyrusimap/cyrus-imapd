@@ -53,10 +53,10 @@
  */
 
 #include "backend.h"
+#include "global.h"
 #include "mailbox.h"
 #include "mpool.h"
 #include "mupdate-client.h"
-#include "global.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/mupdate_err.h"
@@ -80,12 +80,7 @@ struct mupdate_handle_s {
     int saslcompleted;
 };
 
-enum settype {
-    SET_ACTIVE,
-    SET_RESERVE,
-    SET_DELETE,
-    SET_DEACTIVATE
-};
+enum settype { SET_ACTIVE, SET_RESERVE, SET_DELETE, SET_DEACTIVATE };
 
 /* mailbox name MUST be first, since it is the key */
 /* acl MUST be last, since it is what causes the variable size */
@@ -97,8 +92,7 @@ struct mbent {
     char acl[1];
 };
 
-struct mbent_queue
-{
+struct mbent_queue {
     struct mbent *head;
     struct mbent **tail;
 };
@@ -108,7 +102,8 @@ void free_mbent(struct mbent *p);
 
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,
-               const char *cmd, void *context);
+               const char *cmd,
+               void *context);
 
 int mupdate_synchronize_remote(mupdate_handle *handle,
                                struct mbent_queue *remote_boxes,

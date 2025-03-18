@@ -48,18 +48,18 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/uio.h>
 #include <syslog.h>
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "imapd.h"
 #include "global.h"
-#include "mboxlist.h"
+#include "imapd.h"
 #include "mailbox.h"
+#include "mboxlist.h"
 #include "seen.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -79,8 +79,7 @@ static int _initted = 0;
 
 static void statuscache_open(void)
 {
-    if (!config_getswitch(IMAPOPT_STATUSCACHE))
-        return;
+    if (!config_getswitch(IMAPOPT_STATUSCACHE)) return;
 
     char *fname = xstrdupnull(config_getstring(IMAPOPT_STATUSCACHE_DB_PATH));
     if (!fname)
@@ -88,8 +87,7 @@ static void statuscache_open(void)
 
     int r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, cyrusdb_strerror(r));
         syslog(LOG_ERR, "statuscache in degraded mode");
         statuscachedb = NULL;
     }
@@ -103,17 +101,15 @@ static void statuscache_close(void)
 
     int r = cyrusdb_close(statuscachedb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
-              cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "DBERROR: error closing statuscache: %s",
+               cyrusdb_strerror(r));
     }
 
     statuscachedb = NULL;
 }
 
-static void done_cb(void *rock __attribute__((unused)))
-{
-    statuscache_close();
-}
+static void done_cb(void *rock __attribute__((unused))) { statuscache_close(); }
 
 static void init_internal()
 {
@@ -123,8 +119,8 @@ static void init_internal()
     _initted = 1;
 }
 
-static void statuscache_buildkey(const char *mboxname, const char *userid,
-                                 struct buf *buf)
+static void
+statuscache_buildkey(const char *mboxname, const char *userid, struct buf *buf)
 {
     buf_setcstr(buf, mboxname);
     /* double % is a safe separator, it can't exist in a mailboxname */
@@ -135,23 +131,23 @@ static void statuscache_buildkey(const char *mboxname, const char *userid,
     }
 }
 
-static void statuscache_read_index(const char *mboxname, struct statusdata *sdata)
+static void statuscache_read_index(const char *mboxname,
+                                   struct statusdata *sdata)
 {
     struct buf keybuf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscachedb)
-        return;
+    if (!statuscachedb) return;
 
     /* Check if there is an entry in the database */
     statuscache_buildkey(mboxname, NULL, &keybuf);
-    int r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
+    int r = cyrusdb_fetch(
+        statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     buf_free(&keybuf);
 
-    if (r || !data || !datalen)
-        return;
+    if (r || !data || !datalen) return;
 
     const char *dend = data + datalen;
 
@@ -159,8 +155,8 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     if (*p++ != 'I') return;
     if (*p++ != ' ') return;
 
-    unsigned version = (unsigned) strtoul(p, &p, 10);
-    if (version != (unsigned) STATUSCACHE_VERSION) {
+    unsigned version = (unsigned)strtoul(p, &p, 10);
+    if (version != (unsigned)STATUSCACHE_VERSION) {
         /* Wrong version */
         return;
     }
@@ -182,21 +178,20 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     if (*p++ != ')') return;
 
     /* Sanity check the data */
-    if (!sdata->highestmodseq)
-        return;
+    if (!sdata->highestmodseq) return;
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_UIDVALIDITY;
 }
 
-static void statuscache_read_seen(const char *mboxname, const char *userid,
+static void statuscache_read_seen(const char *mboxname,
+                                  const char *userid,
                                   struct statusdata *sdata)
 {
     struct buf keybuf = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
 
-    if (!userid)
-        return;
+    if (!userid) return;
 
     // if no messages, other counts must also be zero
     if (!sdata->messages) {
@@ -208,28 +203,26 @@ static void statuscache_read_seen(const char *mboxname, const char *userid,
     }
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscachedb)
-        return;
+    if (!statuscachedb) return;
 
     // we must have a HIGHESTMODSEQ to compare against
-    if (!(sdata->statusitems & STATUS_HIGHESTMODSEQ))
-        return;
+    if (!(sdata->statusitems & STATUS_HIGHESTMODSEQ)) return;
 
     /* Check if there is an entry in the database */
     statuscache_buildkey(mboxname, userid, &keybuf);
-    int r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
+    int r = cyrusdb_fetch(
+        statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     buf_free(&keybuf);
 
-    if (r || !data || !datalen)
-        return;
+    if (r || !data || !datalen) return;
 
     const char *dend = data + datalen;
     char *p = (char *)data;
     if (*p++ != 'S') return;
     if (*p++ != ' ') return;
 
-    unsigned version = (unsigned) strtoul(p, &p, 10);
-    if (version != (unsigned) STATUSCACHE_VERSION) {
+    unsigned version = (unsigned)strtoul(p, &p, 10);
+    if (version != (unsigned)STATUSCACHE_VERSION) {
         /* Wrong version */
         return;
     }
@@ -245,19 +238,19 @@ static void statuscache_read_seen(const char *mboxname, const char *userid,
     if (*p++ != ')') return;
 
     // doesn't match non-unseen key
-    if (highestmodseq != sdata->highestmodseq)
-        return;
+    if (highestmodseq != sdata->highestmodseq) return;
 
     sdata->userid = userid;
     sdata->statusitems |= STATUS_SEENITEMS;
 }
 
-static int statuscache_lookup(const char *mboxname, const char *userid,
-                       unsigned statusitems, struct statusdata *sdata)
+static int statuscache_lookup(const char *mboxname,
+                              const char *userid,
+                              unsigned statusitems,
+                              struct statusdata *sdata)
 {
     // nothing to read!
-    if (!(statusitems & (STATUS_INDEXITEMS|STATUS_SEENITEMS)))
-        return 0;
+    if (!(statusitems & (STATUS_INDEXITEMS | STATUS_SEENITEMS))) return 0;
 
     init_internal();
 
@@ -280,41 +273,50 @@ static int statuscache_store(const char *mboxname,
     struct buf databuf = BUF_INITIALIZER;
     int r = 0;
 
-    statuscache_buildkey(mboxname, /*userid*/NULL, &keybuf);
+    statuscache_buildkey(mboxname, /*userid*/ NULL, &keybuf);
 
     /* if we don't have a full index, just nuke the key */
-    if (!sdata || (sdata->statusitems & STATUS_INDEXITEMS) != STATUS_INDEXITEMS) {
+    if (!sdata ||
+        (sdata->statusitems & STATUS_INDEXITEMS) != STATUS_INDEXITEMS) {
         r = cyrusdb_delete(statuscachedb, keybuf.s, keybuf.len, tidptr, 1);
         if (r != CYRUSDB_OK) {
-            syslog(LOG_ERR, "DBERROR: error deleting statuscache for: %s (%s)",
-                   mboxname, cyrusdb_strerror(r));
+            syslog(LOG_ERR,
+                   "DBERROR: error deleting statuscache for: %s (%s)",
+                   mboxname,
+                   cyrusdb_strerror(r));
         }
         goto done;
     }
 
-
     buf_printf(&databuf,
-                       "I %u (%u %u %u %u " QUOTA_T_FMT " " MODSEQ_FMT " " MODSEQ_FMT " %u " QUOTA_T_FMT")",
-                       STATUSCACHE_VERSION,
-                       sdata->messages, sdata->uidnext,
-                       sdata->uidvalidity, sdata->mboptions, sdata->size,
-                       sdata->createdmodseq, sdata->highestmodseq,
-                       sdata->deleted, sdata->deleted_storage);
+               "I %u (%u %u %u %u " QUOTA_T_FMT " " MODSEQ_FMT " " MODSEQ_FMT
+               " %u " QUOTA_T_FMT ")",
+               STATUSCACHE_VERSION,
+               sdata->messages,
+               sdata->uidnext,
+               sdata->uidvalidity,
+               sdata->mboptions,
+               sdata->size,
+               sdata->createdmodseq,
+               sdata->highestmodseq,
+               sdata->deleted,
+               sdata->deleted_storage);
 
-    r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
+    r = cyrusdb_store(
+        statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
     if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
-               mboxname, cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "DBERROR: error updating database: %s (%s)",
+               mboxname,
+               cyrusdb_strerror(r));
         goto done;
     }
 
-    if ((sdata->statusitems & STATUS_SEENITEMS) != STATUS_SEENITEMS)
-        goto done;
+    if ((sdata->statusitems & STATUS_SEENITEMS) != STATUS_SEENITEMS) goto done;
 
     // if there's no userid, we don't store this stuff
-    if (!sdata->userid)
-        goto done;
+    if (!sdata->userid) goto done;
 
     statuscache_buildkey(mboxname, sdata->userid, &keybuf);
 
@@ -324,16 +326,20 @@ static int statuscache_store(const char *mboxname,
      * looks less ugly in dbtool output */
     buf_reset(&databuf);
     buf_printf(&databuf,
-                       "S %u (%u %u " MODSEQ_FMT ")",
-                       STATUSCACHE_VERSION,
-                       sdata->recent, sdata->unseen,
-                       sdata->highestmodseq);
+               "S %u (%u %u " MODSEQ_FMT ")",
+               STATUSCACHE_VERSION,
+               sdata->recent,
+               sdata->unseen,
+               sdata->highestmodseq);
 
-    r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
+    r = cyrusdb_store(
+        statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
     if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
-               mboxname, cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "DBERROR: error updating database: %s (%s)",
+               mboxname,
+               cyrusdb_strerror(r));
         goto done;
     }
 
@@ -343,21 +349,20 @@ done:
     return r;
 }
 
-HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
+HIDDEN int statuscache_invalidate(const char *mboxname,
+                                  struct statusdata *sdata)
 {
     int doclose = 0;
     struct txn *tid = NULL;
 
     /* if it's disabled then skip */
-    if (!config_getswitch(IMAPOPT_STATUSCACHE))
-        return 0;
+    if (!config_getswitch(IMAPOPT_STATUSCACHE)) return 0;
 
     /* if it's not already open, open and close it for just this */
     if (!statuscachedb) {
         statuscache_open();
         // failed to open, oh well
-        if (!statuscachedb)
-            return 0;
+        if (!statuscachedb) return 0;
         doclose = 1;
     }
 
@@ -367,22 +372,22 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         cyrusdb_commit(statuscachedb, tid);
     }
     else {
-        syslog(LOG_NOTICE, "DBERROR: failed to store statuscache data for %s", mboxname);
+        syslog(LOG_NOTICE,
+               "DBERROR: failed to store statuscache data for %s",
+               mboxname);
         if (tid) cyrusdb_abort(statuscachedb, tid);
     }
 
     // if we opened the DB, close it now
-    if (doclose)
-        statuscache_close();
+    if (doclose) statuscache_close();
 
     return 0;
 }
 
-
-
 /****************** STATUSDATA FILLING METHODS ************************/
 
-HIDDEN void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sdata)
+HIDDEN void status_fill_mbentry(const mbentry_t *mbentry,
+                                struct statusdata *sdata)
 {
     assert(mbentry);
     assert(sdata);
@@ -393,13 +398,14 @@ HIDDEN void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sda
     sdata->statusitems |= STATUS_MBENTRYITEMS;
 }
 
-HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdata)
+HIDDEN void status_fill_mailbox(struct mailbox *mailbox,
+                                struct statusdata *sdata)
 {
     assert(mailbox);
     assert(sdata);
 
     sdata->messages = mailbox->i.exists;
-    sdata->uidnext = mailbox->i.last_uid+1;
+    sdata->uidnext = mailbox->i.last_uid + 1;
     sdata->mboptions = mailbox->i.options;
     sdata->size = mailbox->i.quota_mailbox_used;
     sdata->createdmodseq = mailbox->i.createdmodseq;
@@ -414,8 +420,10 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
 
-HIDDEN void status_fill_seen(const char *userid, struct statusdata *sdata,
-                                  unsigned numrecent, unsigned numunseen)
+HIDDEN void status_fill_seen(const char *userid,
+                             struct statusdata *sdata,
+                             unsigned numrecent,
+                             unsigned numunseen)
 {
     assert(userid);
     assert(sdata);
@@ -430,8 +438,10 @@ HIDDEN void status_fill_seen(const char *userid, struct statusdata *sdata,
     sdata->statusitems |= STATUS_SEENITEMS;
 }
 
-static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
-                               unsigned statusitems, struct statusdata *sdata)
+static int status_load_mailbox(struct mailbox *mailbox,
+                               const char *userid,
+                               unsigned statusitems,
+                               struct statusdata *sdata)
 {
     status_fill_mailbox(mailbox, sdata);
 
@@ -445,7 +455,8 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
 
         if (internalseen) {
             recentuid = mailbox->i.recentuid;
-        } else {
+        }
+        else {
             struct seen *seendb = NULL;
             struct seendata sd = SEENDATA_INITIALIZER;
 
@@ -459,19 +470,17 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
             seen_freedata(&sd);
         }
 
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        struct mailbox_iter *iter =
+            mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
-            if (record->uid > recentuid)
-                numrecent++;
+            if (record->uid > recentuid) numrecent++;
             if (internalseen) {
-                if (!(record->system_flags & FLAG_SEEN))
-                    numunseen++;
+                if (!(record->system_flags & FLAG_SEEN)) numunseen++;
             }
             else {
-                if (!seqset_ismember(seq, record->uid))
-                    numunseen++;
+                if (!seqset_ismember(seq, record->uid)) numunseen++;
             }
         }
         mailbox_iter_done(&iter);
@@ -485,8 +494,10 @@ static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
     return 0;
 }
 
-static int status_lookup_internal(const char *mboxname, const char *userid,
-                                  unsigned statusitems, struct statusdata *sdata)
+static int status_lookup_internal(const char *mboxname,
+                                  const char *userid,
+                                  unsigned statusitems,
+                                  struct statusdata *sdata)
 {
     struct mailbox *mailbox = NULL;
     int r = 0;
@@ -503,13 +514,19 @@ static int status_lookup_internal(const char *mboxname, const char *userid,
          */
 
         if (!r) {
-            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mboxname, userid, statusitems);
+            syslog(LOG_DEBUG,
+                   "statuscache, '%s', '%s', '0x%02x', 'yes'",
+                   mboxname,
+                   userid,
+                   statusitems);
             return 0;
         }
 
-        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mboxname, userid, statusitems);
+        syslog(LOG_DEBUG,
+               "statuscache, '%s', '%s', '0x%02x', 'no'",
+               mboxname,
+               userid,
+               statusitems);
     }
 
     /* Missing or invalid cache entry */
@@ -525,19 +542,22 @@ static int status_lookup_internal(const char *mboxname, const char *userid,
     return r;
 }
 
-EXPORTED int status_lookup_mbentry(const mbentry_t *mbentry, const char *userid,
-                                  unsigned statusitems, struct statusdata *sdata)
+EXPORTED int status_lookup_mbentry(const mbentry_t *mbentry,
+                                   const char *userid,
+                                   unsigned statusitems,
+                                   struct statusdata *sdata)
 {
     // check if we can get everything we need from the mbentry
     status_fill_mbentry(mbentry, sdata);
-    if ((sdata->statusitems & statusitems) == statusitems)
-        return 0;
+    if ((sdata->statusitems & statusitems) == statusitems) return 0;
 
     return status_lookup_internal(mbentry->name, userid, statusitems, sdata);
 }
 
-EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
-                                    unsigned statusitems, struct statusdata *sdata)
+EXPORTED int status_lookup_mboxname(const char *mboxname,
+                                    const char *userid,
+                                    unsigned statusitems,
+                                    struct statusdata *sdata)
 {
     // we want an mbentry first, just in case we can get everything from there
     if (statusitems & STATUS_MAILBOXID) {
@@ -552,29 +572,34 @@ EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
     return status_lookup_internal(mboxname, userid, statusitems, sdata);
 }
 
-
 // this one has literally no smarts at all
-EXPORTED int status_lookup_mbname(const mbname_t *mbname, const char *userid,
-                                  unsigned statusitems, struct statusdata *sdata)
+EXPORTED int status_lookup_mbname(const mbname_t *mbname,
+                                  const char *userid,
+                                  unsigned statusitems,
+                                  struct statusdata *sdata)
 {
-    return status_lookup_mboxname(mbname_intname(mbname), userid, statusitems, sdata);
+    return status_lookup_mboxname(
+        mbname_intname(mbname), userid, statusitems, sdata);
 }
 
 /*
  * Performs a STATUS command on an open mailbox
  */
-EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
-                                   unsigned statusitems, struct statusdata *sdata)
+EXPORTED int status_lookup_mailbox(struct mailbox *mailbox,
+                                   const char *userid,
+                                   unsigned statusitems,
+                                   struct statusdata *sdata)
 {
-    // check if we already have all the data we need (includes any possible mbentry)
+    // check if we already have all the data we need (includes any possible
+    // mbentry)
     status_fill_mailbox(mailbox, sdata);
-    if ((sdata->statusitems & statusitems) == statusitems)
-        return 0;
+    if ((sdata->statusitems & statusitems) == statusitems) return 0;
 
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         /* Do actual lookup of cache item. */
-        int r = statuscache_lookup(mailbox_name(mailbox), userid, statusitems, sdata);
+        int r = statuscache_lookup(
+            mailbox_name(mailbox), userid, statusitems, sdata);
 
         /* Seen/recent status uses "push" invalidation events from
          * seen_db.c.   This avoids needing to open cyrus.header to get
@@ -583,13 +608,19 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
          */
 
         if (!r) {
-            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mailbox_name(mailbox), userid, statusitems);
+            syslog(LOG_DEBUG,
+                   "statuscache, '%s', '%s', '0x%02x', 'yes'",
+                   mailbox_name(mailbox),
+                   userid,
+                   statusitems);
             return 0;
         }
 
-        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mailbox_name(mailbox), userid, statusitems);
+        syslog(LOG_DEBUG,
+               "statuscache, '%s', '%s', '0x%02x', 'no'",
+               mailbox_name(mailbox),
+               userid,
+               statusitems);
     }
 
     return status_load_mailbox(mailbox, userid, statusitems, sdata);

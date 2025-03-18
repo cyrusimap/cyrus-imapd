@@ -44,22 +44,22 @@
 #include <config.h>
 #endif
 
+#include <errno.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sys/stat.h>
-#include <stdlib.h>
-#include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <signal.h>
 #include <fcntl.h>
+#include <signal.h>
 
+#include "caldav_alarm.h"
+#include "caldav_db.h"
 #include "global.h"
 #include "xmalloc.h"
-#include "caldav_db.h"
-#include "caldav_alarm.h"
 
 extern int optind;
 extern char *optarg;
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
     }
 
     if (runattime) {
-        caldav_alarm_process(runattime, NULL, /*dryrun*/0);
+        caldav_alarm_process(runattime, NULL, /*dryrun*/ 0);
         shut_down(0);
     }
 
@@ -160,18 +160,17 @@ int main(int argc, char **argv)
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process(0, &interval, /*dryrun*/0);
+        caldav_alarm_process(0, &interval, /*dryrun*/ 0);
         libcyrus_run_delayed();
         gettimeofday(&end, 0);
 
         signals_poll();
 
         totaltime = timesub(&start, &end);
-        tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
-        if (tosleep > 0)
-            sleep(tosleep);
+        tosleep = interval - (int)(totaltime + 0.5); /* round to nearest int */
+        if (tosleep > 0) sleep(tosleep);
 
-        session_new_id();  // so we know which actions happened in the same run
+        session_new_id(); // so we know which actions happened in the same run
     }
 
     /* NOTREACHED */

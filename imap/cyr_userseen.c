@@ -45,13 +45,13 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <getopt.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <sysexits.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 
 #include "global.h"
 #include "libcyr_cfg.h"
@@ -71,7 +71,8 @@ static void usage(void)
 }
 
 /* Callback for use by delete_seen */
-static int deluserseen(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int deluserseen(const mbentry_t *mbentry,
+                       void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     int r = 0;
@@ -102,13 +103,12 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "delete", no_argument, NULL, 'd' },
-        { 0, 0, 0, 0 },
+        {"delete", no_argument, NULL, 'd'},
+        {0,        0,           0,    0  },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
-    {
+    while (-1 !=
+           (opt = getopt_long(argc, argv, short_options, long_options, NULL))) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "cyr_userseen", 0, 0);
 
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox("", deluserseen, NULL, /*flags*/0);
+    mboxlist_allmbox("", deluserseen, NULL, /*flags*/ 0);
 
     cyrus_done();
 

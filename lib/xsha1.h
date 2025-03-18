@@ -50,30 +50,31 @@
 #include <stdint.h>
 
 /* definitions and types needed by the internal libcyrus_min implementation */
-#define xSHA1_BLOCK_LENGTH   64
-#define xSHA1_DIGEST_LENGTH  20
-#define xSHA_DIGEST_LENGTH   (xSHA1_DIGEST_LENGTH)
+#define xSHA1_BLOCK_LENGTH 64
+#define xSHA1_DIGEST_LENGTH 20
+#define xSHA_DIGEST_LENGTH (xSHA1_DIGEST_LENGTH)
 
 typedef uint32_t sha1_quadbyte; /* 4 byte type */
-typedef uint8_t sha1_byte;    /* single byte type */
+typedef uint8_t sha1_byte;      /* single byte type */
 typedef struct _xSHA1_CTX {
-    sha1_quadbyte   state[5];
-    sha1_quadbyte   count[2];
-    sha1_byte       buffer[xSHA1_BLOCK_LENGTH];
+    sha1_quadbyte state[5];
+    sha1_quadbyte count[2];
+    sha1_byte buffer[xSHA1_BLOCK_LENGTH];
 } xSHA1_CTX;
 
-int xSHA1Init(xSHA1_CTX* context);
+int xSHA1Init(xSHA1_CTX *context);
 int xSHA1Update(xSHA1_CTX *context, const void *data, unsigned int len);
 int xSHA1Final(sha1_byte digest[xSHA1_DIGEST_LENGTH], xSHA1_CTX *context);
 
-unsigned char *xsha1_impl(const unsigned char *buf, unsigned long len,
+unsigned char *xsha1_impl(const unsigned char *buf,
+                          unsigned long len,
                           sha1_byte dest[xSHA1_DIGEST_LENGTH]);
 
 #ifdef HAVE_SSL
 /* if an SSL library is available, actually use its implementation instead */
 
-#include <openssl/sha.h>
 #include <openssl/evp.h>
+#include <openssl/sha.h>
 
 #include "assert.h"
 
@@ -81,33 +82,33 @@ unsigned char *xsha1_impl(const unsigned char *buf, unsigned long len,
 #define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)
 #endif
 
-#define xsha256(d,l,h)     assert(EVP_Digest(d, l, h, NULL, EVP_sha256(), NULL))
+#define xsha256(d, l, h) assert(EVP_Digest(d, l, h, NULL, EVP_sha256(), NULL))
 
-#define xsha1(d,l,h)       assert(EVP_Digest(d, l, h, NULL, EVP_sha1(), NULL))
+#define xsha1(d, l, h) assert(EVP_Digest(d, l, h, NULL, EVP_sha1(), NULL))
 
-#define SHA1_CTX           EVP_MD_CTX*
+#define SHA1_CTX EVP_MD_CTX *
 
-#define SHA1Init(c)        assert((*c = EVP_MD_CTX_new())            \
-                                  && EVP_DigestInit(*c, EVP_sha1()))
-#define SHA1Update(c,d,l)  EVP_DigestUpdate(*c, d, l)
-#define SHA1Final(h,c)                 \
-    do {                               \
-        EVP_DigestFinal(*c, h, NULL);  \
-        EVP_MD_CTX_free(*c);           \
-    } while(0);
+#define SHA1Init(c)                                                            \
+    assert((*c = EVP_MD_CTX_new()) && EVP_DigestInit(*c, EVP_sha1()))
+#define SHA1Update(c, d, l) EVP_DigestUpdate(*c, d, l)
+#define SHA1Final(h, c)                                                        \
+    do {                                                                       \
+        EVP_DigestFinal(*c, h, NULL);                                          \
+        EVP_MD_CTX_free(*c);                                                   \
+    } while (0);
 
 #else /* HAVE_SSL */
 /* otherwise, use libcyrus_min internal implementation */
 
-#define SHA1_BLOCK_LENGTH   xSHA1_BLOCK_LENGTH
-#define SHA1_DIGEST_LENGTH  xSHA1_DIGEST_LENGTH
-#define SHA_DIGEST_LENGTH   xSHA_DIGEST_LENGTH
+#define SHA1_BLOCK_LENGTH xSHA1_BLOCK_LENGTH
+#define SHA1_DIGEST_LENGTH xSHA1_DIGEST_LENGTH
+#define SHA_DIGEST_LENGTH xSHA_DIGEST_LENGTH
 
-#define SHA1_CTX            xSHA1_CTX
-#define SHA1Init(c)         xSHA1Init(c)
+#define SHA1_CTX xSHA1_CTX
+#define SHA1Init(c) xSHA1Init(c)
 #define SHA1Update(c, d, l) xSHA1Update(c, d, l)
-#define SHA1Final(h, c)     xSHA1Final(h, c)
-#define xsha1(d, l, h)      xsha1_impl(d, l, h)
+#define SHA1Final(h, c) xSHA1Final(h, c)
+#define xsha1(d, l, h) xsha1_impl(d, l, h)
 
 #endif /* HAVE_SSL */
 

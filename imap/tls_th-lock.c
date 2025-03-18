@@ -9,8 +9,8 @@
 #include <syslog.h>
 
 #ifdef HAVE_SSL
-#include <openssl/ssl.h>
 #include "tls_th-lock.h"
+#include <openssl/ssl.h>
 
 /*
  * This entire interface is obsoleted by OpenSSL 1.1.0.
@@ -31,8 +31,8 @@ void CRYPTO_thread_setup(void)
     lock_count = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(long));
 
     for (i = 0; i < CRYPTO_num_locks(); i++) {
-        lock_count[i]=0;
-        pthread_mutex_init(&(lock_cs[i]),NULL);
+        lock_count[i] = 0;
+        pthread_mutex_init(&(lock_cs[i]), NULL);
     }
 
     CRYPTO_set_id_callback((unsigned long (*)())pthreads_thread_id);
@@ -52,7 +52,8 @@ void CRYPTO_thread_cleanup(void)
     OPENSSL_free(lock_count);
 }
 
-void pthreads_locking_callback(int mode, int type,
+void pthreads_locking_callback(int mode,
+                               int type,
                                char *file __attribute__((unused)),
                                int line __attribute__((unused)))
 {
@@ -70,7 +71,7 @@ unsigned long pthreads_thread_id(void)
     unsigned long ret;
 
     ret = (unsigned long)pthread_self();
-    return(ret);
+    return (ret);
 }
 
 #endif /* OPENSSL_VERSION_NUMBER */

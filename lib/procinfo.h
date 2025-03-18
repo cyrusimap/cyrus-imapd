@@ -23,15 +23,20 @@ typedef struct {
     unsigned alloc;
     struct proc_info **data;
     time_t boot_time; /* not used on xBSD */
-    int ncpu; /* not used on Linux */
+    int ncpu;         /* not used on Linux */
 } piarray_t;
 
 extern void init_piarray(piarray_t *piarray);
 extern void deinit_piarray(piarray_t *piarray);
-extern int add_procinfo(pid_t pid, const char *servicename, const char *host,
-                        const char *user, const char *mailbox,
-                        const char *cmdname, void *rock);
-extern int sort_procinfo QSORT_R_COMPAR_ARGS(
-                         const void *pa, const void *pb, void *k);
+extern int add_procinfo(pid_t pid,
+                        const char *servicename,
+                        const char *host,
+                        const char *user,
+                        const char *mailbox,
+                        const char *cmdname,
+                        void *rock);
+extern int sort_procinfo QSORT_R_COMPAR_ARGS(const void *pa,
+                                             const void *pb,
+                                             void *k);
 
 #endif /* INCLUDED_PROCINFO_H */

@@ -41,7 +41,6 @@
  *
  */
 
-
 #ifndef XML_SUPPORT_H
 #define XML_SUPPORT_H
 
