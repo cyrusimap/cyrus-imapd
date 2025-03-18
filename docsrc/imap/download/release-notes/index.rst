@@ -8,6 +8,10 @@ number reveals whether a version is stable (even), or development-only (odd).
 So, a 3.\ **0**\ .0 release is stable, but a 3.\ **1**\ .0 release is
 developmental only.
 
+We stop issuing new micro releases two years after the micro-zero version of a
+minor release.  By that point, you should be upgrading to a newer release to
+stay up to date.
+
 Current Development
 -------------------
 
