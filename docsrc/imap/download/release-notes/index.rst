@@ -101,16 +101,6 @@ Documentation at :cyrus-3.0:`/`.
 
     3.0/index
 
-Series 2.5
-----------
-
-Documentation at :cyrus-2.5:`/`.
-
-.. toctree::
-    :maxdepth: 1
-
-    2.5/index
-
 Development snapshots
 =====================
 
@@ -128,6 +118,20 @@ Development snapshots
 Older Versions
 ==============
 
+Series 2: 2.0 - 2.5
+-------------------
+
+.. toctree::
+    :maxdepth: 1
+
+    2.5/index
+    2.4-dav/index
+    2.4/index
+    2.3/index
+    2.2/2.2.x
+    2.1/2.1.x
+    2.0/2.0.x
+
 Series 1
 --------
 
@@ -135,16 +139,3 @@ Series 1
     :maxdepth: 1
 
     1/1.x.x
-
-Series 2: 2.0 - 2.4
--------------------
-
-.. toctree::
-    :maxdepth: 1
-
-    2.0/2.0.x
-    2.1/2.1.x
-    2.2/2.2.x
-    2.3/index
-    2.4/index
-    2.4-dav/index
