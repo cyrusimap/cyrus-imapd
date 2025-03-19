@@ -1967,7 +1967,8 @@ enum {
     CAL_CAN_ADMIN =     (1<<2),
     CAL_IS_PUBLIC =     (1<<3),
     CAL_IS_TRANSP =     (1<<4),
-    CAL_CAN_PROPCOL =   (1<<5)
+    CAL_CAN_PROPCOL =   (1<<5),
+    CAL_DOES_SCHEDULE = (1<<6)
 };
 
 struct list_cal_rock {
@@ -2055,6 +2056,9 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     if (rights & DACL_PROPCOL) {
         cal->flags |= CAL_CAN_PROPCOL;
     }
+    annotatemore_lookup_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled", "", &temp);
+    if (strcasecmp(buf_cstring(&temp), "F") && strcasecmp(temp.s, "no"))
+        cal->flags |= CAL_DOES_SCHEDULE;
 
     /* Is this the default calendar? */
     if (len == lrock->defaultlen &&
@@ -2311,7 +2315,7 @@ static int list_calendars(struct transaction_t *txn)
         qsort(lrock.cal, lrock.len, sizeof(struct cal_info), &cal_compare);
     charset_t utf8 = charset_lookupname("utf-8");
     buf_printf_markup(body, level, "<thead>");
-    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Color</th><th>Order</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th></tr>");
+    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>Color</th><th>Order</th><th>Components</th><th>WebCAL link</th><th>HTTPS link</th><th>Actions</th><th>Public</th><th>Transparent</th>%s</tr>", namespace_calendar.allow & ALLOW_CAL_SCHED ? "<th>Scheduling</th>" : "");
     buf_printf_markup(body, level, "</thead><tbody>");
 
     /* Add available calendars with action items */
@@ -2415,6 +2419,19 @@ static int list_calendars(struct transaction_t *txn)
                           "Transparent</td>",
                           (cal->flags & CAL_CAN_ADMIN) ? "" : " disabled",
                           (cal->flags & CAL_IS_TRANSP) ? " checked" : "", i);
+
+        /* Scheduling checkbox */
+        if (namespace_calendar.allow & ALLOW_CAL_SCHED) {
+            if (cal->flags & CAL_CAN_PROPCOL)
+                buf_printf_markup(body, level,
+                                  "<td><label><input type=checkbox%s"
+                                  " onclick='scheduling(%i, this.checked)'>Enabled</label>"
+                                  "</td>",
+                                  cal->flags & CAL_DOES_SCHEDULE ? " checked" : "", i);
+            else
+                buf_printf_markup(body, level, "<td>%s</td>",
+                                  cal->flags & CAL_DOES_SCHEDULE ? "Enabled" : "Disabled");
+        }
 
         buf_printf_markup(body, --level, "</tr>");
     }
