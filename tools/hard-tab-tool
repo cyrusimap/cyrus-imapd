@@ -58,7 +58,8 @@ sub file_is_interesting {
            || m{\.h\z}
            || m{\.pm\z}
            || m{\Acassandane/tiny-tests/}
-           || m{\Atools/};
+           || m{\Atools/}
+           || $_ eq 'configure.ac';
 
   return;
 }

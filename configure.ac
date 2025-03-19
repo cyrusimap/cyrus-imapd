@@ -503,7 +503,7 @@ AC_ARG_WITH(caringo,
         [AS_HELP_STRING([--with-caringo], [use Caringo ("yes" or "no")])],,with_caringo="no")
 case "$with_caringo" in
   yes)
-	LDFLAGS="$LDFLAGS -lCastorSDK"
+    LDFLAGS="$LDFLAGS -lCastorSDK"
   ;;
 esac
 AC_MSG_RESULT([$with_caringo])
@@ -517,20 +517,20 @@ AC_ARG_WITH(openio,
 
 case "$with_openio" in
   no)
-	use_openio="no"
-	;;
+    use_openio="no"
+    ;;
   yes)
-	use_openio="yes"
-	with_openio_lib=none
-	with_openio_inc=none
-	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
-	;;
+    use_openio="yes"
+    with_openio_lib=none
+    with_openio_inc=none
+    AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+    ;;
   *)
-	use_openio="yes"
-	with_openio_lib="$with_openio/lib64"
-	with_openio_inc="$with_openio/include"
-	AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
-	;;
+    use_openio="yes"
+    with_openio_lib="$with_openio/lib64"
+    with_openio_inc="$with_openio/include"
+    AC_DEFINE([WITH_OPENIO],[1],[Enable support for OpenIO object storage.])
+    ;;
 esac
 
 AC_ARG_WITH(openio-libdir,
@@ -543,27 +543,27 @@ AC_ARG_WITH(openio-incdir,
         [ test "${with_openio_inc+set}" = set || with_openio_inc=none ])
 
 if test "$use_openio" = "yes"; then
-	if test ! -d "$with_openio_lib"; then
-		AC_MSG_ERROR([OpenIO library directory '$with_openio_lib' does not exist.])
-	fi
-	if test ! -d "$with_openio_inc"; then
-		AC_MSG_ERROR([OpenIO include directory '$with_openio_inc' does not exist.])
-	fi
+    if test ! -d "$with_openio_lib"; then
+        AC_MSG_ERROR([OpenIO library directory '$with_openio_lib' does not exist.])
+    fi
+    if test ! -d "$with_openio_inc"; then
+        AC_MSG_ERROR([OpenIO include directory '$with_openio_inc' does not exist.])
+    fi
 
-	LDFLAGS="$LDFLAGS -L$with_openio_lib"
-	CFLAGS="$CFLAGS -I$with_openio_inc"
-	openio_headers="oio_sds.h core/oiourl.h"
-	for h in $openio_headers; do
-		AC_CHECK_HEADER($h,[],[
-			AC_MSG_ERROR([Header $h is missing.])
-		])
-	done
-	AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
-	AC_CHECK_LIB([oiocore],[oio_url_empty],[],[AC_MSG_ERROR([Library oiocore not found.])])
-	AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
-	AC_CHECK_LIB([json-c],[json_tokener_parse_ex],[],[AC_MSG_ERROR([Library json-c not found.])])
+    LDFLAGS="$LDFLAGS -L$with_openio_lib"
+    CFLAGS="$CFLAGS -I$with_openio_inc"
+    openio_headers="oio_sds.h core/oiourl.h"
+    for h in $openio_headers; do
+        AC_CHECK_HEADER($h,[],[
+            AC_MSG_ERROR([Header $h is missing.])
+        ])
+    done
+    AC_CHECK_LIB([oiosds],[oio_error_free],[],[AC_MSG_ERROR([Library oiosds not found.])])
+    AC_CHECK_LIB([oiocore],[oio_url_empty],[],[AC_MSG_ERROR([Library oiocore not found.])])
+    AC_CHECK_LIB([curl],[curl_version],[],[AC_MSG_ERROR([Library curl not found.])])
+    AC_CHECK_LIB([json-c],[json_tokener_parse_ex],[],[AC_MSG_ERROR([Library json-c not found.])])
 
-	LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
+    LDFLAGS="$LDFLAGS -L$with_openio_lib -loiosds -loiocore -lcurl -ljson-c"
 fi
 AC_MSG_RESULT([$use_openio])
 
@@ -1238,12 +1238,12 @@ AC_SUBST(LDAP_LIBS)
 AM_CONDITIONAL([HAVE_LDAP], [test "$have_ldap" = "yes"])
 
 AC_ARG_WITH([clamav],
-	AS_HELP_STRING([--without-clamav], [ignore presence of ClamAV and disable it]))
+    AS_HELP_STRING([--without-clamav], [ignore presence of ClamAV and disable it]))
 AS_IF([test "x$with_clamav" != "xno"],
-	[ PKG_CHECK_MODULES([CLAMAV], [libclamav],
-		[ AC_DEFINE(HAVE_CLAMAV, [], [Do we have ClamAV?])
-		  with_clamav=yes ],
-		with_clamav=no)])
+    [ PKG_CHECK_MODULES([CLAMAV], [libclamav],
+        [ AC_DEFINE(HAVE_CLAMAV, [], [Do we have ClamAV?])
+          with_clamav=yes ],
+        with_clamav=no)])
 
 AC_ARG_ENABLE(server,
         [AS_HELP_STRING([--disable-server], [disable compiling servers])])
@@ -1510,14 +1510,14 @@ dnl
 dnl Check for chardet library, needed for charset detection support
 dnl
 AC_ARG_WITH([chardet],
-	[AS_HELP_STRING([--without-chardet], [ignore presence of chardet library and disable it])],
+    [AS_HELP_STRING([--without-chardet], [ignore presence of chardet library and disable it])],
     [],
     [with_chardet=yes])
 AS_IF([test "x$with_chardet" = "xyes"],
-	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet >= 1.0.5],
-		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with chardet library support])
-		  with_chardet=yes ],
-		with_chardet=no)])
+    [ PKG_CHECK_MODULES([LIBCHARDET], [chardet >= 1.0.5],
+        [ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with chardet library support])
+          with_chardet=yes ],
+        with_chardet=no)])
 AS_IF([test "x$with_chardet" != "xyes"],
       [AC_MSG_NOTICE([JMAP will not have character set detection support.  Consider installing chardet >= 1.0.5])])
 AC_SUBST([LIBCHARDET_LIBS])
@@ -1835,9 +1835,9 @@ AC_ARG_ENABLE(calalarmd,
         [AS_HELP_STRING([--enable-calalarmd], [enable CalDAV alarm support])],,[enable_calalarmd="no";])
 if test "x$enable_calalarmd" = "xyes"; then
     if test "x$enable_http" = "xyes"; then
-	AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
+    AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
     else
-	AC_MSG_ERROR([--enable-calalarmd requires --enable-http])
+    AC_MSG_ERROR([--enable-calalarmd requires --enable-http])
     fi
 fi
 AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
