@@ -6,7 +6,31 @@ AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLoopsOnASingleLine: true
 BinPackArguments: false
 BinPackParameters: false
+BreakBeforeBraces: Custom
 BraceWrapping:
+  AfterCaseLabel:  false
+  AfterClass:      false
+  AfterControlStatement: MultiLine
+  AfterEnum:       false
+  AfterExternBlock: false
+  AfterFunction:   true
+  AfterNamespace:  false
+  AfterObjCDeclaration: false
+  AfterStruct:     true
+  AfterUnion:      false
+  BeforeCatch:     true
   BeforeElse:      true
-BreakBeforeBraces: Stroustrup
+  BeforeLambdaBody: false
+  BeforeWhile:     false
+  IndentBraces:    false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
 IndentWidth:     4
+SpaceAfterCStyleCast: true
+IndentPPDirectives: AfterHash
+PenaltyReturnTypeOnItsOwnLine: 1000
+BitFieldColonSpacing: None
+Cpp11BracedListStyle: false
+AllowShortEnumsOnASingleLine: false
+BreakBeforeBinaryOperators: NonAssignment
