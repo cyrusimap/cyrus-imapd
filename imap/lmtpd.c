@@ -1134,12 +1134,6 @@ int autocreate_inbox(const mbname_t *mbname)
         return IMAP_MAILBOX_NONEXISTENT;
 
     /*
-     * Exclude anonymous
-     */
-    if (!strcmp(userid, "anonymous"))
-        return IMAP_MAILBOX_NONEXISTENT;
-
-    /*
      * Check for autocreatequota and createonpost
      */
     if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K') < 0)
