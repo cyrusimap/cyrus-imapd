@@ -11,8 +11,8 @@ active development, and is not considered "stable".
 
 The current stable series is 3.12.
 
-Versions 3.4 to 3.10 still receive security updates, and some non-security
-bug fixes.
+Versions 3.8 to 3.10 still receive security updates, and some non-security bug
+fixes.
 
 What is Cyrus
 =============
