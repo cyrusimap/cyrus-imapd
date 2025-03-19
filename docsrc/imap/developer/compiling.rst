@@ -160,7 +160,7 @@ CalDAV, CardDAV, or JMAP (httpd subsystem)
     character set. Required for JMAP, but otherwise is not needed."
     `libical`_, libical-dev, libical-devel, "yes", "It provides
     calendaring functionality for CalDAV, which can't be used without this lib.
-    Version 3.0.0 or higher is required."
+    Version 3.0.10 or higher is required."
     `libxml`_, libxml2-dev, libxml2-devel, "yes", "A fundamental lib for
     all \*DAV functionality."
     `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "HTTP/2 support
