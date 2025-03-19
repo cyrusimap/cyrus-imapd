@@ -1166,8 +1166,8 @@ havefile:
     if (r) goto out;
 
     if (in_object_storage) {  // must delete local file
-        if (xunlink(fname) != 0) // unlink should do it.
-            if (!remove (fname))  // we must insist
+        if (xunlink(fname) == -1) // unlink should do it.
+            if (!remove(fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error", fname);
     }
 

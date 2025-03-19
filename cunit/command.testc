@@ -13,7 +13,7 @@ static void test_run(void)
     struct stat sb;
 
     /* make sure the file isnt there */
-    if (xunlink(canary))
+    if (xunlink(canary) == -1)
         r = errno;
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
@@ -59,7 +59,7 @@ static void test_popen_w(void)
     char buf[32];
 
     /* make sure the file isnt there */
-    if (xunlink(canary))
+    if (xunlink(canary) == -1)
         r = errno;
     CU_ASSERT_EQUAL_FATAL(r, 0);
 

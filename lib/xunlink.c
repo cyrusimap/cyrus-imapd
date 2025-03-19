@@ -59,12 +59,10 @@ EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
 
     if (r) {
         if (errno == ENOENT) {
-            /* we usually ignore this case, so treat it as not an error
-             *
-             * this means you can't use this wrapper function when you do care
-             * about this case
+            /* we usually ignore this case, so signal it differently, don't log
+             * it as an error, and leave errno intact
              */
-            r = 0;
+            r = 1;
         }
         else {
             /* n.b. not simply using xsyslog, because we want to log our
@@ -95,12 +93,10 @@ EXPORTED int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
 
     if (r) {
         if (errno == ENOENT) {
-            /* we usually ignore this case, so treat it as not an error
-             *
-             * this means you can't use this wrapper function when you do care
-             * about this case
+            /* we usually ignore this case, so signal it differently, don't log
+             * it as an error, and leave errno intact
              */
-            r = 0;
+            r = 1;
         }
         else {
             /* n.b. not simply using xsyslog, because we want to log our

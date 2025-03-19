@@ -339,7 +339,7 @@ EXPORTED int mboxkey_delete_user(const char *user)
     }
 
     /* erp! */
-    if (xunlink(fname))
+    if (xunlink(fname) == -1)
         r = IMAP_IOERROR;
     free(fname);
 
