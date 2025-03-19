@@ -5,7 +5,7 @@ What is Cyrus IMAP?
 ===================
 
 Cyrus IMAP is an efficient, reliable, and scalable server for email, calendar,
-and and contacts server. Cyrus is free and open source.
+and contacts server. Cyrus is free and open source.
 
 Cyrus supports JMAP, IMAP, POP3, CalDAV, CardDAV, NNTP, and
 :doc:`many other standards <imap/rfc-support>`.  It supports Sieve for
