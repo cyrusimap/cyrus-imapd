@@ -20,7 +20,7 @@ of features <imap-features>`.
 Cyrus IMAP supports many authentication options.  It uses Cyrus SASL, an
 implementation of the `Simple Authentication and Security Layer (SASL)
 <https://en.wikipedia.org/wiki/Simple_Authentication_and_Security_Layer>`_
-system.  You can read more at the `Cyrus SASL web page <http://www.cyrusimap.org/sasl>`_.
+system.  You can read more at the :ref:`Cyrus SASL web page <cyrussasl:sasl-index>`.
 
 Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
 
