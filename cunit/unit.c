@@ -39,25 +39,25 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <CUnit/Automated.h>
+#include <CUnit/Basic.h>
+#include <CUnit/CUnit.h>
 #include <config.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <unistd.h>
-#include <CUnit/CUnit.h>
-#include <CUnit/Basic.h>
-#include <CUnit/Automated.h>
 #if HAVE_VALGRIND_VALGRIND_H
-#include <valgrind/valgrind.h>
+#    include <valgrind/valgrind.h>
 #endif
-#include <setjmp.h>
-#include "timeout.h"
 #include "cyrunit.h"
+#include "timeout.h"
 #include "util.h"
 #include "xmalloc.h"
+#include <setjmp.h>
 
-#include "lib/retry.h"
 #include "lib/libconfig.h"
+#include "lib/retry.h"
 #include "lib/xunlink.h"
 
 /* generated headers are not necessarily in current directory */
@@ -66,26 +66,37 @@
 int verbose = 0;
 int num_testspecs = 0;
 const char **testspecs;
-enum { RUN, LIST } mode = RUN;
+enum {
+    RUN,
+    LIST
+} mode = RUN;
 int xml_flag = 0;
 int timeouts_flag = 1;
 
 #if HAVE_VALGRIND_VALGRIND_H
-#define log1(fmt, a1) do {                                                  \
-    if (RUNNING_ON_VALGRIND) VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1));      \
-    else fprintf(stderr, "\nunit: "fmt"\n", (a1));                          \
-} while (0)
-#define log2(fmt, a1, a2) do {                                              \
-    if (RUNNING_ON_VALGRIND) VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1), (a2));\
-    else fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                    \
-} while (0)
+#    define log1(fmt, a1)                                                      \
+        do {                                                                   \
+            if (RUNNING_ON_VALGRIND)                                           \
+                VALGRIND_PRINTF_BACKTRACE(fmt "\n", (a1));                     \
+            else                                                               \
+                fprintf(stderr, "\nunit: " fmt "\n", (a1));                    \
+        } while (0)
+#    define log2(fmt, a1, a2)                                                  \
+        do {                                                                   \
+            if (RUNNING_ON_VALGRIND)                                           \
+                VALGRIND_PRINTF_BACKTRACE(fmt "\n", (a1), (a2));               \
+            else                                                               \
+                fprintf(stderr, "\nunit: " fmt "\n", (a1), (a2));              \
+        } while (0)
 #else
-#define log1(fmt, a1) do {                                                  \
-    fprintf(stderr, "\nunit: "fmt"\n", (a1));                               \
-} while (0)
-#define log2(fmt, a1, a2) do {                                              \
-    fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                         \
-} while (0)
+#    define log1(fmt, a1)                                                      \
+        do {                                                                   \
+            fprintf(stderr, "\nunit: " fmt "\n", (a1));                        \
+        } while (0)
+#    define log2(fmt, a1, a2)                                                  \
+        do {                                                                   \
+            fprintf(stderr, "\nunit: " fmt "\n", (a1), (a2));                  \
+        } while (0)
 #endif
 
 jmp_buf fatal_jbuf;
@@ -111,11 +122,15 @@ EXPORTED void fatal(const char *s, int code)
 }
 
 /* Each test gets a maximum of 20 seconds. */
-#define TEST_TIMEOUT_MS (20*1000)
+#define TEST_TIMEOUT_MS (20 * 1000)
 
 static jmp_buf jbuf;
 static const char *code;
-static enum { IDLE, INTEST, INFIXTURE } running = IDLE;
+static enum {
+    IDLE,
+    INTEST,
+    INFIXTURE
+} running = IDLE;
 static struct cunit_param *current_params;
 
 void exit(int status)
@@ -161,48 +176,45 @@ void __cunit_wrap_test(const char *name, void (*fn)(void))
 {
     code = name;
     running = INTEST;
-    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0)
-        exit(1);
+    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0) exit(1);
     fn();
-    if (timeouts_flag && timeout_end() < 0)
-        exit(1);
+    if (timeouts_flag && timeout_end() < 0) exit(1);
     running = IDLE;
 }
 
 int __cunit_wrap_fixture(const char *name, int (*fn)(void))
 {
     int r = setjmp(jbuf);
-    if (r)
-        return r;
+    if (r) return r;
     code = name;
     running = INFIXTURE;
-    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0)
-        exit(1);
+    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0) exit(1);
     r = fn();
-    if (timeouts_flag && timeout_end() < 0)
-        exit(1);
+    if (timeouts_flag && timeout_end() < 0) exit(1);
     running = IDLE;
     return r;
 }
 
 static void describe_params(const struct cunit_param *params,
-                            char *buf, int maxlen)
+                            char *buf,
+                            int maxlen)
 {
     const struct cunit_param *p;
     int n;
 
-    if (maxlen <= 4)
-        return;
-    if (!params || !params->name)
-        return;
+    if (maxlen <= 4) return;
+    if (!params || !params->name) return;
 
-    for (p = params ; p->name ; p++) {
-        n = snprintf(buf, maxlen, "%s%s=%s",
+    for (p = params; p->name; p++) {
+        n = snprintf(buf,
+                     maxlen,
+                     "%s%s=%s",
                      (p == params ? "" : ","),
-                     p->name, p->values[p->idx]);
+                     p->name,
+                     p->values[p->idx]);
         if (n >= maxlen) {
             /* truncated */
-            strcpy(buf+maxlen-4, "...");
+            strcpy(buf + maxlen - 4, "...");
             return;
         }
         buf += n;
@@ -214,8 +226,7 @@ static void params_assign(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    for (p = params ; p->name ; p++)
-        *(p->variable) = p->values[p->idx];
+    for (p = params; p->name; p++) *(p->variable) = p->values[p->idx];
 
     if (verbose) {
         char buf[1024];
@@ -230,28 +241,25 @@ void __cunit_params_begin(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    if (!params || !params[0].name)
-        return;
+    if (!params || !params[0].name) return;
 
     if (!params[0].values) {
         /* first call: split the original value of the
          * variable up into the ->values[] array */
-        for (p = params ; p->name ; p++) {
+        for (p = params; p->name; p++) {
             char *v;
             static const char sep[] = ",";
             p->freeme1 = xstrdup(*(p->variable));
-            for (v = strtok(p->freeme1, sep) ;
-                 v ;
-                 v = strtok(NULL, sep)) {
-                p->values = (p->nvalues ?
-                             xrealloc(p->values, sizeof(char*) * (p->nvalues+1)) :
-                             xmalloc(sizeof(char *)));
+            for (v = strtok(p->freeme1, sep); v; v = strtok(NULL, sep)) {
+                p->values =
+                    (p->nvalues ? xrealloc(p->values,
+                                           sizeof(char *) * (p->nvalues + 1))
+                                : xmalloc(sizeof(char *)));
                 p->values[p->nvalues++] = v;
             }
         }
     }
-    for (p = params ; p->name ; p++)
-        p->idx = 0;
+    for (p = params; p->name; p++) p->idx = 0;
     params_assign(params);
     current_params = params;
 }
@@ -260,34 +268,26 @@ int __cunit_params_next(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    if (!params || !params[0].name)
-        return 0;
+    if (!params || !params[0].name) return 0;
 
-    for (p = params ; p->name ; p++) {
-        if (++p->idx < p->nvalues)
-            break;
+    for (p = params; p->name; p++) {
+        if (++p->idx < p->nvalues) break;
         p->idx = 0;
     }
-    if (!p->name)
-        return 0;       /* incremented off the end */
+    if (!p->name) return 0; /* incremented off the end */
     params_assign(params);
     return 1;
 }
 
-void __cunit_params_end(void)
-{
-    current_params = NULL;
-}
+void __cunit_params_end(void) { current_params = NULL; }
 
-
-CU_BOOL CU_assertFormatImplementation(
-    CU_BOOL bValue,
-    unsigned int uiLine,
-    const char strFile[],
-    const char strFunction[],
-    CU_BOOL bFatal,
-    const char strConditionFormat[],
-    ...)
+CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue,
+                                      unsigned int uiLine,
+                                      const char strFile[],
+                                      const char strFunction[],
+                                      CU_BOOL bFatal,
+                                      const char strConditionFormat[],
+                                      ...)
 {
     va_list args;
     char buf[1024];
@@ -297,16 +297,18 @@ CU_BOOL CU_assertFormatImplementation(
     va_end(args);
 
     if (current_params) {
-        strncat(buf, " [", sizeof(buf)-strlen(buf)-1);
-        describe_params(current_params, buf+strlen(buf), sizeof(buf)-strlen(buf)-1);
-        strncat(buf, "]", sizeof(buf)-strlen(buf)-1);
-        buf[sizeof(buf)-1] = '\0';
+        strncat(buf, " [", sizeof(buf) - strlen(buf) - 1);
+        describe_params(
+            current_params, buf + strlen(buf), sizeof(buf) - strlen(buf) - 1);
+        strncat(buf, "]", sizeof(buf) - strlen(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
     }
 
     if (verbose > 1 && bValue)
         fprintf(stderr, "    %s:%u %s\n", strFile, uiLine, buf);
 
-    return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
+    return CU_assertImplementation(
+        bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
 EXPORTED void config_read_string(const char *s)
@@ -332,33 +334,29 @@ static void run_tests(void)
 
     /* Setup to catch long-running tests.  This seems to be
      * particularly a problem on CentOS 5.5. */
-    if (timeouts_flag && timeout_init(handle_timeout) < 0)
-        exit(1);
+    if (timeouts_flag && timeout_init(handle_timeout) < 0) exit(1);
 
     if (xml_flag) {
         if (num_testspecs == 0) {
             /* not specified: run all tests in order listed */
             CU_automated_run_tests();
-            if (timeouts_flag)
-                timeout_fini();
+            if (timeouts_flag) timeout_fini();
             return;
         }
-        fprintf(stderr, "unit: test specifications not "
-                        "supported in XML mode, sorry\n");
+        fprintf(stderr,
+                "unit: test specifications not "
+                "supported in XML mode, sorry\n");
         exit(1);
     }
 
-    if (verbose)
-        CU_basic_set_mode(CU_BRM_VERBOSE);
+    if (verbose) CU_basic_set_mode(CU_BRM_VERBOSE);
 
     if (num_testspecs == 0) {
         /* not specified: run all tests in order listed */
         err = CU_basic_run_tests();
         running = IDLE; /* Just In Case */
-        if (timeouts_flag)
-            timeout_fini();
-        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed)
-            exit(1);
+        if (timeouts_flag) timeout_fini();
+        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed) exit(1);
         return;
     }
 
@@ -368,12 +366,11 @@ static void run_tests(void)
      * bail on the first failure
      */
 
-    for (i = 0 ; i < num_testspecs ; i++) {
+    for (i = 0; i < num_testspecs; i++) {
         xstrncpy(suitename, testspecs[i], sizeof(suitename));
         if ((testname = strchr(suitename, ':')) != NULL) {
             *testname++ = '\0';
-            if (*testname == '\0')
-                testname = NULL;
+            if (*testname == '\0') testname = NULL;
         }
 
         suite = CU_get_suite_by_name(suitename, CU_get_registry());
@@ -385,23 +382,24 @@ static void run_tests(void)
         if (testname == NULL) {
             err = CU_basic_run_suite(suite);
             running = IDLE; /* Just In Case */
-        } else {
+        }
+        else {
             /* run the named test in the named suite */
             test = CU_get_test_by_name(testname, suite);
             if (test == NULL) {
-                fprintf(stderr, "unit: no such test \"%s\" in suite \"%s\"\n",
-                        testname, suitename);
+                fprintf(stderr,
+                        "unit: no such test \"%s\" in suite \"%s\"\n",
+                        testname,
+                        suitename);
                 exit(1);
             }
             err = CU_basic_run_test(suite, test);
             running = IDLE; /* Just In Case */
         }
-        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed)
-            exit(1);
+        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed) exit(1);
     }
 
-    if (timeouts_flag)
-        timeout_fini();
+    if (timeouts_flag) timeout_fini();
 }
 
 static void list_tests(void)
@@ -409,30 +407,25 @@ static void list_tests(void)
     CU_Suite *suite;
     CU_Test *test;
 
-    for (suite = CU_get_registry()->pSuite ;
-         suite != NULL ;
-         suite = suite->pNext) {
-        for (test = suite->pTest ;
-             test != NULL ;
-             test = test->pNext) {
+    for (suite = CU_get_registry()->pSuite; suite != NULL; suite = suite->pNext)
+    {
+        for (test = suite->pTest; test != NULL; test = test->pNext) {
             printf("%s:%s\n", suite->pName, test->pName);
         }
     }
 }
 
-static void usage(int ec)
-    __attribute__((noreturn));
+static void usage(int ec) __attribute__((noreturn));
 
 static void usage(int ec)
 {
     static const char usage_str[] =
-"Usage: cunit/unit [options] [suite|suite:test ...]\n"
-"options are:\n"
-"    -l      list all tests\n"
-"    -t      disable per-test timeouts\n"
-"    -v      be more verbose\n"
-"    -h      print this message\n"
-    ;
+        "Usage: cunit/unit [options] [suite|suite:test ...]\n"
+        "options are:\n"
+        "    -l      list all tests\n"
+        "    -t      disable per-test timeouts\n"
+        "    -v      be more verbose\n"
+        "    -h      print this message\n";
 
     fputs(usage_str, stderr);
     fflush(stderr);
@@ -444,10 +437,8 @@ static void parse_args(int argc, char **argv)
 {
     int c;
 
-    while ((c = getopt(argc, argv, "hltvx")) > 0)
-    {
-        switch (c)
-        {
+    while ((c = getopt(argc, argv, "hltvx")) > 0) {
+        switch (c) {
         case 'h':
             usage(0);
             break;
@@ -469,7 +460,7 @@ static void parse_args(int argc, char **argv)
         }
     }
     num_testspecs = argc - optind;
-    testspecs = (const char **)(argv + optind);
+    testspecs = (const char **) (argv + optind);
 }
 
 int main(int argc, char **argv)
@@ -487,4 +478,3 @@ int main(int argc, char **argv)
     }
     return 0;
 }
-

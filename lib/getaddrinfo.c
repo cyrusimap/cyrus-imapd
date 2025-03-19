@@ -60,8 +60,8 @@
 
 #include "config.h"
 #ifndef macintosh
-#include <sys/param.h>
-#include <arpa/inet.h>
+#    include <arpa/inet.h>
+#    include <sys/param.h>
 #endif
 #include <ctype.h>
 #include <stdlib.h>
@@ -69,34 +69,36 @@
 
 #include "util.h"
 
-static struct addrinfo *
-malloc_ai(int port, u_long addr, int socktype, int proto)
+static struct addrinfo *malloc_ai(int port,
+                                  u_long addr,
+                                  int socktype,
+                                  int proto)
 {
     struct addrinfo *ai;
 
-    ai = (struct addrinfo *)malloc(sizeof(struct addrinfo) +
-                                   sizeof(struct sockaddr_in));
+    ai = (struct addrinfo *) malloc(sizeof(struct addrinfo)
+                                    + sizeof(struct sockaddr_in));
     if (ai) {
         memset(ai, 0, sizeof(struct addrinfo) + sizeof(struct sockaddr_in));
-        ai->ai_addr = (struct sockaddr *)(ai + 1);
+        ai->ai_addr = (struct sockaddr *) (ai + 1);
         /* XXX -- ssh doesn't use sa_len */
         ai->ai_addrlen = sizeof(struct sockaddr_in);
 #ifdef HAVE_SOCKADDR_SA_LEN
         ai->ai_addr->sa_len = sizeof(struct sockaddr_in);
 #endif
         ai->ai_addr->sa_family = ai->ai_family = AF_INET;
-        ((struct sockaddr_in *)(ai)->ai_addr)->sin_port = port;
-        ((struct sockaddr_in *)(ai)->ai_addr)->sin_addr.s_addr = addr;
+        ((struct sockaddr_in *) (ai)->ai_addr)->sin_port = port;
+        ((struct sockaddr_in *) (ai)->ai_addr)->sin_addr.s_addr = addr;
         ai->ai_socktype = socktype;
         ai->ai_protocol = proto;
         return ai;
-    } else {
+    }
+    else {
         return NULL;
     }
 }
 
-char *
-gai_strerror(int ecode)
+char *gai_strerror(int ecode)
 {
     switch (ecode) {
     case EAI_MEMORY:
@@ -112,22 +114,21 @@ gai_strerror(int ecode)
     }
 }
 
-void
-freeaddrinfo(struct addrinfo *ai)
+void freeaddrinfo(struct addrinfo *ai)
 {
     struct addrinfo *next;
 
-    if (ai->ai_canonname)
-        free(ai->ai_canonname);
+    if (ai->ai_canonname) free(ai->ai_canonname);
     do {
         next = ai->ai_next;
         free(ai);
     } while ((ai = next) != NULL);
 }
 
-int
-getaddrinfo(const char *hostname, const char *servname,
-            const struct addrinfo *hints, struct addrinfo **res)
+int getaddrinfo(const char *hostname,
+                const char *servname,
+                const struct addrinfo *hints,
+                struct addrinfo **res)
 {
     struct addrinfo *cur, *prev = NULL;
     struct hostent *hp;
@@ -137,8 +138,7 @@ getaddrinfo(const char *hostname, const char *servname,
     if (hints && hints->ai_family != PF_INET && hints->ai_family != PF_UNSPEC)
         return EAI_FAMILY;
 
-    socktype = (hints && hints->ai_socktype) ? hints->ai_socktype
-                                             : SOCK_STREAM;
+    socktype = (hints && hints->ai_socktype) ? hints->ai_socktype : SOCK_STREAM;
     if (hints && hints->ai_protocol)
         proto = hints->ai_protocol;
     else {
@@ -194,17 +194,20 @@ getaddrinfo(const char *hostname, const char *servname,
         else
             return EAI_MEMORY;
     }
-    if (hints && hints->ai_flags & AI_NUMERICHOST)
-        return EAI_NONAME;
+    if (hints && hints->ai_flags & AI_NUMERICHOST) return EAI_NONAME;
 #ifndef macintosh
-    if ((hp = gethostbyname(hostname)) &&
-        hp->h_name && hp->h_name[0] && hp->h_addr_list[0]) {
+    if ((hp = gethostbyname(hostname)) && hp->h_name && hp->h_name[0]
+        && hp->h_addr_list[0])
+    {
         for (i = 0; hp->h_addr_list[i]; i++) {
-            if ((cur = malloc_ai(port,
-                                ((struct in_addr *)hp->h_addr_list[i])->s_addr,
-                                socktype, proto)) == NULL) {
-                if (*res)
-                    freeaddrinfo(*res);
+            if ((cur =
+                     malloc_ai(port,
+                               ((struct in_addr *) hp->h_addr_list[i])->s_addr,
+                               socktype,
+                               proto))
+                == NULL)
+            {
+                if (*res) freeaddrinfo(*res);
                 return EAI_MEMORY;
             }
             if (prev)

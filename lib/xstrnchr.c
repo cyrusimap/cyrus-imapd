@@ -47,7 +47,8 @@ EXPORTED char *strnchr(const char *s, int c, size_t n)
 {
     if (!s) return NULL;
 
-    for (; n; n--, s++) if (*s == c) return ((char *) s);
+    for (; n; n--, s++)
+        if (*s == c) return ((char *) s);
 
     return NULL;
 }

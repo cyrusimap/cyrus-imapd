@@ -59,14 +59,12 @@ EXPORTED void slowio_reset_impl(void)
 
 EXPORTED void slowio_maybe_delay_read_impl(ssize_t n_bytes)
 {
-    if (config_debug_slowio)
-        slowio_maybe_delay_impl(&slowio_read, n_bytes);
+    if (config_debug_slowio) slowio_maybe_delay_impl(&slowio_read, n_bytes);
 }
 
 EXPORTED void slowio_maybe_delay_write_impl(ssize_t n_bytes)
 {
-    if (config_debug_slowio)
-        slowio_maybe_delay_impl(&slowio_write, n_bytes);
+    if (config_debug_slowio) slowio_maybe_delay_impl(&slowio_write, n_bytes);
 }
 
 EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
@@ -82,8 +80,7 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
         return;
     }
 
-    if (slowio->last_delay.tv_sec == 0
-        && slowio->last_delay.tv_nsec == 0
+    if (slowio->last_delay.tv_sec == 0 && slowio->last_delay.tv_nsec == 0
         && slowio->bytes_since_last_delay == 0)
     {
         /* first time called, just initialise */
@@ -96,16 +93,16 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
 
     slowio->bytes_since_last_delay += n_bytes;
     /* XXX alas, timesub() is for timeval, not timespec */
-    double elapsed = (double)(now.tv_sec - slowio->last_delay.tv_sec)
-                     + (double)(now.tv_nsec - slowio->last_delay.tv_nsec)
-                       / 1000000000.0;
+    double elapsed =
+        (double) (now.tv_sec - slowio->last_delay.tv_sec)
+        + (double) (now.tv_nsec - slowio->last_delay.tv_nsec) / 1000000000.0;
 
     /* XXX skip out early if elapsed time is very short? */
     if (elapsed <= 0.0 || slowio->bytes_since_last_delay == 0) return;
 
     if (slowio->bytes_since_last_delay / elapsed > max_bytes_per_sec) {
-        double delay = (slowio->bytes_since_last_delay / max_bytes_per_sec)
-                       - elapsed;
+        double delay =
+            (slowio->bytes_since_last_delay / max_bytes_per_sec) - elapsed;
         double delay_s, delay_ns;
         struct timespec sleeptime;
         int r;

@@ -42,45 +42,49 @@
 
 #include <config.h>
 
+#include <ctype.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/stat.h>
 
 #include "assert.h"
 #include "hash.h"
 #include "libconfig.h"
+#include "tok.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "tok.h"
-#include "util.h"
 
-#define CONFIGHASHSIZE 30 /* relatively small,
-                           * because it is for overflow only */
-#define INCLUDEHASHSIZE 5 /* relatively small,
-                            * but how many includes are reasonable? */
+#define CONFIGHASHSIZE                                                         \
+    30 /* relatively small,                                                    \
+        * because it is for overflow only */
+#define INCLUDEHASHSIZE                                                        \
+    5 /* relatively small,                                                     \
+       * but how many includes are reasonable? */
 
 static struct hash_table confighash, includehash;
 
 /* cached configuration variables accessible to the external world */
-EXPORTED const char *config_filename= NULL;       /* filename of configuration file */
-EXPORTED const char *config_dir = NULL;          /* ie /var/imap */
-EXPORTED const char *config_defpartition = NULL;  /* /var/spool/imap */
-EXPORTED const char *config_servername= NULL;    /* gethostname() */
-EXPORTED enum enum_value config_serverinfo;      /* on */
-EXPORTED const char *config_mupdate_server = NULL;/* NULL */
-EXPORTED const char *config_defdomain = NULL;     /* NULL */
-EXPORTED const char *config_ident = NULL;         /* the service name */
-EXPORTED int config_hashimapspool;        /* f */
-EXPORTED enum enum_value config_virtdomains;              /* f */
-EXPORTED enum enum_value config_mupdate_config; /* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
+EXPORTED const char *config_filename =
+    NULL;                               /* filename of configuration file */
+EXPORTED const char *config_dir = NULL; /* ie /var/imap */
+EXPORTED const char *config_defpartition = NULL;   /* /var/spool/imap */
+EXPORTED const char *config_servername = NULL;     /* gethostname() */
+EXPORTED enum enum_value config_serverinfo;        /* on */
+EXPORTED const char *config_mupdate_server = NULL; /* NULL */
+EXPORTED const char *config_defdomain = NULL;      /* NULL */
+EXPORTED const char *config_ident = NULL;          /* the service name */
+EXPORTED int config_hashimapspool;                 /* f */
+EXPORTED enum enum_value config_virtdomains;       /* f */
+EXPORTED enum enum_value
+    config_mupdate_config; /* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 EXPORTED strarray_t config_cua_domains = STRARRAY_INITIALIZER;
 EXPORTED int config_auditlog;
 EXPORTED int config_iolog;
@@ -96,7 +100,7 @@ EXPORTED int config_fatals_abort = 0;
 static int config_loaded;
 
 extern void fatal(const char *fatal_message, int fatal_code)
-   __attribute__ ((noreturn));
+    __attribute__((noreturn));
 
 /* prototype to allow for sane function ordering */
 static void config_read_file(const char *filename);
@@ -107,15 +111,20 @@ static void assert_not_deprecated(enum imapopt opt)
         char errbuf[1024];
         enum imapopt popt = imapopts[opt].preferred_opt;
         if (popt != IMAPOPT_ZERO) {
-            snprintf(errbuf, sizeof(errbuf),
-                    "Option '%s' is deprecated in favor of '%s' since version %s.",
-                    imapopts[opt].optname, imapopts[popt].optname,
-                    imapopts[opt].deprecated_since);
+            snprintf(
+                errbuf,
+                sizeof(errbuf),
+                "Option '%s' is deprecated in favor of '%s' since version %s.",
+                imapopts[opt].optname,
+                imapopts[popt].optname,
+                imapopts[opt].deprecated_since);
         }
         else {
-            snprintf(errbuf, sizeof(errbuf),
-                    "Option '%s' is deprecated in version %s.",
-                    imapopts[opt].optname, imapopts[opt].deprecated_since);
+            snprintf(errbuf,
+                     sizeof(errbuf),
+                     "Option '%s' is deprecated in version %s.",
+                     imapopts[opt].optname,
+                     imapopts[opt].deprecated_since);
         }
         fatal(errbuf, EX_SOFTWARE);
     }
@@ -126,8 +135,8 @@ EXPORTED const char *config_getstring(enum imapopt opt)
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
-    assert((imapopts[opt].t == OPT_STRING) ||
-           (imapopts[opt].t == OPT_STRINGLIST));
+    assert((imapopts[opt].t == OPT_STRING)
+           || (imapopts[opt].t == OPT_STRINGLIST));
 
     return imapopts[opt].val.s;
 }
@@ -139,10 +148,13 @@ EXPORTED int config_getint(enum imapopt opt)
     assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_INT);
 #if (SIZEOF_LONG != 4)
-    if ((imapopts[opt].val.i > 0x7fffffff)||
-        (imapopts[opt].val.i < -0x7fffffff)) {
-        syslog(LOG_ERR, "config_getint: %s: %ld too large for type",
-               imapopts[opt].optname, imapopts[opt].val.i);
+    if ((imapopts[opt].val.i > 0x7fffffff)
+        || (imapopts[opt].val.i < -0x7fffffff))
+    {
+        syslog(LOG_ERR,
+               "config_getint: %s: %ld too large for type",
+               imapopts[opt].optname,
+               imapopts[opt].val.i);
     }
 #endif
     return imapopts[opt].val.i;
@@ -155,10 +167,13 @@ EXPORTED int config_getswitch(enum imapopt opt)
     assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_SWITCH);
 #if (SIZEOF_LONG != 4)
-    if ((imapopts[opt].val.b > 0x7fffffff)||
-        (imapopts[opt].val.b < -0x7fffffff)) {
-        syslog(LOG_ERR, "config_getswitch: %s: %ld too large for type",
-               imapopts[opt].optname, imapopts[opt].val.b);
+    if ((imapopts[opt].val.b > 0x7fffffff)
+        || (imapopts[opt].val.b < -0x7fffffff))
+    {
+        syslog(LOG_ERR,
+               "config_getswitch: %s: %ld too large for type",
+               imapopts[opt].optname,
+               imapopts[opt].val.b);
     }
 #endif
     return imapopts[opt].val.b;
@@ -184,7 +199,9 @@ EXPORTED unsigned long config_getbitfield(enum imapopt opt)
     return imapopts[opt].val.x;
 }
 
-static inline int accumulate(int *val, int mult, int nextchar,
+static inline int accumulate(int *val,
+                             int mult,
+                             int nextchar,
                              struct buf *parse_err)
 {
     int newdigit = 0;
@@ -194,8 +211,7 @@ static inline int accumulate(int *val, int mult, int nextchar,
     if (cyrus_isdigit(nextchar)) newdigit = nextchar - '0';
 
     if (*val > INT_MAX / mult
-        || (*val == INT_MAX / mult
-            && newdigit > INT_MAX % mult))
+        || (*val == INT_MAX / mult && newdigit > INT_MAX % mult))
     {
         if (parse_err)
             buf_printf(parse_err, "would overflow at '%c'", nextchar);
@@ -216,7 +232,9 @@ static inline int accumulate(int *val, int mult, int nextchar,
 
  * On error, -1 is returned and out_duration is unchanged.
  */
-EXPORTED int config_parseduration(const char *str, int defunit, int *out_duration)
+EXPORTED int config_parseduration(const char *str,
+                                  int defunit,
+                                  int *out_duration)
 {
     assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
 
@@ -232,8 +250,7 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
     /* make a copy and append the default unit if necessary */
     copy = xzmalloc(len + 2);
     strlcpy(copy, str, len + 2);
-    if (len > 0 && cyrus_isdigit(copy[len-1]))
-        copy[len] = defunit;
+    if (len > 0 && cyrus_isdigit(copy[len - 1])) copy[len] = defunit;
 
     p = copy;
     if (*p == '-') {
@@ -296,9 +313,11 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
 
 done:
     if (r) {
-        xsyslog(LOG_ERR, "unable to parse duration from string",
-                         "value=<%s> parse_err=<%s>",
-                         str, buf_cstring_or_empty(&parse_err));
+        xsyslog(LOG_ERR,
+                "unable to parse duration from string",
+                "value=<%s> parse_err=<%s>",
+                str,
+                buf_cstring_or_empty(&parse_err));
     }
 
     buf_free(&parse_err);
@@ -325,9 +344,12 @@ EXPORTED int config_getduration(enum imapopt opt, int defunit)
     if (config_parseduration(imapopts[opt].val.s, defunit, &duration)) {
         /* should have been rejected by config_read_file, but just in case */
         char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
+        snprintf(errbuf,
+                 sizeof(errbuf),
                  "%s: %s: couldn't parse duration '%s'",
-                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
+                 __func__,
+                 imapopts[opt].optname,
+                 imapopts[opt].val.s);
         fatal(errbuf, EX_CONFIG);
     }
 
@@ -359,8 +381,7 @@ EXPORTED int config_parsebytesize(const char *str,
     /* make a copy and append the default unit if necessary */
     copy = xzmalloc(len + 2);
     strlcpy(copy, str, len + 2);
-    if (len > 0 && cyrus_isdigit(copy[len-1]))
-        copy[len] = defunit;
+    if (len > 0 && cyrus_isdigit(copy[len - 1])) copy[len] = defunit;
 
     /* start parsing */
     errno = 0;
@@ -431,9 +452,11 @@ EXPORTED int config_parsebytesize(const char *str,
 
 done:
     if (r) {
-        xsyslog(LOG_ERR, "unable to parse bytesize from string",
-                         "value=<%s> parse_err=<%s>",
-                         str, buf_cstring_or_empty(&parse_err));
+        xsyslog(LOG_ERR,
+                "unable to parse bytesize from string",
+                "value=<%s> parse_err=<%s>",
+                str,
+                buf_cstring_or_empty(&parse_err));
     }
     else if (out_bytesize) {
         *out_bytesize = bytesize;
@@ -460,9 +483,12 @@ EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
     if (config_parsebytesize(imapopts[opt].val.s, defunit, &bytesize)) {
         /* should have been rejected by config_read_file, but just in case */
         char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
+        snprintf(errbuf,
+                 sizeof(errbuf),
                  "%s: %s: couldn't parse byte size '%s'",
-                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
+                 __func__,
+                 imapopts[opt].optname,
+                 imapopts[opt].val.s);
         fatal(errbuf, EX_CONFIG);
     }
 
@@ -480,7 +506,7 @@ EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
      * override */
 
     if (config_ident) {
-        if (snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
+        if (snprintf(buf, sizeof(buf), "%s_%s", config_ident, key) == -1)
             fatal("key too long in config_getoverflowstring", EX_TEMPFAIL);
 
         lcase(buf);
@@ -488,34 +514,33 @@ EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
     }
 
     /* No service-specific override, check the actual key */
-    if (!ret)
-        ret = hash_lookup(key, &confighash);
+    if (!ret) ret = hash_lookup(key, &confighash);
 
     /* Return what we got or the default */
     return ret ? ret : def;
 }
 
-EXPORTED void config_foreachoverflowstring(void (*func)(const char *, const char *, void *),
-                                  void *rock)
+EXPORTED void config_foreachoverflowstring(
+    void (*func)(const char *, const char *, void *), void *rock)
 {
     if (!config_filename) return;
 
-    hash_enumerate(&confighash, (void (*)(const char *, void *, void *)) func, rock);
+    hash_enumerate(
+        &confighash, (void (*)(const char *, void *, void *)) func, rock);
 }
 
 EXPORTED const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
-    if (strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf))
-        return 0;
-    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
-        return 0;
+    if (strlcpy(buf, "partition-", sizeof(buf)) >= sizeof(buf)) return 0;
+    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf)) return 0;
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_WARNING, "requested partition directory for unknown partition '%s'",
-                            partition);
+        syslog(LOG_WARNING,
+               "requested partition directory for unknown partition '%s'",
+               partition);
 
     return dir;
 }
@@ -524,15 +549,14 @@ EXPORTED const char *config_metapartitiondir(const char *partition)
 {
     char buf[80];
 
-    if (strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf))
-        return 0;
-    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
-        return 0;
+    if (strlcpy(buf, "metapartition-", sizeof(buf)) >= sizeof(buf)) return 0;
+    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf)) return 0;
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_DEBUG, "requested meta partition directory for unknown partition '%s'",
-                          partition);
+        syslog(LOG_DEBUG,
+               "requested meta partition directory for unknown partition '%s'",
+               partition);
 
     return dir;
 }
@@ -541,18 +565,18 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
 {
     char buf[80];
 
-    if (!config_getswitch(IMAPOPT_ARCHIVE_ENABLED))
-        return NULL;
+    if (!config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) return NULL;
 
-    if(strlcpy(buf, "archivepartition-", sizeof(buf)) >= sizeof(buf))
+    if (strlcpy(buf, "archivepartition-", sizeof(buf)) >= sizeof(buf))
         return NULL;
-    if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
-        return NULL;
+    if (strlcat(buf, partition, sizeof(buf)) >= sizeof(buf)) return NULL;
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_DEBUG, "requested archive partition directory for unknown partition '%s'",
-                          partition);
+        syslog(
+            LOG_DEBUG,
+            "requested archive partition directory for unknown partition '%s'",
+            partition);
 
     return dir;
 }
@@ -572,14 +596,18 @@ static void config_option_deprecate(const int dopt)
     const char *since = imapopts[dopt].deprecated_since;
 
     if (opt == IMAPOPT_ZERO) {
-        syslog(LOG_WARNING, "Option '%s' is deprecated in version %s.",
-               imapopts[dopt].optname, since);
+        syslog(LOG_WARNING,
+               "Option '%s' is deprecated in version %s.",
+               imapopts[dopt].optname,
+               since);
         return;
     }
 
     syslog(LOG_WARNING,
            "Option '%s' is deprecated in favor of '%s' since version %s.",
-           imapopts[dopt].optname, imapopts[opt].optname, since);
+           imapopts[dopt].optname,
+           imapopts[opt].optname,
+           since);
 
     /* Don't override values if the preferred option has been seen */
     if (imapopts[opt].seen) return;
@@ -625,13 +653,12 @@ EXPORTED void config_reset(void)
     enum imapopt opt;
 
     /* XXX this gate should probably use config_loaded, not config_filename */
-    if (!config_filename)
-        return;
+    if (!config_filename) return;
 
-    free((char *)config_filename);
+    free((char *) config_filename);
     config_filename = NULL;
     if (config_servername != config_getstring(IMAPOPT_SERVERNAME))
-        free((char *)config_servername);
+        free((char *) config_servername);
     config_servername = NULL;
     strarray_fini(&config_cua_domains);
     config_defpartition = NULL;
@@ -653,17 +680,16 @@ EXPORTED void config_reset(void)
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if ((imapopts[opt].t == OPT_STRING ||
-             imapopts[opt].t == OPT_DURATION ||
-             imapopts[opt].t == OPT_BYTESIZE) &&
-            (imapopts[opt].seen ||
-             (imapopts[opt].def.s &&
-              imapopts[opt].val.s != imapopts[opt].def.s &&
-              !strncasecmp(imapopts[opt].def.s, "{configdirectory}", 17))))
-            free((char *)imapopts[opt].val.s);
-        memcpy(&imapopts[opt].val,
-               &imapopts[opt].def,
-               sizeof(imapopts[opt].val));
+        if ((imapopts[opt].t == OPT_STRING || imapopts[opt].t == OPT_DURATION
+             || imapopts[opt].t == OPT_BYTESIZE)
+            && (imapopts[opt].seen
+                || (imapopts[opt].def.s
+                    && imapopts[opt].val.s != imapopts[opt].def.s
+                    && !strncasecmp(
+                        imapopts[opt].def.s, "{configdirectory}", 17))))
+            free((char *) imapopts[opt].val.s);
+        memcpy(
+            &imapopts[opt].val, &imapopts[opt].def, sizeof(imapopts[opt].val));
         imapopts[opt].seen = 0;
     }
     config_dir = NULL;
@@ -682,14 +708,28 @@ EXPORTED void config_reset(void)
 }
 
 static const unsigned char qos[] = {
-/* cs0..cs7 */          0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0,
-/* af11..af13 */        0x28, 0x30, 0x38,
-/* af21..af23 */        0x48, 0x50, 0x58,
-/* af31..af33 */        0x68, 0x70, 0x78,
-/* af41..af43 */        0x88, 0x90, 0x98,
-/* ef */                0xb8
+    /* cs0..cs7 */ 0x00,
+    0x20,
+    0x40,
+    0x60,
+    0x80,
+    0xa0,
+    0xc0,
+    0xe0,
+    /* af11..af13 */ 0x28,
+    0x30,
+    0x38,
+    /* af21..af23 */ 0x48,
+    0x50,
+    0x58,
+    /* af31..af33 */ 0x68,
+    0x70,
+    0x78,
+    /* af41..af43 */ 0x88,
+    0x90,
+    0x98,
+    /* ef */ 0xb8
 };
-
 
 EXPORTED void config_read(const char *alt_config, const int config_need_data)
 {
@@ -705,8 +745,10 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     config_loaded = 1;
 
     /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
-    if (alt_config) config_filename = xstrdup(alt_config);
-    else config_filename = xstrdup(CONFIG_FILENAME);
+    if (alt_config)
+        config_filename = xstrdup(alt_config);
+    else
+        config_filename = xstrdup(CONFIG_FILENAME);
 
     if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
         fatal("could not construct configuration hash table", EX_CONFIG);
@@ -732,11 +774,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
         /* Skip options that have a NULL value, aren't strings, or
          * are the configdirectory option */
-        if (
-                !imapopts[opt].val.s ||
-                imapopts[opt].t != OPT_STRING ||
-                opt == IMAPOPT_CONFIGDIRECTORY
-            ) {
+        if (!imapopts[opt].val.s || imapopts[opt].t != OPT_STRING
+            || opt == IMAPOPT_CONFIGDIRECTORY)
+        {
 
             continue;
         }
@@ -745,17 +785,15 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
          * 17 is the length of "{configdirectory}",
          * 16 is one less than that length, so that the replacement string
          *    that is malloced has room for the '\0' */
-        if (!strncasecmp(imapopts[opt].val.s,"{configdirectory}",17)) {
+        if (!strncasecmp(imapopts[opt].val.s, "{configdirectory}", 17)) {
             const char *str = imapopts[opt].val.s;
-            char *newstring =
-                xmalloc(strlen(config_dir) + strlen(str) - 16);
+            char *newstring = xmalloc(strlen(config_dir) + strlen(str) - 16);
             char *freeme = NULL;
 
             /* we need to replace this string, will we need to free
              * the current value?  -- only if we've actually seen it in
              * the config file. */
-            if (imapopts[opt].seen)
-                freeme = (char *)str;
+            if (imapopts[opt].seen) freeme = (char *) str;
 
             /* Build replacement string from configdirectory option */
             strcpy(newstring, config_dir);
@@ -776,10 +814,10 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
-    for (p = (char *)config_defpartition; p && *p; p++) {
+    for (p = (char *) config_defpartition; p && *p; p++) {
         if (!Uisalnum(*p)) {
-            syslog(LOG_ERR, "INVALID defaultpartition: %s",
-                   config_defpartition);
+            syslog(
+                LOG_ERR, "INVALID defaultpartition: %s", config_defpartition);
             fatal("defaultpartition option contains non-alnum character",
                   EX_CONFIG);
         }
@@ -800,7 +838,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
             if (config_partitiondir(config_defpartition)) found = 1;
         }
         else if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD)
-                 && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+                 && !config_getstring(IMAPOPT_PROXYSERVERS))
+        {
             found = 1; /* don't need partitions on the frontend */
         }
         else {
@@ -809,7 +848,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         }
 
         if (!found) {
-            snprintf(buf, sizeof(buf),
+            snprintf(buf,
+                     sizeof(buf),
                      "partition-%s option not specified in configuration file",
                      config_defpartition ? config_defpartition : "<name>");
             fatal(buf, EX_CONFIG);
@@ -831,7 +871,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     if (config_iolog) {
         if (access("/proc/self/io", R_OK)) {
             config_iolog = 0;
-            syslog(LOG_WARNING,"iolog directive needs a kernel built with I/O accounting");
+            syslog(LOG_WARNING,
+                   "iolog directive needs a kernel built with I/O accounting");
         }
     }
 
@@ -843,12 +884,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     }
     config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
 
-    
     /* create an array of calendar-user-address-set domains */
     cua_domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
     if (!cua_domains) cua_domains = config_defdomain;
 
-    tok_init(&tok, cua_domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    tok_init(&tok, cua_domains, " \t", TOK_TRIMLEFT | TOK_TRIMRIGHT);
     while ((domain = tok_next(&tok)))
         strarray_append(&config_cua_domains, domain);
     tok_fini(&tok);
@@ -886,27 +926,30 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
 #define GROWSIZE 4096
 
-static void config_add_overflowstring(const char *key, const char *value, int lineno)
+static void config_add_overflowstring(const char *key,
+                                      const char *value,
+                                      int lineno)
 {
     char *newval = xstrdup(value);
     if (newval != hash_insert(key, newval, &confighash)) {
         char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                "option '%s' was specified twice in config file "
-                "(second occurrence on line %d)",
-                key, lineno);
+        snprintf(errbuf,
+                 sizeof(errbuf),
+                 "option '%s' was specified twice in config file "
+                 "(second occurrence on line %d)",
+                 key,
+                 lineno);
         fatal(errbuf, EX_CONFIG);
     }
 }
 
 EXPORTED int config_parse_switch(const char *p)
 {
-    if (*p == '0' || *p == 'n' ||
-            (*p == 'o' && p[1] == 'f') || *p == 'f') {
+    if (*p == '0' || *p == 'n' || (*p == 'o' && p[1] == 'f') || *p == 'f') {
         return 0;
     }
-    else if (*p == '1' || *p == 'y' ||
-            (*p == 'o' && p[1] == 'n') || *p == 't') {
+    else if (*p == '1' || *p == 'y' || (*p == 'o' && p[1] == 'n') || *p == 't')
+    {
         return 1;
     }
     return -1;
@@ -936,41 +979,43 @@ static void config_read_file(const char *filename)
         infile = fopen(buf, "r");
     }
 
-    if (!infile)
-        infile = fopen(filename, "r");
+    if (!infile) infile = fopen(filename, "r");
 
     if (!infile) {
-        snprintf(buf, bufsize, "can't open configuration file %s: %s",
-                 filename, strerror(errno));
+        snprintf(buf,
+                 bufsize,
+                 "can't open configuration file %s: %s",
+                 filename,
+                 strerror(errno));
         fatal(buf, EX_CONFIG);
     }
 
     /* check to see if we've already read this file */
     if (hash_lookup(filename, &includehash)) {
-        snprintf(buf, bufsize, "configuration file %s included twice",
-                 filename);
+        snprintf(
+            buf, bufsize, "configuration file %s included twice", filename);
         fatal(buf, EX_CONFIG);
     }
     else {
-        hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
+        hash_insert(filename, (void *) 0xDEADBEEF, &includehash);
     }
 
     len = 0;
-    while (fgets(buf+len, bufsize-len, infile)) {
+    while (fgets(buf + len, bufsize - len, infile)) {
         if (buf[len]) {
             len = strlen(buf);
-            if (buf[len-1] == '\n') {
+            if (buf[len - 1] == '\n') {
                 /* end of line */
                 buf[--len] = '\0';
 
-                if (len && buf[len-1] == '\\') {
+                if (len && buf[len - 1] == '\\') {
                     /* line continuation */
                     len--;
                     lineno++;
                     continue;
                 }
             }
-            else if (!feof(infile) && len == bufsize-1) {
+            else if (!feof(infile) && len == bufsize - 1) {
                 /* line is longer than the buffer */
                 bufsize += GROWSIZE;
                 buf = xrealloc(buf, bufsize);
@@ -989,15 +1034,17 @@ static void config_read_file(const char *filename)
         if (!*p || *p == '#') continue;
 
         fullkey = key = p;
-        if (*p == '@') p++;  /* allow @ as the first char (for directives) */
+        if (*p == '@') p++; /* allow @ as the first char (for directives) */
         while (*p && (Uisalnum(*p) || *p == '-' || *p == '_')) {
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
             p++;
         }
         if (*p != ':') {
-            snprintf(errbuf, sizeof(errbuf),
-                    "invalid option name on line %d of configuration file %s",
-                    lineno, filename);
+            snprintf(errbuf,
+                     sizeof(errbuf),
+                     "invalid option name on line %d of configuration file %s",
+                     lineno,
+                     filename);
             fatal(errbuf, EX_CONFIG);
         }
         *p++ = '\0';
@@ -1011,9 +1058,10 @@ static void config_read_file(const char *filename)
         }
 
         if (!*p) {
-            snprintf(errbuf, sizeof(errbuf),
-                    "empty option value on line %d of configuration file",
-                    lineno);
+            snprintf(errbuf,
+                     sizeof(errbuf),
+                     "empty option value on line %d of configuration file",
+                     lineno);
             fatal(errbuf, EX_CONFIG);
         }
 
@@ -1026,16 +1074,20 @@ static void config_read_file(const char *filename)
                 continue;
             }
             else {
-                snprintf(errbuf, sizeof(errbuf),
-                         "invalid directive on line %d of configuration file %s",
-                         lineno, filename);
+                snprintf(
+                    errbuf,
+                    sizeof(errbuf),
+                    "invalid directive on line %d of configuration file %s",
+                    lineno,
+                    filename);
                 fatal(errbuf, EX_CONFIG);
             }
         }
 
         /* Find if there is a <service>_ prefix */
         if (config_ident && !strncasecmp(key, config_ident, idlen)
-           && key[idlen] == '_') {
+            && key[idlen] == '_')
+        {
             /* skip service_ prefix */
             srvkey = key + idlen + 1;
         }
@@ -1073,17 +1125,18 @@ static void config_read_file(const char *filename)
              *  If we have already seen a service-specific form, and this is
              *  a generic form, just skip it and don't moan.
              */
-            if (
-                    (imapopts[opt].seen == 1 && !service_specific) ||
-                    (imapopts[opt].seen == 2 && service_specific)
-                ) {
+            if ((imapopts[opt].seen == 1 && !service_specific)
+                || (imapopts[opt].seen == 2 && service_specific))
+            {
 
                 sprintf(errbuf,
-                        "option '%s' was specified twice in config file (second occurrence on line %d)",
-                        fullkey, lineno);
+                        "option '%s' was specified twice in config file "
+                        "(second occurrence on line %d)",
+                        fullkey,
+                        lineno);
                 fatal(errbuf, EX_CONFIG);
-
-            } else if (imapopts[opt].seen == 2 && !service_specific) {
+            }
+            else if (imapopts[opt].seen == 2 && !service_specific) {
                 continue;
             }
 
@@ -1093,7 +1146,7 @@ static void config_read_file(const char *filename)
                 && (imapopts[opt].t == OPT_STRING
                     || imapopts[opt].t == OPT_DURATION
                     || imapopts[opt].t == OPT_BYTESIZE))
-                free((char *)imapopts[opt].val.s);
+                free((char *) imapopts[opt].val.s);
 
             if (service_specific)
                 imapopts[opt].seen = 2;
@@ -1110,8 +1163,7 @@ static void config_read_file(const char *filename)
 
             /* this is a known option */
             switch (imapopts[opt].t) {
-            case OPT_STRING:
-            {
+            case OPT_STRING: {
                 imapopts[opt].val.s = xstrdup(p);
 
                 if (opt == IMAPOPT_CONFIGDIRECTORY)
@@ -1119,29 +1171,31 @@ static void config_read_file(const char *filename)
 
                 break;
             }
-            case OPT_INT:
-            {
+            case OPT_INT: {
                 long val;
                 char *ptr;
 
                 val = strtol(p, &ptr, 0);
                 if (!ptr || *ptr != '\0') {
                     /* error during conversion */
-                    sprintf(errbuf, "non-integer value for %s in line %d",
-                            imapopts[opt].optname, lineno);
+                    sprintf(errbuf,
+                            "non-integer value for %s in line %d",
+                            imapopts[opt].optname,
+                            lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
 
                 imapopts[opt].val.i = val;
                 break;
             }
-            case OPT_SWITCH:
-            {
+            case OPT_SWITCH: {
                 int b = config_parse_switch(p);
                 if (b < 0) {
                     /* error during conversion */
-                    sprintf(errbuf, "non-switch value for %s in line %d",
-                            imapopts[opt].optname, lineno);
+                    sprintf(errbuf,
+                            "non-switch value for %s in line %d",
+                            imapopts[opt].optname,
+                            lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
                 imapopts[opt].val.b = b;
@@ -1149,8 +1203,7 @@ static void config_read_file(const char *filename)
             }
             case OPT_ENUM:
             case OPT_STRINGLIST:
-            case OPT_BITFIELD:
-            {
+            case OPT_BITFIELD: {
                 const struct enum_option_s *e;
 
                 /* zero the value */
@@ -1164,17 +1217,18 @@ static void config_read_file(const char *filename)
                      * we don't write to p in this section of the parser, so
                      * this is safe, but if that ever changes it'll crash!
                      */
-                    if (!strcmp(p, "1") || !strcmp(p, "yes") ||
-                        !strcmp(p, "t") || !strcmp(p, "true"))
+                    if (!strcmp(p, "1") || !strcmp(p, "yes") || !strcmp(p, "t")
+                        || !strcmp(p, "true"))
                     {
                         p = (char *) "on";
                     }
-                    else if (!strcmp(p, "0") || !strcmp(p, "no") ||
-                             !strcmp(p, "f") || !strcmp(p, "false"))
+                    else if (!strcmp(p, "0") || !strcmp(p, "no")
+                             || !strcmp(p, "f") || !strcmp(p, "false"))
                     {
                         p = (char *) "off";
                     }
-                } else if (imapopts[opt].t == OPT_BITFIELD) {
+                }
+                else if (imapopts[opt].t == OPT_BITFIELD) {
                     /* split the string into separate values */
                     q = p;
                 }
@@ -1186,12 +1240,16 @@ static void config_read_file(const char *filename)
 
                     /* see if its a legal value */
                     for (e = imapopts[opt].enum_options;
-                         e->name && strcmp(e->name, p); e++);
+                         e->name && strcmp(e->name, p);
+                         e++);
 
                     if (!e->name) {
                         /* error during conversion */
-                        sprintf(errbuf, "invalid value '%s' for %s in line %d",
-                                p, imapopts[opt].optname, lineno);
+                        sprintf(errbuf,
+                                "invalid value '%s' for %s in line %d",
+                                p,
+                                imapopts[opt].optname,
+                                lineno);
                         fatal(errbuf, EX_CONFIG);
                     }
                     else if (imapopts[opt].t == OPT_STRINGLIST)
@@ -1200,13 +1258,16 @@ static void config_read_file(const char *filename)
                         imapopts[opt].val.e = e->val;
                     else {
                         const struct enum_option_s *pref = e;
-                        for (; pref > imapopts[opt].enum_options &&
-                                 pref[-1].val == e->val; pref--);
+                        for (; pref > imapopts[opt].enum_options
+                               && pref[-1].val == e->val;
+                             pref--);
                         if (pref != e) {
                             syslog(LOG_WARNING,
                                    "Value '%s' for option '%s'"
                                    " is deprecated in favor of value '%s'",
-                                   e->name, imapopts[opt].optname, pref->name);
+                                   e->name,
+                                   imapopts[opt].optname,
+                                   pref->name);
                         }
 
                         imapopts[opt].val.x |= e->val;
@@ -1219,14 +1280,17 @@ static void config_read_file(const char *filename)
 
                 break;
             }
-            case OPT_DURATION:
-            {
-                /* make sure it's parseable, though we don't know the default units */
+            case OPT_DURATION: {
+                /* make sure it's parseable, though we don't know the default
+                 * units */
                 if (config_parseduration(p, '\0', NULL)) {
                     imapopts[opt].seen = 0; /* not seen after all */
-                    snprintf(errbuf, sizeof(errbuf),
+                    snprintf(errbuf,
+                             sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
-                             p, imapopts[opt].optname, lineno);
+                             p,
+                             imapopts[opt].optname,
+                             lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
 
@@ -1236,14 +1300,17 @@ static void config_read_file(const char *filename)
                 imapopts[opt].val.s = xstrdup(p);
                 break;
             }
-            case OPT_BYTESIZE:
-            {
-                /* make sure it's parseable, though we don't know the default units */
+            case OPT_BYTESIZE: {
+                /* make sure it's parseable, though we don't know the default
+                 * units */
                 if (config_parsebytesize(p, '\0', NULL)) {
                     imapopts[opt].seen = 0; /* not seen after all */
-                    snprintf(errbuf, sizeof(errbuf),
+                    snprintf(errbuf,
+                             sizeof(errbuf),
                              "unparsable byte size '%s' for %s in line %d",
-                             p, imapopts[opt].optname, lineno);
+                             p,
+                             imapopts[opt].optname,
+                             lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
 
@@ -1257,22 +1324,22 @@ static void config_read_file(const char *filename)
             default:
                 abort();
             }
-        } else {
+        }
+        else {
             /* check to make sure it's valid for overflow */
             /* that is, partition names and anything that might be
              * used by SASL */
-/*
-  xxx this would be nice if it wasn't for other services who might be
-      sharing this config file and whose names we cannot predict
+            /*
+              xxx this would be nice if it wasn't for other services who might
+              be sharing this config file and whose names we cannot predict
 
-            if (strncasecmp(key,"sasl_",5)
-            && strncasecmp(key,"partition-",10)) {
-                sprintf(errbuf,
-                        "option '%s' is unknown on line %d of config file",
-                        fullkey, lineno);
-                fatal(errbuf, EX_CONFIG);
-            }
-*/
+                        if (strncasecmp(key,"sasl_",5)
+                        && strncasecmp(key,"partition-",10)) {
+                            sprintf(errbuf,
+                                    "option '%s' is unknown on line %d of config
+              file", fullkey, lineno); fatal(errbuf, EX_CONFIG);
+                        }
+            */
 
             /* Put it in the overflow hash table */
             config_add_overflowstring(key, p, lineno);

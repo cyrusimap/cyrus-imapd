@@ -41,22 +41,22 @@
  */
 
 #include <config.h>
-#include <sys/types.h>
-#include <sys/file.h>
 #include <fcntl.h>
+#include <sys/file.h>
+#include <sys/types.h>
 #include <sysexits.h>
 
-#include "xmalloc.h"
 #include "nonblock.h"
+#include "xmalloc.h"
 
 #ifndef FNDELAY
-#define FNDELAY         O_NDELAY
+#    define FNDELAY O_NDELAY
 #endif
 
 #ifdef O_NONBLOCK
-#define NON_BLOCKING_MODE O_NONBLOCK
+#    define NON_BLOCKING_MODE O_NONBLOCK
 #else
-#define NON_BLOCKING_MODE FNDELAY
+#    define NON_BLOCKING_MODE FNDELAY
 #endif
 
 EXPORTED const char nonblock_method_desc[] = "fcntl";
@@ -78,5 +78,5 @@ EXPORTED void nonblock(int fd, int mode)
     else {
         flags &= ~NON_BLOCKING_MODE;
     }
-    (void)fcntl(fd, F_SETFL, flags);
+    (void) fcntl(fd, F_SETFL, flags);
 }

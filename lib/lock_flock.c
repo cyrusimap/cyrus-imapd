@@ -41,12 +41,12 @@
  */
 
 #include <config.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <sys/file.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "cyr_lock.h"
@@ -69,8 +69,10 @@ EXPORTED double debug_locks_longer_than = 0.0;
  * string naming the action that failed.
  *
  */
-EXPORTED int lock_reopen_ex(int fd, const char *filename,
-                            struct stat *sbuf, const char **failaction,
+EXPORTED int lock_reopen_ex(int fd,
+                            const char *filename,
+                            struct stat *sbuf,
+                            const char **failaction,
                             int *changed)
 {
     int r;
@@ -119,7 +121,9 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
+EXPORTED int lock_setlock(int fd,
+                          int exclusive,
+                          int nonblock,
                           const char *filename __attribute__((unused)))
 {
     int r;
@@ -149,4 +153,3 @@ EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
         return -1;
     }
 }
-

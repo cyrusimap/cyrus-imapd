@@ -46,10 +46,10 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "imap/global.h"
 #include "libconfig.h"
@@ -60,11 +60,12 @@ static int contains_8bit(const char *msg);
 
 static int global_outgoing_count = 0;
 
-char* notify_mailto(const char *class,
+char *notify_mailto(const char *class,
                     const char *priority __attribute__((unused)),
                     const char *user __attribute__((unused)),
                     const char *mailbox __attribute__((unused)),
-                    int nopt, char **options,
+                    int nopt,
+                    char **options,
                     const char *message,
                     const char *fname __attribute__((unused)))
 {
@@ -73,24 +74,22 @@ char* notify_mailto(const char *class,
     char outmsgid[256];
     int sm_stat;
     time_t t;
-    char datestr[RFC5322_DATETIME_MAX+1];
+    char datestr[RFC5322_DATETIME_MAX + 1];
     pid_t sm_pid;
     int fds[2];
 
     /* XXX check/parse options (mailto URI) */
-    if (nopt < 1)
-        return strdup("NO mailto URI not specified");
+    if (nopt < 1) return strdup("NO mailto URI not specified");
 
     smbuf[0] = "sendmail";
-    smbuf[1] = "-i";            /* ignore dots */
+    smbuf[1] = "-i"; /* ignore dots */
     smbuf[2] = "-f";
-    smbuf[3] = "<>";            /* XXX do we want a return-path? */
+    smbuf[3] = "<>"; /* XXX do we want a return-path? */
     smbuf[4] = "--";
     smbuf[5] = options[0];
     smbuf[6] = NULL;
 
-    if (pipe(fds))
-        return strdup("NO mailto could not open pipe");
+    if (pipe(fds)) return strdup("NO mailto could not open pipe");
 
     if ((sm_pid = fork()) == 0) {
         /* i'm the child! run sendmail! */
@@ -106,12 +105,16 @@ char* notify_mailto(const char *class,
     close(fds[0]);
     sm = fdopen(fds[1], "w");
 
-    if (!sm)
-        return strdup("NO mailto could not spawn sendmail process");
+    if (!sm) return strdup("NO mailto could not spawn sendmail process");
 
     t = time(NULL);
-    snprintf(outmsgid, sizeof(outmsgid), "<cmu-sieve-%d-" TIME_T_FMT "-%d@%s>",
-             (int) sm_pid, t, global_outgoing_count++, config_servername);
+    snprintf(outmsgid,
+             sizeof(outmsgid),
+             "<cmu-sieve-%d-" TIME_T_FMT "-%d@%s>",
+             (int) sm_pid,
+             t,
+             global_outgoing_count++,
+             config_servername);
 
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
@@ -119,7 +122,9 @@ char* notify_mailto(const char *class,
     fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
-    fprintf(sm, "From: Mail Sieve Subsystem <%s>\r\n", config_getstring(IMAPOPT_POSTMASTER));
+    fprintf(sm,
+            "From: Mail Sieve Subsystem <%s>\r\n",
+            config_getstring(IMAPOPT_POSTMASTER));
     fprintf(sm, "To: <%s>\r\n", options[0]);
     fprintf(sm, "Subject: [%s] New mail notification\r\n", class);
     if (contains_8bit(message)) {
@@ -141,17 +146,17 @@ char* notify_mailto(const char *class,
     return strdup("OK mailto notification successful");
 }
 
-static int contains_8bit(const char * msg)
+static int contains_8bit(const char *msg)
 {
     int result = 0;
 
     if (msg) {
-        const unsigned char *s = (const unsigned char *)msg;
+        const unsigned char *s = (const unsigned char *) msg;
 
         while (*s) {
             if (0 != (*s & 0x80)) {
                 result = 1;
-                break ;
+                break;
             }
             s++;
         }

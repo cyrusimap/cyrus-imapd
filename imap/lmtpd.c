@@ -43,25 +43,25 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
+#include <arpa/inet.h>
+#include <ctype.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sasl/sasl.h>
+#include <sasl/saslutil.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
-#include <sysexits.h>
-#include <syslog.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+#include <sysexits.h>
+#include <syslog.h>
 
 #include "acl.h"
 #include "annotate.h"
@@ -70,15 +70,16 @@
 #include "attachextract.h"
 #include "auth.h"
 #ifdef USE_AUTOCREATE
-#include "autocreate.h"
+#    include "autocreate.h"
 #endif
 #include "backend.h"
 #ifdef WITH_DAV
-#include "carddav_db.h"
+#    include "carddav_db.h"
 #endif
 #include "duplicate.h"
 #include "global.h"
 #include "idle.h"
+#include "imap/zoneinfo_db.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxevent.h"
@@ -87,8 +88,8 @@
 #include "message.h"
 #include "mupdate.h"
 #include "notify.h"
-#include "prometheus.h"
 #include "proc.h"
+#include "prometheus.h"
 #include "prot.h"
 #include "proxy.h"
 #include "slowio.h"
@@ -100,9 +101,8 @@
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "imap/zoneinfo_db.h"
+#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -113,16 +113,19 @@
 #include "lmtpd.h"
 #include "lmtpengine.h"
 #ifdef USE_SIEVE
-#include "lmtp_sieve.h"
+#    include "lmtp_sieve.h"
 #endif
 
 #include "iostat.h"
 
 /* forward declarations */
-static int deliver(message_data_t *msgdata, char *authuser,
-                   const struct auth_state *authstate, const struct namespace *ns);
+static int deliver(message_data_t *msgdata,
+                   char *authuser,
+                   const struct auth_state *authstate,
+                   const struct namespace *ns);
 static int verify_user(const mbname_t *mbname,
-                       quota_t quotastorage_check, quota_t quotamessage_check,
+                       quota_t quotastorage_check,
+                       quota_t quotamessage_check,
                        struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
@@ -138,9 +141,15 @@ static int autocreate_inbox(const mbname_t *mbname);
 /* current namespace */
 struct namespace lmtpd_namespace;
 
-static struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
-                            &spoolfile, &removespool, &lmtpd_namespace,
-                            0, 1, 0 };
+static struct lmtp_func mylmtp = { &deliver,
+                                   &verify_user,
+                                   &shut_down,
+                                   &spoolfile,
+                                   &removespool,
+                                   &lmtpd_namespace,
+                                   0,
+                                   1,
+                                   0 };
 
 static void usage(void);
 
@@ -149,9 +158,9 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 extern int optind;
 extern char *optarg;
-static int dupelim = 1;         /* eliminate duplicate messages with
-                                   same message-id */
-static int singleinstance = 1;  /* attempt single instance store */
+static int dupelim = 1;        /* eliminate duplicate messages with
+                                  same message-id */
+static int singleinstance = 1; /* attempt single instance store */
 static int isproxy = 0;
 static strarray_t *excluded_specialuse = NULL;
 static const char *lmtpd_clienthost = "[local]";
@@ -166,30 +175,35 @@ int deliver_logfd = -1; /* used in lmtpengine.c */
 /* our cached connections */
 static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
-static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp", NULL, TYPE_STD,
-  { { { 0, "220 " },
-      { "LHLO", "lmtpproxyd", "250 ", NULL,
-        CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
-        { { "AUTH", CAPA_AUTH },
-          { "STARTTLS", CAPA_STARTTLS },
-          { "PIPELINING", CAPA_PIPELINING },
-          { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
-          { NULL, 0 } } },
-      { "STARTTLS", "220", "454", 0 },
-      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
-      { NULL, NULL, NULL },
-      { "NOOP", NULL, "250" },
-      { "QUIT", NULL, "221" } } }
+static struct protocol_t lmtp_protocol = {
+    "lmtp",
+    "lmtp",
+    NULL,
+    TYPE_STD,
+    { { { 0, "220 " },
+        { "LHLO",
+          "lmtpproxyd",
+          "250 ",
+          NULL,
+          CAPAF_ONE_PER_LINE | CAPAF_SKIP_FIRST_WORD | CAPAF_DASH_STUFFING,
+          { { "AUTH", CAPA_AUTH },
+            { "STARTTLS", CAPA_STARTTLS },
+            { "PIPELINING", CAPA_PIPELINING },
+            { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+            { NULL, 0 } } },
+        { "STARTTLS", "220", "454", 0 },
+        { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
+        { NULL, NULL, NULL },
+        { "NOOP", NULL, "250" },
+        { "QUIT", NULL, "221" } } }
 };
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
+    { SASL_CB_GETOPT,       SASL_CB_PROC_PTR &mysasl_config,       NULL },
     { SASL_CB_PROXY_POLICY, SASL_CB_PROC_PTR &mysasl_proxy_policy, NULL },
-    { SASL_CB_CANON_USER, SASL_CB_PROC_PTR &mysasl_canon_user, NULL },
-    { SASL_CB_LIST_END, NULL, NULL }
+    { SASL_CB_CANON_USER,   SASL_CB_PROC_PTR &mysasl_canon_user,   NULL },
+    { SASL_CB_LIST_END,     NULL,                                  NULL }
 };
-
 
 int service_init(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
@@ -204,17 +218,17 @@ int service_init(int argc __attribute__((unused)),
 
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
 
-    excluded_specialuse =
-        strarray_split(config_getstring(IMAPOPT_LMTP_EXCLUDE_SPECIALUSE),
-                       NULL, STRARRAY_TRIM);
+    excluded_specialuse = strarray_split(
+        config_getstring(IMAPOPT_LMTP_EXCLUDE_SPECIALUSE), NULL, STRARRAY_TRIM);
 
     global_sasl_init(1, 1, mysasl_cb);
 
     initialize_lmtp_error_table();
 
-    if (config_mupdate_server &&
-        (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
-        !config_getstring(IMAPOPT_PROXYSERVERS)) {
+    if (config_mupdate_server
+        && (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD)
+        && !config_getstring(IMAPOPT_PROXYSERVERS))
+    {
         /* proxy only */
         isproxy = 1;
     }
@@ -241,8 +255,9 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Set namespace */
-    unsigned options =
-        config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO) ? NAMESPACE_OPTION_UTF8 : 0;
+    unsigned options = config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)
+                           ? NAMESPACE_OPTION_UTF8
+                           : 0;
     if ((r = mboxname_init_namespace(&lmtpd_namespace, options))) {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
@@ -258,8 +273,7 @@ int service_init(int argc __attribute__((unused)),
 /*
  * run for each accepted connection
  */
-int service_main(int argc, char **argv,
-                 char **envp __attribute__((unused)))
+int service_main(int argc, char **argv, char **envp __attribute__((unused)))
 {
     const char *localip, *remoteip;
     int opt;
@@ -272,8 +286,8 @@ int service_main(int argc, char **argv,
     prometheus_increment(CYRUS_LMTP_ACTIVE_CONNECTIONS);
 
     if (config_iolog) {
-        io_count_start = xmalloc (sizeof (struct io_count));
-        io_count_stop = xmalloc (sizeof (struct io_count));
+        io_count_start = xmalloc(sizeof(struct io_count));
+        io_count_stop = xmalloc(sizeof(struct io_count));
         read_io_count(io_count_start);
     }
 
@@ -283,10 +297,11 @@ int service_main(int argc, char **argv,
     prot_settimeout(deliver_in, 360);
 
     lmtpd_clienthost = get_clienthost(0, &localip, &remoteip);
-    proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
+    proc_register(
+        &proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
 
     while ((opt = getopt(argc, argv, "Ha")) != EOF) {
-        switch(opt) {
+        switch (opt) {
         case 'H': /* expect HAProxy protocol header */
             haproxy_protocol = 1;
             break;
@@ -326,12 +341,13 @@ int service_main(int argc, char **argv,
 
     if (config_iolog) {
         read_io_count(io_count_stop);
-        syslog(LOG_INFO,
-               "LMTP session stats : I/O read : %d bytes : I/O write : %d bytes",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
-        free (io_count_start);
-        free (io_count_stop);
+        syslog(
+            LOG_INFO,
+            "LMTP session stats : I/O read : %d bytes : I/O write : %d bytes",
+            io_count_stop->io_read_count - io_count_start->io_read_count,
+            io_count_stop->io_write_count - io_count_start->io_write_count);
+        free(io_count_start);
+        free(io_count_stop);
     }
 
     prometheus_increment(CYRUS_LMTP_READY_LISTENERS);
@@ -345,10 +361,7 @@ int service_main(int argc, char **argv,
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
-{
-    shut_down(error);
-}
+void service_abort(int error) { shut_down(error); }
 
 static void usage(void)
 {
@@ -367,7 +380,8 @@ static void usage(void)
     exit(EX_USAGE);
 }
 
-struct fuzz_rock {
+struct fuzz_rock
+{
     const mbname_t *mbname;
     mbname_t *result;
     int depth;
@@ -379,7 +393,8 @@ static int fuzzyeq(const char *a, const char *b)
 {
     while (*a) {
         if (!*b) return 0;
-        if (tolower(*a) != tolower(*b) && !(strchr(WSP_CHARS, *a) && strchr(WSP_CHARS, *b)))
+        if (tolower(*a) != tolower(*b)
+            && !(strchr(WSP_CHARS, *a) && strchr(WSP_CHARS, *b)))
             return 0;
         a++;
         b++;
@@ -401,13 +416,11 @@ static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
     int depth = 0;
     /* XXX - WSP_CHARS */
     for (i = 0; i < strarray_size(wantboxes); i++) {
-        if (strarray_size(haveboxes) <= i)
-            break;
+        if (strarray_size(haveboxes) <= i) break;
         const char *want = strarray_nth(wantboxes, i);
         const char *have = strarray_nth(haveboxes, i);
-        if (!fuzzyeq(want, have))
-            break;
-        depth = i+1;
+        if (!fuzzyeq(want, have)) break;
+        depth = i + 1;
     }
 
     /* in THEORY we should go for most closely accurate if
@@ -423,8 +436,7 @@ static int fuzzy_match_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* found it */
-    if (frock->depth == strarray_size(wantboxes))
-        return CYRUSDB_DONE;
+    if (frock->depth == strarray_size(wantboxes)) return CYRUSDB_DONE;
 
     return 0;
 }
@@ -436,11 +448,11 @@ EXPORTED int fuzzy_match(mbname_t *mbname)
 
     if (mbname_userid(mbname)) {
         char *name = mboxname_user_mbox(mbname_userid(mbname), NULL);
-        prefix = strconcat(name, ".", (char *)NULL);
+        prefix = strconcat(name, ".", (char *) NULL);
         free(name);
     }
     else if (mbname_domain(mbname)) {
-        prefix = strconcat(mbname_domain(mbname), "!", (char *)NULL);
+        prefix = strconcat(mbname_domain(mbname), "!", (char *) NULL);
     }
 
     frock.mbname = mbname;
@@ -531,7 +543,7 @@ int deliver_mailbox(FILE *f,
     time_t internaldate = 0;
 
     /* make sure we have an IMAP mailbox */
-    if (mboxname_isnondeliverymailbox(mailboxname, 0/*mbtype*/)) {
+    if (mboxname_isnondeliverymailbox(mailboxname, 0 /*mbtype*/)) {
         return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
@@ -557,9 +569,15 @@ int deliver_mailbox(FILE *f,
         }
     }
 
-    r = append_setup_mbox(&as, mailbox,
-                          authuser, authstate, acloverride ? 0 : ACL_POST,
-                          qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
+    r = append_setup_mbox(&as,
+                          mailbox,
+                          authuser,
+                          authstate,
+                          acloverride ? 0 : ACL_POST,
+                          qdiffs,
+                          NULL,
+                          0,
+                          EVENT_MESSAGE_NEW);
     if (r) {
         mailbox_close(&mailbox);
         return r;
@@ -570,8 +588,9 @@ int deliver_mailbox(FILE *f,
     dkey.id = id;
     dkey.to = uuid;
     dkey.date = date;
-    if (id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
-        duplicate_check(&dkey)) {
+    if (id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER)
+        && duplicate_check(&dkey))
+    {
         duplicate_log(&dkey, "delivery");
         append_abort(&as);
         mailbox_close(&mailbox);
@@ -585,15 +604,17 @@ int deliver_mailbox(FILE *f,
         r = message_parse_file_buf(f, &content->map, &content->body, NULL);
     }
 
-    /* if the body contains an x-deliveredinternaldate then that overrides all else */
+    /* if the body contains an x-deliveredinternaldate then that overrides all
+     * else */
     if (content->body->x_deliveredinternaldate) {
         time_from_rfc5322(content->body->x_deliveredinternaldate,
-                          &internaldate, DATETIME_FULL);
+                          &internaldate,
+                          DATETIME_FULL);
     }
     /* Otherwise we'll use a received date if there's one */
     else if (content->body->received_date) {
-        time_from_rfc5322(content->body->received_date,
-                          &internaldate, DATETIME_FULL);
+        time_from_rfc5322(
+            content->body->received_date, &internaldate, DATETIME_FULL);
     }
 
     if (!r) {
@@ -604,21 +625,28 @@ int deliver_mailbox(FILE *f,
 
             if (imap4flags->authstate != authstate) {
                 /* Flags get set as owner of Sieve script */
-                int owner_rights =
-                    cyrus_acl_myrights(imap4flags->authstate, mailbox_acl(mailbox));
+                int owner_rights = cyrus_acl_myrights(imap4flags->authstate,
+                                                      mailbox_acl(mailbox));
 
                 as.myrights |= (owner_rights & ~ACL_POST);
                 as.internalseen = mailbox_internal_seen(mailbox, user);
             }
         }
 
-        r = append_fromstage_full(&as, &content->body, stage,
-                                  internaldate, savedate, /*createdmodseq*/0,
-                                  flags, !singleinstance, &annotations);
+        r = append_fromstage_full(&as,
+                                  &content->body,
+                                  stage,
+                                  internaldate,
+                                  savedate,
+                                  /*createdmodseq*/ 0,
+                                  flags,
+                                  !singleinstance,
+                                  &annotations);
 
         if (r) {
             append_abort(&as);
-        } else {
+        }
+        else {
             r = append_commit(&as);
             if (!r) {
                 /* dupelim after commit, but while mailbox is still
@@ -642,15 +670,24 @@ int deliver_mailbox(FILE *f,
                     action = "snooze";
                     break;
                 }
-                if (mode & TARGET_PLUS_ADDR) target = "plus-addr";
-                else if (mode & TARGET_FUZZY) target = "fuzzy";
-                else if (mode & TARGET_SET) target = "set";
+                if (mode & TARGET_PLUS_ADDR)
+                    target = "plus-addr";
+                else if (mode & TARGET_FUZZY)
+                    target = "fuzzy";
+                else if (mode & TARGET_SET)
+                    target = "set";
 
-                syslog(LOG_INFO, "Delivered: sessionid=<%s>"
+                syslog(LOG_INFO,
+                       "Delivered: sessionid=<%s>"
                        " action=<%s> target=<%s>"
                        " messageid=%s userid=<%s> mailbox=<%s> uniqueid=<%s>",
-                       session_id(), action, target, id, user,
-                       mailbox_name(mailbox), mailbox_uniqueid(mailbox));
+                       session_id(),
+                       action,
+                       target,
+                       id,
+                       user,
+                       mailbox_name(mailbox),
+                       mailbox_uniqueid(mailbox));
                 if (dupelim && id)
                     duplicate_mark(&dkey, time(NULL), as.baseuid);
             }
@@ -672,8 +709,15 @@ int deliver_mailbox(FILE *f,
         }
 
         /* translate mailboxname */
-        notify(notifier, "MAIL", NULL, user, extname, 0, NULL,
-               notifyheader ? notifyheader : "", /*fname*/NULL);
+        notify(notifier,
+               "MAIL",
+               NULL,
+               user,
+               extname,
+               0,
+               NULL,
+               notifyheader ? notifyheader : "",
+               /*fname*/ NULL);
         free(extname);
     }
 
@@ -683,14 +727,15 @@ int deliver_mailbox(FILE *f,
 
 enum rcpt_status {
     done = 0,
-    nosieve,                    /* no sieve script */
-    s_wait,                     /* processing sieve requests */
-    s_err,                      /* error in sieve processing/sending */
-    s_done,                     /* sieve script successfully run */
+    nosieve, /* no sieve script */
+    s_wait,  /* processing sieve requests */
+    s_err,   /* error in sieve processing/sending */
+    s_done,  /* sieve script successfully run */
 };
 
 static void deliver_remote(message_data_t *msgdata,
-                    struct dest *dlist, enum rcpt_status *status)
+                           struct dest *dlist,
+                           enum rcpt_status *status)
 {
     struct dest *d;
 
@@ -719,14 +764,14 @@ static void deliver_remote(message_data_t *msgdata,
         }
         assert(i == d->rnum);
 
-        remote = proxy_findserver(d->server, &lmtp_protocol, "",
-                                  &backend_cached, NULL, NULL, NULL);
+        remote = proxy_findserver(
+            d->server, &lmtp_protocol, "", &backend_cached, NULL, NULL, NULL);
         if (remote) {
             int txn_timeout = config_getduration(IMAPOPT_LMTPTXN_TIMEOUT, 's');
-            if (txn_timeout)
-                prot_settimeout(remote->in, txn_timeout);
+            if (txn_timeout) prot_settimeout(remote->in, txn_timeout);
             lmtp_runtxn(remote, lt);
-        } else {
+        }
+        else {
             /* remote server not available; tempfail all deliveries */
             for (rc = d->to, i = 0; i < d->rnum; i++) {
                 lt->rcpt[i].result = RCPT_TEMPFAIL;
@@ -769,7 +814,8 @@ static void deliver_remote(message_data_t *msgdata,
     }
 }
 
-static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
+static int deliver_local(deliver_data_t *mydata,
+                         struct imap4flags *imap4flags,
                          const mbname_t *origmbname)
 {
     message_data_t *md = mydata->m;
@@ -779,33 +825,57 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
 
     /* case 1: shared mailbox request */
     if (!mbname_userid(origmbname)) {
-        return deliver_mailbox(md->f, mydata->content, mydata->stage,
-                               md->size, imap4flags, NULL,
-                               mydata->authuser, mydata->authstate, md->id,
-                               NULL, mydata->notifyheader,
-                               mode, mbname_intname(origmbname), md->date,
-                               0 /*savedate*/, quotaoverride, 0);
+        return deliver_mailbox(md->f,
+                               mydata->content,
+                               mydata->stage,
+                               md->size,
+                               imap4flags,
+                               NULL,
+                               mydata->authuser,
+                               mydata->authstate,
+                               md->id,
+                               NULL,
+                               mydata->notifyheader,
+                               mode,
+                               mbname_intname(origmbname),
+                               md->date,
+                               0 /*savedate*/,
+                               quotaoverride,
+                               0);
     }
 
     mbname_t *mbname = mbname_dup(origmbname);
 
     if (strarray_size(mbname_boxes(mbname))) {
         ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
-        if (!ret) mode |= TARGET_PLUS_ADDR;
-        else if (ret == IMAP_MAILBOX_NONEXISTENT &&
-                 config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
-                 fuzzy_match(mbname)) {
+        if (!ret)
+            mode |= TARGET_PLUS_ADDR;
+        else if (ret == IMAP_MAILBOX_NONEXISTENT
+                 && config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)
+                 && fuzzy_match(mbname))
+        {
             /* try delivery to a fuzzy matched mailbox */
             ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
             if (!ret) mode |= TARGET_FUZZY;
         }
 
-        ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                              md->size, imap4flags, NULL,
-                              mydata->authuser, mydata->authstate, md->id,
-                              mbname_userid(mbname), mydata->notifyheader,
-                              mode, mbname_intname(mbname), md->date,
-                              0 /*savedate*/, quotaoverride, 0);
+        ret = deliver_mailbox(md->f,
+                              mydata->content,
+                              mydata->stage,
+                              md->size,
+                              imap4flags,
+                              NULL,
+                              mydata->authuser,
+                              mydata->authstate,
+                              md->id,
+                              mbname_userid(mbname),
+                              mydata->notifyheader,
+                              mode,
+                              mbname_intname(mbname),
+                              md->date,
+                              0 /*savedate*/,
+                              quotaoverride,
+                              0);
     }
 
     if (ret) {
@@ -814,12 +884,23 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
         struct auth_state *authstate = auth_newstate(mbname_userid(mbname));
 
         mode &= ACTION_MASK;
-        ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                              md->size, imap4flags, NULL,
-                              mbname_userid(mbname), authstate, md->id,
-                              mbname_userid(mbname), mydata->notifyheader,
-                              mode, mbname_intname(mbname), md->date,
-                              0 /*savedate*/, quotaoverride, 1);
+        ret = deliver_mailbox(md->f,
+                              mydata->content,
+                              mydata->stage,
+                              md->size,
+                              imap4flags,
+                              NULL,
+                              mbname_userid(mbname),
+                              authstate,
+                              md->id,
+                              mbname_userid(mbname),
+                              mydata->notifyheader,
+                              mode,
+                              mbname_intname(mbname),
+                              md->date,
+                              0 /*savedate*/,
+                              quotaoverride,
+                              1);
 
         if (authstate) auth_freestate(authstate);
     }
@@ -829,8 +910,10 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
     return ret;
 }
 
-int deliver(message_data_t *msgdata, char *authuser,
-            const struct auth_state *authstate, const struct namespace *ns)
+int deliver(message_data_t *msgdata,
+            char *authuser,
+            const struct auth_state *authstate,
+            const struct namespace *ns)
 {
     int n, nrcpts;
     struct dest *dlist = NULL;
@@ -859,8 +942,8 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.authstate = authstate;
 
     if (config_getswitch(IMAPOPT_LMTP_PREPARSE)) {
-        int r = message_parse_file_buf(msgdata->f, &content.map,
-                                       &content.body, NULL);
+        int r = message_parse_file_buf(
+            msgdata->f, &content.map, &content.body, NULL);
         if (r) {
             for (n = 0; n < nrcpts; n++)
                 msg_setrcpt_status(msgdata, n, r, NULL);
@@ -876,9 +959,9 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
         const mbname_t *mbname = msg_getrcpt(msgdata, n);
-        char *mboxname = mbname_userid(mbname) ?
-                mboxname_user_mbox(mbname_userid(mbname), NULL) :
-                xstrdup(mbname_intname(mbname));
+        char *mboxname = mbname_userid(mbname)
+                             ? mboxname_user_mbox(mbname_userid(mbname), NULL)
+                             : xstrdup(mbname_intname(mbname));
 
         mbentry_t *mbentry = NULL;
         int r = proxy_mlookup(mboxname, &mbentry, NULL, NULL);
@@ -901,26 +984,37 @@ int deliver(message_data_t *msgdata, char *authuser,
             limits.clienthost = lmtpd_clienthost;
             limits.userid = userid;
             if (proc_checklimits(&limits)) {
-                if (limits.maxhost && limits.maxhost <= limits.host) r = IMAP_LIMIT_HOST;
-                else if (limits.maxuser && limits.maxuser <= limits.user) r = IMAP_LIMIT_USER;
-                else r = IMAP_SERVER_UNAVAILABLE;
+                if (limits.maxhost && limits.maxhost <= limits.host)
+                    r = IMAP_LIMIT_HOST;
+                else if (limits.maxuser && limits.maxuser <= limits.user)
+                    r = IMAP_LIMIT_USER;
+                else
+                    r = IMAP_SERVER_UNAVAILABLE;
                 goto setstatus;
             }
 
-            proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, userid, NULL, NULL);
+            proc_register(&proc_handle,
+                          0,
+                          config_ident,
+                          lmtpd_clienthost,
+                          userid,
+                          NULL,
+                          NULL);
 
-            // lock conversations for the duration of delivery, so nothing else can read
-            // the state of any mailbox while the delivery is half done
+            // lock conversations for the duration of delivery, so nothing else
+            // can read the state of any mailbox while the delivery is half done
             struct conversations_state *state = NULL;
             if (userid) {
-                r = conversations_open_user(userid, 0/*shared*/, &state);
+                r = conversations_open_user(userid, 0 /*shared*/, &state);
                 if (r) goto setstatus;
             }
 
             /* local mailbox */
             mydata.cur_rcpt = n;
 #ifdef USE_SIEVE
-            struct sieve_interp_ctx ctx = { mbname_userid(mbname), state, NULL };
+            struct sieve_interp_ctx ctx = { mbname_userid(mbname),
+                                            state,
+                                            NULL };
             sieve_interp_t *interp = setup_sieve(&ctx);
 
             sieve_srs_init();
@@ -930,27 +1024,33 @@ int deliver(message_data_t *msgdata, char *authuser,
                 r = run_sieve(mbname, interp, &mydata);
             // set a flag if sieve failed
             if (r < 0) strarray_append(&flags, "$SieveFailed");
-#ifdef WITH_DAV
+#    ifdef WITH_DAV
             if (ctx.carddavdb) carddav_close(ctx.carddavdb);
-#endif
+#    endif
             sieve_srs_free();
             sieve_interp_free(&interp);
             /* if there was no sieve script, or an error during execution,
                r is non-zero and we'll do normal delivery */
 #else
-            r = 1;      /* normal delivery */
+            r = 1; /* normal delivery */
 #endif
             if (r) {
                 r = deliver_local(&mydata, &imap4flags, mbname);
             }
             strarray_fini(&flags);
             conversations_commit(&state);
-            proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
+            proc_register(&proc_handle,
+                          0,
+                          config_ident,
+                          lmtpd_clienthost,
+                          NULL,
+                          NULL,
+                          NULL);
         }
 
         telemetry_rusage(mbname_userid(mbname));
 
-        setstatus:
+    setstatus:
 
         msg_setrcpt_status(msgdata, n, r, NULL);
 
@@ -991,11 +1091,10 @@ skipdelivery:
                 syslog(LOG_CRIT,
                        "sieve states reached, but we don't implement sieve");
                 abort();
-            break;
+                break;
             case nosieve:
                 /* yikes, we never got an answer on this one */
-                syslog(LOG_CRIT, "still waiting for response to rcpt %d",
-                       n);
+                syslog(LOG_CRIT, "still waiting for response to rcpt %d", n);
                 abort();
                 break;
             case done:
@@ -1034,7 +1133,7 @@ skipdelivery:
     return 0;
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -1054,7 +1153,7 @@ EXPORTED void fatal(const char* s, int code)
     }
     recurse_code = code;
     if (deliver_out) {
-        prot_printf(deliver_out,"421 4.3.0 lmtpd: %s\r\n", s);
+        prot_printf(deliver_out, "421 4.3.0 lmtpd: %s\r\n", s);
         prot_flush(deliver_out);
     }
     if (stage) append_removestage(stage);
@@ -1093,8 +1192,7 @@ static void shut_down(int code)
     if (excluded_specialuse) strarray_free(excluded_specialuse);
 
     if (!isproxy) {
-        if (dupelim)
-            duplicate_done();
+        if (dupelim) duplicate_done();
 
         idle_done();
     }
@@ -1130,14 +1228,12 @@ int autocreate_inbox(const mbname_t *mbname)
 {
     const char *userid = mbname_userid(mbname);
 
-    if (!userid)
-        return IMAP_MAILBOX_NONEXISTENT;
+    if (!userid) return IMAP_MAILBOX_NONEXISTENT;
 
     /*
      * Exclude anonymous
      */
-    if (!strcmp(userid, "anonymous"))
-        return IMAP_MAILBOX_NONEXISTENT;
+    if (!strcmp(userid, "anonymous")) return IMAP_MAILBOX_NONEXISTENT;
 
     /*
      * Check for autocreatequota and createonpost
@@ -1153,7 +1249,8 @@ int autocreate_inbox(const mbname_t *mbname)
 #endif // USE_AUTOCREATE
 
 static int verify_user(const mbname_t *origmbname,
-                       quota_t quotastorage_check, quota_t quotamessage_check,
+                       quota_t quotastorage_check,
+                       quota_t quotamessage_check,
                        struct auth_state *authstate)
 {
     int r = 0;
@@ -1183,8 +1280,9 @@ static int verify_user(const mbname_t *origmbname,
     }
 #endif // USE_AUTOCREATE
 
-    if (r == IMAP_MAILBOX_NONEXISTENT && !mbname_userid(mbname) &&
-        config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)) {
+    if (r == IMAP_MAILBOX_NONEXISTENT && !mbname_userid(mbname)
+        && config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH))
+    {
         /* see if we have a mailbox whose name is close */
         if (fuzzy_match(mbname)) {
             r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
@@ -1195,10 +1293,11 @@ static int verify_user(const mbname_t *origmbname,
         int access = cyrus_acl_myrights(authstate, mbentry->acl);
 
         if ((access & aclcheck) != aclcheck) {
-            r = (access & ACL_LOOKUP) ?
-                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+            r = (access & ACL_LOOKUP) ? IMAP_PERMISSION_DENIED
+                                      : IMAP_MAILBOX_NONEXISTENT;
         }
-    } else if (!r) {
+    }
+    else if (!r) {
         int strict = config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA);
         quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
         if (quotastorage_check < 0 || strict)
@@ -1212,7 +1311,7 @@ static int verify_user(const mbname_t *origmbname,
     mboxlist_entry_free(&mbentry);
 
     if (!r && mbname_userid(mbname)) {
-        char msg[MAX_MAILBOX_PATH+1];
+        char msg[MAX_MAILBOX_PATH + 1];
 
         if (userdeny(mbname_userid(mbname), config_ident, msg, sizeof(msg))) {
             r = IMAP_MAILBOX_DISABLED;
@@ -1220,8 +1319,11 @@ static int verify_user(const mbname_t *origmbname,
         }
     }
 
-    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", mbname_userid(mbname),
-                  error_message(r));
+    if (r)
+        syslog(LOG_DEBUG,
+               "verify_user(%s) failed: %s",
+               mbname_userid(mbname),
+               error_message(r));
 
 done:
     mbname_free(&mbname);
@@ -1250,8 +1352,7 @@ char *generate_notify(message_data_t *m)
         }
     }
 
-    if (buf_len(&ret))
-        return buf_release(&ret);
+    if (buf_len(&ret)) return buf_release(&ret);
 
     buf_free(&ret);
     return NULL;

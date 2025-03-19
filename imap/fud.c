@@ -43,30 +43,30 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
-#include <stdlib.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <limits.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <pwd.h>
+#include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/param.h>
-#include <sys/stat.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <errno.h>
-#include <pwd.h>
-#include <limits.h>
 
 #include "acl.h"
-#include "mboxlist.h"
 #include "global.h"
 #include "mailbox.h"
 #include "map.h"
+#include "mboxlist.h"
 #include "mboxname.h"
 #include "proc.h"
 #include "seen.h"
@@ -77,9 +77,9 @@
 
 #include "master/service.h"
 
-#define REQ_OK          0
-#define REQ_DENY        1
-#define REQ_UNK         2
+#define REQ_OK 0
+#define REQ_DENY 1
+#define REQ_UNK 2
 
 extern int optind;
 
@@ -90,36 +90,43 @@ static struct namespace fud_namespace;
  * only if we're not on a frontend, so we won't flat-out require it here */
 const int config_need_data = 0;
 
-static int handle_request(const char *who, const char *name,
-                          struct sockaddr *sfrom, socklen_t sfromsiz);
+static int handle_request(const char *who,
+                          const char *name,
+                          struct sockaddr *sfrom,
+                          socklen_t sfromsiz);
 
-static void send_reply(struct sockaddr *sfrom, socklen_t sfromsiz, int status,
-                const char *user, const char *mbox,
-                int numrecent, time_t lastread, time_t lastarrived);
+static void send_reply(struct sockaddr *sfrom,
+                       socklen_t sfromsiz,
+                       int status,
+                       const char *user,
+                       const char *mbox,
+                       int numrecent,
+                       time_t lastread,
+                       time_t lastarrived);
 
 static int soc = 0; /* inetd (master) has handed us the port as stdin */
 
 #ifndef MAXLOGNAME
-#  ifdef LOGIN_NAME_MAX
-#define MAXLOGNAME (LOGIN_NAME_MAX - 1)
-#  else
-#define MAXLOGNAME 16           /* should find out for real */
-#  endif
+#    ifdef LOGIN_NAME_MAX
+#        define MAXLOGNAME (LOGIN_NAME_MAX - 1)
+#    else
+#        define MAXLOGNAME 16 /* should find out for real */
+#    endif
 #endif
 #ifndef MAXDOMNAME
-#define MAXDOMNAME 20           /* should find out for real */
+#    define MAXDOMNAME 20 /* should find out for real */
 #endif
 
 static int begin_handling(void)
 {
     struct sockaddr_storage sfrom_storage;
-    struct sockaddr *sfrom = (struct sockaddr *)&sfrom_storage;
+    struct sockaddr *sfrom = (struct sockaddr *) &sfrom_storage;
     socklen_t sfromsiz;
     char buf[MAXLOGNAME + MAXDOMNAME + MAX_MAILBOX_BUFFER];
     char *mbox;
     int r;
 
-    while(1) {
+    while (1) {
         if (signals_poll() == SIGHUP) {
             /* caught a SIGHUP, return */
             return 0;
@@ -134,7 +141,8 @@ static int begin_handling(void)
         mbox = strchr(buf, '|');
         if (mbox) {
             *mbox++ = 0;
-        } else {
+        }
+        else {
             continue;
         }
 
@@ -155,7 +163,6 @@ void shut_down(int code)
     exit(code);
 }
 
-
 /*
  * run once when process is forked;
  * MUST NOT exit directly; must return with non-zero error code
@@ -172,10 +179,7 @@ int service_init(int argc, char **argv, char **envp)
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
-{
-    shut_down(error);
-}
+void service_abort(int error) { shut_down(error); }
 
 int service_main(int argc __attribute__((unused)),
                  char **argv __attribute__((unused)),
@@ -195,10 +199,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-static void cyrus_timeout(int signo __attribute__((unused)))
-{
-    return;
-}
+static void cyrus_timeout(int signo __attribute__((unused))) { return; }
 
 static int setsigalrm(int enable)
 
@@ -209,9 +210,10 @@ static int setsigalrm(int enable)
 
     action.sa_flags = 0;
 
-    if(enable) {
+    if (enable) {
         action.sa_handler = cyrus_timeout;
-    } else {
+    }
+    else {
         action.sa_handler = SIG_IGN;
     }
 
@@ -223,11 +225,12 @@ static int setsigalrm(int enable)
     return 0;
 }
 
-
 /* Send a proxy request to the backend, send their reply to sfrom */
-static int do_proxy_request(const char *who, const char *name,
+static int do_proxy_request(const char *who,
+                            const char *name,
                             const char *backend_host,
-                            struct sockaddr *sfrom, socklen_t sfromsiz)
+                            struct sockaddr *sfrom,
+                            socklen_t sfromsiz)
 {
     char tmpbuf[2048];
     int replysize;
@@ -236,8 +239,8 @@ static int do_proxy_request(const char *who, const char *name,
     int error = 0;
     socklen_t cinsiz, coutsiz;
     struct sockaddr_storage cin_storage, cout_storage;
-    struct sockaddr *cin = (struct sockaddr *)&cin_storage;
-    struct sockaddr *cout = (struct sockaddr *)&cout_storage;
+    struct sockaddr *cin = (struct sockaddr *) &cin_storage;
+    struct sockaddr *cout = (struct sockaddr *) &cout_storage;
     static const char *backend_port = NULL; /* fud port */
     struct addrinfo hints;
     struct addrinfo *res, *res0;
@@ -280,10 +283,11 @@ static int do_proxy_request(const char *who, const char *name,
     }
     if (csoc < 0) {
         for (res = res0; res; res = res->ai_next) {
-            if (res->ai_family != sfrom->sa_family &&
-                (res->ai_family == AF_INET || res->ai_family == AF_INET6)) {
-                csoc = socket(res->ai_family, res->ai_socktype,
-                              res->ai_protocol);
+            if (res->ai_family != sfrom->sa_family
+                && (res->ai_family == AF_INET || res->ai_family == AF_INET6))
+            {
+                csoc =
+                    socket(res->ai_family, res->ai_socktype, res->ai_protocol);
                 break;
             }
         }
@@ -304,7 +308,7 @@ static int do_proxy_request(const char *who, const char *name,
     snprintf(tmpbuf, sizeof(tmpbuf), "%s|%s", who, name);
 
     /* Send the query and wait for a reply */
-    sendto(csoc, tmpbuf, strlen (tmpbuf), 0, cin, cinsiz);
+    sendto(csoc, tmpbuf, strlen(tmpbuf), 0, cin, cinsiz);
 
     if (setsigalrm(1) < 0) {
         r = IMAP_SERVER_UNAVAILABLE;
@@ -315,13 +319,13 @@ static int do_proxy_request(const char *who, const char *name,
     r = 0;
     alarm(1);
 
-    memset(tmpbuf, '\0', strlen (tmpbuf));
+    memset(tmpbuf, '\0', strlen(tmpbuf));
 
     coutsiz = sizeof(struct sockaddr_storage);
     replysize = recvfrom(csoc, tmpbuf, sizeof(tmpbuf), 0, cout, &coutsiz);
     alarm(0);
 
-    setsigalrm(0);  /* Failure isn't really terrible here */
+    setsigalrm(0); /* Failure isn't really terrible here */
 
     if (replysize < 1) {
         r = IMAP_SERVER_UNAVAILABLE;
@@ -334,13 +338,15 @@ static int do_proxy_request(const char *who, const char *name,
     sendto(soc, tmpbuf, replysize, 0, sfrom, sfromsiz);
     r = 0;
 
- done:
+done:
     if (csoc != -1) close(csoc);
     return r;
 }
 
-static int handle_request(const char *who, const char *name,
-                          struct sockaddr *sfrom, socklen_t sfromsiz)
+static int handle_request(const char *who,
+                          const char *name,
+                          struct sockaddr *sfrom,
+                          socklen_t sfromsiz)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -370,14 +376,15 @@ static int handle_request(const char *who, const char *name,
 
     if (mbentry->mbtype & MBTYPE_REMOTE) {
         /* Check the ACL */
-        if(cyrus_acl_myrights(mystate, mbentry->acl) & ACL_USER0) {
+        if (cyrus_acl_myrights(mystate, mbentry->acl) & ACL_USER0) {
             /* We want to proxy this one */
             auth_freestate(mystate);
             r = do_proxy_request(who, name, mbentry->server, sfrom, sfromsiz);
             mboxlist_entry_free(&mbentry);
             free(intname);
             return r;
-        } else {
+        }
+        else {
             /* Permission Denied */
             auth_freestate(mystate);
             mboxlist_entry_free(&mbentry);
@@ -415,7 +422,8 @@ static int handle_request(const char *who, const char *name,
     if (internalseen) {
         lastread = mailbox->i.recenttime;
         recentuid = mailbox->i.recentuid;
-    } else {
+    }
+    else {
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
         r = seen_open(who, 0, &seendb);
@@ -436,7 +444,8 @@ static int handle_request(const char *who, const char *name,
 
     lastarrived = mailbox->i.last_appenddate;
     {
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+        struct mailbox_iter *iter =
+            mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
@@ -448,37 +457,46 @@ static int handle_request(const char *who, const char *name,
     mailbox_close(&mailbox);
     free(intname);
 
-    send_reply(sfrom, sfromsiz, REQ_OK, who, name, numrecent,
-               lastread, lastarrived);
+    send_reply(
+        sfrom, sfromsiz, REQ_OK, who, name, numrecent, lastread, lastarrived);
 
     return 0;
 }
 
-static void
-send_reply(struct sockaddr *sfrom, socklen_t sfromsiz,
-           int status, const char *user, const char *mbox,
-           int numrecent, time_t lastread, time_t lastarrived)
+static void send_reply(struct sockaddr *sfrom,
+                       socklen_t sfromsiz,
+                       int status,
+                       const char *user,
+                       const char *mbox,
+                       int numrecent,
+                       time_t lastread,
+                       time_t lastarrived)
 {
     char buf[MAX_MAILBOX_PATH + 16 + 9];
     int siz;
 
-    switch(status) {
-        case REQ_DENY:
-            sendto(soc, "PERMDENY", 9, 0, sfrom, sfromsiz);
-            break;
-        case REQ_OK:
-            siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%u|%u",
-                           user, mbox, numrecent,
-                           (uint32_t)lastread, (uint32_t)lastarrived);
-            sendto(soc, buf, siz, 0, sfrom, sfromsiz);
-            break;
-        case REQ_UNK:
-            sendto(soc,"UNKNOWN", 8, 0, sfrom, sfromsiz);
-            break;
+    switch (status) {
+    case REQ_DENY:
+        sendto(soc, "PERMDENY", 9, 0, sfrom, sfromsiz);
+        break;
+    case REQ_OK:
+        siz = snprintf(buf,
+                       sizeof(buf),
+                       "%s|%s|%d|%u|%u",
+                       user,
+                       mbox,
+                       numrecent,
+                       (uint32_t) lastread,
+                       (uint32_t) lastarrived);
+        sendto(soc, buf, siz, 0, sfrom, sfromsiz);
+        break;
+    case REQ_UNK:
+        sendto(soc, "UNKNOWN", 8, 0, sfrom, sfromsiz);
+        break;
     }
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
     if (recurse_code) {

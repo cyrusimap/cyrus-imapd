@@ -4,10 +4,10 @@
  *
    export LD_LIBRARY_PATH=/path/to/cyrus/lib
    export PKG_CONFIG_PATH=/path/to/cyrus/lib/pkgconfig
-   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus libcyrus_min)
-   export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other libcyrus libcyrus_min)
-   export LDLIBS=$(pkg-config --libs-only-l libcyrus libcyrus_min)
-   make example_libcyrus
+   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus
+ libcyrus_min) export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other
+ libcyrus libcyrus_min) export LDLIBS=$(pkg-config --libs-only-l libcyrus
+ libcyrus_min) make example_libcyrus
    ./example_libcyrus
  */
 
@@ -20,12 +20,12 @@
 #include "bitvector.h"
 #include "bloom.h"
 #include "bsearch.h"
-/* #include "charset.h" */  /* XXX bogus: needs util.h for struct buf */
-/* #include "command.h" */  /* XXX bogus: needs prot.h for struct protstream */
+/* #include "charset.h" */ /* XXX bogus: needs util.h for struct buf */
+/* #include "command.h" */ /* XXX bogus: needs prot.h for struct protstream */
 #include "cyr_qsort_r.h"
 #include "cyrusdb.h"
 #include "glob.h"
-/* #include "imapurl.h" */  /* XXX bogus: needs util.h for struct buf */
+/* #include "imapurl.h" */ /* XXX bogus: needs util.h for struct buf */
 #include "imclient.h"
 #include "imparse.h"
 #include "iostat.h"
@@ -100,8 +100,7 @@ void test_bitvector(void)
     unsigned u;
 
     for (u = 0; u < 20; u++) {
-        if (u % 5 == 0 || u % 3 == 0)
-            bv_set(&bv, u);
+        if (u % 5 == 0 || u % 3 == 0) bv_set(&bv, u);
     }
 
     str = bv_cstring(&bv);
@@ -142,7 +141,8 @@ void test_bsearch(void)
     puts("bsearch ok");
 }
 
-static int cmp QSORT_R_COMPAR_ARGS(const void *a, const void *b,
+static int cmp QSORT_R_COMPAR_ARGS(const void *a,
+                                   const void *b,
                                    void *thunk __attribute__((unused)))
 {
     return *(const int *) a - *(const int *) b;
@@ -225,7 +225,7 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;

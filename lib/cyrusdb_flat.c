@@ -43,50 +43,52 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <syslog.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/uio.h>
-#include <fcntl.h>
+#include <syslog.h>
 
 #include "assert.h"
-#include "cyrusdb.h"
-#include "map.h"
 #include "bsearch.h"
 #include "cyr_lock.h"
+#include "cyrusdb.h"
+#include "map.h"
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "xunlink.h"
 
 /* we have the file locked iff we have an outstanding transaction */
 
-struct dbengine {
+struct dbengine
+{
     char *fname;
     struct dbengine *next;
     int refcount;
 
-    int fd;                     /* current file open */
+    int fd; /* current file open */
     ino_t ino;
 
-    const char *base;           /* contents of file */
-    size_t size;                /* actual size */
-    size_t len;         /* mapped size */
+    const char *base; /* contents of file */
+    size_t size;      /* actual size */
+    size_t len;       /* mapped size */
 
-    struct buf data;            /* returned storage for fetch */
+    struct buf data; /* returned storage for fetch */
 };
-#define DATA(db)        ((db)->data.s ? (db)->data.s : "")
-#define DATALEN(db)     ((db)->data.len)
+#define DATA(db) ((db)->data.s ? (db)->data.s : "")
+#define DATALEN(db) ((db)->data.len)
 
-struct txn {
+struct txn
+{
     char *fnamenew;
     int fd;
 };
@@ -98,25 +100,25 @@ static struct dbengine *alldbs;
  * thus unlikely to appear in the key or data unless they are completely
  * non-textual.
  */
-#define ESCAPE      0xff
+#define ESCAPE 0xff
 
 static void encode(const char *ps, int len, struct buf *buf)
 {
-    const unsigned char *p = (const unsigned char *)ps;
+    const unsigned char *p = (const unsigned char *) ps;
 
     buf_reset(buf);
     /* allocate enough space plus a little slop to cover
      * escaping a few characters */
-    buf_ensure(buf, len+10);
+    buf_ensure(buf, len + 10);
 
-    for ( ; len > 0 ; len--, p++) {
+    for (; len > 0; len--, p++) {
         switch (*p) {
         case '\0':
         case '\t':
         case '\r':
         case '\n':
             buf_putc(buf, ESCAPE);
-            buf_putc(buf, 0x80|(*p));
+            buf_putc(buf, 0x80 | (*p));
             break;
         case ESCAPE:
             buf_putc(buf, ESCAPE);
@@ -135,14 +137,14 @@ static void encode(const char *ps, int len, struct buf *buf)
 
 static void decode(const char *ps, int len, struct buf *buf)
 {
-    const unsigned char *p = (const unsigned char *)ps;
+    const unsigned char *p = (const unsigned char *) ps;
 
     buf_reset(buf);
     /* allocate enough space; we don't need slop because
      * decoding can only shrink the result */
     buf_ensure(buf, len);
 
-    for ( ; len > 0 ; len--, p++) {
+    for (; len > 0; len--, p++) {
         if (*p == ESCAPE) {
             if (len < 2) {
                 /* invalid encoding, silently ignore */
@@ -182,24 +184,21 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
     /* release lock */
     r = lock_unlock(db->fd, db->fname);
     if (r == -1) {
-        xsyslog(LOG_ERR, "IOERROR: unlocking db failed",
-                         "fname=<%s>",
-                         db->fname);
+        xsyslog(
+            LOG_ERR, "IOERROR: unlocking db failed", "fname=<%s>", db->fname);
         r = CYRUSDB_IOERROR;
     }
 
     if (rw) {
         /* return to our normally scheduled fd */
         if (!r && fstat(db->fd, &sbuf) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                             "fname=<%s>",
-                             db->fname);
+            xsyslog(LOG_ERR, "IOERROR: fstat failed", "fname=<%s>", db->fname);
             r = CYRUSDB_IOERROR;
         }
         if (!r) {
             map_free(&db->base, &db->len);
-            map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
-                        db->fname, 0);
+            map_refresh(
+                db->fd, 0, &db->base, &db->len, sbuf.st_size, db->fname, 0);
             db->size = sbuf.st_size;
         }
     }
@@ -222,7 +221,7 @@ static struct dbengine *find_db(const char *fname)
 {
     struct dbengine *db;
 
-    for (db = alldbs ; db ; db = db->next) {
+    for (db = alldbs; db; db = db->next) {
         if (!strcmp(fname, db->fname)) {
             db->refcount++;
             return db;
@@ -250,9 +249,11 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 
         /* start txn; grab lock */
         if (lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
-                             "action=<%s> fname=<%s>",
-                             lockfailaction, db->fname);
+            xsyslog(LOG_ERR,
+                    "IOERROR: lock_reopen failed",
+                    "action=<%s> fname=<%s>",
+                    lockfailaction,
+                    db->fname);
             return CYRUSDB_IOERROR;
         }
         *mytid = new_txn();
@@ -260,8 +261,7 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
         if (db->ino != sbuf.st_ino) {
             map_free(&db->base, &db->len);
         }
-        map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
-                    db->fname, 0);
+        map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size, db->fname, 0);
 
         /* we now have the latest & greatest open */
         db->size = sbuf.st_size;
@@ -272,9 +272,7 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
         /* no txn, but let's try to be reasonably up-to-date */
 
         if (stat(db->fname, &sbuf) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: stat failed",
-                             "fname=<%s>",
-                             db->fname);
+            xsyslog(LOG_ERR, "IOERROR: stat failed", "fname=<%s>", db->fname);
             return CYRUSDB_IOERROR;
         }
 
@@ -284,32 +282,32 @@ static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 
             if (newfd == -1) {
                 /* fail! */
-                xsyslog(LOG_ERR, "IOERROR: reopen failed",
-                                 "fname=<%s>",
-                                 db->fname);
+                xsyslog(
+                    LOG_ERR, "IOERROR: reopen failed", "fname=<%s>", db->fname);
                 return CYRUSDB_IOERROR;
             }
             dup2(newfd, db->fd);
             close(newfd);
             if (stat(db->fname, &sbuf) == -1) {
-                xsyslog(LOG_ERR, "IOERROR: stat failed",
-                                 "fname=<%s>",
-                                 db->fname);
+                xsyslog(
+                    LOG_ERR, "IOERROR: stat failed", "fname=<%s>", db->fname);
                 return CYRUSDB_IOERROR;
             }
 
             db->ino = sbuf.st_ino;
             map_free(&db->base, &db->len);
         }
-        map_refresh(db->fd, 0, &db->base, &db->len,
-                    sbuf.st_size, db->fname, 0);
+        map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size, db->fname, 0);
         db->size = sbuf.st_size;
     }
 
     return 0;
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
+static int myopen(const char *fname,
+                  int flags,
+                  struct dbengine **ret,
+                  struct txn **mytid)
 {
     struct dbengine *db;
     struct stat sbuf;
@@ -317,8 +315,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     assert(fname && ret);
 
     db = find_db(fname);
-    if (db)
-        goto out;   /* new reference to existing db */
+    if (db) goto out; /* new reference to existing db */
 
     db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
@@ -337,25 +334,20 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     }
 
     if (db->fd == -1) {
-        xsyslog(LOG_ERR, "IOERROR: open failed",
-                         "fname=<%s>",
-                         fname);
+        xsyslog(LOG_ERR, "IOERROR: open failed", "fname=<%s>", fname);
         free_db(db);
         return CYRUSDB_IOERROR;
     }
 
     if (fstat(db->fd, &sbuf) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                         "fname=<%s>",
-                         fname);
+        xsyslog(LOG_ERR, "IOERROR: fstat failed", "fname=<%s>", fname);
         close(db->fd);
         free_db(db);
         return CYRUSDB_IOERROR;
     }
     db->ino = sbuf.st_ino;
 
-    map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size,
-                fname, 0);
+    map_refresh(db->fd, 0, &db->base, &db->len, sbuf.st_size, fname, 0);
     db->size = sbuf.st_size;
 
     db->fname = xstrdup(fname);
@@ -380,15 +372,11 @@ static int myclose(struct dbengine *db)
     struct dbengine **prevp;
 
     assert(db);
-    if (--db->refcount > 0)
-        return 0;
+    if (--db->refcount > 0) return 0;
     /* now we are dropping the last reference */
 
     /* detach from the list of all dbs */
-    for (prevp = &alldbs ;
-         *prevp && *prevp != db ;
-         prevp = &(*prevp)->next)
-        ;
+    for (prevp = &alldbs; *prevp && *prevp != db; prevp = &(*prevp)->next);
     assert(*prevp == db); /* this struct must be in the list */
     *prevp = db->next;
 
@@ -401,8 +389,10 @@ static int myclose(struct dbengine *db)
 }
 
 static int myfetch(struct dbengine *db,
-                   const char *key, size_t keylen,
-                   const char **data, size_t *datalen,
+                   const char *key,
+                   size_t keylen,
+                   const char **data,
+                   size_t *datalen,
                    struct txn **mytid)
 {
     int r = 0;
@@ -431,7 +421,8 @@ static int myfetch(struct dbengine *db,
             if (data) *data = DATA(db);
             if (datalen) *datalen = DATALEN(db);
         }
-    } else {
+    }
+    else {
         r = CYRUSDB_NOTFOUND;
     }
 
@@ -439,8 +430,10 @@ static int myfetch(struct dbengine *db,
     return r;
 }
 
-static int getentry(struct dbengine *db, const char *p,
-                    struct buf *keybuf, const char **dataendp)
+static int getentry(struct dbengine *db,
+                    const char *p,
+                    struct buf *keybuf,
+                    const char **dataendp)
 {
     const char *key;
     int keylen;
@@ -470,15 +463,17 @@ static int getentry(struct dbengine *db, const char *p,
     return 0;
 }
 
-#define GETENTRY(p)                             \
-    r = getentry(db, p, &keybuf, &dataend);     \
+#define GETENTRY(p)                                                            \
+    r = getentry(db, p, &keybuf, &dataend);                                    \
     if (r) break;
 
-static int foreach(struct dbengine *db,
-                   const char *prefix, size_t prefixlen,
-                   foreach_p *goodp,
-                   foreach_cb *cb, void *rock,
-                   struct txn **mytid)
+static int foreach (struct dbengine *db,
+                    const char *prefix,
+                    size_t prefixlen,
+                    foreach_p * goodp,
+                    foreach_cb * cb,
+                    void *rock,
+                    struct txn * *mytid)
 {
     int r = CYRUSDB_OK;
     int offset;
@@ -510,7 +505,7 @@ static int foreach(struct dbengine *db,
         /* No transaction, use the fast method to avoid stomping on our
          * memory map if changes happen */
         dbfd = dup(db->fd);
-        if(dbfd == -1) return CYRUSDB_IOERROR;
+        if (dbfd == -1) return CYRUSDB_IOERROR;
 
         map_refresh(dbfd, 1, &dbbase, &dblen, db->size, db->fname, 0);
 
@@ -543,17 +538,20 @@ static int foreach(struct dbengine *db,
         if (!dontmove) {
             GETENTRY(p)
         }
-        else dontmove = 0;
+        else
+            dontmove = 0;
 
         /* does it still match prefix? */
         if (keybuf.len < (size_t) prefixbuf.len) break;
-        if (prefixbuf.len && memcmp(keybuf.s, prefixbuf.s, prefixbuf.len)) break;
+        if (prefixbuf.len && memcmp(keybuf.s, prefixbuf.s, prefixbuf.len))
+            break;
 
-        if (!goodp || goodp(rock, keybuf.s, keybuf.len, DATA(db), DATALEN(db))) {
+        if (!goodp || goodp(rock, keybuf.s, keybuf.len, DATA(db), DATALEN(db)))
+        {
             unsigned long ino = db->ino;
             unsigned long sz = db->size;
 
-            if(mytid) {
+            if (mytid) {
                 /* transaction present, this means we do the slow way */
                 buf_copy(&savebuf, &keybuf);
             }
@@ -567,8 +565,8 @@ static int foreach(struct dbengine *db,
                 if (!(ino == db->ino && sz == db->size)) {
                     /* something changed in the file; reseek */
                     buf_cstring(&savebuf);
-                    offset = bsearch_mem_mbox(savebuf.s, db->base, db->size,
-                                              0, &len);
+                    offset = bsearch_mem_mbox(
+                        savebuf.s, db->base, db->size, 0, &len);
                     p = db->base + offset;
 
                     GETENTRY(p);
@@ -607,9 +605,12 @@ done:
 #undef GETENTRY
 
 static int mystore(struct dbengine *db,
-                   const char *key, size_t keylen,
-                   const char *data, size_t datalen,
-                   struct txn **mytid, int overwrite)
+                   const char *key,
+                   size_t keylen,
+                   const char *data,
+                   size_t datalen,
+                   struct txn **mytid,
+                   int overwrite)
 {
     int r = 0;
     char fnamebuf[1024];
@@ -627,17 +628,19 @@ static int mystore(struct dbengine *db,
     if (!mytid || !*mytid) {
         r = lock_reopen(db->fd, db->fname, &sbuf, &lockfailaction);
         if (r < 0) {
-            xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
-                             "action=<%s> fname=<%s>",
-                             lockfailaction, db->fname);
+            xsyslog(LOG_ERR,
+                    "IOERROR: lock_reopen failed",
+                    "action=<%s> fname=<%s>",
+                    lockfailaction,
+                    db->fname);
             return CYRUSDB_IOERROR;
         }
 
         if (sbuf.st_ino != db->ino) {
             db->ino = sbuf.st_ino;
             map_free(&db->base, &db->len);
-            map_refresh(db->fd, 0, &db->base, &db->len,
-                        sbuf.st_size, db->fname, 0);
+            map_refresh(
+                db->fd, 0, &db->base, &db->len, sbuf.st_size, db->fname, 0);
             db->size = sbuf.st_size;
         }
 
@@ -662,7 +665,8 @@ static int mystore(struct dbengine *db,
     /* write new file */
     if (mytid && (*mytid)->fnamenew) {
         strlcpy(fnamebuf, (*mytid)->fnamenew, sizeof(fnamebuf));
-    } else {
+    }
+    else {
         strlcpy(fnamebuf, db->fname, sizeof(fnamebuf));
         strlcat(fnamebuf, ".NEW", sizeof(fnamebuf));
     }
@@ -692,16 +696,16 @@ static int mystore(struct dbengine *db,
     }
 
     if (db->size - (offset + len) > 0) {
-        WRITEV_ADD_TO_IOVEC(iov, niov, (char *) db->base + offset + len,
+        WRITEV_ADD_TO_IOVEC(iov,
+                            niov,
+                            (char *) db->base + offset + len,
                             db->size - (offset + len));
     }
 
     /* do the write */
     r = retry_writev(writefd, iov, niov);
     if (r == -1) {
-        xsyslog(LOG_ERR, "IOERROR: write failed",
-                         "fname=<%s>",
-                         fnamebuf);
+        xsyslog(LOG_ERR, "IOERROR: write failed", "fname=<%s>", fnamebuf);
         close(writefd);
         if (mytid) abort_txn(db, *mytid);
         buf_free(&keybuf);
@@ -720,17 +724,15 @@ static int mystore(struct dbengine *db,
         if ((*mytid)->fd) close((*mytid)->fd);
         (*mytid)->fd = writefd;
         map_free(&db->base, &db->len);
-        map_refresh(writefd, 0, &db->base, &db->len, sbuf.st_size,
-                    fnamebuf, 0);
+        map_refresh(writefd, 0, &db->base, &db->len, sbuf.st_size, fnamebuf, 0);
         db->size = sbuf.st_size;
-    } else {
+    }
+    else {
         /* commit immediately */
-        if (fsync(writefd) ||
-            fstat(writefd, &sbuf) == -1 ||
-            rename(fnamebuf, db->fname) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: commit failed",
-                             "fname=<%s>",
-                             fnamebuf);
+        if (fsync(writefd) || fstat(writefd, &sbuf) == -1
+            || rename(fnamebuf, db->fname) == -1)
+        {
+            xsyslog(LOG_ERR, "IOERROR: commit failed", "fname=<%s>", fnamebuf);
             close(writefd);
             buf_free(&keybuf);
             buf_free(&databuf);
@@ -743,16 +745,17 @@ static int mystore(struct dbengine *db,
         /* release lock */
         r = lock_unlock(db->fd, db->fname);
         if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
-                             "fname=<%s>",
-                             db->fname);
+            xsyslog(LOG_ERR,
+                    "IOERROR: lock_unlock failed",
+                    "fname=<%s>",
+                    db->fname);
             r = CYRUSDB_IOERROR;
         }
 
         db->ino = sbuf.st_ino;
         map_free(&db->base, &db->len);
-        map_refresh(writefd, 0, &db->base, &db->len, sbuf.st_size,
-            db->fname, 0);
+        map_refresh(
+            writefd, 0, &db->base, &db->len, sbuf.st_size, db->fname, 0);
         db->size = sbuf.st_size;
     }
 
@@ -763,8 +766,10 @@ static int mystore(struct dbengine *db,
 }
 
 static int create(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  const char *data, size_t datalen,
+                  const char *key,
+                  size_t keylen,
+                  const char *data,
+                  size_t datalen,
                   struct txn **tid)
 {
     if (!data) {
@@ -775,8 +780,10 @@ static int create(struct dbengine *db,
 }
 
 static int store(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 const char *data, size_t datalen,
+                 const char *key,
+                 size_t keylen,
+                 const char *data,
+                 size_t datalen,
                  struct txn **tid)
 {
     if (!data) {
@@ -787,8 +794,10 @@ static int store(struct dbengine *db,
 }
 
 static int delete(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  struct txn **mytid, int force __attribute__((unused)))
+                  const char *key,
+                  size_t keylen,
+                  struct txn **mytid,
+                  int force __attribute__((unused)))
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
@@ -805,15 +814,15 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
         /* we wrote something */
 
         writefd = tid->fd;
-        if (fsync(writefd) ||
-            fstat(writefd, &sbuf) == -1 ||
-            rename(tid->fnamenew, db->fname) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: commit failed",
-                             "fname=<%s>",
-                             tid->fnamenew);
+        if (fsync(writefd) || fstat(writefd, &sbuf) == -1
+            || rename(tid->fnamenew, db->fname) == -1)
+        {
+            xsyslog(
+                LOG_ERR, "IOERROR: commit failed", "fname=<%s>", tid->fnamenew);
             close(writefd);
             r = CYRUSDB_IOERROR;
-        } else {
+        }
+        else {
             /* successful */
             /* we now deal exclusively with our new fd */
             close(db->fd);
@@ -821,14 +830,16 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
             db->ino = sbuf.st_ino;
         }
         free(tid->fnamenew);
-    } else {
+    }
+    else {
         /* read-only txn */
         /* release lock */
         r = lock_unlock(db->fd, db->fname);
         if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
-                             "fname=<%s>",
-                             db->fname);
+            xsyslog(LOG_ERR,
+                    "IOERROR: lock_unlock failed",
+                    "fname=<%s>",
+                    db->fname);
             r = CYRUSDB_IOERROR;
         }
     }
@@ -837,33 +848,30 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
     return r;
 }
 
-EXPORTED struct cyrusdb_backend cyrusdb_flat =
-{
-    "flat",                     /* name */
+EXPORTED struct cyrusdb_backend cyrusdb_flat = { "flat", /* name */
 
-    &cyrusdb_generic_init,
-    &cyrusdb_generic_done,
-    &cyrusdb_generic_archive,
-    &cyrusdb_generic_unlink,
+                                                 &cyrusdb_generic_init,
+                                                 &cyrusdb_generic_done,
+                                                 &cyrusdb_generic_archive,
+                                                 &cyrusdb_generic_unlink,
 
-    &myopen,
-    &myclose,
+                                                 &myopen,
+                                                 &myclose,
 
-    &myfetch,
-    &myfetch,
-    NULL,
+                                                 &myfetch,
+                                                 &myfetch,
+                                                 NULL,
 
-    &foreach,
-    &create,
-    &store,
-    &delete,
+                                                 &foreach,
+                                                 &create,
+                                                 &store,
+                                                 &delete,
 
-    NULL, /* lock */
-    &commit_txn,
-    &abort_txn,
+                                                 NULL, /* lock */
+                                                 &commit_txn,
+                                                 &abort_txn,
 
-    NULL,
-    NULL,
-    NULL,
-    &bsearch_ncompare_mbox
-};
+                                                 NULL,
+                                                 NULL,
+                                                 NULL,
+                                                 &bsearch_ncompare_mbox };

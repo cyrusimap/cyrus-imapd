@@ -62,7 +62,7 @@ xmlChar *xmlBufferDetach(xmlBufferPtr buf)
     return ret;
 }
 
-#ifndef HAVE_XML_FIRSTCHILD
+#    ifndef HAVE_XML_FIRSTCHILD
 
 xmlNodePtr xmlGetNextNode(xmlNodePtr node)
 {
@@ -70,6 +70,6 @@ xmlNodePtr xmlGetNextNode(xmlNodePtr node)
     return node;
 }
 
-#endif /* HAVE_XML_FIRSTCHILD */
+#    endif /* HAVE_XML_FIRSTCHILD */
 
 #endif /* HAVE_XML_BUFFERDETACH */

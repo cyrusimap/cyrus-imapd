@@ -46,7 +46,7 @@
 #include <sys/uio.h>
 #include <sysexits.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "retry.h"
@@ -62,7 +62,7 @@ EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
     size_t nread;
     char *buf = vbuf;
 
-    for (nread = 0; nread < nbyte; ) {
+    for (nread = 0; nread < nbyte;) {
         ssize_t n = read(fd, buf + nread, nbyte - nread);
         if (n == 0) {
             /* end of file */
@@ -93,7 +93,7 @@ EXPORTED ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
 
     if (nbyte == 0) return 0;
 
-    for (written = 0; written < nbyte; ) {
+    for (written = 0; written < nbyte;) {
         ssize_t n = write(fd, buf + written, nbyte - written);
 
         if (n == -1) {
@@ -126,16 +126,15 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 #ifdef MAXIOV
         MAXIOV
 #else
-#ifdef IOV_MAX
+#    ifdef IOV_MAX
         IOV_MAX
-#else
+#    else
         8192
-#endif
+#    endif
 #endif
         ;
 
-    if (!iovcnt)
-        return 0;
+    if (!iovcnt) return 0;
 
     for (i = 0; i < iovcnt; i++) {
         len += srciov[i].iov_len;

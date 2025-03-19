@@ -48,12 +48,12 @@
 #include <string.h>
 #include <sysexits.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/uio.h>
 
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -62,57 +62,66 @@
 #include "cyrusdb.h"
 #include "global.h"
 #include "mailbox.h"
-#include "util.h"
 #include "retry.h"
+#include "util.h"
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
 #define STACKSIZE 64000
-static char stack[STACKSIZE+1];
+static char stack[STACKSIZE + 1];
 
 static int outfd;
 
 static struct db *db = NULL;
 
-static int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
-  int c,res,inkey;
-  res = 0;
-  inkey = 1;
-  *keyptr = stack;
-  *keylen = 0;
-  *vallen = 0;
-  while( (c = getchar()) != EOF ) {
-    if (c == '\n') break;
-    if ((c == '\t') && inkey) {
-      inkey = 0;
-      *valptr = stack + *keylen + 1;
-    } else {
-      if (inkey) {
-        (*keyptr)[(*keylen)++] = c;
-        res = 1;
-      } else {
-        (*valptr)[(*vallen)++] = c;
-      }
+static int read_key_value(char **keyptr,
+                          size_t *keylen,
+                          char **valptr,
+                          size_t *vallen)
+{
+    int c, res, inkey;
+    res = 0;
+    inkey = 1;
+    *keyptr = stack;
+    *keylen = 0;
+    *vallen = 0;
+    while ((c = getchar()) != EOF) {
+        if (c == '\n') break;
+        if ((c == '\t') && inkey) {
+            inkey = 0;
+            *valptr = stack + *keylen + 1;
+        }
+        else {
+            if (inkey) {
+                (*keyptr)[(*keylen)++] = c;
+                res = 1;
+            }
+            else {
+                (*valptr)[(*vallen)++] = c;
+            }
+        }
+        if (*keylen + *vallen >= STACKSIZE - 1) {
+            printf("Error, stack overflow\n");
+            fatal("stack overflow", EX_DATAERR);
+        }
     }
-    if (*keylen + *vallen >= STACKSIZE - 1) {
-      printf("Error, stack overflow\n");
-      fatal("stack overflow", EX_DATAERR);
+    (*keyptr)[*keylen] = '\0';
+    if (inkey) {
+        *valptr = *keyptr + *keylen;
     }
-  }
-  (*keyptr)[*keylen] = '\0';
-  if (inkey) {
-    *valptr = *keyptr + *keylen;
-  } else {
-    (*valptr)[*vallen] = '\0';
-  }
-  return res;
+    else {
+        (*valptr)[*vallen] = '\0';
+    }
+    return res;
 }
 
 static int printer_cb(void *rock __attribute__((unused)),
-    const char *key, size_t keylen,
-    const char *data, size_t datalen)
+                      const char *key,
+                      size_t keylen,
+                      const char *data,
+                      size_t datalen)
 {
     struct iovec io[4];
     io[0].iov_base = (char *) key;
@@ -129,10 +138,12 @@ static int printer_cb(void *rock __attribute__((unused)),
 
 /* use IMAP literals for all communications */
 static int aprinter_cb(void *rock,
-                       const char *key, size_t keylen,
-                       const char *data, size_t datalen)
+                       const char *key,
+                       size_t keylen,
+                       const char *data,
+                       size_t datalen)
 {
-    struct protstream *out = (struct protstream *)rock;
+    struct protstream *out = (struct protstream *) rock;
 
     prot_printamap(out, key, keylen);
     prot_putc(' ', out);
@@ -149,7 +160,7 @@ static void batch_commands(struct db *db)
     struct buf val = BUF_INITIALIZER;
     struct txn *tid = NULL;
     struct txn **tidp = NULL;
-    struct protstream *in = prot_new(0, 0); // stdin
+    struct protstream *in = prot_new(0, 0);  // stdin
     struct protstream *out = prot_new(1, 1); // stdout
     int line = 0;
     int c = '-';
@@ -165,10 +176,8 @@ static void batch_commands(struct db *db)
         c = getword(in, &cmd);
         if (c == EOF) break;
 
-        if (c == ' ')
-            c = getbastring(in, NULL, &key);
-        if (c == ' ')
-            c = getbastring(in, NULL, &val);
+        if (c == ' ') c = getbastring(in, NULL, &key);
+        if (c == ' ') c = getbastring(in, NULL, &val);
         if (c == '\r') c = prot_getc(in);
         if (c != '\n') {
             r = IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -185,7 +194,8 @@ static void batch_commands(struct db *db)
                 tidp = &tid;
             }
             else if (!strcmp(cmd.s, "SHOW")) {
-                r = cyrusdb_foreach(db, key.s, key.len, NULL, aprinter_cb, out, tidp);
+                r = cyrusdb_foreach(
+                    db, key.s, key.len, NULL, aprinter_cb, out, tidp);
                 if (r) goto done;
                 prot_flush(out);
             }
@@ -243,8 +253,12 @@ static void batch_commands(struct db *db)
 done:
     if (r) {
         if (tid) cyrusdb_abort(db, tid);
-        fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
-                line, (int)cmd.len, cmd.s, error_message(r));
+        fprintf(stderr,
+                "FAILED: line %d at cmd %.*s with error %s\n",
+                line,
+                (int) cmd.len,
+                cmd.s,
+                error_message(r));
     }
 
     prot_free(in);
@@ -261,9 +275,9 @@ int main(int argc, char *argv[])
     const char *action;
     char *key = NULL;
     char *value = NULL;
-    int i,r;
+    int i, r;
     size_t keylen = 0, vallen = 0, reslen = 0;
-    int opt,loop;
+    int opt, loop;
     char *alt_config = NULL;
     const char *res = NULL;
     int is_get = 0;
@@ -279,18 +293,19 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "convert", no_argument, NULL, 'c' },
-        { "no-checksum", no_argument, NULL, 'N' },
-        { "create", no_argument, NULL, 'n' },
-        { "readonly", no_argument, NULL, 'R' },
-        { "no-sync", no_argument, NULL, 'S' },
+        { "convert",         no_argument, NULL, 'c' },
+        { "no-checksum",     no_argument, NULL, 'N' },
+        { "create",          no_argument, NULL, 'n' },
+        { "readonly",        no_argument, NULL, 'R' },
+        { "no-sync",         no_argument, NULL, 'S' },
         { "use-transaction", no_argument, NULL, 'T' },
-        { "no-transaction", no_argument, NULL, 't' },
-        { 0, 0, 0, 0 },
+        { "no-transaction",  no_argument, NULL, 't' },
+        { 0,                 0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -324,10 +339,13 @@ int main(int argc, char *argv[])
         char sep;
         strarray_t *backends = cyrusdb_backends();
 
-        fprintf(stderr, "Usage: %s [-C altconfig] <db file> <db backend> <action> [<key>] [<value>]\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s [-C altconfig] <db file> <db backend> <action> "
+                "[<key>] [<value>]\n",
+                argv[0]);
         fprintf(stderr, "Usable Backends");
 
-        for(i=0, sep = ':'; i < backends->count; i++) {
+        for (i = 0, sep = ':'; i < backends->count; i++) {
             fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
             sep = ',';
         }
@@ -336,10 +354,15 @@ int main(int argc, char *argv[])
         fprintf(stderr, "\n");
         fprintf(stderr, "\n");
         fprintf(stderr, "Options:\n");
-        fprintf(stderr, "  -c     convert database to named backend if not already\n");
-        fprintf(stderr, "  -N     minimise use of checksums (don't check on read, create nochecksum if supported)\n");
+        fprintf(stderr,
+                "  -c     convert database to named backend if not already\n");
+        fprintf(stderr,
+                "  -N     minimise use of checksums (don't check on read, "
+                "create nochecksum if supported)\n");
         fprintf(stderr, "  -n     create the database if it doesn't exist\n");
-        fprintf(stderr, "  -R     open the database readonly (won't create a new DB)\n");
+        fprintf(
+            stderr,
+            "  -R     open the database readonly (won't create a new DB)\n");
         fprintf(stderr, "  -S     don't fsync writes (dangerous)\n");
         fprintf(stderr, "  -T     use a single transaction for the action\n");
         fprintf(stderr, "  -t     don't use a transaction (default)\n");
@@ -354,15 +377,19 @@ int main(int argc, char *argv[])
         fprintf(stderr, "* repack - repack/checkpoint the DB (if supported)\n");
         fprintf(stderr, "* damage - start a commit then die during\n");
         fprintf(stderr, "* batch - read from stdin and execute commands\n");
-        fprintf(stderr, "You may omit key or key/value and specify one per line on stdin\n");
-        fprintf(stderr, "keys are terminated by tab or newline, values are terminated by newline\n");
+        fprintf(stderr,
+                "You may omit key or key/value and specify one per line on "
+                "stdin\n");
+        fprintf(stderr,
+                "keys are terminated by tab or newline, values are terminated "
+                "by newline\n");
         exit(-1);
     }
 
     fname = argv[optind];
-    action = argv[optind+2];
+    action = argv[optind + 2];
 
-    if(fname[0] != '/') {
+    if (fname[0] != '/') {
         printf("\nSorry, you cannot use this tool with relative path names.\n"
                "This is because some database backends do not\n"
                "always do what you would expect with them.\n"
@@ -374,69 +401,80 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_dbtool", 0, 0);
 
-    r = cyrusdb_lockopen(argv[optind+1], fname, db_flags, &db, tidp);
-    if(r != CYRUSDB_OK)
-        fatal("can't open database", EX_TEMPFAIL);
+    r = cyrusdb_lockopen(argv[optind + 1], fname, db_flags, &db, tidp);
+    if (r != CYRUSDB_OK) fatal("can't open database", EX_TEMPFAIL);
 
-    if (( is_get = !strcmp(action, "get"))  ||
-      (is_delete = !strcmp(action, "delete")) ||
-      (is_set = !strcmp(action, "set")) ) {
-        use_stdin = ( (argc - optind) < 4 );
+    if ((is_get = !strcmp(action, "get"))
+        || (is_delete = !strcmp(action, "delete"))
+        || (is_set = !strcmp(action, "set")))
+    {
+        use_stdin = ((argc - optind) < 4);
         if (use_stdin) {
-          loop = read_key_value( &key, &keylen, &value, &vallen );
-        } else {
-          key = argv[optind+3];
-          keylen = strlen(key);
-          if (is_set) {
-            value = argv[optind+4];
-            vallen = strlen(value);
-          }
-          loop = 1;
+            loop = read_key_value(&key, &keylen, &value, &vallen);
         }
-        while ( loop ) {
-          if (is_get) {
-            r = cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
-            if (r) break;
-            printf("%.*s\n", (int)reslen, res);
-          } else if (is_set) {
-            r = cyrusdb_store(db, key, keylen, value, vallen, tidp);
-            if (r) break;
-          } else if (is_delete) {
-            r = cyrusdb_delete(db, key, keylen, tidp, 1);
-            if (r) break;
-          }
-          loop = 0;
-          if ( use_stdin ) {
-            loop = read_key_value( &key, &keylen, &value, &vallen );
-          }
+        else {
+            key = argv[optind + 3];
+            keylen = strlen(key);
+            if (is_set) {
+                value = argv[optind + 4];
+                vallen = strlen(value);
+            }
+            loop = 1;
         }
-    } else if (!strcmp(action, "batch")) {
+        while (loop) {
+            if (is_get) {
+                r = cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
+                if (r) break;
+                printf("%.*s\n", (int) reslen, res);
+            }
+            else if (is_set) {
+                r = cyrusdb_store(db, key, keylen, value, vallen, tidp);
+                if (r) break;
+            }
+            else if (is_delete) {
+                r = cyrusdb_delete(db, key, keylen, tidp, 1);
+                if (r) break;
+            }
+            loop = 0;
+            if (use_stdin) {
+                loop = read_key_value(&key, &keylen, &value, &vallen);
+            }
+        }
+    }
+    else if (!strcmp(action, "batch")) {
         batch_commands(db);
-    } else if (!strcmp(action, "show")) {
+    }
+    else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
             r = cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
-        } else {
-            key = argv[optind+3];
+        }
+        else {
+            key = argv[optind + 3];
             keylen = strlen(key);
             r = cyrusdb_foreach(db, key, keylen, NULL, printer_cb, NULL, tidp);
         }
-    } else if (!strcmp(action, "dump")) {
+    }
+    else if (!strcmp(action, "dump")) {
         int level = 1;
-        if ((argc - optind) > 3)
-            level = atoi(argv[optind+3]);
+        if ((argc - optind) > 3) level = atoi(argv[optind + 3]);
         r = cyrusdb_dump(db, level);
-    } else if (!strcmp(action, "consistent")) {
+    }
+    else if (!strcmp(action, "consistent")) {
         if (cyrusdb_consistent(db)) {
             printf("No, not consistent\n");
-        } else {
+        }
+        else {
             printf("Yes, consistent\n");
         }
-    } else if (!strcmp(action, "repack")) {
+    }
+    else if (!strcmp(action, "repack")) {
         r = cyrusdb_repack(db);
-    } else if (!strcmp(action, "damage")) {
+    }
+    else if (!strcmp(action, "damage")) {
         cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
         assert(!tid);
-    } else {
+    }
+    else {
         printf("Unknown action %s\n", action);
     }
     if (tid && !r) {

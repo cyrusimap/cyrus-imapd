@@ -59,9 +59,11 @@ EXPORTED int gmtoff_of(struct tm *tm, time_t time)
     offset = local.tm_yday - gmt.tm_yday;
     if (offset > 1) {
         offset = -24;
-    } else if (offset < -1) {
+    }
+    else if (offset < -1) {
         offset = 24;
-    } else {
+    }
+    else {
         offset *= 24;
     }
 

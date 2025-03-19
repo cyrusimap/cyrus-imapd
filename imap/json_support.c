@@ -41,7 +41,6 @@
  *
  */
 
-
 #include <config.h>
 
 #include <string.h>
@@ -77,22 +76,17 @@ static int parse_date(json_t *json, unsigned utc)
     return (s && *s == '\0');
 }
 
-int json_is_date(json_t *json)
-{
-    return parse_date(json, 0);
-}
+int json_is_date(json_t *json) { return parse_date(json, 0); }
 
-int json_is_utcdate(json_t *json)
-{
-    return parse_date(json, 1);
-}
+int json_is_utcdate(json_t *json) { return parse_date(json, 1); }
 
 int json_array_find(json_t *array, const char *needle)
 {
     size_t i;
     json_t *val;
 
-    json_array_foreach(array, i, val) {
+    json_array_foreach(array, i, val)
+    {
         if (!strcmp(needle, json_string_value(val))) return i;
     }
 
@@ -101,8 +95,10 @@ int json_array_find(json_t *array, const char *needle)
 
 /* Get the property with the given key, if it exists.
    Otherwise, create is with the given json_pack() args */
-json_t *json_object_get_vanew(json_t *obj, const char *key,
-                              const char *fmt, ...)
+json_t *json_object_get_vanew(json_t *obj,
+                              const char *key,
+                              const char *fmt,
+                              ...)
 {
     json_t *val = json_object_get(obj, key);
 

@@ -42,21 +42,21 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <getopt.h>
 #include <libgen.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <string.h>
 
 /* cyrus includes */
 #include "assert.h"
 #include "global.h"
-#include "index.h"
 #include "imapurl.h"
+#include "index.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "util.h"
@@ -70,11 +70,14 @@ static int verbose = 0;
 static const char *progname = NULL;
 
 static int dump_me(struct findall_data *data, void *rock);
-static void print_seq(const char *tag, const char *attrib,
-                      unsigned *seq, int n);
+static void print_seq(const char *tag,
+                      const char *attrib,
+                      unsigned *seq,
+                      int n);
 static int usage(void);
 
-struct incremental_record {
+struct incremental_record
+{
     unsigned incruid;
 };
 
@@ -93,11 +96,12 @@ int main(int argc, char *argv[])
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "verbose", no_argument, NULL, 'v' },
-        { 0, 0, 0, 0 },
+        { 0,         0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'v':
@@ -143,7 +147,9 @@ static int usage(void)
     fprintf(stderr, "Dumps out a basic copy of mailbox data to stdout.\n");
     fprintf(stderr, "\n");
 
-    fprintf(stderr, "-C <config-file>         use <config-file> instead of config from imapd.conf\n");
+    fprintf(stderr,
+            "-C <config-file>         use <config-file> instead of config from "
+            "imapd.conf\n");
     fprintf(stderr, "-v                       enable verbose output\n");
 
     fprintf(stderr, "\n");
@@ -155,8 +161,12 @@ static void generate_boundary(char *boundary, size_t size)
 {
     assert(size >= 100);
 
-    snprintf(boundary, size, "dump-%ld-%ld-%ld",
-             (long) getpid(), (long) time(NULL), (long) rand());
+    snprintf(boundary,
+             size,
+             "dump-%ld-%ld-%ld",
+             (long) getpid(),
+             (long) time(NULL),
+             (long) rand());
 }
 
 static search_expr_t *systemflag_match(int flag)
@@ -267,24 +277,20 @@ static int dump_me(struct findall_data *data, void *rock)
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
         struct buf buf = BUF_INITIALIZER;
-        struct index_map *im = &state->map[msgno-1];
+        struct index_map *im = &state->map[msgno - 1];
         struct index_record record;
 
-        while (im->uid > uids[i] && i < numuids)
-            i++;
-        if (i >= numuids)
-            break;
+        while (im->uid > uids[i] && i < numuids) i++;
+        if (i >= numuids) break;
 
-        if (im->uid < uids[i])
-            continue;
+        if (im->uid < uids[i]) continue;
 
         /* got a match */
         i++;
         memset(&record, 0, sizeof(struct index_record));
         record.recno = im->recno;
         record.uid = im->uid;
-        if (mailbox_reload_index_record(state->mailbox, &record))
-            continue;
+        if (mailbox_reload_index_record(state->mailbox, &record)) continue;
 
         printf("\n--%s\n", boundary);
         printf("Content-Type: message/rfc822\n");
@@ -293,7 +299,8 @@ static int dump_me(struct findall_data *data, void *rock)
         r = mailbox_map_record(state->mailbox, &record, &buf);
         if (r) {
             if (verbose) {
-                printf("error mapping message %u: %s\n", record.uid,
+                printf("error mapping message %u: %s\n",
+                       record.uid,
                        error_message(r));
             }
             break;
@@ -310,8 +317,7 @@ static int dump_me(struct findall_data *data, void *rock)
     return 0;
 }
 
-static void print_seq(const char *tag, const char *attrib,
-                      unsigned *seq, int n)
+static void print_seq(const char *tag, const char *attrib, unsigned *seq, int n)
 {
     int i;
 

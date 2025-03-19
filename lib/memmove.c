@@ -62,4 +62,3 @@ void *memmove(void *s, const void *ct, size_t n)
 
     return s;
 }
-

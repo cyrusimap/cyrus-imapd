@@ -43,39 +43,39 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/wait.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <sys/wait.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
 #include "assert.h"
-#include "util.h"
 #include "auth.h"
-#include "prot.h"
-#include "times.h"
 #include "global.h"
 #include "prometheus.h"
+#include "prot.h"
+#include "times.h"
+#include "util.h"
+#include "version.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "version.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -83,20 +83,22 @@
 #include "imap/mupdate_err.h"
 
 #include "lmtpengine.h"
-#include "tls.h"
 #include "telemetry.h"
+#include "tls.h"
 
 #define RCPT_GROW 30
 
 /* data per message */
-struct address_data {
+struct address_data
+{
     mbname_t *mbname;
     int ignorequota;
     int status;
     strarray_t *resp;
 };
 
-struct clientdata {
+struct clientdata
+{
     struct protstream *pin;
     struct protstream *pout;
     int fd;
@@ -122,14 +124,18 @@ struct clientdata {
 /* defined in lmtpd.c */
 extern int deliver_logfd;
 
-extern int saslserver(sasl_conn_t *conn, const char *mech,
-                      const char *init_resp, const char *resp_prefix,
-                      const char *continuation, const char *empty_chal,
-                      struct protstream *pin, struct protstream *pout,
-                      int *sasl_result, char **success_data);
+extern int saslserver(sasl_conn_t *conn,
+                      const char *mech,
+                      const char *init_resp,
+                      const char *resp_prefix,
+                      const char *continuation,
+                      const char *empty_chal,
+                      struct protstream *pin,
+                      struct protstream *pout,
+                      int *sasl_result,
+                      char **success_data);
 
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
-
 
 static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 {
@@ -171,17 +177,19 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 
     case IMAP_PERMISSION_DENIED:
         if (LMTP_LONG_ERROR_MSGS) {
-            prot_printf(pout, error_message(LMTP_NOT_AUTHORIZED_LONG),
+            prot_printf(pout,
+                        error_message(LMTP_NOT_AUTHORIZED_LONG),
                         config_getstring(IMAPOPT_POSTMASTER));
         }
         code = LMTP_NOT_AUTHORIZED;
         break;
 
     case IMAP_QUOTA_EXCEEDED:
-        if(config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
+        if (config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
             /* Not Default - Perm Failure */
             code = LMTP_MAILBOX_FULL_PERM;
-        } else {
+        }
+        else {
             /* Default - Temp Failure */
             code = LMTP_MAILBOX_FULL;
         }
@@ -287,8 +295,8 @@ static void msg_free(message_data_t *m)
         free(m->rcpt);
     }
     if (m->date) {
-      free(m->date);
-     }
+        free(m->date);
+    }
 
     if (m->authuser) {
         free(m->authuser);
@@ -307,15 +315,9 @@ const char **msg_getheader(message_data_t *m, const char *phead)
     return spool_getheader(m->hdrcache, phead);
 }
 
-int msg_getsize(message_data_t *m)
-{
-    return m->size;
-}
+int msg_getsize(message_data_t *m) { return m->size; }
 
-int msg_getnumrcpt(message_data_t *m)
-{
-    return m->rcpt_num;
-}
+int msg_getnumrcpt(message_data_t *m) { return m->rcpt_num; }
 
 const mbname_t *msg_getrcpt(message_data_t *m, int rcpt_num)
 {
@@ -337,7 +339,10 @@ int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num)
 
 /* set a recipient status; 'r' should be an IMAP error code that will be
    translated into an LMTP status code */
-void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, strarray_t *resp)
+void msg_setrcpt_status(message_data_t *m,
+                        int rcpt_num,
+                        int r,
+                        strarray_t *resp)
 {
     assert(0 <= rcpt_num && rcpt_num < m->rcpt_num);
     if (!m->rcpt[rcpt_num]->status) {
@@ -346,15 +351,9 @@ void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r, strarray_t *resp
     }
 }
 
-void *msg_getrock(message_data_t *m)
-{
-    return m->rock;
-}
+void *msg_getrock(message_data_t *m) { return m->rock; }
 
-void msg_setrock(message_data_t *m, void *rock)
-{
-    m->rock = rock;
-}
+void msg_setrock(message_data_t *m, void *rock) { m->rock = rock; }
 
 /* return a malloc'd string representing the authorized user.
  advance 'strp' over the parameter */
@@ -369,44 +368,41 @@ static char *parseautheq(char **strp)
         return NULL;
     }
 
-    ret = (char *) xmalloc(strlen(s)+1);
-    ret[0]='\0';
+    ret = (char *) xmalloc(strlen(s) + 1);
+    ret[0] = '\0';
     str = ret;
 
-    if (*s == '<') s++;         /* we'll be liberal and accept "<foo>" */
-    while (1)
-    {
+    if (*s == '<') s++; /* we'll be liberal and accept "<foo>" */
+    while (1) {
         /* hexchar */
-        if (*s == '+')
-        {
+        if (*s == '+') {
             int lup;
             *str = '\0';
             s++;
 
-            for (lup=0;lup<2;lup++)
-            {
-                if ((*s>='0') && (*s<='9'))
+            for (lup = 0; lup < 2; lup++) {
+                if ((*s >= '0') && (*s <= '9'))
                     (*str) = (*str) & (*s - '0');
-                else if ((*s>='A') && (*s<='F'))
+                else if ((*s >= 'A') && (*s <= 'F'))
                     (*str) = (*str) & (*s - 'A' + 10);
                 else {
                     free(ret);
                     *strp = s;
                     return NULL;
                 }
-                if (lup==0)
-                {
+                if (lup == 0) {
                     (*str) = (*str) << 4;
                     s++;
                 }
             }
             str++;
-
-        } else if ((*s >= '!') && (*s <='~') && (*s!='+') && (*s!='=')) {
+        }
+        else if ((*s >= '!') && (*s <= '~') && (*s != '+') && (*s != '=')) {
             /* ascii char */
             *str = *s;
             str++;
-        } else {
+        }
+        else {
             /* bad char or end-of-line */
             break;
         }
@@ -414,14 +410,16 @@ static char *parseautheq(char **strp)
     }
 
     *strp = s;
-    if (*s && (*s!=' ')) { free(ret); return NULL; }
+    if (*s && (*s != ' ')) {
+        free(ret);
+        return NULL;
+    }
 
     *str = '\0';
 
     /* take off trailing '>' */
-    if ((str!=ret) && ( *(str-1)=='>'))
-    {
-        *(str-1) = '\0';
+    if ((str != ret) && (*(str - 1) == '>')) {
+        *(str - 1) = '\0';
     }
 
     return ret;
@@ -448,9 +446,12 @@ static char *parseaddr(char *s)
         else {
             while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
         }
-        if (*p == ',' && p[1] == '@') p++;
-        else if (*p == ':' && p[1] != '@') p++;
-        else return 0;
+        if (*p == ',' && p[1] == '@')
+            p++;
+        else if (*p == ':' && p[1] != '@')
+            p++;
+        else
+            return 0;
     }
 
     /* local-part */
@@ -476,8 +477,8 @@ static char *parseaddr(char *s)
                        of addresses. */
                     *p = 'X';
                 }
-                if (*p <= ' ' || (*p & 128) ||
-                    strchr("<>()[]\\,;:\"", *p)) return 0;
+                if (*p <= ' ' || (*p & 128) || strchr("<>()[]\\,;:\"", *p))
+                    return 0;
             }
             p++;
         }
@@ -511,10 +512,10 @@ static void clean_retpath(char *rpath)
     if (*rpath == '<') {
         sl = strlen(rpath);
         /* use strlen(rpath) so we move the NUL too */
-        memmove(rpath, rpath+1, sl);
+        memmove(rpath, rpath + 1, sl);
         sl--; /* string is one shorter now */
-        if (rpath[sl-1] == '>') {
-            rpath[sl-1] = '\0';
+        if (rpath[sl - 1] == '>') {
+            rpath[sl - 1] = '\0';
         }
     }
 }
@@ -526,11 +527,11 @@ static void clean_retpath(char *rpath)
  */
 static void clean822space(char *buf)
 {
-    char *from=buf, *to=buf;
+    char *from = buf, *to = buf;
     int c;
     int commentlevel = 0;
 
-    while ((c = *from++)!=0) {
+    while ((c = *from++) != 0) {
         switch (c) {
         case '\r':
         case '\n':
@@ -578,9 +579,9 @@ static int savemsg(struct clientdata *cd,
     int nrcpts = m->rcpt_num;
     time_t now = time(NULL);
     static unsigned msgid_count = 0;
-    char datestr[RFC5322_DATETIME_MAX+1], tls_info[250] = "";
+    char datestr[RFC5322_DATETIME_MAX + 1], tls_info[250] = "";
     const char *skipheaders[] = {
-        "Return-Path",  /* need to remove (we add our own) */
+        "Return-Path", /* need to remove (we add our own) */
         NULL
     };
     char *addbody, *fold[5], *p;
@@ -595,7 +596,9 @@ static int savemsg(struct clientdata *cd,
 #ifdef EDQUOT
                         errno == EDQUOT ||
 #endif
-                        errno == ENOSPC) ? '1' : '2',
+                        errno == ENOSPC)
+                        ? '1'
+                        : '2',
                     error_message(errno));
         return IMAP_IOERROR;
     }
@@ -615,8 +618,11 @@ static int savemsg(struct clientdata *cd,
 
         addlen = 2 + strlen(rpath) + (hostname ? 1 + strlen(hostname) : 0);
         addbody = xmalloc(addlen + 1);
-        sprintf(addbody, "<%s%s%s>",
-                rpath, hostname ? "@" : "", hostname ? hostname : "");
+        sprintf(addbody,
+                "<%s%s%s>",
+                rpath,
+                hostname ? "@" : "",
+                hostname ? hostname : "");
         fprintf(f, "Return-Path: %s\r\n", addbody);
         spool_cache_header(xstrdup("Return-Path"), addbody, m->hdrcache);
     }
@@ -651,7 +657,8 @@ static int savemsg(struct clientdata *cd,
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         p += sprintf(p, " (Cyrus %s)", CYRUS_VERSION);
     }
-    p += sprintf(p, " with LMTP%s%s",
+    p += sprintf(p,
+                 " with LMTP%s%s",
                  cd->starttls_done ? "S" : "",
                  cd->authenticated != NOAUTH ? "A" : "");
 
@@ -671,7 +678,8 @@ static int savemsg(struct clientdata *cd,
     }
     buf_printf(&rbuf, "%s\r\n", p);
     fputs(buf_cstring(&rbuf), f);
-    spool_append_header_raw(xstrdup("Received"), addbody, buf_release(&rbuf), m->hdrcache);
+    spool_append_header_raw(
+        xstrdup("Received"), addbody, buf_release(&rbuf), m->hdrcache);
 
     char *sid = xstrdup(session_id());
     fprintf(f, "X-Cyrus-Session-Id: %s\r\n", sid);
@@ -694,15 +702,21 @@ static int savemsg(struct clientdata *cd,
     /* get message-id */
     if ((body = msg_getheader(m, "message-id")) && body[0][0]) {
         m->id = xstrdup(body[0]);
-    } else if (body) {
-        r = IMAP_MESSAGE_BADHEADER;  /* empty message-id */
-    } else {
+    }
+    else if (body) {
+        r = IMAP_MESSAGE_BADHEADER; /* empty message-id */
+    }
+    else {
         /* no message-id, create one */
         pid_t p = getpid();
 
         m->id = xmalloc(40 + strlen(config_servername));
-        sprintf(m->id, "<cmu-lmtpd-%d-%d-%u@%s>", p, (int) now,
-                msgid_count++, config_servername);
+        sprintf(m->id,
+                "<cmu-lmtpd-%d-%d-%u@%s>",
+                p,
+                (int) now,
+                msgid_count++,
+                config_servername);
         fprintf(f, "Message-ID: %s\r\n", m->id);
         spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
     }
@@ -719,8 +733,7 @@ static int savemsg(struct clientdata *cd,
         m->date = xstrdup(body[0]);
     }
 
-    if (!m->return_path &&
-        (body = msg_getheader(m, "return-path"))) {
+    if (!m->return_path && (body = msg_getheader(m, "return-path"))) {
         /* let's grab return_path */
         m->return_path = xstrdup(body[0]);
         clean822space(m->return_path);
@@ -746,14 +759,17 @@ static int savemsg(struct clientdata *cd,
     fflush(f);
     if (ferror(f)) {
         while (nrcpts--) {
-            prot_printf(cd->pout,
-               "451 4.3.%c cannot copy message to temporary file: %s\r\n",
-                   (
+            prot_printf(
+                cd->pout,
+                "451 4.3.%c cannot copy message to temporary file: %s\r\n",
+                (
 #ifdef EDQUOT
                     errno == EDQUOT ||
 #endif
-                    errno == ENOSPC) ? '1' : '2',
-                   error_message(errno));
+                    errno == ENOSPC)
+                    ? '1'
+                    : '2',
+                error_message(errno));
         }
         fclose(f);
         if (func->removespool) func->removespool(m);
@@ -783,7 +799,8 @@ static int savemsg(struct clientdata *cd,
 static int process_recipient(char *addr,
                              int ignorequota,
                              int (*verify_user)(const mbname_t *mbname,
-                                                quota_t, quota_t,
+                                                quota_t,
+                                                quota_t,
                                                 struct auth_state *),
                              message_data_t *msg)
 {
@@ -794,8 +811,7 @@ static int process_recipient(char *addr,
     /* Skip at-domain-list */
     if (*addr == '@') {
         addr = strchr(addr, ':');
-        if (!addr)
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!addr) return IMAP_PROTOCOL_BAD_PARAMETERS;
         addr++;
     }
 
@@ -803,7 +819,7 @@ static int process_recipient(char *addr,
     int r = 0;
 
     size_t sl = strlen(addr);
-    if (addr[sl-1] == '>') sl--;
+    if (addr[sl - 1] == '>') sl--;
 
     if (sl) {
         char *rcpt = xstrndup(addr, sl);
@@ -814,15 +830,20 @@ static int process_recipient(char *addr,
         if (forcedowncase) mbname_downcaseuser(mbname);
 
         /* strip username if postuser */
-        if (!strcmpsafe(mbname_localpart(mbname), config_getstring(IMAPOPT_POSTUSER))) {
+        if (!strcmpsafe(mbname_localpart(mbname),
+                        config_getstring(IMAPOPT_POSTUSER)))
+        {
             mbname_set_localpart(mbname, NULL);
-            if (!config_virtdomains || !strcmpsafe(mbname_domain(mbname), config_defdomain))
+            if (!config_virtdomains
+                || !strcmpsafe(mbname_domain(mbname), config_defdomain))
                 mbname_set_domain(mbname, NULL);
         }
 
         if ((r = verify_user(mbname,
-                        (quota_t) (ignorequota ? -1 : msg->size),
-                        ignorequota ? -1 : 1, msg->authstate))) {
+                             (quota_t) (ignorequota ? -1 : msg->size),
+                             ignorequota ? -1 : 1,
+                             msg->authstate)))
+        {
             mbname_free(&mbname);
         }
     }
@@ -832,8 +853,10 @@ static int process_recipient(char *addr,
         if (catchall) {
             mbname = mbname_from_userid(catchall);
             if ((r = verify_user(mbname,
-                            ignorequota ? -1 : msg->size,
-                            ignorequota ? -1 : 1, msg->authstate))) {
+                                 ignorequota ? -1 : msg->size,
+                                 ignorequota ? -1 : 1,
+                                 msg->authstate)))
+            {
                 mbname_free(&mbname);
             }
         }
@@ -855,19 +878,17 @@ static int process_recipient(char *addr,
     return 0;
 }
 
-static int localauth_mechlist_override(
-    void *context __attribute__((unused)),
-    const char *plugin_name __attribute__((unused)),
-    const char *option,
-    const char **result,
-    unsigned *len)
+static int localauth_mechlist_override(void *context __attribute__((unused)),
+                                       const char *plugin_name
+                                       __attribute__((unused)),
+                                       const char *option,
+                                       const char **result,
+                                       unsigned *len)
 {
     /* If we are doing local auth, we only support EXTERNAL */
-    if (strcmp(option,"mech_list")==0)
-    {
+    if (strcmp(option, "mech_list") == 0) {
         *result = "EXTERNAL";
-        if (len)
-            *len = strlen(*result);
+        if (len) *len = strlen(*result);
         return SASL_OK;
     }
 
@@ -877,8 +898,8 @@ static int localauth_mechlist_override(
 }
 
 static struct sasl_callback localauth_override_cb[] = {
-    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &localauth_mechlist_override, NULL },
-    { SASL_CB_LIST_END, NULL, NULL },
+    { SASL_CB_GETOPT,   SASL_CB_PROC_PTR &localauth_mechlist_override, NULL },
+    { SASL_CB_LIST_END, NULL,                                          NULL },
 };
 
 /* Reset the given sasl_conn_t to a sane state */
@@ -889,22 +910,26 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("lmtp", config_servername, NULL,
+    ret = sasl_server_new("lmtp",
+                          config_servername,
+                          NULL,
                           buf_cstringnull_ifempty(&saslprops.iplocalport),
                           buf_cstringnull_ifempty(&saslprops.ipremoteport),
-                          NULL, 0, conn);
-    if(ret != SASL_OK) return ret;
+                          NULL,
+                          0,
+                          conn);
+    if (ret != SASL_OK) return ret;
 
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
-    if(saslprops.ssf) {
+    if (saslprops.ssf) {
         ret = saslprops_set_tls(&saslprops, *conn);
     }
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -932,7 +957,7 @@ void lmtpmode(struct lmtp_func *func,
     cd.fd = fd;
     cd.clienthost = "";
     cd.lhlo_param[0] = '\0';
-    cd.authenticated =  NOAUTH;
+    cd.authenticated = NOAUTH;
 #ifdef HAVE_SSL
     cd.tls_conn = NULL;
 #endif
@@ -959,17 +984,23 @@ void lmtpmode(struct lmtp_func *func,
         buf_setcstr(&saslprops.iplocalport, localip);
     }
 
-    syslog(LOG_DEBUG, "connection from %s%s",
+    syslog(LOG_DEBUG,
+           "connection from %s%s",
            cd.clienthost,
            func->preauth ? " preauth'd as postman" : "");
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
-    if (sasl_server_new("lmtp", config_servername, NULL,
+    if (sasl_server_new("lmtp",
+                        config_servername,
+                        NULL,
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         (func->preauth ? localauth_override_cb : NULL),
-                        0, &cd.conn) != SASL_OK) {
+                        0,
+                        &cd.conn)
+        != SASL_OK)
+    {
         fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
     }
 
@@ -981,13 +1012,13 @@ void lmtpmode(struct lmtp_func *func,
     if (func->preauth) {
         const char *auth_id = "postman";
 
-        cd.authenticated = EXTERNAL_AUTHED;     /* we'll allow commands,
-                                                   but we still accept
-                                                   the AUTH command */
+        cd.authenticated = EXTERNAL_AUTHED; /* we'll allow commands,
+                                               but we still accept
+                                               the AUTH command */
         saslprops.ssf = 2;
         buf_setcstr(&saslprops.authid, auth_id);
         if (saslprops_set_tls(&saslprops, cd.conn) != SASL_OK)
-            fatal("saslprops_set_tls() failed: preauth",EX_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: preauth", EX_TEMPFAIL);
 
         deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     }
@@ -1000,149 +1031,172 @@ void lmtpmode(struct lmtp_func *func,
 
     for (;;) {
     nextcmd:
-      signals_poll();
+        signals_poll();
 
-      if (!prot_fgets(buf, sizeof(buf), pin)) {
-          const char *err = prot_error(pin);
+        if (!prot_fgets(buf, sizeof(buf), pin)) {
+            const char *err = prot_error(pin);
 
-          if (err != NULL) {
-              prot_printf(pout, "421 4.4.1 bye %s\r\n", err);
-              prot_flush(pout);
-          }
-          goto cleanup;
-      }
-      p = buf + strlen(buf) - 1;
-      if (p >= buf && *p == '\n') *p-- = '\0';
-      if (p >= buf && *p == '\r') *p-- = '\0';
+            if (err != NULL) {
+                prot_printf(pout, "421 4.4.1 bye %s\r\n", err);
+                prot_flush(pout);
+            }
+            goto cleanup;
+        }
+        p = buf + strlen(buf) - 1;
+        if (p >= buf && *p == '\n') *p-- = '\0';
+        if (p >= buf && *p == '\r') *p-- = '\0';
 
-      /* Only allow LHLO/NOOP/QUIT when there is a shutdown file */
-      if (!strchr("LlNnQq", buf[0]) &&
-          shutdown_file(buf, sizeof(buf))) {
+        /* Only allow LHLO/NOOP/QUIT when there is a shutdown file */
+        if (!strchr("LlNnQq", buf[0]) && shutdown_file(buf, sizeof(buf))) {
 
-          prot_printf(pout, "421 4.3.2 %s\r\n", buf);
-          prot_flush(pout);
+            prot_printf(pout, "421 4.3.2 %s\r\n", buf);
+            prot_flush(pout);
 
-          func->shutdown(0);
-      }
+            func->shutdown(0);
+        }
 
-      if (config_getswitch(IMAPOPT_CHATTY))
-        syslog(LOG_NOTICE, "command: %s", buf);
+        if (config_getswitch(IMAPOPT_CHATTY))
+            syslog(LOG_NOTICE, "command: %s", buf);
 
-      switch (buf[0]) {
-      case 'a':
-      case 'A':
-          if (!strncasecmp(buf, "auth ", 5)) {
-              char mech[128];
-              int sasl_result;
-              const void *val;
-              const char *user;
+        switch (buf[0]) {
+        case 'a':
+        case 'A':
+            if (!strncasecmp(buf, "auth ", 5)) {
+                char mech[128];
+                int sasl_result;
+                const void *val;
+                const char *user;
 
-              if (cd.authenticated > 0) {
-                  prot_printf(pout,
-                              "503 5.5.0 already authenticated\r\n");
-                  continue;
-              }
-              if (msg->rcpt_num != 0) {
-                  prot_printf(pout,
-                              "503 5.5.0 AUTH not permitted now\r\n");
-                  continue;
-              }
+                if (cd.authenticated > 0) {
+                    prot_printf(pout, "503 5.5.0 already authenticated\r\n");
+                    continue;
+                }
+                if (msg->rcpt_num != 0) {
+                    prot_printf(pout, "503 5.5.0 AUTH not permitted now\r\n");
+                    continue;
+                }
 
-              /* ok, what mechanism ? */
-              p = buf + 5;
-              while ((*p != ' ') && (*p != '\0')) {
-                  p++;
-              }
-              if (*p == ' ') {
-                  *p = '\0';
-                  p++;
-              } else {
-                  p = NULL;
-              }
-              strlcpy(mech, buf + 5, sizeof(mech));
+                /* ok, what mechanism ? */
+                p = buf + 5;
+                while ((*p != ' ') && (*p != '\0')) {
+                    p++;
+                }
+                if (*p == ' ') {
+                    *p = '\0';
+                    p++;
+                }
+                else {
+                    p = NULL;
+                }
+                strlcpy(mech, buf + 5, sizeof(mech));
 
-              r = saslserver(cd.conn, mech, p, "", "334 ", "",
-                             pin, pout, &sasl_result, NULL);
+                r = saslserver(cd.conn,
+                               mech,
+                               p,
+                               "",
+                               "334 ",
+                               "",
+                               pin,
+                               pout,
+                               &sasl_result,
+                               NULL);
 
-              if (r) {
-                  const char *errorstring = NULL;
-                  const char *userid = "-notset-";
+                if (r) {
+                    const char *errorstring = NULL;
+                    const char *userid = "-notset-";
 
-                  switch (r) {
-                  case IMAP_SASL_CANCEL:
-                      prot_printf(pout,
-                                  "501 5.5.4 client canceled authentication\r\n");
-                      break;
-                  case IMAP_SASL_PROTERR:
-                      errorstring = prot_error(pin);
+                    switch (r) {
+                    case IMAP_SASL_CANCEL:
+                        prot_printf(
+                            pout,
+                            "501 5.5.4 client canceled authentication\r\n");
+                        break;
+                    case IMAP_SASL_PROTERR:
+                        errorstring = prot_error(pin);
 
-                      prot_printf(pout,
-                                  "501 5.5.4 Error reading client response: %s\r\n",
-                                  errorstring ? errorstring : "");
-                      break;
-                  default:
-                      if (sasl_result == SASL_NOMECH) {
-                          prot_printf(pout,
-                                      "504 Unrecognized authentication type.\r\n");
-                          continue;
-                      }
-                      else {
-                          if (r != SASL_NOUSER)
-                              sasl_getprop(cd.conn, SASL_USERNAME, (const void **) &userid);
+                        prot_printf(
+                            pout,
+                            "501 5.5.4 Error reading client response: %s\r\n",
+                            errorstring ? errorstring : "");
+                        break;
+                    default:
+                        if (sasl_result == SASL_NOMECH) {
+                            prot_printf(
+                                pout,
+                                "504 Unrecognized authentication type.\r\n");
+                            continue;
+                        }
+                        else {
+                            if (r != SASL_NOUSER)
+                                sasl_getprop(cd.conn,
+                                             SASL_USERNAME,
+                                             (const void **) &userid);
 
-                          syslog(LOG_ERR, "badlogin: %s %s (%s) [%s]",
-                                 cd.clienthost, mech, userid, sasl_errdetail(cd.conn));
+                            syslog(LOG_ERR,
+                                   "badlogin: %s %s (%s) [%s]",
+                                   cd.clienthost,
+                                   mech,
+                                   userid,
+                                   sasl_errdetail(cd.conn));
 
-                          prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
+                            prometheus_increment(
+                                CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
 
-                          prot_printf(pout, "501 5.5.4 %s\r\n",
-                                      sasl_errstring((r == SASL_NOUSER ?
-                                                      SASL_BADAUTH : r),
-                                                     NULL, NULL));
-                      }
-                  }
+                            prot_printf(
+                                pout,
+                                "501 5.5.4 %s\r\n",
+                                sasl_errstring(
+                                    (r == SASL_NOUSER ? SASL_BADAUTH : r),
+                                    NULL,
+                                    NULL));
+                        }
+                    }
 
-                  reset_saslconn(&cd.conn);
-                  continue;
-              }
-              r = sasl_getprop(cd.conn, SASL_USERNAME, &val);
-              if (r != SASL_OK) {
-                  prot_printf(pout, "501 5.5.4 SASL Error\r\n");
-                  reset_saslconn(&cd.conn);
-                  goto nextcmd;
-              }
-              user = (const char *) val;
+                    reset_saslconn(&cd.conn);
+                    continue;
+                }
+                r = sasl_getprop(cd.conn, SASL_USERNAME, &val);
+                if (r != SASL_OK) {
+                    prot_printf(pout, "501 5.5.4 SASL Error\r\n");
+                    reset_saslconn(&cd.conn);
+                    goto nextcmd;
+                }
+                user = (const char *) val;
 
-              r = sasl_getprop(cd.conn, SASL_SSF, &val);
-              if (r != SASL_OK) {
-                  prot_printf(pout, "501 5.5.4 SASL Error\r\n");
-                  reset_saslconn(&cd.conn);
-                  goto nextcmd;
-              }
-              saslprops.ssf = *((sasl_ssf_t *) val);
+                r = sasl_getprop(cd.conn, SASL_SSF, &val);
+                if (r != SASL_OK) {
+                    prot_printf(pout, "501 5.5.4 SASL Error\r\n");
+                    reset_saslconn(&cd.conn);
+                    goto nextcmd;
+                }
+                saslprops.ssf = *((sasl_ssf_t *) val);
 
-              /* Create telemetry log */
-              deliver_logfd = telemetry_log(user, pin, pout, 0);
+                /* Create telemetry log */
+                deliver_logfd = telemetry_log(user, pin, pout, 0);
 
-              /* authenticated successfully! */
+                /* authenticated successfully! */
 
-              prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
-              syslog(LOG_NOTICE, "login: %s %s %s%s %s",
-                     cd.clienthost, user, mech,
-                     cd.starttls_done ? "+TLS" : "", "User logged in");
+                prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
+                syslog(LOG_NOTICE,
+                       "login: %s %s %s%s %s",
+                       cd.clienthost,
+                       user,
+                       mech,
+                       cd.starttls_done ? "+TLS" : "",
+                       "User logged in");
 
-              cd.authenticated = DIDAUTH;
-              prot_printf(pout, "235 Authenticated!\r\n");
+                cd.authenticated = DIDAUTH;
+                prot_printf(pout, "235 Authenticated!\r\n");
 
-              /* set protection layers */
-              prot_setsasl(pin,  cd.conn);
-              prot_setsasl(pout, cd.conn);
-              continue;
-          }
-          goto syntaxerr;
+                /* set protection layers */
+                prot_setsasl(pin, cd.conn);
+                prot_setsasl(pout, cd.conn);
+                continue;
+            }
+            goto syntaxerr;
 
-      case 'd':
-      case 'D':
+        case 'd':
+        case 'D':
             if (!strcasecmp(buf, "data")) {
                 int delivered = 0;
                 int j;
@@ -1161,69 +1215,85 @@ void lmtpmode(struct lmtp_func *func,
                     prot_printf(pout,
                                 "552 5.2.3 Message size (%d) exceeds fixed "
                                 "maximum message size (%" PRIi64 ")\r\n",
-                                msg->size, max_msgsize);
+                                msg->size,
+                                max_msgsize);
                     continue;
                 }
 
                 prometheus_increment(CYRUS_LMTP_RECEIVED_MESSAGES_TOTAL);
-                prometheus_apply_delta(CYRUS_LMTP_RECEIVED_BYTES_TOTAL, msg->size);
-                prometheus_apply_delta(CYRUS_LMTP_RECEIVED_RECIPIENTS_TOTAL, msg->rcpt_num);
+                prometheus_apply_delta(CYRUS_LMTP_RECEIVED_BYTES_TOTAL,
+                                       msg->size);
+                prometheus_apply_delta(CYRUS_LMTP_RECEIVED_RECIPIENTS_TOTAL,
+                                       msg->rcpt_num);
 
                 /* do delivery, report status */
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
 
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
-                    send_lmtp_error(pout, msg->rcpt[j]->status,
-                                    msg->rcpt[j]->resp);
+                    send_lmtp_error(
+                        pout, msg->rcpt[j]->status, msg->rcpt[j]->resp);
                 }
 
                 prometheus_increment(CYRUS_LMTP_TRANSMITTED_MESSAGES_TOTAL);
-                prometheus_apply_delta(CYRUS_LMTP_TRANSMITTED_BYTES_TOTAL, delivered * msg->size);
+                prometheus_apply_delta(CYRUS_LMTP_TRANSMITTED_BYTES_TOTAL,
+                                       delivered * msg->size);
 
                 goto rset;
             }
             goto syntaxerr;
 
-      case 'l':
-      case 'L':
-          if (!strncasecmp(buf, "lhlo ", 5)) {
-              int mechcount;
-              const char *mechs;
+        case 'l':
+        case 'L':
+            if (!strncasecmp(buf, "lhlo ", 5)) {
+                int mechcount;
+                const char *mechs;
 
-              prot_printf(pout, "250-%s\r\n"
-                                "250-8BITMIME\r\n"
-                                "250-ENHANCEDSTATUSCODES\r\n"
-                                "250-PIPELINING\r\n"
-                                "250-SIZE %" PRIu64 "\r\n",
-                          config_servername, max_msgsize);
+                prot_printf(pout,
+                            "250-%s\r\n"
+                            "250-8BITMIME\r\n"
+                            "250-ENHANCEDSTATUSCODES\r\n"
+                            "250-PIPELINING\r\n"
+                            "250-SIZE %" PRIu64 "\r\n",
+                            config_servername,
+                            max_msgsize);
 
-              if (tls_enabled() && !cd.starttls_done &&
-                  cd.authenticated == NOAUTH) {
-                  prot_printf(pout, "250-STARTTLS\r\n");
-              }
-              if ((cd.authenticated <= 0) &&
-                  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs,
-                                NULL, &mechcount) == SASL_OK &&
-                  mechcount > 0) {
-                  prot_printf(pout,"250-%s\r\n", mechs);
-              }
-              prot_printf(pout, "250-IGNOREQUOTA\r\n");
-              prot_printf(pout, "250 Ok SESSIONID=<%s>\r\n", session_id());
+                if (tls_enabled() && !cd.starttls_done
+                    && cd.authenticated == NOAUTH)
+                {
+                    prot_printf(pout, "250-STARTTLS\r\n");
+                }
+                if ((cd.authenticated <= 0)
+                    && sasl_listmech(cd.conn,
+                                     NULL,
+                                     "AUTH ",
+                                     " ",
+                                     "",
+                                     &mechs,
+                                     NULL,
+                                     &mechcount)
+                           == SASL_OK
+                    && mechcount > 0)
+                {
+                    prot_printf(pout, "250-%s\r\n", mechs);
+                }
+                prot_printf(pout, "250-IGNOREQUOTA\r\n");
+                prot_printf(pout, "250 Ok SESSIONID=<%s>\r\n", session_id());
 
-              strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
+                strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
 
-              session_new_id();
-              continue;
-          }
-          goto syntaxerr;
+                session_new_id();
+                continue;
+            }
+            goto syntaxerr;
 
-      case 'm':
-      case 'M':
+        case 'm':
+        case 'M':
             if (!cd.authenticated) {
                 if (config_getswitch(IMAPOPT_SOFT_NOAUTH)) {
                     prot_printf(pout, "430 Authentication required\r\n");
-                } else {
+                }
+                else {
                     prot_printf(pout, "530 Authentication required\r\n");
                 }
                 continue;
@@ -1232,25 +1302,26 @@ void lmtpmode(struct lmtp_func *func,
             if (!strncasecmp(buf, "mail ", 5)) {
                 char *tmp;
                 if (msg->return_path) {
-                    prot_printf(pout,
-                                "503 5.5.1 Nested MAIL command\r\n");
+                    prot_printf(pout, "503 5.5.1 Nested MAIL command\r\n");
                     continue;
                 }
                 /* +5 to get past "mail "
                  * +10 to get past "mail from:" */
-                if (strncasecmp(buf+5, "from:", 5) != 0 ||
-                    !(msg->return_path = parseaddr(buf+10))) {
+                if (strncasecmp(buf + 5, "from:", 5) != 0
+                    || !(msg->return_path = parseaddr(buf + 10)))
+                {
                     prot_printf(pout,
                                 "501 5.5.4 Syntax error in parameters\r\n");
                     continue;
                 }
-                tmp = buf+10+strlen(msg->return_path);
+                tmp = buf + 10 + strlen(msg->return_path);
 
                 /* is any other whitespace allow separating? */
                 while (*tmp == ' ') {
                     tmp++;
                     switch (*tmp) {
-                    case 'a': case 'A':
+                    case 'a':
+                    case 'A':
                         if (strncasecmp(tmp, "auth=", 5) != 0) {
                             goto badparam;
                         }
@@ -1258,14 +1329,16 @@ void lmtpmode(struct lmtp_func *func,
                         msg->authuser = parseautheq(&tmp);
                         if (msg->authuser) {
                             msg->authstate = auth_newstate(msg->authuser);
-                        } else {
+                        }
+                        else {
                             /* do we want to bounce mail because of this? */
                             /* i guess not. accept with no auth user */
                             msg->authstate = NULL;
                         }
                         break;
 
-                    case 'b': case 'B':
+                    case 'b':
+                    case 'B':
                         if (strncasecmp(tmp, "body=", 5) != 0) {
                             goto badparam;
                         }
@@ -1274,34 +1347,39 @@ void lmtpmode(struct lmtp_func *func,
                            body-value ::= "7BIT" / "8BITMIME" */
                         if (!strncasecmp(tmp, "7bit", 4)) {
                             tmp += 4;
-                        } else if (!strncasecmp(tmp, "8bitmime", 8)) {
+                        }
+                        else if (!strncasecmp(tmp, "8bitmime", 8)) {
                             tmp += 8;
-                        } else {
+                        }
+                        else {
                             prot_printf(pout,
-                              "501 5.5.4 Unrecognized BODY type\r\n");
+                                        "501 5.5.4 Unrecognized BODY type\r\n");
                             goto nextcmd;
                         }
                         break;
 
-                    case 's': case 'S':
+                    case 's':
+                    case 'S':
                         if (strncasecmp(tmp, "size=", 5) != 0) {
                             goto badparam;
                         }
                         tmp += 5;
                         /* make sure we have a value */
                         if (!Uisdigit(*tmp)) {
-                                prot_printf(pout,
-                                            "501 5.5.2 SIZE requires a value\r\n");
-                                goto nextcmd;
+                            prot_printf(pout,
+                                        "501 5.5.2 SIZE requires a value\r\n");
+                            goto nextcmd;
                         }
                         msg->size = strtoul(tmp, &p, 10);
                         tmp = p;
                         /* make sure the value is in range */
-                        if (errno == ERANGE || msg->size < 0 ||
-                            msg->size > max_msgsize) {
+                        if (errno == ERANGE || msg->size < 0
+                            || msg->size > max_msgsize)
+                        {
                             prot_printf(pout,
                                         "552 5.2.3 Message SIZE exceeds fixed "
-                                        "maximum message size (%" PRIi64 ")\r\n",
+                                        "maximum message size (%" PRIi64
+                                        ")\r\n",
                                         max_msgsize);
                             goto nextcmd;
                         }
@@ -1325,25 +1403,25 @@ void lmtpmode(struct lmtp_func *func,
             }
             goto syntaxerr;
 
-      case 'n':
-      case 'N':
+        case 'n':
+        case 'N':
             if (!strcasecmp(buf, "noop")) {
-                prot_printf(pout,"250 2.0.0 ok\r\n");
+                prot_printf(pout, "250 2.0.0 ok\r\n");
                 continue;
             }
             goto syntaxerr;
 
-      case 'q':
-      case 'Q':
+        case 'q':
+        case 'Q':
             if (!strcasecmp(buf, "quit")) {
-                prot_printf(pout,"221 2.0.0 bye\r\n");
+                prot_printf(pout, "221 2.0.0 bye\r\n");
                 prot_flush(pout);
                 goto cleanup;
             }
             goto syntaxerr;
 
-      case 'r':
-      case 'R':
+        case 'r':
+        case 'R':
             if (!strncasecmp(buf, "rcpt ", 5)) {
                 char *rcpt = NULL;
                 int ignorequota = 0;
@@ -1354,24 +1432,27 @@ void lmtpmode(struct lmtp_func *func,
                     continue;
                 }
                 if (!(msg->rcpt_num % RCPT_GROW)) { /* time to alloc more */
-                    msg->rcpt = (address_data_t **)
-                        xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) *
-                                 sizeof(address_data_t *));
+                    msg->rcpt = (address_data_t **) xrealloc(
+                        msg->rcpt,
+                        (msg->rcpt_num + RCPT_GROW + 1)
+                            * sizeof(address_data_t *));
                 }
                 /* +5 to get past "rcpt "
                  * +8 to get past "rcpt to:" */
-                if (strncasecmp(buf+5, "to:", 3) != 0 ||
-                    !(rcpt = parseaddr(buf+8))) {
+                if (strncasecmp(buf + 5, "to:", 3) != 0
+                    || !(rcpt = parseaddr(buf + 8)))
+                {
                     prot_printf(pout,
                                 "501 5.5.4 Syntax error in parameters\r\n");
                     continue;
                 }
 
-                tmp = buf+8+strlen(rcpt);
+                tmp = buf + 8 + strlen(rcpt);
                 while (*tmp == ' ') {
                     tmp++;
                     switch (*tmp) {
-                    case 'i': case 'I':
+                    case 'i':
+                    case 'I':
                         if (strncasecmp(tmp, "ignorequota", 12) != 0) {
                             goto badrparam;
                         }
@@ -1392,10 +1473,8 @@ void lmtpmode(struct lmtp_func *func,
                     continue;
                 }
 
-                r = process_recipient(rcpt,
-                                      ignorequota,
-                                      func->verify_user,
-                                      msg);
+                r = process_recipient(
+                    rcpt, ignorequota, func->verify_user, msg);
                 if (rcpt) free(rcpt); /* malloc'd in parseaddr() */
                 if (r) {
                     send_lmtp_error(pout, r, NULL);
@@ -1408,9 +1487,10 @@ void lmtpmode(struct lmtp_func *func,
             }
             else if (!strcasecmp(buf, "rset")) {
                 session_new_id();
-                prot_printf(pout, "250 2.0.0 Ok SESSIONID=<%s>\r\n", session_id());
+                prot_printf(
+                    pout, "250 2.0.0 Ok SESSIONID=<%s>\r\n", session_id());
 
-              rset:
+            rset:
                 if (msg) msg_free(msg);
                 msg_new(&msg, func->namespace);
 
@@ -1418,17 +1498,18 @@ void lmtpmode(struct lmtp_func *func,
             }
             goto syntaxerr;
 
-      case 's':
-      case 'S':
+        case 's':
+        case 'S':
 #ifdef HAVE_SSL
-            if (!strcasecmp(buf, "starttls") && tls_enabled() &&
-                !func->preauth) { /* don't need TLS for preauth'd connect */
+            if (!strcasecmp(buf, "starttls") && tls_enabled() && !func->preauth)
+            { /* don't need TLS for preauth'd connect */
 
                 /* XXX  discard any input pipelined after STARTTLS */
                 prot_flush(pin);
 
                 if (cd.starttls_done == 1) {
-                    prot_printf(pout, "454 4.3.3 %s\r\n",
+                    prot_printf(pout,
+                                "454 4.3.3 %s\r\n",
                                 "Already successfully executed STARTTLS");
                     continue;
                 }
@@ -1438,16 +1519,17 @@ void lmtpmode(struct lmtp_func *func,
                     continue;
                 }
 
-                r=tls_init_serverengine("lmtp",
-                                        5,   /* depth to verify */
-                                        1,   /* can client auth? */
-                                        NULL);
+                r = tls_init_serverengine("lmtp",
+                                          5, /* depth to verify */
+                                          1, /* can client auth? */
+                                          NULL);
 
                 if (r == -1) {
 
                     syslog(LOG_ERR, "[lmtpd] error initializing TLS");
 
-                    prot_printf(pout, "454 4.3.3 %s\r\n", "Error initializing TLS");
+                    prot_printf(
+                        pout, "454 4.3.3 %s\r\n", "Error initializing TLS");
                     continue;
                 }
 
@@ -1455,17 +1537,18 @@ void lmtpmode(struct lmtp_func *func,
                 /* must flush our buffers before starting tls */
                 prot_flush(pout);
 
-                r=tls_start_servertls(0, /* read */
-                                      1, /* write */
-                                      360, /* 6 minutes */
-                                      &saslprops,
-                                      NULL, /* no ALPN id for lmtp */
-                                      &(cd.tls_conn));
+                r = tls_start_servertls(0,   /* read */
+                                        1,   /* write */
+                                        360, /* 6 minutes */
+                                        &saslprops,
+                                        NULL, /* no ALPN id for lmtp */
+                                        &(cd.tls_conn));
 
                 /* if error */
-                if (r==-1) {
+                if (r == -1) {
                     syslog(LOG_NOTICE,
-                           "TLS negotiation failed: %s", cd.clienthost);
+                           "TLS negotiation failed: %s",
+                           cd.clienthost);
                     func->shutdown(EX_PROTOCOL);
                 }
 
@@ -1490,23 +1573,22 @@ void lmtpmode(struct lmtp_func *func,
 #endif /* HAVE_SSL*/
             goto syntaxerr;
 
-      case 'v':
-      case 'V':
+        case 'v':
+        case 'V':
             if (!strncasecmp(buf, "vrfy ", 5)) {
-                prot_printf(pout,
-                            "252 2.3.3 try RCPT to attempt delivery\r\n");
+                prot_printf(pout, "252 2.3.3 try RCPT to attempt delivery\r\n");
                 continue;
             }
             goto syntaxerr;
 
-      default:
-      syntaxerr:
+        default:
+        syntaxerr:
             prot_printf(pout, "500 5.5.2 Syntax error\r\n");
             continue;
-      }
+        }
     }
 
- cleanup:
+cleanup:
     /* free resources and return; this connection has been closed */
 
     if (msg) msg_free(msg);
@@ -1542,19 +1624,22 @@ static int revconvert_lmtp(const char *code)
         if (code[4] == '4' && code[6] == '3') {
             if (code[8] == '0') {
                 return IMAP_IOERROR;
-            } else if (code[8] == '1') {
+            }
+            else if (code[8] == '1') {
                 return IMAP_NOSPACE;
-            } else {
+            }
+            else {
                 return IMAP_IOERROR;
             }
         }
-        else if (code[4] == '4' && code [6] == '4') {
+        else if (code[4] == '4' && code[6] == '4') {
             return IMAP_SERVER_UNAVAILABLE;
         }
         else if (code[4] == '4' && code[6] == '2') {
             if (code[8] == '1') {
                 return IMAP_MAILBOX_MOVED;
-            } else {
+            }
+            else {
                 return IMAP_MAILBOX_BADFORMAT;
             }
         }
@@ -1566,14 +1651,16 @@ static int revconvert_lmtp(const char *code)
     case 550:
         if (code[4] == '5' && code[6] == '7') {
             return IMAP_PERMISSION_DENIED;
-        } else if (code[4] == '5' && code[6] == '1') {
+        }
+        else if (code[4] == '5' && code[6] == '1') {
             return IMAP_MAILBOX_NONEXISTENT;
         }
         return IMAP_PERMISSION_DENIED;
     case 552:
         if (code[6] == '2') {
             return IMAP_QUOTA_EXCEEDED;
-        } else if (code[6] == '3') {
+        }
+        else if (code[6] == '3') {
             return IMAP_MESSAGE_TOO_LARGE;
         }
         return IMAP_QUOTA_EXCEEDED;
@@ -1581,10 +1668,14 @@ static int revconvert_lmtp(const char *code)
         return IMAP_MESSAGE_BADHEADER; /* sigh, pick one */
 
     default:
-        if (ISGOOD(c)) return 0;
-        else if (TEMPFAIL(c)) return IMAP_AGAIN;
-        else if (PERMFAIL(c)) return IMAP_PROTOCOL_ERROR;
-        else return IMAP_AGAIN;
+        if (ISGOOD(c))
+            return 0;
+        else if (TEMPFAIL(c))
+            return IMAP_AGAIN;
+        else if (PERMFAIL(c))
+            return IMAP_PROTOCOL_ERROR;
+        else
+            return IMAP_AGAIN;
     }
 }
 
@@ -1592,19 +1683,17 @@ static int ask_code(const char *s)
 {
     int ret = 0;
 
-    if (s==NULL) return -1;
+    if (s == NULL) return -1;
 
     if (strlen(s) < 3) return -1;
 
     /* check to make sure 0-2 are digits */
-    if ((Uisdigit(s[0])==0) ||
-        (Uisdigit(s[1])==0) ||
-        (Uisdigit(s[2])==0))
+    if ((Uisdigit(s[0]) == 0) || (Uisdigit(s[1]) == 0) || (Uisdigit(s[2]) == 0))
     {
         return -1;
     }
 
-    ret = ((s[0]-'0')*100)+((s[1]-'0')*10)+(s[2]-'0');
+    ret = ((s[0] - '0') * 100) + ((s[1] - '0') * 10) + (s[2] - '0');
 
     return ret;
 }
@@ -1616,8 +1705,8 @@ static int ask_code(const char *s)
    if a read failed, '*code == 400', a temporary failure.
 
    returns an IMAP error code. */
-static int getlastresp(char *buf, int len, int *code, struct protstream *pin,
-                       strarray_t **sa)
+static int getlastresp(
+    char *buf, int len, int *code, struct protstream *pin, strarray_t **sa)
 {
     *code = 0;
 
@@ -1637,17 +1726,18 @@ static int getlastresp(char *buf, int len, int *code, struct protstream *pin,
     return 0;
 }
 
-static void pushmsg(struct protstream *in, struct protstream *out,
+static void pushmsg(struct protstream *in,
+                    struct protstream *out,
                     int isdotstuffed)
 {
     char buf[8192], *p;
     int lastline_hadendline = 1;
 
     /* -2: Might need room to add a \r\n\0 set */
-    while (prot_fgets(buf, sizeof(buf)-2, in)) {
+    while (prot_fgets(buf, sizeof(buf) - 2, in)) {
         /* dot stuff */
-        if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0]=='.')) {
-            (void)prot_putc('.', out);
+        if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0] == '.')) {
+            (void) prot_putc('.', out);
         }
         p = buf + strlen(buf) - 1;
         if (*p == '\n') {
@@ -1664,7 +1754,8 @@ static void pushmsg(struct protstream *in, struct protstream *out,
                    XXX ignored
                  */
                 lastline_hadendline = 1;
-            } else {
+            }
+            else {
                 /*
                  * We were unlucky enough to get a CR just before we ran
                  * out of buffer--put it back.
@@ -1673,7 +1764,8 @@ static void pushmsg(struct protstream *in, struct protstream *out,
                 *p = '\0';
                 lastline_hadendline = 0;
             }
-        } else {
+        }
+        else {
             lastline_hadendline = 0;
         }
 
@@ -1681,7 +1773,7 @@ static void pushmsg(struct protstream *in, struct protstream *out,
         while ((p = strchr(buf, '\r')) && p[1] != '\n') {
             /* Src/Target overlap, use memmove */
             /* strlen(p) will result in copying the NUL byte as well */
-            memmove(p, p+1, strlen(p));
+            memmove(p, p + 1, strlen(p));
         }
 
         prot_write(out, buf, strlen(buf));
@@ -1709,30 +1801,36 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 
     /* rset */
     prot_printf(conn->out, "RSET\r\n");
-    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
+    r = getlastresp(buf, sizeof(buf) - 1, &code, conn->in, NULL);
     if (!ISGOOD(code)) {
         goto failall;
     }
 
     if (config_auditlog) {
         parse_sessionid(buf, rsessionid);
-        syslog(LOG_NOTICE, "auditlog: proxy sessionid=<%s> remote=<%s>", session_id(), rsessionid);
+        syslog(LOG_NOTICE,
+               "auditlog: proxy sessionid=<%s> remote=<%s>",
+               session_id(),
+               rsessionid);
     }
 
     /* mail from */
     if (!txn->from) {
         prot_printf(conn->out, "MAIL FROM:<>");
-    } else if (txn->from[0] == '<') {
+    }
+    else if (txn->from[0] == '<') {
         prot_printf(conn->out, "MAIL FROM:%s", txn->from);
-    } else {
+    }
+    else {
         prot_printf(conn->out, "MAIL FROM:<%s>", txn->from);
     }
     if (CAPA(conn, CAPA_AUTH)) {
-        prot_printf(conn->out, " AUTH=%s",
+        prot_printf(conn->out,
+                    " AUTH=%s",
                     txn->auth && txn->auth[0] ? txn->auth : "<>");
     }
     prot_printf(conn->out, "\r\n");
-    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
+    r = getlastresp(buf, sizeof(buf) - 1, &code, conn->in, NULL);
     if (!ISGOOD(code)) {
         goto failall;
     }
@@ -1745,7 +1843,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
             prot_printf(conn->out, " IGNOREQUOTA");
         }
         prot_printf(conn->out, "\r\n");
-        r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
+        r = getlastresp(buf, sizeof(buf) - 1, &code, conn->in, NULL);
         if (r) {
             goto failall;
         }
@@ -1753,19 +1851,24 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
         if (ISGOOD(code)) {
             onegood = 1;
             txn->rcpt[j].result = RCPT_GOOD;
-        } else if (TEMPFAIL(code)) {
+        }
+        else if (TEMPFAIL(code)) {
             txn->rcpt[j].result = RCPT_TEMPFAIL;
-        } else if (PERMFAIL(code)) {
-            if(txn->tempfail_unknown_mailbox &&
-               txn->rcpt[j].r == IMAP_MAILBOX_NONEXISTENT) {
+        }
+        else if (PERMFAIL(code)) {
+            if (txn->tempfail_unknown_mailbox
+                && txn->rcpt[j].r == IMAP_MAILBOX_NONEXISTENT)
+            {
                 /* If there is a nonexistent error, we have been told
                  * to mask it (e.g. proxy got out-of-date mupdate data) */
                 txn->rcpt[j].result = RCPT_TEMPFAIL;
                 txn->rcpt[j].r = IMAP_AGAIN;
-            } else {
+            }
+            else {
                 txn->rcpt[j].result = RCPT_PERMFAIL;
             }
-        } else {
+        }
+        else {
             /* yikes?!? */
             code = 400;
             goto failall;
@@ -1778,7 +1881,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 
     /* data */
     prot_printf(conn->out, "DATA\r\n");
-    r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
+    r = getlastresp(buf, sizeof(buf) - 1, &code, conn->in, NULL);
     if (r) {
         goto failall;
     }
@@ -1796,8 +1899,8 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     for (j = 0; j < txn->rcpt_num; j++) {
         if (txn->rcpt[j].result == RCPT_GOOD) {
             /* expecting a status code for this recipient */
-            r = getlastresp(buf, sizeof(buf)-1, &code, conn->in,
-                            &txn->rcpt[j].resp);
+            r = getlastresp(
+                buf, sizeof(buf) - 1, &code, conn->in, &txn->rcpt[j].resp);
             if (r) {
                 /* technically, some recipients might've succeeded here,
                    but we'll be paranoid */
@@ -1807,11 +1910,14 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
             if (ISGOOD(code)) {
                 onegood = 1;
                 txn->rcpt[j].result = RCPT_GOOD;
-            } else if (TEMPFAIL(code)) {
+            }
+            else if (TEMPFAIL(code)) {
                 txn->rcpt[j].result = RCPT_TEMPFAIL;
-            } else if (PERMFAIL(code)) {
+            }
+            else if (PERMFAIL(code)) {
                 txn->rcpt[j].result = RCPT_PERMFAIL;
-            } else {
+            }
+            else {
                 /* yikes?!? */
                 txn->rcpt[j].result = RCPT_TEMPFAIL;
             }
@@ -1821,20 +1927,23 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     /* done with txn */
     return 0;
 
- failall:
+failall:
     /* something fatal happened during the transaction; we should assign
        'code' to all recipients and return */
     for (j = 0; j < txn->rcpt_num; j++) {
         if (ISGOOD(code)) {
             txn->rcpt[j].r = 0;
             txn->rcpt[j].result = RCPT_GOOD;
-        } else if (TEMPFAIL(code)) {
+        }
+        else if (TEMPFAIL(code)) {
             txn->rcpt[j].r = IMAP_AGAIN;
             txn->rcpt[j].result = RCPT_TEMPFAIL;
-        } else if (PERMFAIL(code)) {
+        }
+        else if (PERMFAIL(code)) {
             txn->rcpt[j].r = IMAP_PROTOCOL_ERROR;
             txn->rcpt[j].result = RCPT_PERMFAIL;
-        } else {
+        }
+        else {
             /* code should have been a valid number */
             abort();
         }

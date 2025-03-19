@@ -44,8 +44,8 @@
  */
 
 /* for size_t */
-#include <sys/types.h>
 #include "util.h"
+#include <sys/types.h>
 
 /* case insensitive string compare
  */
@@ -64,4 +64,3 @@ int strncasecmp(const char *str1, const char *str2, size_t n)
 
     return (n ? (int) TOLOWER(*str1) - (int) TOLOWER(*str2) : 0);
 }
-

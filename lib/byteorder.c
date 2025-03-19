@@ -1,4 +1,5 @@
-/* byteorder.c -- convert 32 and 64-bit values between host and network byte order
+/* byteorder.c -- convert 32 and 64-bit values between host and network byte
+ * order
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,12 +41,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <config.h>
 #include "byteorder.h"
+#include <config.h>
 
 #ifdef CYRUS_BYTESWAP
 
-#include <netinet/in.h>
+#    include <netinet/in.h>
 
 /* Structure used to swap the bytes in a 64-bit uint64_t. */
 union byteswap_64_u {
@@ -71,7 +72,6 @@ EXPORTED uint64_t _htonll(uint64_t x)
 
     return u2.a;
 }
-
 
 /* Function to byteswap big endian 64bit unsigned integers
  * back to little endian host order on little endian machines.

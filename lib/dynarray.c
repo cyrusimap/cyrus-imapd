@@ -76,12 +76,11 @@ EXPORTED void dynarray_free(struct dynarray **dap)
     *dap = NULL;
 }
 
-#define QUANTUM     16
+#define QUANTUM 16
 static inline int grow(int have, int want)
 {
     int x = MAX(QUANTUM, have);
-    while (x < want)
-        x *= 2;
+    while (x < want) x *= 2;
     return x;
 }
 
@@ -95,15 +94,12 @@ static inline int grow(int have, int want)
 static void ensure_alloc(struct dynarray *da, int newalloc)
 {
     assert(newalloc >= 0);
-    if (newalloc < da->alloc)
-        return;
+    if (newalloc < da->alloc) return;
     newalloc = grow(da->alloc, newalloc + 1);
-    da->data = xzrealloc(da->data,
-                         da->membsize * da->alloc,
-                         da->membsize * newalloc);
+    da->data =
+        xzrealloc(da->data, da->membsize * da->alloc, da->membsize * newalloc);
     da->alloc = newalloc;
 }
-
 
 static inline int adjust_index_ro(const struct dynarray *da, int idx)
 {
@@ -117,34 +113,36 @@ static inline int adjust_index_ro(const struct dynarray *da, int idx)
 static inline int adjust_index_rw(struct dynarray *da, int idx, int len)
 {
     if (idx >= da->count) {
-        ensure_alloc(da, idx+len);
-    } else if (idx < 0) {
+        ensure_alloc(da, idx + len);
+    }
+    else if (idx < 0) {
         idx += da->count;
-        if (idx >= 0 && len)
-            ensure_alloc(da, da->count+len);
-    } else if (len) {
-        ensure_alloc(da, da->count+len);
+        if (idx >= 0 && len) ensure_alloc(da, da->count + len);
+    }
+    else if (len) {
+        ensure_alloc(da, da->count + len);
     }
     return idx;
 }
 
-EXPORTED int dynarray_size(struct dynarray *da)
-{
-    return da->count;
-}
+EXPORTED int dynarray_size(struct dynarray *da) { return da->count; }
 
-__attribute__((unused))
-static char *dump(struct dynarray *da)
+__attribute__((unused)) static char *dump(struct dynarray *da)
 {
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "{membsize=%zu count=%d alloc=%d data=%p: ", da->membsize, da->count, da->alloc, da->data);
+    buf_printf(&buf,
+               "{membsize=%zu count=%d alloc=%d data=%p: ",
+               da->membsize,
+               da->count,
+               da->alloc,
+               da->data);
     int i;
     for (i = 0; i < da->alloc; i++) {
         void *memb = da->data + i * da->membsize;
         buf_putc(&buf, '[');
         size_t j;
         for (j = 0; j < da->membsize; j++) {
-            buf_printf(&buf, "%02x", *((unsigned char*) memb + j) & 0xff);
+            buf_printf(&buf, "%02x", *((unsigned char *) memb + j) & 0xff);
             if (j < da->membsize - 1) buf_putc(&buf, ' ');
         }
         buf_putc(&buf, ']');
@@ -155,37 +153,34 @@ static char *dump(struct dynarray *da)
 
 EXPORTED void dynarray_append(struct dynarray *da, void *memb)
 {
-    ensure_alloc(da, da->count+1);
+    ensure_alloc(da, da->count + 1);
     memcpy(da->data + da->count * da->membsize, memb, da->membsize);
     da->count++;
 }
 
 EXPORTED void dynarray_set(struct dynarray *da, int idx, void *memb)
 {
-    if ((idx = adjust_index_rw(da, idx, 0)) < 0)
-        return;
+    if ((idx = adjust_index_rw(da, idx, 0)) < 0) return;
     memcpy(da->data + idx * da->membsize, memb, da->membsize);
-    if (idx >= da->count)
-        da->count = idx + 1;
+    if (idx >= da->count) da->count = idx + 1;
 }
 
 EXPORTED void *dynarray_nth(const struct dynarray *da, int idx)
 {
-    if ((idx = adjust_index_ro(da, idx)) < 0)
-        return NULL;
+    if ((idx = adjust_index_ro(da, idx)) < 0) return NULL;
     return da->data + idx * da->membsize;
 }
 
 EXPORTED void dynarray_truncate(struct dynarray *da, int newlen)
 {
-    if (newlen == da->count)
-        return;
+    if (newlen == da->count) return;
 
     if (newlen > da->count) {
         ensure_alloc(da, newlen);
-    } else {
+    }
+    else {
         int i;
-        for (i = newlen ; i < da->count ; i++) {
+        for (i = newlen; i < da->count; i++) {
             memset(da->data + i * da->membsize, 0, da->membsize);
         }
     }
@@ -197,6 +192,8 @@ EXPORTED void dynarray_sort(struct dynarray *da,
 {
     if (!da || !da->count) return;
 
-    qsort(da->data, da->count, da->membsize,
-            (int (*)(const void *, const void *))compare);
+    qsort(da->data,
+          da->count,
+          da->membsize,
+          (int (*)(const void *, const void *)) compare);
 }
