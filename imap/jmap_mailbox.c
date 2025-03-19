@@ -2380,7 +2380,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                       "totalThreads", 0, "unreadThreads", 0);
 
     if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
-	json_object_set_new(*mbox, "uniqueId", json_string(mbentry->uniqueid));
+        json_object_set_new(*mbox, "uniqueId", json_string(mbentry->uniqueid));
     }
 
     /* Set server defaults */
