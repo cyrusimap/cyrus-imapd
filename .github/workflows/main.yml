@@ -22,12 +22,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [ "gcc", "clang" ]
+        compiler: [ "--gcc", "--clang" ]
         san: [ "" ]
         include:
-          - san: "-fsanitize=undefined"
-            ubsan_options: "print_stacktrace=1:halt_on_error=1"
-            compiler: gcc
+          - san: "--ubsan"
+            compiler: "--gcc"
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
@@ -49,12 +48,8 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
-      env:
-        CC: "${{ matrix.compiler }}"
-        CYRUS_SAN_FLAGS: "${{ matrix.san }}"
-        UBSAN_OPTIONS: "${{ matrix.ubsan_options }}"
       shell: bash
-      run: cyd build
+      run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}"
     - name: report version information
       shell: bash
       run: |
@@ -98,7 +93,7 @@ jobs:
       shell: bash
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
-        LSAN_OPTIONS=suppressions=leaksanitizer.suppress CYRUS_SAN_FLAGS="-fsanitize=address -static-libasan" ./tools/build-with-cyruslibs.sh
+        cyd build --gcc --asan
     - name: report version information
       shell: bash
       run: |
@@ -130,7 +125,7 @@ jobs:
       shell: bash
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
-        ./tools/build-with-cyruslibs.sh
+        cyd build
     - name: make check with valgrind
       shell: bash
       run: |
