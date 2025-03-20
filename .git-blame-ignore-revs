@@ -8,5 +8,8 @@
 #
 # $ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
+# Remove ALL tabs (again), 2025-03-06
+be1c081f8acc88ce29ff94baac585a8a995747d4
+
 # Remove ALL tabs, 2015-06-14
 1f19b582295691fc56b76ee43377defb17869ecf
