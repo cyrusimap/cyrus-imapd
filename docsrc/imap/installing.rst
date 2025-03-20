@@ -181,8 +181,8 @@ Here's how to do so for Debian/Ubuntu.  Use the provided
 ``statoverride`` facility to manage the ownership and permissions of
 these directories::
 
-    sudo dpkg-statoverride cyrus mail 755 /run/cyrus
-    sudo dpkg-statoverride cyrus mail 750 /run/cyrus/socket
+    sudo dpkg-statoverride --add cyrus mail 755 /run/cyrus
+    sudo dpkg-statoverride --add cyrus mail 750 /run/cyrus/socket
 
 Then you can use something like this in your init script (like those
 packaged by Debian team)::
