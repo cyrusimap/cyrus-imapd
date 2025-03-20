@@ -12,18 +12,21 @@ on:
       - master
       - main
       - 'cyrus-imapd-*'
+
+env:
+  CYRUS_CLONE_ROOT: ${{ github.workspace }}
+
 jobs:
   build:
     name: Cassandane
     strategy:
       fail-fast: false
       matrix:
-        compiler: [ "gcc", "clang" ]
+        compiler: [ "--gcc", "--clang" ]
         san: [ "" ]
         include:
-          - san: "-fsanitize=undefined"
-            ubsan_options: "print_stacktrace=1:halt_on_error=1"
-            compiler: gcc
+          - san: "--ubsan"
+            compiler: "--gcc"
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
@@ -32,10 +35,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: install missing or frequently-updated deps
-      shell: bash
-      run: |
-        cpanm Mail::IMAPTalk # in image, but fetch latest!
     - name: setup git safe directory
       shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
@@ -49,14 +48,8 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
-      env:
-        CC: "${{ matrix.compiler }}"
-        CYRUS_SAN_FLAGS: "${{ matrix.san }}"
-        UBSAN_OPTIONS: "${{ matrix.ubsan_options }}"
       shell: bash
-      run: |
-        echo "building cyrus version" $(./tools/git-version.sh)
-        ./tools/build-with-cyruslibs.sh
+      run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}"
     - name: report version information
       shell: bash
       run: |
@@ -64,22 +57,14 @@ jobs:
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
-    - name: set up cassandane
-      working-directory: cassandane
-      shell: bash
-      run: |
-        cp -af cassandane.ini.dockertests cassandane.ini
-        chown cyrus:mail cassandane.ini
-        make -j8
     - name: run cassandane quietly
       id: cass1
       continue-on-error: true
-      working-directory: cassandane
-      run: setpriv --reuid=cyrus --regid=mail --clear-groups --inh-caps='-chown,-dac_override,-dac_read_search,-fowner,-fsetid,-kill,-setgid,-setuid,-setpcap,-linux_immutable,-net_bind_service,-net_broadcast,-net_admin,-net_raw,-ipc_lock,-ipc_owner,-sys_module,-sys_rawio,-sys_chroot,-sys_ptrace,-sys_pacct,-sys_admin,-sys_boot,-sys_nice,-sys_resource,-sys_time,-sys_tty_config,-mknod,-lease,-audit_write,-audit_control,-setfcap,-mac_override,-mac_admin,-syslog,-wake_alarm,-block_suspend,-audit_read,-cap_38,-cap_39,-cap_40' ./testrunner.pl --slow -f prettier -j 8 !Test::Core
+      # We haven't figured out how to make Test::Core work in actions yet.
+      run: cyd test "!Test::Core"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
-      working-directory: cassandane
-      run: setpriv --reuid=cyrus --regid=mail --clear-groups --inh-caps='-chown,-dac_override,-dac_read_search,-fowner,-fsetid,-kill,-setgid,-setuid,-setpcap,-linux_immutable,-net_bind_service,-net_broadcast,-net_admin,-net_raw,-ipc_lock,-ipc_owner,-sys_module,-sys_rawio,-sys_chroot,-sys_ptrace,-sys_pacct,-sys_admin,-sys_boot,-sys_nice,-sys_resource,-sys_time,-sys_tty_config,-mknod,-lease,-audit_write,-audit_control,-setfcap,-mac_override,-mac_admin,-syslog,-wake_alarm,-block_suspend,-audit_read,-cap_38,-cap_39,-cap_40' ./testrunner.pl -f pretty -j 8 --rerun
+      run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
       if: always()
       run: cat /tmp/cass/*/conf/log/syslog
@@ -108,7 +93,7 @@ jobs:
       shell: bash
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
-        LSAN_OPTIONS=suppressions=leaksanitizer.suppress CYRUS_SAN_FLAGS="-fsanitize=address -static-libasan" ./tools/build-with-cyruslibs.sh
+        cyd build --gcc --asan
     - name: report version information
       shell: bash
       run: |
@@ -140,7 +125,7 @@ jobs:
       shell: bash
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
-        ./tools/build-with-cyruslibs.sh
+        cyd build
     - name: make check with valgrind
       shell: bash
       run: |
