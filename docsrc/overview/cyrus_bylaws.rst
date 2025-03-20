@@ -26,7 +26,6 @@ The members of the Core Developers group are:
 * Bron Gondwana
 * ellie timoney
 * Ken Murchison
-* Matt Selsky
 * Robert Stepanek
 
 III. The Release Engineer
