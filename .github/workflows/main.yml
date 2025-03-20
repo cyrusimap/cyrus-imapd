@@ -39,7 +39,7 @@ jobs:
       shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
     - name: fetch upstream release tags
-      # if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
+      if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
       shell: bash
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
