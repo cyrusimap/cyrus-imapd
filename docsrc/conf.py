@@ -42,6 +42,10 @@ extensions = [
     "myst_parser",
 ]
 
+myst_enable_extensions = [
+    "substitution",
+]
+
 extensions.append("sphinxlocal.roles.cyrusman")
 extensions.append("sphinxlocal.builders.gitstamp")
 
@@ -486,6 +490,10 @@ rst_prolog += """
 ## rst_prolog += """
 ## .. |imap_version_master_renamed| replace:: 3.0
 ## """
+
+common_substitutions = {
+"cli-dash-c-text": "Use the specified configuration file *config-file* rather than the default :cyrusman:`imapd.conf(5)`."
+}
 
 # Bloilerplate configuration file texts.
 rst_prolog += """
