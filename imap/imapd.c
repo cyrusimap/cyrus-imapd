@@ -4687,6 +4687,24 @@ out:
     quota_free(&q);
 }
 
+static void prot_print_client_capa(struct protstream *pout, unsigned capa)
+{
+    if (capa & CAPA_IMAP4REV2) {
+        prot_puts(pout, " IMAP4rev2");
+    }
+    if (capa & CAPA_CONDSTORE) {
+        prot_puts(pout, " CONDSTORE");
+    }
+    if (capa & CAPA_QRESYNC) {
+        prot_puts(pout, " QRESYNC");
+    }
+    if (capa & CAPA_UIDONLY) {
+        prot_puts(pout, " UIDONLY");
+    }
+    if (capa & CAPA_UTF8_ACCEPT) {
+        prot_puts(pout, " UTF8=ACCEPT");
+    }
+}
 
 /*
  * Perform a SELECT/EXAMINE/BBOARD command
@@ -4878,13 +4896,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
             /* Enable client capabilities on new backend */
             proxy_gentag(mytag, sizeof(mytag));
             prot_printf(backend_current->out, "%s Enable", mytag);
-            if (client_capa & CAPA_QRESYNC)
-                prot_printf(backend_current->out, " Qresync");
-            else if (client_capa & CAPA_CONDSTORE)
-                prot_printf(backend_current->out, " Condstore");
-            else if (client_capa & CAPA_IMAP4REV2)
-                prot_printf(backend_current->out, " IMAP4rev2");
-            prot_printf(backend_current->out, "\r\n");
+            prot_print_client_capa(backend_current->out, client_capa);
+            prot_puts(backend_current->out, "\r\n");
             pipe_until_tag(backend_current, mytag, 0);
         }
 
@@ -14626,32 +14639,35 @@ static void cmd_enable(char *tag)
     /* filter out already enabled extensions */
     new_capa ^= client_capa;
 
-    /* RFC 9051, 6.3.1:
-     * The ENABLED response is sent even if no extensions were enabled. */
-    prot_printf(imapd_out, "* ENABLED");
-    if (new_capa & CAPA_IMAP4REV2) {
-        /* Tell idled to start sending mailbox updates */
-        strarray_t key = { 1, 0, &imapd_userid }; // avoid memory alloc
-
-        idle_start(IMAP_NOTIFY_MAILBOX, 0, FILTER_PERSONAL, &key);
-
-        prot_printf(imapd_out, " IMAP4rev2");
+    if (new_capa & (CAPA_UTF8_ACCEPT | CAPA_IMAP4REV2)) {
         imapd_namespace.isutf8 = 1;
+
+        if (new_capa & CAPA_IMAP4REV2) {
+            /* Tell idled to start sending mailbox updates */
+            strarray_t key = { 1, 0, &imapd_userid }; // avoid memory alloc
+
+            idle_start(IMAP_NOTIFY_MAILBOX, 0, FILTER_PERSONAL, &key);
+        }
     }
-    if (new_capa & CAPA_CONDSTORE) {
-        prot_printf(imapd_out, " CONDSTORE");
+
+    if (ptrarray_size(&backend_cached)) {
+        /* ENABLE on all remote mailboxes */
+        for (int i = 0; i < ptrarray_size(&backend_cached); i++) {
+            struct backend *be = ptrarray_nth(&backend_cached, i);
+
+            prot_printf(be->out, "%s ENABLE", tag);
+            prot_print_client_capa(be->out, new_capa);
+            prot_puts(be->out, "\r\n");
+            pipe_until_tag(be, tag, 0);
+        }
     }
-    if (new_capa & CAPA_QRESYNC) {
-        prot_printf(imapd_out, " QRESYNC");
+    else {
+        /* RFC 9051, 6.3.1:
+         * The ENABLED response is sent even if no extensions were enabled. */
+        prot_puts(imapd_out, "* ENABLED");
+        prot_print_client_capa(imapd_out, new_capa);
+        prot_puts(imapd_out, "\r\n");
     }
-    if (new_capa & CAPA_UIDONLY) {
-        prot_printf(imapd_out, " UIDONLY");
-    }
-    if (new_capa & CAPA_UTF8_ACCEPT) {
-        prot_printf(imapd_out, " UTF8=ACCEPT");
-        imapd_namespace.isutf8 = 1;
-    }
-    prot_printf(imapd_out, "\r\n");
 
     /* track the new capabilities */
     client_capa |= new_capa;

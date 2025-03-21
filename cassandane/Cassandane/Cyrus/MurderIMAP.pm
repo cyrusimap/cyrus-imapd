@@ -139,6 +139,16 @@ sub test_frontend_commands
     $self->assert_not_null($result);
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
+    # enable should be proxied through
+    $result = $frontend->enable('qresync');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # should be able to fetch vanished
+    $result = $frontend->uid(1);
+    $result = $frontend->fetch('1:*', ['FLAGS'],
+                               ['CHANGEDSINCE', '1', 'VANISHED']);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
     # XXX test other commands
 }
 
