@@ -1,0 +1,23 @@
+
+Description:
+
+Use the 'jmap_preview_annot' option to enable/disable
+the IMAP PREVIEW capability and the FETCH PREVIEW attribute.
+
+Config changes:
+
+The IMAP PREVIEW extension is now enabled ONLY if the 'jmap_preview_annot'
+option is non-NULL and begins with the '/shared/' prefix.
+
+
+Upgrade instructions:
+
+Note that existing installations that DID NOT set the 'jmap_preview_annot'
+option will no longer advertise the IMAP PREVIEW capability or accept the
+FETCH PREVIEW attribute.  Previously, if not set, FETCH PREVIEW would return
+NIL.
+
+
+GitHub issue:
+
+Fixes issue #4665
