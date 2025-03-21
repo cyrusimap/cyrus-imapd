@@ -211,6 +211,7 @@ static int imapd_compress_done = 0; /* have we done a successful compress? */
 static const char *plaintextloginalert = NULL;
 static const char *imapd_jmapaccess_url = NULL;
 static int imapd_jmapaccess_enabled = 0;
+static int imapd_preview_enabled = 0;
 static int ignorequota = 0;
 static int sync_sieve_mailbox_enabled = 0;
 static int sync_archive_enabled = 0;
@@ -451,7 +452,8 @@ static struct capa_struct base_capabilities[] = {
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
     { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
-    { "PREVIEW",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8970 */
+    { "PREVIEW",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8970 */
+      { .statep = &imapd_preview_enabled }                    },
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     { "QUOTA=RES-",            CAPA_POSTAUTH|CAPA_MULTI,         /* RFC 9208 */
@@ -1092,6 +1094,9 @@ int service_init(int argc, char **argv, char **envp)
 
     imapd_jmapaccess_url = config_getstring(IMAPOPT_JMAPACCESS_URL);
     imapd_jmapaccess_enabled = !!imapd_jmapaccess_url;
+
+    const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
+    imapd_preview_enabled = !strncmpsafe(annot, "/shared/", 8);
 
     /* setup for sending IMAP IDLE/NOTIFY notifications */
     if ((imapd_idle_enabled = idle_enabled())) {
@@ -5466,7 +5471,7 @@ badannotation:
             break;
 
         case 'P':
-            if (!strcmp(fetchatt.s, "PREVIEW")) {
+            if (imapd_preview_enabled && !strcmp(fetchatt.s, "PREVIEW")) {
                 fa->fetchitems |= FETCH_PREVIEW;
                 if (c == ' ') {
                     c = prot_getc(imapd_in);

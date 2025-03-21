@@ -55,7 +55,13 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ adminstore => 1 }, @_);
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(
+        jmap_preview_annot => '/shared/vendor/messagingengine.com/preview',
+    );
+
+    return $class->SUPER::new({ config => $config, adminstore => 1 }, @_);
 }
 
 sub set_up
