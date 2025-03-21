@@ -164,7 +164,11 @@ are listed with ``<none>''.
   (e.g., from /dev/urandom) to create a challenge in the banner. */
 
 { "allowdeleted", 0, SWITCH, "3.1.8" }
-/* Allow access to deleted and expunged data via vendor.cmu-* access. */
+/* Allow access to deleted and expunged data in LIST and SELECT commands.
+   If enabled, use the LIST selection option "vendor.cmu-include-deleted"
+   to include deleted mailboxes in the LIST result. For SELECT, use the
+   "VENDOR.CMU-INCLUDE-EXPUNGED" parameter to include expunged messages
+   in the SELECT result. */
 
 { "allownewnews", 0, SWITCH, "2.3.17" }
 /* Allow use of the NNTP NEWNEWS command.
