@@ -12,4 +12,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta6
 *   Added support for optionally adding Content-MD5 header to responses (see httpcontentmd5 option)
 *   Fixed time-based queries for components other than VEVENT
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

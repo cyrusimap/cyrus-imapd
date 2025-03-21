@@ -14,4 +14,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta7
 *   Added replacement functions for those not present in libxml2 < v2.8.0
 *   Plugged a few more memory leaks found by Valgrind.
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

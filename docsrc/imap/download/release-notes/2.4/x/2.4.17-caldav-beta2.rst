@@ -9,4 +9,4 @@ Changes to the Cyrus IMAP Server since 2.4.17-caldav-beta1
 *   Fixed bug where calendars and addressbooks were using the same mailbox type flag
 *   Fixed [un]signed int / size_t mismatches in formatted output
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

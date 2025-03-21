@@ -1,6 +1,5 @@
 .. _imap-release-notes-2.4:
 
-=======================
 Cyrus IMAP 2.4 Releases
 =======================
 
@@ -9,4 +8,4 @@ Cyrus IMAP 2.4 Releases
     :glob:
 
     x/?.?.?
-    x/?.?.??
+    x/?.?.??*
