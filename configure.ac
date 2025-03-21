@@ -2352,33 +2352,15 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                        have_ppvr=no
                      ])
 
-AX_PYTHON_MODULE([git], [], [python2])
+AX_PYTHON_MODULE([git], [], [python3])
 AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
-        [*],    [
-    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
-    AX_PYTHON_MODULE([git], [], [python3])
-    AS_CASE([$HAVE_PYMOD_GIT],
-            [yes],  [],
-            [*],    [WARN_DOCDEPS([GitPython])])
-])
+        [*],    [WARN_DOCDEPS([GitPython])])
 
-# XXX icky and slightly bogus* to have to duplicate this python2/python3 mess,
-# XXX but i think it's not worth generalising now when we'll surely drop
-# XXX python2 support sooner or later anyway
-# XXX (* this check inherits the successful PYTHON from the check above, and
-# XXX doesn't actually check both despite looking like it will.  that's fine...
-# XXX it only works if both modules are installed for the same python anyway!)
-AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python2])
+AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python3])
 AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
         [yes],  [],
-        [*],    [
-    unset PYTHON # work around AX_PYTHON_MODULE not cleaning up
-    AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python3])
-    AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
-            [yes],  [],
-            [*],    [WARN_DOCDEPS([sphinx_rtd_theme])])
-])
+        [*],    [WARN_DOCDEPS([sphinx_rtd_theme])])
 
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
     [ test -n "$SPHINX_BUILD" \
