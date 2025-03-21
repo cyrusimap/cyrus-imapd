@@ -153,9 +153,9 @@ sub print_man2rst {
     my $result = '';
 
     # If we're already in a section, and tabs is 0, set it to 1
-    if ($section == 1 && $tabs == 0) {
-        $tabs = 1;
-    }
+    #if ($section == 1 && $tabs == 0) {
+    #    $tabs = 1;
+    #}
 
     # We have a hanging indent from the last pass
     if ($inl > 0) {
