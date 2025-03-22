@@ -440,9 +440,23 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
     unsigned int i;
+    int keep = 0;
 
-    /* otherwise, we're expiring messages by sent date */
-    if (record->gmtime < erock->expire_mark) {
+    /* check whether we expire by sentdate or savedate */
+    time_t message_time = record->gmtime;
+    if (config_getswitch(IMAPOPT_EXPIRE_BY_SAVEDATE))
+        message_time = record->savedate;
+
+    /* Keep all messages which are too new to expire */
+    if (message_time >= erock->expire_mark)
+        keep = 1;
+
+    /* Keep flagged messages if configured to */
+    if ((record->system_flags & FLAG_FLAGGED) &&
+        config_getswitch(IMAPOPT_EXPIRE_KEEP_FLAGGED))
+        keep = 1;
+
+    if (!keep) {
         erock->messages_expired++;
         return 1;
     }
