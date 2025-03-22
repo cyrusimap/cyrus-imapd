@@ -6,14 +6,11 @@ Releasing Cyrus IMAP - normal releases
 
 .. contents::
 
-These instructions are specifically for doing point releases (x.y.z) from
-branches that contain RST-based documentation and infrastructure.  This
-includes 2.5 and later versions.
+These instructions are specifically for doing point releases. Those are
+releases that change the *z* in ``x.y.z``.
 
 For snapshot releases from the master branch, see
 :ref:`imap-developer-snapshot-releasing`
-
-For new releases from ancient branches, see :ref:`imap-developer-ancient-releasing`
 
 For major (x.y) releases, you will follow this process for publishing the
 release tarballs, but there are additional steps before and around that,
@@ -39,7 +36,8 @@ Order of operations
 ===================
 
 Sometimes you're releasing several new versions all at once(ish), for example
-maybe there's been a security fix that affected 2.4, 2.5 and 3.0.
+maybe there's been a security fix that affected 3.12, 3.10 and 3.8.  (Heaven
+forbid.)
 
 Github's release page will put a "Latest Release" graphic on the release with
 the newest tag (by timestamp, I think).  This means that, if you're doing new
@@ -47,8 +45,8 @@ releases for several different versions, you want to do the oldest one first,
 and only do the release for the current-stable branch last.
 
 If you start at the current stable branch and then work your way backwards
-through the older ones, you'll get Github saying "2.5.15 is the Latest
-Release" even though 3.0.13 was also just released... so, even though
+through the older ones, you'll get Github saying "3.8.15 is the Latest
+Release" even though 3.12.3 was also just released... so, even though
 releasing the current-stable fix feels more urgent, suck it up and get the
 older-branch ones out first.
 
@@ -70,7 +68,7 @@ correct and complete.
 Pre-release testing
 ===================
 
-1. Ensure your git repository is clean, using something like ``git clean -xfd``.
+1. Ensure your git repository is clean, using something like ``git clean -dfx``.
    Note that this command will destroy any uncommitted work you might have,
    so make sure your ducks are in line before proceeding.
 2. Generate a configure script: ``autoreconf -i -s``
@@ -84,7 +82,7 @@ Pre-release testing
 5. ``make distcheck`` can only test so much (it doesn't know about cunit or
    cassandane), so you also need to check the tarball against those.
 
-   i.    The tarball will be called something like ``cyrus-imapd-3.0.0-rc2-23-g0241b22.tar.gz``
+   i.    The tarball will be called something like ``cyrus-imapd-3.12.2-rc2-23-g0241b22.tar.gz``
          (this corresponds to the ``git describe`` output).
    ii.   Extract it: ``tar xfz cyrus-imapd-*.tar.gz`` (substitute version for ``*``).
    iii.  Change into the directory: ``cd cyrus-imapd-*``
@@ -98,16 +96,12 @@ Pre-release testing
          testing.
 
 .. Note::
-    ``make distcheck`` doesn't work on the 2.5 branch.  For 2.5, just use
-    ``make dist`` instead.
-
-.. Note::
     Realistically, there's usually some set of expected Cassandane failures
-    from each Cyrus branch, especially for 2.5.  If you're doing releases
-    regularly, you've probably got a good gut feel for which failures are a
-    problem and which ones are just "that old thing".  If you don't do
-    releases regularly, try to pull in someone who does for guidance about
-    which failures are ignorable, and which should be a source of stress.
+    from each Cyrus branch.  If you're doing releases regularly, you've
+    probably got a good gut feel for which failures are a problem and which
+    ones are just "that old thing".  If you don't do releases regularly, try to
+    pull in someone who does for guidance about which failures are ignorable,
+    and which should be a source of stress.
 
     If in doubt, try building and testing the previous release from the same
     series, and compare the test results.
@@ -136,7 +130,7 @@ Note: it is absolutely critical that your repository is clean and your local
 commits have been pushed upstream at this point.  If they are not, and if
 anybody else pushes in the meantime, you will end up with a mess.
 
-1. Ensure your repository is clean again: ``git clean -xfd``
+1. Ensure your repository is clean again: ``git clean -dfx``
 2. Create a signed, annotated tag for the new version: ``git tag -s cyrus-imapd-<version>``
 3. You will be prompted to enter a commit message for the tag.  I use the
    following, just because it's what the old instructions said::
@@ -181,11 +175,6 @@ When making a cyrus-imapd release, you need to add the new release notes
 file to each relevant cyrus-imapd branch.  You also need to check and
 update the contents of ``docsrc/conf.py`` on each branch AND the cyrus-sasl
 repository.
-
-Sometimes you can just cherry-pick the commits around, but note that the
-2.5 website stores release notes files in a different path, so if you
-bother to copy release notes back to this branch, a naive cherry-pick will
-not put them in the right place!
 
 This step often gets forgotten, so if you actually follow it, and notice
 some missing versions, just go ahead and add them while you're there.
