@@ -89,6 +89,7 @@ static void usage(void)
 /* Gather the build configuration parameters as JSON object */
 static json_t *buildinfo()
 {
+    json_t *compilation = json_object();
     json_t *component = json_object();
     json_t *dependency = json_object();
     json_t *database = json_object();
@@ -98,6 +99,7 @@ static json_t *buildinfo()
     json_t *version = json_object();
     json_t *ical = json_object();
 
+    json_object_set_new(buildconf, "compilation", compilation);
     json_object_set_new(buildconf, "component", component);
     json_object_set_new(buildconf, "dependency", dependency);
     json_object_set_new(buildconf, "database", database);
@@ -349,6 +351,38 @@ static json_t *buildinfo()
 #else
     json_object_set_new(version, "FORTIFY_LEVEL",
                                  json_integer(0));
+#endif
+
+#if defined WITH_ASAN
+    json_object_set_new(compilation, "ASAN", json_true());
+#else
+    json_object_set_new(compilation, "ASAN", json_false());
+#endif
+
+#if defined WITH_STATIC_ASAN
+    json_object_set_new(compilation, "STATIC_ASAN", json_true());
+#else
+    json_object_set_new(compilation, "STATIC_ASAN", json_false());
+#endif
+
+#if defined WITH_UBSAN
+    json_object_set_new(compilation, "UBSAN", json_true());
+#else
+    json_object_set_new(compilation, "UBSAN", json_false());
+#endif
+
+#if defined WITH_STATIC_UBSAN
+    json_object_set_new(compilation, "STATIC_UBSAN", json_true());
+#else
+    json_object_set_new(compilation, "STATIC_UBSAN", json_false());
+#endif
+
+/* only detected if ASAN or UBSAN is true, so we won't fill in a WITH_GCC
+   false f it isn't set
+*/
+
+#if defined WITH_GCC
+    json_object_set_new(compilation, "WITH_GCC", json_true());
 #endif
 
     /* Whew ... */
