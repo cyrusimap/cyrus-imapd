@@ -1,3 +1,5 @@
+.. _cyd-and-dar:
+
 =========================================
 Overview of Cyrus development environment
 =========================================
