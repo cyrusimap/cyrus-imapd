@@ -11,7 +11,6 @@ Getting Started
 
     developer/process
     developer/overview
-    developer/github-guide
     developer/compiling
     installing
     developer/developer-testing
@@ -23,24 +22,23 @@ Getting Started
 
     developer/install-xapian
 
-System files and Databases
-==========================
-.. toctree::
 
-    developer/namespaces
 
-Resources
-=========
+Cyrus internals and libraries
+=============================
 
 .. toctree::
     :maxdepth: 1
 
+    developer/namespaces
     developer/libraries
 
 Releasing
 =========
 
 .. toctree::
+    :maxdepth: 1
+
     developer/releasing
     developer/major-releasing
     developer/snapshot-releasing
