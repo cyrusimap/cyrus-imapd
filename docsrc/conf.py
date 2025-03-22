@@ -27,12 +27,7 @@ sys.path.insert(0, os.path.abspath("exts"))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-# XXX The oldest version we need to support at present is 1.3.6, and the
-# XXX oldest version we actually support is 1.3.2, but these versions
-# XXX don't check the third field properly, so we can't bump this line to
-# XXX match reality!  See discussion from last time we tried to bump this
-# XXX at https://github.com/cyrusimap/cyrus-imapd/pull/2868
-needs_sphinx = "1.2"
+needs_sphinx = "5.3.0"
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
