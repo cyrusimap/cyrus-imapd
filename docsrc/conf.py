@@ -44,7 +44,6 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
-    "sphinx.ext.intersphinx",
 ]
 
 extensions.append("sphinxlocal.roles.cyrusman")
@@ -58,8 +57,6 @@ extensions.append("sphinxlocal.sitemap")
 # Other branches are available at multiple locations (3.12 is at 3.12 and stable and /).
 # Supply all webroots that this set of docs is available at.
 sitemap_website = ["https://www.cyrusimap.org/dev/"]
-
-intersphinx_mapping = {"cyrussasl": ("https://www.cyrusimap.org/sasl", None)}
 
 mathjax_path = "https://cdn.mathjax.org/mathjax/latest/MathJax.js"
 
@@ -546,6 +543,7 @@ extlinks = {
     "cyrus-3.12": ("https://www.cyrusimap.org/3.12%s", None),
     "cyrus-dev": ("https://www.cyrusimap.org/dev%s", None),
     "cyrus-stable": ("https://www.cyrusimap.org%s", None),
+    "cyrus-sasl": ("https://www.cyrusimap.org/sasl%s", None),
     "github-release": (
         "https://github.com/cyrusimap/cyrus-imapd/releases/tag/cyrus-imapd-%s",
         "cyrus-imapd-%s",

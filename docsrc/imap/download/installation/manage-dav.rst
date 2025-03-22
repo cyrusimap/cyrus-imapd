@@ -67,7 +67,7 @@ Authentication
 --------------
 
 As with other Cyrus services, the Cyrus httpd service uses
-:ref:`Cyrus SASL <cyrussasl:sasl-index>` to perform its authentication.
+:cyrus-sasl:`Cyrus SASL </>` to perform its authentication.
 
 .. sidebar:: allowplaintext
 
@@ -84,7 +84,7 @@ whether the client has connected over a TLS protected connection (HTTPS). BASIC
 authentication does not depend on a Cyrus SASL plugin.
 
 The advertisement of the other HTTP authentication schemes is controlled by the
-:ref:`SASL mech_list option <cyrussasl:options>` option. For Cyrus httpd
+:cyrus-sasl:`SASL mech_list option </options>` option. For Cyrus httpd
 the GSS-SPNEGO, SCRAM-SHA-1, and SCRAM-SHA-256 values enable
 support for the Negotiate (Kerberos only), SCRAM-SHA-1, and
 SCRAM-SHA-256 authentication schemes respectively, provided that the plugins

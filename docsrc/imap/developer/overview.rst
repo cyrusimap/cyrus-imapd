@@ -23,7 +23,7 @@ Cyrus IMAPd
 Cyrus SASL
     Used for providing user authentication to the mail server.
 
-    When developing against Cyrus, however, we assume that Cyrus SASL is a third party pre-built component. There is a separate section on compiling from source if you're interested in :ref:`contributing to Cyrus SASL <sasldevinstallguide>`.
+    When developing against Cyrus, however, we assume that Cyrus SASL is a third party pre-built component. There is a separate section on compiling from source if you're interested in :cyrus-sasl:`contributing to Cyrus SASL </contributing>`.
 
 Testing tools
 -------------

@@ -52,5 +52,5 @@ Common Interoperability Problems
     faqs/interop-*
 
 
-Looking for the :ref:`Cyrus SASL FAQ <sasl-faq>`?
+Looking for the :cyrus-sasl:`Cyrus SASL FAQ </faq>`?
 
