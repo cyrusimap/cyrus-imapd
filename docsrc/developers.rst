@@ -12,9 +12,8 @@ we hope to make it easier for you to contribute.
 .. toctree::
     :maxdepth: 1
 
-    Contribute docs <imap/developer/documentation>
-    Contribute code and tests <imap/developer>
-    Cyrus.Works <imap/developer/cyrusworks>
+    Contributing to the documentation <imap/developer/documentation>
+    Contributing code and tests <imap/developer>
 
 Cyrus Internals
 ===============
