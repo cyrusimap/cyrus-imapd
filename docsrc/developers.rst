@@ -1,6 +1,9 @@
-==========
-Developers
-==========
+===================
+Developer Resources
+===================
+
+The Development Process
+=======================
 
 We want it to be easy to contribute to Cyrus, whether it's documentation
 improvements, bug fixes, new features, or optimizations.
@@ -14,6 +17,7 @@ we hope to make it easier for you to contribute.
 
     Contributing to the documentation <imap/developer/documentation>
     Contributing code and tests <imap/developer>
+    Using the Cassandane test suite <imap/developer/unit-tests>
 
 Cyrus Internals
 ===============
@@ -32,10 +36,3 @@ level details about how Cyrus is implemented.
 
 This :download:`diagram <imap/developer/images/master-state-machine.svg>` shows
 the Master State Machine.
-
-Unit Tests
-==========
-
-.. toctree::
-
-    imap/developer/unit-tests
