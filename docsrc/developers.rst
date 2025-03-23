@@ -2,11 +2,16 @@
 Developers
 ==========
 
+We want it to be easy to contribute to Cyrus, whether it's documentation
+improvements, bug fixes, new features, or optimizations.
+
+The contribution guidelines below outline the process that you'll need to
+follow to get a code patch merged. By making expectations and process explicit,
+we hope to make it easier for you to contribute.
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
 
-    contribute
     Contribute docs <imap/developer/documentation>
     Contribute code and tests <imap/developer>
     Cyrus.Works <imap/developer/cyrusworks>
