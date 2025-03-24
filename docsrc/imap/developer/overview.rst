@@ -87,7 +87,7 @@ dar
 
 Developing with just Docker and ``cyd`` is possible, but can be a pain.  You
 won't have your ssh credentials, so you can't push changes back up.  You'll be
-logged in a root, and you won't have your editor configuration.  To make
+logged in as root, and you won't have your editor configuration.  To make
 development with Docker and ``cyd`` more streamlined, we've written ``dar``.
 
 ``dar`` runs ``cyd`` commands inside of a container, which it manages for you.
@@ -128,7 +128,7 @@ you've built up a lot of test output.
 
 ``dar`` works by mounting your git checkout into the container where the source
 is expected.  When you build, you'll be building into that directory, meaning a
-directory on your local machine.  This means you'll send up with `foo.o` files
+directory on your local machine.  This means you'll end up with `foo.o` files
 in your working tree, and they'll be owned by the root user.  ``dar clean``
 will clean all this up, but if you've already pruned your container, you'll
 need to clean up by hand.  If you're confident you've committed everything you
