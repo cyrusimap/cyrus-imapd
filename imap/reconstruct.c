@@ -115,7 +115,6 @@ struct reconstruct_rock {
 static const char *progname = NULL;
 
 /* forward declarations */
-static void do_mboxlist(void);
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock);
 static int do_reconstruct(struct findall_data *data, void *rock);
 static void reconstruct_mbentry(const char *path);
@@ -147,7 +146,6 @@ int main(int argc, char **argv)
     int dousers = 0;
     int dopaths = 0;
     int rflag = 0;
-    int mflag = 0;
     int fflag = 0;
     int xflag = 0;
     struct buf buf = BUF_INITIALIZER;
@@ -158,7 +156,7 @@ int main(int argc, char **argv)
     progname = basename(argv[0]);
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:GIMOPRUV:fmnop:qrsux";
+    static const char short_options[] = "C:GIMOPRUV:fnop:qrsux";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
@@ -205,10 +203,6 @@ int main(int argc, char **argv)
 
         case 'P':
             dopaths = 1;
-            break;
-
-        case 'm':
-            mflag = 1;
             break;
 
         case 'n':
@@ -283,14 +277,7 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    if (mflag) {
-        if (rflag || fflag || optind != argc) {
-            cyrus_done();
-            usage();
-        }
-        do_mboxlist();
-    }
-    else if (dousers && dopaths) {
+    if (dousers && dopaths) {
         cyrus_done();
         usage();
     }
@@ -743,15 +730,6 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     hash_insert(name, &rrock, &rrock->visited);
 
     return 0;
-}
-
-/*
- * Reconstruct the mailboxes list.
- */
-static void do_mboxlist(void)
-{
-    fprintf(stderr, "reconstructing mailboxes.db currently not supported\n");
-    exit(EX_USAGE);
 }
 
 /*
