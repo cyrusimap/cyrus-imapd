@@ -2144,7 +2144,8 @@ If all partitions are over that limit, this feature is not used anymore.
 /* Username that is used as the 'From' address in rejection MDNs produced
    by sieve. */
 
-{ "postspec", NULL, STRING, "2.3.17" }
+{ "postspec", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
 { "postuser", "", STRING, "2.3.17" }
 /* Userid used to deliver messages to shared folders.  For example, if
