@@ -77,9 +77,14 @@ maintained) is called "pcre3".  Yes, this is confusing.
 How are you planning on upgrading?
 ##################################
 
-Ideally, you will do a sandboxed test installation of 3.12 using a snapshot of
-your existing data before you switch off your existing installation. The rest
-of the instructions are assuming a sandboxed 3.12 installation.
+Ideally, you will do a sandboxed test installation of 3.12 using a snapshot
+of your existing data before you switch off your existing installation.
+
+Other possibilities are upgrading by replication, or upgrading in place.
+
+**The rest of the instructions are written assuming a sandboxed 3.12
+installation**, but you should read and understand them regardless of how
+you intend to perform the upgrade.
 
 Upgrade by replicating
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -87,7 +92,7 @@ Upgrade by replicating
 If you're familiar with replication, and your current installation is 2.4 or
 newer, you can set up your existing installation to replicate data to a new
 3.12 installation and failover to the new installation when you're ready. The
-replication protocol has been kept backwards compatible.
+replication protocol has been kept mostly backwards compatible.
 
 If your old installation contains mailboxes or messages that are older than
 2.4, they may not have GUID fields in their indexes (index version too old),
@@ -110,11 +115,19 @@ so it's better to identify the mailboxes needing attention and target them
 specifically.  But if you have a small amount of data, it might be less work
 to just `reconstruct -G -V max` everything.
 
+If your old installation is on 3.0 or older and is using mailbox annotations,
+you will have problems replicating to newer versions due to missing MODSEQ
+(:issue:`4967`).  There is an experimental patch in the comments on this issue
+that might help for a one-off replication run into an empty replica, but it
+will not help for updating a replica that already has data.
+
 Upgrade in place
 ~~~~~~~~~~~~~~~~
 
-If you are upgrading in place, you will need to shut down Cyrus
-entirely while you install the new package.
+If you are upgrading in place, you will need to shut down Cyrus entirely while
+you install the new package.  You should probably also block logins or filewall
+off internet access until you're completely finished so that you aren't
+surprised by users reconnecting before the upgraded server is ready for them.
 
 Do What As Who?
 ###############
