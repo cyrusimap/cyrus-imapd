@@ -95,18 +95,6 @@ Pre-release testing
    ix.   If any of this fails, fix it, commit it, then restart the pre-release
          testing.
 
-.. Note::
-    Realistically, there's usually some set of expected Cassandane failures
-    from each Cyrus branch.  If you're doing releases regularly, you've
-    probably got a good gut feel for which failures are a problem and which
-    ones are just "that old thing".  If you don't do releases regularly, try to
-    pull in someone who does for guidance about which failures are ignorable,
-    and which should be a source of stress.
-
-    If in doubt, try building and testing the previous release from the same
-    series, and compare the test results.
-
-
 Linking up release notes
 ========================
 
