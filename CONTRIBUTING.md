@@ -65,17 +65,21 @@ when they're found.  The policy on that is something like this:
   merge the fix when it's ready.  Running these in production is *your*
   liability to worry about.  These versions are numbered vX.Y.Z, where Y is
   odd.
-* We release a **new major version** about once a year.  We release these when
+* We release a **new minor version** about once a year.  We release these when
   we believe that all the new features work correctly and there are no known
   regressions, other than those we've documented as intentional.  These
   versions are numbered vX.Y.0, where Y is even.
-* We release **new minor version** for major releases once in a while, when
+* We release **new micro version** for minor releases once in a while, when
   we've built up enough backported bugfixes, or when we've been waiting long
   enough to ship the ones we've already applied.  There are numbered vX.Y.Z,
   where Y is even and Z is nonzero.
 
-We stop releasing minor releases for major releases after two years.  While we
-might push bugfixes for significant problems to the git branch for an old major
+The "macro" part of the version number -- the X in vX.Y.Z -- is updated to
+signify larger changes than the minor version, but otherwise carries no
+particular meaning.
+
+We stop releasing micro releases for minor releases after two years.  While we
+might push bugfixes for significant problems to the git branch for an old minor
 release, we won't undertake a new release.  If you're running an old version of
 Cyrus, it's up to you (or your package manager) to track and package new
 patches.
@@ -84,6 +88,6 @@ If we discover a security vulnerability in a non-development-snapshot version
 of Cyrus, we practice responsible disclosure.  We produce a fix, then inform
 downstream package mangers of that fix, with an embargo date so that the fix
 can be released publicly at the same time that updated packages become
-available.  In general, we do not pursue security fixes for major versions of
+available.  In general, we do not pursue security fixes for minor versions of
 Cyrus over three years old.  There may be exceptions to this, but generally you
 should try to run a recent stable release.

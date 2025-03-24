@@ -1,8 +1,7 @@
 .. _imap-release-notes-3.9:
 
-===================
-Cyrus IMAP 3.9 Tags
-===================
+Cyrus IMAP 3.9 Snapshots
+========================
 
 .. warning::
 

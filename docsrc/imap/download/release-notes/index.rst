@@ -1,4 +1,3 @@
-=============
 Release Notes
 =============
 
@@ -6,19 +5,18 @@ Cyrus uses an `odd-even release cycle <http://producingoss.com/en/development-cy
 
 With our versioning system using ``major.minor.micro`` numbering, the minor (middle)
 number reveals whether a version is stable (even), or development-only (odd).
+So, a 3.\ **0**\ .0 release is stable, but a 3.\ **1**\ .0 release is
+developmental only.
 
-A 3.\ **0**\ .1 release is stable, but a 3.\ **1**\ .4 release is developmental only.
+We stop issuing new micro releases two years after the micro-zero version of a
+minor release.  By that point, you should be upgrading to a newer release to
+stay up to date.
 
-Stable Version
-==============
+Current Development
+-------------------
 
-Latest stable version is |imap_stable_release_notes|. Documentation at :cyrus-stable:`/`.
-
-
-Development Version
-===================
-
-Latest development snapshot is |imap_development_release_notes|. Documentation at :cyrus-dev:`/`.
+The latest development snapshot is |imap_development_release_notes|.
+Its documentation can be found at :cyrus-dev:`/`.
 
 .. warning::
 
@@ -28,11 +26,22 @@ Latest development snapshot is |imap_development_release_notes|. Documentation a
     there will generally be **large breaking changes** occurring between
     releases in this series.
 
-Supported Product Series
-========================
+Series 3.14
+~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    3.13/index
+
+Supported Verions
+-----------------
+
+The latest stable version is |imap_stable_release_notes|.  Its documentation
+can be found at :cyrus-stable:`/`.
 
 Series 3.12
------------
+~~~~~~~~~~~
 
 Documentation at :cyrus-3.12:`/`.
 
@@ -40,9 +49,10 @@ Documentation at :cyrus-3.12:`/`.
     :maxdepth: 1
 
     3.12/index
+    3.11/index
 
 Series 3.10
------------
+~~~~~~~~~~~
 
 Documentation at :cyrus-3.10:`/`.
 
@@ -50,9 +60,10 @@ Documentation at :cyrus-3.10:`/`.
     :maxdepth: 1
 
     3.10/index
+    3.9/index
 
 Series 3.8
-----------
+~~~~~~~~~~
 
 Documentation at :cyrus-3.8:`/`.
 
@@ -60,91 +71,43 @@ Documentation at :cyrus-3.8:`/`.
     :maxdepth: 1
 
     3.8/index
+    3.7/index
 
-Series 3.6
-----------
 
-Documentation at :cyrus-3.6:`/`.
+Older Versions
+--------------
+
+Series 3.x
+~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
     3.6/index
-
-Series 3.4
-----------
-
-Documentation at :cyrus-3.4:`/`.
-
-.. toctree::
-    :maxdepth: 1
-
+    3.5/index
     3.4/index
-
-Series 3.2
-----------
-
-Documentation at :cyrus-3.2:`/`.
-
-.. toctree::
-    :maxdepth: 1
-
+    3.3/index
     3.2/index
-
-Series 3.0
-----------
-
-Documentation at :cyrus-3.0:`/`.
-
-.. toctree::
-    :maxdepth: 1
-
+    3.1/index
     3.0/index
 
-Series 2.5
-----------
-
-Documentation at :cyrus-2.5:`/`.
+Series 2.x
+~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
     2.5/index
+    2.4/index
+    2.3/index
+    2.2/2.2.x
+    2.1/2.1.x
+    2.0/2.0.x
 
-Development snapshots
-=====================
-
-.. toctree::
-    :maxdepth: 1
-
-    3.13/index
-    3.11/index
-    3.9/index
-    3.7/index
-    3.5/index
-    3.3/index
-    3.1/index
-
-Older Versions
-==============
-
-Series 1
---------
+Series 1.x
+~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
     1/1.x.x
-
-Series 2: 2.0 - 2.4
--------------------
-
-.. toctree::
-    :maxdepth: 1
-
-    2.0/2.0.x
-    2.1/2.1.x
-    2.2/2.2.x
-    2.3/index
-    2.4/index
-    2.4-dav/index

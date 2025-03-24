@@ -10,4 +10,4 @@ Cyrus IMAP 2.4.17-caldav-beta11 Release Notes
 *   Faster free/busy calculation for non-recurring events.
 *   Added caldav_mindatetime and caldav_maxdatetime options.
 
-:ref:`imap-release-notes-2.4-dav`
+:ref:`imap-release-notes-2.4`

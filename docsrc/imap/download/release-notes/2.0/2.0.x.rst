@@ -1,6 +1,6 @@
-==============================
-Cyrus IMAP 2.0.x Release Notes
-==============================
+=======================
+Cyrus IMAP 2.0 Releases
+=======================
 
 Changes to the Cyrus IMAP Server since 2.0.16
 
