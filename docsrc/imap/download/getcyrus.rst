@@ -39,8 +39,8 @@ Extract the tarball:
 Use the source from Git
 -----------------------
 
-Read our :ref:`Guide to GitHub <github-guide>` for details on how to
-access our GitHub repository, and fork/clone the source.
+You can find the Cyrus IMAP source code at `its GitHub repository
+<https://github.com/cyrusimap/cyrus-imapd/>`_.
 
 Licensing
 =========

@@ -20,7 +20,7 @@ Download from GitHub:
 Major changes since the 2.5.x series
 ====================================
 
-*   The source repository has moved to :ref:`GitHub <github-guide>`, Bugzilla and Phabricator
+*   The source repository has moved to `GitHub <https://github.com/cyrus-imap/cyrusmapd/>`_, Bugzilla and Phabricator
     have been deprecated.  Their issue lists are being imported into GitHub.
 
 *   Support added for FastMail-style conversations (threaded messages).

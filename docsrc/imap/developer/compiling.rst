@@ -52,7 +52,7 @@ required to build a functional cyrus-imapd.
 .. _autoconf: http://www.gnu.org/software/autoconf/
 .. _automake: http://www.gnu.org/software/automake/
 .. _bison: http://www.gnu.org/software/bison/
-.. _Cyrus SASL: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
+.. _Cyrus SASL: :cyrus-sasl:`Cyrus SASL </>`
 .. _flex: http://flex.sourceforge.net/
 .. _gcc: http://gcc.gnu.org
 .. _gperf: http://www.gnu.org/software/gperf/
@@ -205,9 +205,9 @@ Other
 
 .. _ClamAV: https://www.clamav.net/
 .. _CUnit: http://cunit.sourceforge.net/
-.. _Cyrus SASL Plain: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
-.. _Cyrus SASL MD5: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
-.. _sasl binaries: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
+.. _Cyrus SASL Plain: :cyrus-sasl:`Cyrus SASL </>`
+.. _Cyrus SASL MD5: :cyrus-sasl:`Cyrus SASL </>`
+.. _sasl binaries: :cyrus-sasl:`Cyrus SASL </>`
 .. _Kerberos: http://web.mit.edu/kerberos/www/
 .. _libbrotli: https://github.com/google/brotli
 .. _libchardet: https://github.com/Joungkyun/libchardet

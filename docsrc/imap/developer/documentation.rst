@@ -7,89 +7,14 @@ Documentation
 Overview
 ========
 
-Our documentation for the website is held under git source control, the same as the source. We'd love to have your contributions, which can be sent to the :ref:`mailing list <feedback-mailing-lists>` or you can submit a patch directly against the source.
+The best way to test changes to our documentation is to use the :ref:`dar
+makedocs <cyd-and-dar>` command from your local git clone.
 
-Our helpfile source uses Sphinx_ and `Restructured Text`_.
+The best way to submit changes to our documentation is via a GitHub pull
+request.
 
-While editing the documentation can take place in any text editor, you'll need tools to fetch the source, generate man pages and html for testing.
-
-Documentation Tools
-===================
-
-For basic reStructured Text operations, we are using Sphinx version 1.3.6:
-
-* python-sphinx
-* python-sphinxcontrib-programoutput
-* python-sphinxcontrib.actdiag
-* python-sphinxcontrib.blockdiag
-* python-sphinxcontrib.nwdiag
-* python-sphinxcontrib.phpdomain
-* python-sphinxcontrib.seqdiag
-* python-sphinxcontrib.spelling
-
-You will need the `gitpython <https://gitpython.readthedocs.io/en/stable/>`_
-python package for performing datestamp operations:
-
-* gitpython
-
-You will also need the perl package, which is used to build some docs from their Perl source:
-
-* Pod::POM::View::Restructured
-
-For editing and preview
-
-* `geany <http://www.geany.org>`_
-    * Has a full feature set
-    * Minimal syntax highlighting for .rst files.
-
-* `retext <http://sourceforge.net/projects/retext>`_ (`Windows install instructions <http://sourceforge.net/p/retext/wiki/Windows%20Install%20of%20ReText/>`_)
-    * Built-in preview mode.
-    * Struggles with templates
-
-* or any text editor
-    * No preview capability
-    * Some editors have syntax highlighting support for .rst files.
-
-For interaction with the repositories
-
-* git
-* git-stuff
-
-Building the files
-==================
-
-The best way to build the documentation is to use the toplevel Makefile (generated as part of
-:ref:`building the source <compiling>`)::
-
-    make doc
-
-This runs ``make doc-html doc-text man`` and places the relevant output in ``doc/html/``, ``doc/text/`` and ``man/`` directories.
-
-If you don't have a full source build environment and just want to manage the documentation
-on its own, from the `docsrc/`` directory run::
-
-    make clean init man html
-
-This generates the manpages and the html files. The results are in ``build``.
-
-Run ``make`` with no arguments for a list of available output targets.
-
-Submitting updates
-==================
-
-Using GitHub pull requests
---------------------------
-
-We operate on the GitHub fork/pull model. We'd love to have your pull request come through!
-
-If you're new to GitHub or the fork/pull model, we have a :ref:`Quick GitHub guide <github-guide>` to get you going.
-
-Patches through the mailing list
---------------------------------
-If you're not planning on regularly submitting changes, you can just send your patch through to the :ref:`mailing list <feedback-mailing-lists>` and one of the regular maintainers will incorporate it.
-
-.. _Sphinx: http://sphinx-doc.org
-.. _Restructured Text: http://docutils.sourceforge.net/rst.html
+Our documentation source uses `Sphinx <https://sphinx-doc.org>`_ and
+`Restructured Text <https://docutils.sourceforge.net/rst.html>`_.
 
 Special Tags
 ============
@@ -132,18 +57,29 @@ For Unix manual, or "man" pages, we follow the conventions laid out in the man p
 
 .. note::
 
-    Conventional section names include NAME, SYNOPSIS, CONFIGURATION, DESCRIPTION, OPTIONS, EXIT STATUS, RETURN VALUE, ERRORS, ENVIRONMENT, FILES, VERSIONS, CONFORMING TO, NOTES, BUGS, EXAMPLE, AUTHORS, and SEE ALSO. The following conventions apply to the SYNOPSIS section and can be used as a guide in other sections.
+    Conventional section names include NAME, SYNOPSIS, CONFIGURATION,
+    DESCRIPTION, OPTIONS, EXIT STATUS, RETURN VALUE, ERRORS, ENVIRONMENT,
+    FILES, VERSIONS, CONFORMING TO, NOTES, BUGS, EXAMPLE, AUTHORS, and SEE
+    ALSO. The following conventions apply to the SYNOPSIS section and can be
+    used as a guide in other sections.
 
-| **bold text** - type exactly as shown.
-| *italic text* - replace with appropriate argument.
-| [-abc]        - any or all arguments within [ ] are optional.
-| -a|-b - options delimited by | cannot be used together.
-| argument ... - argument is repeatable.
-| [expression] ... - entire expression within [ ] is repeatable.
+**bold text**
+    type exactly as shown.
 
-.. note::
+*italic text*
+    replace with appropriate argument.
 
-    Exact rendering may vary depending on the output device. For instance, man will usually not be able to render italics when running in a terminal, and will typically use underlined or coloured text instead. The command or function illustration is a pattern that should match all possible invocations. In some cases it is advisable to illustrate several exclusive invocations as is shown in the SYNOPSIS section of this manual page.
+[-abc]
+    any or all arguments within [ ] are optional.
+
+-a|-b
+    options delimited by | cannot be used together.
+
+argument ...
+    argument is repeatable.
+
+[expression] ...
+    entire expression within [ ] is repeatable.
 
 Synopsis
 --------
@@ -166,7 +102,9 @@ SYNOPSIS
 Examples
 --------
 
-In order to preserve space in traditional man page output, we're using the ``.. only:: html`` directive in the reStructured Text (.rst) files for the verbose output of the Examples for commands.
+In order to preserve space in traditional man page output, we use the ``..
+only:: html`` directive in the reStructured Text (.rst) files for the verbose
+output of the Examples for commands.
 
 For example, this is good, and follows the style of the man(8) manpage::
 

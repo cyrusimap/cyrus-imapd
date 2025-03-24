@@ -27,12 +27,7 @@ sys.path.insert(0, os.path.abspath("exts"))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-# XXX The oldest version we need to support at present is 1.3.6, and the
-# XXX oldest version we actually support is 1.3.2, but these versions
-# XXX don't check the third field properly, so we can't bump this line to
-# XXX match reality!  See discussion from last time we tried to bump this
-# XXX at https://github.com/cyrusimap/cyrus-imapd/pull/2868
-needs_sphinx = "1.2"
+needs_sphinx = "5.3.0"
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -44,7 +39,6 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
-    "sphinx.ext.intersphinx",
 ]
 
 extensions.append("sphinxlocal.roles.cyrusman")
@@ -58,8 +52,6 @@ extensions.append("sphinxlocal.sitemap")
 # Other branches are available at multiple locations (3.12 is at 3.12 and stable and /).
 # Supply all webroots that this set of docs is available at.
 sitemap_website = ["https://www.cyrusimap.org/dev/"]
-
-intersphinx_mapping = {"cyrussasl": ("https://www.cyrusimap.org/sasl", None)}
 
 mathjax_path = "https://cdn.mathjax.org/mathjax/latest/MathJax.js"
 
@@ -546,6 +538,7 @@ extlinks = {
     "cyrus-3.12": ("https://www.cyrusimap.org/3.12%s", None),
     "cyrus-dev": ("https://www.cyrusimap.org/dev%s", None),
     "cyrus-stable": ("https://www.cyrusimap.org%s", None),
+    "cyrus-sasl": ("https://www.cyrusimap.org/sasl%s", None),
     "github-release": (
         "https://github.com/cyrusimap/cyrus-imapd/releases/tag/cyrus-imapd-%s",
         "cyrus-imapd-%s",

@@ -185,7 +185,7 @@ Login Authentication
 
 This section discusses different types of authentication (ways of logging in) that can be used with Cyrus IMAP.
 
-The Cyrus IMAP server uses the Cyrus SASL library for authentication. This section describes how to configure SASL with use with Cyrus imapd. Please consult the :ref:`Cyrus SASL System Administrator's Guide <cyrussasl:sasl-index>` for more detailed, up-to-date information.
+The Cyrus IMAP server uses the Cyrus SASL library for authentication. This section describes how to configure SASL with use with Cyrus imapd. Please consult the :cyrus-sasl:`Cyrus SASL System Administrator's Guide </>` for more detailed, up-to-date information.
 
 Anonymous Login
 ===============
@@ -225,7 +225,7 @@ If the ``loginuseacl`` configuration option is turned on, than any Kerberos iden
 Shared Secrets Logins
 =====================
 
-The SCRAM mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanisms, you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :ref:`Cyrus SASL distribution <cyrussasl:sasl-index>`).
+The SCRAM mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanisms, you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :cyrus-sasl:`Cyrus SASL distribution </>`).
 
 Quotas
 ******

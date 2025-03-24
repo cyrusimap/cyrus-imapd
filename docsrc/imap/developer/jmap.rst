@@ -121,10 +121,10 @@ Optional: Install sample JMAP client
 
 .. note::
 
-    Cyrus does not yet implement JMAP authentication. Instead, it requires for
-    each request the HTTP Basic Auth header set with the account's username and
-    password. If you intend to use the JMAP perl or web clients, make sure to add
-    the required authentication headers for each request.
+    For JMAP authentication, Cyrus requires for each request the HTTP Basic
+    Auth header set with the account's username and password. If you intend to
+    use the JMAP Perl or web clients, make sure to add the required
+    authentication headers for each request.
 
 You can set up the `JMAP Proxy (perl) <https://github.com/jmapio/jmap-perl>`_ to sit in front of a standard IMAP server and query that over a custom JMAP client.
 
