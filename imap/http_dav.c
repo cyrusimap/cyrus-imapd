@@ -6165,7 +6165,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     buf_free(&writebuf);
     if (mailbox) mailbox_close(&mailbox);
 
-    return 0;
+    return r;
 }
 
 /* Free an entry list */
