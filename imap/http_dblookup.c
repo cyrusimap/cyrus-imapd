@@ -58,7 +58,7 @@ static int meth_get_db(struct transaction_t *txn, void *params);
 /* Namespace for DB lookups */
 struct namespace_t namespace_dblookup = {
     URL_NS_DBLOOKUP, /*enabled*/1, "dblookup", "/dblookup", NULL,
-    http_allow_noauth, /*authschemes*/0,
+    /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
     NULL, NULL, NULL, NULL, NULL,

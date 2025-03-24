@@ -59,7 +59,7 @@ static int meth_post_applepush(struct transaction_t *txn, void *params);
 
 struct namespace_t namespace_applepush = {
     URL_NS_APPLEPUSH, /*enabled*/0, "applepush", "/applepush/subscribe", NULL,
-    http_allow_noauth_get, /*authschemes*/0,
+    /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ|ALLOW_POST,
     &applepush_init, NULL, NULL, NULL, NULL,

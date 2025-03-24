@@ -83,7 +83,6 @@ static time_t compile_time;
 
 /* Namespace callbacks */
 static void jmap_init(struct buf *serverinfo);
-static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
 static void jmap_reset(void);
 static void jmap_shutdown(void);
@@ -113,7 +112,7 @@ static struct connect_params ws_params = {
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "jmap", JMAP_ROOT, "/.well-known/jmap",
-    jmap_need_auth, 0,
+    0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST | ALLOW_READONLY),
     &jmap_init, &jmap_auth, &jmap_reset, &jmap_shutdown, NULL,
@@ -218,12 +217,6 @@ static int jmap_auth(const char *userid __attribute__((unused)))
     mboxname_init_namespace(&jmap_namespace, options);
 
     return 0;
-}
-
-static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
-{
-    /* All endpoints require authentication */
-    return HTTP_UNAUTHORIZED;
 }
 
 static void jmap_reset(void)
