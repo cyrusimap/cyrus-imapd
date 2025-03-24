@@ -222,7 +222,11 @@ static int jmap_auth(const char *userid __attribute__((unused)))
 
 static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
 {
-    /* All endpoints require authentication */
+    /* Allow CORS preflight requests, if CORS is enabled */
+    if (txn->meth == METH_OPTIONS && config_getstring(IMAPOPT_HTTPALLOWCORS))
+        return 0;
+
+    /* Otherwise require authentication */
     return HTTP_UNAUTHORIZED;
 }
 

@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cors_preflight
+    :HttpAllowCorsFooExampleCom
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $http = $self->{instance}->get_service("http");
+
+    my $req = {
+        headers => {
+            'Origin' => 'https://foo.example.com',
+            'Access-Control-Request-Method' => 'POST',
+        },
+        content => '',
+    };
+    my $res = $jmap->ua->request('OPTIONS', $jmap->uri(), $req);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($req, $res);
+    }
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('https://foo.example.com',
+        $res->{headers}{'access-control-allow-origin'});
+}
