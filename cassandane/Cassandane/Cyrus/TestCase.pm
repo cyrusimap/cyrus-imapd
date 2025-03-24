@@ -496,6 +496,10 @@ magic(CaldavAlarmOnlyVevent => sub {
     my $self = shift;
     $self->config_set('caldav_alarm_support_components' => 'VEVENT');
 });
+magic(HttpAllowCorsFooExampleCom => sub {
+    my $self = shift;
+    $self->config_set(httpallowcors => 'https://foo.example.com');
+});
 
 
 # Run any magic handlers indicated by the test name or attributes
