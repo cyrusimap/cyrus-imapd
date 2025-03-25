@@ -3769,7 +3769,7 @@ static int _mboxset_state_find_specialuse_cb(const char *mboxname,
     struct mboxset_state *state = rock;
     jmap_req_t *req = state->req;
 
-    if (!strcmpsafe(userid, req->accountid)) { // FIXME userid or accountid?
+    if (!strcmpsafe(userid, req->accountid)) { // XXX userid or accountid?
         const char *mbox_id = hash_lookup(mboxname, state->id_by_imapname);
         if (mbox_id) {
             strarray_t *specialuses = strarray_split(buf_cstring(value), " ", STRARRAY_TRIM);

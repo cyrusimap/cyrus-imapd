@@ -10,7 +10,7 @@ sub test_blob_copy
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    # FIXME how to share just #jmap folder?
+    # XXX how to share just #jmap folder?
     xlog $self, "create user foo and share inbox";
     $self->{instance}->create_user("foo");
     $admintalk->setacl("user.foo", "cassandane", "lrkintex") or die;

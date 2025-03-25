@@ -74,7 +74,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
         $ret->{recurrenceRules},
     );
 
-    # FIXME Net-CalDAV talk needs to update
+    # XXX Net-CalDAV talk needs to update
     # Make sure we have no rscale through caldav, most clients can't
     # handle it
     my $events = $caldav->GetEvents("$calid");

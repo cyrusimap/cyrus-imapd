@@ -21,5 +21,5 @@ sub test_rfc5258_ex08_haschildren_childinfo
     });
 
     # TODO probably break the rest of this test out into 8a, 8b etc
-    xlog('FIXME much more to test here...');
+    xlog('XXX much more to test here...');
 }

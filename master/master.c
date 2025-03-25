@@ -1542,7 +1542,7 @@ static void reap_child(void)
             syslog(LOG_ERR,
                    "received SIGCHLD from unknown child pid %d, ignoring",
                    pid);
-            /* FIXME: is this something we should take lightly? */
+            /* XXX: is this something we should take lightly? */
         }
         if (verbose && c) {
             if (c->si != SERVICE_NONE) {
