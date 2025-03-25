@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_export_utf8
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $href = "$CalendarId/event.ics";
+    my $summary = 'Lunch with Schäfer';
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:535b2dc7-f8f4-47e7-9d2f-dc35e4c35458
+DTSTAMP:20250324T112522Z
+DTSTART;TZID=America/New_York:20250404T090000
+DURATION:PT1H
+SUMMARY:$summary
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    utf8::encode($summary);
+
+    $CalDAV->Request('PUT', $href, $event,
+                     'Content-Type' => 'text/calendar; charset=utf-8');
+
+    my $res = $CalDAV->Request('GET', $CalendarId);
+    $self->assert_matches(qr/NAME:foo/, $res->{content});
+    $self->assert_matches(qr/SUMMARY:$summary/, $res->{content});
+}
