@@ -419,7 +419,7 @@ HIDDEN int seen_rename_user(const char *olduser, const char *newuser)
     }
 
     cyrus_mkdir(newfname, 0755);
-    if (rename(oldfname, newfname) && errno != ENOENT) {
+    if (cyrus_rename(oldfname, newfname) && errno != ENOENT) {
         syslog(LOG_ERR, "error renaming %s to %s: %m", oldfname, newfname);
         r = IMAP_IOERROR;
     }

@@ -727,7 +727,7 @@ static int mystore(struct dbengine *db,
         /* commit immediately */
         if (fsync(writefd) ||
             fstat(writefd, &sbuf) == -1 ||
-            rename(fnamebuf, db->fname) == -1) {
+            cyrus_rename(fnamebuf, db->fname) == -1) {
             xsyslog(LOG_ERR, "IOERROR: commit failed",
                              "fname=<%s>",
                              fnamebuf);
@@ -807,7 +807,7 @@ static int commit_txn(struct dbengine *db, struct txn *tid)
         writefd = tid->fd;
         if (fsync(writefd) ||
             fstat(writefd, &sbuf) == -1 ||
-            rename(tid->fnamenew, db->fname) == -1) {
+            cyrus_rename(tid->fnamenew, db->fname) == -1) {
             xsyslog(LOG_ERR, "IOERROR: commit failed",
                              "fname=<%s>",
                              tid->fnamenew);
