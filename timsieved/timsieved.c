@@ -43,7 +43,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#    include <config.h>
 #endif
 
 #include <arpa/inet.h>
@@ -53,8 +53,8 @@
 #include <netinet/in.h>
 #include <sasl/sasl.h> /* yay! sasl */
 #include <signal.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -64,21 +64,21 @@
 #include <unistd.h>
 
 #include "auth.h"
-#include "libconfig.h"
-#include "slowio.h"
-#include "xmalloc.h"
 #include "imap/backend.h"
 #include "imap/global.h"
 #include "imap/mboxlist.h"
 #include "imap/proxy.h"
 #include "imap/sync_log.h"
 #include "lib/assert.h"
+#include "libconfig.h"
 #include "master/service.h"
 #include "sieve/sieve_interface.h"
+#include "slowio.h"
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
-#include "timsieved/parser.h"
 #include "timsieved/lex.h"
+#include "timsieved/parser.h"
+#include "xmalloc.h"
 
 /* global state */
 const int config_need_data = 0;
@@ -118,7 +118,7 @@ static void bitpipe(void);
 /*
  * Cleanly shut down and exit
  */
-void shut_down(int code) __attribute__ ((noreturn));
+void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     /* free interpreter */
@@ -167,8 +167,7 @@ static void cmdloop(void)
     /* initialize lexer */
     lex_init();
 
-    while (ret != TRUE)
-    {
+    while (ret != TRUE) {
         if (backend) {
             /* create a pipe from client to backend */
             bitpipe();
@@ -205,14 +204,19 @@ EXPORTED void fatal(const char *s, int code)
 }
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, SASL_CB_PROC_PTR &mysasl_proxy_policy, (void*) &sieved_proxyctx },
-    { SASL_CB_CANON_USER, SASL_CB_PROC_PTR &mysasl_canon_user, (void*) &sieved_domainfromip },
-    { SASL_CB_LIST_END, NULL, NULL }
+    { SASL_CB_GETOPT,       SASL_CB_PROC_PTR &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY,
+     SASL_CB_PROC_PTR &mysasl_proxy_policy,
+     (void *) &sieved_proxyctx                                    },
+    { SASL_CB_CANON_USER,
+     SASL_CB_PROC_PTR &mysasl_canon_user,
+     (void *) &sieved_domainfromip                                },
+    { SASL_CB_LIST_END,     NULL,                            NULL }
 };
 
-EXPORTED int service_init(int argc, char **argv,
-                 char **envp __attribute__((unused)))
+EXPORTED int service_init(int argc,
+                          char **argv,
+                          char **envp __attribute__((unused)))
 {
     int opt;
 
@@ -223,7 +227,7 @@ EXPORTED int service_init(int argc, char **argv,
     if (interp == NULL) shut_down(EX_SOFTWARE);
 
     while ((opt = getopt(argc, argv, "H")) != EOF) {
-        switch(opt) {
+        switch (opt) {
         case 'H': /* expect HAProxy protocol header */
             haproxy_protocol = 1;
             break;
@@ -243,8 +247,8 @@ EXPORTED void service_abort(int error)
 }
 
 EXPORTED int service_main(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
-                 char **envp __attribute__((unused)))
+                          char **argv __attribute__((unused)),
+                          char **envp __attribute__((unused)))
 {
     const char *remoteip, *localip;
     sasl_security_properties_t *secprops = NULL;
@@ -273,18 +277,22 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     }
 
     /* other params should be filled in */
-    if (sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
+    if (sasl_server_new(SIEVE_SERVICE_NAME,
+                        config_servername,
+                        NULL,
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
-                        NULL, SASL_SUCCESS_DATA, &sieved_saslconn) != SASL_OK)
+                        NULL,
+                        SASL_SUCCESS_DATA,
+                        &sieved_saslconn)
+        != SASL_OK)
         fatal("SASL failed initializing: sasl_server_new()", -1);
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
 
-    if (actions_init() != TIMSIEVE_OK)
-      fatal("Error initializing actions",-1);
+    if (actions_init() != TIMSIEVE_OK) fatal("Error initializing actions", -1);
 
     sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
@@ -304,22 +312,26 @@ int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
+    ret = sasl_server_new(SIEVE_SERVICE_NAME,
+                          config_servername,
+                          NULL,
                           buf_cstringnull_ifempty(&saslprops.iplocalport),
                           buf_cstringnull_ifempty(&saslprops.ipremoteport),
-                          NULL, SASL_SUCCESS_DATA, conn);
-    if(ret != SASL_OK) return ret;
+                          NULL,
+                          SASL_SUCCESS_DATA,
+                          conn);
+    if (ret != SASL_OK) return ret;
 
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) return ret;
 
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
-    if(saslprops.ssf) {
+    if (saslprops.ssf) {
         ret = saslprops_set_tls(&saslprops, *conn);
-        if(ret != SASL_OK) return ret;
+        if (ret != SASL_OK) return ret;
     }
     /* End TLS/SSL Info */
 
@@ -347,10 +359,16 @@ static void bitpipe(void)
             shutdown = 1;
             goto done;
         }
-    } while (!proxy_check_input(protin, sieved_in, sieved_out,
-                                backend->in, backend->out, PROT_NO_FD, NULL, 0));
+    } while (!proxy_check_input(protin,
+                                sieved_in,
+                                sieved_out,
+                                backend->in,
+                                backend->out,
+                                PROT_NO_FD,
+                                NULL,
+                                0));
 
- done:
+done:
     /* ok, we're done. */
     protgroup_free(protin);
 
