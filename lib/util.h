@@ -220,6 +220,9 @@ extern char *create_tempdir(const char *path, const char *subname);
  * value of remove on error. */
 extern int removedir(const char *path);
 
+/* Call rename but fsync the directory before returning success */
+extern int cyrus_rename(const char *src, const char *dest);
+
 /* Close a network filedescriptor the "safe" way */
 extern int cyrus_close_sock(int fd);
 
