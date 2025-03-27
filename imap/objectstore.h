@@ -38,22 +38,24 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
-
+ */
 
 #ifndef OBJECT_STORE
 #define OBJECT_STORE
 
-int objectstore_put (struct mailbox *mailbox,
-        const struct index_record *record, const char *fname);
+int objectstore_put(struct mailbox *mailbox,
+                    const struct index_record *record,
+                    const char *fname);
 
-int objectstore_get (struct mailbox *mailbox,
-        const struct index_record *record, const char *fname);
+int objectstore_get(struct mailbox *mailbox,
+                    const struct index_record *record,
+                    const char *fname);
 
-int objectstore_delete (struct mailbox *mailbox,
-    const struct index_record *record);
+int objectstore_delete(struct mailbox *mailbox,
+                       const struct index_record *record);
 
-int objectstore_is_filename_in_container (struct mailbox *mailbox,
-        const struct index_record *record, int *isthere);
+int objectstore_is_filename_in_container(struct mailbox *mailbox,
+                                         const struct index_record *record,
+                                         int *isthere);
 
 #endif /*OBJECT_STORE*/

@@ -51,7 +51,8 @@
 
 #define CALDAV_CALUSERADDR_INITIALIZER { STRARRAY_INITIALIZER, 0 }
 
-struct caldav_caluseraddr {
+struct caldav_caluseraddr
+{
     strarray_t uris;
     int pref;
 };
@@ -67,6 +68,7 @@ extern int caldav_caluseraddr_write(struct mailbox *mbox,
 extern void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr);
 
 extern void get_schedule_addresses(const char *mboxname,
-                                   const char *userid, strarray_t *addresses);
+                                   const char *userid,
+                                   strarray_t *addresses);
 
 #endif /* SCHED_UTIL_H */

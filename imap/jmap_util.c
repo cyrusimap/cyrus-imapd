@@ -43,10 +43,10 @@
 
 #include <config.h>
 
-#include <string.h>
-#include <syslog.h>
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
+#include <syslog.h>
 
 #include <sasl/saslutil.h>
 
@@ -66,26 +66,32 @@
 #include "xapian_wrap.h"
 
 #ifdef HAVE_LIBCHARDET
-#include <chardet/chardet.h>
+#    include <chardet/chardet.h>
 #endif
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
-                              int mandatory, json_t *invalid, const char *fmt,
-                              void *dst)
+EXPORTED int jmap_readprop_full(json_t *root,
+                                const char *prefix,
+                                const char *name,
+                                int mandatory,
+                                json_t *invalid,
+                                const char *fmt,
+                                void *dst)
 {
     int r = 0;
     json_t *jval = json_object_get(root, name);
     if (!jval && mandatory) {
         r = -1;
-    } else if (jval) {
+    }
+    else if (jval) {
         json_error_t err;
         if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
             r = -2;
-        } else {
+        }
+        else {
             r = 1;
         }
     }
@@ -94,7 +100,8 @@ EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *na
         buf_printf(&buf, "%s.%s", prefix, name);
         json_array_append_new(invalid, json_string(buf_cstring(&buf)));
         buf_free(&buf);
-    } else if (r < 0) {
+    }
+    else if (r < 0) {
         json_array_append_new(invalid, json_string(name));
     }
     return r;
@@ -105,7 +112,7 @@ EXPORTED int jmap_pointer_needsencode(const char *src)
     return strchr(src, '/') || strchr(src, '~');
 }
 
-EXPORTED char* jmap_pointer_encode(const char *src)
+EXPORTED char *jmap_pointer_encode(const char *src)
 {
     struct buf buf = BUF_INITIALIZER;
     const char *base, *top;
@@ -114,21 +121,21 @@ EXPORTED char* jmap_pointer_encode(const char *src)
     base = src;
     top = base;
     while (*base) {
-        for (top = base; *top && *top != '~' && *top != '/'; top++)
-            ;
+        for (top = base; *top && *top != '~' && *top != '/'; top++);
         if (!*top) break;
 
-        buf_appendmap(&buf, base, top-base);
+        buf_appendmap(&buf, base, top - base);
         if (*top == '~') {
             buf_appendmap(&buf, "~0", 2);
             top++;
-        } else if (*top == '/') {
+        }
+        else if (*top == '/') {
             buf_appendmap(&buf, "~1", 2);
             top++;
         }
         base = top;
     }
-    buf_appendmap(&buf, base, top-base);
+    buf_appendmap(&buf, base, top - base);
     return buf_release(&buf);
 }
 
@@ -142,27 +149,29 @@ EXPORTED char *jmap_pointer_decode(const char *src, size_t len)
 
     base = src;
     while (base < end && (top = strchr(base, '~')) && top < end) {
-        buf_appendmap(&buf, base, top-base);
+        buf_appendmap(&buf, base, top - base);
 
-        if (top < end-1 && *(top+1) == '0') {
+        if (top < end - 1 && *(top + 1) == '0') {
             buf_appendcstr(&buf, "~");
             base = top + 2;
-        } else if (top < end-1 && *(top+1) == '1') {
+        }
+        else if (top < end - 1 && *(top + 1) == '1') {
             buf_appendcstr(&buf, "/");
             base = top + 2;
-        } else {
+        }
+        else {
             buf_appendcstr(&buf, "~");
             base = top + 1;
         }
     }
     if (base < end) {
-        buf_appendmap(&buf, base, end-base);
+        buf_appendmap(&buf, base, end - base);
     }
 
     return buf_release(&buf);
 }
 
-EXPORTED json_t* jmap_patchobject_apply(json_t *val,
+EXPORTED json_t *jmap_patchobject_apply(json_t *val,
                                         json_t *patch,
                                         json_t *invalid,
                                         unsigned flags)
@@ -171,7 +180,8 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
     json_t *newval, *dst;
 
     dst = json_deep_copy(val);
-    json_object_foreach(patch, path, newval) {
+    json_object_foreach(patch, path, newval)
+    {
         /* Start traversal at root object */
         json_t *it = dst;
         const char *base = path, *top, *err;
@@ -181,10 +191,11 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
 
         /* Find path in object tree */
         while (it && (top = strchr(base, '/'))) {
-            ref = jmap_pointer_decode(base, top-base);
+            ref = jmap_pointer_decode(base, top - base);
 
-            if (json_is_array(it) && (flags & PATCH_ALLOW_ARRAY) &&
-                    !parsenum(ref, &err, 0, &idx) && !*err) {
+            if (json_is_array(it) && (flags & PATCH_ALLOW_ARRAY)
+                && !parsenum(ref, &err, 0, &idx) && !*err)
+            {
                 it = json_array_get(it, idx);
             }
             else {
@@ -200,8 +211,9 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
             ref = jmap_pointer_decode(base, strlen(base));
 
             if (json_is_array(it)) {
-                if ((flags & PATCH_ALLOW_ARRAY) && !json_is_null(newval) &&
-                        !parsenum(ref, &err, 0, &idx) && !*err) {
+                if ((flags & PATCH_ALLOW_ARRAY) && !json_is_null(newval)
+                    && !parsenum(ref, &err, 0, &idx) && !*err)
+                {
                     r = json_array_set(it, idx, newval);
                 }
             }
@@ -226,8 +238,10 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
     return dst;
 }
 
-static void jmap_patchobject_set(json_t *diff, struct buf *path,
-                                 const char *key, json_t *val)
+static void jmap_patchobject_set(json_t *diff,
+                                 struct buf *path,
+                                 const char *key,
+                                 json_t *val)
 {
     char *enckey = jmap_pointer_encode(key);
     size_t len = buf_len(path);
@@ -238,17 +252,17 @@ static void jmap_patchobject_set(json_t *diff, struct buf *path,
     free(enckey);
 }
 
-static void jmap_patchobject_diff(json_t *diff, struct buf *path,
-                                  json_t *src, json_t *dst, unsigned flags)
+static void jmap_patchobject_diff(
+    json_t *diff, struct buf *path, json_t *src, json_t *dst, unsigned flags)
 {
-    if (!json_is_object(src) || !json_is_object(dst))
-        return;
+    if (!json_is_object(src) || !json_is_object(dst)) return;
 
     const char *key;
     json_t *val;
 
     // Add any properties that are set in dst but not in src
-    json_object_foreach(dst, key, val) {
+    json_object_foreach(dst, key, val)
+    {
         if (json_object_get(src, key) == NULL) {
             jmap_patchobject_set(diff, path, key, val);
         }
@@ -256,7 +270,8 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
 
     if (!(flags & PATCH_NO_REMOVE)) {
         // Remove any properties that are set in src but not in dst
-        json_object_foreach(src, key, val) {
+        json_object_foreach(src, key, val)
+        {
             if (json_object_get(dst, key) == NULL) {
                 jmap_patchobject_set(diff, path, key, json_null());
             }
@@ -264,18 +279,21 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
     }
 
     // Handle properties that exist in both src and dst
-    json_object_foreach(dst, key, val) {
+    json_object_foreach(dst, key, val)
+    {
         json_t *srcval = json_object_get(src, key);
         if (!srcval) {
             continue;
         }
-        if ((flags & PATCH_ALLOW_ARRAY) &&
-            json_is_array(val) && json_is_array(srcval) &&
-            json_array_size(val) == json_array_size(srcval)) {
+        if ((flags & PATCH_ALLOW_ARRAY) && json_is_array(val)
+            && json_is_array(srcval)
+            && json_array_size(val) == json_array_size(srcval))
+        {
             json_t *subval;
             size_t i;
 
-            json_array_foreach(val, i, subval) {
+            json_array_foreach(val, i, subval)
+            {
                 json_t *srcsubval = json_array_get(srcval, i);
                 char *enckey = jmap_pointer_encode(key);
                 size_t len = buf_len(path);
@@ -307,7 +325,9 @@ static void jmap_patchobject_diff(json_t *diff, struct buf *path,
     }
 }
 
-EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags)
+EXPORTED json_t *jmap_patchobject_create(json_t *src,
+                                         json_t *dst,
+                                         unsigned flags)
 {
     json_t *diff = json_object();
     struct buf buf = BUF_INITIALIZER;
@@ -325,7 +345,8 @@ EXPORTED void jmap_filterprops(json_t *jobj, hash_table *props)
     const char *key;
     json_t *jval;
     void *tmp;
-    json_object_foreach_safe(jobj, tmp, key, jval) {
+    json_object_foreach_safe(jobj, tmp, key, jval)
+    {
         if (!hash_lookup(key, props)) {
             json_object_del(jobj, key);
         }
@@ -339,7 +360,8 @@ static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
     const char *key;
     json_t *val;
     struct buf xtext = BUF_INITIALIZER;
-    json_object_foreach(json_object_get(addr, "parameters"), key, val) {
+    json_object_foreach(json_object_get(addr, "parameters"), key, val)
+    {
         /* We never take AUTH at face value */
         if (!strcasecmp(key, "AUTH")) {
             continue;
@@ -372,7 +394,8 @@ EXPORTED void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
     address_to_smtp(&smtpenv->from, json_object_get(env, "mailFrom"));
     size_t i;
     json_t *val;
-    json_array_foreach(json_object_get(env, "rcptTo"), i, val) {
+    json_array_foreach(json_object_get(env, "rcptTo"), i, val)
+    {
         smtp_addr_t *smtpaddr = xzmalloc(sizeof(smtp_addr_t));
         address_to_smtp(smtpaddr, val);
         ptrarray_append(&smtpenv->rcpts, smtpaddr);
@@ -383,7 +406,7 @@ EXPORTED json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid)
 {
     /* get the snoozed annotation */
     mbentry_t mbentry = MBENTRY_INITIALIZER;
-    mbentry.name = (char *)mbox;
+    mbentry.name = (char *) mbox;
     struct mailbox mailbox = { .mbentry = &mbentry };
     const char *annot = IMAP_ANNOT_NS "snoozed";
     struct buf value = BUF_INITIALIZER;
@@ -400,8 +423,8 @@ EXPORTED json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid)
             r = annotatemore_msg_lookup(&mailbox, uid, annot, "", &value);
             if (!r && buf_len(&value)) {
                 /* build a SnoozeDetails object from the naked "until" value */
-                snooze = json_pack("{s:s}",
-                                   "until", json_string(buf_cstring(&value)));
+                snooze = json_pack(
+                    "{s:s}", "until", json_string(buf_cstring(&value)));
             }
         }
         else {
@@ -430,18 +453,17 @@ EXPORTED int jmap_email_keyword_is_valid(const char *keyword)
         if (*p < 0x21 || *p > 0x7e) {
             return 0;
         }
-        switch(*p) {
-            case '(':
-            case ')':
-            case '{':
-            case ']':
-            case '%':
-            case '*':
-            case '"':
-            case '\\':
-                return 0;
-            default:
-                ;
+        switch (*p) {
+        case '(':
+        case ')':
+        case '{':
+        case ']':
+        case '%':
+        case '*':
+        case '"':
+        case '\\':
+            return 0;
+        default:;
         }
     }
     return 1;
@@ -480,19 +502,24 @@ HIDDEN void jmap_parser_push(struct jmap_parser *parser, const char *prop)
     strarray_push(&parser->path, prop);
 }
 
-HIDDEN void jmap_parser_push_index(struct jmap_parser *parser, const char *prop,
-                                   size_t index, const char *name)
+HIDDEN void jmap_parser_push_index(struct jmap_parser *parser,
+                                   const char *prop,
+                                   size_t index,
+                                   const char *name)
 {
     /* TODO make this more clever: won't need to printf most of the time */
     buf_reset(&parser->buf);
-    if (name) buf_printf(&parser->buf, "%s[%zu:%s]", prop, index, name);
-    else buf_printf(&parser->buf, "%s[%zu]", prop, index);
+    if (name)
+        buf_printf(&parser->buf, "%s[%zu:%s]", prop, index, name);
+    else
+        buf_printf(&parser->buf, "%s[%zu]", prop, index);
     strarray_push(&parser->path, buf_cstring(&parser->buf));
     buf_reset(&parser->buf);
 }
 
 HIDDEN void jmap_parser_push_name(struct jmap_parser *parser,
-                                  const char *prop, const char *name)
+                                  const char *prop,
+                                  const char *name)
 {
     /* TODO make this more clever: won't need to printf most of the time */
     buf_reset(&parser->buf);
@@ -506,7 +533,7 @@ HIDDEN void jmap_parser_pop(struct jmap_parser *parser)
     free(strarray_pop(&parser->path));
 }
 
-HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
+HIDDEN const char *jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
 {
     int i;
     buf_reset(buf);
@@ -517,7 +544,8 @@ HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
             char *tmp = jmap_pointer_encode(p);
             buf_appendcstr(buf, tmp);
             free(tmp);
-        } else {
+        }
+        else {
             buf_appendcstr(buf, p);
         }
         if ((i + 1) < parser->path.count) {
@@ -530,48 +558,48 @@ HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
 
 HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
 {
-    if (prop)
-        jmap_parser_push(parser, prop);
+    if (prop) jmap_parser_push(parser, prop);
 
     json_array_append_new(parser->invalid,
-            json_string(jmap_parser_path(parser, &parser->buf)));
+                          json_string(jmap_parser_path(parser, &parser->buf)));
 
-    if (prop)
-        jmap_parser_pop(parser);
+    if (prop) jmap_parser_pop(parser);
 }
 
-HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path)
+HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser,
+                                     const char *path)
 {
     json_array_append_new(parser->invalid, json_string(path));
 }
 
 HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
-                                  const char *prop, json_t *val)
+                                  const char *prop,
+                                  json_t *val)
 {
-    if (prop)
-        jmap_parser_push(parser, prop);
+    if (prop) jmap_parser_push(parser, prop);
 
-    json_object_set_new(parser->serverset,
-            jmap_parser_path(parser, &parser->buf), val);
+    json_object_set_new(
+        parser->serverset, jmap_parser_path(parser, &parser->buf), val);
 
-    if (prop)
-        jmap_parser_pop(parser);
+    if (prop) jmap_parser_pop(parser);
 }
 
 HIDDEN json_t *jmap_server_error(int r)
 {
     switch (r) {
-        case IMAP_INVALID_RIGHTS:
-        case IMAP_PERMISSION_DENIED:
-            return json_pack("{s:s}", "type", "forbidden");
-        case IMAP_CONVERSATION_GUIDLIMIT:
-            return json_pack("{s:s}", "type", "tooManyMailboxes");
-        case IMAP_QUOTA_EXCEEDED:
-            return json_pack("{s:s}", "type", "overQuota");
-        default:
-            return json_pack("{s:s, s:s}",
-                    "type", "serverFail",
-                    "description", error_message(r));
+    case IMAP_INVALID_RIGHTS:
+    case IMAP_PERMISSION_DENIED:
+        return json_pack("{s:s}", "type", "forbidden");
+    case IMAP_CONVERSATION_GUIDLIMIT:
+        return json_pack("{s:s}", "type", "tooManyMailboxes");
+    case IMAP_QUOTA_EXCEEDED:
+        return json_pack("{s:s}", "type", "overQuota");
+    default:
+        return json_pack("{s:s, s:s}",
+                         "type",
+                         "serverFail",
+                         "description",
+                         error_message(r));
     }
 }
 
@@ -615,28 +643,26 @@ HIDDEN char *jmap_decode_base64_nopad(const char *b64, size_t b64len)
     /* Pad base64 data. */
     size_t myb64len = b64len;
     switch (b64len % 4) {
-        case 3:
-            myb64len += 1;
-            break;
-        case 2:
-            myb64len += 2;
-            break;
-        case 1:
-            return NULL;
-        default:
-            ; // do nothing
+    case 3:
+        myb64len += 1;
+        break;
+    case 2:
+        myb64len += 2;
+        break;
+    case 1:
+        return NULL;
+    default:; // do nothing
     }
-    char *myb64 = xzmalloc(myb64len+1);
+    char *myb64 = xzmalloc(myb64len + 1);
     memcpy(myb64, b64, b64len);
     switch (myb64len - b64len) {
-        case 2:
-            myb64[b64len+1] = '=';
-            // fall through
-        case 1:
-            myb64[b64len] = '=';
-            break;
-        default:
-            ; // do nothing
+    case 2:
+        myb64[b64len + 1] = '=';
+        // fall through
+    case 1:
+        myb64[b64len] = '=';
+        break;
+    default:; // do nothing
     }
 
     /* Convert from URL-safe Base64 (see rfc4648#section-5) */
@@ -665,8 +691,10 @@ HIDDEN char *jmap_decode_base64_nopad(const char *b64, size_t b64len)
     return data;
 }
 
-EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
-                                  const char *data, size_t datalen,
+EXPORTED void jmap_decode_to_utf8(const char *charset,
+                                  int encoding,
+                                  const char *data,
+                                  size_t datalen,
                                   float confidence,
                                   struct buf *text,
                                   int *is_encoding_problem)
@@ -689,8 +717,10 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
 
     /* Can't use fast path. Allocate and try to detect charset. */
     if (cs == CHARSET_UNKNOWN_CHARSET || encoding == ENCODING_UNKNOWN) {
-        syslog(LOG_INFO, "decode_to_utf8 error (%s, %s)",
-                charset, encoding_name(encoding));
+        syslog(LOG_INFO,
+               "decode_to_utf8 error (%s, %s)",
+               charset,
+               encoding_name(encoding));
         if (is_encoding_problem) *is_encoding_problem = 1;
         goto done;
     }
@@ -699,8 +729,10 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
     size_t nreplacement = 0;
     if (!strcasecmp(charset_id, "UTF-8")) {
         if (charset_decode(text, data, datalen, encoding)) {
-            xsyslog(LOG_INFO, "failed to decode UTF-8 data",
-                    "encoding=<%s>", encoding_name(encoding));
+            xsyslog(LOG_INFO,
+                    "failed to decode UTF-8 data",
+                    "encoding=<%s>",
+                    encoding_name(encoding));
             if (is_encoding_problem) *is_encoding_problem = 1;
             goto done;
         }
@@ -712,7 +744,8 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
             nreplacement = counts.replacement;
             buf_reset(text);
         }
-        else counts.replacement = 0; // ignore replacement in source data
+        else
+            counts.replacement = 0; // ignore replacement in source data
     }
     if (!buf_len(text)) {
         if (charset_to_utf8(text, data, datalen, cs, encoding)) {
@@ -731,7 +764,8 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         /* Special-handle UTF-32. Some clients announce the wrong endianess. */
         if (counts.invalid || counts.replacement) {
             charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
-            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
+            if (!strcasecmp(charset_id, "UTF-32")
+                || !strcasecmp(charset_id, "UTF-32BE"))
                 guess_cs = charset_lookupname("UTF-32LE");
             else
                 guess_cs = charset_lookupname("UTF-32BE");
@@ -756,9 +790,10 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
             charset_t guess_cs = charset_lookupname("ISO-2022-JP");
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
                 struct buf guess = BUF_INITIALIZER;
-                if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding)) {
-                    struct char_counts guess_counts =
-                        charset_count_validutf8(buf_base(&guess), buf_len(&guess));
+                if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding))
+                {
+                    struct char_counts guess_counts = charset_count_validutf8(
+                        buf_base(&guess), buf_len(&guess));
                     if (!guess_counts.invalid && !guess_counts.replacement) {
                         buf_copy(text, &guess);
                         counts = guess_counts;
@@ -780,34 +815,45 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
         if (!obj) goto done;
         detect_reset(&d);
 
-
         struct buf buf = BUF_INITIALIZER;
         charset_decode(&buf, data, datalen, encoding);
         buf_cstring(&buf);
-        if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
+        if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj)
+            == CHARDET_SUCCESS)
+        {
             charset_t guess_cs = charset_lookupname(obj->encoding);
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
                 struct buf guess = BUF_INITIALIZER;
-                if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding)) {
-                    struct char_counts guess_counts =
-                        charset_count_validutf8(buf_base(&guess), buf_len(&guess));
-                    if ((guess_counts.valid > counts.valid) &&
-                            (obj->confidence >= confidence)) {
-                        // libchardet might have guessed a single-byte character encoding,
-                        // which will result in a large number of valid characters and no
-                        // invalid or replacement characters. An indicator that the guess
-                        // was wrong is if the number of printable characters decreased
-                        // in relation to all valid characters, including control chars.
-                        double printable = counts.valid ?
-                            1.0 * (counts.valid - counts.cntrl) / counts.valid
-                            : 0;
-                        double guess_printable = guess_counts.valid ?
-                            1.0 * (guess_counts.valid - guess_counts.cntrl) / guess_counts.valid
-                            : 0;
+                if (!charset_to_utf8(&guess, data, datalen, guess_cs, encoding))
+                {
+                    struct char_counts guess_counts = charset_count_validutf8(
+                        buf_base(&guess), buf_len(&guess));
+                    if ((guess_counts.valid > counts.valid)
+                        && (obj->confidence >= confidence))
+                    {
+                        // libchardet might have guessed a single-byte character
+                        // encoding, which will result in a large number of
+                        // valid characters and no invalid or replacement
+                        // characters. An indicator that the guess was wrong is
+                        // if the number of printable characters decreased in
+                        // relation to all valid characters, including control
+                        // chars.
+                        double printable =
+                            counts.valid ? 1.0 * (counts.valid - counts.cntrl)
+                                               / counts.valid
+                                         : 0;
+                        double guess_printable =
+                            guess_counts.valid ? 1.0
+                                                     * (guess_counts.valid
+                                                        - guess_counts.cntrl)
+                                                     / guess_counts.valid
+                                               : 0;
 
-                        if ((guess_counts.replacement <= counts.replacement) &&
-                            (!guess_counts.invalid || guess_counts.invalid < counts.invalid) &&
-                                guess_printable >= printable) {
+                        if ((guess_counts.replacement <= counts.replacement)
+                            && (!guess_counts.invalid
+                                || guess_counts.invalid < counts.invalid)
+                            && guess_printable >= printable)
+                        {
                             buf_copy(text, &guess);
                             counts = guess_counts;
                         }
@@ -989,7 +1035,7 @@ EXPORTED json_t *jmap_header_as_raw(const char *raw)
     if (!raw) return json_null();
 
     size_t len = strlen(raw);
-    if (len > 1 && raw[len-1] == '\n' && raw[len-2] == '\r') len -= 2;
+    if (len > 1 && raw[len - 1] == '\n' && raw[len - 2] == '\r') len -= 2;
     return json_stringn(raw, len);
 }
 
@@ -1010,8 +1056,8 @@ static char *decode_and_normalize_mimeheader(const char *raw)
     if (is_8bit) {
         int r = 0;
         struct buf buf = BUF_INITIALIZER;
-        jmap_decode_to_utf8("utf-8", ENCODING_NONE,
-                raw, strlen(raw), 0.0, &buf, &r);
+        jmap_decode_to_utf8(
+            "utf-8", ENCODING_NONE, raw, strlen(raw), 0.0, &buf, &r);
         if (buf_len(&buf)) {
             val = charset_utf8_normalize(buf_cstring(&buf));
         }
@@ -1019,7 +1065,8 @@ static char *decode_and_normalize_mimeheader(const char *raw)
     }
 
     if (!val) {
-        val = charset_decode_mimeheader(raw, CHARSET_KEEPCASE | CHARSET_UNORM_NFC);
+        val = charset_decode_mimeheader(raw,
+                                        CHARSET_KEEPCASE | CHARSET_UNORM_NFC);
     }
     return val;
 }
@@ -1066,7 +1113,7 @@ EXPORTED json_t *jmap_header_as_date(const char *raw)
         if (r == -1) return json_null();
     }
 
-    char cbuf[ISO8601_DATETIME_MAX+1] = "";
+    char cbuf[ISO8601_DATETIME_MAX + 1] = "";
     offsettime_to_iso8601(&t, cbuf, sizeof(cbuf), 1);
     return json_string(cbuf);
 }
@@ -1075,8 +1122,7 @@ static void _remove_ws(char *s)
 {
     char *d = s;
     do {
-        while (isspace(*s))
-            s++;
+        while (isspace(*s)) s++;
     } while ((*d++ = *s++));
 }
 
@@ -1130,8 +1176,8 @@ EXPORTED json_t *jmap_header_as_messageids(const char *raw)
         }
 
         /* Read id */
-        char *val = xstrndup(*p == '<' ? p + 1 : p,
-                             *q == '>' ? q - p - 1 : q - p);
+        char *val =
+            xstrndup(*p == '<' ? p + 1 : p, *q == '>' ? q - p - 1 : q - p);
         if (*p == '<') {
             _remove_ws(val);
         }
@@ -1149,7 +1195,6 @@ EXPORTED json_t *jmap_header_as_messageids(const char *raw)
         /* Reset iterator */
         p = *q ? q + 1 : q;
     }
-
 
     if (!json_array_size(msgids)) {
         json_decref(msgids);
@@ -1226,8 +1271,10 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                 if (form == HEADER_FORM_GROUPEDADDRESSES) {
                     if (groupname || json_array_size(addresses)) {
                         json_t *group = json_object();
-                        json_object_set_new(group, "name",
-                                groupname ? json_string(groupname) : json_null());
+                        json_object_set_new(group,
+                                            "name",
+                                            groupname ? json_string(groupname)
+                                                      : json_null());
                         json_object_set_new(group, "addresses", addresses);
                         json_array_append_new(result, group);
                         addresses = json_array();
@@ -1243,8 +1290,10 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
             if (form == HEADER_FORM_GROUPEDADDRESSES) {
                 if (groupname || json_array_size(addresses)) {
                     json_t *group = json_object();
-                    json_object_set_new(group, "name",
-                            groupname ? json_string(groupname) : json_null());
+                    json_object_set_new(group,
+                                        "name",
+                                        groupname ? json_string(groupname)
+                                                  : json_null());
                     json_object_set_new(group, "addresses", addresses);
                     json_array_append_new(result, group);
                     addresses = json_array();
@@ -1256,8 +1305,8 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
             /* Regular address */
             json_t *jemailaddr = json_object();
 
-            json_object_set_new(jemailaddr, "name",
-                                name ? json_string(name) : json_null());
+            json_object_set_new(
+                jemailaddr, "name", name ? json_string(name) : json_null());
 
             if (mailbox) {
                 buf_setcstr(&buf, mailbox);
@@ -1265,9 +1314,11 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                     buf_putc(&buf, '@');
                     buf_appendcstr(&buf, domain);
                 }
-                json_object_set_new(jemailaddr, "email", json_string(buf_cstring(&buf)));
+                json_object_set_new(
+                    jemailaddr, "email", json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
-            } else {
+            }
+            else {
                 json_object_set_new(jemailaddr, "email", json_null());
             }
             json_array_append_new(addresses, jemailaddr);
@@ -1283,12 +1334,15 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
     if (form == HEADER_FORM_GROUPEDADDRESSES) {
         if (groupname || json_array_size(addresses)) {
             json_t *group = json_object();
-            json_object_set_new(group, "name",
-                    groupname ? json_string(groupname) : json_null());
+            json_object_set_new(group,
+                                "name",
+                                groupname ? json_string(groupname)
+                                          : json_null());
             json_object_set_new(group, "addresses", addresses);
             json_array_append_new(result, group);
         }
-        else json_decref(addresses);
+        else
+            json_decref(addresses);
     }
     else {
         json_decref(result);
@@ -1302,29 +1356,29 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
 EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
 {
     buf[0] = 'G';
-    memcpy(buf+1, message_guid_encode(guid), JMAP_BLOBID_SIZE-2);
-    buf[JMAP_BLOBID_SIZE-1] = '\0';
+    memcpy(buf + 1, message_guid_encode(guid), JMAP_BLOBID_SIZE - 2);
+    buf[JMAP_BLOBID_SIZE - 1] = '\0';
 }
 
 EXPORTED void jmap_set_emailid(const struct message_guid *guid, char *buf)
 {
     buf[0] = 'M';
-    memcpy(buf+1, message_guid_encode(guid), JMAP_EMAILID_SIZE-2);
-    buf[JMAP_EMAILID_SIZE-1] = '\0';
+    memcpy(buf + 1, message_guid_encode(guid), JMAP_EMAILID_SIZE - 2);
+    buf[JMAP_EMAILID_SIZE - 1] = '\0';
 }
 
 EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
 {
     buf[0] = 'T';
-    memcpy(buf+1, conversation_id_encode(cid), JMAP_THREADID_SIZE-2);
-    buf[JMAP_THREADID_SIZE-1] = 0;
+    memcpy(buf + 1, conversation_id_encode(cid), JMAP_THREADID_SIZE - 2);
+    buf[JMAP_THREADID_SIZE - 1] = 0;
 }
 
 EXPORTED char *jmap_role_to_specialuse(const char *role)
 {
     if (!role) return NULL;
     if (!role[0]) return NULL;
-    char *specialuse = strconcat("\\", role, (char *)NULL);
+    char *specialuse = strconcat("\\", role, (char *) NULL);
     specialuse[1] = toupper(specialuse[1]);
     return specialuse;
 }
@@ -1340,8 +1394,7 @@ EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
     const char *p = id;
 
     // read prefix
-    if (*p != 'E')
-        goto done;
+    if (*p != 'E') goto done;
     p++;
     if (*p == 'R') {
         has_recurid = 1;
@@ -1351,8 +1404,7 @@ EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
         is_base64 = 1;
         p++;
     }
-    if (*p != '-')
-        goto done;
+    if (*p != '-') goto done;
     p++;
 
     // read recurid
@@ -1375,8 +1427,8 @@ EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
     }
 
     // read uid
-    eid->ical_uid = eid->_alloced[0] = is_base64 ?
-        jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+    eid->ical_uid = eid->_alloced[0] =
+        is_base64 ? jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
 
 done:
     if (!eid->ical_uid) {
@@ -1401,7 +1453,8 @@ EXPORTED void jmap_caleventid_free(struct jmap_caleventid **eidptr)
     *eidptr = NULL;
 }
 
-EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf)
+EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid,
+                                            struct buf *buf)
 {
     buf_reset(buf);
 
@@ -1417,10 +1470,8 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
     int has_recurid = eid->ical_recurid && eid->ical_recurid[0];
 
     buf_putc(buf, 'E');
-    if (has_recurid)
-        buf_putc(buf, 'R');
-    if (need_base64)
-        buf_putc(buf, 'B');
+    if (has_recurid) buf_putc(buf, 'R');
+    if (need_base64) buf_putc(buf, 'B');
     buf_putc(buf, '-');
 
     if (has_recurid) {
@@ -1429,7 +1480,8 @@ EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, s
     }
 
     if (need_base64) {
-        char *tmp = jmap_encode_base64_nopad(eid->ical_uid, strlen(eid->ical_uid));
+        char *tmp =
+            jmap_encode_base64_nopad(eid->ical_uid, strlen(eid->ical_uid));
         buf_appendcstr(buf, tmp);
         free(tmp);
     }
@@ -1446,9 +1498,9 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
     const char *id = NULL;
 
     icalproperty *prop;
-    for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY)) {
+    for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY); prop;
+         prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY))
+    {
 
         if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
             id = icalproperty_get_value_as_string(prop);
@@ -1460,13 +1512,13 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
         id = icalcomponent_get_uid(valarm);
     }
 
-    char keybuf[2*SHA1_DIGEST_LENGTH+1];
+    char keybuf[2 * SHA1_DIGEST_LENGTH + 1];
     if (!id) {
         unsigned char dest[SHA1_DIGEST_LENGTH];
         const char *val = icalcomponent_as_ical_string(valarm);
         xsha1((const unsigned char *) val, strlen(val), dest);
         bin_to_hex(dest, SHA1_DIGEST_LENGTH, keybuf, BH_LOWER);
-        keybuf[2*SHA1_DIGEST_LENGTH] = '\0';
+        keybuf[2 * SHA1_DIGEST_LENGTH] = '\0';
         id = keybuf;
     }
 
@@ -1480,14 +1532,10 @@ EXPORTED int jmap_is_valid_id(const char *id)
     if (!id || *id == '\0') return 0;
     const char *p;
     for (p = id; *p; p++) {
-        if (('0' <= *p && *p <= '9'))
-            continue;
-        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
-            continue;
-        if ((*p == '-') || (*p == '_'))
-            continue;
+        if (('0' <= *p && *p <= '9')) continue;
+        if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z')) continue;
+        if ((*p == '-') || (*p == '_')) continue;
         return 0;
     }
     return 1;
 }
-

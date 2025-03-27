@@ -41,7 +41,6 @@
  *
  */
 
-
 #include <config.h>
 
 #include <string.h>
@@ -92,7 +91,8 @@ int json_array_find(json_t *array, const char *needle)
     size_t i;
     json_t *val;
 
-    json_array_foreach(array, i, val) {
+    json_array_foreach(array, i, val)
+    {
         if (!strcmp(needle, json_string_value(val))) return i;
     }
 
@@ -101,8 +101,10 @@ int json_array_find(json_t *array, const char *needle)
 
 /* Get the property with the given key, if it exists.
    Otherwise, create is with the given json_pack() args */
-json_t *json_object_get_vanew(json_t *obj, const char *key,
-                              const char *fmt, ...)
+json_t *json_object_get_vanew(json_t *obj,
+                              const char *key,
+                              const char *fmt,
+                              ...)
 {
     json_t *val = json_object_get(obj, key);
 

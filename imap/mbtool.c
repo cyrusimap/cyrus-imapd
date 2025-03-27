@@ -43,44 +43,44 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
-#include <getopt.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/stat.h>
 
 #if HAVE_DIRENT_H
-# include <dirent.h>
-# define NAMLEN(dirent) strlen((dirent)->d_name)
+#    include <dirent.h>
+#    define NAMLEN(dirent) strlen((dirent)->d_name)
 #else
-# define dirent direct
-# define NAMLEN(dirent) (dirent)->d_namlen
-# if HAVE_SYS_NDIR_H
-#  include <sys/ndir.h>
-# endif
-# if HAVE_SYS_DIR_H
-#  include <sys/dir.h>
-# endif
-# if HAVE_NDIR_H
-#  include <ndir.h>
-# endif
+#    define dirent direct
+#    define NAMLEN(dirent) (dirent)->d_namlen
+#    if HAVE_SYS_NDIR_H
+#        include <sys/ndir.h>
+#    endif
+#    if HAVE_SYS_DIR_H
+#        include <sys/dir.h>
+#    endif
+#    if HAVE_NDIR_H
+#        include <ndir.h>
+#    endif
 #endif
 
 #include "assert.h"
-#include "index.h"
 #include "global.h"
+#include "index.h"
 #include "mailbox.h"
+#include "mboxlist.h"
+#include "mboxname.h"
 #include "message.h"
 #include "message_guid.h"
-#include "mboxname.h"
-#include "mboxlist.h"
 #include "seen.h"
 #include "times.h"
 #include "util.h"
@@ -114,14 +114,15 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "new-uniqueid", no_argument, NULL, 'r' },
+        { "new-uniqueid",           no_argument, NULL, 'r' },
         { "normalize-internaldate", no_argument, NULL, 't' },
 
-        { 0, 0, 0, 0 },
+        { 0,                        0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -129,12 +130,16 @@ int main(int argc, char **argv)
             break;
 
         case 'r':
-            if (cmd == 0) cmd = CMD_REID;
-            else usage();
+            if (cmd == 0)
+                cmd = CMD_REID;
+            else
+                usage();
             break;
         case 't':
-            if (cmd == 0) cmd = CMD_TIME;
-            else usage();
+            if (cmd == 0)
+                cmd = CMD_TIME;
+            else
+                usage();
             break;
 
         default:
@@ -151,7 +156,9 @@ int main(int argc, char **argv)
     cyrus_init(alt_config, "mbtool", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&mbtool_namespace, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(&mbtool_namespace,
+                                     NAMESPACE_OPTION_ADMIN)))
+    {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -171,8 +178,10 @@ static void usage(void)
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    mbtool [options] {-r|-t} mailbox...\n");
     fprintf(stderr, "\nCommands:\n");
-    fprintf(stderr, "    -r    create new unique IDs for specified mailboxes\n");
-    fprintf(stderr, "    -t    normalise internaldates in specified mailboxes\n");
+    fprintf(stderr,
+            "    -r    create new unique IDs for specified mailboxes\n");
+    fprintf(stderr,
+            "    -t    normalise internaldates in specified mailboxes\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "    -C alt_config  use alternate imapd.conf file\n");
     exit(EX_USAGE);
@@ -185,8 +194,8 @@ static int do_timestamp(const mbname_t *mbname)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
-    char olddate[RFC5322_DATETIME_MAX+1];
-    char newdate[RFC5322_DATETIME_MAX+1];
+    char olddate[RFC5322_DATETIME_MAX + 1];
+    char newdate[RFC5322_DATETIME_MAX + 1];
 
     signals_poll();
 
@@ -200,13 +209,13 @@ static int do_timestamp(const mbname_t *mbname)
     r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
-        if (llabs(record->internaldate - record->gmtime) < 86400)
-            continue;
+        if (llabs(record->internaldate - record->gmtime) < 86400) continue;
 
         struct index_record copyrecord = *record;
 
@@ -221,7 +230,7 @@ static int do_timestamp(const mbname_t *mbname)
         if (r) goto done;
     }
 
- done:
+done:
     mailbox_iter_done(&iter);
     mailbox_close(&mailbox);
 
@@ -266,19 +275,16 @@ done:
     return r;
 }
 
-
 int do_cmd(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
     if (!data->is_exactmatch) return 0;
 
-    int *valp = (int *)rock;
+    int *valp = (int *) rock;
 
-    if (*valp == CMD_TIME)
-        return do_timestamp(data->mbname);
+    if (*valp == CMD_TIME) return do_timestamp(data->mbname);
 
-    if (*valp == CMD_REID)
-        return do_reid(data->mbname);
+    if (*valp == CMD_REID) return do_reid(data->mbname);
 
     return 0;
 }

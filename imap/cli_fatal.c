@@ -42,8 +42,8 @@
 
 #include <config.h>
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sysexits.h>
 
 #include "global.h"

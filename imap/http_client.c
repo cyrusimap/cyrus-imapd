@@ -44,7 +44,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <string.h>
 #include <syslog.h>
@@ -81,18 +81,19 @@ EXPORTED int is_mediatype(const char *pat, const char *type)
     type = ++tsep;
     tlen = strcspn(type, "; \r\n\0");
 
-    return (!strncmp(pat, "*", plen) ||
-            (!alltypes && (tlen == plen) && !strncasecmp(pat, type, tlen)));
+    return (!strncmp(pat, "*", plen)
+            || (!alltypes && (tlen == plen) && !strncasecmp(pat, type, tlen)));
 }
-
 
 /*
  * Parse the framing of a request or response message.
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified)
  */
-EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
-                                struct body_t *body, const char **errstr)
+EXPORTED int http_parse_framing(int http2,
+                                hdrcache_t hdrs,
+                                struct body_t *body,
+                                const char **errstr)
 {
     static unsigned max_msgsize = 0;
     const char **hdr;
@@ -100,7 +101,8 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     if (max_msgsize == 0) {
         int64_t val = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
 
-        /* 0 means "unlimited", which really means our internally-defined limit */
+        /* 0 means "unlimited", which really means our internally-defined limit
+         */
         if (val <= 0) val = BYTESIZE_UNLIMITED;
 
         /* XXX constrained by other variable sizes here */
@@ -122,7 +124,8 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
         }
 
         for (; *hdr; hdr++) {
-            tok_t tok = TOK_INITIALIZER(*hdr, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            tok_t tok =
+                TOK_INITIALIZER(*hdr, ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
             char *token;
 
             while ((token = tok_next(&tok))) {
@@ -141,8 +144,8 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
 #ifdef HAVE_ZLIB
                 else if (!strcasecmp(token, "deflate"))
                     body->te = TE_DEFLATE;
-                else if (!strcasecmp(token, "gzip") ||
-                         !strcasecmp(token, "x-gzip"))
+                else if (!strcasecmp(token, "gzip")
+                         || !strcasecmp(token, "x-gzip"))
                     body->te = TE_GZIP;
 #endif
                 else if (!(body->flags & BODY_DISCARD)) {
@@ -151,7 +154,7 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
                 }
             }
             tok_fini(&tok);
-            if (token) break;  /* error */
+            if (token) break; /* error */
         }
 
         if (*hdr) {
@@ -188,16 +191,19 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
 
     /* Check if this is a close-delimited response */
     else if (body->flags & BODY_RESPONSE) {
-        if (body->flags & BODY_CLOSE) body->framing = FRAMING_CLOSE;
-        else return HTTP_LENGTH_REQUIRED;
+        if (body->flags & BODY_CLOSE)
+            body->framing = FRAMING_CLOSE;
+        else
+            return HTTP_LENGTH_REQUIRED;
     }
 
     return 0;
 }
 
-
-EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
-                               hdrcache_t *hdrs, const char **errstr)
+EXPORTED int http_read_headers(struct protstream *pin,
+                               int read_sep,
+                               hdrcache_t *hdrs,
+                               const char **errstr)
 {
     int r, c;
 
@@ -219,16 +225,16 @@ EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
         *errstr = error_message(r);
         return HTTP_BAD_REQUEST;
     }
-    else if ((*errstr = prot_error(pin)) &&
-        strcmp(*errstr, PROT_EOF_STRING)) {
+    else if ((*errstr = prot_error(pin)) && strcmp(*errstr, PROT_EOF_STRING)) {
         /* client timed out */
         syslog(LOG_WARNING, "%s, closing connection", *errstr);
         return HTTP_TIMEOUT;
     }
 
     /* Read CRLF separating headers and body */
-    if (read_sep &&
-        ((c = prot_getc(pin)) != '\r' || (c = prot_getc(pin)) != '\n')) {
+    if (read_sep
+        && ((c = prot_getc(pin)) != '\r' || (c = prot_getc(pin)) != '\n'))
+    {
         *errstr = error_message(IMAP_MESSAGE_NOBLANKLINE);
         return HTTP_BAD_REQUEST;
     }
@@ -236,22 +242,25 @@ EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
     return 0;
 }
 
-
 /*
  * Read the body of a request or response.
  * Handles chunked, gzip, deflate TE only.
  * Handles close-delimited response bodies (no Content-Length specified)
  * Handles gzip and deflate CE only.
  */
-EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
-                            struct body_t *body, const char **errstr)
+EXPORTED int http_read_body(struct protstream *pin,
+                            hdrcache_t hdrs,
+                            struct body_t *body,
+                            const char **errstr)
 {
     char buf[PROT_BUFSIZE];
     unsigned n;
     int r = 0;
 
-    syslog(LOG_DEBUG, "http_read_body(flags=%#x, framing=%d)",
-           body->flags, body->framing);
+    syslog(LOG_DEBUG,
+           "http_read_body(flags=%#x, framing=%d)",
+           body->flags,
+           body->framing);
 
     if (body->framing == FRAMING_UNKNOWN) {
         /* Get message framing */
@@ -282,8 +291,7 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
 
         break;
 
-    case FRAMING_CHUNKED:
-    {
+    case FRAMING_CHUNKED: {
         unsigned last = 0;
 
         /* Read chunks until last-chunk (zero chunk-size) */
@@ -291,8 +299,9 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
             unsigned chunk;
 
             /* Read chunk-size */
-            if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
-                sscanf(buf, "%x", &chunk) != 1) {
+            if (!prot_fgets(buf, PROT_BUFSIZE, pin)
+                || sscanf(buf, "%x", &chunk) != 1)
+            {
                 *errstr = "Unable to read chunk size";
                 goto read_failure;
 
@@ -361,7 +370,6 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
         goto read_failure;
     }
 
-
     if (!(body->flags & BODY_DISCARD) && buf_len(&body->payload)) {
 #ifdef HAVE_ZLIB
         /* Decode the payload, if necessary */
@@ -394,8 +402,8 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
                 else
                     r = buf_inflate(&body->payload, DEFLATE_ZLIB);
             }
-            else if (!strcasecmp(hdr[0], "gzip") ||
-                     !strcasecmp(hdr[0], "x-gzip"))
+            else if (!strcasecmp(hdr[0], "gzip")
+                     || !strcasecmp(hdr[0], "x-gzip"))
                 r = buf_inflate(&body->payload, DEFLATE_GZIP);
 #endif
             else {
@@ -412,21 +420,24 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
 
     return 0;
 
-  read_failure:
+read_failure:
     if (strcmpsafe(prot_error(pin), PROT_EOF_STRING)) {
         /* client timed out */
         *errstr = prot_error(pin);
         syslog(LOG_WARNING, "%s, closing connection", *errstr);
         return HTTP_TIMEOUT;
     }
-    else return HTTP_BAD_REQUEST;
+    else
+        return HTTP_BAD_REQUEST;
 }
 
-
 /* Read a response from backend */
-EXPORTED int http_read_response(struct backend *be, unsigned meth,
-                                unsigned *code, hdrcache_t *hdrs,
-                                struct body_t *body, const char **errstr)
+EXPORTED int http_read_response(struct backend *be,
+                                unsigned meth,
+                                unsigned *code,
+                                hdrcache_t *hdrs,
+                                struct body_t *body,
+                                const char **errstr)
 {
     static char statbuf[2048];
     const char **conn;
@@ -436,44 +447,47 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
     *errstr = NULL;
     *code = HTTP_BAD_GATEWAY;
 
-    if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
-        (sscanf(statbuf, "HTTP/1.%1u %3u ", &version, code) != 2) ||
-        (version > 1)) {
+    if (!prot_fgets(statbuf, sizeof(statbuf), be->in)
+        || (sscanf(statbuf, "HTTP/1.%1u %3u ", &version, code) != 2)
+        || (version > 1))
+    {
         *errstr = "Unable to read status-line from backend";
         return HTTP_BAD_GATEWAY;
     }
     r = http_read_headers(be->in, 1 /* read_sep */, hdrs, errstr);
-    if (r) return (r != HTTP_SERVER_ERROR ? HTTP_BAD_GATEWAY: r);
+    if (r) return (r != HTTP_SERVER_ERROR ? HTTP_BAD_GATEWAY : r);
 
     /* 1xx (provisional) response - nothing else to do */
     if (*code < 200) return 0;
 
     /* Final response */
-    if (!body) return 0;  /* body will be piped */
+    if (!body) return 0; /* body will be piped */
     if (!(body->flags & BODY_DISCARD)) buf_reset(&body->payload);
 
     /* Check connection persistence */
     if (version == 0) body->flags |= BODY_CLOSE;
     for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
-        tok_t tok =
-            TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        tok_t tok = TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
         char *token;
 
         while ((token = tok_next(&tok))) {
-            if (!strcasecmp(token, "keep-alive")) body->flags &= ~BODY_CLOSE;
-            else if (!strcasecmp(token, "close")) body->flags |= BODY_CLOSE;
+            if (!strcasecmp(token, "keep-alive"))
+                body->flags &= ~BODY_CLOSE;
+            else if (!strcasecmp(token, "close"))
+                body->flags |= BODY_CLOSE;
         }
         tok_fini(&tok);
     }
 
     /* Not expecting a body for 204/304 response or any HEAD response */
-    switch (*code){
+    switch (*code) {
     case 204: /* No Content */
     case 304: /* Not Modified */
         break;
 
     default:
-        if (meth == METH_HEAD) break;
+        if (meth == METH_HEAD)
+            break;
 
         else {
             body->flags |= BODY_RESPONSE;
@@ -488,12 +502,11 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
     return 0;
 }
 
-
 /* Convert a HTTP status to one of our error codes */
 EXPORTED long http_status_to_code(unsigned status)
 {
     int i, len, n_msgs = et_http_error_table.n_msgs;
-    const char * const *msgs = et_http_error_table.msgs;
+    const char *const *msgs = et_http_error_table.msgs;
     char buf[100];
 
     len = snprintf(buf, sizeof(buf), "%u ", status);
@@ -505,11 +518,13 @@ EXPORTED long http_status_to_code(unsigned status)
     return HTTP_SERVER_ERROR;
 }
 
-
 EXPORTED int http_parse_auth_params(const char *params,
-                                    const char **realm, unsigned int *realm_len,
-                                    const char **sid, unsigned int *sid_len,
-                                    const char **data, unsigned int *data_len)
+                                    const char **realm,
+                                    unsigned int *realm_len,
+                                    const char **sid,
+                                    unsigned int *sid_len,
+                                    const char **data,
+                                    unsigned int *data_len)
 {
     const char *param = params;
 
@@ -539,7 +554,8 @@ EXPORTED int http_parse_auth_params(const char *params,
         if (!value) {
             syslog(LOG_ERR,
                    "Missing value for '%.*s' parameter in credentials",
-                   (int) tok_len, param);
+                   (int) tok_len,
+                   param);
             return SASL_BADAUTH;
         }
 

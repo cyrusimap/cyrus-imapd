@@ -64,11 +64,12 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-
-EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
+EXPORTED int dav_get_validators(struct mailbox *mailbox,
+                                void *data,
                                 const char *userid __attribute__((unused)),
                                 struct index_record *record,
-                                const char **etag, time_t *lastmod)
+                                const char **etag,
+                                time_t *lastmod)
 {
     const struct dav_data *ddata = (const struct dav_data *) data;
 
@@ -86,8 +87,11 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
         /* Fetch index record for the resource */
         r = mailbox_find_index_record(mailbox, ddata->imap_uid, record);
         if (r) {
-            syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-                   mailbox_name(mailbox), ddata->imap_uid, error_message(r));
+            syslog(LOG_ERR,
+                   "mailbox_find_index_record(%s, %u) failed: %s",
+                   mailbox_name(mailbox),
+                   ddata->imap_uid,
+                   error_message(r));
             return r;
         }
 
@@ -103,9 +107,9 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
     return 0;
 }
 
-
 EXPORTED int dav_store_resource(struct transaction_t *txn,
-                                const char *data, size_t datalen,
+                                const char *data,
+                                size_t datalen,
                                 struct mailbox *mailbox,
                                 struct index_record *oldrecord,
                                 modseq_t createdmodseq,
@@ -123,10 +127,12 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     const char *mboxname = mailbox_name(mailbox);
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mboxname, now,
+    if (!(f = append_newstage(mboxname,
+                              now,
                               strhash(mboxname), /* unique msgnum to avoid clash
                                                     during iMIP processing */
-                              &stage))) {
+                              &stage)))
+    {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         txn->error.desc = "append_newstage() failed";
         return HTTP_SERVER_ERROR;
@@ -152,8 +158,8 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
             buf_printf(&txn->buf, "<%s@%s>", txn->userid, config_servername);
         }
 
-        mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
-                                            buf_len(&txn->buf), 0);
+        mimehdr = charset_encode_mimeheader(
+            buf_cstring(&txn->buf), buf_len(&txn->buf), 0);
         fprintf(f, "From: %s\r\n", mimehdr);
         free(mimehdr);
         buf_reset(&txn->buf);
@@ -167,7 +173,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         fprintf(f, "Date: %s\r\n", hdr[0]);
     }
     else {
-        char datestr[80];       /* XXX: Why do we need 80 character buffer? */
+        char datestr[80]; /* XXX: Why do we need 80 character buffer? */
         time_to_rfc5322(now, datestr, sizeof(datestr));
         fprintf(f, "Date: %s\r\n", datestr);
     }
@@ -183,7 +189,8 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
         fprintf(f, "Content-Type: %s\r\n", hdr[0]);
     }
-    else fputs("Content-Type: application/octet-stream\r\n", f);
+    else
+        fputs("Content-Type: application/octet-stream\r\n", f);
 
     if (!datalen) {
         datalen = strlen(data);
@@ -215,17 +222,28 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     qdiffs[QUOTA_MESSAGE] = 1;
 
     /* Prepare to append the message to the mailbox */
-    if ((r = append_setup_mbox(&as, mailbox, txn->userid, txn->authstate,
-                          0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+    if ((r = append_setup_mbox(&as,
+                               mailbox,
+                               txn->userid,
+                               txn->authstate,
+                               0,
+                               qdiffs,
+                               0,
+                               0,
+                               EVENT_MESSAGE_NEW | EVENT_CALENDAR)))
+    {
+        syslog(LOG_ERR,
+               "append_setup(%s) failed: %s",
+               mailbox_name(mailbox),
+               error_message(r));
         if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
             /* DAV:quota-not-exceeded */
             txn->error.precond = DAV_OVER_QUOTA;
             txn->error.desc =
                 (r == IMAP_NO_OVERQUOTA) ? "num resources" : "storage";
             ret = HTTP_NO_STORAGE;
-        } else {
+        }
+        else {
             ret = HTTP_SERVER_ERROR;
             txn->error.desc = error_message(r);
         }
@@ -252,22 +270,27 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         if (del_imapflags && flaglist) {
             int i;
             for (i = 0; i < strarray_size(del_imapflags); i++) {
-                strarray_remove_all_case(flaglist, strarray_nth(del_imapflags, i));
+                strarray_remove_all_case(flaglist,
+                                         strarray_nth(del_imapflags, i));
             }
         }
 
         /* Append the message to the mailbox */
-        if ((r = append_fromstage(&as, &body, stage, now,
-                                  createdmodseq, flaglist, 0, &annots))) {
-            syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-                   mailbox_name(mailbox), error_message(r));
+        if ((r = append_fromstage(
+                 &as, &body, stage, now, createdmodseq, flaglist, 0, &annots)))
+        {
+            syslog(LOG_ERR,
+                   "append_fromstage(%s) failed: %s",
+                   mailbox_name(mailbox),
+                   error_message(r));
             if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
                 /* DAV:quota-not-exceeded */
                 txn->error.precond = DAV_OVER_QUOTA;
                 txn->error.desc =
                     (r == IMAP_NO_OVERQUOTA) ? "num resources" : "storage";
                 ret = HTTP_NO_STORAGE;
-            } else {
+            }
+            else {
                 txn->error.desc = error_message(r);
                 ret = HTTP_SERVER_ERROR;
             }
@@ -279,12 +302,15 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         strarray_free(flaglist);
         freeentryatts(annots);
 
-        if (r) append_abort(&as);
+        if (r)
+            append_abort(&as);
         else {
             /* Commit the append to the mailbox */
             if ((r = append_commit(&as))) {
-                syslog(LOG_ERR, "append_commit(%s) failed: %s",
-                       mailbox_name(mailbox), error_message(r));
+                syslog(LOG_ERR,
+                       "append_commit(%s) failed: %s",
+                       mailbox_name(mailbox),
+                       error_message(r));
                 ret = HTTP_SERVER_ERROR;
                 txn->error.desc = "append_commit() failed";
             }
@@ -299,20 +325,24 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                     /* Perform the actual expunge */
                     r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
                     if (!r) {
-                        oldrecord->user_flags[userflag/32] |= 1 << (userflag & 31);
+                        oldrecord->user_flags[userflag / 32] |=
+                            1 << (userflag & 31);
                         oldrecord->internal_flags |= FLAG_INTERNAL_EXPUNGED;
                         r = mailbox_rewrite_index_record(mailbox, oldrecord);
                     }
                     if (r) {
-                        syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                               mailbox_name(mailbox), error_message(r));
+                        syslog(LOG_ERR,
+                               "expunging record (%s) failed: %s",
+                               mailbox_name(mailbox),
+                               error_message(r));
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }
                 }
 
                 if (!r) {
-                    /* Read index record for new message (always the last one) */
+                    /* Read index record for new message (always the last one)
+                     */
                     struct index_record newrecord;
                     struct dav_data ddata;
                     static char etagbuf[256];
@@ -321,13 +351,18 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                     ddata.alive = 1;
                     ddata.imap_uid = mailbox->i.last_uid;
                     assert(ddata.imap_uid != 0);
-                    r = dav_get_validators(mailbox, &ddata, txn->userid, &newrecord,
-                                           &etag, &txn->resp_body.lastmod);
+                    r = dav_get_validators(mailbox,
+                                           &ddata,
+                                           txn->userid,
+                                           &newrecord,
+                                           &etag,
+                                           &txn->resp_body.lastmod);
                     if (r) {
-                        xsyslog(LOG_ERR, "read index record failed",
-                                         "mailbox=<%s> uid=<%u>",
-                                         mailbox_name(mailbox),
-                                         ddata.imap_uid);
+                        xsyslog(LOG_ERR,
+                                "read index record failed",
+                                "mailbox=<%s> uid=<%u>",
+                                mailbox_name(mailbox),
+                                ddata.imap_uid);
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }

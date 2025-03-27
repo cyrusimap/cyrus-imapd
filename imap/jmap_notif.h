@@ -52,7 +52,8 @@
 #define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
 
 extern char *jmap_notifmboxname(const char *userid);
-extern int jmap_create_notify_collection(const char *userid, mbentry_t **mbentryptr);
+extern int jmap_create_notify_collection(const char *userid,
+                                         mbentry_t **mbentryptr);
 extern char *jmap_caleventnotif_format_fromheader(const char *userid);
 extern int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      const char *userid,

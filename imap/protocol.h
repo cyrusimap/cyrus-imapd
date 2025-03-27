@@ -48,8 +48,8 @@
 
 enum {
     /* protocol types */
-    TYPE_STD           = 0,    /* protocol fits standard template */
-    TYPE_SPEC          = 1     /* non-standard needs special functions */
+    TYPE_STD = 0, /* protocol fits standard template */
+    TYPE_SPEC = 1 /* non-standard needs special functions */
 };
 
 struct stdprot_t;
@@ -59,9 +59,9 @@ struct backend;
 
 enum {
     /* generic capabilities */
-    CAPA_AUTH           = (1 << 0),
-    CAPA_STARTTLS       = (1 << 1),
-    CAPA_COMPRESS       = (1 << 2)
+    CAPA_AUTH = (1 << 0),
+    CAPA_STARTTLS = (1 << 1),
+    CAPA_COMPRESS = (1 << 2)
 
     /*
       protocol specific capabilities MUST be in the range
@@ -69,50 +69,56 @@ enum {
     */
 };
 
-struct banner_t {
-    u_char auto_capa;           /* capability response sent automatically
-                                   in banner? */
-    const char *resp;           /* end of banner response */
+struct banner_t
+{
+    u_char auto_capa; /* capability response sent automatically
+                         in banner? */
+    const char *resp; /* end of banner response */
 };
 
-struct capa_t {
+struct capa_t
+{
     const char *str;
     unsigned long flag;
 };
 
-#define CAPAF_MANY_PER_LINE     (0)
-#define CAPAF_ONE_PER_LINE      (1<<0)
-#define CAPAF_SKIP_FIRST_WORD   (1<<1)
-#define CAPAF_QUOTE_WORDS       (1<<2)
-#define CAPAF_DASH_STUFFING     (1<<3)
+#define CAPAF_MANY_PER_LINE (0)
+#define CAPAF_ONE_PER_LINE (1 << 0)
+#define CAPAF_SKIP_FIRST_WORD (1 << 1)
+#define CAPAF_QUOTE_WORDS (1 << 2)
+#define CAPAF_DASH_STUFFING (1 << 3)
 
-struct capa_cmd_t {
-    const char *cmd;            /* [OPTIONAL] capability command string */
-    const char *arg;            /* [OPTIONAL] capability command argument */
-    const char *resp;           /* end of capability response */
+struct capa_cmd_t
+{
+    const char *cmd;  /* [OPTIONAL] capability command string */
+    const char *arg;  /* [OPTIONAL] capability command argument */
+    const char *resp; /* end of capability response */
     void (*postcapability)(struct backend *);
-                                /* [OPTIONAL] called after capabilities,
-                                 * received from server, are parsed */
-    int formatflags;            /* CAPAF* constants above */
-    struct capa_t capa[MAX_CAPA+1];/* list of capabilities to parse for
-                                      (MUST end with NULL entry) */
+    /* [OPTIONAL] called after capabilities,
+     * received from server, are parsed */
+    int formatflags;                  /* CAPAF* constants above */
+    struct capa_t capa[MAX_CAPA + 1]; /* list of capabilities to parse for
+                                         (MUST end with NULL entry) */
 };
 
-struct tls_cmd_t {
-    const char *cmd;            /* TLS command string */
-    const char *ok;             /* start TLS prompt */
-    const char *fail;           /* failure response */
-    u_char auto_capa;           /* capability response sent automatically
-                                   after TLS? */
+struct tls_cmd_t
+{
+    const char *cmd;  /* TLS command string */
+    const char *ok;   /* start TLS prompt */
+    const char *fail; /* failure response */
+    u_char auto_capa; /* capability response sent automatically
+                         after TLS? */
 };
 
-struct simple_cmd_t {
-    const char *cmd;            /* command string */
-    const char *unsol;          /* unsolicited response */
-    const char *ok;             /* success response */
+struct simple_cmd_t
+{
+    const char *cmd;   /* command string */
+    const char *unsol; /* unsolicited response */
+    const char *ok;    /* success response */
 };
 
-struct stdprot_t {
+struct stdprot_t
+{
     struct banner_t banner;
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
@@ -122,21 +128,25 @@ struct stdprot_t {
     struct simple_cmd_t logout_cmd;
 };
 
-struct protocol_t {
+struct protocol_t
+{
     const char *service;               /* INET service name */
     const char *sasl_service;          /* SASL service name */
     const struct tls_alpn_t *alpn_map; /* ALPN protocols */
     unsigned type;
     union {
-       struct stdprot_t std;
-       struct {
-           /* special protocol */
-           int (*login)(struct backend *s, const char *userid,
-                        sasl_callback_t *cb, const char **status,
-                        int noauth);
-           int (*ping)(struct backend *s, const char *userid);
-           int (*logout)(struct backend *s);
-       } spec;
+        struct stdprot_t std;
+        struct
+        {
+            /* special protocol */
+            int (*login)(struct backend *s,
+                         const char *userid,
+                         sasl_callback_t *cb,
+                         const char **status,
+                         int noauth);
+            int (*ping)(struct backend *s, const char *userid);
+            int (*logout)(struct backend *s);
+        } spec;
     } u;
 };
 

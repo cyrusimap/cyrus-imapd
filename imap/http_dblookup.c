@@ -41,7 +41,6 @@
  *
  */
 
-
 #include "carddav_db.h"
 #include "http_dav.h"
 #include "spool.h"
@@ -57,39 +56,49 @@ static int meth_get_db(struct transaction_t *txn, void *params);
 
 /* Namespace for DB lookups */
 struct namespace_t namespace_dblookup = {
-    URL_NS_DBLOOKUP, /*enabled*/1, "dblookup", "/dblookup", NULL,
-    http_allow_noauth, /*authschemes*/0,
-    /*mbtype*/0,
+    URL_NS_DBLOOKUP,
+ /*enabled*/ 1,
+    "dblookup",
+    "/dblookup",
+    NULL,
+    http_allow_noauth,
+ /*authschemes*/ 0,
+    /*mbtype*/ 0,
     ALLOW_READ,
-    NULL, NULL, NULL, NULL, NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     {
-        { NULL,                 NULL },                 /* ACL          */
-        { NULL,                 NULL },                 /* BIND         */
-        { NULL,                 NULL },                 /* CONNECT      */
-        { NULL,                 NULL },                 /* COPY         */
-        { NULL,                 NULL },                 /* DELETE       */
-        { &meth_get_db,         NULL },                 /* GET          */
-        { NULL,                 NULL },                 /* HEAD         */
-        { NULL,                 NULL },                 /* LOCK         */
-        { NULL,                 NULL },                 /* MKCALENDAR   */
-        { NULL,                 NULL },                 /* MKCOL        */
-        { NULL,                 NULL },                 /* MOVE         */
-        { NULL,                 NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
-        { NULL,                 NULL },                 /* POST         */
-        { NULL,                 NULL },                 /* PROPFIND     */
-        { NULL,                 NULL },                 /* PROPPATCH    */
-        { NULL,                 NULL },                 /* PUT          */
-        { NULL,                 NULL },                 /* REPORT       */
-        { NULL,                 NULL },                 /* SEARCH       */
-        { NULL,                 NULL },                 /* TRACE        */
-        { NULL,                 NULL },                 /* UNBIND       */
-        { NULL,                 NULL }                  /* UNLOCK       */
+      { NULL, NULL },         /* ACL          */
+        { NULL, NULL },         /* BIND         */
+        { NULL, NULL },         /* CONNECT      */
+        { NULL, NULL },         /* COPY         */
+        { NULL, NULL },         /* DELETE       */
+        { &meth_get_db, NULL }, /* GET          */
+        { NULL, NULL },         /* HEAD         */
+        { NULL, NULL },         /* LOCK         */
+        { NULL, NULL },         /* MKCALENDAR   */
+        { NULL, NULL },         /* MKCOL        */
+        { NULL, NULL },         /* MOVE         */
+        { NULL, NULL },         /* OPTIONS      */
+        { NULL, NULL },         /* PATCH        */
+        { NULL, NULL },         /* POST         */
+        { NULL, NULL },         /* PROPFIND     */
+        { NULL, NULL },         /* PROPPATCH    */
+        { NULL, NULL },         /* PUT          */
+        { NULL, NULL },         /* REPORT       */
+        { NULL, NULL },         /* SEARCH       */
+        { NULL, NULL },         /* TRACE        */
+        { NULL, NULL },         /* UNBIND       */
+        { NULL, NULL }          /* UNLOCK       */
     }
 };
 
 static int get_email(struct transaction_t *txn __attribute__((unused)),
-                     const char *userid, const char *key)
+                     const char *userid,
+                     const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -110,7 +119,7 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
         json_array_append_new(json, json_string(strarray_nth(array, i)));
     }
 
-    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    result = json_dumps(json, JSON_PRESERVE_ORDER | JSON_COMPACT);
     json_decref(json);
 
     txn->resp_body.type = "application/json";
@@ -127,7 +136,8 @@ done:
 }
 
 static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
-                          const char *userid, const char *key)
+                          const char *userid,
+                          const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -163,7 +173,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
         json_array_append_new(json, json_string(strarray_nth(array, i)));
     }
 
-    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    result = json_dumps(json, JSON_PRESERVE_ORDER | JSON_COMPACT);
     json_decref(json);
 
     txn->resp_body.type = "application/json";
@@ -182,7 +192,8 @@ done:
 }
 
 static int get_email2details(struct transaction_t *txn __attribute__((unused)),
-                             const char *userid, const char *key)
+                             const char *userid,
+                             const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -221,7 +232,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
 
     json = json_pack("{s:o s:b}", "uids", uids, "isPinned", ispinned);
 
-    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    result = json_dumps(json, JSON_PRESERVE_ORDER | JSON_COMPACT);
     json_decref(json);
 
     txn->resp_body.type = "application/json";
@@ -240,7 +251,8 @@ done:
 }
 
 static int get_uid2groups(struct transaction_t *txn,
-                          const char *userid, const char *key)
+                          const char *userid,
+                          const char *key)
 {
     struct carddav_db *db = NULL;
     strarray_t *array = NULL;
@@ -280,10 +292,12 @@ static int get_uid2groups(struct transaction_t *txn,
 
     json = json_object();
     for (i = 0; i < strarray_size(array); i += 2) {
-        json_object_set_new(json, strarray_nth(array, i), json_string(strarray_nth(array, i+1)));
+        json_object_set_new(json,
+                            strarray_nth(array, i),
+                            json_string(strarray_nth(array, i + 1)));
     }
 
-    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    result = json_dumps(json, JSON_PRESERVE_ORDER | JSON_COMPACT);
     json_decref(json);
 
     txn->resp_body.type = "application/json";
@@ -317,9 +331,8 @@ static int meth_get_db(struct transaction_t *txn,
     if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
 
     spool_cache_header(xstrdup(":dblookup"),
-                      strconcat(userhdrs[0], "/", keyhdrs[0], (char *)NULL),
-                      txn->req_hdrs);
-
+                       strconcat(userhdrs[0], "/", keyhdrs[0], (char *) NULL),
+                       txn->req_hdrs);
 
     if (!strcmp(txn->req_uri->path, "/dblookup/email"))
         return get_email(txn, userhdrs[0], keyhdrs[0]);

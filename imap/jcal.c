@@ -43,20 +43,19 @@
 
 #include <config.h>
 
-#include <stdio.h>  /* for snprintf() */
 #include <stddef.h> /* for offsetof() macro */
+#include <stdio.h>  /* for snprintf() */
 #include <syslog.h>
 
 #include "global.h"
 #include "ical_support.h"
-#include "json_support.h"
 #include "jcal.h"
-#include "xcal.h"
+#include "json_support.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"
+#include "xcal.h"
 #include "xstrlcat.h"
-
 
 /*
  * Construct a JSON string for an iCalendar Period.
@@ -80,11 +79,11 @@ static char *icalperiodtype_as_json_string(struct icalperiodtype p)
     return str;
 }
 
-
 /*
  * Add an iCalendar recur-rule-part to a JSON recur object.
  */
-static void icalrecur_add_obj_to_json_object(json_t *jrecur, const char *rpart,
+static void icalrecur_add_obj_to_json_object(json_t *jrecur,
+                                             const char *rpart,
                                              json_t *obj)
 {
     json_t *old_rpart = json_object_get(jrecur, rpart);
@@ -99,26 +98,29 @@ static void icalrecur_add_obj_to_json_object(json_t *jrecur, const char *rpart,
             json_array_append(byarray, old_rpart);
             json_object_set_new(jrecur, rpart, byarray);
         }
-        else byarray = old_rpart;
+        else
+            byarray = old_rpart;
 
         /* Append value to array */
         json_array_append_new(byarray, obj);
     }
-    else json_object_set_new(jrecur, rpart, obj);
+    else
+        json_object_set_new(jrecur, rpart, obj);
 }
 
-static void icalrecur_add_int_to_json_object(void *jrecur, const char *rpart,
+static void icalrecur_add_int_to_json_object(void *jrecur,
+                                             const char *rpart,
                                              int i)
 {
     icalrecur_add_obj_to_json_object(jrecur, rpart, json_integer(i));
 }
 
-static void icalrecur_add_string_to_json_object(void *jrecur, const char *rpart,
+static void icalrecur_add_string_to_json_object(void *jrecur,
+                                                const char *rpart,
                                                 const char *s)
 {
     icalrecur_add_obj_to_json_object(jrecur, rpart, json_string(s));
 }
-
 
 /*
  * Construct a JSON "structured value" for an iCalendar REQUEST-STATUS.
@@ -128,13 +130,15 @@ static json_t *icalreqstattype_as_json_array(struct icalreqstattype stat)
     json_t *jstat;
     char code[22];
 
-    icalerror_check_arg_rz((stat.code != ICAL_UNKNOWN_STATUS),"Status");
+    icalerror_check_arg_rz((stat.code != ICAL_UNKNOWN_STATUS), "Status");
 
     if (!stat.desc) stat.desc = icalenum_reqstat_desc(stat.code);
 
     jstat = json_array();
 
-    snprintf(code, sizeof(code), "%u.%u",
+    snprintf(code,
+             sizeof(code),
+             "%u.%u",
              icalenum_reqstat_major(stat.code),
              icalenum_reqstat_minor(stat.code));
 
@@ -144,7 +148,6 @@ static json_t *icalreqstattype_as_json_array(struct icalreqstattype stat)
 
     return jstat;
 }
-
 
 /*
  * Construct the proper JSON object for an iCalendar value.
@@ -167,8 +170,7 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
         break;
 
     case ICAL_DATETIMEPERIOD_VALUE: {
-        struct icaldatetimeperiodtype dtp =
-            icalvalue_get_datetimeperiod(value);
+        struct icaldatetimeperiodtype dtp = icalvalue_get_datetimeperiod(value);
 
         if (!icaltime_is_null_time(dtp.time))
             str = icaltime_as_iso_string(dtp.time);
@@ -205,7 +207,8 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
         struct icalrecurrencetype *recur = icalvalue_get_recurrence(value);
 
         obj = json_object();
-        icalrecurrencetype_add_as_xxx(recur, obj,
+        icalrecurrencetype_add_as_xxx(recur,
+                                      obj,
                                       &icalrecur_add_int_to_json_object,
                                       &icalrecur_add_string_to_json_object);
         icalrecurrencetype_unref(recur);
@@ -213,8 +216,8 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
     }
 
     case ICAL_REQUESTSTATUS_VALUE:
-        return
-            icalreqstattype_as_json_array(icalvalue_get_requeststatus(value));
+        return icalreqstattype_as_json_array(
+            icalvalue_get_requeststatus(value));
 
     case ICAL_TRIGGER_VALUE: {
         struct icaltriggertype trig = icalvalue_get_trigger(value);
@@ -238,7 +241,6 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
     return (str ? json_string(str) : NULL);
 }
 
-
 /*
  * Add an iCalendar parameter to an existing JSON object.
  */
@@ -259,7 +261,7 @@ static void icalparameter_as_json_object_member(icalparameter *param,
         kind_string = icalparameter_get_iana_name(param);
         break;
 
-    default:                    /* XXX: Is the default case here deliberate?? */
+    default: /* XXX: Is the default case here deliberate?? */
         kind_string = icalparameter_kind_to_string(kind);
         if (kind_string) break;
 
@@ -267,8 +269,8 @@ static void icalparameter_as_json_object_member(icalparameter *param,
 
     case ICAL_NO_PARAMETER:
     case ICAL_ANY_PARAMETER:
-            icalerror_set_errno(ICAL_BADARG_ERROR);
-            return;
+        icalerror_set_errno(ICAL_BADARG_ERROR);
+        return;
     }
 
     /* XXX  Need to handle multi-valued parameters */
@@ -280,10 +282,10 @@ static void icalparameter_as_json_object_member(icalparameter *param,
     }
     if (!value_string) return;
 
-    json_object_set_new(jparams, lcase(icalmemory_tmp_copy(kind_string)),
+    json_object_set_new(jparams,
+                        lcase(icalmemory_tmp_copy(kind_string)),
                         json_string(value_string));
 }
-
 
 /*
  * Construct a JSON array for an iCalendar property.
@@ -315,17 +317,16 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
     /* Create property array */
     jprop = json_array();
 
-
     /* Add property name */
-    json_array_append_new(jprop,
-                          json_string(lcase(icalmemory_tmp_copy(property_name))));
-
+    json_array_append_new(
+        jprop, json_string(lcase(icalmemory_tmp_copy(property_name))));
 
     /* Add parameters */
     jparams = json_object();
     for (param = icalproperty_get_first_parameter(prop, ICAL_ANY_PARAMETER);
          param != 0;
-         param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER)) {
+         param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER))
+    {
 
         if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) continue;
 
@@ -333,11 +334,9 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
     }
     json_array_append_new(jprop, jparams);
 
-
     /* Add type */
     type = icalproperty_value_kind_as_string(prop);
     json_array_append_new(jprop, json_string(lcase(icalmemory_tmp_copy(type))));
-
 
     /* Add value */
     value = icalproperty_get_value(prop);
@@ -351,7 +350,8 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
                 const char *str = icalvalue_as_ical_string(value);
                 tok_t tok;
 
-                tok_init(&tok, str, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
+                tok_init(
+                    &tok, str, ",", TOK_TRIMLEFT | TOK_TRIMRIGHT | TOK_EMPTY);
                 while ((str = tok_next(&tok))) {
                     if (*str) json_array_append_new(jprop, json_string(str));
                 }
@@ -369,7 +369,6 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
     return jprop;
 }
 
-
 /*
  * Construct a JSON array for an iCalendar component.
  */
@@ -378,7 +377,7 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
     icalcomponent *c;
     icalproperty *p;
     icalcomponent_kind kind;
-    const char* kind_string;
+    const char *kind_string;
     json_t *jcomp, *jprops, *jsubs;
 
     if (!comp) return NULL;
@@ -390,39 +389,35 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
         break;
 
     case ICAL_X_COMPONENT:
-        kind_string = ""; //comp->x_name;
+        kind_string = ""; // comp->x_name;
         break;
 
     default:
         kind_string = icalcomponent_kind_to_string(kind);
     }
 
-
     /* Create component array */
     jcomp = json_array();
 
-
     /* Add component name */
     json_array_append_new(jcomp,
-        json_string(lcase(icalmemory_tmp_copy(kind_string))));
-
+                          json_string(lcase(icalmemory_tmp_copy(kind_string))));
 
     /* Add properties */
     jprops = json_array();
-    for (p = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
-         p;
-         p = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
+    for (p = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY); p;
+         p = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY))
+    {
 
         json_array_append_new(jprops, icalproperty_as_json_array(p));
     }
     json_array_append_new(jcomp, jprops);
 
-
     /* Add sub-components */
     jsubs = json_array();
-    for (c = icalcomponent_get_first_component(comp, ICAL_ANY_COMPONENT);
-         c;
-         c = icalcomponent_get_next_component(comp, ICAL_ANY_COMPONENT)) {
+    for (c = icalcomponent_get_first_component(comp, ICAL_ANY_COMPONENT); c;
+         c = icalcomponent_get_next_component(comp, ICAL_ANY_COMPONENT))
+    {
 
         json_array_append_new(jsubs, icalcomponent_as_jcal_array(c));
     }
@@ -430,7 +425,6 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
 
     return jcomp;
 }
-
 
 /*
  * Construct a jCal string for an iCalendar component.
@@ -456,7 +450,6 @@ struct buf *icalcomponent_as_jcal_string(icalcomponent *ical)
 
     return ret;
 }
-
 
 static void buf_appendjson(struct buf *buf, json_t *jvalue)
 {
@@ -495,12 +488,10 @@ static void buf_appendjson(struct buf *buf, json_t *jvalue)
     }
 }
 
-
 /*
  * Construct an iCalendar property value from a JSON object.
  */
-static icalvalue *json_object_to_icalvalue(json_t *jvalue,
-                                           icalvalue_kind kind)
+static icalvalue *json_object_to_icalvalue(json_t *jvalue, icalvalue_kind kind)
 {
     icalvalue *value = NULL;
     int len, i;
@@ -524,8 +515,7 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
         /* MUST be an array of 2 doubles */
         if (json_is_array(jvalue) && (len = json_array_size(jvalue)) != 2) {
 
-            for (i = 0;
-                 i < len && json_is_real(json_array_get(jvalue, i));
+            for (i = 0; i < len && json_is_real(json_array_get(jvalue, i));
                  i++);
             if (i == len) {
                 struct icalgeotype geo;
@@ -533,8 +523,8 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
                 double lon = json_real_value(json_array_get(jvalue, 1));
 
 #ifdef ICAL_GEO_LEN
-                snprintf(geo.lat, ICAL_GEO_LEN-1, "%lf", lat);
-                snprintf(geo.lon, ICAL_GEO_LEN-1, "%lf", lon);
+                snprintf(geo.lat, ICAL_GEO_LEN - 1, "%lf", lat);
+                snprintf(geo.lon, ICAL_GEO_LEN - 1, "%lf", lon);
 #else
                 geo.lat = lat;
                 geo.lon = lon;
@@ -564,7 +554,8 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             json_t *val;
 
             /* create an iCal RRULE string from jCal 'recur' object */
-            json_object_foreach(jvalue, key, val) {
+            json_object_foreach(jvalue, key, val)
+            {
                 char *mykey = xstrdup(key);
                 buf_printf(&rrule, "%s%s=", sep, ucase(mykey));
                 buf_appendjson(&rrule, val);
@@ -576,7 +567,8 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             rt = icalrecurrencetype_new_from_string(buf_cstring(&rrule));
             buf_free(&rrule);
 
-            if (rt->freq != ICAL_NO_RECURRENCE) value = icalvalue_new_recurrence(rt);
+            if (rt->freq != ICAL_NO_RECURRENCE)
+                value = icalvalue_new_recurrence(rt);
             icalrecurrencetype_unref(rt);
         }
         else
@@ -585,19 +577,24 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
 
     case ICAL_REQUESTSTATUS_VALUE:
         /* MUST be an array of 2-3 strings */
-        if (json_is_array(jvalue) &&
-            ((len = json_array_size(jvalue)) == 2 || len == 3)) {
+        if (json_is_array(jvalue)
+            && ((len = json_array_size(jvalue)) == 2 || len == 3))
+        {
 
-            for (i = 0;
-                 i < len && json_is_string(json_array_get(jvalue, i));
+            for (i = 0; i < len && json_is_string(json_array_get(jvalue, i));
                  i++);
             if (i == len) {
-                struct icalreqstattype rst =
-                    { ICAL_UNKNOWN_STATUS, NULL, NULL };
+                struct icalreqstattype rst = { ICAL_UNKNOWN_STATUS,
+                                               NULL,
+                                               NULL };
                 short maj, min;
 
                 if (sscanf(json_string_value(json_array_get(jvalue, 0)),
-                           "%hd.%hd", &maj, &min) == 2) {
+                           "%hd.%hd",
+                           &maj,
+                           &min)
+                    == 2)
+                {
                     rst.code = icalenum_num_to_reqstat(maj, min);
                 }
                 if (rst.code == ICAL_UNKNOWN_STATUS) {
@@ -605,10 +602,10 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
                     break;
                 }
 
-                rst.desc =
-                    json_string_value(json_array_get(jvalue, 1));
-                rst.debug = (len < 3) ? NULL :
-                    json_string_value(json_array_get(jvalue, 2));
+                rst.desc = json_string_value(json_array_get(jvalue, 1));
+                rst.debug = (len < 3)
+                                ? NULL
+                                : json_string_value(json_array_get(jvalue, 2));
 
                 value = icalvalue_new_requeststatus(rst);
             }
@@ -622,13 +619,19 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             int utcoffset, hours, minutes, seconds = 0;
             char sign;
 
-            if (sscanf(json_string_value(jvalue), "%c%02d:%02d:%02d",
-                       &sign, &hours, &minutes, &seconds) < 3) {
+            if (sscanf(json_string_value(jvalue),
+                       "%c%02d:%02d:%02d",
+                       &sign,
+                       &hours,
+                       &minutes,
+                       &seconds)
+                < 3)
+            {
                 syslog(LOG_WARNING, "Unexpected utc-offset format");
                 break;
             }
 
-            utcoffset = hours*3600 + minutes*60 + seconds;
+            utcoffset = hours * 3600 + minutes * 60 + seconds;
 
             if (sign == '-') utcoffset = -utcoffset;
 
@@ -640,8 +643,7 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
 
     default:
         if (json_is_string(jvalue))
-            value = icalvalue_new_from_string(kind,
-                                              json_string_value(jvalue));
+            value = icalvalue_new_from_string(kind, json_string_value(jvalue));
         else
             syslog(LOG_WARNING, "jCal string object expected");
         break;
@@ -649,7 +651,6 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
 
     return value;
 }
-
 
 /*
  * Construct an iCalendar property from a JSON array.
@@ -675,8 +676,9 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
     jparams = json_array_get(jprop, 1);
     jvaltype = json_array_get(jprop, 2);
 
-    if (!json_is_string(jtype) ||
-        !json_is_object(jparams) || !json_is_string(jvaltype)) {
+    if (!json_is_string(jtype) || !json_is_object(jparams)
+        || !json_is_string(jvaltype))
+    {
         syslog(LOG_WARNING, "jCal property array contains incorrect objects");
         return NULL;
     }
@@ -691,11 +693,14 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
 
     /* Get the value type */
     typestr = json_string_value(jvaltype);
-    valkind = !strcmp(typestr, "unknown") ? ICAL_X_VALUE :
-        icalenum_string_to_value_kind(ucase(icalmemory_tmp_copy(typestr)));
+    valkind = !strcmp(typestr, "unknown") ? ICAL_X_VALUE
+                                          : icalenum_string_to_value_kind(ucase(
+                                                icalmemory_tmp_copy(typestr)));
     if (valkind == ICAL_NO_VALUE) {
-        syslog(LOG_WARNING, "Unknown jCal value type for %s property: %s",
-               propname, typestr);
+        syslog(LOG_WARNING,
+               "Unknown jCal value type for %s property: %s",
+               propname,
+               typestr);
         return NULL;
     }
     else if (valkind == ICAL_TEXT_VALUE) {
@@ -712,11 +717,11 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
     if (kind == ICAL_X_PROPERTY) icalproperty_set_x_name(prop, propname);
 
     /* Add parameters */
-    json_object_foreach(jparams, key, jvalue) {
+    json_object_foreach(jparams, key, jvalue)
+    {
         /* XXX  Need to handle multi-valued parameters */
-        icalproperty_set_parameter_from_string(prop,
-                                               ucase(icalmemory_tmp_copy(key)),
-                                               json_string_value(jvalue));
+        icalproperty_set_parameter_from_string(
+            prop, ucase(icalmemory_tmp_copy(key)), json_string_value(jvalue));
     }
 
     /* Add value */
@@ -745,8 +750,8 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
     default:
         value = json_object_to_icalvalue(jvalue, valkind);
         if (!value) {
-            syslog(LOG_ERR, "Creation of new %s property value failed",
-                   propname);
+            syslog(
+                LOG_ERR, "Creation of new %s property value failed", propname);
             goto error;
         }
         break;
@@ -756,11 +761,10 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
 
     return prop;
 
-  error:
+error:
     icalproperty_free(prop);
     return NULL;
 }
-
 
 /*
  * Construct an iCalendar component from a JSON object.
@@ -784,8 +788,9 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
     jprops = json_array_get(jobj, 1);
     jsubs = json_array_get(jobj, 2);
 
-    if (!json_is_string(jtype) ||
-        !json_is_array(jprops) || !json_is_array(jsubs)) {
+    if (!json_is_string(jtype) || !json_is_array(jprops)
+        || !json_is_array(jsubs))
+    {
         syslog(LOG_WARNING, "jCal component array contains incorrect objects");
         return NULL;
     }
@@ -826,11 +831,10 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
 
     return comp;
 
-  error:
+error:
     icalcomponent_free(comp);
     return NULL;
 }
-
 
 /*
  * Construct an iCalendar component from a jCal string.
@@ -857,10 +861,12 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
     return ical;
 }
 
-
-EXPORTED const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
-                                const char *prodid, const char *name,
-                                const char *desc, const char *color)
+EXPORTED const char *begin_jcal(struct buf *buf,
+                                struct mailbox *mailbox,
+                                const char *prodid,
+                                const char *name,
+                                const char *desc,
+                                const char *color)
 {
     icalcomponent *ical;
     icalproperty *prop;
@@ -874,9 +880,9 @@ EXPORTED const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
     ical = icalcomponent_new_stream(mailbox, prodid, name, desc, color);
     jprops = json_array();
 
-    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY); prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY))
+    {
 
         json_array_append_new(jprops, icalproperty_as_json_array(prop));
     }
@@ -892,7 +898,6 @@ EXPORTED const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
 
     return ",";
 }
-
 
 EXPORTED void end_jcal(struct buf *buf)
 {

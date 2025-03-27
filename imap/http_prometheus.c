@@ -43,8 +43,8 @@
 
 #include <config.h>
 
-#include "imap/httpd.h"
 #include "imap/http_err.h"
+#include "imap/httpd.h"
 #include "imap/prometheus.h"
 
 static int prom_need_auth(struct transaction_t *txn);
@@ -70,28 +70,28 @@ struct namespace_t namespace_prometheus = {
     &prom_shutdown,
     /* XXX premethod */ NULL,
     {
-        { NULL,                 NULL },                 /* ACL          */
-        { NULL,                 NULL },                 /* BIND         */
-        { NULL,                 NULL },                 /* CONNECT      */
-        { NULL,                 NULL },                 /* COPY         */
-        { NULL,                 NULL },                 /* DELETE       */
-        { &prom_get,            NULL },                 /* GET          */
-        { NULL,                 NULL },                 /* HEAD         */
-        { NULL,                 NULL },                 /* LOCK         */
-        { NULL,                 NULL },                 /* MKCALENDAR   */
-        { NULL,                 NULL },                 /* MKCOL        */
-        { NULL,                 NULL },                 /* MOVE         */
-        { &meth_options,        NULL },                 /* OPTIONS      */
-        { NULL,                 NULL },                 /* PATCH        */
-        { NULL,                 NULL },                 /* POST         */
-        { NULL,                 NULL },                 /* PROPFIND     */
-        { NULL,                 NULL },                 /* PROPPATCH    */
-        { NULL,                 NULL },                 /* PUT          */
-        { NULL,                 NULL },                 /* REPORT       */
-        { NULL,                 NULL },                 /* SEARCH       */
-        { &meth_trace,          NULL },                 /* TRACE        */
-        { NULL,                 NULL },                 /* UNBIND       */
-        { NULL,                 NULL },                 /* UNLOCK       */
+           { NULL, NULL },          /* ACL          */
+        { NULL, NULL },          /* BIND         */
+        { NULL, NULL },          /* CONNECT      */
+        { NULL, NULL },          /* COPY         */
+        { NULL, NULL },          /* DELETE       */
+        { &prom_get, NULL },     /* GET          */
+        { NULL, NULL },          /* HEAD         */
+        { NULL, NULL },          /* LOCK         */
+        { NULL, NULL },          /* MKCALENDAR   */
+        { NULL, NULL },          /* MKCOL        */
+        { NULL, NULL },          /* MOVE         */
+        { &meth_options, NULL }, /* OPTIONS      */
+        { NULL, NULL },          /* PATCH        */
+        { NULL, NULL },          /* POST         */
+        { NULL, NULL },          /* PROPFIND     */
+        { NULL, NULL },          /* PROPPATCH    */
+        { NULL, NULL },          /* PUT          */
+        { NULL, NULL },          /* REPORT       */
+        { NULL, NULL },          /* SEARCH       */
+        { &meth_trace, NULL },   /* TRACE        */
+        { NULL, NULL },          /* UNBIND       */
+        { NULL, NULL },          /* UNLOCK       */
     },
 };
 
@@ -99,8 +99,7 @@ static int prom_need_auth(struct transaction_t *txn __attribute__((unused)))
 {
     const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
 
-    if (!strcmp(need_auth, "none"))
-        return 0;
+    if (!strcmp(need_auth, "none")) return 0;
 
     return HTTP_UNAUTHORIZED;
 }
@@ -135,14 +134,12 @@ static int prom_get(struct transaction_t *txn,
     const char *mimetype = NULL;
     int r;
 
-    if (strcmp(txn->req_uri->path, "/metrics"))
-        return HTTP_NOT_FOUND;
+    if (strcmp(txn->req_uri->path, "/metrics")) return HTTP_NOT_FOUND;
 
     const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
     if (!strcmp(need_auth, "admin") && !httpd_userisadmin)
         return HTTP_UNAUTHORIZED;
-    if (!strcmp(need_auth, "user") && !httpd_userid)
-        return HTTP_UNAUTHORIZED;
+    if (!strcmp(need_auth, "user") && !httpd_userid) return HTTP_UNAUTHORIZED;
 
     r = prometheus_text_report(&buf, &mimetype);
     if (r) {

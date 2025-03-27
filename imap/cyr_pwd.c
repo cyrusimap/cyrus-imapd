@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include <getopt.h>
@@ -85,10 +85,11 @@ int main(int argc, char **argv)
         { 0, 0, 0, 0 },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -111,8 +112,7 @@ int main(int argc, char **argv)
 
     mbname = mbname_from_path(".");
 
-    if (mbname) 
-        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+    if (mbname) extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
 
     if (extname)
         printf("%s\n", extname);

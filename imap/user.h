@@ -44,10 +44,10 @@
 #define INCLUDED_USER_H
 
 #include "auth.h"
-#include "mboxname.h"
 #include "mboxlist.h"
+#include "mboxname.h"
 
-#define FNAME_SUBSSUFFIX     "sub"
+#define FNAME_SUBSSUFFIX "sub"
 #define FNAME_COUNTERSSUFFIX "counters"
 
 /* check if this user should be treated as being on a replica (for user moves,
@@ -70,8 +70,10 @@ int user_deletedata(const mbentry_t *mbentry, int wipe_user);
 int user_renamedata(const char *olduser, const char *newuser);
 
 /* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
-int user_renameacl(const struct namespace *namespace, const char *name,
-                   const char *olduser, const char *newuser);
+int user_renameacl(const struct namespace *namespace,
+                   const char *name,
+                   const char *olduser,
+                   const char *newuser);
 
 /* Copy a quotaroot from mailbox 'oldname' to 'newname' */
 int user_copyquotaroot(const char *oldname, const char *newname);
@@ -92,11 +94,13 @@ char *user_hash_xapian_byid(const char *mboxid, const char *root);
 
 /* default to exclusive lock! */
 struct mboxlock *user_namespacelock_full(const char *userid, int locktype);
-#define user_namespacelock(userid) user_namespacelock_full(userid, LOCK_EXCLUSIVE)
+#define user_namespacelock(userid)                                             \
+    user_namespacelock_full(userid, LOCK_EXCLUSIVE)
 int user_isnamespacelocked(const char *userid);
 int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock);
 
 int user_sharee_renameacls(const struct namespace *namespace,
-                           const char *olduser, const char *newuser);
+                           const char *olduser,
+                           const char *newuser);
 
 #endif

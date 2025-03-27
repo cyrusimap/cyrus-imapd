@@ -52,33 +52,33 @@
 #include "parseaddr.h"
 #include "strarray.h"
 
+#define SCHED_INBOX "Inbox/"
+#define SCHED_OUTBOX "Outbox/"
+#define SCHED_DEFAULT "Default/"
 
-#define SCHED_INBOX     "Inbox/"
-#define SCHED_OUTBOX    "Outbox/"
-#define SCHED_DEFAULT   "Default/"
-
-#define REQSTAT_PENDING         "1.0;Pending"
-#define REQSTAT_SENT            "1.1;Sent"
-#define REQSTAT_DELIVERED       "1.2;Delivered"
-#define REQSTAT_SUCCESS         "2.0;Success"
-#define REQSTAT_NOUSER          "3.7;Invalid calendar user"
-#define REQSTAT_NOPRIVS         "3.8;Noauthority"
-#define REQSTAT_TEMPFAIL        "5.1;Service unavailable"
-#define REQSTAT_PERMFAIL        "5.2;Invalid calendar service"
-#define REQSTAT_REJECTED        "5.3;No scheduling support for user"
+#define REQSTAT_PENDING "1.0;Pending"
+#define REQSTAT_SENT "1.1;Sent"
+#define REQSTAT_DELIVERED "1.2;Delivered"
+#define REQSTAT_SUCCESS "2.0;Success"
+#define REQSTAT_NOUSER "3.7;Invalid calendar user"
+#define REQSTAT_NOPRIVS "3.8;Noauthority"
+#define REQSTAT_TEMPFAIL "5.1;Service unavailable"
+#define REQSTAT_PERMFAIL "5.2;Invalid calendar service"
+#define REQSTAT_REJECTED "5.3;No scheduling support for user"
 
 enum sched_mechanism {
-    SCHED_MECH_CALDAV         = 0,
-    SCHED_MECH_ISCHEDULE      = 1,
-    SCHED_MECH_SIEVE          = 2,
-    SCHED_MECH_JMAP_SET       = 3,
+    SCHED_MECH_CALDAV = 0,
+    SCHED_MECH_ISCHEDULE = 1,
+    SCHED_MECH_SIEVE = 2,
+    SCHED_MECH_JMAP_SET = 3,
     SCHED_MECH_JMAP_PARTREPLY = 4,
-    SCHED_MECH_JMAP_RESTORE   = 5,
+    SCHED_MECH_JMAP_RESTORE = 5,
 };
 
 extern const char *sched_mechanisms[];
 
-struct sched_data {
+struct sched_data
+{
     enum sched_mechanism mech;
     unsigned flags;
     icalcomponent *itip;
@@ -90,62 +90,65 @@ struct sched_data {
     const char *status;
 };
 
-#define SCHEDFLAG_ISCHEDULE        (1<<0)
-#define SCHEDFLAG_IS_REPLY         (1<<1)
-#define SCHEDFLAG_IS_UPDATE        (1<<2)
-#define SCHEDFLAG_INVITES_ONLY     (1<<3)
-#define SCHEDFLAG_UPDATES_ONLY     (1<<4)
-#define SCHEDFLAG_DELETE_CANCELLED (1<<5)
-#define SCHEDFLAG_ALLOW_PUBLIC     (1<<6)
+#define SCHEDFLAG_ISCHEDULE (1 << 0)
+#define SCHEDFLAG_IS_REPLY (1 << 1)
+#define SCHEDFLAG_IS_UPDATE (1 << 2)
+#define SCHEDFLAG_INVITES_ONLY (1 << 3)
+#define SCHEDFLAG_UPDATES_ONLY (1 << 4)
+#define SCHEDFLAG_DELETE_CANCELLED (1 << 5)
+#define SCHEDFLAG_ALLOW_PUBLIC (1 << 6)
 
-#define SCHED_ISCHEDULE(sched)        (sched->flags & SCHEDFLAG_ISCHEDULE)
-#define SCHED_IS_REPLY(sched)         (sched->flags & SCHEDFLAG_IS_REPLY)
-#define SCHED_IS_UPDATE(sched)        (sched->flags & SCHEDFLAG_IS_UPDATE)
-#define SCHED_INVITES_ONLY(sched)     (sched->flags & SCHEDFLAG_INVITES_ONLY)
-#define SCHED_UPDATES_ONLY(sched)     (sched->flags & SCHEDFLAG_UPDATES_ONLY)
-#define SCHED_DELETE_CANCELLED(sched) (sched->flags & SCHEDFLAG_DELETE_CANCELLED)
-#define SCHED_ALLOW_PUBLIC(sched)     (sched->flags & SCHEDFLAG_ALLOW_PUBLIC)
+#define SCHED_ISCHEDULE(sched) (sched->flags & SCHEDFLAG_ISCHEDULE)
+#define SCHED_IS_REPLY(sched) (sched->flags & SCHEDFLAG_IS_REPLY)
+#define SCHED_IS_UPDATE(sched) (sched->flags & SCHEDFLAG_IS_UPDATE)
+#define SCHED_INVITES_ONLY(sched) (sched->flags & SCHEDFLAG_INVITES_ONLY)
+#define SCHED_UPDATES_ONLY(sched) (sched->flags & SCHEDFLAG_UPDATES_ONLY)
+#define SCHED_DELETE_CANCELLED(sched)                                          \
+    (sched->flags & SCHEDFLAG_DELETE_CANCELLED)
+#define SCHED_ALLOW_PUBLIC(sched) (sched->flags & SCHEDFLAG_ALLOW_PUBLIC)
 
-#define SCHED_STATUS(sched, isched, ical) \
+#define SCHED_STATUS(sched, isched, ical)                                      \
     (sched->status = SCHED_ISCHEDULE(sched) ? isched : ical)
 
-#define SCHEDSTAT_PENDING       "1.0"
-#define SCHEDSTAT_SENT          "1.1"
-#define SCHEDSTAT_DELIVERED     "1.2"
-#define SCHEDSTAT_SUCCESS       "2.0"
-#define SCHEDSTAT_PARAM         "2.3"
-#define SCHEDSTAT_NOUSER        "3.7"
-#define SCHEDSTAT_NOPRIVS       "3.8"
-#define SCHEDSTAT_TEMPFAIL      "5.1"
-#define SCHEDSTAT_PERMFAIL      "5.2"
-#define SCHEDSTAT_REJECTED      "5.3"
+#define SCHEDSTAT_PENDING "1.0"
+#define SCHEDSTAT_SENT "1.1"
+#define SCHEDSTAT_DELIVERED "1.2"
+#define SCHEDSTAT_SUCCESS "2.0"
+#define SCHEDSTAT_PARAM "2.3"
+#define SCHEDSTAT_NOUSER "3.7"
+#define SCHEDSTAT_NOPRIVS "3.8"
+#define SCHEDSTAT_TEMPFAIL "5.1"
+#define SCHEDSTAT_PERMFAIL "5.2"
+#define SCHEDSTAT_REJECTED "5.3"
 
 /* Scheduling protocol flags */
-#define SCHEDTYPE_REMOTE        (1<<0)
-#define SCHEDTYPE_ISCHEDULE     (1<<1)
-#define SCHEDTYPE_SSL           (1<<2)
+#define SCHEDTYPE_REMOTE (1 << 0)
+#define SCHEDTYPE_ISCHEDULE (1 << 1)
+#define SCHEDTYPE_SSL (1 << 2)
 
 enum sched_deliver_outcome {
-    SCHED_DELIVER_ERROR    = -1,
+    SCHED_DELIVER_ERROR = -1,
     SCHED_DELIVER_NOACTION = 0,
-    SCHED_DELIVER_ADDED    = 1,
-    SCHED_DELIVER_UPDATED  = 2,
-    SCHED_DELIVER_DELETED  = 3
+    SCHED_DELIVER_ADDED = 1,
+    SCHED_DELIVER_UPDATED = 2,
+    SCHED_DELIVER_DELETED = 3
 };
 
-struct proplist {
+struct proplist
+{
     icalproperty *prop;
     struct proplist *next;
 };
 
 /* Each calendar user address has the following scheduling protocol params */
 /* All memory must be freed with sched_param_fini. */
-struct caldav_sched_param {
-    char *userid;       /* Userid corresponding to calendar address */
-    char *server;       /* Remote server user lives on */
-    unsigned port;      /* Remote server port, default = 80 */
-    unsigned flags;     /* Flags dictating protocol to use for scheduling */
-    unsigned isyou;     /* true if the user is the same as the authenticated user */
+struct caldav_sched_param
+{
+    char *userid;   /* Userid corresponding to calendar address */
+    char *server;   /* Remote server user lives on */
+    unsigned port;  /* Remote server port, default = 80 */
+    unsigned flags; /* Flags dictating protocol to use for scheduling */
+    unsigned isyou; /* true if the user is the same as the authenticated user */
     struct proplist *props; /* List of attendee iCal properties */
 };
 
@@ -162,7 +165,8 @@ extern char *caldav_scheddefault(const char *userid, int fallback);
 extern icalproperty *find_attendee(icalcomponent *comp, const char *match);
 extern const char *get_organizer(icalcomponent *comp);
 extern int partstat_changed(icalcomponent *oldcomp,
-                            icalcomponent *newcomp, const char *attendee);
+                            icalcomponent *newcomp,
+                            const char *attendee);
 extern int organizer_changed(icalcomponent *oldcomp, icalcomponent *newcomp);
 
 extern icalcomponent *master_to_recurrence(icalcomponent *master,
@@ -170,14 +174,15 @@ extern icalcomponent *master_to_recurrence(icalcomponent *master,
 
 extern void itip_strip_personal_data(icalcomponent *comp);
 
-extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
-                                                      const char *sender,
-                                                      const char *recipient,
-                                                      struct address *mailfrom,
-                                                      struct caldav_sched_param *sparam,
-                                                      struct sched_data *sched_data,
-                                                      struct auth_state *authstate,
-                                                      const char **attendeep,
-                                                      icalcomponent **icalp);
+extern enum sched_deliver_outcome sched_deliver_local(
+    const char *userid,
+    const char *sender,
+    const char *recipient,
+    struct address *mailfrom,
+    struct caldav_sched_param *sparam,
+    struct sched_data *sched_data,
+    struct auth_state *authstate,
+    const char **attendeep,
+    icalcomponent **icalp);
 
 #endif /* ITIP_SUPPORT_H */

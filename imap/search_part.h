@@ -43,8 +43,8 @@
 #ifndef INCLUDED_SEARCH_PART_H
 #define INCLUDED_SEARCH_PART_H
 
-/* These constants are passed into the search_text_receiver_t.begin_part callback to
-   tell it which part of the message is being sent down */
+/* These constants are passed into the search_text_receiver_t.begin_part
+   callback to tell it which part of the message is being sent down */
 enum search_part {
     SEARCH_PART_NONE = -1,
     SEARCH_PART_ANY,

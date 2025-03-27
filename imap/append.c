@@ -44,51 +44,52 @@
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/types.h>
-#include <syslog.h>
+#include <sys/poll.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <sys/poll.h>
-#include <inttypes.h>
+#include <syslog.h>
 
 #include "acl.h"
+#include "append.h"
 #include "assert.h"
+#include "global.h"
 #include "mailbox.h"
-#include "notify.h"
+#include "mboxlist.h"
 #include "message.h"
 #include "msgrecord.h"
-#include "append.h"
-#include "global.h"
+#include "notify.h"
 #include "prot.h"
-#include "sync_log.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "mboxlist.h"
-#include "seen.h"
-#include "retry.h"
 #include "quota.h"
+#include "retry.h"
+#include "seen.h"
+#include "sync_log.h"
 #include "util.h"
+#include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 #include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
 #include "annotate.h"
+#include "conversations.h"
 #include "message_guid.h"
 #include "strarray.h"
-#include "conversations.h"
 
 #if defined ENABLE_OBJECTSTORE
-#include "objectstore.h"
+#    include "objectstore.h"
 #endif
 
-struct stagemsg {
+struct stagemsg
+{
     char fname[1024];
 
     strarray_t parts; /* buffer of current stage parts */
@@ -97,7 +98,8 @@ struct stagemsg {
 
 static uint64_t append_counter;
 
-static int append_addseen(struct mailbox *mailbox, const char *userid,
+static int append_addseen(struct mailbox *mailbox,
+                          const char *userid,
                           seqset_t *newseen);
 static int append_setseen(struct appendstate *as, msgrecord_t *mr);
 
@@ -114,9 +116,9 @@ static int append_setseen(struct appendstate *as, msgrecord_t *mr);
  *
  */
 EXPORTED int append_check(const char *name,
-                 struct auth_state *auth_state,
-                 long aclcheck,
-                 const quota_t quotacheck[QUOTA_NUMRESOURCES])
+                          struct auth_state *auth_state,
+                          long aclcheck,
+                          const quota_t quotacheck[QUOTA_NUMRESOURCES])
 {
     struct mailbox *mailbox = NULL;
     int myrights;
@@ -127,14 +129,15 @@ EXPORTED int append_check(const char *name,
 
     myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
-    if ((myrights & aclcheck) != aclcheck || mboxname_isscheduledmailbox(name, 0)) {
-        r = (myrights & ACL_LOOKUP) ?
-          IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+    if ((myrights & aclcheck) != aclcheck
+        || mboxname_isscheduledmailbox(name, 0))
+    {
+        r = (myrights & ACL_LOOKUP) ? IMAP_PERMISSION_DENIED
+                                    : IMAP_MAILBOX_NONEXISTENT;
         goto done;
     }
 
-    if (quotacheck)
-        r = mailbox_quota_check(mailbox, quotacheck);
+    if (quotacheck) r = mailbox_quota_check(mailbox, quotacheck);
 
 done:
     mailbox_close(&mailbox);
@@ -158,10 +161,15 @@ done:
  *
  * when you commit or abort, the mailbox is closed
  */
-EXPORTED int append_setup(struct appendstate *as, const char *name,
-                 const char *userid, const struct auth_state *auth_state,
-                 long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                 const struct namespace *namespace, int isadmin, enum event_type  event_type)
+EXPORTED int append_setup(struct appendstate *as,
+                          const char *name,
+                          const char *userid,
+                          const struct auth_state *auth_state,
+                          long aclcheck,
+                          const quota_t quotacheck[QUOTA_NUMRESOURCES],
+                          const struct namespace *namespace,
+                          int isadmin,
+                          enum event_type event_type)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -172,24 +180,38 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
         return r;
     }
 
-    r = append_setup_mbox(as, mailbox, userid, auth_state,
-                          aclcheck, quotacheck, namespace, isadmin, event_type);
-    if (r) mailbox_close(&mailbox);
-    else as->close_mailbox_when_done = 1;
+    r = append_setup_mbox(as,
+                          mailbox,
+                          userid,
+                          auth_state,
+                          aclcheck,
+                          quotacheck,
+                          namespace,
+                          isadmin,
+                          event_type);
+    if (r)
+        mailbox_close(&mailbox);
+    else
+        as->close_mailbox_when_done = 1;
 
     return r;
 }
 
 /* setup for append with an existing mailbox
  *
- * same as append_setup, but when you commit, the mailbox remains open and locked.
+ * same as append_setup, but when you commit, the mailbox remains open and
+ * locked.
  *
  * Requires as write locked mailbox (of course)
  */
-EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
-                               const char *userid, const struct auth_state *auth_state,
-                               long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
-                               const struct namespace *namespace, int isadmin,
+EXPORTED int append_setup_mbox(struct appendstate *as,
+                               struct mailbox *mailbox,
+                               const char *userid,
+                               const struct auth_state *auth_state,
+                               long aclcheck,
+                               const quota_t quotacheck[QUOTA_NUMRESOURCES],
+                               const struct namespace *namespace,
+                               int isadmin,
                                enum event_type event_type)
 {
     int r;
@@ -199,8 +221,8 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
     if ((as->myrights & aclcheck) != aclcheck) {
-        r = (as->myrights & ACL_LOOKUP) ?
-          IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+        r = (as->myrights & ACL_LOOKUP) ? IMAP_PERMISSION_DENIED
+                                        : IMAP_MAILBOX_NONEXISTENT;
         return r;
     }
 
@@ -211,7 +233,8 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
     if (userid) {
         strlcpy(as->userid, userid, sizeof(as->userid));
-    } else {
+    }
+    else {
         as->userid[0] = '\0';
     }
     as->namespace = namespace;
@@ -250,8 +273,7 @@ static void append_free(struct appendstate *as)
     mboxevent_freequeue(&as->mboxevents);
     as->event_type = 0;
 
-    if (as->close_mailbox_when_done)
-        mailbox_close(&as->mailbox);
+    if (as->close_mailbox_when_done) mailbox_close(&as->mailbox);
 
     as->s = APPEND_DONE;
 }
@@ -276,8 +298,9 @@ EXPORTED int append_commit(struct appendstate *as)
             append_addseen(as->mailbox, as->userid, as->seen_seq);
     }
 
-    /* Send the list of MessageCopy or MessageAppend event notifications at once.
-     * We want to do this before the Modseq event gets sent by mailbox_commit().
+    /* Send the list of MessageCopy or MessageAppend event notifications at
+     * once. We want to do this before the Modseq event gets sent by
+     * mailbox_commit().
      */
     mboxevent_notify(&as->mboxevents);
 
@@ -285,9 +308,11 @@ EXPORTED int append_commit(struct appendstate *as)
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: committing mailbox append",
-                         "mailbox=<%s> error=<%s>",
-                         mailbox_name(as->mailbox), error_message(r));
+        xsyslog(LOG_ERR,
+                "IOERROR: committing mailbox append",
+                "mailbox=<%s> error=<%s>",
+                mailbox_name(as->mailbox),
+                error_message(r));
         append_abort(as);
         return r;
     }
@@ -318,11 +343,14 @@ EXPORTED int append_abort(struct appendstate *as)
  * with the file for the given mailboxname and returns the open file
  * so it can double as the spool file
  */
-EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate __attribute__((unused)),
-                      int msgnum __attribute__((unused)), struct stagemsg **stagep, const char *sourcefile)
+EXPORTED FILE *append_newstage_full(const char *mailboxname,
+                                    time_t internaldate __attribute__((unused)),
+                                    int msgnum __attribute__((unused)),
+                                    struct stagemsg **stagep,
+                                    const char *sourcefile)
 {
     struct stagemsg *stage;
-    char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
+    char stagedir[MAX_MAILBOX_PATH + 1], stagefile[MAX_MAILBOX_PATH + 1];
     FILE *f;
     int r;
 
@@ -334,13 +362,18 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     stage = xmalloc(sizeof(struct stagemsg));
     strarray_init(&stage->parts);
 
-    snprintf(stage->fname, sizeof(stage->fname), "%d-%" PRIu64,
-             (int) getpid(), append_counter++);
+    snprintf(stage->fname,
+             sizeof(stage->fname),
+             "%d-%" PRIu64,
+             (int) getpid(),
+             append_counter++);
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
-        syslog(LOG_ERR, "couldn't find stage directory for mbox: '%s': %s",
-               mailboxname, error_message(r));
+        syslog(LOG_ERR,
+               "couldn't find stage directory for mbox: '%s': %s",
+               mailboxname,
+               error_message(r));
         free(stage);
         return NULL;
     }
@@ -352,8 +385,11 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     if (sourcefile) {
         r = mailbox_copyfile(sourcefile, stagefile, 0);
         if (r) {
-            syslog(LOG_ERR, "couldn't copy stagefile '%s' for mbox: '%s': %s",
-                   sourcefile, mailboxname, error_message(r));
+            syslog(LOG_ERR,
+                   "couldn't copy stagefile '%s' for mbox: '%s': %s",
+                   sourcefile,
+                   mailboxname,
+                   error_message(r));
             free(stage);
             return NULL;
         }
@@ -364,17 +400,19 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     }
     if (!f) {
         if (mkdir(stagedir, 0755) != 0) {
-            syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
-                   stagedir);
-        } else {
-            syslog(LOG_NOTICE, "created stage directory %s",
-                   stagedir);
+            syslog(
+                LOG_ERR, "couldn't create stage directory: %s: %m", stagedir);
+        }
+        else {
+            syslog(LOG_NOTICE, "created stage directory %s", stagedir);
             f = fopen(stagefile, "w+");
         }
     }
     if (!f) {
-        xsyslog(LOG_ERR, "IOERROR: creating message file",
-                         "filename=<%s>", stagefile);
+        xsyslog(LOG_ERR,
+                "IOERROR: creating message file",
+                "filename=<%s>",
+                stagefile);
         strarray_fini(&stage->parts);
         free(stage);
         return NULL;
@@ -397,15 +435,13 @@ static int callout_send_args(int fd, const struct buf *args)
     char lenbuf[32];
     int r = 0;
 
-    snprintf(lenbuf, sizeof(lenbuf), "%u\n", (unsigned)args->len);
+    snprintf(lenbuf, sizeof(lenbuf), "%u\n", (unsigned) args->len);
     r = retry_write(fd, lenbuf, strlen(lenbuf));
-    if (r < 0)
-        goto out;
+    if (r < 0) goto out;
 
     if (args->len) {
         r = retry_write(fd, args->s, args->len);
-        if (r < 0)
-            goto out;
+        if (r < 0) goto out;
         r = retry_write(fd, "0\n", 2);
     }
 
@@ -413,10 +449,11 @@ out:
     return (r < 0 ? IMAP_SYS_ERROR : 0);
 }
 
-#define CALLOUT_TIMEOUT_MS      (10*1000)
+#define CALLOUT_TIMEOUT_MS (10 * 1000)
 
 static int callout_receive_reply(const char *callout,
-                                 int fd, struct dlist **results)
+                                 int fd,
+                                 struct dlist **results)
 {
     struct protstream *p = NULL;
     int r;
@@ -429,27 +466,24 @@ static int callout_receive_reply(const char *callout,
 
     r = poll(&pfd, 1, CALLOUT_TIMEOUT_MS);
     if (r < 0) {
-        syslog(LOG_ERR, "cannot poll() waiting for callout %s: %m",
-               callout);
+        syslog(LOG_ERR, "cannot poll() waiting for callout %s: %m", callout);
         r = IMAP_SYS_ERROR;
         goto out;
     }
     if (r == 0) {
-        syslog(LOG_ERR, "timed out waiting for callout %s",
-               callout);
+        syslog(LOG_ERR, "timed out waiting for callout %s", callout);
         r = IMAP_SYS_ERROR;
         goto out;
     }
 
-    p = prot_new(fd, /*write*/0);
+    p = prot_new(fd, /*write*/ 0);
 
     /* read and parse the reply as a dlist */
-    c = dlist_parse(results, /*parsekeys*/0, /*isarchive*/0, p);
+    c = dlist_parse(results, /*parsekeys*/ 0, /*isarchive*/ 0, p);
     r = (c == EOF ? IMAP_SYS_ERROR : 0);
 
 out:
-    if (p)
-        prot_free(p);
+    if (p) prot_free(p);
     return r;
 }
 
@@ -476,7 +510,7 @@ static int callout_run_socket(const char *callout,
     memset(&mysun, 0, sizeof(mysun));
     mysun.sun_family = AF_UNIX;
     xstrncpy(mysun.sun_path, callout, sizeof(mysun.sun_path));
-    r = connect(sock, (struct sockaddr *)&mysun, sizeof(mysun));
+    r = connect(sock, (struct sockaddr *) &mysun, sizeof(mysun));
     if (r < 0) {
         syslog(LOG_ERR, "cannot connect socket for callout: %m");
         r = IMAP_SYS_ERROR;
@@ -484,14 +518,12 @@ static int callout_run_socket(const char *callout,
     }
 
     r = callout_send_args(sock, args);
-    if (r)
-        goto out;
+    if (r) goto out;
 
     r = callout_receive_reply(callout, sock, results);
 
 out:
-    if (sock >= 0)
-        close(sock);
+    if (sock >= 0) close(sock);
     return r;
 }
 
@@ -505,16 +537,15 @@ static int callout_run_executable(const char *callout,
                                   struct dlist **results)
 {
     pid_t pid, reaped;
-#define PIPE_READ    0
-#define PIPE_WRITE   1
+#define PIPE_READ 0
+#define PIPE_WRITE 1
     int inpipe[2] = { -1, -1 };
     int outpipe[2] = { -1, -1 };
     int status;
     int r;
 
     r = pipe(inpipe);
-    if (!r)
-        r = pipe(outpipe);
+    if (!r) r = pipe(outpipe);
     if (r < 0) {
         syslog(LOG_ERR, "cannot create pipe for callout: %m");
         r = IMAP_SYS_ERROR;
@@ -539,7 +570,7 @@ static int callout_run_executable(const char *callout,
         dup2(outpipe[PIPE_WRITE], STDOUT_FILENO);
         close(outpipe[PIPE_WRITE]);
 
-        execl(callout, callout, (char *)NULL);
+        execl(callout, callout, (char *) NULL);
         syslog(LOG_ERR, "cannot exec callout %s: %m", callout);
         exit(1);
     }
@@ -550,41 +581,30 @@ static int callout_run_executable(const char *callout,
     outpipe[PIPE_WRITE] = -1;
 
     r = callout_send_args(inpipe[PIPE_WRITE], args);
-    if (r)
-        goto out;
+    if (r) goto out;
 
     r = callout_receive_reply(callout, outpipe[PIPE_READ], results);
-    if (r)
-        goto out;
+    if (r) goto out;
 
     /* reap the child process */
     do {
         reaped = waitpid(pid, &status, 0);
         if (reaped < 0) {
-            if (errno == EINTR)
-                continue;
-            if (errno == ESRCH)
-                break;
-            if (errno == ECHILD)
-                break;
-            syslog(LOG_ERR, "error reaping callout pid %d: %m",
-                    (int)pid);
+            if (errno == EINTR) continue;
+            if (errno == ESRCH) break;
+            if (errno == ECHILD) break;
+            syslog(LOG_ERR, "error reaping callout pid %d: %m", (int) pid);
             r = IMAP_SYS_ERROR;
             goto out;
         }
-    }
-    while (reaped != pid);
+    } while (reaped != pid);
     r = 0;
 
 out:
-    if (inpipe[PIPE_READ] >= 0)
-        close(inpipe[PIPE_READ]);
-    if (inpipe[PIPE_WRITE] >= 0)
-        close(inpipe[PIPE_WRITE]);
-    if (outpipe[PIPE_READ] >= 0)
-        close(outpipe[PIPE_READ]);
-    if (outpipe[PIPE_WRITE] >= 0)
-        close(outpipe[PIPE_WRITE]);
+    if (inpipe[PIPE_READ] >= 0) close(inpipe[PIPE_READ]);
+    if (inpipe[PIPE_WRITE] >= 0) close(inpipe[PIPE_WRITE]);
+    if (outpipe[PIPE_READ] >= 0) close(outpipe[PIPE_READ]);
+    if (outpipe[PIPE_WRITE] >= 0) close(outpipe[PIPE_WRITE]);
     return r;
 #undef PIPE_READ
 #undef PIPE_WRITE
@@ -608,28 +628,25 @@ static void callout_encode_args(struct buf *args,
     message_write_nstring(args, fname);
 
     buf_printf(args, " ANNOTATIONS (");
-    for (ee = annotations ; ee ; ee = ee->next) {
+    for (ee = annotations; ee; ee = ee->next) {
         struct attvaluelist *av;
         message_write_nstring(args, ee->entry);
         buf_putc(args, ' ');
         buf_putc(args, '(');
-        for (av = ee->attvalues ; av ; av = av->next) {
+        for (av = ee->attvalues; av; av = av->next) {
             message_write_nstring(args, av->attrib);
             buf_putc(args, ' ');
             message_write_nstring_map(args, av->value.s, av->value.len);
-            if (av->next)
-                buf_putc(args, ' ');
+            if (av->next) buf_putc(args, ' ');
         }
         buf_putc(args, ')');
-        if (ee->next)
-            buf_putc(args, ' ');
+        if (ee->next) buf_putc(args, ' ');
     }
     buf_putc(args, ')');
 
     buf_printf(args, " FLAGS (");
-    for (i = 0 ; i < flags->count ; i++) {
-        if (i)
-            buf_putc(args, ' ');
+    for (i = 0; i < flags->count; i++) {
+        if (i) buf_putc(args, ' ');
         buf_appendcstr(args, flags->data[i]);
     }
     buf_putc(args, ')');
@@ -669,17 +686,16 @@ static void callout_decode_results(const char *callout,
 {
     struct dlist *dd;
 
-    for (dd = results->head ; dd ; dd = dd->next) {
+    for (dd = results->head; dd; dd = dd->next) {
         const char *key = dlist_cstring(dd);
         const char *val;
         dd = dd->next;
-        if (!dd)
-            goto error;
+        if (!dd) goto error;
 
         if (!strcasecmp(key, "+FLAGS")) {
             if (dd->head) {
                 struct dlist *dflag;
-                for (dflag = dd->head ; dflag ; dflag = dflag->next)
+                for (dflag = dd->head; dflag; dflag = dflag->next)
                     if ((val = dlist_cstring(dflag)))
                         strarray_add_case(flags, val);
             }
@@ -690,7 +706,7 @@ static void callout_decode_results(const char *callout,
         else if (!strcasecmp(key, "-FLAGS")) {
             if (dd->head) {
                 struct dlist *dflag;
-                for (dflag = dd->head ; dflag ; dflag = dflag->next) {
+                for (dflag = dd->head; dflag; dflag = dflag->next) {
                     if ((val = dlist_cstring(dflag)))
                         strarray_remove_all_case(flags, val);
                 }
@@ -703,13 +719,11 @@ static void callout_decode_results(const char *callout,
             const char *entry;
             struct dlist *dx = dd->head;
 
-            if (!dx)
-                goto error;
+            if (!dx) goto error;
             entry = dlist_cstring(dx);
-            if (!entry)
-                goto error;
+            if (!entry) goto error;
 
-            for (dx = dx->next ; dx ; dx = dx->next) {
+            for (dx = dx->next; dx; dx = dx->next) {
                 const char *attrib;
                 const char *valmap;
                 size_t vallen;
@@ -720,10 +734,8 @@ static void callout_decode_results(const char *callout,
                 if (!dx->head || !dx->head->next || dx->head->next->next)
                     goto error;
                 attrib = dlist_cstring(dx->head);
-                if (!attrib)
-                    goto error;
-                if (!dlist_tomap(dx->head->next, &valmap, &vallen))
-                    goto error;
+                if (!attrib) goto error;
+                if (!dlist_tomap(dx->head->next, &valmap, &vallen)) goto error;
                 buf_init_ro(&value, valmap, vallen);
                 clearentryatt(user_annots, entry, attrib);
                 setentryatt(system_annots, entry, attrib, &value);
@@ -737,8 +749,7 @@ static void callout_decode_results(const char *callout,
 
     return;
 error:
-    syslog(LOG_WARNING, "Unexpected data in response from callout %s",
-           callout);
+    syslog(LOG_WARNING, "Unexpected data in response from callout %s", callout);
 }
 
 static int callout_run(const char *fname,
@@ -767,15 +778,14 @@ static int callout_run(const char *fname,
     if (S_ISSOCK(sb.st_mode)) {
         /* UNIX domain socket on which a service is listening */
         r = callout_run_socket(callout, &args, &results);
-        if (r)
-            goto out;
+        if (r) goto out;
     }
-    else if (S_ISREG(sb.st_mode) &&
-             (sb.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH))) {
+    else if (S_ISREG(sb.st_mode)
+             && (sb.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
+    {
         /* regular file, executable */
         r = callout_run_executable(callout, &args, &results);
-        if (r)
-            goto out;
+        if (r) goto out;
     }
     else {
         syslog(LOG_ERR, "cannot classify annotation_callout %s", callout);
@@ -786,8 +796,8 @@ static int callout_run(const char *fname,
     if (results) {
         /* We have some results, parse them and merge them back into
          * the annotations and flags we were given */
-        callout_decode_results(callout, results,
-                               user_annots, system_annots, flags);
+        callout_decode_results(
+            callout, results, user_annots, system_annots, flags);
     }
 
 out:
@@ -867,9 +877,12 @@ static int append_apply_flags(struct appendstate *as,
             // One or more ACLs were missing to set the flag
             char aclstr[ACL_STRING_MAX];
             cyrus_acl_masktostr(need_rights, aclstr);
-            xsyslog(LOG_ERR, "could not write flag due missing ACL",
+            xsyslog(LOG_ERR,
+                    "could not write flag due missing ACL",
                     "flag=<%s> need_rights=<%s> mailboxid=<%s>",
-                    flag, aclstr, mailbox_uniqueid(as->mailbox));
+                    flag,
+                    aclstr,
+                    mailbox_uniqueid(as->mailbox));
         }
     }
 
@@ -883,7 +896,8 @@ out:
     return r;
 }
 
-struct findstage_cb_rock {
+struct findstage_cb_rock
+{
     const char *partition;
     const char *guid;
     char *fname;
@@ -933,11 +947,14 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
  * Note: @user_annots needs to be freed by the caller but
  * may be modified during processing of callout responses.
  */
-EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
+EXPORTED int append_fromstage_full(struct appendstate *as,
+                                   struct body **body,
                                    struct stagemsg *stage,
-                                   time_t internaldate, time_t savedate,
+                                   time_t internaldate,
+                                   time_t savedate,
                                    modseq_t createdmodseq,
-                                   const strarray_t *flags, int nolink,
+                                   const strarray_t *flags,
+                                   int nolink,
                                    struct entryattlist **user_annotsp)
 {
     struct mailbox *mailbox = as->mailbox;
@@ -949,11 +966,12 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
 #if defined ENABLE_OBJECTSTORE
-    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    int object_storage_enabled =
+        config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
 
     /* for staging */
-    char stagefile[MAX_MAILBOX_PATH+1] = "";
+    char stagefile[MAX_MAILBOX_PATH + 1] = "";
     char *linkfile = NULL;
 
     assert(stage != NULL && stage->parts.count);
@@ -962,7 +980,8 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     if (!*body) {
         FILE *file = fopen(stage->parts.data[0], "r");
         if (file) {
-            r = message_parse_file(file, NULL, NULL, body, stage->parts.data[0]);
+            r = message_parse_file(
+                file, NULL, NULL, body, stage->parts.data[0]);
             fclose(file);
         }
         else
@@ -981,14 +1000,19 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
         if (cstate) {
             char *guid = xstrdup(message_guid_encode(&(*body)->guid));
-            struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
+            struct findstage_cb_rock rock = { mailbox_partition(mailbox),
+                                              guid,
+                                              NULL };
 
             // ignore errors, it's OK for this to fail
             conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
 
             // if we found a file, remember it
             if (rock.fname) {
-                syslog(LOG_NOTICE, "found existing file %s for %s; linking", guid, rock.fname);
+                syslog(LOG_NOTICE,
+                       "found existing file %s for %s; linking",
+                       guid,
+                       rock.fname);
                 linkfile = rock.fname;
             }
 
@@ -998,7 +1022,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
     if (linkfile) goto havefile;
 
-    for (i = 0 ; i < stage->parts.count ; i++) {
+    for (i = 0; i < stage->parts.count; i++) {
         /* ok, we've successfully created the file */
         if (!strcmp(stagefile, stage->parts.data[i])) {
             /* aha, this is us */
@@ -1013,24 +1037,28 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         r = mailbox_copyfile(stage->parts.data[0], stagefile, 0);
         if (r) {
             /* maybe the directory doesn't exist? */
-            char stagedir[MAX_MAILBOX_PATH+1];
+            char stagedir[MAX_MAILBOX_PATH + 1];
 
             /* xxx check errors */
-            mboxlist_findstage(mailbox_name(mailbox), stagedir, sizeof(stagedir));
+            mboxlist_findstage(
+                mailbox_name(mailbox), stagedir, sizeof(stagedir));
             if (mkdir(stagedir, 0755) != 0) {
-                syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
+                syslog(LOG_ERR,
+                       "couldn't create stage directory: %s: %m",
                        stagedir);
-            } else {
-                syslog(LOG_NOTICE, "created stage directory %s",
-                       stagedir);
+            }
+            else {
+                syslog(LOG_NOTICE, "created stage directory %s", stagedir);
                 r = mailbox_copyfile(stage->parts.data[0], stagefile, 0);
             }
         }
         if (r) {
             /* oh well, we tried */
 
-            xsyslog(LOG_ERR, "IOERROR: creating message file",
-                             "filename=<%s>", stagefile);
+            xsyslog(LOG_ERR,
+                    "IOERROR: creating message file",
+                    "filename=<%s>",
+                    stagefile);
             xunlink(stagefile);
             goto out;
         }
@@ -1040,8 +1068,8 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
 havefile:
 
-    /* 'linkfile' or 'stagefile' contains the message and is on the same partition
-       as the mailbox we're looking at */
+    /* 'linkfile' or 'stagefile' contains the message and is on the same
+       partition as the mailbox we're looking at */
 
     /* Setup */
 
@@ -1070,8 +1098,7 @@ havefile:
 
     /* And make sure it has a timestamp */
     r = msgrecord_get_internaldate(msgrec, &internaldate);
-    if (!r && !internaldate)
-        r = msgrecord_set_internaldate(msgrec, time(NULL));
+    if (!r && !internaldate) r = msgrecord_set_internaldate(msgrec, time(NULL));
     if (r) goto out;
 
     /* should we archive it straight away? */
@@ -1107,8 +1134,9 @@ havefile:
         goto out;
     }
 
-    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
-        (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)) {
+    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT)
+        && (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL))
+    {
         if (flags)
             newflags = strarray_dup(flags);
         else
@@ -1126,8 +1154,7 @@ havefile:
     int in_object_storage = 0;
 #if defined ENABLE_OBJECTSTORE
 
-    if (object_storage_enabled)
-    {
+    if (object_storage_enabled) {
         uint32_t internal_flags;
         r = msgrecord_get_internalflags(msgrec, &internal_flags);
         if (r) goto out;
@@ -1156,7 +1183,9 @@ havefile:
     if (flags) {
         r = append_apply_flags(as, mboxevent, msgrec, flags);
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed to apply flags %s", error_message(r));
+            syslog(LOG_ERR,
+                   "Annotation callout failed to apply flags %s",
+                   error_message(r));
             goto out;
         }
     }
@@ -1165,37 +1194,42 @@ havefile:
     r = msgrecord_append(msgrec);
     if (r) goto out;
 
-    if (in_object_storage) {  // must delete local file
+    if (in_object_storage) {     // must delete local file
         if (xunlink(fname) != 0) // unlink should do it.
-            if (!remove (fname))  // we must insist
+            if (!remove(fname))  // we must insist
                 syslog(LOG_ERR, "Removing local file <%s> error", fname);
     }
 
     /* Apply the annotations */
     if (user_annots || system_annots) {
-        /* pretend to be admin to avoid ACL checks when writing annotations here, since there calling user
-         * didn't control them */
+        /* pretend to be admin to avoid ACL checks when writing annotations
+         * here, since there calling user didn't control them */
         if (user_annots) {
-           r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
-           if (!r) r = msgrecord_annot_writeall(msgrec, user_annots);
+            r = msgrecord_annot_set_auth(
+                msgrec, /*isadmin*/ 1, as->userid, as->auth_state);
+            if (!r) r = msgrecord_annot_writeall(msgrec, user_annots);
         }
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed to apply user annots %s", error_message(r));
+            syslog(LOG_ERR,
+                   "Annotation callout failed to apply user annots %s",
+                   error_message(r));
             goto out;
         }
         if (system_annots) {
-           r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
-           if (!r) r = msgrecord_annot_writeall(msgrec, system_annots);
+            r = msgrecord_annot_set_auth(
+                msgrec, /*isadmin*/ 1, as->userid, as->auth_state);
+            if (!r) r = msgrecord_annot_writeall(msgrec, system_annots);
         }
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed to apply system annots %s", error_message(r));
+            syslog(LOG_ERR,
+                   "Annotation callout failed to apply system annots %s",
+                   error_message(r));
             goto out;
         }
     }
 
 out:
-    if (newflags)
-        strarray_free(newflags);
+    if (newflags) strarray_free(newflags);
     freeentryatts(system_annots);
     free(linkfile);
     if (r) {
@@ -1209,7 +1243,8 @@ out:
      * present in body structure ? */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
+    mboxevent_set_access(
+        mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
 
     msgrecord_unref(&msgrec);
@@ -1247,11 +1282,12 @@ EXPORTED int append_removestage(struct stagemsg *stage)
  * unlocked) until append_commit() is called.  multiple
  * append_onefromstream()s can be aborted by calling append_abort().
  */
-EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
-                      struct protstream *messagefile,
-                      unsigned long size,
-                      time_t internaldate,
-                      const strarray_t *flags)
+EXPORTED int append_fromstream(struct appendstate *as,
+                               struct body **body,
+                               struct protstream *messagefile,
+                               unsigned long size,
+                               time_t internaldate,
+                               const strarray_t *flags)
 {
     struct mailbox *mailbox = as->mailbox;
     const char *fname;
@@ -1277,8 +1313,8 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     xunlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
-        xsyslog(LOG_ERR, "IOERROR: creating message file",
-                         "filename=<%s>", fname);
+        xsyslog(
+            LOG_ERR, "IOERROR: creating message file", "filename=<%s>", fname);
         r = IMAP_IOERROR;
         goto out;
     }
@@ -1299,8 +1335,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
         if (!r) r = msgrecord_set_bodystructure(msgrec, *body);
 
         /* messageContent may be included with MessageAppend and MessageNew */
-        if (!r)
-            mboxevent_extract_content_msgrec(mboxevent, msgrec, destfile);
+        if (!r) mboxevent_extract_content_msgrec(mboxevent, msgrec, destfile);
     }
     fclose(destfile);
     if (r) goto out;
@@ -1326,15 +1361,15 @@ out:
      * present in body structure */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
     mboxevent_extract_mailbox(mboxevent, mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
+    mboxevent_set_access(
+        mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, mailbox, -1);
     msgrecord_unref(&msgrec);
 
     return 0;
 }
 
-HIDDEN int append_run_annotator(struct appendstate *as,
-                                msgrecord_t *msgrec)
+HIDDEN int append_run_annotator(struct appendstate *as, msgrecord_t *msgrec)
 {
     FILE *f = NULL;
     const char *fname;
@@ -1345,8 +1380,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     int r = 0;
     struct mailbox *mailbox = NULL;
 
-    if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
-        return 0;
+    if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) return 0;
 
     if (config_getswitch(IMAPOPT_ANNOTATION_CALLOUT_DISABLE_APPEND)) {
         syslog(LOG_DEBUG, "append_run_annotator: Append disabled.");
@@ -1393,7 +1427,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     if (r) goto out;
 
     /* Reset user flags */
-    uint32_t user_flags[MAX_USER_FLAGS/32];
+    uint32_t user_flags[MAX_USER_FLAGS / 32];
     memset(user_flags, 0, sizeof(user_flags));
     r = msgrecord_set_userflags(msgrec, user_flags);
     if (r) goto out;
@@ -1401,22 +1435,26 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     /* Apply annotator flags */
     r = append_apply_flags(as, NULL, msgrec, flags);
     if (r) {
-        syslog(LOG_ERR, "Setting flags from annotator "
-                        "callout failed (%s)",
-                        error_message(r));
+        syslog(LOG_ERR,
+               "Setting flags from annotator "
+               "callout failed (%s)",
+               error_message(r));
         goto out;
     }
 
     if (system_annots) {
         /* pretend to be admin to avoid ACL checks */
-        r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
+        r = msgrecord_annot_set_auth(
+            msgrec, /*isadmin*/ 1, as->userid, as->auth_state);
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
             char *res = dumpentryatt(system_annots);
-            syslog(LOG_ERR, "Setting system annotations from annotator "
-                            "callout failed (%s) for %s",
-                            error_message(r), res);
+            syslog(LOG_ERR,
+                   "Setting system annotations from annotator "
+                   "callout failed (%s) for %s",
+                   error_message(r),
+                   res);
             free(res);
             goto out;
         }
@@ -1443,16 +1481,19 @@ out:
  * flag is to be set anywhere then 'userid' passed to append_setup()
  * contains the name of the user whose \Seen flag gets set.
  */
-EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
-                         ptrarray_t *msgrecs, int nolink, int is_same_user,
+EXPORTED int append_copy(struct mailbox *mailbox,
+                         struct appendstate *as,
+                         ptrarray_t *msgrecs,
+                         int nolink,
+                         int is_same_user,
                          struct progress_rock *prock)
 {
     int msg;
     char *srcfname = NULL;
     char *destfname = NULL;
-    int object_storage_enabled = 0 ;
+    int object_storage_enabled = 0;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
     int r = 0;
     int userflag;
@@ -1493,7 +1534,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
         /* wipe out the bits that aren't magically copied */
         uint32_t dst_system_flags, dst_internal_flags;
-        uint32_t dst_user_flags[MAX_USER_FLAGS/32];
+        uint32_t dst_user_flags[MAX_USER_FLAGS / 32];
 
         dst_msgrec = msgrecord_copy_msgrecord(as->mailbox, src_msgrec);
 
@@ -1509,7 +1550,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
         dst_internal_flags &= ~FLAG_INTERNAL_SNOOZED;
 
-        for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+        for (i = 0; i < MAX_USER_FLAGS / 32; i++) {
             dst_user_flags[i] = 0;
         }
         r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
@@ -1531,36 +1572,43 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
         /* user flags are special - different numbers, so look them up */
         if (as->myrights & ACL_WRITE) {
-            uint32_t src_user_flags[MAX_USER_FLAGS/32];
+            uint32_t src_user_flags[MAX_USER_FLAGS / 32];
 
             r = msgrecord_get_userflags(src_msgrec, src_user_flags);
             if (r) goto out;
 
             for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
-                bit32 flagmask = src_user_flags[userflag/32];
-                if (mailbox->h.flagname[userflag] && (flagmask & (1U<<(userflag&31)))) {
+                bit32 flagmask = src_user_flags[userflag / 32];
+                if (mailbox->h.flagname[userflag]
+                    && (flagmask & (1U << (userflag & 31))))
+                {
                     int num;
-                    r = mailbox_user_flag(as->mailbox, mailbox->h.flagname[userflag], &num, 1);
+                    r = mailbox_user_flag(
+                        as->mailbox, mailbox->h.flagname[userflag], &num, 1);
                     if (r)
-                        xsyslog(LOG_ERR, "IOERROR: unable to copy flag",
-                                         "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
-                                         " uid=<%u> error=<%s>",
-                                         mailbox->h.flagname[userflag],
-                                         mailbox_name(mailbox),
-                                         mailbox_name(as->mailbox),
-                                         src_uid,
-                                         error_message(r));
+                        xsyslog(LOG_ERR,
+                                "IOERROR: unable to copy flag",
+                                "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
+                                " uid=<%u> error=<%s>",
+                                mailbox->h.flagname[userflag],
+                                mailbox_name(mailbox),
+                                mailbox_name(as->mailbox),
+                                src_uid,
+                                error_message(r));
                     else
-                        dst_user_flags[num/32] |= 1U<<(num&31);
+                        dst_user_flags[num / 32] |= 1U << (num & 31);
                 }
             }
 
             r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
             if (r) {
-                xsyslog(LOG_ERR, "IOERROR: unable to copy user flags",
-                                 "source=<%s> dest=<%s> uid=<%u> error=<%s>",
-                                 mailbox_name(mailbox), mailbox_name(as->mailbox),
-                                 src_uid, error_message(r));
+                xsyslog(LOG_ERR,
+                        "IOERROR: unable to copy user flags",
+                        "source=<%s> dest=<%s> uid=<%u> error=<%s>",
+                        mailbox_name(mailbox),
+                        mailbox_name(as->mailbox),
+                        src_uid,
+                        error_message(r));
             }
         }
         else {
@@ -1601,18 +1649,25 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
         destfname = xstrdup(tmp);
 
-        if (!(object_storage_enabled &&
-              src_internal_flags & FLAG_INTERNAL_ARCHIVED))   // if object storage do not move file
-           r = mailbox_copyfile(srcfname, destfname, nolink);
+        if (!(object_storage_enabled
+              && src_internal_flags
+                     & FLAG_INTERNAL_ARCHIVED)) // if object storage do not move
+                                                // file
+            r = mailbox_copyfile(srcfname, destfname, nolink);
 
         if (r) goto out;
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled &&
-            src_internal_flags & FLAG_INTERNAL_ARCHIVED) {
+        if (object_storage_enabled
+            && src_internal_flags & FLAG_INTERNAL_ARCHIVED)
+        {
             struct index_record record;
             r = msgrecord_get_index_record(dst_msgrec, &record);
-            if (!r) r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
+            if (!r)
+                r = objectstore_put(
+                    as->mailbox,
+                    &record,
+                    destfname); // put should just add the refcount.
         }
 #endif
 
@@ -1626,9 +1681,8 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         annotate_state_t *astate = NULL;
         r = mailbox_get_annotate_state(as->mailbox, dst_uid, &astate);
         if (r) goto out;
-        r = annotate_msg_copy(mailbox, src_uid,
-                              as->mailbox, dst_uid,
-                              as->userid);
+        r = annotate_msg_copy(
+            mailbox, src_uid, as->mailbox, dst_uid, as->userid);
         if (r) goto out;
 
         mboxevent_extract_msgrecord(mboxevent, dst_msgrec);
@@ -1648,7 +1702,8 @@ out:
     }
 
     mboxevent_extract_mailbox(mboxevent, as->mailbox);
-    mboxevent_set_access(mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
+    mboxevent_set_access(
+        mboxevent, NULL, NULL, as->userid, mailbox_name(as->mailbox), 1);
     mboxevent_set_numunseen(mboxevent, as->mailbox, -1);
 
     return 0;
@@ -1682,21 +1737,21 @@ static int append_addseen(struct mailbox *mailbox,
     struct seendata sd = SEENDATA_INITIALIZER;
     seqset_t *oldseen;
 
-    if (!seqset_first(newseen))
-        return 0;
+    if (!seqset_first(newseen)) return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: seen_open failed",
-                         "userid=<%s>", userid);
+        xsyslog(LOG_ERR, "IOERROR: seen_open failed", "userid=<%s>", userid);
         goto done;
     }
 
     r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: seen_lockread failed",
-                         "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox_uniqueid(mailbox));
+        xsyslog(LOG_ERR,
+                "IOERROR: seen_lockread failed",
+                "userid=<%s> uniqueid=<%s>",
+                userid,
+                mailbox_uniqueid(mailbox));
         goto done;
     }
 
@@ -1713,13 +1768,15 @@ static int append_addseen(struct mailbox *mailbox,
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: seen_write failed",
-                         "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox_uniqueid(mailbox));
+        xsyslog(LOG_ERR,
+                "IOERROR: seen_write failed",
+                "userid=<%s> uniqueid=<%s>",
+                userid,
+                mailbox_uniqueid(mailbox));
     }
     seen_freedata(&sd);
 
- done:
+done:
     seen_close(&seendb);
     return r;
 }
