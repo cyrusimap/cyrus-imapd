@@ -451,6 +451,33 @@ EXPORTED int removedir(const char *path)
     return nftw(path, removedir_cb, 128, FTW_DEPTH|FTW_PHYS);
 }
 
+// rename a file (probably in the same directory) and fsync the
+// destination directory before returning
+EXPORTED int cyrus_rename(const char *src, const char *dest)
+{
+    char *copy = xstrdup(dest);
+    const char *dir = dirname(copy);
+    int r = 0;
+
+#if defined(O_DIRECTORY)
+    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    int dirfd = open(dir, O_RDONLY, 0600);
+#endif
+    if (dirfd < 0) {
+        free(copy);
+        return dirfd;
+    }
+
+    r = renameat(AT_FDCWD, src, dirfd, dest);
+    if (!r) r = fsync(dirfd);
+
+    close(dirfd);
+    free(copy);
+
+    return r;
+}
+
 /* Create all parent directories for the given path,
  * up to but not including the basename.
  */
