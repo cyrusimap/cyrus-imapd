@@ -226,7 +226,9 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
             res = v;
             break;
         }
-        if (!res) goto fail;
+        if (!res) {
+            goto fail;
+        }
 
         /* Extract the reference argument value. */
         /* We maintain our own pool of newly created JSON objects, since
@@ -235,7 +237,9 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
          * an entirely new one, put it into the pool for cleanup. */
         ptrarray_t pool = PTRARRAY_INITIALIZER;
         json_t *val = extract_value(json_array_get(res, 1), path, &pool);
-        if (!val) goto fail;
+        if (!val) {
+            goto fail;
+        }
 
         /* Replace both key and value of the reference entry */
         json_object_set(args, arg + 1, val);
@@ -293,7 +297,9 @@ static int validate_request(struct transaction_t *txn,
         }
         const char *mname = json_string_value(json_array_get(val, 0));
         mname = strchr(mname, '/');
-        if (!mname) continue;
+        if (!mname) {
+            continue;
+        }
 
         mname++;
         if (!strcmp(mname, "get")) {
@@ -434,7 +440,9 @@ static jmap_method_t *find_methodproc(const char *name,
     for (i = 0; i < ptrarray_size(pa); i++) {
         jmap_method_t *mp = ptrarray_nth(pa, i);
 
-        if (strarray_contains(using_capabilities, mp->capability)) return mp;
+        if (strarray_contains(using_capabilities, mp->capability)) {
+            return mp;
+        }
     }
 
     return NULL;
@@ -451,7 +459,9 @@ static struct mbstate *_mbstate_getoradd(struct auth_state *authstate,
                                          hash_table *mbstates)
 {
     struct mbstate *mbstate = hash_lookup(mbentry->name, mbstates);
-    if (mbstate) return mbstate;
+    if (mbstate) {
+        return mbstate;
+    }
 
     mbstate = xmalloc(sizeof(struct mbstate));
     mbstate->mbtype = mbentry->mbtype;
@@ -461,14 +471,17 @@ static struct mbstate *_mbstate_getoradd(struct auth_state *authstate,
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         // if it's an intermediate mailbox, we get rights from the parent
         mbentry_t *parententry = NULL;
-        if (mboxlist_findparent(mbentry->name, &parententry))
+        if (mboxlist_findparent(mbentry->name, &parententry)) {
             mbstate->rights = 0;
-        else
+        }
+        else {
             mbstate->rights = httpd_myrights(authstate, parententry);
+        }
         mboxlist_entry_free(&parententry);
     }
-    else
+    else {
         mbstate->rights = httpd_myrights(authstate, mbentry);
+    }
     mbname_free(&mbname);
 
     hash_insert(mbentry->name, mbstate, mbstates);
@@ -481,7 +494,9 @@ static int _rights_for_mbentry(struct auth_state *authstate,
                                const mbentry_t *mbentry,
                                hash_table *mbstates)
 {
-    if (!mbentry) return 0;
+    if (!mbentry) {
+        return 0;
+    }
     struct mbstate *mbstate = _mbstate_getoradd(authstate, mbentry, mbstates);
     return mbstate->rights;
 }
@@ -502,7 +517,9 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct capabilities_rock *rock = vrock;
 
-    if (!mbentry) return 0;
+    if (!mbentry) {
+        return 0;
+    }
 
     if ((mbentry->mbtype & MBTYPE_DELETED) || (mbentry->mbtype & MBTYPE_MOVING)
         || (mbentry->mbtype & MBTYPE_REMOTE)
@@ -523,7 +540,9 @@ static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
 
     int rights =
         _rights_for_mbentry(rock->authstate, mbentry, rock->mboxrights);
-    if (!(rights & JACL_LOOKUP)) return 0;
+    if (!(rights & JACL_LOOKUP)) {
+        return 0;
+    }
     rock->is_visible = 1;
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
@@ -564,8 +583,9 @@ static json_t *lookup_capabilities(const char *accountid,
             jmap_admin_capabilities(capas);
             return capas;
         }
-        else
+        else {
             return json_null();
+        }
     }
     free(inboxname);
 
@@ -592,7 +612,9 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_sieve_capabilities(capas);
         jmap_vacation_capabilities(capas);
 #endif
-        if (httpd_userisadmin) jmap_admin_capabilities(capas);
+        if (httpd_userisadmin) {
+            jmap_admin_capabilities(capas);
+        }
     }
     else {
         /* Lookup capabilities for shared account */
@@ -797,8 +819,9 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
         /* Pre-process result references */
         if (process_resultrefs(args, resp, &err)) {
-            if (!err)
+            if (!err) {
                 err = json_pack("{s:s}", "type", "invalidResultReference");
+            }
 
             json_array_append_new(resp,
                                   json_pack("[s,o,s]", "error", err, tag));
@@ -808,7 +831,9 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
         if (config_getswitch(IMAPOPT_READONLY) && (mp->flags & JMAP_READ_WRITE))
         {
-            if (!err) err = json_pack("{s:s}", "type", "accountReadOnly");
+            if (!err) {
+                err = json_pack("{s:s}", "type", "accountReadOnly");
+            }
 
             json_array_append_new(resp,
                                   json_pack("[s,o,s]", "error", err, tag));
@@ -959,15 +984,21 @@ struct findaccounts_rock
 
 static void findaccounts_add(struct findaccounts_rock *rock)
 {
-    if (!buf_len(&rock->current_accountid)) return;
+    if (!buf_len(&rock->current_accountid)) {
+        return;
+    }
 
-    if (!(rock->current_rights & JACL_READITEMS)) return;
+    if (!(rock->current_rights & JACL_READITEMS)) {
+        return;
+    }
 
     const char *accountid = buf_cstring(&rock->current_accountid);
     int is_rw = rock->current_rights & JACL_WRITE;
     int is_primary = !strcmp(rock->authuserid, accountid);
 
-    if (config_getswitch(IMAPOPT_READONLY)) is_rw = 0;
+    if (config_getswitch(IMAPOPT_READONLY)) {
+        is_rw = 0;
+    }
 
     json_t *account = json_object();
     json_object_set_new(account, "name", json_string(accountid));
@@ -1082,8 +1113,9 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
-    if (httpd_userisadmin)
+    if (httpd_userisadmin) {
         json_object_set(primary_accounts, JMAP_ADMIN_EXTENSION, jprimary);
+    }
     json_decref(jprimary);
 
     /* Clean up */
@@ -1097,7 +1129,9 @@ HIDDEN void jmap_add_subreq(jmap_req_t *req,
                             json_t *args,
                             const char *client_id)
 {
-    if (!client_id) client_id = req->tag;
+    if (!client_id) {
+        client_id = req->tag;
+    }
     ptrarray_push(req->method_calls,
                   json_pack("[s,o,s]", method, args, client_id));
 }
@@ -1109,10 +1143,16 @@ const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id)
 
 const char *jmap_id_string_value(jmap_req_t *req, json_t *item)
 {
-    if (!item) return NULL;
-    if (!json_is_string(item)) return NULL;
+    if (!item) {
+        return NULL;
+    }
+    if (!json_is_string(item)) {
+        return NULL;
+    }
     const char *id = json_string_value(item);
-    if (*id == '#') return jmap_lookup_id(req, id + 1);
+    if (*id == '#') {
+        return jmap_lookup_id(req, id + 1);
+    }
     return id;
 }
 
@@ -1134,11 +1174,13 @@ HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req,
 {
     const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
 
-    if (mbentry)
+    if (mbentry) {
         return rw ? mailbox_open_iwl(mbentry->name, mboxp)
                   : mailbox_open_irl(mbentry->name, mboxp);
-    else
+    }
+    else {
         return IMAP_MAILBOX_NONEXISTENT;
+    }
 }
 
 struct findblob_data
@@ -1161,7 +1203,9 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 
     if (d->exact) {
         // we only want top-level blobs
-        if (rec->part) return 0;
+        if (rec->part) {
+            return 0;
+        }
     }
 
     r = conv_guidrec_mbentry(rec, &mbentry);
@@ -1183,7 +1227,9 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 
     r = mailbox_open_irl(mbentry->name, &d->mbox);
     mboxlist_entry_free(&mbentry);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     r = msgrecord_find(d->mbox, rec->uid, &d->mr);
     if (r) {
@@ -1249,7 +1295,9 @@ static int _jmap_findblob(jmap_req_t *req,
         cstate = conversations_get_user(accountid);
         if (!cstate) {
             r = conversations_open_user(accountid, 1 /*shared*/, &mycstate);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
 
             cstate = mycstate;
         }
@@ -1260,14 +1308,18 @@ static int _jmap_findblob(jmap_req_t *req,
 
     r = conversations_guid_foreach(cstate, blobid + 1, findblob_cb, &data);
     if (r != IMAP_OK_COMPLETED) {
-        if (!r) r = IMAP_NOTFOUND;
+        if (!r) {
+            r = IMAP_NOTFOUND;
+        }
         goto done;
     }
 
     /* Find part containing the data */
     if (data.part_id) {
         r = msgrecord_extract_bodystructure(data.mr, &mybody);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         ptrarray_t parts = PTRARRAY_INITIALIZER;
         struct message_guid content_guid;
@@ -1283,8 +1335,9 @@ static int _jmap_findblob(jmap_req_t *req,
                 continue;
             }
             ptrarray_push(&parts, mypart->subpart);
-            for (i = 1; i < mypart->numparts; i++)
+            for (i = 1; i < mypart->numparts; i++) {
                 ptrarray_push(&parts, mypart->subpart + i);
+            }
         }
         ptrarray_fini(&parts);
 
@@ -1297,7 +1350,9 @@ static int _jmap_findblob(jmap_req_t *req,
     if (blob && !buf_base(blob)) {
         /* Map the message into memory */
         r = msgrecord_get_body(data.mr, blob);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     r = 0;
@@ -1316,15 +1371,20 @@ done:
     else {
         *mbox = data.mbox;
         *mr = data.mr;
-        if (part) *part = mypart;
-        if (body)
+        if (part) {
+            *part = mypart;
+        }
+        if (body) {
             *body = mybody;
+        }
         else if (mybody) {
             message_free_body(mybody);
             free(mybody);
         }
     }
-    if (data.part_id) free(data.part_id);
+    if (data.part_id) {
+        free(data.part_id);
+    }
     return r;
 }
 
@@ -1433,7 +1493,9 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
     /* Collection */
     buf_printf(&buf, "%s", strrchr(mboxname, '.') + 1);
 
-    if (resource) buf_printf(&buf, "/%s", resource);
+    if (resource) {
+        buf_printf(&buf, "/%s", resource);
+    }
     free(owner);
     return buf_release(&buf);
 }
@@ -1454,12 +1516,14 @@ HIDDEN int jmap_mbtype(jmap_req_t *req, const char *mboxname)
             mbstate = _mbstate_getoradd(req->authstate, mbentry, req->mbstates);
             mbtype = mbstate->mbtype;
         }
-        else
+        else {
             mbtype = MBTYPE_UNKNOWN;
+        }
         mboxlist_entry_free(&mbentry);
     }
-    else
+    else {
         mbtype = mbstate->mbtype;
+    }
 
     return mbtype_isa(mbtype);
 }
@@ -1470,14 +1534,18 @@ HIDDEN int jmap_hasrights_mbentry(jmap_req_t *req,
                                   int rights)
 {
     int myrights = jmap_myrights_mbentry(req, mbentry);
-    if ((myrights & rights) == rights) return 1;
+    if ((myrights & rights) == rights) {
+        return 1;
+    }
     return 0;
 }
 
 HIDDEN int jmap_myrights(jmap_req_t *req, const char *mboxname)
 {
     struct mbstate *mbstate = hash_lookup(mboxname, req->mbstates);
-    if (mbstate) return mbstate->rights;
+    if (mbstate) {
+        return mbstate->rights;
+    }
 
     // if unable to read, that means no rights
     int rights = 0;
@@ -1513,7 +1581,9 @@ HIDDEN int jmap_hasrights_mboxid(jmap_req_t *req,
 HIDDEN int jmap_hasrights(jmap_req_t *req, const char *mboxname, int rights)
 {
     int myrights = jmap_myrights(req, mboxname);
-    if ((myrights & rights) == rights) return 1;
+    if ((myrights & rights) == rights) {
+        return 1;
+    }
     return 0;
 }
 
@@ -1553,7 +1623,9 @@ HIDDEN void jmap_ok(jmap_req_t *req, json_t *res)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
-    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) jmap_add_perf(req, res);
+    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
+        jmap_add_perf(req, res);
+    }
 }
 
 HIDDEN void jmap_error(jmap_req_t *req, json_t *err)
@@ -1591,13 +1663,16 @@ HIDDEN const jmap_property_t *jmap_property_find(const char *name,
     const jmap_property_t *prop;
 
     for (prop = props; prop && prop->name; prop++) {
-        if (!strcmp(name, prop->name))
+        if (!strcmp(name, prop->name)) {
             return prop;
+        }
         else {
             size_t len = strlen(prop->name);
             if ((prop->name[len - 1] == '*')
                 && !strncmp(name, prop->name, len - 1))
+            {
                 return prop;
+            }
         }
     }
 
@@ -1730,7 +1805,9 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
         return;
     }
 
-    if (*err) return;
+    if (*err) {
+        return;
+    }
 
     if (get->props == NULL) {
         /* Initialize default properties */
@@ -1803,7 +1880,9 @@ static void jmap_set_validate_props(jmap_req_t *req,
         const char *slash = strchr(pname, '/');
         if (slash) {
             tmp = jmap_pointer_decode(pname, slash - path);
-            if (tmp) pname = tmp;
+            if (tmp) {
+                pname = tmp;
+            }
         }
         /* Validate against property spec */
         const jmap_property_t *prop = jmap_property_find(pname, valid_props);
@@ -1833,7 +1912,9 @@ static void jmap_set_validate_props(jmap_req_t *req,
                 json_array_append_new(invalid, json_string(path));
             }
         }
-        if (tmp) free(tmp);
+        if (tmp) {
+            free(tmp);
+        }
     }
     if (json_array_size(invalid)) {
         *err = json_pack(
@@ -2175,8 +2256,9 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req,
                         jmap_parser_invalid(parser, buf_cstring(&buf));
                         buf_reset(&buf);
                     }
-                    else
+                    else {
                         json_array_append(copy->create, id);
+                    }
                 }
             }
 
@@ -2222,8 +2304,9 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req,
                     jmap_parser_invalid(parser, "id");
                     jmap_parser_pop(parser);
                 }
-                else
+                else {
                     json_object_set(copy->create, creation_id, obj);
+                }
             }
             jmap_parser_pop(parser);
         }
@@ -2373,7 +2456,9 @@ HIDDEN void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
 
     while ((cond = ptrarray_pop(&f->conditions))) {
         if (f->op == JMAP_FILTER_OP_NONE) {
-            if (freecond) freecond(cond);
+            if (freecond) {
+                freecond(cond);
+            }
         }
         else {
             jmap_filter_free(cond, freecond);
@@ -2395,7 +2480,9 @@ HIDDEN void jmap_filter_parse(jmap_req_t *req,
     const char *s;
     size_t i;
 
-    if (err && *err) return;
+    if (err && *err) {
+        return;
+    }
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
         jmap_parser_invalid(parser, NULL);
@@ -2650,8 +2737,9 @@ HIDDEN json_t *jmap_query_reply(struct jmap_query *query)
     json_object_set_new(
         res, "canCalculateChanges", json_boolean(query->can_calculate_changes));
     json_object_set_new(res, "position", json_integer(query->result_position));
-    if (query->have_total)
+    if (query->have_total) {
         json_object_set_new(res, "total", json_integer(query->total));
+    }
     /* Special case total */
     if (query->position > 0 && query->total && query->total < SSIZE_MAX) {
         if (query->position > (ssize_t) query->total) {
@@ -2903,18 +2991,24 @@ HIDDEN json_t *jmap_parse_reply(struct jmap_parse *parse)
 {
     json_t *res = json_object();
 
-    if (json_object_size(parse->parsed))
+    if (json_object_size(parse->parsed)) {
         json_object_set(res, "parsed", parse->parsed);
-    else
+    }
+    else {
         json_object_set_new(res, "parsed", json_null());
-    if (json_array_size(parse->not_parsable))
+    }
+    if (json_array_size(parse->not_parsable)) {
         json_object_set(res, "notParsable", parse->not_parsable);
-    else
+    }
+    else {
         json_object_set_new(res, "notParsable", json_null());
-    if (json_array_size(parse->not_found))
+    }
+    if (json_array_size(parse->not_found)) {
         json_object_set(res, "notFound", parse->not_found);
-    else
+    }
+    else {
         json_object_set_new(res, "notFound", json_null());
+    }
     return res;
 }
 
@@ -2933,24 +3027,36 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry,
         char *rightstr;
 
         rightstr = strchr(userid, '\t');
-        if (!rightstr) break;
+        if (!rightstr) {
+            break;
+        }
         *rightstr++ = '\0';
 
         nextid = strchr(rightstr, '\t');
-        if (!nextid) break;
+        if (!nextid) {
+            break;
+        }
         *nextid++ = '\0';
 
         cyrus_acl_strtomask(rightstr, &rights);
 
         // skip system users and owner
-        if (is_system_user(userid)) continue;
-        if (!strcmp(userid, owner)) continue;
+        if (is_system_user(userid)) {
+            continue;
+        }
+        if (!strcmp(userid, owner)) {
+            continue;
+        }
 
         json_t *jrights = tojmap(rights);
-        if (!jrights) continue;
+        if (!jrights) {
+            continue;
+        }
 
         // we've got one! Create the object if this is the first
-        if (!JNOTNULL(sharewith)) sharewith = json_object();
+        if (!JNOTNULL(sharewith)) {
+            sharewith = json_object();
+        }
 
         json_object_set_new(sharewith, userid, jrights);
     }
@@ -2989,12 +3095,15 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
     if (old != new) {
         int access, r = 0;
 
-        if (!new)
+        if (!new) {
             access = SHARE_NONE;
-        else if ((new &JACL_WRITE) == new)
+        }
+        else if ((new &JACL_WRITE) == new) {
             access = SHARE_READWRITE;
-        else
+        }
+        else {
             access = SHARE_READONLY;
+        }
 
         if (!old || !new) {
             /* Change subscription */
@@ -3100,11 +3209,15 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
         int access;
 
         rightstr = strchr(userid, '\t');
-        if (!rightstr) break;
+        if (!rightstr) {
+            break;
+        }
         *rightstr++ = '\0';
 
         nextid = strchr(rightstr, '\t');
-        if (!nextid) break;
+        if (!nextid) {
+            break;
+        }
         *nextid++ = '\0';
 
         cyrus_acl_strtomask(rightstr, &access);
@@ -3133,10 +3246,12 @@ static void add_shareacls(const char *userid, void *val, void *rock)
     char **aclptr = rock;
     int access = (uintptr_t) val;
 
-    if (access & JACL_WRITE)
+    if (access & JACL_WRITE) {
         cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
-    else
+    }
+    else {
         cyrus_acl_remove(aclptr, userid, NULL, NULL);
+    }
 }
 
 static int set_upload_rights(const char *accountid)
@@ -3147,7 +3262,9 @@ static int set_upload_rights(const char *accountid)
     struct mailbox *mbox = NULL;
     int r = jmap_open_upload_collection(accountid, &mbox);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     hash_table user_access = HASH_TABLE_INITIALIZER;
     struct shared_rock srock = { &user_access, accountid, mailbox_name(mbox) };
@@ -3197,7 +3314,9 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     int r;
     char *newacl = xstrdup(""); /* start with empty ACL */
 
-    if (json_is_null(shareWith)) overwrite = 1;
+    if (json_is_null(shareWith)) {
+        overwrite = 1;
+    }
 
     construct_hash_table(&user_access, 64, 0);
 
@@ -3208,11 +3327,15 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         int access;
 
         rightstr = strchr(userid, '\t');
-        if (!rightstr) break;
+        if (!rightstr) {
+            break;
+        }
         *rightstr++ = '\0';
 
         nextid = strchr(rightstr, '\t');
-        if (!nextid) break;
+        if (!nextid) {
+            break;
+        }
         *nextid++ = '\0';
 
         /* Is this a shareable user? (not owner or admin) */
@@ -3222,7 +3345,9 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             cyrus_acl_strtomask(rightstr, &change->oldrights);
 
             /* unless we're overwriting, we start with the existing state */
-            if (!overwrite) change->newrights = change->oldrights;
+            if (!overwrite) {
+                change->newrights = change->oldrights;
+            }
 
             hash_insert(userid, (void *) change, &user_access);
         }
@@ -3254,8 +3379,12 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         }
 
         /* skip system users and owner */
-        if (is_system_user(userid)) continue;
-        if (!strcmp(userid, owner)) continue;
+        if (is_system_user(userid)) {
+            continue;
+        }
+        if (!strcmp(userid, owner)) {
+            continue;
+        }
 
         change = hash_lookup(userid, &user_access);
         if (!change) {
@@ -3303,12 +3432,15 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         irock.owner = owner;
 
         /* Find the DAV namespace for this mailbox */
-        if (iscalendar)
+        if (iscalendar) {
             irock.tgt.namespace = &namespace_calendar;
-        else if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_ADDRESSBOOK)
+        }
+        else if (mbtype_isa(mailbox_mbtype(mbox)) == MBTYPE_ADDRESSBOOK) {
             irock.tgt.namespace = &namespace_addressbook;
-        else
+        }
+        else {
             irock.tgt.namespace = &namespace_drive;
+        }
 
         /* Get "live" properties for the namespace */
         pparams = irock.tgt.namespace->methods[METH_PROPFIND].params;
@@ -3316,8 +3448,9 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
         /* Create DAV URL for this collection */
         mbname = mbname_from_intname(mailbox_name(mbox));
-        if (!mbname_domain(mbname))
+        if (!mbname_domain(mbname)) {
             mbname_set_domain(mbname, httpd_extradomain);
+        }
 
         make_collection_url(&irock.resource,
                             irock.tgt.namespace->prefix,
@@ -3337,7 +3470,9 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         }
 
         /* Cleanup */
-        if (irock.notify) xmlFreeDoc(irock.notify->doc);
+        if (irock.notify) {
+            xmlFreeDoc(irock.notify->doc);
+        }
         mboxlist_entry_free(&irock.tgt.mbentry);
         free(irock.tgt.userid);
         buf_free(&irock.resource);
@@ -3365,7 +3500,9 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
             const char *userid = field + 10;
             const char *right = strchr(userid, '/');
 
-            if (!*shareWith) *shareWith = json_object();
+            if (!*shareWith) {
+                *shareWith = json_object();
+            }
 
             if (right) {
                 /* individual right */
@@ -3411,7 +3548,9 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
 
     r = mboxlist_lookup_allow_all(name, &entry, tid);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* Ignore "reserved" entries, like they aren't there */
     if (entry->mbtype & MBTYPE_RESERVE) {
@@ -3425,10 +3564,12 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
         return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    if (entryptr)
+    if (entryptr) {
         *entryptr = entry;
-    else
+    }
+    else {
         mboxlist_entry_free(&entry);
+    }
 
     return 0;
 }
@@ -3443,8 +3584,9 @@ static const mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req,
         req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
         construct_hash_table(req->mbentry_byid, 1024, 0);
     }
-    else
+    else {
         mbentry = hash_lookup(id, req->mbentry_byid);
+    }
 
     if (!mbentry) {
         int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
@@ -3481,7 +3623,9 @@ EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req,
                                                   const char *id)
 {
     const mbentry_t *mbentry = _mbentry_by_uniqueid(req, id, 1 /*scope*/);
-    if (!mbentry) return NULL;
+    if (!mbentry) {
+        return NULL;
+    }
     return mboxlist_entry_copy(mbentry);
 }
 
@@ -3534,14 +3678,18 @@ EXPORTED mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav)
     mbentry_t *mbentry = NULL;
 
     if (dav->mailbox_byname) {
-        if (jmap_mboxlist_lookup(dav->mailbox, &mbentry, NULL)) return NULL;
+        if (jmap_mboxlist_lookup(dav->mailbox, &mbentry, NULL)) {
+            return NULL;
+        }
     }
     else {
         /* XXX  DAV DB scopes the lookup to a single account.
            XXX  And scoping the mailbox to req->accountid will break Foo/copy */
         const mbentry_t *mbe =
             _mbentry_by_uniqueid(req, dav->mailbox, 0 /*scope*/);
-        if (!mbe) return NULL;
+        if (!mbe) {
+            return NULL;
+        }
         mbentry = mboxlist_entry_copy(mbe);
     }
 
@@ -3579,7 +3727,9 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
 
     buf_free(&attrib);
 
-    if (d->uniqueid) return CYRUSDB_DONE;
+    if (d->uniqueid) {
+        return CYRUSDB_DONE;
+    }
     return 0;
 }
 

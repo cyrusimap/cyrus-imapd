@@ -153,8 +153,12 @@ EXPORTED const char *dlist_reserve_path(const char *part,
     const char *base = NULL;
 
     /* part must be a configured partition name on this server */
-    if (isarchive) base = config_archivepartitiondir(part);
-    if (!base) base = config_partitiondir(part);
+    if (isarchive) {
+        base = config_archivepartitiondir(part);
+    }
+    if (!base) {
+        base = config_partitiondir(part);
+    }
 
     /* we expect to have a base at this point, so let's assert that */
     assert(base != NULL);
@@ -257,7 +261,9 @@ static int reservefile(struct protstream *in,
             break;
         }
         size -= n;
-        if (!file) continue;
+        if (!file) {
+            continue;
+        }
         if (fwrite(buf, 1, n, file) != n) {
             xsyslog(LOG_ERR, "IOERROR: write failed", "fname=<%s>", *fname);
             r = IMAP_IOERROR;
@@ -265,7 +271,9 @@ static int reservefile(struct protstream *in,
         }
     }
 
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     /* Make sure that message flushed to disk just incase mmap has problems */
     fflush(file);
@@ -341,18 +349,24 @@ EXPORTED void dlist_unstitch(struct dlist *parent, struct dlist *child)
 
     /* find old record */
     for (replace = parent->head; replace; replace = replace->next) {
-        if (replace == child) break;
+        if (replace == child) {
+            break;
+        }
         prev = replace;
     }
 
     assert(replace);
 
-    if (prev)
+    if (prev) {
         prev->next = child->next;
-    else
+    }
+    else {
         parent->head = child->next;
+    }
 
-    if (parent->tail == child) parent->tail = prev;
+    if (parent->tail == child) {
+        parent->tail = prev;
+    }
 
     child->next = NULL;
 }
@@ -360,9 +374,13 @@ EXPORTED void dlist_unstitch(struct dlist *parent, struct dlist *child)
 static struct dlist *dlist_child(struct dlist *dl, const char *name)
 {
     struct dlist *i = xzmalloc(sizeof(struct dlist));
-    if (name) i->name = xstrdup(name);
+    if (name) {
+        i->name = xstrdup(name);
+    }
     i->type = DL_NIL;
-    if (dl) dlist_stitch(dl, i);
+    if (dl) {
+        dlist_stitch(dl, i);
+    }
     return i;
 }
 
@@ -371,7 +389,9 @@ static void _dlist_free_children(struct dlist *dl)
     struct dlist *next;
     struct dlist *i;
 
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
 
     i = dl->head;
     while (i) {
@@ -385,7 +405,9 @@ static void _dlist_free_children(struct dlist *dl)
 
 static void _dlist_clean(struct dlist *dl)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
 
     /* remove any children */
     _dlist_free_children(dl);
@@ -402,33 +424,41 @@ static void _dlist_clean(struct dlist *dl)
 
 void dlist_makeatom(struct dlist *dl, const char *val)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     if (val) {
         dl->type = DL_ATOM;
         dl->sval = xstrdup(val);
         dl->nval = strlen(val);
     }
-    else
+    else {
         dl->type = DL_NIL;
+    }
 }
 
 void dlist_makeflag(struct dlist *dl, const char *val)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     if (val) {
         dl->type = DL_FLAG;
         dl->sval = xstrdup(val);
         dl->nval = strlen(val);
     }
-    else
+    else {
         dl->type = DL_NIL;
+    }
 }
 
 void dlist_makenum32(struct dlist *dl, uint32_t val)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     dl->type = DL_NUM;
     dl->nval = val;
@@ -436,7 +466,9 @@ void dlist_makenum32(struct dlist *dl, uint32_t val)
 
 void dlist_makenum64(struct dlist *dl, bit64 val)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     dl->type = DL_NUM;
     dl->nval = val;
@@ -444,7 +476,9 @@ void dlist_makenum64(struct dlist *dl, bit64 val)
 
 void dlist_makedate(struct dlist *dl, time_t val)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     dl->type = DL_DATE;
     dl->nval = val;
@@ -452,7 +486,9 @@ void dlist_makedate(struct dlist *dl, time_t val)
 
 void dlist_makehex64(struct dlist *dl, bit64 val)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     dl->type = DL_HEX;
     dl->nval = val;
@@ -460,15 +496,18 @@ void dlist_makehex64(struct dlist *dl, bit64 val)
 
 void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     if (guid) {
         dl->type = DL_GUID;
         dl->gval = xzmalloc(sizeof(struct message_guid));
         message_guid_copy(dl->gval, guid);
     }
-    else
+    else {
         dl->type = DL_NIL;
+    }
 }
 
 void dlist_makefile(struct dlist *dl,
@@ -477,7 +516,9 @@ void dlist_makefile(struct dlist *dl,
                     unsigned long size,
                     const char *fname)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     if (part && guid && fname) {
         dl->type = DL_FILE;
@@ -487,13 +528,16 @@ void dlist_makefile(struct dlist *dl,
         dl->nval = size;
         dl->part = xstrdup(part);
     }
-    else
+    else {
         dl->type = DL_NIL;
+    }
 }
 
 EXPORTED void dlist_makemap(struct dlist *dl, const char *val, size_t len)
 {
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
     _dlist_clean(dl);
     if (val) {
         dl->type = DL_BUF;
@@ -506,8 +550,9 @@ EXPORTED void dlist_makemap(struct dlist *dl, const char *val, size_t len)
         dl->sval[len] = '\0'; /* make it string safe too */
         dl->nval = len;
     }
-    else
+    else {
         dl->type = DL_NIL;
+    }
 }
 
 EXPORTED struct dlist *dlist_newkvlist(struct dlist *parent, const char *name)
@@ -620,7 +665,9 @@ EXPORTED struct dlist *dlist_setfile(struct dlist *parent,
 static struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
 {
     struct dlist *dl = dlist_getchild(parent, name);
-    if (!dl) dl = dlist_child(parent, name);
+    if (!dl) {
+        dl = dlist_child(parent, name);
+    }
     return dl;
 }
 
@@ -738,10 +785,12 @@ EXPORTED void dlist_print(const struct dlist *dl,
         printfile(out, dl);
         break;
     case DL_BUF:
-        if (strlen(dl->sval) == dl->nval)
+        if (strlen(dl->sval) == dl->nval) {
             prot_printastring(out, dl->sval);
-        else
+        }
+        else {
             prot_printliteral(out, dl->sval, dl->nval);
+        }
         break;
     case DL_GUID:
         prot_printf(out, "%s", message_guid_encode(dl->gval));
@@ -765,7 +814,9 @@ EXPORTED void dlist_print(const struct dlist *dl,
         prot_printf(out, "(");
         for (di = dl->head; di; di = di->next) {
             dlist_print(di, dl->nval, out);
-            if (di->next) prot_printf(out, " ");
+            if (di->next) {
+                prot_printf(out, " ");
+            }
         }
         prot_printf(out, ")");
         break;
@@ -788,15 +839,21 @@ EXPORTED void dlist_unlink_files(struct dlist *dl)
 {
     struct dlist *i;
 
-    if (!dl) return;
+    if (!dl) {
+        return;
+    }
 
     for (i = dl->head; i; i = i->next) {
         dlist_unlink_files(i);
     }
 
-    if (dl->type != DL_FILE) return;
+    if (dl->type != DL_FILE) {
+        return;
+    }
 
-    if (!dl->sval) return;
+    if (!dl->sval) {
+        return;
+    }
 
     syslog(LOG_DEBUG, "%s: unlinking %s", __func__, dl->sval);
     xunlink(dl->sval);
@@ -804,7 +861,9 @@ EXPORTED void dlist_unlink_files(struct dlist *dl)
 
 EXPORTED void dlist_free(struct dlist **dlp)
 {
-    if (!*dlp) return;
+    if (!*dlp) {
+        return;
+    }
     _dlist_clean(*dlp);
     free((*dlp)->name);
     free(*dlp);
@@ -839,7 +898,9 @@ EXPORTED const char *dlist_print_iter_step(struct dlist_print_iter *iter,
                                            struct buf *outbuf)
 {
     /* already finished */
-    if (!iter->next) return NULL;
+    if (!iter->next) {
+        return NULL;
+    }
 
     buf_reset(outbuf);
 
@@ -858,7 +919,9 @@ EXPORTED const char *dlist_print_iter_step(struct dlist_print_iter *iter,
         case DL_KVLIST:
         case DL_ATOMLIST:
             // XXX should use equiv to "prot_printastring" for curr->name
-            if (iter->printkeys) buf_printf(outbuf, "%s ", curr->name);
+            if (iter->printkeys) {
+                buf_printf(outbuf, "%s ", curr->name);
+            }
 
             buf_appendcstr(outbuf, curr->type == DL_KVLIST ? "%(" : "(");
 
@@ -867,13 +930,17 @@ EXPORTED const char *dlist_print_iter_step(struct dlist_print_iter *iter,
             }
             else {
                 buf_putc(outbuf, ')');
-                if (curr->next) buf_putc(outbuf, ' ');
+                if (curr->next) {
+                    buf_putc(outbuf, ' ');
+                }
             }
             break;
 
         default:
             dlist_printbuf(curr, iter->printkeys, outbuf);
-            if (curr->next) buf_putc(outbuf, ' ');
+            if (curr->next) {
+                buf_putc(outbuf, ' ');
+            }
             break;
         }
 
@@ -964,7 +1031,9 @@ static int _parseqstring(struct dlistsax_state *s, struct buf *buf)
     buf->len = 0;
 
     /* get over the first quote */
-    if (*s->p++ != '"') return IMAP_INVALID_IDENTIFIER;
+    if (*s->p++ != '"') {
+        return IMAP_INVALID_IDENTIFIER;
+    }
 
     while (s->p < s->end) {
         /* found the end quote */
@@ -975,7 +1044,9 @@ static int _parseqstring(struct dlistsax_state *s, struct buf *buf)
         /* backslash just quotes the next char, no matter what it is */
         if (*s->p == '\\') {
             s->p++;
-            if (s->p == s->end) break;
+            if (s->p == s->end) {
+                break;
+            }
             /* fall through */
         }
 
@@ -989,7 +1060,9 @@ static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
 {
     size_t len = 0;
 
-    if (*s->p++ != '{') return IMAP_INVALID_IDENTIFIER;
+    if (*s->p++ != '{') {
+        return IMAP_INVALID_IDENTIFIER;
+    }
 
     while (s->p < s->end) {
         if (cyrus_isdigit(*s->p)) {
@@ -998,13 +1071,21 @@ static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
         }
 
         // skip literal+ if present
-        if (*s->p == '+' && (s->p + 1 < s->end)) s->p++;
+        if (*s->p == '+' && (s->p + 1 < s->end)) {
+            s->p++;
+        }
 
         // we'd better be at the end of the literal
         if (*s->p == '}') {
-            if (s->p + 3 + len >= s->end) break;
-            if (s->p[1] != '\r') break;
-            if (s->p[2] != '\n') break;
+            if (s->p + 3 + len >= s->end) {
+                break;
+            }
+            if (s->p[1] != '\r') {
+                break;
+            }
+            if (s->p[2] != '\n') {
+                break;
+            }
             buf_truncate(buf, 0);
             buf_appendmap(buf, s->p + 3, len);
             s->p += len + 3;
@@ -1034,13 +1115,19 @@ static int _parseitem(struct dlistsax_state *s, struct buf *buf)
 
     default:
         sp = memchr(s->p, ' ', s->end - s->p);
-        if (!sp) sp = s->end;
-        while (sp[-1] == ')' && sp > s->p) sp--;
+        if (!sp) {
+            sp = s->end;
+        }
+        while (sp[-1] == ')' && sp > s->p) {
+            sp--;
+        }
         buf_appendmap(buf, s->p, sp - s->p);
         s->p = sp;
         if (buf->len == 3 && buf->s[0] == 'N' && buf->s[1] == 'I'
             && buf->s[2] == 'L')
+        {
             return IMAP_ZERO_LENGTH_LITERAL; // this is kinda bogus, but...
+        }
         return 0; /* this could be the last thing, so end is OK */
     }
 }
@@ -1055,67 +1142,105 @@ static int _parsesax(struct dlistsax_state *s, int parsekey)
     struct buf *backdoor = (struct buf *) (&s->d.kbuf);
     if (parsekey) {
         r = _parseitem(s, backdoor);
-        if (r) return r;
-        if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
-        if (*s->p == ' ')
-            s->p++;
-        else
+        if (r) {
+            return r;
+        }
+        if (s->p >= s->end) {
             return IMAP_INVALID_IDENTIFIER;
+        }
+        if (*s->p == ' ') {
+            s->p++;
+        }
+        else {
+            return IMAP_INVALID_IDENTIFIER;
+        }
     }
     else {
         backdoor->len = 0;
     }
 
-    if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+    if (s->p >= s->end) {
+        return IMAP_INVALID_IDENTIFIER;
+    }
 
     /* check what sort of value we have */
     if (*s->p == '(') {
         r = s->proc(DLISTSAX_LISTSTART, &s->d);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         s->p++;
-        if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+        if (s->p >= s->end) {
+            return IMAP_INVALID_IDENTIFIER;
+        }
 
         while (*s->p != ')') {
             r = _parsesax(s, 0);
-            if (r) return r;
-            if (*s->p == ')') break;
-            if (*s->p == ' ')
+            if (r) {
+                return r;
+            }
+            if (*s->p == ')') {
+                break;
+            }
+            if (*s->p == ' ') {
                 s->p++;
-            else
+            }
+            else {
                 return IMAP_INVALID_IDENTIFIER;
-            if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+            }
+            if (s->p >= s->end) {
+                return IMAP_INVALID_IDENTIFIER;
+            }
         }
 
         r = s->proc(DLISTSAX_LISTEND, &s->d);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         s->p++;
     }
     else if (*s->p == '%') {
         s->p++;
-        if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+        if (s->p >= s->end) {
+            return IMAP_INVALID_IDENTIFIER;
+        }
         /* no whitespace allowed here */
         if (*s->p == '(') {
             r = s->proc(DLISTSAX_KVLISTSTART, &s->d);
-            if (r) return r;
+            if (r) {
+                return r;
+            }
 
             s->p++;
-            if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+            if (s->p >= s->end) {
+                return IMAP_INVALID_IDENTIFIER;
+            }
 
             while (*s->p != ')') {
                 r = _parsesax(s, 1);
-                if (r) return r;
-                if (*s->p == ')') break;
-                if (*s->p == ' ')
+                if (r) {
+                    return r;
+                }
+                if (*s->p == ')') {
+                    break;
+                }
+                if (*s->p == ' ') {
                     s->p++;
-                else
+                }
+                else {
                     return IMAP_INVALID_IDENTIFIER;
-                if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
+                }
+                if (s->p >= s->end) {
+                    return IMAP_INVALID_IDENTIFIER;
+                }
             }
 
             r = s->proc(DLISTSAX_KVLISTEND, &s->d);
-            if (r) return r;
+            if (r) {
+                return r;
+            }
 
             s->p++;
         }
@@ -1126,15 +1251,20 @@ static int _parsesax(struct dlistsax_state *s, int parsekey)
     }
     else {
         r = _parseitem(s, &s->buf);
-        if (r == IMAP_ZERO_LENGTH_LITERAL)
+        if (r == IMAP_ZERO_LENGTH_LITERAL) {
             s->d.data = NULL; // NIL
-        else if (r)
+        }
+        else if (r) {
             return r;
-        else
+        }
+        else {
             s->d.data = buf_cstring(&s->buf);
+        }
         r = s->proc(DLISTSAX_STRING, &s->d);
         s->d.data = NULL; // zero out for next call
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     s->depth--;
@@ -1157,16 +1287,22 @@ EXPORTED int dlist_parsesax(
 
     r = _parsesax(&state, parsekey);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
-    if (state.p < state.end) return IMAP_IOERROR;
+    if (state.p < state.end) {
+        return IMAP_IOERROR;
+    }
 
     return 0;
 }
 
 static char next_nonspace(struct protstream *in, char c)
 {
-    while (Uisspace(c)) c = prot_getc(in);
+    while (Uisspace(c)) {
+        c = prot_getc(in);
+    }
     return c;
 }
 
@@ -1194,7 +1330,9 @@ EXPORTED int dlist_parse(struct dlist **dlp,
     }
 
     /* connection dropped? */
-    if (c == EOF) goto fail;
+    if (c == EOF) {
+        goto fail;
+    }
 
     /* check what sort of value we have */
     if (c == '(') {
@@ -1204,9 +1342,13 @@ EXPORTED int dlist_parse(struct dlist **dlp,
             struct dlist *di = NULL;
             prot_ungetc(c, in);
             c = dlist_parse(&di, 0, isarchive, in);
-            if (di) dlist_stitch(dl, di);
+            if (di) {
+                dlist_stitch(dl, di);
+            }
             c = next_nonspace(in, c);
-            if (c == EOF) goto fail;
+            if (c == EOF) {
+                goto fail;
+            }
         }
         c = prot_getc(in);
     }
@@ -1220,9 +1362,13 @@ EXPORTED int dlist_parse(struct dlist **dlp,
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
                 c = dlist_parse(&di, 1, isarchive, in);
-                if (di) dlist_stitch(dl, di);
+                if (di) {
+                    dlist_stitch(dl, di);
+                }
                 c = next_nonspace(in, c);
-                if (c == EOF) goto fail;
+                if (c == EOF) {
+                    goto fail;
+                }
             }
         }
         else if (c == '{') {
@@ -1231,17 +1377,30 @@ EXPORTED int dlist_parse(struct dlist **dlp,
             unsigned size = 0;
             const char *fname;
             c = getastring(in, NULL, &pbuf);
-            if (c != ' ') goto fail;
-            c = getastring(in, NULL, &gbuf);
-            if (c != ' ') goto fail;
-            c = getuint32(in, &size);
-            if (c != '}') goto fail;
-            c = prot_getc(in);
-            if (c == '\r') c = prot_getc(in);
-            if (c != '\n') goto fail;
-            if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
-            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, &fname))
+            if (c != ' ') {
                 goto fail;
+            }
+            c = getastring(in, NULL, &gbuf);
+            if (c != ' ') {
+                goto fail;
+            }
+            c = getuint32(in, &size);
+            if (c != '}') {
+                goto fail;
+            }
+            c = prot_getc(in);
+            if (c == '\r') {
+                c = prot_getc(in);
+            }
+            if (c != '\n') {
+                goto fail;
+            }
+            if (!message_guid_decode(&tmp_guid, gbuf.s)) {
+                goto fail;
+            }
+            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, &fname)) {
+                goto fail;
+            }
             dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
             /* file literal */
         }
@@ -1324,10 +1483,14 @@ EXPORTED struct dlist *dlist_getchild(struct dlist *dl, const char *name)
 {
     struct dlist *i;
 
-    if (!dl) return NULL;
+    if (!dl) {
+        return NULL;
+    }
 
     for (i = dl->head; i; i = i->next) {
-        if (i->name && !strcmp(name, i->name)) return i;
+        if (i->name && !strcmp(name, i->name)) {
+            return i;
+        }
     }
     lastkey = name;
     return NULL;
@@ -1337,9 +1500,13 @@ EXPORTED struct dlist *dlist_getchildn(struct dlist *dl, int num)
 {
     struct dlist *i;
 
-    if (!dl) return NULL;
+    if (!dl) {
+        return NULL;
+    }
 
-    for (i = dl->head; i && num; i = i->next) num--;
+    for (i = dl->head; i && num; i = i->next) {
+        num--;
+    }
 
     return i;
 }
@@ -1383,7 +1550,9 @@ EXPORTED void dlist_splat(struct dlist *parent, struct dlist *child)
 
     /* find old record */
     for (replace = parent->head; replace; replace = replace->next) {
-        if (replace == child) break;
+        if (replace == child) {
+            break;
+        }
         prev = replace;
     }
 
@@ -1391,22 +1560,30 @@ EXPORTED void dlist_splat(struct dlist *parent, struct dlist *child)
 
     if (child->head) {
         /* stitch in children */
-        if (prev)
+        if (prev) {
             prev->next = child->head;
-        else
+        }
+        else {
             parent->head = child->head;
-        if (child->next)
+        }
+        if (child->next) {
             child->tail->next = child->next;
-        else
+        }
+        else {
             parent->tail = child->tail;
+        }
     }
     else {
         /* just remove the record */
-        if (prev)
+        if (prev) {
             prev->next = child->next;
-        else
+        }
+        else {
             parent->head = child->next;
-        if (!child->next) parent->tail = prev;
+        }
+        if (!child->next) {
+            parent->tail = prev;
+        }
     }
     /* remove the node itself, carefully blanking out
      * the now unlinked children */
@@ -1422,11 +1599,15 @@ struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
     struct dlist *i;
     struct dlist *tmp;
 
-    if (!dl) return NULL;
+    if (!dl) {
+        return NULL;
+    }
 
     for (i = dl->head; i; i = i->next) {
         tmp = dlist_getchild(i, key);
-        if (tmp && !strcmp(tmp->sval, val)) return i;
+        if (tmp && !strcmp(tmp->sval, val)) {
+            return i;
+        }
     }
 
     return NULL;
@@ -1437,7 +1618,9 @@ EXPORTED int dlist_toatom(struct dlist *dl, const char **valp)
     const char *str;
     size_t len;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     /* atom can be NULL */
     if (dl->type == DL_NIL) {
@@ -1446,12 +1629,18 @@ EXPORTED int dlist_toatom(struct dlist *dl, const char **valp)
     }
 
     /* tomap always adds a trailing \0 */
-    if (!dlist_tomap(dl, &str, &len)) return 0;
+    if (!dlist_tomap(dl, &str, &len)) {
+        return 0;
+    }
 
     /* got NULLs? */
-    if (dl->type == DL_BUF && strlen(str) != len) return 0;
+    if (dl->type == DL_BUF && strlen(str) != len) {
+        return 0;
+    }
 
-    if (valp) *valp = str;
+    if (valp) {
+        *valp = str;
+    }
 
     return 1;
 }
@@ -1460,7 +1649,9 @@ HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
 {
     char tmp[30];
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     switch (dl->type) {
     case DL_NUM:
@@ -1488,8 +1679,12 @@ HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
         return 0;
     }
 
-    if (valp) *valp = dl->sval;
-    if (lenp) *lenp = dl->nval;
+    if (valp) {
+        *valp = dl->sval;
+    }
+    if (lenp) {
+        *lenp = dl->nval;
+    }
 
     return 1;
 }
@@ -1500,13 +1695,19 @@ static int dlist_tonum64(struct dlist *dl, bit64 *valp)
     const char *end;
     bit64 newval;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     switch (dl->type) {
     case DL_ATOM:
     case DL_BUF:
-        if (parsenum(dl->sval, &end, dl->nval, &newval)) return 0;
-        if (end - dl->sval != (int) dl->nval) return 0;
+        if (parsenum(dl->sval, &end, dl->nval, &newval)) {
+            return 0;
+        }
+        if (end - dl->sval != (int) dl->nval) {
+            return 0;
+        }
         /* successfully parsed - switch to a numeric value */
         dlist_makenum64(dl, newval);
         break;
@@ -1520,7 +1721,9 @@ static int dlist_tonum64(struct dlist *dl, bit64 *valp)
         return 0;
     }
 
-    if (valp) *valp = dl->nval;
+    if (valp) {
+        *valp = dl->nval;
+    }
 
     return 1;
 }
@@ -1530,7 +1733,9 @@ EXPORTED int dlist_tonum32(struct dlist *dl, uint32_t *valp)
     bit64 v;
 
     if (dlist_tonum64(dl, &v)) {
-        if (valp) *valp = (uint32_t) v;
+        if (valp) {
+            *valp = (uint32_t) v;
+        }
         return 1;
     }
 
@@ -1542,7 +1747,9 @@ int dlist_todate(struct dlist *dl, time_t *valp)
     bit64 v;
 
     if (dlist_tonum64(dl, &v)) {
-        if (valp) *valp = (time_t) v;
+        if (valp) {
+            *valp = (time_t) v;
+        }
         dl->type = DL_DATE;
         return 1;
     }
@@ -1555,13 +1762,19 @@ static int dlist_tohex64(struct dlist *dl, bit64 *valp)
     const char *end = NULL;
     bit64 newval;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     switch (dl->type) {
     case DL_ATOM:
     case DL_BUF:
-        if (parsehex(dl->sval, &end, dl->nval, &newval)) return 0;
-        if (end - dl->sval != (int) dl->nval) return 0;
+        if (parsehex(dl->sval, &end, dl->nval, &newval)) {
+            return 0;
+        }
+        if (end - dl->sval != (int) dl->nval) {
+            return 0;
+        }
         /* successfully parsed - switch to a numeric value */
         dlist_makehex64(dl, newval);
         break;
@@ -1576,7 +1789,9 @@ static int dlist_tohex64(struct dlist *dl, bit64 *valp)
         return 0;
     }
 
-    if (valp) *valp = dl->nval;
+    if (valp) {
+        *valp = dl->nval;
+    }
 
     return 1;
 }
@@ -1585,13 +1800,19 @@ EXPORTED int dlist_toguid(struct dlist *dl, struct message_guid **valp)
 {
     struct message_guid tmpguid;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     switch (dl->type) {
     case DL_ATOM:
     case DL_BUF:
-        if (dl->nval != 40) return 0;
-        if (!message_guid_decode(&tmpguid, dl->sval)) return 0;
+        if (dl->nval != 40) {
+            return 0;
+        }
+        if (!message_guid_decode(&tmpguid, dl->sval)) {
+            return 0;
+        }
         /* successfully parsed - switch to guid value */
         dlist_makeguid(dl, &tmpguid);
         break;
@@ -1603,7 +1824,9 @@ EXPORTED int dlist_toguid(struct dlist *dl, struct message_guid **valp)
         return 0;
     }
 
-    if (valp) *valp = dl->gval;
+    if (valp) {
+        *valp = dl->gval;
+    }
 
     return 1;
 }
@@ -1614,32 +1837,48 @@ EXPORTED int dlist_tofile(struct dlist *dl,
                           unsigned long *sizep,
                           const char **fnamep)
 {
-    if (!dlist_isfile(dl)) return 0;
+    if (!dlist_isfile(dl)) {
+        return 0;
+    }
 
-    if (guidp) *guidp = dl->gval;
-    if (sizep) *sizep = dl->nval;
-    if (fnamep) *fnamep = dl->sval;
-    if (partp) *partp = dl->part;
+    if (guidp) {
+        *guidp = dl->gval;
+    }
+    if (sizep) {
+        *sizep = dl->nval;
+    }
+    if (fnamep) {
+        *fnamep = dl->sval;
+    }
+    if (partp) {
+        *partp = dl->part;
+    }
 
     return 1;
 }
 
 EXPORTED int dlist_isatomlist(const struct dlist *dl)
 {
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
     return (dl->type == DL_ATOMLIST);
 }
 
 int dlist_iskvlist(const struct dlist *dl)
 {
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     return (dl->type == DL_KVLIST);
 }
 
 int dlist_isfile(const struct dlist *dl)
 {
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     return (dl->type == DL_FILE);
 }
@@ -1650,7 +1889,9 @@ int dlist_isnum(struct dlist *dl)
 {
     bit64 tmp;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     /* see if it can be parsed as a number */
     return dlist_tonum64(dl, &tmp);
@@ -1662,7 +1903,9 @@ EXPORTED int dlist_ishex64(struct dlist *dl)
 {
     bit64 tmp;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     /* see if it can be parsed as a number */
     return dlist_tohex64(dl, &tmp);
@@ -1674,7 +1917,9 @@ int dlist_isguid(struct dlist *dl)
 {
     struct message_guid *tmp = NULL;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
     return dlist_toguid(dl, &tmp);
 }
@@ -1684,9 +1929,13 @@ EXPORTED bit64 dlist_num(struct dlist *dl)
 {
     bit64 v;
 
-    if (!dl) return 0;
+    if (!dl) {
+        return 0;
+    }
 
-    if (dlist_tonum64(dl, &v)) return v;
+    if (dlist_tonum64(dl, &v)) {
+        return v;
+    }
 
     return 0;
 }
@@ -1699,7 +1948,9 @@ EXPORTED const char *dlist_cstring(struct dlist *dl)
     if (dl) {
         const char *res = NULL;
         dlist_toatom(dl, &res);
-        if (res) return res;
+        if (res) {
+            return res;
+        }
     }
 
     return &zerochar;
@@ -1785,7 +2036,9 @@ EXPORTED int dlist_getlist(struct dlist *dl,
                            struct dlist **valp)
 {
     struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
+    if (!i) {
+        return 0;
+    }
     *valp = i;
     return 1;
 }
@@ -1803,7 +2056,9 @@ EXPORTED void dlist_rename(struct dlist *dl, const char *name)
 
 EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
 {
-    if (!dl) return NULL;
+    if (!dl) {
+        return NULL;
+    }
     struct buf buf = BUF_INITIALIZER;
     struct dlist *new = NULL;
     dlist_printbuf(dl, 1, &buf);

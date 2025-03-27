@@ -79,11 +79,14 @@ static int _initted = 0;
 
 static void statuscache_open(void)
 {
-    if (!config_getswitch(IMAPOPT_STATUSCACHE)) return;
+    if (!config_getswitch(IMAPOPT_STATUSCACHE)) {
+        return;
+    }
 
     char *fname = xstrdupnull(config_getstring(IMAPOPT_STATUSCACHE_DB_PATH));
-    if (!fname)
+    if (!fname) {
         fname = strconcat(config_dir, FNAME_STATUSCACHEDB, (char *) NULL);
+    }
 
     int r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (r) {
@@ -97,7 +100,9 @@ static void statuscache_open(void)
 
 static void statuscache_close(void)
 {
-    if (!statuscachedb) return;
+    if (!statuscachedb) {
+        return;
+    }
 
     int r = cyrusdb_close(statuscachedb);
     if (r) {
@@ -116,7 +121,9 @@ static void done_cb(void *rock __attribute__((unused)))
 
 static void init_internal()
 {
-    if (_initted) return;
+    if (_initted) {
+        return;
+    }
     statuscache_open();
     cyrus_modules_add(done_cb, NULL);
     _initted = 1;
@@ -143,7 +150,9 @@ static void statuscache_read_index(const char *mboxname,
     size_t datalen = 0;
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscachedb) return;
+    if (!statuscachedb) {
+        return;
+    }
 
     /* Check if there is an entry in the database */
     statuscache_buildkey(mboxname, NULL, &keybuf);
@@ -151,13 +160,19 @@ static void statuscache_read_index(const char *mboxname,
         statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     buf_free(&keybuf);
 
-    if (r || !data || !datalen) return;
+    if (r || !data || !datalen) {
+        return;
+    }
 
     const char *dend = data + datalen;
 
     char *p = (char *) data;
-    if (*p++ != 'I') return;
-    if (*p++ != ' ') return;
+    if (*p++ != 'I') {
+        return;
+    }
+    if (*p++ != ' ') {
+        return;
+    }
 
     unsigned version = (unsigned) strtoul(p, &p, 10);
     if (version != (unsigned) STATUSCACHE_VERSION) {
@@ -165,24 +180,50 @@ static void statuscache_read_index(const char *mboxname,
         return;
     }
 
-    if (*p++ != ' ') return;
-    if (*p++ != '(') return;
+    if (*p++ != ' ') {
+        return;
+    }
+    if (*p++ != '(') {
+        return;
+    }
 
     // read the matched items
-    if (p < dend) sdata->messages = strtoul(p, &p, 10);
-    if (p < dend) sdata->uidnext = strtoul(p, &p, 10);
-    if (p < dend) sdata->uidvalidity = strtoul(p, &p, 10);
-    if (p < dend) sdata->mboptions = strtoul(p, &p, 10);
-    if (p < dend) sdata->size = strtoull(p, &p, 10);
-    if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
-    if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
-    if (p < dend) sdata->deleted = strtoul(p, &p, 10);
-    if (p < dend) sdata->deleted_storage = strtoull(p, &p, 10);
+    if (p < dend) {
+        sdata->messages = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->uidnext = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->uidvalidity = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->mboptions = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->size = strtoull(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->createdmodseq = strtoull(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->highestmodseq = strtoull(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->deleted = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->deleted_storage = strtoull(p, &p, 10);
+    }
 
-    if (*p++ != ')') return;
+    if (*p++ != ')') {
+        return;
+    }
 
     /* Sanity check the data */
-    if (!sdata->highestmodseq) return;
+    if (!sdata->highestmodseq) {
+        return;
+    }
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_UIDVALIDITY;
 }
@@ -195,7 +236,9 @@ static void statuscache_read_seen(const char *mboxname,
     const char *data = NULL;
     size_t datalen = 0;
 
-    if (!userid) return;
+    if (!userid) {
+        return;
+    }
 
     // if no messages, other counts must also be zero
     if (!sdata->messages) {
@@ -207,10 +250,14 @@ static void statuscache_read_seen(const char *mboxname,
     }
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscachedb) return;
+    if (!statuscachedb) {
+        return;
+    }
 
     // we must have a HIGHESTMODSEQ to compare against
-    if (!(sdata->statusitems & STATUS_HIGHESTMODSEQ)) return;
+    if (!(sdata->statusitems & STATUS_HIGHESTMODSEQ)) {
+        return;
+    }
 
     /* Check if there is an entry in the database */
     statuscache_buildkey(mboxname, userid, &keybuf);
@@ -218,12 +265,18 @@ static void statuscache_read_seen(const char *mboxname,
         statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     buf_free(&keybuf);
 
-    if (r || !data || !datalen) return;
+    if (r || !data || !datalen) {
+        return;
+    }
 
     const char *dend = data + datalen;
     char *p = (char *) data;
-    if (*p++ != 'S') return;
-    if (*p++ != ' ') return;
+    if (*p++ != 'S') {
+        return;
+    }
+    if (*p++ != ' ') {
+        return;
+    }
 
     unsigned version = (unsigned) strtoul(p, &p, 10);
     if (version != (unsigned) STATUSCACHE_VERSION) {
@@ -231,18 +284,30 @@ static void statuscache_read_seen(const char *mboxname,
         return;
     }
 
-    if (*p++ != ' ') return;
-    if (*p++ != '(') return;
+    if (*p++ != ' ') {
+        return;
+    }
+    if (*p++ != '(') {
+        return;
+    }
 
     // read the matched items
-    if (p < dend) sdata->recent = strtoul(p, &p, 10);
-    if (p < dend) sdata->unseen = strtoul(p, &p, 10);
+    if (p < dend) {
+        sdata->recent = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        sdata->unseen = strtoul(p, &p, 10);
+    }
     modseq_t highestmodseq = strtoull(p, &p, 10);
 
-    if (*p++ != ')') return;
+    if (*p++ != ')') {
+        return;
+    }
 
     // doesn't match non-unseen key
-    if (highestmodseq != sdata->highestmodseq) return;
+    if (highestmodseq != sdata->highestmodseq) {
+        return;
+    }
 
     sdata->userid = userid;
     sdata->statusitems |= STATUS_SEENITEMS;
@@ -254,17 +319,21 @@ static int statuscache_lookup(const char *mboxname,
                               struct statusdata *sdata)
 {
     // nothing to read!
-    if (!(statusitems & (STATUS_INDEXITEMS | STATUS_SEENITEMS))) return 0;
+    if (!(statusitems & (STATUS_INDEXITEMS | STATUS_SEENITEMS))) {
+        return 0;
+    }
 
     init_internal();
 
     statuscache_read_index(mboxname, sdata);
-    if (statusitems & STATUS_SEENITEMS)
+    if (statusitems & STATUS_SEENITEMS) {
         statuscache_read_seen(mboxname, userid, sdata);
+    }
 
     // did we get everything we wanted?
-    if ((sdata->statusitems & statusitems) != statusitems)
+    if ((sdata->statusitems & statusitems) != statusitems) {
         return IMAP_NO_NOSUCHMSG;
+    }
 
     return 0;
 }
@@ -317,10 +386,14 @@ static int statuscache_store(const char *mboxname,
         goto done;
     }
 
-    if ((sdata->statusitems & STATUS_SEENITEMS) != STATUS_SEENITEMS) goto done;
+    if ((sdata->statusitems & STATUS_SEENITEMS) != STATUS_SEENITEMS) {
+        goto done;
+    }
 
     // if there's no userid, we don't store this stuff
-    if (!sdata->userid) goto done;
+    if (!sdata->userid) {
+        goto done;
+    }
 
     statuscache_buildkey(mboxname, sdata->userid, &keybuf);
 
@@ -360,13 +433,17 @@ HIDDEN int statuscache_invalidate(const char *mboxname,
     struct txn *tid = NULL;
 
     /* if it's disabled then skip */
-    if (!config_getswitch(IMAPOPT_STATUSCACHE)) return 0;
+    if (!config_getswitch(IMAPOPT_STATUSCACHE)) {
+        return 0;
+    }
 
     /* if it's not already open, open and close it for just this */
     if (!statuscachedb) {
         statuscache_open();
         // failed to open, oh well
-        if (!statuscachedb) return 0;
+        if (!statuscachedb) {
+            return 0;
+        }
         doclose = 1;
     }
 
@@ -379,11 +456,15 @@ HIDDEN int statuscache_invalidate(const char *mboxname,
         syslog(LOG_NOTICE,
                "DBERROR: failed to store statuscache data for %s",
                mboxname);
-        if (tid) cyrusdb_abort(statuscachedb, tid);
+        if (tid) {
+            cyrusdb_abort(statuscachedb, tid);
+        }
     }
 
     // if we opened the DB, close it now
-    if (doclose) statuscache_close();
+    if (doclose) {
+        statuscache_close();
+    }
 
     return 0;
 }
@@ -465,9 +546,13 @@ static int status_load_mailbox(struct mailbox *mailbox,
             struct seendata sd = SEENDATA_INITIALIZER;
 
             int r = seen_open(userid, SEEN_CREATE, &seendb);
-            if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
+            if (!r) {
+                r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
+            }
             seen_close(&seendb);
-            if (r) return r;
+            if (r) {
+                return r;
+            }
 
             recentuid = sd.lastuid;
             seq = seqset_parse(sd.seenuids, NULL, recentuid);
@@ -479,12 +564,18 @@ static int status_load_mailbox(struct mailbox *mailbox,
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
-            if (record->uid > recentuid) numrecent++;
+            if (record->uid > recentuid) {
+                numrecent++;
+            }
             if (internalseen) {
-                if (!(record->system_flags & FLAG_SEEN)) numunseen++;
+                if (!(record->system_flags & FLAG_SEEN)) {
+                    numunseen++;
+                }
             }
             else {
-                if (!seqset_ismember(seq, record->uid)) numunseen++;
+                if (!seqset_ismember(seq, record->uid)) {
+                    numunseen++;
+                }
             }
         }
         mailbox_iter_done(&iter);
@@ -535,12 +626,16 @@ static int status_lookup_internal(const char *mboxname,
 
     /* Missing or invalid cache entry */
     r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     r = status_load_mailbox(mailbox, userid, statusitems, sdata);
 
     /* cache the new value while unlocking */
-    if (!r) mailbox_unlock_index(mailbox, sdata);
+    if (!r) {
+        mailbox_unlock_index(mailbox, sdata);
+    }
     mailbox_close(&mailbox);
 
     return r;
@@ -553,7 +648,9 @@ EXPORTED int status_lookup_mbentry(const mbentry_t *mbentry,
 {
     // check if we can get everything we need from the mbentry
     status_fill_mbentry(mbentry, sdata);
-    if ((sdata->statusitems & statusitems) == statusitems) return 0;
+    if ((sdata->statusitems & statusitems) == statusitems) {
+        return 0;
+    }
 
     return status_lookup_internal(mbentry->name, userid, statusitems, sdata);
 }
@@ -567,7 +664,9 @@ EXPORTED int status_lookup_mboxname(const char *mboxname,
     if (statusitems & STATUS_MAILBOXID) {
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         r = status_lookup_mbentry(mbentry, userid, statusitems, sdata);
         mboxlist_entry_free(&mbentry);
         return r;
@@ -597,7 +696,9 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox,
     // check if we already have all the data we need (includes any possible
     // mbentry)
     status_fill_mailbox(mailbox, sdata);
-    if ((sdata->statusitems & statusitems) == statusitems) return 0;
+    if ((sdata->statusitems & statusitems) == statusitems) {
+        return 0;
+    }
 
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {

@@ -124,15 +124,22 @@ static int is_directory_empty(char *dir_path)
     int n = 0;
     struct dirent *d;
     DIR *dir = opendir(dir_path);
-    if (dir == NULL) return 0;
+    if (dir == NULL) {
+        return 0;
+    }
     while ((d = readdir(dir)) != NULL) {
-        if (++n > 2) break;
+        if (++n > 2) {
+            break;
+        }
     }
     closedir(dir);
     if (n <= 2) // The directory is empty
+    {
         return 1;
-    else
+    }
+    else {
         return 0;
+    }
 }
 
 int objectstore_put(struct mailbox *mailbox,
@@ -222,7 +229,9 @@ int objectstore_delete(struct mailbox *mailbox,
                 objectstore_container_path(mailbox, record);
             snprintf(path, sizeof(path), "%s/", container_path);
 
-            if (is_directory_empty(path)) remove(path);
+            if (is_directory_empty(path)) {
+                remove(path);
+            }
         }
     }
     return rc;
@@ -240,7 +249,8 @@ int objectstore_is_filename_in_container(struct mailbox *mailbox,
     if (stat(filename, &fileStat) == -1) {
         rc = -1;
     }
-    else
+    else {
         *isthere = 1;
+    }
     return rc;
 }

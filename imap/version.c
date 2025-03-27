@@ -94,12 +94,13 @@ EXPORTED void id_response(struct protstream *pout)
                 CYRUS_VERSION);
 
     /* add the os info */
-    if (uname(&os) != -1)
+    if (uname(&os) != -1) {
         prot_printf(pout,
                     " \"os\" \"%s\""
                     " \"os-version\" \"%s\"",
                     os.sysname,
                     os.release);
+    }
 
 #ifdef ID_SAVE_CMDLINE
     /* add the command line info */
@@ -188,11 +189,12 @@ EXPORTED void id_response(struct protstream *pout)
              MAXIDVALUELEN - strlen(env_buf),
              "; nonblock = %s",
              nonblock_method_desc);
-    if (idle_method_desc)
+    if (idle_method_desc) {
         snprintf(env_buf + strlen(env_buf),
                  MAXIDVALUELEN - strlen(env_buf),
                  "; idle = %s",
                  idle_method_desc);
+    }
 
     prot_printf(pout, " \"environment\" \"%s\"", env_buf);
 }

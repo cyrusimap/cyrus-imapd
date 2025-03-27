@@ -127,12 +127,20 @@ static void list_expunged(const char *mboxname,
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
-        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) continue;
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            continue;
+        }
 
         if (nuids) {
-            while (uidnum < nuids && record->uid > uids[uidnum]) uidnum++;
-            if (uidnum >= nuids) continue;
-            if (record->uid != uids[uidnum]) continue;
+            while (uidnum < nuids && record->uid > uids[uidnum]) {
+                uidnum++;
+            }
+            if (uidnum >= nuids) {
+                continue;
+            }
+            if (record->uid != uids[uidnum]) {
+                continue;
+            }
             /* otherwise we want this one */
         }
 
@@ -208,16 +216,26 @@ static int restore_expunged(struct mailbox *mailbox,
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
-        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) continue;
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            continue;
+        }
 
         if (mode == MODE_UID) {
-            while (uidnum < nuids && record->uid > uids[uidnum]) uidnum++;
-            if (uidnum >= nuids) continue;
-            if (record->uid != uids[uidnum]) continue;
+            while (uidnum < nuids && record->uid > uids[uidnum]) {
+                uidnum++;
+            }
+            if (uidnum >= nuids) {
+                continue;
+            }
+            if (record->uid != uids[uidnum]) {
+                continue;
+            }
             /* otherwise we want this one */
         }
         else if (mode == MODE_TIME) {
-            if (record->last_updated < time_since) continue;
+            if (record->last_updated < time_since) {
+                continue;
+            }
             /* otherwise we want this one */
         }
 
@@ -231,54 +249,71 @@ static int restore_expunged(struct mailbox *mailbox,
         /* bump the UID, strip the flags */
         newrecord.uid = mailbox->i.last_uid + 1;
         newrecord.internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
-        if (unsetdeleted) newrecord.system_flags &= ~FLAG_DELETED;
+        if (unsetdeleted) {
+            newrecord.system_flags &= ~FLAG_DELETED;
+        }
 
         /* copy the message file */
         fname = mailbox_record_fname(mailbox, &newrecord);
         r = mailbox_copyfile(oldfname, fname, 0);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         /* add the flag if requested */
         if (addflag) {
             int userflag = 0;
             r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
-            if (r) break;
+            if (r) {
+                break;
+            }
             newrecord.user_flags[userflag / 32] |= 1U << (userflag & 31);
         }
 
         /* and append the new record */
         r = mailbox_append_index_record(mailbox, &newrecord);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         /* ensure we have an astate connected to the destination
          * mailbox, so that the annotation txn will be committed
          * when we close the mailbox */
         r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         /* and copy over any annotations */
         r = annotate_msg_copy(
             mailbox, record->uid, mailbox, newrecord.uid, userid);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
-        if (verbose)
+        if (verbose) {
             printf("Unexpunged %s: %u => %u\n",
                    extname,
                    record->uid,
                    newrecord.uid);
+        }
 
         /* mark the old one unlinked so we don't see it again */
         struct index_record oldrecord = *record;
         oldrecord.internal_flags |=
             FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         (*numrestored)++;
     }
 
     /* better get that seen to */
-    if (*numrestored) mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+    if (*numrestored) {
+        mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+    }
 
     mailbox_iter_done(&iter);
     free(userid);
@@ -324,17 +359,23 @@ int main(int argc, char *argv[])
             break;
 
         case 'l':
-            if (mode != MODE_UNKNOWN) usage();
+            if (mode != MODE_UNKNOWN) {
+                usage();
+            }
             mode = MODE_LIST;
             break;
 
         case 'a':
-            if (mode != MODE_UNKNOWN) usage();
+            if (mode != MODE_UNKNOWN) {
+                usage();
+            }
             mode = MODE_ALL;
             break;
 
         case 't':
-            if (mode != MODE_UNKNOWN) usage();
+            if (mode != MODE_UNKNOWN) {
+                usage();
+            }
 
             mode = MODE_TIME;
             secs = atoi(optarg);
@@ -360,7 +401,9 @@ int main(int argc, char *argv[])
             break;
 
         case 'u':
-            if (mode != MODE_UNKNOWN) usage();
+            if (mode != MODE_UNKNOWN) {
+                usage();
+            }
             mode = MODE_UID;
             break;
 
@@ -383,8 +426,9 @@ int main(int argc, char *argv[])
     }
 
     /* sanity check */
-    if (mode == MODE_UNKNOWN || (optind + (mode == MODE_UID ? 1 : 0)) >= argc)
+    if (mode == MODE_UNKNOWN || (optind + (mode == MODE_UID ? 1 : 0)) >= argc) {
         usage();
+    }
 
     cyrus_init(alt_config, "unexpunge", 0, 0);
 
@@ -411,8 +455,9 @@ int main(int argc, char *argv[])
 
         uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));
 
-        for (i = 0; i < nuids; i++)
+        for (i = 0; i < nuids; i++) {
             uids[i] = strtoul(argv[optind + i], NULL, 10);
+        }
 
         /* Sort the UIDs so we can binary search */
         qsort(uids, nuids, sizeof(unsigned long), compare_uid);

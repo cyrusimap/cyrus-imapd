@@ -196,8 +196,9 @@ struct search_engine
 #define SEARCH_COMPACT_REINDEX (1 << 7)     /* re-index all matching messages */
 #define SEARCH_COMPACT_ONLYUPGRADE (1 << 8) /* only compact if reindexing */
 #define SEARCH_COMPACT_XAPINDEXED (1 << 9)  /* use XAPIAN index */
-#define SEARCH_ATTACHMENTS_IN_ANY (1 << 10) /* search attachments in ANY part  \
-                                             */
+#define SEARCH_ATTACHMENTS_IN_ANY                                              \
+    (1 << 10) /* search attachments in ANY part                                \
+               */
 #define SEARCH_COMPACT_ALLOW_PARTIALS                                          \
     (1 << 11) /* allow partially indexed messages */
 #define SEARCH_COMPACT_NONBLOCKING (1 << 12) /* skip if locked */

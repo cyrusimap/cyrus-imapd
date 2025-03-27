@@ -130,18 +130,42 @@ static strarray_t *suppressed_capabilities = NULL;
 
 static int get_facility(const char *name)
 {
-    if (!strcasecmp(name, "DAEMON")) return LOG_DAEMON;
-    if (!strcasecmp(name, "MAIL")) return LOG_MAIL;
-    if (!strcasecmp(name, "NEWS")) return LOG_NEWS;
-    if (!strcasecmp(name, "USER")) return LOG_USER;
-    if (!strcasecmp(name, "LOCAL0")) return LOG_LOCAL0;
-    if (!strcasecmp(name, "LOCAL1")) return LOG_LOCAL1;
-    if (!strcasecmp(name, "LOCAL2")) return LOG_LOCAL2;
-    if (!strcasecmp(name, "LOCAL3")) return LOG_LOCAL3;
-    if (!strcasecmp(name, "LOCAL4")) return LOG_LOCAL4;
-    if (!strcasecmp(name, "LOCAL5")) return LOG_LOCAL5;
-    if (!strcasecmp(name, "LOCAL6")) return LOG_LOCAL6;
-    if (!strcasecmp(name, "LOCAL7")) return LOG_LOCAL7;
+    if (!strcasecmp(name, "DAEMON")) {
+        return LOG_DAEMON;
+    }
+    if (!strcasecmp(name, "MAIL")) {
+        return LOG_MAIL;
+    }
+    if (!strcasecmp(name, "NEWS")) {
+        return LOG_NEWS;
+    }
+    if (!strcasecmp(name, "USER")) {
+        return LOG_USER;
+    }
+    if (!strcasecmp(name, "LOCAL0")) {
+        return LOG_LOCAL0;
+    }
+    if (!strcasecmp(name, "LOCAL1")) {
+        return LOG_LOCAL1;
+    }
+    if (!strcasecmp(name, "LOCAL2")) {
+        return LOG_LOCAL2;
+    }
+    if (!strcasecmp(name, "LOCAL3")) {
+        return LOG_LOCAL3;
+    }
+    if (!strcasecmp(name, "LOCAL4")) {
+        return LOG_LOCAL4;
+    }
+    if (!strcasecmp(name, "LOCAL5")) {
+        return LOG_LOCAL5;
+    }
+    if (!strcasecmp(name, "LOCAL6")) {
+        return LOG_LOCAL6;
+    }
+    if (!strcasecmp(name, "LOCAL7")) {
+        return LOG_LOCAL7;
+    }
 
     /* fall back to the default.  This will work because we already have
        this log open when we call out */
@@ -180,10 +204,12 @@ static void debug_toggled(void)
 {
     int logmask = setlogmask(0); /* gets the current log mask */
 
-    if (config_debug)
+    if (config_debug) {
         logmask |= LOG_MASK(LOG_DEBUG);
-    else
+    }
+    else {
         logmask &= ~LOG_MASK(LOG_DEBUG);
+    }
 
     syslog(LOG_INFO, "debug logging turned %s", config_debug ? "on" : "off");
 
@@ -216,7 +242,9 @@ EXPORTED int cyrus_init(const char *alt_config,
 
     cyrus_init_nodb = (flags & CYRUSINIT_NODB);
 #ifdef LOG_PERROR
-    if ((flags & CYRUSINIT_PERROR)) syslog_opts |= LOG_PERROR;
+    if ((flags & CYRUSINIT_PERROR)) {
+        syslog_opts |= LOG_PERROR;
+    }
 #endif
 
     initialize_http_error_table();
@@ -228,15 +256,18 @@ EXPORTED int cyrus_init(const char *alt_config,
      * accidentally reuse low FD numbers */
     while (1) {
         int fd = open("/dev/null", 0);
-        if (fd == -1) fatal("can't open /dev/null", EX_SOFTWARE);
+        if (fd == -1) {
+            fatal("can't open /dev/null", EX_SOFTWARE);
+        }
         if (fd >= 3) {
             close(fd);
             break;
         }
     }
 
-    if (!ident)
+    if (!ident) {
         fatal("service name was not specified to cyrus_init", EX_SOFTWARE);
+    }
 
     config_ident = ident;
 
@@ -271,10 +302,12 @@ EXPORTED int cyrus_init(const char *alt_config,
 
         /* The $CYRUS_SYSLOG_PREFIX environment variable takes precedence */
         if (!ident_buf) {
-            if (prefix)
+            if (prefix) {
                 ident_buf = strconcat(prefix, "/", ident, NULL);
-            else
+            }
+            else {
                 ident_buf = xstrdup(ident);
+            }
         }
 
         closelog();
@@ -285,16 +318,21 @@ EXPORTED int cyrus_init(const char *alt_config,
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *) config_defpartition; p && *p; p++) {
-        if (!Uisalnum(*p))
+        if (!Uisalnum(*p)) {
             fatal("defaultpartition option contains non-alphanumeric character",
                   EX_CONFIG);
-        if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+        }
+        if (Uisupper(*p)) {
+            *p = tolower((unsigned char) *p);
+        }
     }
 
     /* Look up umask */
     val = config_getstring(IMAPOPT_UMASK);
     while (*val) {
-        if (*val >= '0' && *val <= '7') umaskval = umaskval * 8 + *val - '0';
+        if (*val >= '0' && *val <= '7') {
+            umaskval = umaskval * 8 + *val - '0';
+        }
         val++;
     }
     umask(umaskval);
@@ -310,9 +348,12 @@ EXPORTED int cyrus_init(const char *alt_config,
         config_getbitfield(IMAPOPT_METAPARTITION_FILES);
 
     val = config_getstring(IMAPOPT_SUPPRESS_CAPABILITIES);
-    if (val) suppressed_capabilities = strarray_split(val, NULL, 0);
-    if (config_getswitch(IMAPOPT_SEARCH_SKIPDIACRIT))
+    if (val) {
+        suppressed_capabilities = strarray_split(val, NULL, 0);
+    }
+    if (config_getswitch(IMAPOPT_SEARCH_SKIPDIACRIT)) {
         charset_flags |= CHARSET_SKIPDIACRIT;
+    }
 
     switch (config_getenum(IMAPOPT_SEARCH_WHITESPACE)) {
     case IMAP_ENUM_SEARCH_WHITESPACE_MERGE:
@@ -325,11 +366,13 @@ EXPORTED int cyrus_init(const char *alt_config,
         break;
     }
 
-    if (config_getswitch(IMAPOPT_SEARCH_SKIPHTML))
+    if (config_getswitch(IMAPOPT_SEARCH_SKIPHTML)) {
         charset_flags |= CHARSET_SKIPHTML;
+    }
 
-    if (config_getswitch(IMAPOPT_RFC2047_UTF8))
+    if (config_getswitch(IMAPOPT_RFC2047_UTF8)) {
         charset_flags |= CHARSET_MIME_UTF8;
+    }
 
     /* Set snippet conversion flags. */
     charset_snippet_flags = CHARSET_KEEPCASE;
@@ -539,14 +582,18 @@ EXPORTED int global_authisa(struct auth_state *authstate, enum imapopt opt)
     size_t len;
 
     /* Is the option defined? */
-    if (!val) return 0;
+    if (!val) {
+        return 0;
+    }
 
     while (*val) {
         char *p;
 
         for (p = (char *) val; *p && !Uisspace(*p); p++);
         len = p - val;
-        if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+        if (len >= sizeof(buf)) {
+            len = sizeof(buf) - 1;
+        }
         memcpy(buf, val, len);
         buf[len] = '\0';
 
@@ -554,7 +601,9 @@ EXPORTED int global_authisa(struct auth_state *authstate, enum imapopt opt)
             return 1;
         }
         val = p;
-        while (*val && Uisspace(*val)) val++;
+        while (*val && Uisspace(*val)) {
+            val++;
+        }
     }
 
     return 0;
@@ -624,7 +673,9 @@ EXPORTED const char *canonify_userid(char *user,
                     snprintf(buf, sizeof(buf), "%s@%s", user, domain + 1);
                     user = buf;
 
-                    if (domain_from_ip) *domain_from_ip = 1;
+                    if (domain_from_ip) {
+                        *domain_from_ip = 1;
+                    }
                 }
             }
         }
@@ -749,8 +800,12 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
                 break;
             }
             /* not this realm, try next one */
-            while (*val && !Uisspace(*val)) val++;
-            while (*val && Uisspace(*val)) val++;
+            while (*val && !Uisspace(*val)) {
+                val++;
+            }
+            while (*val && Uisspace(*val)) {
+                val++;
+            }
         }
         if (!*val) {
             sasl_seterror(
@@ -811,9 +866,10 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
             authstate = auth_newstate(requested_user);
 
             /* are we a proxy admin? */
-            if (ctx->userisproxyadmin)
+            if (ctx->userisproxyadmin) {
                 *(ctx->userisproxyadmin) =
                     global_authisa(authstate, IMAPOPT_ADMINS);
+            }
         }
         else {
             sasl_seterror(
@@ -825,11 +881,15 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
         }
     }
 
-    if (ctx->authstate)
+    if (ctx->authstate) {
         *(ctx->authstate) = authstate;
-    else
+    }
+    else {
         auth_freestate(authstate);
-    if (ctx->userisadmin) *(ctx->userisadmin) = userisadmin;
+    }
+    if (ctx->userisadmin) {
+        *(ctx->userisadmin) = userisadmin;
+    }
 
     return SASL_OK;
 }
@@ -838,10 +898,14 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 EXPORTED void cyrus_done(void)
 {
     cyrus_modules_done();
-    if (cyrus_init_run != RUNNING) return;
+    if (cyrus_init_run != RUNNING) {
+        return;
+    }
     cyrus_init_run = DONE;
 
-    if (!cyrus_init_nodb) libcyrus_done();
+    if (!cyrus_init_nodb) {
+        libcyrus_done();
+    }
 
     xzfree(config_skip_userlock);
 }
@@ -898,8 +962,12 @@ EXPORTED int shutdown_file(char *buf, int size)
         syslog(LOG_DEBUG, "Shutdown file exists with no contents");
     }
     else {
-        if ((p = strchr(buf, '\r')) != NULL) *p = 0;
-        if ((p = strchr(buf, '\n')) != NULL) *p = 0;
+        if ((p = strchr(buf, '\r')) != NULL) {
+            *p = 0;
+        }
+        if ((p = strchr(buf, '\n')) != NULL) {
+            *p = 0;
+        }
 
         syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
     }
@@ -920,7 +988,9 @@ EXPORTED void session_new_id(void)
     }
     ++session_id_count;
     base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
-    if (!base) base = config_servername;
+    if (!base) {
+        base = config_servername;
+    }
 
 #ifdef HAVE_SSL
     unsigned long long random;
@@ -947,7 +1017,9 @@ EXPORTED void session_new_id(void)
 /* Return the session id */
 EXPORTED const char *session_id(void)
 {
-    if (!session_id_count) session_new_id();
+    if (!session_id_count) {
+        session_new_id();
+    }
     return (const char *) session_id_buf;
 }
 
@@ -965,11 +1037,13 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
             ep = sessionid + len;
             *ep = '\0';
         }
-        else
+        else {
             strcpy(sessionid, "invalid");
+        }
     }
-    else
+    else {
         strcpy(sessionid, "unknown");
+    }
 }
 
 EXPORTED int capa_is_disabled(const char *str)
@@ -1025,7 +1099,9 @@ EXPORTED const char *get_clienthost(int s,
 
         niflags = NI_NUMERICHOST;
 #ifdef NI_WITHSCOPEID
-        if (remotesock->sa_family == AF_INET6) niflags |= NI_WITHSCOPEID;
+        if (remotesock->sa_family == AF_INET6) {
+            niflags |= NI_WITHSCOPEID;
+        }
 #endif
         if (getnameinfo(remotesock, salen, hbuf, sizeof(hbuf), NULL, 0, niflags)
             != 0)
@@ -1063,8 +1139,12 @@ EXPORTED const char *get_clienthost(int s,
 
 EXPORTED int cmd_cancelled(int insearch)
 {
-    if (signals_cancelled()) return IMAP_CANCELLED;
-    if (insearch && cmdtime_checksearch()) return IMAP_SEARCH_SLOW;
+    if (signals_cancelled()) {
+        return IMAP_CANCELLED;
+    }
+    if (insearch && cmdtime_checksearch()) {
+        return IMAP_SEARCH_SLOW;
+    }
     return 0;
 }
 

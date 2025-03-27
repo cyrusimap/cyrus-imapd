@@ -86,9 +86,13 @@ static int parse_record(struct buf *buf, char **wildp, const char **msgp)
     /* check version */
     if (((version = strtoul(buf->s, &wild, 10)) < 1)
         || (version > USERDENY_VERSION))
+    {
         return IMAP_MAILBOX_BADFORMAT;
+    }
 
-    if (*wild++ != '\t') return IMAP_MAILBOX_BADFORMAT;
+    if (*wild++ != '\t') {
+        return IMAP_MAILBOX_BADFORMAT;
+    }
 
     /* check if we have a deny message */
     if (version == USERDENY_VERSION) {
@@ -126,8 +130,12 @@ EXPORTED int userdeny(const char *user,
 
     init_internal();
 
-    if (!denydb) denydb_open(/*create*/ 0);
-    if (!denydb) return 0;
+    if (!denydb) {
+        denydb_open(/*create*/ 0);
+    }
+    if (!denydb) {
+        return 0;
+    }
 
     memset(&tok, 0, sizeof(tok));
 
@@ -169,7 +177,9 @@ EXPORTED int userdeny(const char *user,
 
         /* is it a negated pattern? */
         not = (*pat == '!');
-        if (not) ++pat;
+        if (not) {
+            ++pat;
+        }
 
         syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
 
@@ -177,7 +187,9 @@ EXPORTED int userdeny(const char *user,
         if (wildmat(service, pat)) {
             /* match ==> we're done */
             ret = !not;
-            if (msgbuf) strlcpy(msgbuf, msg, bufsiz);
+            if (msgbuf) {
+                strlcpy(msgbuf, msg, bufsiz);
+            }
             break;
         }
     }
@@ -208,7 +220,9 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
         goto out;
     }
 
-    if (!service) service = "*";
+    if (!service) {
+        service = "*";
+    }
 
     if (!user || strchr(service, '\t')) {
         /* the service field may not contain a TAB, it's the field separator */
@@ -237,10 +251,12 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
 
 out:
     if (txn) {
-        if (r)
+        if (r) {
             cyrusdb_abort(denydb, txn);
-        else
+        }
+        else {
             cyrusdb_commit(denydb, txn);
+        }
     }
     buf_free(&data);
     return r;
@@ -258,9 +274,13 @@ EXPORTED int denydb_delete(const char *user)
 
     init_internal();
 
-    if (!denydb) return 0;
+    if (!denydb) {
+        return 0;
+    }
 
-    if (!user) return r;
+    if (!user) {
+        return r;
+    }
 
     /* remove the record */
     do {
@@ -276,10 +296,12 @@ EXPORTED int denydb_delete(const char *user)
     }
 
     if (txn) {
-        if (r)
+        if (r) {
             cyrusdb_abort(denydb, txn);
-        else
+        }
+        else {
             cyrusdb_commit(denydb, txn);
+        }
     }
     return r;
 }
@@ -330,7 +352,9 @@ EXPORTED int denydb_foreach(denydb_proc_t proc, void *rock)
 
     init_internal();
 
-    if (!denydb) return 0;
+    if (!denydb) {
+        return 0;
+    }
 
     dr.proc = proc;
     dr.rock = rock;

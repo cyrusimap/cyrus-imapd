@@ -80,7 +80,9 @@ static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
     int r;
     char *tofree = NULL;
 
-    if (!fname) fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
+    if (!fname) {
+        fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
+    }
 
     /* create db file name */
     if (!fname) {
@@ -89,10 +91,12 @@ static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
     }
 
     r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
-    if (r != 0)
+    if (r != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, cyrusdb_strerror(r));
-    else
+    }
+    else {
         newsrc_dbopen = 1;
+    }
 
     free(tofree);
 
@@ -145,8 +149,12 @@ int init_net(const char *host,
     for (res = res0; res; res = res->ai_next) {
         if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol))
             < 0)
+        {
             continue;
-        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0) break;
+        }
+        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0) {
+            break;
+        }
         close(sock);
         sock = -1;
     }
@@ -188,10 +196,12 @@ static int fetch(char *msgid,
     }
 
     /* fetch the article */
-    if (bymsgid)
+    if (bymsgid) {
         prot_printf(pout, "ARTICLE %s\r\n", msgid);
-    else
+    }
+    else {
         prot_printf(pout, "ARTICLE\r\n");
+    }
 
     if (!prot_fgets(buf, sizeof(buf), pin)) {
         syslog(LOG_ERR, "ARTICLE terminated abnormally");
@@ -240,10 +250,12 @@ static int fetch(char *msgid,
         syslog(LOG_ERR, "IHAVE terminated abnormally");
         return -1;
     }
-    else if (!strncmp("235", buf, 3))
+    else if (!strncmp("235", buf, 3)) {
         (*accepted)++;
-    else
+    }
+    else {
         (*failed)++;
+    }
 
     return 0;
 }
@@ -298,8 +310,9 @@ int main(int argc, char *argv[])
                 *colon = '\0';
                 port = colon + 1;
             }
-            else
+            else {
                 port = "119";
+            }
             break;
 
         case 'w': /* wildmat */
@@ -365,8 +378,9 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp("381", buf, 3)) {
             /* password required */
-            if (!password)
+            if (!password) {
                 password = cyrus_getpass("Please enter the password: ");
+            }
 
             if (!password) {
                 fprintf(stderr, "failed to get password\n");
@@ -441,7 +455,9 @@ int main(int argc, char *argv[])
         }
 
         /* ask for new articles */
-        if (stamp) stamp -= 180; /* adjust back 3 minutes */
+        if (stamp) {
+            stamp -= 180; /* adjust back 3 minutes */
+        }
         ptime = gmtime(&stamp);
         ptime->tm_isdst = -1;
 
@@ -485,7 +501,9 @@ int main(int argc, char *argv[])
 
     /* process the NEWNEWS/LIST ACTIVE list */
     while (prot_fgets(buf, sizeof(buf), pin)) {
-        if (buf[0] == '.') break;
+        if (buf[0] == '.') {
+            break;
+        }
         strarray_append(&resp, buf);
     }
     if (buf[0] != '.') {
@@ -537,8 +555,9 @@ int main(int argc, char *argv[])
 
         /* write the current timestamp */
         lseek(fd, 0, SEEK_SET);
-        if (write(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp))
+        if (write(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp)) {
             syslog(LOG_ERR, "error writing %s", sfile);
+        }
         lock_unlock(fd, sfile);
         close(fd);
     }
@@ -566,7 +585,9 @@ int main(int argc, char *argv[])
             {
                 last = strtoul(data, NULL, 10);
             }
-            if (high <= last) continue;
+            if (high <= last) {
+                continue;
+            }
 
             /* select the group */
             prot_printf(pout, "GROUP %s\r\n", group);
@@ -574,8 +595,9 @@ int main(int argc, char *argv[])
                 syslog(LOG_ERR, "GROUP terminated abnormally");
                 continue;
             }
-            else if (strncmp("211", buf, 3))
+            else if (strncmp("211", buf, 3)) {
                 break;
+            }
 
             for (start = 1, cur = low > last ? low : ++last;; cur++) {
                 if (start) {
@@ -617,7 +639,9 @@ int main(int argc, char *argv[])
                 }
 
                 /* have we reached the highwater mark? */
-                if (cur >= high) break;
+                if (cur >= high) {
+                    break;
+                }
             }
 
             snprintf(lastbuf, sizeof(lastbuf), "%lu", cur);
@@ -629,7 +653,9 @@ int main(int argc, char *argv[])
                           &tid);
         }
 
-        if (tid) cyrusdb_commit(newsrc_db, tid);
+        if (tid) {
+            cyrusdb_commit(newsrc_db, tid);
+        }
         newsrc_done();
     }
 

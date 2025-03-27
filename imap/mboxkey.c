@@ -350,7 +350,9 @@ EXPORTED int mboxkey_close(struct mboxkey *mboxkeydb)
                    cyrusdb_strerror(r));
             r = IMAP_IOERROR;
         }
-        if (!r) lastmboxkey->db = NULL;
+        if (!r) {
+            lastmboxkey->db = NULL;
+        }
         free(lastmboxkey->user);
         free(lastmboxkey->fname);
         free(lastmboxkey);
@@ -372,7 +374,9 @@ EXPORTED int mboxkey_delete_user(const char *user)
     }
 
     /* erp! */
-    if (xunlink(fname)) r = IMAP_IOERROR;
+    if (xunlink(fname)) {
+        r = IMAP_IOERROR;
+    }
     free(fname);
 
     if (lastmboxkey) {
@@ -391,7 +395,9 @@ int mboxkey_unlock(struct mboxkey *mboxkeydb)
     int r;
 
     assert(mboxkeydb);
-    if (!mboxkeydb->tid) return 0;
+    if (!mboxkeydb->tid) {
+        return 0;
+    }
 
     if (MBOXKEY_DEBUG) {
         syslog(LOG_DEBUG, "mboxkey_db: mboxkey_unlock(%s)", mboxkeydb->user);
@@ -456,7 +462,9 @@ static int mboxkey_merge_cb(void *rockp,
     const char *tgtdata;
     size_t tgtdatalen;
 
-    if (!tgtdb) return IMAP_INTERNAL;
+    if (!tgtdb) {
+        return IMAP_INTERNAL;
+    }
 
     r = cyrusdb_fetchlock(
         tgtdb, key, keylen, &tgtdata, &tgtdatalen, &(rockdata->tid));
@@ -487,25 +495,35 @@ HIDDEN int mboxkey_merge(const char *tmpfile, const char *tgtfile)
 
     /* xxx does this need to be CYRUSDB_CREATE? */
     r = cyrusdb_open(DB, tmpfile, CYRUSDB_CREATE, &tmp);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = cyrusdb_open(DB, tgtfile, CYRUSDB_CREATE, &tgt);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     rock.db = tgt;
     rock.tid = NULL;
 
     r = cyrusdb_foreach(tmp, "", 0, NULL, mboxkey_merge_cb, &rock, &rock.tid);
 
-    if (r)
+    if (r) {
         cyrusdb_abort(rock.db, rock.tid);
-    else
+    }
+    else {
         cyrusdb_commit(rock.db, rock.tid);
+    }
 
 done:
 
-    if (tgt) cyrusdb_close(tgt);
-    if (tmp) cyrusdb_close(tmp);
+    if (tgt) {
+        cyrusdb_close(tgt);
+    }
+    if (tmp) {
+        cyrusdb_close(tmp);
+    }
 
     return r;
 }

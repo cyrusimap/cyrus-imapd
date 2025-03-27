@@ -59,12 +59,12 @@ static int meth_post_applepush(struct transaction_t *txn, void *params);
 
 struct namespace_t namespace_applepush = {
     URL_NS_APPLEPUSH,
- /*enabled*/ 0,
+    /*enabled*/ 0,
     "applepush",
     "/applepush/subscribe",
     NULL,
     http_allow_noauth_get,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ | ALLOW_POST,
     &applepush_init,
@@ -122,16 +122,22 @@ static int meth_get_applepush(struct transaction_t *txn,
 
     /* unpack query params */
     vals = hash_lookup("token", &txn->req_qparams);
-    if (!vals) goto done;
+    if (!vals) {
+        goto done;
+    }
     token = vals->s;
 
     vals = hash_lookup("key", &txn->req_qparams);
-    if (!vals) goto done;
+    if (!vals) {
+        goto done;
+    }
     key = vals->s;
 
     /* decompose key to userid + mailbox uniqueid */
     keyparts = strarray_split(key, "/", 0);
-    if (strarray_size(keyparts) != 2) goto done;
+    if (strarray_size(keyparts) != 2) {
+        goto done;
+    }
     mailbox_userid = strarray_nth(keyparts, 0);
     mailbox_uniqueid = strarray_nth(keyparts, 1);
 
@@ -157,7 +163,9 @@ static int meth_get_applepush(struct transaction_t *txn,
 
     /* mailbox must be calendar or addressbook */
     mbtype = mbtype_isa(mbentry->mbtype);
-    if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK) goto done;
+    if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK) {
+        goto done;
+    }
 
     /* check if auth user has access to mailbox */
     int myrights = httpd_myrights(httpd_authstate, mbentry);
@@ -200,8 +208,12 @@ static int meth_get_applepush(struct transaction_t *txn,
 
 done:
     mboxlist_entry_free(&mbentry);
-    if (mboxname) free(mboxname);
-    if (keyparts) strarray_free(keyparts);
+    if (mboxname) {
+        free(mboxname);
+    }
+    if (keyparts) {
+        strarray_free(keyparts);
+    }
 
     return rc;
 }
@@ -250,10 +262,14 @@ int propfind_push_transports(const xmlChar *name,
     assert(fctx->req_tgt->namespace->id == URL_NS_CALENDAR
            || fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK);
 
-    if (!namespace_applepush.enabled) return HTTP_NOT_FOUND;
+    if (!namespace_applepush.enabled) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Only on home sets */
-    if (fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
     if (!propstat) {
         /* Prescreen "property" request - add namespace for environment */
@@ -306,10 +322,14 @@ int propfind_pushkey(const xmlChar *name,
                      struct propstat propstat[],
                      void *rock __attribute__((unused)))
 {
-    if (!namespace_applepush.enabled) return HTTP_NOT_FOUND;
+    if (!namespace_applepush.enabled) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Only on collections */
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* key is userid and mailbox uniqueid */
     buf_reset(&fctx->buf);

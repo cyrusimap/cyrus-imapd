@@ -93,13 +93,15 @@ extern "C" {
 #define JMAPICAL_XPARAM_RSVP_URI "X-JMAP-RSVP-URI"
 #define JMAPICAL_XPARAM_TZID "X-JMAP-TZID"
 
-#define JMAPICAL_XPARAM_DTSTAMP "X-DTSTAMP" /* used for iMIP ATTENDEE replies  \
-                                             */
+#define JMAPICAL_XPARAM_DTSTAMP                                                \
+    "X-DTSTAMP" /* used for iMIP ATTENDEE replies                              \
+                 */
 #define JMAPICAL_XPARAM_SEQUENCE                                               \
-    "X-SEQUENCE"                            /*used for iMIP ATTENDEE replies */
-#define JMAPICAL_XPARAM_COMMENT "X-COMMENT" /*used for iMIP ATTENDEE replies   \
-                                             */
-#define JMAPICAL_XPARAM_TITLE "X-TITLE"     /* Apple uses that for locations */
+    "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
+#define JMAPICAL_XPARAM_COMMENT                                                \
+    "X-COMMENT"                         /*used for iMIP ATTENDEE replies       \
+                                         */
+#define JMAPICAL_XPARAM_TITLE "X-TITLE" /* Apple uses that for locations */
 
 /* Custom JSCalendar properties */
 #define JMAPICAL_JSPROP_TIMEZONES "cyrusimap.org:timeZones"

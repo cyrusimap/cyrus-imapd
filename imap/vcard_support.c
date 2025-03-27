@@ -214,7 +214,9 @@ static size_t _prop_decode_value(const char *data,
     /* Decode property value */
     charset_decode_mimebody(
         data, strlen(data), ENCODING_BASE64, &decbuf, &size);
-    if (!decbuf) return 0;
+    if (!decbuf) {
+        return 0;
+    }
 
     if (content_type && !*content_type) {
         /* Attempt to detect the content type */
@@ -276,9 +278,13 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
     struct vparse_param *param;
     char *data, *mt, *b64;
 
-    if (!prop) return 0;
+    if (!prop) {
+        return 0;
+    }
 
-    if (content_type) *content_type = NULL;
+    if (content_type) {
+        *content_type = NULL;
+    }
 
     /* Make sure we have base64-encoded data */
     if (((param = vparse_get_param(prop, "encoding"))
@@ -291,8 +297,9 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
             struct buf buf = BUF_INITIALIZER;
 
             buf_setcstr(&buf, param->value);
-            if (strncmp("image/", buf_lcase(&buf), 6))
+            if (strncmp("image/", buf_lcase(&buf), 6)) {
                 buf_insertcstr(&buf, 0, "image/");
+            }
 
             *content_type = buf_release(&buf);
         }
@@ -305,7 +312,9 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
 
         data = b64 + 8;
 
-        if (content_type && mt_len) *content_type = xstrndup(mt, mt_len);
+        if (content_type && mt_len) {
+            *content_type = xstrndup(mt, mt_len);
+        }
     }
     else {
         return 0;
@@ -377,8 +386,12 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 
         next = ventry->next;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
         buf_reset(&buf);
 
@@ -523,7 +536,9 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 
 static int vcard_value_is_uri(const char *val)
 {
-    if (!val) return 0;
+    if (!val) {
+        return 0;
+    }
     xmlURIPtr xuri = xmlParseURI(val);
     int is_uri = xuri && xuri->scheme;
     xmlFreeURI(xuri);
@@ -562,8 +577,12 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
         next = ventry->next;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
         buf_reset(&buf);
 
@@ -712,7 +731,9 @@ EXPORTED vcardcomponent *vcard_parse_string_x(const char *str)
     vcardcomponent *vcard = vcardcomponent_new_from_string(str);
 
     /* Remove all X-LIC-ERROR properties */
-    if (vcard) vcardcomponent_strip_errors(vcard);
+    if (vcard) {
+        vcardcomponent_strip_errors(vcard);
+    }
 
     return vcard;
 }
@@ -727,7 +748,9 @@ EXPORTED struct buf *vcard_as_buf_x(vcardcomponent *vcard)
     char *str = vcardcomponent_as_vcard_string_r(vcard);
     struct buf *ret = buf_new();
 
-    if (str) buf_initm(ret, str, strlen(str));
+    if (str) {
+        buf_initm(ret, str, strlen(str));
+    }
 
     return ret;
 }
@@ -757,17 +780,25 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
     vcardparameter *param;
     const char *mt, *b64;
 
-    if (!prop) return 0;
+    if (!prop) {
+        return 0;
+    }
 
     val = vcardproperty_get_value(prop);
-    if (vcardvalue_isa(val) == VCARD_X_VALUE)
+    if (vcardvalue_isa(val) == VCARD_X_VALUE) {
         data = vcardvalue_get_x(val);
-    else
+    }
+    else {
         data = vcardvalue_get_uri(val);
+    }
 
-    if (!data) return 0;
+    if (!data) {
+        return 0;
+    }
 
-    if (content_type) *content_type = NULL;
+    if (content_type) {
+        *content_type = NULL;
+    }
 
     /* Make sure we have base64-encoded data */
     param = vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
@@ -803,8 +834,9 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
                 }
             }
 
-            if (strncmp(type, buf_lcase(&buf), strlen(type)))
+            if (strncmp(type, buf_lcase(&buf), strlen(type))) {
                 buf_insertcstr(&buf, 0, type);
+            }
 
             *content_type = buf_release(&buf);
         }
@@ -817,7 +849,9 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
 
         data = b64 + 8;
 
-        if (content_type && mt_len) *content_type = xstrndup(mt, mt_len);
+        if (content_type && mt_len) {
+            *content_type = xstrndup(mt, mt_len);
+        }
     }
     else {
         return 0;

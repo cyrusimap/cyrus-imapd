@@ -116,7 +116,7 @@ struct namespace_t namespace_rss = {
     "/rss",
     NULL,
     http_allow_noauth_get,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ,
     rss_init,
@@ -154,7 +154,9 @@ static void rss_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_rss.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_RSS;
 
-    if (!namespace_rss.enabled) return;
+    if (!namespace_rss.enabled) {
+        return;
+    }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
@@ -169,7 +171,9 @@ static int meth_get(struct transaction_t *txn,
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
 
-    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+    if (!httpd_userid) {
+        return HTTP_UNAUTHORIZED;
+    }
 
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_parse_path(
@@ -180,14 +184,20 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* If no mailboxname, list all available feeds */
-    if (!txn->req_tgt.mbentry) return list_feeds(txn);
+    if (!txn->req_tgt.mbentry) {
+        return list_feeds(txn);
+    }
 
     /* Make sure it is a mailbox that we are treating as an RSS feed */
-    if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
+    if (!is_feed(txn->req_tgt.mbentry->name)) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
+    if (!(rights & ACL_READ)) {
+        return HTTP_NO_PRIVS;
+    }
 
     if (txn->req_tgt.mbentry->server) {
         /* Remote mailbox */
@@ -200,7 +210,9 @@ static int meth_get(struct transaction_t *txn,
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -229,16 +241,21 @@ static int meth_get(struct transaction_t *txn,
     /* Check for UID, if any */
     if (txn->req_tgt.resource) {
         uid = strtoul(txn->req_tgt.resource, NULL, 10);
-        if (!uid) uid = -1;
+        if (!uid) {
+            uid = -1;
+        }
 
         /* Check for section query param, if any */
         param = hash_lookup("section", &txn->req_qparams);
-        if (param) section = param->s;
+        if (param) {
+            section = param->s;
+        }
     }
 
     /* If no UID specified, list messages as an RSS feed */
-    if (!uid)
+    if (!uid) {
         ret = list_messages(txn, mailbox);
+    }
     else if (uid > mailbox->i.last_uid) {
         txn->error.desc = "Message does not exist";
         ret = HTTP_NOT_FOUND;
@@ -276,9 +293,13 @@ static int meth_get(struct transaction_t *txn,
                 resp_body->lastmod = lastmod;
                 resp_body->maxage = 31536000; /* 1 year */
                 txn->flags.cc |= CC_MAXAGE;
-                if (httpd_userid) txn->flags.cc |= CC_PRIVATE;
+                if (httpd_userid) {
+                    txn->flags.cc |= CC_PRIVATE;
+                }
 
-                if (precond != HTTP_NOT_MODIFIED) break;
+                if (precond != HTTP_NOT_MODIFIED) {
+                    break;
+                }
 
                 GCC_FALLTHROUGH
 
@@ -356,10 +377,14 @@ static int rss_parse_path(const char *path,
 
     /* Clip off RSS prefix */
     start = path + strlen(namespace_rss.prefix);
-    if (*start == '/') start++;
+    if (*start == '/') {
+        start++;
+    }
     end = start + strlen(start);
 
-    if ((end > start) && (end[-1] == '/')) end--;
+    if ((end > start) && (end[-1] == '/')) {
+        end--;
+    }
 
     /* Check for UID */
     if (end > start && end[-1] == '.') {
@@ -373,7 +398,9 @@ static int rss_parse_path(const char *path,
     }
 
     len = end - start;
-    if (len > MAX_MAILBOX_BUFFER) return IMAP_MAILBOX_BADNAME;
+    if (len > MAX_MAILBOX_BUFFER) {
+        return IMAP_MAILBOX_BADNAME;
+    }
 
     strncpy(mboxname, start, len);
     mboxname[len] = '\0';
@@ -382,10 +409,12 @@ static int rss_parse_path(const char *path,
     if (*mboxname) {
         /* Translate external (URL) mboxname to internal */
         for (; len > 0; len--) {
-            if (mboxname[len - 1] == '/')
+            if (mboxname[len - 1] == '/') {
                 mboxname[len - 1] = '.';
-            else if (mboxname[len - 1] == '.')
+            }
+            else if (mboxname[len - 1] == '.') {
                 mboxname[len - 1] = '^';
+            }
         }
 
         int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
@@ -424,10 +453,14 @@ static int is_feed(const char *mbox)
 
     /* check mailbox against the 'rss_feeds' wildmat */
     wild = feeds;
-    while (wild->pat && wildmat(mbox, wild->pat) != 1) wild++;
+    while (wild->pat && wildmat(mbox, wild->pat) != 1) {
+        wild++;
+    }
 
     /* if we don't have a match, or its a negative match, don't use it */
-    if (!wild->pat || wild->not) return 0;
+    if (!wild->pat || wild->not) {
+        return 0;
+    }
 
     /* otherwise, its usable */
     return 1;
@@ -462,19 +495,27 @@ static int do_list(const char *name, void *rock)
         int r;
 
         /* Don't list mailboxes that we don't treat as RSS feeds */
-        if (!is_feed(name)) return 0;
+        if (!is_feed(name)) {
+            return 0;
+        }
 
         /* Don't list deleted mailboxes */
-        if (mboxname_isdeletedmailbox(name, NULL)) return 0;
+        if (mboxname_isdeletedmailbox(name, NULL)) {
+            return 0;
+        }
 
         /* Lookup the mailbox and make sure it is readable */
         r = proxy_mlookup(name, &mbentry, NULL, NULL);
-        if (r) return 0;
+        if (r) {
+            return 0;
+        }
 
         rights = httpd_myrights(httpd_authstate, mbentry);
         mboxlist_entry_free(&mbentry);
 
-        if ((rights & ACL_READ) != ACL_READ) return 0;
+        if ((rights & ACL_READ) != ACL_READ) {
+            return 0;
+        }
     }
 
     if (name && !strncmp(name, last->name, last->len)
@@ -506,10 +547,12 @@ static int do_list(const char *name, void *rock)
         }
 
         /* See if we have a missing ancestor in the tree */
-        if ((cp = strchr(&name[last->len + 1], '.')))
+        if ((cp = strchr(&name[last->len + 1], '.'))) {
             len = cp - name;
-        else
+        }
+        else {
             href = path;
+        }
 
         /* Populate new/updated node */
         xstrncpy(node->name, name, len);
@@ -520,10 +563,12 @@ static int do_list(const char *name, void *rock)
         lrock->last = last->child = node;
 
         /* Get last segment of mailbox name */
-        if ((cp = strrchr(node->name, '.')))
+        if ((cp = strrchr(node->name, '.'))) {
             cp++;
-        else
+        }
+        else {
             cp = node->name;
+        }
 
         /* Translate short mailbox name to external form */
         strlcpy(shortname, cp, sizeof(shortname));
@@ -535,10 +580,12 @@ static int do_list(const char *name, void *rock)
             /* Translate internal mboxname to external (URL) */
             buf_setcstr(mboxname, node->name);
             for (; len > 0; len--) {
-                if (mboxname->s[len - 1] == '.')
+                if (mboxname->s[len - 1] == '.') {
                     mboxname->s[len - 1] = '/';
-                else if (mboxname->s[len - 1] == '^')
+                }
+                else if (mboxname->s[len - 1] == '^') {
                     mboxname->s[len - 1] = '.';
+                }
             }
 
             snprintf(path, sizeof(path), "/rss/%s", buf_cstring(mboxname));
@@ -571,8 +618,9 @@ static int do_list(const char *name, void *rock)
 
 static int list_cb(struct findall_data *data, void *rock)
 {
-    if (data && data->is_exactmatch)
+    if (data && data->is_exactmatch) {
         return do_list(mbname_intname(data->mbname), rock);
+    }
     return do_list(NULL, rock);
 }
 
@@ -597,7 +645,9 @@ static int list_feeds(struct transaction_t *txn)
 
         buf_reset(path);
         prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
-        if (prefix) buf_printf(path, "%s/", prefix);
+        if (prefix) {
+            buf_printf(path, "%s/", prefix);
+        }
         buf_appendcstr(path, template_file);
 
         /* See if template exists and contains feedlist variable */
@@ -674,7 +724,9 @@ static int list_feeds(struct transaction_t *txn)
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -711,10 +763,14 @@ static int list_feeds(struct transaction_t *txn)
                      &lrock);
 
     /* Close out the tree */
-    if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
+    if (buf_len(body)) {
+        write_body(0, txn, buf_cstring(body), buf_len(body));
+    }
 
     /* Send rest of template */
-    if (suffix_len) write_body(0, txn, suffix, suffix_len);
+    if (suffix_len) {
+        write_body(0, txn, suffix, suffix_len);
+    }
 
     /* End of output */
     write_body(0, txn, NULL, 0);
@@ -788,26 +844,33 @@ static void buf_escapestr(struct buf *buf,
     const char *c;
     unsigned buflen = buf_len(buf), len = 0;
 
-    if (!replace && config_httpprettytelemetry)
+    if (!replace && config_httpprettytelemetry) {
         buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+    }
 
     for (c = str; c && *c && (!max || len < max); c++, len++) {
         /* Translate CR to HTML <br> tag */
-        if (*c == '\r')
+        if (*c == '\r') {
             buf_appendcstr(buf, "<br>");
-        else if (*c == '\n' && !config_httpprettytelemetry)
+        }
+        else if (*c == '\n' && !config_httpprettytelemetry) {
             continue;
+        }
 
         /* Translate XML/HTML specials */
-        else if (*c == '"')
+        else if (*c == '"') {
             buf_appendcstr(buf, "&quot;");
+        }
         //      else if (*c == '\'') buf_appendcstr(buf, "&apos;");
-        else if (*c == '&')
+        else if (*c == '&') {
             buf_appendcstr(buf, "&amp;");
-        else if (*c == '<')
+        }
+        else if (*c == '<') {
             buf_appendcstr(buf, "&lt;");
-        else if (*c == '>')
+        }
+        else if (*c == '>') {
             buf_appendcstr(buf, "&gt;");
+        }
 
         /* Handle multi-byte UTF-8 sequences */
         else if ((*c & 0xc0) == 0xc0) {
@@ -822,8 +885,9 @@ static void buf_escapestr(struct buf *buf,
              */
             unsigned char lead = *c;
 
-            do buf_putc(buf, *c);
-            while (((lead <<= 1) & 0x80) && c++);
+            do {
+                buf_putc(buf, *c);
+            } while (((lead <<= 1) & 0x80) && c++);
         }
 
         /* Check for non-printable chars */
@@ -846,11 +910,14 @@ static void buf_escapestr(struct buf *buf,
             }
         }
 
-        else
+        else {
             buf_putc(buf, *c);
+        }
     }
 
-    if (!replace && config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+    if (!replace && config_httpprettytelemetry) {
+        buf_appendcstr(buf, "\n");
+    }
 }
 
 /* List messages as an RSS feed */
@@ -886,7 +953,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         txn->resp_body.maxage = 3600; /* 1 hr */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -907,15 +976,21 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Get maximum age of items to display */
     max_age = config_getduration(IMAPOPT_RSS_MAXAGE, 'd');
-    if (max_age > 0) age_mark = time(0) - max_age;
+    if (max_age > 0) {
+        age_mark = time(0) - max_age;
+    }
 
     /* Get number of items to display */
     max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
-    if (max_items < 0) max_items = 0;
+    if (max_items < 0) {
+        max_items = 0;
+    }
 
     /* Get length of description to display */
     max_len = config_getint(IMAPOPT_RSS_MAXSYNOPSIS);
-    if (max_len < 0) max_len = 0;
+    if (max_len < 0) {
+        max_len = 0;
+    }
 
 #if 0
     /* Obtain recentuid */
@@ -1052,7 +1127,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         }
 
         /* Make sure the message is new enough */
-        if (record.gmtime < age_mark) continue;
+        if (record.gmtime < age_mark) {
+            continue;
+        }
 
         /* Feeding this message, increment counter */
         nitems++;
@@ -1091,7 +1168,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
         /* <author> - optional */
         addr = body->from;
-        if (!addr) addr = body->sender;
+        if (!addr) {
+            addr = body->sender;
+        }
         if (addr && *addr->mailbox) {
             buf_printf_markup(buf, level++, "<author>");
 
@@ -1140,7 +1219,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         if (parts) {
             struct bodypart **p;
 
-            for (p = parts; *p; p++) free(*p);
+            for (p = parts; *p; p++) {
+                free(*p);
+            }
             free(parts);
         }
 
@@ -1167,11 +1248,14 @@ static void display_address(struct buf *buf,
                             const char *sep,
                             unsigned level)
 {
-    if (config_httpprettytelemetry)
+    if (config_httpprettytelemetry) {
         buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+    }
 
     buf_printf(buf, "%s", sep);
-    if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
+    if (addr->name) {
+        buf_printf(buf, "\"%s\" ", addr->name);
+    }
     buf_printf(buf,
                "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
                addr->mailbox,
@@ -1179,7 +1263,9 @@ static void display_address(struct buf *buf,
                addr->mailbox,
                addr->domain);
 
-    if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+    if (config_httpprettytelemetry) {
+        buf_appendcstr(buf, "\n");
+    }
 }
 
 static void display_part(struct transaction_t *txn,
@@ -1204,7 +1290,9 @@ static void display_part(struct transaction_t *txn,
             for (i = body->numparts; --i;) {
                 if (!strcmp(body->subpart[i].type, "MULTIPART")
                     || !strcmp(body->subpart[i].subtype, "HTML"))
+                {
                     break;
+                }
             }
         }
 
@@ -1342,12 +1430,16 @@ static void display_part(struct transaction_t *txn,
                                     charset,
                                     encoding);
             charset_free(&charset);
-            if (!ishtml) buf_printf_markup(buf, level, "<pre>");
+            if (!ishtml) {
+                buf_printf_markup(buf, level, "<pre>");
+            }
             write_body(0, txn, buf_cstring(buf), buf_len(buf));
             buf_reset(buf);
 
             write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
-            if (!ishtml) buf_printf_markup(buf, level, "</pre>");
+            if (!ishtml) {
+                buf_printf_markup(buf, level, "</pre>");
+            }
         }
         else {
             int is_image = !strcmp(body->type, "IMAGE");
@@ -1359,7 +1451,9 @@ static void display_part(struct transaction_t *txn,
              */
             /* Look for a filename in parameters */
             if (body->disposition) {
-                if (!strcmp(body->disposition, "ATTACHMENT")) is_image = 0;
+                if (!strcmp(body->disposition, "ATTACHMENT")) {
+                    is_image = 0;
+                }
                 param = body->disposition_params;
                 file_attr = "FILENAME";
             }
@@ -1377,8 +1471,9 @@ static void display_part(struct transaction_t *txn,
                               body->type,
                               body->subtype);
 
-            if (config_httpprettytelemetry)
+            if (config_httpprettytelemetry) {
                 buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+            }
 
             /* Add image */
             if (is_image) {
@@ -1389,8 +1484,9 @@ static void display_part(struct transaction_t *txn,
             }
 
             /* Create text for link or alternative text for image */
-            if (param)
+            if (param) {
                 buf_printf(buf, "%s", param->value);
+            }
             else {
                 buf_printf(buf,
                            "[%s/%s %u bytes]",
@@ -1399,9 +1495,13 @@ static void display_part(struct transaction_t *txn,
                            body->content_size);
             }
 
-            if (is_image) buf_printf(buf, "\">");
+            if (is_image) {
+                buf_printf(buf, "\">");
+            }
 
-            if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+            if (config_httpprettytelemetry) {
+                buf_appendcstr(buf, "\n");
+            }
 
             buf_printf_markup(buf, --level, "</a>");
             buf_printf_markup(buf, --level, "</div>");
@@ -1481,14 +1581,18 @@ static struct body *body_fetch_section(struct body *body, const char *section)
         int32_t skip = 0;
         int r = parseint32(p, &p, &skip);
 
-        if (r || !skip) return NULL;
+        if (r || !skip) {
+            return NULL;
+        }
 
         if (body->subpart && !body->numparts) {
             /* step inside message/rfc822 */
             body = body->subpart;
         }
 
-        if ((skip > 1) && (skip > body->numparts)) return NULL;
+        if ((skip > 1) && (skip > body->numparts)) {
+            return NULL;
+        }
 
         if (body->numparts) {
             /* step inside multipart */
@@ -1496,7 +1600,9 @@ static struct body *body_fetch_section(struct body *body, const char *section)
         }
 
         if (*p == '.') {
-            if (!body->subpart) return NULL;
+            if (!body->subpart) {
+                return NULL;
+            }
             p++;
         }
     }

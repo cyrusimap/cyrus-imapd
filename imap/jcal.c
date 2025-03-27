@@ -69,10 +69,12 @@ static char *icalperiodtype_as_json_string(struct icalperiodtype p)
     start = icaltime_as_iso_string(p.start);
     snprintf(str, sizeof(str), "%s/", start);
 
-    if (!icaltime_is_null_time(p.end))
+    if (!icaltime_is_null_time(p.end)) {
         end = icaltime_as_iso_string(p.end);
-    else
+    }
+    else {
         end = icaldurationtype_as_ical_string(p.duration);
+    }
 
     strlcat(str, end, sizeof(str));
 
@@ -98,14 +100,16 @@ static void icalrecur_add_obj_to_json_object(json_t *jrecur,
             json_array_append(byarray, old_rpart);
             json_object_set_new(jrecur, rpart, byarray);
         }
-        else
+        else {
             byarray = old_rpart;
+        }
 
         /* Append value to array */
         json_array_append_new(byarray, obj);
     }
-    else
+    else {
         json_object_set_new(jrecur, rpart, obj);
+    }
 }
 
 static void icalrecur_add_int_to_json_object(void *jrecur,
@@ -132,7 +136,9 @@ static json_t *icalreqstattype_as_json_array(struct icalreqstattype stat)
 
     icalerror_check_arg_rz((stat.code != ICAL_UNKNOWN_STATUS), "Status");
 
-    if (!stat.desc) stat.desc = icalenum_reqstat_desc(stat.code);
+    if (!stat.desc) {
+        stat.desc = icalenum_reqstat_desc(stat.code);
+    }
 
     jstat = json_array();
 
@@ -144,7 +150,9 @@ static json_t *icalreqstattype_as_json_array(struct icalreqstattype stat)
 
     json_array_append_new(jstat, json_string(code));
     json_array_append_new(jstat, json_string(stat.desc));
-    if (stat.debug) json_array_append_new(jstat, json_string(stat.debug));
+    if (stat.debug) {
+        json_array_append_new(jstat, json_string(stat.debug));
+    }
 
     return jstat;
 }
@@ -172,10 +180,12 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
     case ICAL_DATETIMEPERIOD_VALUE: {
         struct icaldatetimeperiodtype dtp = icalvalue_get_datetimeperiod(value);
 
-        if (!icaltime_is_null_time(dtp.time))
+        if (!icaltime_is_null_time(dtp.time)) {
             str = icaltime_as_iso_string(dtp.time);
-        else
+        }
+        else {
             str = icalperiodtype_as_json_string(dtp.period);
+        }
         break;
     }
 
@@ -222,10 +232,12 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
     case ICAL_TRIGGER_VALUE: {
         struct icaltriggertype trig = icalvalue_get_trigger(value);
 
-        if (!icaltime_is_null_time(trig.time))
+        if (!icaltime_is_null_time(trig.time)) {
             str = icaltime_as_iso_string(trig.time);
-        else
+        }
+        else {
             str = icaldurationtype_as_ical_string(trig.duration);
+        }
         break;
     }
 
@@ -263,7 +275,9 @@ static void icalparameter_as_json_object_member(icalparameter *param,
 
     default: /* XXX: Is the default case here deliberate?? */
         kind_string = icalparameter_kind_to_string(kind);
-        if (kind_string) break;
+        if (kind_string) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -278,9 +292,13 @@ static void icalparameter_as_json_object_member(icalparameter *param,
     if (!value_string) {
         icalparameter_value value = icalparameter_get_value(param);
 
-        if (value) value_string = icalparameter_enum_to_string(value);
+        if (value) {
+            value_string = icalparameter_enum_to_string(value);
+        }
     }
-    if (!value_string) return;
+    if (!value_string) {
+        return;
+    }
 
     json_object_set_new(jparams,
                         lcase(icalmemory_tmp_copy(kind_string)),
@@ -299,15 +317,19 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
     const icalvalue *value;
     json_t *jprop, *jparams;
 
-    if (!prop) return NULL;
+    if (!prop) {
+        return NULL;
+    }
 
     prop_kind = icalproperty_isa(prop);
     x_name = icalproperty_get_x_name(prop);
 
-    if (prop_kind == ICAL_X_PROPERTY && x_name)
+    if (prop_kind == ICAL_X_PROPERTY && x_name) {
         property_name = x_name;
-    else
+    }
+    else {
         property_name = icalproperty_kind_to_string(prop_kind);
+    }
 
     if (!property_name) {
         icalerror_warn("Got a property of an unknown kind.");
@@ -328,7 +350,9 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
          param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER))
     {
 
-        if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) continue;
+        if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) {
+            continue;
+        }
 
         icalparameter_as_json_object_member(param, jparams);
     }
@@ -353,7 +377,9 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
                 tok_init(
                     &tok, str, ",", TOK_TRIMLEFT | TOK_TRIMRIGHT | TOK_EMPTY);
                 while ((str = tok_next(&tok))) {
-                    if (*str) json_array_append_new(jprop, json_string(str));
+                    if (*str) {
+                        json_array_append_new(jprop, json_string(str));
+                    }
                 }
                 tok_fini(&tok);
                 break;
@@ -380,7 +406,9 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
     const char *kind_string;
     json_t *jcomp, *jprops, *jsubs;
 
-    if (!comp) return NULL;
+    if (!comp) {
+        return NULL;
+    }
 
     kind = icalcomponent_isa(comp);
     switch (kind) {
@@ -436,7 +464,9 @@ struct buf *icalcomponent_as_jcal_string(icalcomponent *ical)
     size_t flags = JSON_PRESERVE_ORDER;
     char *buf;
 
-    if (!ical) return NULL;
+    if (!ical) {
+        return NULL;
+    }
 
     jcal = icalcomponent_as_jcal_array(ical);
 
@@ -498,17 +528,21 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue, icalvalue_kind kind)
 
     switch (kind) {
     case ICAL_BOOLEAN_VALUE:
-        if (json_is_boolean(jvalue))
+        if (json_is_boolean(jvalue)) {
             value = icalvalue_new_integer(json_is_true(jvalue));
-        else
+        }
+        else {
             syslog(LOG_WARNING, "jCal boolean object expected");
+        }
         break;
 
     case ICAL_FLOAT_VALUE:
-        if (json_is_real(jvalue))
+        if (json_is_real(jvalue)) {
             value = icalvalue_new_float((float) json_real_value(jvalue));
-        else
+        }
+        else {
             syslog(LOG_WARNING, "jCal double object expected");
+        }
         break;
 
     case ICAL_GEO_VALUE:
@@ -533,17 +567,21 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue, icalvalue_kind kind)
                 value = icalvalue_new_geo(geo);
             }
         }
-        if (!value)
+        if (!value) {
             syslog(LOG_WARNING, "jCal array object of 2 doubles expected");
+        }
         break;
 
     case ICAL_INTEGER_VALUE:
-        if (json_is_integer(jvalue))
+        if (json_is_integer(jvalue)) {
             value = icalvalue_new_integer((int) json_integer_value(jvalue));
-        else if (json_is_string(jvalue))
+        }
+        else if (json_is_string(jvalue)) {
             value = icalvalue_new_integer(atoi(json_string_value(jvalue)));
-        else
+        }
+        else {
             syslog(LOG_WARNING, "jCal integer object expected");
+        }
         break;
 
     case ICAL_RECUR_VALUE:
@@ -567,12 +605,14 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue, icalvalue_kind kind)
             rt = icalrecurrencetype_new_from_string(buf_cstring(&rrule));
             buf_free(&rrule);
 
-            if (rt->freq != ICAL_NO_RECURRENCE)
+            if (rt->freq != ICAL_NO_RECURRENCE) {
                 value = icalvalue_new_recurrence(rt);
+            }
             icalrecurrencetype_unref(rt);
         }
-        else
+        else {
             syslog(LOG_WARNING, "jCal object object expected");
+        }
         break;
 
     case ICAL_REQUESTSTATUS_VALUE:
@@ -610,8 +650,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue, icalvalue_kind kind)
                 value = icalvalue_new_requeststatus(rst);
             }
         }
-        if (!value)
+        if (!value) {
             syslog(LOG_WARNING, "jCal array object of 2-3 strings expected");
+        }
         break;
 
     case ICAL_UTCOFFSET_VALUE:
@@ -633,19 +674,24 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue, icalvalue_kind kind)
 
             utcoffset = hours * 3600 + minutes * 60 + seconds;
 
-            if (sign == '-') utcoffset = -utcoffset;
+            if (sign == '-') {
+                utcoffset = -utcoffset;
+            }
 
             value = icalvalue_new_utcoffset(utcoffset);
         }
-        else
+        else {
             syslog(LOG_WARNING, "jCal string object expected");
+        }
         break;
 
     default:
-        if (json_is_string(jvalue))
+        if (json_is_string(jvalue)) {
             value = icalvalue_new_from_string(kind, json_string_value(jvalue));
-        else
+        }
+        else {
             syslog(LOG_WARNING, "jCal string object expected");
+        }
         break;
     }
 
@@ -714,7 +760,9 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
         syslog(LOG_ERR, "Creation of new %s property failed", propname);
         return NULL;
     }
-    if (kind == ICAL_X_PROPERTY) icalproperty_set_x_name(prop, propname);
+    if (kind == ICAL_X_PROPERTY) {
+        icalproperty_set_x_name(prop, propname);
+    }
 
     /* Add parameters */
     json_object_foreach(jparams, key, jvalue)
@@ -814,7 +862,9 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
         icalproperty *prop =
             json_array_to_icalproperty(json_array_get(jprops, i));
 
-        if (!prop) goto error;
+        if (!prop) {
+            goto error;
+        }
 
         icalcomponent_add_property(comp, prop);
     }
@@ -824,7 +874,9 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
         icalcomponent *sub =
             jcal_array_as_icalcomponent(json_array_get(jsubs, i));
 
-        if (!sub) goto error;
+        if (!sub) {
+            goto error;
+        }
 
         icalcomponent_add_component(comp, sub);
     }
@@ -846,7 +898,9 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
     icalcomponent *ical;
     const char *str = buf_cstring(buf);
 
-    if (!str) return NULL;
+    if (!str) {
+        return NULL;
+    }
 
     jcal = json_loads(str, 0, &jerr);
     if (!jcal) {

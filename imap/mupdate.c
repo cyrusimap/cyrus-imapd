@@ -343,7 +343,9 @@ static void conn_free(struct conn *C)
             for (upc = updatelist; upc->updatelist_next != NULL;
                  upc = upc->updatelist_next)
             {
-                if (upc->updatelist_next == C) break;
+                if (upc->updatelist_next == C) {
+                    break;
+                }
             }
             /* must find it ! */
             assert(upc->updatelist_next == C);
@@ -368,29 +370,43 @@ static void conn_free(struct conn *C)
         struct conn *t;
 
         for (t = connlist; t->next != NULL; t = t->next) {
-            if (t->next == C) break;
+            if (t->next == C) {
+                break;
+            }
         }
         assert(t != NULL);
         t->next = C->next;
     }
     pthread_mutex_unlock(&connlist_mutex); /* UNLOCK */
 
-    if (C->ev) prot_removewaitevent(C->pin, C->ev);
+    if (C->ev) {
+        prot_removewaitevent(C->pin, C->ev);
+    }
 
     prot_flush(C->pout);
 
-    if (C->pin) prot_free(C->pin);
-    if (C->pout) prot_free(C->pout);
+    if (C->pin) {
+        prot_free(C->pin);
+    }
+    if (C->pout) {
+        prot_free(C->pout);
+    }
 
 #ifdef HAVE_SSL
-    if (C->tlsconn) tls_reset_servertls(&C->tlsconn);
+    if (C->tlsconn) {
+        tls_reset_servertls(&C->tlsconn);
+    }
     tls_shutdown_serverengine();
 #endif
 
     cyrus_close_sock(C->fd);
-    if (C->logfd != -1) close(C->logfd);
+    if (C->logfd != -1) {
+        close(C->logfd);
+    }
 
-    if (C->saslconn) sasl_dispose(&C->saslconn);
+    if (C->saslconn) {
+        sasl_dispose(&C->saslconn);
+    }
 
     saslprops_free(&C->saslprops);
 
@@ -401,7 +417,9 @@ static void conn_free(struct conn *C)
     buf_free(&(C->arg2));
     buf_free(&(C->arg3));
 
-    if (C->streaming_hosts) strarray_free(C->streaming_hosts);
+    if (C->streaming_hosts) {
+        strarray_free(C->streaming_hosts);
+    }
 
     free(C);
 }
@@ -482,12 +500,17 @@ static int islocalip(const char *hostname)
     }
 
     for (ifr = ifc.ifc_req; ifr - ifc.ifc_req < ifc.ifc_len; ifr++) {
-        if (ioctl(sock, SIOCGIFADDR, ifr) != 0) continue;
-        if (ioctl(sock, SIOCGIFFLAGS, ifr) != 0) continue;
+        if (ioctl(sock, SIOCGIFADDR, ifr) != 0) {
+            continue;
+        }
+        if (ioctl(sock, SIOCGIFFLAGS, ifr) != 0) {
+            continue;
+        }
 
         /* skip any inactive or loopback interfaces */
-        if (!(ifr->ifr_flags & IFF_UP) || (ifr->ifr_flags & IFF_LOOPBACK))
+        if (!(ifr->ifr_flags & IFF_UP) || (ifr->ifr_flags & IFF_LOOPBACK)) {
             continue;
+        }
 
         iaddr = &(((struct sockaddr_in *) &ifr->ifr_addr)->sin_addr);
 
@@ -513,7 +536,9 @@ int service_init(int argc, char **argv, char **envp __attribute__((unused)))
     int opt, autoselect = 0;
     pthread_t t;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
 
     /* Do minor configuration checking */
     workers_to_start = config_getint(IMAPOPT_MUPDATE_WORKERS_START);
@@ -575,7 +600,9 @@ int service_init(int argc, char **argv, char **envp __attribute__((unused)))
         }
     }
 
-    if (!masterp && autoselect) masterp = islocalip(config_mupdate_server);
+    if (!masterp && autoselect) {
+        masterp = islocalip(config_mupdate_server);
+    }
 
     if (masterp && config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
         /* XXX  We currently prohibit this because mailboxes created
@@ -611,7 +638,9 @@ int service_init(int argc, char **argv, char **envp __attribute__((unused)))
 
         /* Wait until they sync the database */
         pthread_mutex_lock(&synced_mutex);
-        if (!synced) pthread_cond_wait(&synced_cond, &synced_mutex);
+        if (!synced) {
+            pthread_cond_wait(&synced_cond, &synced_mutex);
+        }
         pthread_mutex_unlock(&synced_mutex);
     }
     else {
@@ -659,14 +688,18 @@ EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
-    if (recurse_code)
+    if (recurse_code) {
         exit(code);
-    else
+    }
+    else {
         recurse_code = code;
+    }
 
     syslog(LOG_ERR, "%s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -712,7 +745,9 @@ nextcmd:
 
 cmd:
     ch = getword(c->pin, &(c->tag));
-    if (ch == EOF) goto lost_conn;
+    if (ch == EOF) {
+        goto lost_conn;
+    }
 
     if (ch != ' ') {
         prot_printf(c->pout, "* BAD \"Need command\"\r\n");
@@ -735,7 +770,9 @@ cmd:
         c->cmd.s[0] = toupper((unsigned char) c->cmd.s[0]);
     }
     for (p = &(c->cmd.s[1]); *p; p++) {
-        if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+        if (Uisupper(*p)) {
+            *p = tolower((unsigned char) *p);
+        }
     }
 
     switch (c->cmd.s[0]) {
@@ -743,7 +780,9 @@ cmd:
         if (!strcmp(c->cmd.s, "Authenticate")) {
             int opt = 0;
 
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
             if (ch == ' ') {
                 ch = getstring(c->pin, c->pout, &(c->arg2));
@@ -759,83 +798,120 @@ cmd:
 
             cmd_authenticate(c, c->tag.s, c->arg1.s, opt ? c->arg2.s : NULL);
         }
-        else if (!c->userid)
+        else if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "Activate")) {
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg2));
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg3));
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
-            if (!masterp) goto masteronly;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
+            if (!masterp) {
+                goto masteronly;
+            }
 
             cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, c->arg3.s, SET_ACTIVE);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
 #ifdef HAVE_ZLIB
     case 'C':
         if (!strcmp(c->cmd.s, "Compress")) {
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
             CHECKNEWLINE(c, ch);
 
             cmd_compress(c, c->tag.s, c->arg1.s);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 #endif
 
     case 'D':
-        if (!c->userid)
+        if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "Deactivate")) {
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg2));
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
-            if (!masterp) goto masteronly;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
+            if (!masterp) {
+                goto masteronly;
+            }
 
             cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_DEACTIVATE);
         }
         else if (!strcmp(c->cmd.s, "Delete")) {
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
-            if (!masterp) goto masteronly;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
+            if (!masterp) {
+                goto masteronly;
+            }
 
             cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, SET_DELETE);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     case 'F':
-        if (!c->userid)
+        if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "Find")) {
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
 
             cmd_find(c, c->tag.s, c->arg1.s, 1, 0);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     case 'L':
@@ -846,8 +922,9 @@ cmd:
             ret = DOCMD_CONN_FINISHED;
             goto done;
         }
-        else if (!c->userid)
+        else if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "List")) {
             int opt = 0;
 
@@ -858,19 +935,23 @@ cmd:
             }
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
 
             cmd_list(c, c->tag.s, opt ? c->arg1.s : NULL);
 
             prot_printf(c->pout, "%s OK \"list complete\"\r\n", c->tag.s);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     case 'N':
-        if (!c->userid)
+        if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "Noop")) {
             CHECKNEWLINE(c, ch);
 
@@ -882,27 +963,38 @@ cmd:
 
             prot_printf(c->pout, "%s OK \"Noop done\"\r\n", c->tag.s);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     case 'R':
-        if (!c->userid)
+        if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "Reserve")) {
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg1));
-            if (ch != ' ') goto missingargs;
+            if (ch != ' ') {
+                goto missingargs;
+            }
             ch = getstring(c->pin, c->pout, &(c->arg2));
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
-            if (!masterp) goto masteronly;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
+            if (!masterp) {
+                goto masteronly;
+            }
 
             cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_RESERVE);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     case 'S':
@@ -942,13 +1034,15 @@ cmd:
             }
             cmd_starttls(c, c->tag.s);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     case 'U':
-        if (!c->userid)
+        if (!c->userid) {
             goto nologin;
+        }
         else if (!strcmp(c->cmd.s, "Update")) {
             strarray_t *arg = NULL;
             int counter = 30; /* limit on number of processed hosts */
@@ -964,17 +1058,22 @@ cmd:
                     strarray_free(arg);
                     goto extraargs;
                 }
-                if (!arg) arg = strarray_new();
+                if (!arg) {
+                    arg = strarray_new();
+                }
                 strarray_append(arg, c->arg1.s);
             }
 
             CHECKNEWLINE(c, ch);
-            if (c->streaming) goto notwhenstreaming;
+            if (c->streaming) {
+                goto notwhenstreaming;
+            }
 
             cmd_startupdate(c, c->tag.s, arg);
         }
-        else
+        else {
             goto badcmd;
+        }
         break;
 
     default:
@@ -1029,10 +1128,12 @@ lost_conn: {
 
 done:
     /* Restore the state of the input stream */
-    if (was_blocking)
+    if (was_blocking) {
         prot_BLOCK(c->pin);
-    else
+    }
+    else {
         prot_NONBLOCK(c->pin);
+    }
 
     /* Necessary since we don't ever do a prot_read on an idle connection
      * in mupdate */
@@ -1064,7 +1165,9 @@ int service_main_fd(int fd,
         close(fd);
 
         syslog(LOG_ERR, "Server too busy, dropping connection.");
-        if (r) return 0; /* filthy hack to avoid warning on 'r' */
+        if (r) {
+            return 0; /* filthy hack to avoid warning on 'r' */
+        }
     }
     else if (write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
         /* signal that a new file descriptor is available.
@@ -1099,8 +1202,9 @@ static void dobanner(struct conn *c)
 
     /* Add mupdate:// tag if necessary */
     if (!masterp) {
-        if (!config_mupdate_server)
+        if (!config_mupdate_server) {
             fatal("mupdate server was not specified for slave", EX_TEMPFAIL);
+        }
 
         snprintf(
             slavebuf, sizeof(slavebuf), "mupdate://%s", config_mupdate_server);
@@ -1172,10 +1276,14 @@ static void *thread_main(void *rock __attribute__((unused)))
         max_worker_flag = (idle_worker_count
                            >= config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE));
         /* Increment Idle Workers */
-        if (!max_worker_flag) idle_worker_count++;
+        if (!max_worker_flag) {
+            idle_worker_count++;
+        }
         pthread_mutex_unlock(&idle_worker_mutex);
 
-        if (max_worker_flag) goto worker_thread_done;
+        if (max_worker_flag) {
+            goto worker_thread_done;
+        }
 
     retry_lock:
 
@@ -1297,7 +1405,9 @@ static void *thread_main(void *rock __attribute__((unused)))
         if (new_fd != NO_NEW_CONNECTION) {
             /* new_fd indicates a new connection */
             currConn = conn_new(new_fd);
-            if (currConn) send_a_banner = 1;
+            if (currConn) {
+                send_a_banner = 1;
+            }
         }
         else if (protout) {
             /* Handle existing connection, we'll need to pull it off
@@ -1343,7 +1453,9 @@ static void *thread_main(void *rock __attribute__((unused)))
             if (need_workers > 0) {
                 too_many = (need_workers + worker_count)
                            - config_getint(IMAPOPT_MUPDATE_WORKERS_MAX);
-                if (too_many > 0) need_workers -= too_many;
+                if (too_many > 0) {
+                    need_workers -= too_many;
+                }
             }
             pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
 
@@ -1506,42 +1618,54 @@ static struct mbent *database_lookup(const char *name,
     char *location = NULL;
     int r;
 
-    if (!name) return NULL;
+    if (!name) {
+        return NULL;
+    }
 
     if (!mbentry) {
         r = mboxlist_lookup_allow_all(name, &my_mbentry, NULL);
-        if (r) return NULL;
+        if (r) {
+            return NULL;
+        }
         mbentry = my_mbentry;
     }
 
     /* XXX - if mbtype & MBTYPE_DELETED, maybe set a delete */
 
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-        if (!pool)
+        if (!pool) {
             out = xmalloc(sizeof(struct mbent) + 1);
-        else
+        }
+        else {
             out = mpool_malloc(pool, sizeof(struct mbent) + 1);
+        }
         out->t = SET_RESERVE;
         out->acl[0] = '\0';
     }
     else {
-        if (!pool)
+        if (!pool) {
             out = xmalloc(sizeof(struct mbent) + strlen(mbentry->acl));
-        else
+        }
+        else {
             out =
                 mpool_malloc(pool, sizeof(struct mbent) + strlen(mbentry->acl));
+        }
         out->t = SET_ACTIVE;
         strcpy(out->acl, mbentry->acl);
     }
 
-    if (mbentry->server && mbentry->partition)
+    if (mbentry->server && mbentry->partition) {
         location = strconcat(mbentry->server, "!", mbentry->partition, NULL);
-    else if (mbentry->server)
+    }
+    else if (mbentry->server) {
         location = xstrdup(mbentry->server);
-    else if (mbentry->partition)
+    }
+    else if (mbentry->partition) {
         location = xstrdup(mbentry->partition);
-    else
+    }
+    else {
         location = xstrdup("");
+    }
 
     if (pool) {
         out->mailbox = mpool_strdup(pool, name);
@@ -1553,7 +1677,9 @@ static struct mbent *database_lookup(const char *name,
         out->location = location;
     }
 
-    if (my_mbentry) mboxlist_entry_free(&my_mbentry);
+    if (my_mbentry) {
+        mboxlist_entry_free(&my_mbentry);
+    }
 
     return out;
 }
@@ -1602,9 +1728,10 @@ static void cmd_authenticate(struct conn *C,
                 sleep(failedloginpause);
             }
 
-            if (r != SASL_NOUSER)
+            if (r != SASL_NOUSER) {
                 sasl_getprop(
                     C->saslconn, SASL_USERNAME, (const void **) &userid);
+            }
 
             syslog(LOG_ERR,
                    "badlogin: %s %s (%s) [%s]",
@@ -1776,15 +1903,19 @@ static void cmd_set(struct conn *C,
         }
     }
     else {
-        if (m) oldlocation = m->location;
+        if (m) {
+            oldlocation = m->location;
+        }
 
         if (m && (!acl || strlen(acl) < strlen(m->acl))) {
             /* change what's already there -- the acl is smaller */
             m->location = xstrdup(location);
-            if (acl)
+            if (acl) {
                 strcpy(m->acl, acl);
-            else
+            }
+            else {
                 m->acl[0] = '\0';
+            }
 
             m->t = t;
         }
@@ -1817,17 +1948,23 @@ static void cmd_set(struct conn *C,
     }
 
     /* write to disk */
-    if (m) database_log(m, NULL);
+    if (m) {
+        database_log(m, NULL);
+    }
 
     if (oldlocation) {
         tmp = strchr(oldlocation, '!');
-        if (tmp) *tmp = '\0';
+        if (tmp) {
+            *tmp = '\0';
+        }
     }
 
     if (location) {
         thislocation = xstrdup(location);
         tmp = strchr(thislocation, '!');
-        if (tmp) *tmp = '\0';
+        if (tmp) {
+            *tmp = '\0';
+        }
     }
 
     /* post pending changes */
@@ -1835,8 +1972,12 @@ static void cmd_set(struct conn *C,
 
     msg = ISOK;
 done:
-    if (thislocation) free(thislocation);
-    if (oldlocation) free(oldlocation);
+    if (thislocation) {
+        free(thislocation);
+    }
+    if (oldlocation) {
+        free(oldlocation);
+    }
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
@@ -1926,10 +2067,14 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
     struct conn *C = (struct conn *) rock;
     struct mbent *m;
 
-    if (!C) return -1;
+    if (!C) {
+        return -1;
+    }
 
     m = database_lookup(mbentry->name, mbentry, NULL);
-    if (!m) return -1;
+    if (!m) {
+        return -1;
+    }
 
     if (!C->list_prefix
         || !strncmp(m->location, C->list_prefix, C->list_prefix_len))
@@ -1993,10 +2138,12 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
     /* since this isn't valid when streaming, just use the same callback */
     C->streaming = tag;
     C->list_prefix = host_prefix;
-    if (C->list_prefix)
+    if (C->list_prefix) {
         C->list_prefix_len = strlen(C->list_prefix);
-    else
+    }
+    else {
         C->list_prefix_len = 0;
+    }
 
     mboxlist_allmbox("", sendupdate, (void *) C, /*flags*/ 0);
 
@@ -2227,18 +2374,24 @@ static int reset_saslconn(struct conn *c)
                           NULL,
                           0,
                           &c->saslconn);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(c->saslconn, SASL_SEC_PROPS, secprops);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
     if (c->saslprops.ssf) {
         ret = saslprops_set_tls(&c->saslprops, c->saslconn);
     }
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -2254,7 +2407,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     char *tmp;
     int ret = 0;
 
-    if (!mdata || !rock || !mdata->mailbox) return 1;
+    if (!mdata || !rock || !mdata->mailbox) {
+        return 1;
+    }
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -2277,17 +2432,21 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
     else {
         m = database_lookup(mdata->mailbox, NULL, NULL);
 
-        if (m) oldlocation = m->location;
+        if (m) {
+            oldlocation = m->location;
+        }
 
         if (m && (!mdata->acl || strlen(mdata->acl) < strlen(m->acl))) {
             /* change what's already there */
             /* old m->location freed when oldlocation is freed */
             m->location = xstrdup(mdata->location);
 
-            if (mdata->acl)
+            if (mdata->acl) {
                 strcpy(m->acl, mdata->acl);
-            else
+            }
+            else {
                 m->acl[0] = '\0';
+            }
 
             if (!strncmp(rock, "MAILBOX", 6)) {
                 m->t = SET_ACTIVE;
@@ -2351,21 +2510,29 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
 
     if (oldlocation) {
         tmp = strchr(oldlocation, '!');
-        if (tmp) *tmp = '\0';
+        if (tmp) {
+            *tmp = '\0';
+        }
     }
 
     if (mdata->location) {
         thislocation = xstrdup(mdata->location);
         tmp = strchr(thislocation, '!');
-        if (tmp) *tmp = '\0';
+        if (tmp) {
+            *tmp = '\0';
+        }
     }
 
     /* post pending changes to anyone we are talking to */
     log_update(mdata->mailbox, oldlocation, thislocation);
 
 done:
-    if (oldlocation) free(oldlocation);
-    if (thislocation) free(thislocation);
+    if (oldlocation) {
+        free(oldlocation);
+    }
+    if (thislocation) {
+        free(thislocation);
+    }
 
     free_mbent(m);
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
@@ -2389,7 +2556,9 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     struct mbent_queue *remote_boxes = r->boxes;
     struct mbent *newm = NULL;
 
-    if (!mdata || !rock || !mdata->mailbox || !remote_boxes) return 1;
+    if (!mdata || !rock || !mdata->mailbox || !remote_boxes) {
+        return 1;
+    }
 
     /* allocate new mailbox */
     if (mdata->acl) {
@@ -2435,11 +2604,15 @@ static int sync_findall_cb(const mbentry_t *mbentry, void *rock)
     struct mbent_queue *local_boxes = (struct mbent_queue *) r->boxes;
     struct mbent *m;
 
-    if (!local_boxes) return 1;
+    if (!local_boxes) {
+        return 1;
+    }
 
     m = database_lookup(mbentry->name, mbentry, r->pool);
     /* If it doesn't exist, fine... */
-    if (!m) return 0;
+    if (!m) {
+        return 0;
+    }
 
     m->next = NULL;
     *(local_boxes->tail) = m;
@@ -2454,7 +2627,9 @@ int mupdate_synchronize_remote(mupdate_handle *handle,
 {
     struct sync_rock rock;
 
-    if (!handle || !handle->saslcompleted) return 1;
+    if (!handle || !handle->saslcompleted) {
+        return 1;
+    }
 
     rock.pool = pool;
 
@@ -2645,7 +2820,9 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
         }
     }
 
-    if (tid) mboxlist_commit(tid);
+    if (tid) {
+        mboxlist_commit(tid);
+    }
 
     /* All up to date! */
     if (err) {
@@ -2699,7 +2876,9 @@ void mupdate_unready(void)
 /* Used to free malloc'd mbent's (not for mpool'd mbents) */
 void free_mbent(struct mbent *p)
 {
-    if (!p) return;
+    if (!p) {
+        return;
+    }
     free(p->location);
     free(p->mailbox);
     free(p);

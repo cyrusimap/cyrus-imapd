@@ -116,7 +116,9 @@ EXPORTED void fatal(const char *msg, int err)
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
-    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+    if (err != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(err);
 }
@@ -135,10 +137,12 @@ static void usage(void)
 static void save_argv0(const char *s)
 {
     const char *slash = strrchr(s, '/');
-    if (slash)
+    if (slash) {
         argv0 = slash + 1;
-    else
+    }
+    else {
         argv0 = s;
+    }
 }
 
 static int do_cleanup(void)
@@ -149,7 +153,9 @@ static int do_cleanup(void)
 
     dh = opendir(basedir);
     if (!dh) {
-        if (errno == ENOENT) return 0; /* nothing to do */
+        if (errno == ENOENT) {
+            return 0; /* nothing to do */
+        }
         syslog(LOG_ERR, "IOERROR: opendir(%s): %m", basedir);
         return EX_IOERR;
     }
@@ -158,7 +164,9 @@ static int do_cleanup(void)
         char path[PATH_MAX];
         int r;
 
-        if (dirent->d_name[0] == '.') continue;
+        if (dirent->d_name[0] == '.') {
+            continue;
+        }
 
         r = snprintf(path, sizeof(path), "%s%s", basedir, dirent->d_name);
         if (r < 0 || (size_t) r >= sizeof(path)) {
@@ -204,11 +212,15 @@ static int promdir_foreach(promdir_foreach_cb *proc,
         struct mappedfile *mf = NULL;
 
         /* skip filenames we don't care about */
-        if (dirent->d_name[0] == '.') continue;
-        if (mode == PROMDIR_FOREACH_PIDS && !cyrus_isdigit(dirent->d_name[0]))
+        if (dirent->d_name[0] == '.') {
             continue;
-        if (mode == PROMDIR_FOREACH_DONEPROCS && dirent->d_name[0] != 'd')
+        }
+        if (mode == PROMDIR_FOREACH_PIDS && !cyrus_isdigit(dirent->d_name[0])) {
             continue;
+        }
+        if (mode == PROMDIR_FOREACH_DONEPROCS && dirent->d_name[0] != 'd') {
+            continue;
+        }
 
         r = snprintf(fname, sizeof(fname), "%s%s", basedir, dirent->d_name);
         if (r < 0 || (size_t) r >= sizeof(fname)) {
@@ -220,7 +232,9 @@ static int promdir_foreach(promdir_foreach_cb *proc,
         }
 
         r = mappedfile_open(&mf, fname, 0);
-        if (r) continue;
+        if (r) {
+            continue;
+        }
         r = mappedfile_readlock(mf);
         if (r) {
             mappedfile_close(&mf);
@@ -231,7 +245,9 @@ static int promdir_foreach(promdir_foreach_cb *proc,
         mappedfile_close(&mf);
 
         r = proc(&stats, rock);
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     closedir(dh);
@@ -276,12 +292,15 @@ static void format_metric(const char *key __attribute__((unused)),
     struct format_metric_rock *fmrock = (struct format_metric_rock *) rock;
 
     /* don't report service/metric combinations that have never been seen */
-    if (!stats->metrics[fmrock->metric].last_updated) return;
+    if (!stats->metrics[fmrock->metric].last_updated) {
+        return;
+    }
 
     buf_appendcstr(fmrock->buf, prom_metric_descs[fmrock->metric].name);
     buf_printf(fmrock->buf, "{service=\"%s\"", stats->ident);
-    if (prom_metric_descs[fmrock->metric].label)
+    if (prom_metric_descs[fmrock->metric].label) {
         buf_printf(fmrock->buf, ",%s", prom_metric_descs[fmrock->metric].label);
+    }
     buf_printf(fmrock->buf,
                "} %0.f %" PRId64 "\n",
                stats->metrics[fmrock->metric].value,
@@ -393,10 +412,14 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     struct partition_data *pdata;
 
     /* don't want partial matches */
-    if (!data || !data->is_exactmatch) return 0;
+    if (!data || !data->is_exactmatch) {
+        return 0;
+    }
 
     /* don't want intermediates XXX unless we do? in which case count them! */
-    if (!data->mbentry->partition) return 0;
+    if (!data->mbentry->partition) {
+        return 0;
+    }
 
     pdata = hash_lookup(data->mbentry->partition, h);
     if (!pdata) {
@@ -696,15 +719,21 @@ static void do_write_report(struct mappedfile *mf, const struct buf *report)
     int r;
 
     r = mappedfile_writelock(mf);
-    if (r) fatal("couldn't write lock report file", EX_IOERR);
+    if (r) {
+        fatal("couldn't write lock report file", EX_IOERR);
+    }
 
     r = mappedfile_pwritebuf(mf, report, 0);
-    if (r < 0) fatal("error writing report file", EX_IOERR);
+    if (r < 0) {
+        fatal("error writing report file", EX_IOERR);
+    }
 
     mappedfile_truncate(mf, buf_len(report));
 
     r = mappedfile_commit(mf);
-    if (r) fatal("error committing report file", EX_IOERR);
+    if (r) {
+        fatal("error committing report file", EX_IOERR);
+    }
 
     mappedfile_unlock(mf);
 }
@@ -731,7 +760,9 @@ int main(int argc, char **argv)
     unsigned i;
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
+    if (p) {
+        verbose = atoi(p) + 1;
+    }
 
     while ((opt = getopt(argc, argv, "C:D1cdf:v")) != -1) {
         switch (opt) {
@@ -757,7 +788,9 @@ int main(int argc, char **argv)
 
         case 'f': /* set service report frequency */
             reports[0].frequency = atoi(optarg);
-            if (reports[0].frequency <= 0) usage();
+            if (reports[0].frequency <= 0) {
+                usage();
+            }
             break;
 
         case 'v': /* verbose */
@@ -817,18 +850,21 @@ int main(int argc, char **argv)
     for (i = 0; i < n_reports; i++) {
         char *fname = strconcat(prometheus_stats_dir(), reports[i].fname, NULL);
 
-        if (reports[i].frequency <= 0)
+        if (reports[i].frequency <= 0) {
             reports[i].frequency = config_getduration(reports[i].freq_opt, 's');
-        if (reports[i].frequency <= 0)
+        }
+        if (reports[i].frequency <= 0) {
             reports[i].frequency = reports[i].default_frequency;
+        }
 
         if (reports[i].frequency) {
             syslog(LOG_DEBUG,
                    "updating %s every %d seconds",
                    fname,
                    reports[i].frequency);
-            if (reports[i].frequency < min_frequency)
+            if (reports[i].frequency < min_frequency) {
                 min_frequency = reports[i].frequency;
+            }
         }
         else {
             syslog(LOG_DEBUG, "not updating %s due to frequency 0", fname);
@@ -838,7 +874,9 @@ int main(int argc, char **argv)
         r = mappedfile_open(
             &reports[i].mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
         free(fname);
-        if (r) fatal("couldn't open report file", EX_IOERR);
+        if (r) {
+            fatal("couldn't open report file", EX_IOERR);
+        }
     }
     assert(min_frequency > 0 && min_frequency < INT_MAX);
 
@@ -854,8 +892,9 @@ int main(int argc, char **argv)
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {
-            if (verbose || debugmode)
+            if (verbose || debugmode) {
                 syslog(LOG_DEBUG, "Detected shutdown file");
+            }
             shut_down(0);
         }
 

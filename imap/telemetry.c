@@ -114,13 +114,18 @@ EXPORTED int telemetry_log(const char *userid,
         now = time(NULL);
         snprintf(buf2, sizeof(buf2), "---------- %s %s\n", userid, ctime(&now));
         r = write(fd, buf2, strlen(buf2));
-        if (r < 0)
+        if (r < 0) {
             syslog(LOG_ERR,
                    "IOERROR: unable to write to telemetry log %s: %m",
                    buf);
+        }
 
-        if (pin) prot_setlog(pin, fd);
-        if (pout) prot_setlog(pout, fd);
+        if (pin) {
+            prot_setlog(pin, fd);
+        }
+        if (pout) {
+            prot_setlog(pout, fd);
+        }
     }
 
     return fd;

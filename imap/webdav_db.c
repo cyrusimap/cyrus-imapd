@@ -106,14 +106,18 @@ static void init_internal()
 EXPORTED int webdav_init(void)
 {
     int r = sqldb_init();
-    if (!r) webdav_initialized = 1;
+    if (!r) {
+        webdav_initialized = 1;
+    }
     return r;
 }
 
 EXPORTED int webdav_done(void)
 {
     int r = sqldb_done();
-    if (!r) webdav_initialized = 0;
+    if (!r) {
+        webdav_initialized = 0;
+    }
     return r;
 }
 
@@ -125,7 +129,9 @@ EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
     init_internal();
 
     sqldb_t *db = dav_open_userid(userid);
-    if (!db) return NULL;
+    if (!db) {
+        return NULL;
+    }
 
     webdavdb = xzmalloc(sizeof(struct webdav_db));
     webdavdb->userid = xstrdup(userid);
@@ -149,7 +155,9 @@ EXPORTED struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox)
     }
 
     sqldb_t *db = dav_open_mailbox(mailbox);
-    if (!db) return NULL;
+    if (!db) {
+        return NULL;
+    }
 
     webdavdb = xzmalloc(sizeof(struct webdav_db));
     webdavdb->db = db;
@@ -162,7 +170,9 @@ EXPORTED int webdav_close(struct webdav_db *webdavdb)
 {
     int r = 0;
 
-    if (!webdavdb) return 0;
+    if (!webdavdb) {
+        return 0;
+    }
 
     buf_free(&webdavdb->mailbox);
     buf_free(&webdavdb->resource);
@@ -229,7 +239,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     wdata->dav.alive = sqlite3_column_int(stmt, 14);
     wdata->dav.modseq = sqlite3_column_int64(stmt, 15);
     wdata->dav.createdmodseq = sqlite3_column_int64(stmt, 16);
-    if (!rrock->tombstones && !wdata->dav.alive) return 0;
+    if (!rrock->tombstones && !wdata->dav.alive) {
+        return 0;
+    }
 
     wdata->dav.rowid = sqlite3_column_int(stmt, 0);
     wdata->dav.creationdate = sqlite3_column_int(stmt, 1);
@@ -309,7 +321,9 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
 
     r = sqldb_exec(webdavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock);
-    if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !wdata.dav.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     /* always mailbox and resource so error paths don't fail */
     wdata.dav.mailbox_byname = (webdavdb->db->version < DB_MBOXID_VERSION);
@@ -344,7 +358,9 @@ EXPORTED int webdav_lookup_imapuid(struct webdav_db *webdavdb,
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
 
     r = sqldb_exec(webdavdb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
-    if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !wdata.dav.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     wdata.dav.mailbox = mailbox;
     wdata.dav.imap_uid = imap_uid;
@@ -371,7 +387,9 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb,
     *result = memset(&wdata, 0, sizeof(struct webdav_data));
 
     r = sqldb_exec(webdavdb->db, CMD_SELUID, bval, &read_cb, &rrock);
-    if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !wdata.dav.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     return r;
 }
@@ -537,8 +555,12 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
-    if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
-    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    if (mailbox) {
+        buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    }
+    if (!oldmodseq) {
+        buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    }
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
     r = sqldb_exec(webdavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);

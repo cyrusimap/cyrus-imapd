@@ -84,12 +84,16 @@ static void dump_octets(FILE *fp, const char *base, unsigned int len)
 
     while (len > 0) {
         fputs("    ", fp);
-        for (i = 0; i < 16 && i < len; i++)
+        for (i = 0; i < 16 && i < len; i++) {
             fprintf(fp, "%02x ", ((unsigned char *) base)[i]);
-        for (; i < 16; i++) fputs("   ", fp);
+        }
+        for (; i < 16; i++) {
+            fputs("   ", fp);
+        }
         fputs("   ", fp);
-        for (i = 0; i < 16 && i < len; i++)
+        for (i = 0; i < 16 && i < len; i++) {
             fputc((isprint(base[i]) && !isspace(base[i]) ? base[i] : '.'), fp);
+        }
         fputc('\n', fp);
 
         i = (len > 16 ? 16 : len);
@@ -179,7 +183,9 @@ int main(int argc, char **argv)
 
         case 'r':
             recno = atoi(optarg);
-            if (recno <= 0) usage(argv[0]);
+            if (recno <= 0) {
+                usage(argv[0]);
+            }
             break;
 
         case 's':
@@ -208,8 +214,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (optind != argc) usage(argv[0]);
-    if (mboxname && filename) usage(argv[0]);
+    if (optind != argc) {
+        usage(argv[0]);
+    }
+    if (mboxname && filename) {
+        usage(argv[0]);
+    }
 
     cyrus_init(alt_config, "message_test", 0, CONFIG_NEED_PARTITION_DATA);
 
@@ -287,7 +297,9 @@ int main(int argc, char **argv)
         int c;
         struct buf buf = BUF_INITIALIZER;
 
-        while ((c = fgetc(stdin)) != EOF) buf_putc(&buf, c);
+        while ((c = fgetc(stdin)) != EOF) {
+            buf_putc(&buf, c);
+        }
         message = message_new_from_data(buf.s, buf.len);
         dump_message(message);
         if (r) {
@@ -323,7 +335,9 @@ EXPORTED void fatal(const char *s, int code)
     fprintf(stderr, "message_test: %s\n", s);
     cyrus_done();
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }

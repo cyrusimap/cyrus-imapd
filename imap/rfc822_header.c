@@ -183,7 +183,9 @@ const struct rfc822_header_desc *__rfc822_header_lookup(
 
             if ((((unsigned char) *str ^ (unsigned char) *s) & ~32) == 0
                 && !gperf_case_strncmp(str, s, len) && s[len] == '\0')
+            {
                 return &wordlist[key];
+            }
         }
     }
     return 0;

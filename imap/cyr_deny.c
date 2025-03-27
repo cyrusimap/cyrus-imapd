@@ -120,8 +120,9 @@ static int gather_one(pid_t pid,
 {
     struct kill_rock *kr = (struct kill_rock *) rock;
 
-    if (!strcmp(userid, kr->user))
+    if (!strcmp(userid, kr->user)) {
         ptrarray_append(&kr->pids, xmemdup(&pid, sizeof(pid)));
+    }
     return 0;
 }
 
@@ -159,7 +160,9 @@ static void kill_existing_services(const char *user)
                 continue;
             }
         }
-        if (!kr.pids.count) break;
+        if (!kr.pids.count) {
+            break;
+        }
 
         probing = 1;
 
@@ -215,12 +218,16 @@ int main(int argc, char **argv)
             break;
 
         case 'a':
-            if (mode != DENY) usage();
+            if (mode != DENY) {
+                usage();
+            }
             mode = ALLOW;
             break;
 
         case 'l':
-            if (mode != DENY) usage();
+            if (mode != DENY) {
+                usage();
+            }
             mode = LIST;
             break;
 
@@ -237,13 +244,19 @@ int main(int argc, char **argv)
             break;
         }
     }
-    if (mode != DENY && (message || services)) usage();
+    if (mode != DENY && (message || services)) {
+        usage();
+    }
 
     if (mode == LIST) {
-        if (optind != argc) usage();
+        if (optind != argc) {
+            usage();
+        }
     }
     else {
-        if (optind != argc - 1) usage();
+        if (optind != argc - 1) {
+            usage();
+        }
         user = argv[optind];
     }
 
@@ -253,41 +266,47 @@ int main(int argc, char **argv)
 
     r = denydb_open(/*create*/ (mode == DENY));
     if (r) {
-        if (mode != DENY && r == IMAP_NOTFOUND)
+        if (mode != DENY && r == IMAP_NOTFOUND) {
             r = 0;
-        else
+        }
+        else {
             fprintf(stderr,
                     "cyr_deny: failed to open deny db: %s\n",
                     error_message(r));
+        }
         goto out;
     }
 
     switch (mode) {
     case ALLOW:
         r = denydb_delete(user);
-        if (r)
+        if (r) {
             fprintf(stderr,
                     "cyr_deny: failed to allow access for %s: %s\n",
                     user,
                     error_message(r));
+        }
         break;
     case DENY:
         r = denydb_set(user, services, message);
-        if (r)
+        if (r) {
             fprintf(stderr,
                     "cyr_deny: failed to deny access for %s: %s\n",
                     user,
                     error_message(r));
-        else
+        }
+        else {
             kill_existing_services(user);
+        }
         break;
     case LIST:
         printf("%-30s %-20s %s\n", "Username", "Service(s)", "Message");
         r = denydb_foreach(list_one, NULL);
-        if (r)
+        if (r) {
             fprintf(stderr,
                     "cyr_deny: failed to list entries: %s\n",
                     error_message(r));
+        }
         break;
     }
 

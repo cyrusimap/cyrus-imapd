@@ -123,7 +123,9 @@ int main(int argc, char **argv)
 
     strarray_t args = STRARRAY_INITIALIZER;
     int i;
-    for (i = optind; i < argc; i++) strarray_append(&args, argv[i]);
+    for (i = optind; i < argc; i++) {
+        strarray_append(&args, argv[i]);
+    }
     if (userid) {
         static char env_userlock[MAX_MAILBOX_NAME + 30];
         snprintf(env_userlock,

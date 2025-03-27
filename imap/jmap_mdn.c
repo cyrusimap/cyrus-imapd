@@ -181,14 +181,18 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
         jmap_parser_push(&parser, "disposition");
         json_object_foreach(arg, key, val)
         {
-            if (!strcmp(key, "actionMode"))
+            if (!strcmp(key, "actionMode")) {
                 mdn->dispo.action = json_string_value(val);
-            else if (!strcmp(key, "sendingMode"))
+            }
+            else if (!strcmp(key, "sendingMode")) {
                 mdn->dispo.sending = json_string_value(val);
-            else if (!strcmp(key, "type"))
+            }
+            else if (!strcmp(key, "type")) {
                 mdn->dispo.type = json_string_value(val);
-            else
+            }
+            else {
                 jmap_parser_invalid(&parser, key);
+            }
         }
 
         const char *s = mdn->dispo.action;
@@ -268,7 +272,9 @@ static json_t *generate_mdn(struct jmap_req *req,
 
     /* Open the mailbox */
     r = mailbox_open_iwl(mboxname, &mbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Load the message */
     mr = msgrecord_from_uid(mbox, uid);
@@ -326,7 +332,9 @@ static json_t *generate_mdn(struct jmap_req *req,
     /* XXX  Is this the best/only way to determine the Final-Recipient? */
     buf_setcstr(&buf, "rfc822; ");
     buf_appendcstr(&buf, req->userid);
-    if (!strchr(req->userid, '@')) buf_printf(&buf, "@%s", config_servername);
+    if (!strchr(req->userid, '@')) {
+        buf_printf(&buf, "@%s", config_servername);
+    }
     mdn->final_rcpt = buf_release(&buf);
     from = mdn->final_rcpt + 8; /* skip "rfc822; " */
 
@@ -369,8 +377,9 @@ static json_t *generate_mdn(struct jmap_req *req,
     buf_appendcstr(msgbuf, "Content-Disposition: inline\r\n");
     buf_appendcstr(msgbuf, "Content-Transfer-Encoding: 8bit\r\n\r\n");
 
-    if (mdn->body)
+    if (mdn->body) {
         buf_appendcstr(msgbuf, mdn->body);
+    }
     else {
         buf_printf(msgbuf,
                    "This is a Return Receipt for the mail that you sent to %s.",
@@ -382,7 +391,9 @@ static json_t *generate_mdn(struct jmap_req *req,
     buf_printf(msgbuf, "--%s\r\n", uuid);
     buf_appendcstr(msgbuf,
                    "Content-Type: message/disposition-notification\r\n\r\n");
-    if (mdn->mua) buf_printf(msgbuf, "Reporting-UA: %s\r\n", mdn->mua);
+    if (mdn->mua) {
+        buf_printf(msgbuf, "Reporting-UA: %s\r\n", mdn->mua);
+    }
 
     r = message_get_field(msg, "original-recipient", MESSAGE_RAW, &buf);
     if (!r && buf_len(&buf)) {
@@ -418,8 +429,12 @@ static json_t *generate_mdn(struct jmap_req *req,
     buf_printf(msgbuf, "--%s--\r\n", uuid);
 
 done:
-    if (r && err == NULL) err = jmap_server_error(r);
-    if (mr) msgrecord_unref(&mr);
+    if (r && err == NULL) {
+        err = jmap_server_error(r);
+    }
+    if (mr) {
+        msgrecord_unref(&mr);
+    }
     mailbox_close(&mbox);
     free(mboxname);
     buf_free(&buf);
@@ -438,7 +453,9 @@ static json_t *send_mdn(struct jmap_req *req,
     if (!*sm) {
         /* Open the SMTP connection */
         r = smtpclient_open(sm);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     smtpclient_set_auth(*sm, req->userid);
@@ -467,7 +484,9 @@ static json_t *send_mdn(struct jmap_req *req,
     smtp_envelope_fini(&smtpenv);
 
 done:
-    if (r && err == NULL) err = jmap_server_error(r);
+    if (r && err == NULL) {
+        err = jmap_server_error(r);
+    }
 
     return err;
 }
@@ -510,7 +529,9 @@ static int jmap_mdn_send(struct jmap_req *req)
     }
 
     /* send is a required argument */
-    if (!send || !json_object_size(send)) jmap_parser_invalid(&parser, "send");
+    if (!send || !json_object_size(send)) {
+        jmap_parser_invalid(&parser, "send");
+    }
 
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s s:O}",
@@ -568,11 +589,15 @@ static int jmap_mdn_send(struct jmap_req *req)
                 }
 
                 /* Add this id to the sent list */
-                if (!sent) sent = json_object();
+                if (!sent) {
+                    sent = json_object();
+                }
                 json_object_set_new(sent, id, jmdn);
 
                 /* Add this emailid to the list to be updated */
-                if (!update) update = json_object();
+                if (!update) {
+                    update = json_object();
+                }
                 json_object_set_new(update,
                                     mdn.emailid,
                                     json_pack("{s:b}", "keywords/$MDNSent", 1));
@@ -581,14 +606,18 @@ static int jmap_mdn_send(struct jmap_req *req)
 
         if (err) {
             /* Add this id to the not_sent list */
-            if (!not_sent) not_sent = json_object();
+            if (!not_sent) {
+                not_sent = json_object();
+            }
             json_object_set_new(not_sent, id, err);
         }
 
         free_mdn(&mdn);
     }
 
-    if (sm) smtpclient_close(&sm);
+    if (sm) {
+        smtpclient_close(&sm);
+    }
     buf_free(&msgbuf);
 
     /* Reply */

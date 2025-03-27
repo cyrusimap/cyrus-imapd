@@ -169,7 +169,9 @@ static int header_cb(nghttp2_session *session,
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
 
-    if (!txn) return 0;
+    if (!txn) {
+        return 0;
+    }
 
     my_name = xstrndup((const char *) name, namelen);
     my_value = xstrndup((const char *) value, valuelen);
@@ -179,7 +181,9 @@ static int header_cb(nghttp2_session *session,
     if (my_name[0] == ':') {
         switch (my_name[1]) {
         case 'm': /* :method */
-            if (!strcmp("ethod", my_name + 2)) txn->req_line.meth = my_value;
+            if (!strcmp("ethod", my_name + 2)) {
+                txn->req_line.meth = my_value;
+            }
             break;
 
         case 's': /* :scheme */
@@ -189,8 +193,9 @@ static int header_cb(nghttp2_session *session,
             break;
 
         case 'p': /* :path, :protocol */
-            if (!strcmp("ath", my_name + 2))
+            if (!strcmp("ath", my_name + 2)) {
                 txn->req_line.uri = my_value;
+            }
             else if (!strcmp("rotocol", my_name + 2)
                      && !strcmp(my_value, WS_TOKEN))
             {
@@ -215,7 +220,9 @@ static int data_chunk_recv_cb(nghttp2_session *session,
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, stream_id);
 
-    if (!txn) return 0;
+    if (!txn) {
+        return 0;
+    }
 
     syslog(LOG_DEBUG,
            "http2_data_chunk_recv_cb(id=%d, len=%zu, txnflags=%#x)",
@@ -223,7 +230,9 @@ static int data_chunk_recv_cb(nghttp2_session *session,
            len,
            txn->req_body.flags);
 
-    if (txn->req_body.flags & BODY_DISCARD) return 0;
+    if (txn->req_body.flags & BODY_DISCARD) {
+        return 0;
+    }
 
     if (len) {
         txn->req_body.framing = FRAMING_HTTP2;
@@ -244,7 +253,9 @@ static int frame_recv_cb(nghttp2_session *session,
     struct http2_context *ctx;
     struct buf *logbuf = NULL;
 
-    if (!txn) return 0;
+    if (!txn) {
+        return 0;
+    }
 
     ctx = (struct http2_context *) txn->conn->sess_ctx;
 
@@ -332,17 +343,23 @@ static int frame_recv_cb(nghttp2_session *session,
 
         if (txn->meth != METH_CONNECT) {
             /* Check that the client request has finished */
-            if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
+            if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+                break;
+            }
 
             /* Check that we still want to process the request */
-            if (txn->req_body.flags & BODY_DISCARD) break;
+            if (txn->req_body.flags & BODY_DISCARD) {
+                break;
+            }
         }
 
         /* Process the requested method */
         ret = process_request(txn);
 
         /* Handle errors (success responses handled by method functions) */
-        if (ret) error_response(ret, txn);
+        if (ret) {
+            error_response(ret, txn);
+        }
 
         if (txn->ws_ctx) {
             /* Add to WebSocket stream id array */
@@ -442,12 +459,16 @@ static void end_session(struct http_connection *conn, nghttp2_error_code err)
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
     const char *msg = conn->close_str;
 
-    if (!ctx) return;
+    if (!ctx) {
+        return;
+    }
 
-    if (!msg)
+    if (!msg) {
         msg = "Server unavailable";
-    else if (!err)
+    }
+    else if (!err) {
         err = NGHTTP2_CANCEL;
+    }
 
     /* Close all streams with open WebSocket channels */
     int32_t stream_id;
@@ -477,7 +498,9 @@ static void session_free(struct http_connection *conn)
 {
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
 
-    if (!ctx) return;
+    if (!ctx) {
+        return;
+    }
 
     nghttp2_option_del(ctx->options);
     nghttp2_session_del(ctx->session);
@@ -633,7 +656,9 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
         retry_write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
 
-    if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
+    if (code) {
+        simple_hdr(txn, ":status", "%.3s", error_message(code));
+    }
 }
 
 static void add_resp_header(struct transaction_t *txn,
@@ -827,7 +852,9 @@ static int resp_body_chunk(struct transaction_t *txn,
         }
         else if (txn->flags.trailer) {
             flags = NGHTTP2_FLAG_NONE;
-            if (txn->flags.trailer & TRAILER_CMD5) MD5Final(md5, md5ctx);
+            if (txn->flags.trailer & TRAILER_CMD5) {
+                MD5Final(md5, md5ctx);
+            }
         }
     }
 
@@ -849,7 +876,9 @@ static int resp_body_chunk(struct transaction_t *txn,
 
         if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
             begin_resp_headers(txn, 0);
-            if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
+            if (txn->flags.trailer & TRAILER_CMD5) {
+                content_md5_hdr(txn, md5);
+            }
             if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
                 simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
             }
@@ -871,9 +900,13 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     struct http2_context *ctx;
     int r;
 
-    if (!conn) conn = txn->conn;
+    if (!conn) {
+        conn = txn->conn;
+    }
 
-    if (conn->sess_ctx) return 0;
+    if (conn->sess_ctx) {
+        return 0;
+    }
 
     ctx = xzmalloc(sizeof(struct http2_context));
 
@@ -903,7 +936,9 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         unsigned outlen;
 
         const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
-        if (!hdr || hdr[1]) return 0;
+        if (!hdr || hdr[1]) {
+            return 0;
+        }
 
         /* base64url decode the settings.
            Use the SASL base64 decoder after replacing the encoded values
@@ -936,7 +971,9 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         }
 
         buf_reset(buf);
-        if (r) return HTTP_BAD_REQUEST;
+        if (r) {
+            return HTTP_BAD_REQUEST;
+        }
 
         /* tell client to start h2c upgrade (RFC 7540) */
         response_header(HTTP_SWITCH_PROT, txn);

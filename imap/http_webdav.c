@@ -300,7 +300,7 @@ struct namespace_t namespace_drive = {
     "/dav/drive",
     NULL,
     http_allow_noauth_get,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     MBTYPE_COLLECTION,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE | ALLOW_DAV
      | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL),
@@ -339,7 +339,9 @@ static void my_webdav_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_drive.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_WEBDAV;
 
-    if (!namespace_drive.enabled) return;
+    if (!namespace_drive.enabled) {
+        return;
+    }
 
     if (!config_getstring(IMAPOPT_DAVDRIVEPREFIX)) {
         fatal("Required 'davdriveprefix' option is not set", EX_CONFIG);
@@ -373,7 +375,9 @@ static int my_webdav_auth(const char *userid)
         namespacelock = user_namespacelock(userid);
         // did we lose the race?  Nothing to do!
         r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
-        if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+        if (r != IMAP_MAILBOX_NONEXISTENT) {
+            goto done;
+        }
 
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
@@ -381,7 +385,9 @@ static int my_webdav_auth(const char *userid)
 
         r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         free(inboxname);
-        if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = IMAP_INVALID_USER;
+        }
         if (!r && mbentry->server) {
             proxy_findserver(mbentry->server,
                              &http_protocol,
@@ -408,11 +414,12 @@ static int my_webdav_auth(const char *userid)
                                        httpd_authstate,
                                        0 /*flags*/,
                                        NULL /*mailboxptr*/);
-            if (r)
+            if (r) {
                 syslog(LOG_ERR,
                        "IOERROR: failed to create %s (%s)",
                        mbname_intname(mbname),
                        error_message(r));
+            }
         }
         else {
             syslog(LOG_ERR,
@@ -479,7 +486,9 @@ static int webdav_parse_path(const char *path,
     mbname_t *mbname = NULL;
     const char *mboxname = NULL;
 
-    if (*tgt->path) return 0; /* Already parsed */
+    if (*tgt->path) {
+        return 0; /* Already parsed */
+    }
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -505,7 +514,9 @@ static int webdav_parse_path(const char *path,
     p += len;
     if (!*p || !*++p) {
         /* Make sure collection is terminated with '/' */
-        if (p[-1] != '/') *p++ = '/';
+        if (p[-1] != '/') {
+            *p++ = '/';
+        }
 
         tgt->flags = TGT_DRIVE_ROOT;
     }
@@ -516,7 +527,9 @@ static int webdav_parse_path(const char *path,
         p += len;
         if (!*p || !*++p) {
             /* Make sure collection is terminated with '/' */
-            if (p[-1] != '/') *p++ = '/';
+            if (p[-1] != '/') {
+                *p++ = '/';
+            }
 
             tgt->flags = TGT_DRIVE_USER;
 
@@ -536,7 +549,9 @@ static int webdav_parse_path(const char *path,
         p += len;
         if (!*p || !*++p) {
             /* Make sure collection is terminated with '/' */
-            if (p[-1] != '/') *p++ = '/';
+            if (p[-1] != '/') {
+                *p++ = '/';
+            }
         }
 
         len = strcspn(p, "/");
@@ -558,7 +573,9 @@ static int webdav_parse_path(const char *path,
         p += len;
         if (!*p || !*++p) {
             /* Make sure collection is terminated with '/' */
-            if (p[-1] != '/') *p++ = '/';
+            if (p[-1] != '/') {
+                *p++ = '/';
+            }
             lastlen = strlen(last);
         }
 
@@ -623,7 +640,9 @@ static int webdav_parse_path(const char *path,
     /* Set proper Allow bits based on path components */
     tgt->allow |= ALLOW_ACL | ALLOW_PROPPATCH | ALLOW_WRITE | ALLOW_DELETE;
 
-    if (!tgt->resource) tgt->allow |= ALLOW_POST | ALLOW_MKCOL;
+    if (!tgt->resource) {
+        tgt->allow |= ALLOW_POST | ALLOW_MKCOL;
+    }
 
     return 0;
 }
@@ -721,7 +740,9 @@ static int webdav_put(struct transaction_t *txn,
     char *filename = NULL;
 
     /* Validate the data */
-    if (!buf) return HTTP_FORBIDDEN;
+    if (!buf) {
+        return HTTP_FORBIDDEN;
+    }
 
     /* Find message UID for the resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
@@ -767,8 +788,9 @@ static int webdav_put(struct transaction_t *txn,
         }
         tok_fini(&tok);
     }
-    else
+    else {
         filename = (char *) resource;
+    }
 
     /* Create and cache RFC 5322 header fields for resource */
     if (filename) {
@@ -810,8 +832,9 @@ static int propfind_restype(const xmlChar *name,
     xmlNodePtr node = xml_add_prop(
         HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK], name, ns, NULL, 0);
 
-    if (!fctx->req_tgt->resource)
+    if (!fctx->req_tgt->resource) {
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
+    }
 
     return 0;
 }

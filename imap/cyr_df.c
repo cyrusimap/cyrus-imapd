@@ -130,15 +130,21 @@ static void get_part_stats(const char *key, const char *val, void *rock)
     long blocks_percent_used;
 
     if (meta) {
-        if (strncmp("meta", key, 4)) return;
+        if (strncmp("meta", key, 4)) {
+            return;
+        }
         key += 4;
     }
-    if (strncmp("partition-", key, 10)) return;
+    if (strncmp("partition-", key, 10)) {
+        return;
+    }
 
     part = key + 10;
     path = val;
 
-    if (statvfs(path, &s)) return;
+    if (statvfs(path, &s)) {
+        return;
+    }
 
     blocks_used = s.f_blocks - s.f_bfree;
     blocks_percent_used =

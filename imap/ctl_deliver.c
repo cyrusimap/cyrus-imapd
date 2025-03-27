@@ -101,24 +101,30 @@ int main(int argc, char *argv[])
             break;
 
         case 'd':
-            if (op == NONE)
+            if (op == NONE) {
                 op = DUMP;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'f':
-            if (alt_file == NULL)
+            if (alt_file == NULL) {
                 alt_file = optarg;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'E':
-            if (op == NONE)
+            if (op == NONE) {
                 op = PRUNE;
-            else
+            }
+            else {
                 usage();
+            }
             /* deprecated, but we still support it */
             days = optarg;
             break;
@@ -142,10 +148,12 @@ int main(int argc, char *argv[])
             fatal("cyr_expire command buffer not sufficiently big", EX_CONFIG);
         }
 
-        if (alt_config)
+        if (alt_config) {
             execl(buf, buf, "-C", alt_config, "-E", days, NULL);
-        else
+        }
+        else {
             execl(buf, buf, "-E", days, NULL);
+        }
 
         break;
     }

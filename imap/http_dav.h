@@ -104,8 +104,9 @@ enum {
                  DAV:unlock and DAV:share) */
 
 /* JMAP-specific privileges */
-#define DACL_WRITEOWNRSRC ACL_USER6 /* CY:update-own-resource - used for JMAP  \
-                                     */
+#define DACL_WRITEOWNRSRC                                                      \
+    ACL_USER6 /* CY:update-own-resource - used for JMAP                        \
+               */
 #define DACL_UPDATEPRIVATE ACL_USER5
 
 /* WebDAV (RFC 3744) privileges */
@@ -135,36 +136,36 @@ enum {
    We use ACL_USER9 for both read-free-busy and schedule-*-freebusy because
    Scheduling Inbox and Outbox don't contribute to free-busy.
 */
-#define DACL_SCHEDFB                                                           \
-    ACL_USER9 /* For Scheduling Inbox:                                         \
-                 CALDAV:schedule-query-freebusy                                \
-                                                                               \
-                 For Scheduling Outbox:                                        \
+#define DACL_SCHEDFB                                                             \
+    ACL_USER9 /* For Scheduling Inbox:                                           \
+                 CALDAV:schedule-query-freebusy                                  \
+                                                                               \ \
+                 For Scheduling Outbox:                                          \
                  CALDAV:schedule-send-freebusy */
-#define DACL_INVITE                                                            \
-    ACL_USER8 /* For Scheduling Inbox:                                         \
-                 CALDAV:schedule-deliver-invite                                \
-                                                                               \
-                 For Scheduling Outbox:                                        \
+#define DACL_INVITE                                                              \
+    ACL_USER8 /* For Scheduling Inbox:                                           \
+                 CALDAV:schedule-deliver-invite                                  \
+                                                                               \ \
+                 For Scheduling Outbox:                                          \
                  CALDAV:schedule-send-invite */
-#define DACL_REPLY                                                             \
-    ACL_USER7 /* For Scheduling Inbox:                                         \
-                 CALDAV:schedule-deliver-reply                                 \
-                                                                               \
-                 For Scheduling Outbox:                                        \
+#define DACL_REPLY                                                               \
+    ACL_USER7 /* For Scheduling Inbox:                                           \
+                 CALDAV:schedule-deliver-reply                                   \
+                                                                               \ \
+                 For Scheduling Outbox:                                          \
                  CALDAV:schedule-send-reply */
-#define DACL_SCHED                                                             \
-    (DACL_SCHEDFB | DACL_INVITE                                                \
-     | DACL_REPLY) /* For Scheduling Inbox:                                    \
-                      CALDAV:schedule-deliver (aggregates                      \
-                      CALDAV:schedule-deliver-invite,                          \
-                      schedule-deliver-reply,                                  \
-                      schedule-query-freebusy);                                \
-                                                                               \
-                      For Scheduling Outbox:                                   \
-                      CALDAV:schedule-send (aggregates                         \
-                      CALDAV:schedule-send-invite,                             \
-                      schedule-send-reply,                                     \
+#define DACL_SCHED                                                               \
+    (DACL_SCHEDFB | DACL_INVITE                                                  \
+     | DACL_REPLY) /* For Scheduling Inbox:                                      \
+                      CALDAV:schedule-deliver (aggregates                        \
+                      CALDAV:schedule-deliver-invite,                            \
+                      schedule-deliver-reply,                                    \
+                      schedule-query-freebusy);                                  \
+                                                                               \ \
+                      For Scheduling Outbox:                                     \
+                      CALDAV:schedule-send (aggregates                           \
+                      CALDAV:schedule-send-invite,                               \
+                      schedule-send-reply,                                       \
                       schedule-send-freebusy) */
 
 /* Preference bits */

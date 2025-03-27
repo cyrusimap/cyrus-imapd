@@ -158,7 +158,9 @@ void *clamav_init()
     }
 
     /* load all available databases from default directory */
-    if (verbose) puts("Loading virus signatures...");
+    if (verbose) {
+        puts("Loading virus signatures...");
+    }
     starttime = now_ms();
     if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
         syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
@@ -374,7 +376,9 @@ int main(int argc, char *argv[])
     else {
         printf("Using %s virus scanner\n", engine.name);
 
-        if (engine.init) engine.state = engine.init();
+        if (engine.init) {
+            engine.state = engine.init();
+        }
     }
 
     if (optind == argc) { /* do the whole partition */
@@ -389,7 +393,9 @@ int main(int argc, char *argv[])
         strarray_free(array);
     }
 
-    if (email_notification) append_notifications(&notification_template);
+    if (email_notification) {
+        append_notifications(&notification_template);
+    }
 
     buf_free(&notification_template);
 
@@ -398,10 +404,12 @@ int main(int argc, char *argv[])
            srock.total_infected,
            disinfect ? "removed" : "found");
 
-    if (srock.searchargs)
+    if (srock.searchargs) {
         freesearchargs(srock.searchargs);
-    else if (engine.destroy)
+    }
+    else if (engine.destroy) {
         engine.destroy(engine.state);
+    }
 
     cyrus_done();
 
@@ -440,8 +448,12 @@ static void print_header(void)
 
 int scan_me(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
     struct mailbox *mailbox = NULL;
     int r;
@@ -469,7 +481,9 @@ int scan_me(struct findall_data *data, void *rock)
 
     if (srock->searchargs) {
         r = index_open_mailbox(mailbox, NULL, &srock->idx_state);
-        if (!r) r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+        if (!r) {
+            r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+        }
         if (r) {
             printf("failed to open index %s (%s)\n", name, error_message(r));
             return 0;
@@ -510,7 +524,9 @@ int scan_me(struct findall_data *data, void *rock)
 
     srock->i_mbox = i_mbox;
 
-    if (verbose) printf("Scanning %s...\n", name);
+    if (verbose) {
+        printf("Scanning %s...\n", name);
+    }
     mailbox_expunge(mailbox,
                     NULL,
                     virus_check,
@@ -518,10 +534,12 @@ int scan_me(struct findall_data *data, void *rock)
                     NULL,
                     EVENT_MESSAGE_EXPUNGE,
                     /*limit*/ 0);
-    if (srock->idx_state)
+    if (srock->idx_state) {
         index_close(&srock->idx_state); /* closes mailbox */
-    else
+    }
+    else {
         mailbox_close(&mailbox);
+    }
 
     srock->mailboxes_scanned++;
 
@@ -549,7 +567,9 @@ void create_digest(struct infected_mbox *i_mbox,
     /* decode the FROM header */
     tmp = mailbox_cache_get_env(mailbox, record, ENV_FROM);
     message_parse_env_address(tmp, &addr);
-    if (addr.name) buf_printf(&from, "\"%s\" ", addr.name);
+    if (addr.name) {
+        buf_printf(&from, "\"%s\" ", addr.name);
+    }
     buf_printf(&from, "<%s@%s>", addr.mailbox, addr.domain);
     free(tmp);
     i_msg->from = buf_release(&from);
@@ -583,7 +603,9 @@ unsigned virus_check(struct mailbox *mailbox,
 
     if (r) {
         /* print header if this is the first infection seen for this user */
-        if (verbose || !srock->user_infected) print_header();
+        if (verbose || !srock->user_infected) {
+            print_header();
+        }
 
         char *extname =
             mboxname_to_external(mailbox_name(mailbox), srock->namespace, NULL);
@@ -604,8 +626,9 @@ unsigned virus_check(struct mailbox *mailbox,
                 create_digest(i_mbox, mailbox, record, virname);
             }
         }
-        else
+        else {
             r = 0;
+        }
     }
 
     return r;
@@ -637,7 +660,9 @@ static int load_notification_template(struct buf *dst)
 
     /* using a custom template, validate it! */
     r = check_notification_template(dst);
-    if (r) buf_reset(dst);
+    if (r) {
+        buf_reset(dst);
+    }
 
     return r;
 }
@@ -664,9 +689,11 @@ static int check_notification_template(const struct buf *template)
                     buf_len(template),
                     subs[i],
                     strlen(subs[i])))
+        {
             syslog(LOG_WARNING,
                    "notification template is missing %s substitution",
                    subs[i]);
+        }
     }
 
     /* stub a message, and do minimal checking for RFC 822 compliance */
@@ -806,10 +833,12 @@ static void append_notifications(const struct buf *template)
                 buf_replace_all(&chunk, "%MSG_UID%", uidbuf);
                 mbname_free(&mailbox);
 
-                if (!first)
+                if (!first) {
                     buf_appendcstr(&message, "\r\n");
-                else
+                }
+                else {
                     first = 0;
+                }
                 buf_append(&message, &chunk);
                 buf_free(&chunk);
 
@@ -854,7 +883,9 @@ static void append_notifications(const struct buf *template)
                 r = append_fromstream(&as, &body, pout, msgsize, t, NULL);
                 /* n.b. append_fromstream calls append_abort itself if it fails
                  */
-                if (!r) r = append_commit(&as);
+                if (!r) {
+                    r = append_commit(&as);
+                }
 
                 if (body) {
                     message_free_body(body);

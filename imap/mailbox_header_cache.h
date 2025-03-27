@@ -123,7 +123,9 @@ static int gperf_case_strcmp(register const char *s1, register const char *s2)
     for (;;) {
         unsigned char c1 = gperf_downcase[(unsigned char) *s1++];
         unsigned char c2 = gperf_downcase[(unsigned char) *s2++];
-        if (c1 != 0 && c1 == c2) continue;
+        if (c1 != 0 && c1 == c2) {
+            continue;
+        }
         return (int) c1 - (int) c2;
     }
 }
@@ -299,7 +301,9 @@ struct mailbox_header_cache *mailbox_header_cache_lookup(
 
             if ((((unsigned char) *str ^ (unsigned char) *s) & ~32) == 0
                 && !gperf_case_strcmp(str, s))
+            {
                 return &wordlist[key];
+            }
         }
     }
     return 0;

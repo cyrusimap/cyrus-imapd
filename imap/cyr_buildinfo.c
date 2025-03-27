@@ -396,7 +396,9 @@ static void format_json(json_t *buildinfo, int fmt)
     int flags = JSON_PRESERVE_ORDER;
     char *dump;
 
-    if (fmt == FORMAT_PRETTY) flags |= JSON_INDENT(2);
+    if (fmt == FORMAT_PRETTY) {
+        flags |= JSON_INDENT(2);
+    }
     dump = json_dumps(buildinfo, flags);
     printf("%s\n", dump);
     free(dump);
@@ -432,19 +434,25 @@ int main(int argc, char *argv[])
         }
     }
     if (optind < argc) {
-        if (!strcmp(argv[optind], "pretty"))
+        if (!strcmp(argv[optind], "pretty")) {
             fmt = FORMAT_PRETTY;
-        else if (!strcmp(argv[optind], "dense"))
+        }
+        else if (!strcmp(argv[optind], "dense")) {
             fmt = FORMAT_DENSE;
-        else if (!strcmp(argv[optind], "flat"))
+        }
+        else if (!strcmp(argv[optind], "flat")) {
             fmt = FORMAT_FLAT;
-        else
+        }
+        else {
             usage();
+        }
     }
 
     /* Create and print the build configuration */
     bi = buildinfo();
-    if (!bi) exit(-2);
+    if (!bi) {
+        exit(-2);
+    }
     switch (fmt) {
     case FORMAT_PRETTY:
     case FORMAT_DENSE:

@@ -115,12 +115,15 @@ const char *icaltime_as_iso_string(const struct icaltimetype tt)
     static char str[21];
     const char *fmt;
 
-    if (icaltime_is_date(tt))
+    if (icaltime_is_date(tt)) {
         fmt = "%04d-%02d-%02d";
-    else if (icaltime_is_utc(tt))
+    }
+    else if (icaltime_is_utc(tt)) {
         fmt = "%04d-%02d-%02dT%02d:%02d:%02dZ";
-    else
+    }
+    else {
         fmt = "%04d-%02d-%02dT%02d:%02d:%02d";
+    }
 
     snprintf(str,
              sizeof(str),
@@ -147,19 +150,23 @@ const char *icalvalue_utcoffset_as_iso_string(const icalvalue *value)
 
     off = icalvalue_get_utcoffset(value);
 
-    if (abs(off) == off)
+    if (abs(off) == off) {
         sign = '+';
-    else
+    }
+    else {
         sign = '-';
+    }
 
     h = off / 3600;
     m = (off - (h * 3600)) / 60;
     s = (off - (h * 3600) - (m * 60));
 
-    if (s > 0)
+    if (s > 0) {
         fmt = "%c%02d:%02d:%02d";
-    else
+    }
+    else {
         fmt = "%c%02d:%02d";
+    }
 
     snprintf(str, sizeof(str), fmt, sign, abs(h), abs(m), abs(s));
 
@@ -274,7 +281,9 @@ static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
 
     default:
         kind_string = icalparameter_kind_to_string(kind);
-        if (kind_string) break;
+        if (kind_string) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -309,11 +318,15 @@ static xmlNodePtr icalparameter_as_xml_element(icalparameter *param)
 
     /* XXX  Need to handle multi-valued parameters */
     value = icalparameter_get_value(param);
-    if (value == ICAL_VALUE_X)
+    if (value == ICAL_VALUE_X) {
         value_string = icalparameter_get_xvalue(param);
-    else
+    }
+    else {
         value_string = icalparameter_enum_to_string(value);
-    if (!value_string) return NULL;
+    }
+    if (!value_string) {
+        return NULL;
+    }
 
     xparam = xmlNewNode(NULL, BAD_CAST lcase(icalmemory_tmp_copy(kind_string)));
     xmlNewTextChild(xparam, NULL, BAD_CAST type_string, BAD_CAST value_string);
@@ -393,7 +406,9 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
     case ICAL_REQUESTSTATUS_VALUE: {
         struct icalreqstattype stat = icalvalue_get_requeststatus(value);
 
-        if (!stat.desc) stat.desc = icalenum_reqstat_desc(stat.code);
+        if (!stat.desc) {
+            stat.desc = icalenum_reqstat_desc(stat.code);
+        }
 
         snprintf(buf,
                  sizeof(buf),
@@ -403,8 +418,9 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
         xmlNewTextChild(xtype, NULL, BAD_CAST "code", BAD_CAST buf);
         xmlNewTextChild(
             xtype, NULL, BAD_CAST "description", BAD_CAST stat.desc);
-        if (stat.debug)
+        if (stat.debug) {
             xmlNewTextChild(xtype, NULL, BAD_CAST "data", BAD_CAST stat.debug);
+        }
 
         return;
     }
@@ -412,10 +428,12 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
     case ICAL_TRIGGER_VALUE: {
         struct icaltriggertype trig = icalvalue_get_trigger(value);
 
-        if (!icaltime_is_null_time(trig.time))
+        if (!icaltime_is_null_time(trig.time)) {
             str = icaltime_as_iso_string(trig.time);
-        else
+        }
+        else {
             str = icaldurationtype_as_ical_string(trig.duration);
+        }
         break;
     }
 
@@ -456,7 +474,9 @@ static void icalproperty_add_value_as_xml_element(xmlNodePtr xprop,
         break;
     }
 
-    if (str) xmlAddChild(xtype, xmlNewText(BAD_CAST str));
+    if (str) {
+        xmlAddChild(xtype, xmlNewText(BAD_CAST str));
+    }
 }
 
 /*
@@ -469,15 +489,19 @@ static xmlNodePtr icalproperty_as_xml_element(icalproperty *prop)
     icalparameter *param;
     xmlNodePtr xprop, xparams = NULL;
 
-    if (!prop) return NULL;
+    if (!prop) {
+        return NULL;
+    }
 
     prop_kind = icalproperty_isa(prop);
     x_name = icalproperty_get_x_name(prop);
 
-    if (prop_kind == ICAL_X_PROPERTY && x_name)
+    if (prop_kind == ICAL_X_PROPERTY && x_name) {
         property_name = x_name;
-    else
+    }
+    else {
         property_name = icalproperty_kind_to_string(prop_kind);
+    }
 
     if (!property_name) {
         icalerror_warn("Got a property of an unknown kind.");
@@ -494,10 +518,13 @@ static xmlNodePtr icalproperty_as_xml_element(icalproperty *prop)
          param = icalproperty_get_next_parameter(prop, ICAL_ANY_PARAMETER))
     {
 
-        if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) continue;
+        if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) {
+            continue;
+        }
 
-        if (!xparams)
+        if (!xparams) {
             xparams = xmlNewChild(xprop, NULL, BAD_CAST "parameters", NULL);
+        }
 
         xmlAddChild(xparams, icalparameter_as_xml_element(param));
     }
@@ -519,7 +546,9 @@ static xmlNodePtr icalcomponent_as_xml_element(icalcomponent *comp)
     const char *kind_string;
     xmlNodePtr xcomp, xprops = NULL, xsubs = NULL;
 
-    if (!comp) return NULL;
+    if (!comp) {
+        return NULL;
+    }
 
     kind = icalcomponent_isa(comp);
     switch (kind) {
@@ -543,8 +572,9 @@ static xmlNodePtr icalcomponent_as_xml_element(icalcomponent *comp)
          p = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY))
     {
 
-        if (!xprops)
+        if (!xprops) {
             xprops = xmlNewChild(xcomp, NULL, BAD_CAST "properties", NULL);
+        }
 
         xmlAddChild(xprops, icalproperty_as_xml_element(p));
     }
@@ -554,8 +584,9 @@ static xmlNodePtr icalcomponent_as_xml_element(icalcomponent *comp)
          c = icalcomponent_get_next_component(comp, ICAL_ANY_COMPONENT))
     {
 
-        if (!xsubs)
+        if (!xsubs) {
             xsubs = xmlNewChild(xcomp, NULL, BAD_CAST "components", NULL);
+        }
 
         xmlAddChild(xsubs, icalcomponent_as_xml_element(c));
     }
@@ -574,7 +605,9 @@ struct buf *icalcomponent_as_xcal_string(icalcomponent *ical)
     xmlChar *buf;
     int bufsiz;
 
-    if (!ical) return NULL;
+    if (!ical) {
+        return NULL;
+    }
 
     doc = xmlNewDoc(BAD_CAST "1.0");
     root = xmlNewNode(NULL, BAD_CAST "icalendar");
@@ -696,7 +729,9 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
 
         content = xmlNodeGetContent(node);
         p.start = icaltime_from_string((const char *) content);
-        if (icaltime_is_null_time(p.start)) break;
+        if (icaltime_is_null_time(p.start)) {
+            break;
+        }
 
         node = xmlNextElementSibling(node);
         if (!node) {
@@ -707,13 +742,17 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
             xmlFree(content);
             content = xmlNodeGetContent(node);
             p.end = icaltime_from_string((const char *) content);
-            if (icaltime_is_null_time(p.end)) break;
+            if (icaltime_is_null_time(p.end)) {
+                break;
+            }
         }
         else if (!xmlStrcmp(node->name, BAD_CAST "duration")) {
             xmlFree(content);
             content = xmlNodeGetContent(node);
             p.duration = icaldurationtype_from_string((const char *) content);
-            if (icaldurationtype_as_int(p.duration) == 0) break;
+            if (icaldurationtype_as_int(p.duration) == 0) {
+                break;
+            }
         }
         else {
             syslog(LOG_WARNING,
@@ -782,8 +821,9 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         rt = icalrecurrencetype_new_from_string(buf_cstring(&rrule));
         buf_free(&rrule);
 
-        if (rt->freq != ICAL_NO_RECURRENCE)
+        if (rt->freq != ICAL_NO_RECURRENCE) {
             value = icalvalue_new_recurrence(rt);
+        }
         icalrecurrencetype_unref(rt);
 
         break;
@@ -867,7 +907,9 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
 
         utcoffset = hours * 3600 + minutes * 60 + seconds;
 
-        if (sign == '-') utcoffset = -utcoffset;
+        if (sign == '-') {
+            utcoffset = -utcoffset;
+        }
 
         value = icalvalue_new_utcoffset(utcoffset);
         break;
@@ -879,7 +921,9 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         break;
     }
 
-    if (content) xmlFree(content);
+    if (content) {
+        xmlFree(content);
+    }
 
     return value;
 }
@@ -910,7 +954,9 @@ static icalproperty *xml_element_to_icalproperty(xmlNodePtr xprop)
         syslog(LOG_ERR, "Creation of new %s property failed", propname);
         return NULL;
     }
-    if (kind == ICAL_X_PROPERTY) icalproperty_set_x_name(prop, propname);
+    if (kind == ICAL_X_PROPERTY) {
+        icalproperty_set_x_name(prop, propname);
+    }
 
     /* Add parameters */
     node = xmlFirstElementChild(xprop);
@@ -1015,7 +1061,9 @@ static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
     icalcomponent *comp = NULL;
     xmlNodePtr node, xprop, xsub;
 
-    if (!xcomp) return NULL;
+    if (!xcomp) {
+        return NULL;
+    }
 
     /* Get component type */
     kind = icalenum_string_to_component_kind(
@@ -1045,13 +1093,17 @@ static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
     {
         icalproperty *prop = xml_element_to_icalproperty(xprop);
 
-        if (!prop) goto error;
+        if (!prop) {
+            goto error;
+        }
 
         icalcomponent_add_property(comp, prop);
     }
 
     /* Add sub-components */
-    if (!(node = xmlNextElementSibling(node))) return comp;
+    if (!(node = xmlNextElementSibling(node))) {
+        return comp;
+    }
 
     if (xmlStrcmp(node->name, BAD_CAST "components")) {
         syslog(LOG_WARNING,
@@ -1065,7 +1117,9 @@ static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
     {
         icalcomponent *sub = xml_element_to_icalcomponent(xsub);
 
-        if (!sub) goto error;
+        if (!sub) {
+            goto error;
+        }
 
         icalcomponent_add_component(comp, sub);
     }
@@ -1094,7 +1148,9 @@ icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf)
     xmlNodePtr root;
     icalcomponent *ical = NULL;
 
-    if (!buf_len(buf)) return NULL;
+    if (!buf_len(buf)) {
+        return NULL;
+    }
 
     /* Parse the XML request */
     ctxt = xmlNewParserCtxt();

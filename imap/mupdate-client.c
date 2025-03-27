@@ -157,7 +157,9 @@ EXPORTED void mupdate_disconnect(mupdate_handle **hp)
 {
     mupdate_handle *h;
 
-    if (!hp || !(*hp)) return;
+    if (!hp || !(*hp)) {
+        return;
+    }
     h = *hp;
 
     backend_disconnect(h->conn);
@@ -217,7 +219,9 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p + 1, '!')) {
@@ -231,7 +235,9 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the server part, everything is local */
-        if (p) location = p + 1;
+        if (p) {
+            location = p + 1;
+        }
     }
 
     prot_printf(handle->conn->out,
@@ -282,7 +288,9 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p + 1, '!')) {
@@ -296,7 +304,9 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the location part, everything is local */
-        if (p) location = p + 1;
+        if (p) {
+            location = p + 1;
+        }
     }
 
     prot_printf(handle->conn->out,
@@ -344,7 +354,9 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p + 1, '!')) {
@@ -358,7 +370,9 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the server part, everything is local */
-        if (p) location = p + 1;
+        if (p) {
+            location = p + 1;
+        }
     }
 
     prot_printf(handle->conn->out,
@@ -398,7 +412,9 @@ EXPORTED int mupdate_delete(mupdate_handle *handle, const char *mailbox)
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     prot_printf(handle->conn->out,
                 "X%u DELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
@@ -424,7 +440,9 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
 {
     struct mupdate_handle_s *h = (struct mupdate_handle_s *) context;
 
-    if (!h || !cmd || !mdata) return 1;
+    if (!h || !cmd || !mdata) {
+        return 1;
+    }
 
     /* coyp the data to the handle storage */
     /* xxx why can't we just point to the 'mdata' buffers? */
@@ -661,7 +679,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
             handle->cmd.s[0] = toupper((unsigned char) handle->cmd.s[0]);
         }
         for (p = &(handle->cmd.s[1]); *p; p++) {
-            if (Uislower(*p)) *p = toupper((unsigned char) *p);
+            if (Uislower(*p)) {
+                *p = toupper((unsigned char) *p);
+            }
         }
 
         switch (handle->cmd.s[0]) {
@@ -757,7 +777,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
                 syslog(LOG_DEBUG, "mupdate NO response: %s", handle->arg1.s);
                 if (wait_for_ok) {
-                    if (response) *response = MUPDATE_NO;
+                    if (response) {
+                        *response = MUPDATE_NO;
+                    }
                     goto done;
                 }
                 break;
@@ -771,7 +793,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
                 CHECKNEWLINE(handle, ch);
                 if (wait_for_ok) {
-                    if (response) *response = MUPDATE_OK;
+                    if (response) {
+                        *response = MUPDATE_OK;
+                    }
                     goto done;
                 }
                 break;
@@ -835,12 +859,16 @@ EXPORTED void kick_mupdate(void)
     int len;
 
     /* no server? drop out */
-    if (!config_mupdate_server) return;
+    if (!config_mupdate_server) {
+        return;
+    }
 
     /* don't kick on standard backends */
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD
         && config_getstring(IMAPOPT_PROXYSERVERS))
+    {
         return;
+    }
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {

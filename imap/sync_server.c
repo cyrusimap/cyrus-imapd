@@ -250,7 +250,9 @@ int service_init(int argc __attribute__((unused)),
 {
     int opt, r;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -371,34 +373,45 @@ int service_main(int argc __attribute__((unused)),
                             0,
                             &sync_saslconn)
             != SASL_OK)
+        {
             fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
+        }
 
         /* will always return something valid */
         secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
-        if (sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
+        if (sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK) {
             fatal("Failed to set SASL property", EX_TEMPFAIL);
+        }
 
         if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf)
             != SASL_OK)
+        {
             fatal("Failed to set SASL property", EX_TEMPFAIL);
+        }
 
         tcp_disable_nagle(1); /* XXX magic fd */
     }
 
     r = proc_register(
         &proc_handle, 0, config_ident, sync_clienthost, NULL, NULL, NULL);
-    if (r) fatal("unable to register process", EX_IOERR);
+    if (r) {
+        fatal("unable to register process", EX_IOERR);
+    }
     proc_settitle(config_ident, sync_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
     timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
-    if (timeout < 3) timeout = 3;
+    if (timeout < 3) {
+        timeout = 3;
+    }
     prot_settimeout(sync_in, timeout);
 
     prot_setflushonread(sync_in, sync_out);
 
     sync_log_init();
-    if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN)) sync_log_suppress();
+    if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN)) {
+        sync_log_suppress();
+    }
 
     dobanner();
 
@@ -486,7 +499,9 @@ EXPORTED void fatal(const char *s, int code)
         prot_flush(sync_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
     shut_down(code);
 }
 
@@ -506,11 +521,15 @@ static int reset_saslconn(sasl_conn_t **conn)
                           NULL,
                           0,
                           conn);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
@@ -521,7 +540,9 @@ static int reset_saslconn(sasl_conn_t **conn)
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -546,7 +567,9 @@ static void cmdloop(void)
         libcyrus_run_delayed();
 
         /* Parse command name */
-        if ((c = getword(sync_in, &cmd)) == EOF) break;
+        if ((c = getword(sync_in, &cmd)) == EOF) {
+            break;
+        }
 
         if (!cmd.s[0]) {
             prot_printf(sync_out, "BAD Null command\r\n");
@@ -554,19 +577,27 @@ static void cmdloop(void)
             continue;
         }
 
-        if (Uislower(cmd.s[0])) cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+        if (Uislower(cmd.s[0])) {
+            cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+        }
         for (p = &cmd.s[1]; *p; p++) {
-            if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+            if (Uisupper(*p)) {
+                *p = tolower((unsigned char) *p);
+            }
         }
 
         /* Must be an admin */
-        if (sync_userid && !sync_userisadmin) goto noperm;
+        if (sync_userid && !sync_userisadmin) {
+            goto noperm;
+        }
 
         switch (cmd.s[0]) {
         case 'A':
             if (!strcmp(cmd.s, "Authenticate")) {
                 int haveinitresp = 0;
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(sync_in, &arg1);
                 if (!imparse_isatom(arg1.s)) {
                     prot_printf(sync_out, "BAD Invalid mechanism\r\n");
@@ -576,10 +607,16 @@ static void cmdloop(void)
                 if (c == ' ') {
                     haveinitresp = 1;
                     c = getword(sync_in, &arg2);
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(sync_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 if (sync_userid) {
                     prot_printf(sync_out, "BAD Already authenticated\r\n");
@@ -588,7 +625,9 @@ static void cmdloop(void)
                 cmd_authenticate(arg1.s, haveinitresp ? arg2.s : NULL);
                 continue;
             }
-            if (!sync_userid) goto nologin;
+            if (!sync_userid) {
+                goto nologin;
+            }
             if (!strcmp(cmd.s, "Apply")) {
                 kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
@@ -610,17 +649,25 @@ static void cmdloop(void)
 
         case 'C':
             if (!strcmp(cmd.s, "Compress")) {
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(sync_in, &arg1);
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(sync_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
                 cmd_compress(arg1.s);
                 continue;
             }
             break;
 
         case 'G':
-            if (!sync_userid) goto nologin;
+            if (!sync_userid) {
+                goto nologin;
+            }
             if (!strcmp(cmd.s, "Get")) {
                 kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
@@ -642,8 +689,12 @@ static void cmdloop(void)
 
         case 'E':
             if (!strcmp(cmd.s, "Exit")) {
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(sync_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
                 prot_printf(sync_out, "OK Finished\r\n");
                 prot_flush(sync_out);
                 goto exit;
@@ -652,8 +703,12 @@ static void cmdloop(void)
 
         case 'N':
             if (!strcmp(cmd.s, "Noop")) {
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(sync_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
                 prot_printf(sync_out, "OK Noop completed\r\n");
                 continue;
             }
@@ -661,14 +716,20 @@ static void cmdloop(void)
 
         case 'R':
             if (!strcmp(cmd.s, "Restart")) {
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(sync_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
                 /* just clear the GUID cache */
                 cmd_restart(&reserve_list, 1);
                 prot_printf(sync_out, "OK Restarting\r\n");
                 continue;
             }
-            if (!sync_userid) goto nologin;
+            if (!sync_userid) {
+                goto nologin;
+            }
             if (!strcmp(cmd.s, "Restore")) {
                 kl = sync_parseline(sync_in, sync_archive_enabled);
                 if (kl) {
@@ -690,8 +751,12 @@ static void cmdloop(void)
 
         case 'S':
             if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
-                if (c == '\r') c = prot_getc(sync_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(sync_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 /* XXX  discard any input pipelined after STARTTLS */
                 prot_flush(sync_in);
@@ -791,9 +856,10 @@ static void cmd_authenticate(char *mech, char *resp)
             /* failed authentication */
             errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
-            if (r != SASL_NOUSER)
+            if (r != SASL_NOUSER) {
                 sasl_getprop(
                     sync_saslconn, SASL_USERNAME, (const void **) &userid);
+            }
 
             syslog(LOG_NOTICE,
                    "badlogin: %s %s (%s) [%s]",
@@ -843,7 +909,9 @@ static void cmd_authenticate(char *mech, char *resp)
                       sync_userid,
                       NULL,
                       NULL);
-    if (r) fatal("unable to register process", EX_IOERR);
+    if (r) {
+        fatal("unable to register process", EX_IOERR);
+    }
     proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
     syslog(LOG_NOTICE,
@@ -1004,7 +1072,9 @@ static struct partition_list *partition_list_add(char *name,
 
     /* Is name already on list? */
     for (p = pl; p; p = p->next) {
-        if (!strcmp(p->name, name)) return (pl);
+        if (!strcmp(p->name, name)) {
+            return (pl);
+        }
     }
 
     /* Add entry to start of list and return new list */
@@ -1037,7 +1107,9 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
 
     for (res = l->head; res; res = res->next) {
         for (msg = res->list->head; msg; msg = msg->next) {
-            if (!msg->fname) continue;
+            if (!msg->fname) {
+                continue;
+            }
             pl = partition_list_add(res->part, pl);
             xunlink(msg->fname);
         }
@@ -1067,10 +1139,12 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
     }
     partition_list_free(pl);
 
-    if (re_alloc)
+    if (re_alloc) {
         *reserve_listp = sync_reserve_list_create(hash_size);
-    else
+    }
+    else {
         *reserve_listp = NULL;
+    }
 }
 
 /******************************************************************************/

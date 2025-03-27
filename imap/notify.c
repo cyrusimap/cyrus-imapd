@@ -75,7 +75,9 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
     const char *myarg = (arg ? arg : "");
     int len = strlen(myarg) + 1;
 
-    if (*buflen + len > max_size) return -1;
+    if (*buflen + len > max_size) {
+        return -1;
+    }
 
     strcat(buf + *buflen, myarg);
     *buflen += len;
@@ -110,7 +112,9 @@ static void notify_dlist(const char *sockpath,
     dlist_setatom(dl, "USER", user);
     dlist_setatom(dl, "MAILBOX", mailbox);
     il = dlist_newlist(dl, "OPTIONS");
-    for (i = 0; i < nopt; i++) dlist_setatom(il, NULL, options[i]);
+    for (i = 0; i < nopt; i++) {
+        dlist_setatom(il, NULL, options[i]);
+    }
     dlist_setatom(dl, "MESSAGE", message);
     dlist_setatom(dl, "FILEPATH", fname);
 
@@ -145,7 +149,9 @@ static void notify_dlist(const char *sockpath,
     prot_flush(out);
 
     c = dlist_parse(&res, 1, 0, in);
-    if (c == '\r') c = prot_getc(in);
+    if (c == '\r') {
+        c = prot_getc(in);
+    }
     /* XXX - do something with the response?  Like have NOTIFY answer */
     if (c == '\n' && res && res->name) {
         if (strcmp(res->name, "OK")) {
@@ -165,9 +171,15 @@ static void notify_dlist(const char *sockpath,
     }
 
 out:
-    if (in) prot_free(in);
-    if (out) prot_free(out);
-    if (soc >= 0) close(soc);
+    if (in) {
+        prot_free(in);
+    }
+    if (out) {
+        prot_free(out);
+    }
+    if (soc >= 0) {
+        close(soc);
+    }
     dlist_free(&dl);
     dlist_free(&res);
 }
@@ -258,20 +270,34 @@ EXPORTED void notify(const char *method,
      */
 
     r = add_arg(buf, bufsiz, method, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, class, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, priority, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, user, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, mailbox, &buflen);
+    if (!r) {
+        r = add_arg(buf, bufsiz, class, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, bufsiz, priority, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, bufsiz, user, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, bufsiz, mailbox, &buflen);
+    }
 
     snprintf(noptstr, sizeof(noptstr), "%d", nopt);
-    if (!r) r = add_arg(buf, bufsiz, noptstr, &buflen);
+    if (!r) {
+        r = add_arg(buf, bufsiz, noptstr, &buflen);
+    }
 
     for (i = 0; !r && i < nopt; i++) {
         r = add_arg(buf, bufsiz, options[i], &buflen);
     }
 
-    if (!r) r = add_arg(buf, bufsiz, message, &buflen);
-    if (!r && fname) r = add_arg(buf, bufsiz, fname, &buflen);
+    if (!r) {
+        r = add_arg(buf, bufsiz, message, &buflen);
+    }
+    if (!r && fname) {
+        r = add_arg(buf, bufsiz, fname, &buflen);
+    }
 
     if (r) {
         syslog(LOG_ERR, "NOTIFY(%s): datagram too large", loginfo);

@@ -134,13 +134,17 @@ int main(int argc, char **argv)
             break;
 
         case 'u':
-            if (wantvalue) usage();
+            if (wantvalue) {
+                usage();
+            }
             wantuid = 1;
             wantvalue = atoi(optarg);
             break;
 
         case 's':
-            if (wantvalue) usage();
+            if (wantvalue) {
+                usage();
+            }
             wantvalue = atoi(optarg);
             break;
 
@@ -226,9 +230,15 @@ static int do_examine(struct findall_data *data, void *rock)
     int *ok_count = (int *) rock;
 
     /* don't want partial matches or intermediate mailboxes */
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
-    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
+    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) {
+        return 0;
+    }
 
     signals_poll();
 
@@ -253,11 +263,15 @@ static int do_examine(struct findall_data *data, void *rock)
     printf("  User Flags: ");
 
     for (i = 0; i < MAX_USER_FLAGS; i++) {
-        if (!mailbox->h.flagname[i]) break;
+        if (!mailbox->h.flagname[i]) {
+            break;
+        }
         printf("%s ", mailbox->h.flagname[i]);
     }
 
-    if (!i) printf("[none]");
+    if (!i) {
+        printf("[none]");
+    }
 
     printf("\n");
 
@@ -321,10 +335,14 @@ static int do_examine(struct findall_data *data, void *rock)
         const struct index_record *record = msg_record(msg);
         if (wantvalue) {
             if (wantuid) {
-                if (record->uid != wantvalue) continue;
+                if (record->uid != wantvalue) {
+                    continue;
+                }
             }
             else {
-                if (msgno != wantvalue) continue;
+                if (msgno != wantvalue) {
+                    continue;
+                }
             }
             flag = 1;
         }
@@ -343,8 +361,9 @@ static int do_examine(struct findall_data *data, void *rock)
                record->last_updated,
                record->system_flags);
 
-        if (mailbox->i.minor_version >= 6)
+        if (mailbox->i.minor_version >= 6) {
             printf("      > CACHEVER:%-2u", record->cache_version);
+        }
 
         if (mailbox->i.minor_version >= 7) {
             printf(" GUID:%s", message_guid_encode(&record->guid));
@@ -361,23 +380,38 @@ static int do_examine(struct findall_data *data, void *rock)
         printf("\n");
 
         printf("      > INTERNALFLAGS:");
-        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             printf(" FLAG_INTERNAL_EXPUNGED");
-        if (record->internal_flags & FLAG_INTERNAL_UNLINKED)
+        }
+        if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
             printf(" FLAG_INTERNAL_UNLINKED");
-        if (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+        }
+        if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             printf(" FLAG_INTERNAL_ARCHIVED");
-        if (record->internal_flags & FLAG_INTERNAL_NEEDS_CLEANUP)
+        }
+        if (record->internal_flags & FLAG_INTERNAL_NEEDS_CLEANUP) {
             printf(" FLAG_INTERNAL_NEEDS_CLEANUP");
-        if (record->internal_flags & FLAG_INTERNAL_SNOOZED)
+        }
+        if (record->internal_flags & FLAG_INTERNAL_SNOOZED) {
             printf(" FLAG_INTERNAL_SNOOZED");
+        }
 
         printf("      > SYSTEMFLAGS:");
-        if (record->system_flags & FLAG_SEEN) printf(" FLAG_SEEN");
-        if (record->system_flags & FLAG_DRAFT) printf(" FLAG_DRAFT");
-        if (record->system_flags & FLAG_DELETED) printf(" FLAG_DELETED");
-        if (record->system_flags & FLAG_FLAGGED) printf(" FLAG_FLAGGED");
-        if (record->system_flags & FLAG_ANSWERED) printf(" FLAG_ANSWERED");
+        if (record->system_flags & FLAG_SEEN) {
+            printf(" FLAG_SEEN");
+        }
+        if (record->system_flags & FLAG_DRAFT) {
+            printf(" FLAG_DRAFT");
+        }
+        if (record->system_flags & FLAG_DELETED) {
+            printf(" FLAG_DELETED");
+        }
+        if (record->system_flags & FLAG_FLAGGED) {
+            printf(" FLAG_FLAGGED");
+        }
+        if (record->system_flags & FLAG_ANSWERED) {
+            printf(" FLAG_ANSWERED");
+        }
 
         printf("\n");
 
@@ -399,7 +433,9 @@ static int do_examine(struct findall_data *data, void *rock)
             print_rec("Subjct", cacheitem_buf(record, CACHE_SUBJECT));
         }
 
-        if (flag) break;
+        if (flag) {
+            break;
+        }
     }
 
     mailbox_iter_done(&iter);
@@ -410,7 +446,9 @@ static int do_examine(struct findall_data *data, void *rock)
 
     mailbox_close(&mailbox);
 
-    if (!r && ok_count) (*ok_count)++;
+    if (!r && ok_count) {
+        (*ok_count)++;
+    }
 
     return r;
 }
@@ -428,9 +466,15 @@ static int do_quota(struct findall_data *data, void *rock)
     int *ok_count = (int *) rock;
 
     /* don't want partial matches or intermediate mailboxes */
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
-    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
+    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) {
+        return 0;
+    }
 
     signals_poll();
 
@@ -482,7 +526,9 @@ static int do_quota(struct findall_data *data, void *rock)
 
 done:
     mailbox_close(&mailbox);
-    if (!r && ok_count) (*ok_count)++;
+    if (!r && ok_count) {
+        (*ok_count)++;
+    }
 
     return r;
 }
@@ -508,9 +554,15 @@ static int do_compare(struct findall_data *data, void *rock)
     int *ok_count = (int *) rock;
 
     /* don't want partial matches or intermediate mailboxes */
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
-    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
+    if (data->mbentry->mbtype == MBTYPE_INTERMEDIATE) {
+        return 0;
+    }
 
     signals_poll();
 
@@ -553,7 +605,9 @@ static int do_compare(struct findall_data *data, void *rock)
     while ((dirent = readdir(dirp))) {
         uint32_t uid;
 
-        if (sscanf(dirent->d_name, "%u.", &uid) != 1) continue;
+        if (sscanf(dirent->d_name, "%u.", &uid) != 1) {
+            continue;
+        }
 
         if (count >= nalloc) {
             nalloc += 2;
@@ -616,16 +670,21 @@ static int do_compare(struct findall_data *data, void *rock)
             printf("\n");
 
             printf("   Size: ");
-            if (record)
+            if (record) {
                 printf("%-50u", record->size);
-            else
+            }
+            else {
                 printf("%-50s", "");
+            }
 
-            if (fs_record.uid && !message_guid_isnull(&fs_record.guid))
+            if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
                 printf("\t%-50u", fs_record.size);
+            }
             printf("\n");
 
-            if (record) time_to_rfc5322(record->sentdate, sent, sizeof(sent));
+            if (record) {
+                time_to_rfc5322(record->sentdate, sent, sizeof(sent));
+            }
             printf("   Date: %-50s", sent);
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
@@ -672,7 +731,9 @@ done:
     mailbox_close(&mailbox);
     free(uids);
 
-    if (!r && ok_count) (*ok_count)++;
+    if (!r && ok_count) {
+        (*ok_count)++;
+    }
 
     if (r) {
         fprintf(stderr, "%s: %s\n", extname, error_message(r));

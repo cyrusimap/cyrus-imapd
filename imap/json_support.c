@@ -53,11 +53,15 @@ static int parse_date(json_t *json, unsigned utc)
     const char *s = NULL;
     struct tm date;
 
-    if (!json_is_string(json)) return 0;
+    if (!json_is_string(json)) {
+        return 0;
+    }
 
     /* parse full-date and partial-time up to time-secfrac */
     s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%S", &date);
-    if (!s) return 0;
+    if (!s) {
+        return 0;
+    }
 
     /* parse time-secfrac */
     if (*s == '.') {
@@ -70,7 +74,9 @@ static int parse_date(json_t *json, unsigned utc)
     }
 
     /* parse time-numoffset */
-    if (*s == '-' || *s == '+') s++;
+    if (*s == '-' || *s == '+') {
+        s++;
+    }
     s = strptime(s, "%H:%M", &date);
 
     return (s && *s == '\0');
@@ -93,7 +99,9 @@ int json_array_find(json_t *array, const char *needle)
 
     json_array_foreach(array, i, val)
     {
-        if (!strcmp(needle, json_string_value(val))) return i;
+        if (!strcmp(needle, json_string_value(val))) {
+            return i;
+        }
     }
 
     return -1;

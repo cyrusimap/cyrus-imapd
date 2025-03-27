@@ -90,7 +90,9 @@ HIDDEN void jmap_admin_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_admin_capabilities(json_t *account_capabilities)
 {
-    if (!httpd_userisadmin) return;
+    if (!httpd_userisadmin) {
+        return;
+    }
 
     json_object_set_new(
         account_capabilities, JMAP_ADMIN_EXTENSION, json_object());
@@ -111,7 +113,9 @@ struct rewrite_calevent_privacy_rock
 static int rewrite_calevent_privacy_find_uids(void *vrock,
                                               struct caldav_data *cdata)
 {
-    if (!cdata->comp_flags.privacy) return 0;
+    if (!cdata->comp_flags.privacy) {
+        return 0;
+    }
 
     struct rewrite_calevent_privacy_rock *rock = vrock;
 
@@ -137,14 +141,20 @@ static int rewrite_calevent_privacy_update_uid(struct mailbox *mbox,
 
     struct index_record record;
     int r = mailbox_find_index_record(mbox, uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     struct caldav_data *cdata;
     r = caldav_lookup_imapuid(caldavdb, mbox->mbentry, uid, &cdata, 1);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     ical = record_to_ical(mbox, &record, NULL);
-    if (!ical) goto done;
+    if (!ical) {
+        goto done;
+    }
 
     buf_setcstr(buf, cdata->dav.resource);
     cdata->comp_flags.privacy = 0;
@@ -159,10 +169,14 @@ static int rewrite_calevent_privacy_update_uid(struct mailbox *mbox,
                                     NULL,
                                     NULL,
                                     sched_addrs);
-    if (ret != HTTP_NO_CONTENT) r = IMAP_INTERNAL;
+    if (ret != HTTP_NO_CONTENT) {
+        r = IMAP_INTERNAL;
+    }
 
 done:
-    if (ical) icalcomponent_free(ical);
+    if (ical) {
+        icalcomponent_free(ical);
+    }
     return r;
 }
 
@@ -295,8 +309,9 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
     if (json_object_size(rewritten_uids)) {
         json_object_set_new(rock->rewritten, userid, rewritten_uids);
     }
-    else
+    else {
         json_decref(rewritten_uids);
+    }
 
     if (json_object_size(not_rewritten_uids)) {
         json_t *err = json_pack("{s:s s:o}",
@@ -306,8 +321,9 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
                                 not_rewritten_uids);
         json_object_set_new(rock->not_rewritten, userid, err);
     }
-    else
+    else {
         json_decref(not_rewritten_uids);
+    }
 
     strarray_free(mbkeys);
 
@@ -328,7 +344,9 @@ done:
     memset(&rock->txn, 0, sizeof(struct transaction_t));
     buf_free(&rock->buf);
 
-    if (caldavdb) caldav_close(caldavdb);
+    if (caldavdb) {
+        caldav_close(caldavdb);
+    }
     mboxname_release(&namespacelock);
     conversations_commit(&cstate);
     strarray_fini(&sched_addrs);
@@ -437,12 +455,18 @@ static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     struct migrate_defaultalarms_rock *rock = vrock;
 
-    if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
+    if (mbentry->mbtype != MBTYPE_CALENDAR) {
+        goto done;
+    }
 
-    if (!mboxname_iscalendarmailbox(mbname_intname(mbname), 0)) goto done;
+    if (!mboxname_iscalendarmailbox(mbname_intname(mbname), 0)) {
+        goto done;
+    }
 
     const strarray_t *boxes = mbname_boxes(mbname);
-    if (strarray_size(boxes) < 2) goto done;
+    if (strarray_size(boxes) < 2) {
+        goto done;
+    }
 
     const char *collname = strarray_nth(boxes, strarray_size(boxes) - 1);
     if (!strncmpsafe(collname, SCHED_INBOX, strlen(SCHED_INBOX) - 1)

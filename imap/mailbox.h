@@ -385,10 +385,11 @@ struct mailbox_iter;
     136 /* bytes of \Deleted messages                                          \
          * for this mailbox (64-bit) */
 #define OFFSET_QUOTA_EXPUNGED_USED                                             \
-    144                          /* bytes of \Expunged messages                \
-                                  * for this mailbox (64-bit) */
-#define OFFSET_CHANGES_EPOCH 152 /* time from which we can calculate changes   \
-                                  */
+    144 /* bytes of \Expunged messages                                         \
+         * for this mailbox (64-bit) */
+#define OFFSET_CHANGES_EPOCH                                                   \
+    152 /* time from which we can calculate changes                            \
+         */
 #define OFFSET_HEADER_CRC 156
 
 #define PRE19_OFFSET_MAILBOX_OPTIONS 60

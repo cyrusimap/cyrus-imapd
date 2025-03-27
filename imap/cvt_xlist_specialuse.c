@@ -77,10 +77,12 @@ static void usage(void)
 static void save_argv0(const char *s)
 {
     const char *slash = strrchr(s, '/');
-    if (slash)
+    if (slash) {
         argv0 = slash + 1;
-    else
+    }
+    else {
         argv0 = s;
+    }
 }
 
 EXPORTED void fatal(const char *s, int code)
@@ -88,7 +90,9 @@ EXPORTED void fatal(const char *s, int code)
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -98,14 +102,17 @@ static void xlist_lookup_cb(const char *key, const char *val, void *rock)
     hash_table *xlistp = (hash_table *) rock;
     struct buf *flag;
 
-    if (strncmp(key, "xlist-", 6)) return;
+    if (strncmp(key, "xlist-", 6)) {
+        return;
+    }
 
     flag = buf_new();
     buf_putc(flag, '\\');
     buf_appendcstr(flag, key + 6);
 
-    if (verbose)
+    if (verbose) {
         printf("will set %s for folders named %s\n", buf_cstring(flag), val);
+    }
 
     hash_insert(val, flag, xlistp);
 }
@@ -119,26 +126,36 @@ static int set_specialuse(struct findall_data *data, void *rock)
     char *existing;
     int r;
 
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
-    if (!mbname_userid(data->mbname)) return 0;
+    if (!mbname_userid(data->mbname)) {
+        return 0;
+    }
 
     boxes = mbname_boxes(data->mbname);
-    if (boxes->count != 1) /* INBOX, or nested subfolder */
+    if (boxes->count != 1) /* INBOX, or nested subfolder */ {
         return 0;
+    }
 
     flag = hash_lookup(strarray_nth(boxes, 0), xlist);
-    if (!flag || !buf_len(flag)) return 0;
+    if (!flag || !buf_len(flag)) {
+        return 0;
+    }
 
     existing = mboxlist_find_specialuse(buf_cstring(flag),
                                         mbname_userid(data->mbname));
     if (existing) {
-        if (verbose)
+        if (verbose) {
             printf("not setting specialuse %s for %s, already exists as %s\n",
                    buf_cstring(flag),
                    mbname_intname(data->mbname),
                    existing);
+        }
         free(existing);
         return 0;
     }
@@ -199,7 +216,9 @@ int main(int argc, char **argv)
         }
     }
 
-    if (optind == argc) usage();
+    if (optind == argc) {
+        usage();
+    }
 
     cyrus_init(alt_config,
                "cvt_xlist_specialuse",

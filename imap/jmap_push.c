@@ -121,7 +121,9 @@ EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
                     *modseq = lastmodseq;
                 }
 
-                if (*type != '*') break;
+                if (*type != '*') {
+                    break;
+                }
             }
         }
     }
@@ -142,9 +144,13 @@ EXPORTED void jmap_push_done(struct transaction_t *txn)
 {
     jmap_push_ctx_t *jpush = (jmap_push_ctx_t *) txn->push_ctx;
 
-    if (!jpush) return;
+    if (!jpush) {
+        return;
+    }
 
-    if (jpush->wait) prot_removewaitevent(txn->conn->pin, jpush->wait);
+    if (jpush->wait) {
+        prot_removewaitevent(txn->conn->pin, jpush->wait);
+    }
     free(jpush->accountid);
     free(jpush->inboxname);
     buf_free(&jpush->buf);

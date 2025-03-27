@@ -180,7 +180,9 @@ static void jmap_init(struct buf *serverinfo)
         namespace_jmap.enabled = 0;
     }
 
-    if (!namespace_jmap.enabled) return;
+    if (!namespace_jmap.enabled) {
+        return;
+    }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
@@ -204,7 +206,9 @@ static void jmap_init(struct buf *serverinfo)
     jmap_admin_init(&my_jmap_settings);
 
     jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
-    if (jmap_push_poll < 0) jmap_push_poll = 0;
+    if (jmap_push_poll < 0) {
+        jmap_push_poll = 0;
+    }
 
     if (ws_enabled) {
         json_object_set_new(my_jmap_settings.server_capabilities,
@@ -283,7 +287,9 @@ static int jmap_parse_path(const char *path,
     size_t len;
     char *p;
 
-    if (*tgt->path) return 0; /* Already parsed */
+    if (*tgt->path) {
+        return 0; /* Already parsed */
+    }
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, path, sizeof(tgt->path));
@@ -305,7 +311,9 @@ static int jmap_parse_path(const char *path,
     p += len;
 
     /* Check for path after prefix */
-    if (*p == '/') p++;
+    if (*p == '/') {
+        p++;
+    }
     if (*p) {
         /* Get "collection" */
         tgt->collection = p;
@@ -382,7 +390,9 @@ static int meth_get(struct transaction_t *txn,
     int r =
         jmap_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     if (!(txn->req_tgt.allow & ALLOW_READ)) {
         return HTTP_NOT_FOUND;
     }
@@ -398,7 +408,9 @@ static int meth_get(struct transaction_t *txn,
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         r = http_pipe_req_resp(be, txn);
         if (!r && (txn->req_tgt.flags == JMAP_ENDPOINT_WS)) {
@@ -497,7 +509,9 @@ static int meth_post(struct transaction_t *txn,
 
     ret = jmap_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
 
-    if (ret) return ret;
+    if (ret) {
+        return ret;
+    }
     if (!(txn->req_tgt.allow & ALLOW_POST)) {
         return HTTP_NOT_ALLOWED;
     }
@@ -513,7 +527,9 @@ static int meth_post(struct transaction_t *txn,
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -544,7 +560,9 @@ static int meth_post(struct transaction_t *txn,
         json_decref(req);
     }
 
-    if (ret) ret = jmap_error_response(txn, ret, &res);
+    if (ret) {
+        ret = jmap_error_response(txn, ret, &res);
+    }
 
     /* ensure we didn't leak anything! */
     assert(!open_mailboxes_exist());
@@ -576,8 +594,9 @@ static char *parse_accept_header(const char **hdr)
         char *subtype = NULL;
         struct param *params = NULL;
         message_parse_type(accept->token, &type, &subtype, &params);
-        if (type && subtype && !strchr(type, '*') && !strchr(subtype, '*'))
+        if (type && subtype && !strchr(type, '*') && !strchr(subtype, '*')) {
             val = xstrdup(accept->token);
+        }
         free(type);
         free(subtype);
         param_free(&params);
@@ -678,7 +697,9 @@ HIDDEN int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
     int res = 0;
 
-    if (!ctx->blobid) return HTTP_NOT_FOUND;
+    if (!ctx->blobid) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Call getblob handlers */
     int i;
@@ -688,7 +709,9 @@ HIDDEN int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 
         jmap_getblob_ctx_reset(ctx);
         res = handler(req, ctx);
-        if (res) break;
+        if (res) {
+            break;
+        }
     }
 
     if (!res) {
@@ -697,7 +720,9 @@ HIDDEN int jmap_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         res = jmap_getblob_default_handler(req, ctx);
     }
 
-    if (res == HTTP_OK) return 0;
+    if (res == HTTP_OK) {
+        return 0;
+    }
 
     return res;
 }
@@ -885,7 +910,9 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentryp)
         free(inboxname);
         mboxlist_entry_free(&inboxentry);
 
-        if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+        if (r != IMAP_MAILBOX_NONEXISTENT) {
+            goto done;
+        }
         /* create the synthetic entry for with the mailbox name inside */
         *mbentryp = mboxlist_entry_create();
         (*mbentryp)->name = xstrdup(uploadname);
@@ -1063,8 +1090,12 @@ static int data_domain(const char *p, size_t n)
     int r = DOMAIN_7BIT;
 
     while (n--) {
-        if (!*p) return DOMAIN_BINARY;
-        if (*p & 0x80) r = DOMAIN_8BIT;
+        if (!*p) {
+            return DOMAIN_BINARY;
+        }
+        if (*p & 0x80) {
+            r = DOMAIN_8BIT;
+        }
         p++;
     }
 
@@ -1164,7 +1195,9 @@ static int jmap_upload(struct transaction_t *txn)
         free(subtype);
         param_free(&param);
     }
-    if (!normalisedtype) normalisedtype = xstrdup("application/octet-stream");
+    if (!normalisedtype) {
+        normalisedtype = xstrdup("application/octet-stream");
+    }
 
     if (!strcasecmp(normalisedtype, "message/rfc822")) {
         struct protstream *stream = prot_readmap(data, datalen);
@@ -1330,17 +1363,21 @@ done:
     strarray_fini(&flags);
     append_removestage(stage);
     if (mailbox) {
-        if (r)
+        if (r) {
             mailbox_abort(mailbox);
-        else
+        }
+        else {
             r = mailbox_commit(mailbox);
+        }
         mailbox_close(&mailbox);
     }
     if (cstate) {
-        if (r)
+        if (r) {
             conversations_abort(&cstate);
-        else
+        }
+        else {
             conversations_commit(&cstate);
+        }
     }
 
     /* ensure we didn't leak anything! */
@@ -1605,7 +1642,9 @@ static int jmap_ws(struct transaction_t *txn,
         /* Log JMAP methods */
         const char **hdr = spool_getheader(txn->req_hdrs, ":jmap");
 
-        if (hdr) buf_printf(logbuf, "; jmap=%s", hdr[0]);
+        if (hdr) {
+            buf_printf(logbuf, "; jmap=%s", hdr[0]);
+        }
 
         /* Add logheaders */
         if (strarray_size(httpd_log_headers)) {
@@ -1736,7 +1775,9 @@ static struct prot_waitevent *es_push(struct protstream *s
 /* Handle a GET on the eventsource endpoint */
 static int jmap_eventsource(struct transaction_t *txn)
 {
-    if (!jmap_push_poll) return HTTP_NO_CONTENT;
+    if (!jmap_push_poll) {
+        return HTTP_NO_CONTENT;
+    }
 
     jmap_push_ctx_t *jpush = NULL;
     modseq_t lastmodseq = ULLONG_MAX;

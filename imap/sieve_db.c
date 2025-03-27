@@ -112,14 +112,18 @@ static void init_internal()
 EXPORTED int sievedb_init(void)
 {
     int r = sqldb_init();
-    if (!r) sieve_initialized = 1;
+    if (!r) {
+        sieve_initialized = 1;
+    }
     return r;
 }
 
 EXPORTED int sievedb_done(void)
 {
     int r = sqldb_done();
-    if (!r) sieve_initialized = 0;
+    if (!r) {
+        sieve_initialized = 0;
+    }
     return r;
 }
 
@@ -131,7 +135,9 @@ EXPORTED struct sieve_db *sievedb_open_userid(const char *userid)
     init_internal();
 
     sqldb_t *db = dav_open_userid(userid);
-    if (!db) return NULL;
+    if (!db) {
+        return NULL;
+    }
 
     sievedb = xzmalloc(sizeof(struct sieve_db));
     sievedb->db = db;
@@ -154,7 +160,9 @@ EXPORTED struct sieve_db *sievedb_open_mailbox(struct mailbox *mailbox)
     }
 
     sqldb_t *db = dav_open_mailbox(mailbox);
-    if (!db) return NULL;
+    if (!db) {
+        return NULL;
+    }
 
     sievedb = xzmalloc(sizeof(struct sieve_db));
     sievedb->db = db;
@@ -167,7 +175,9 @@ EXPORTED int sievedb_close(struct sieve_db *sievedb)
 {
     int r = 0;
 
-    if (!sievedb) return 0;
+    if (!sievedb) {
+        return 0;
+    }
 
     buf_free(&sievedb->mailbox);
     buf_free(&sievedb->id);
@@ -227,7 +237,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     sdata->modseq = sqlite3_column_int64(stmt, 5);
     sdata->createdmodseq = sqlite3_column_int64(stmt, 6);
     sdata->alive = sqlite3_column_int(stmt, 11);
-    if (!rrock->tombstones && !sdata->alive) return 0;
+    if (!rrock->tombstones && !sdata->alive) {
+        return 0;
+    }
 
     sdata->rowid = sqlite3_column_int(stmt, 0);
     sdata->creationdate = sqlite3_column_int(stmt, 1);
@@ -285,7 +297,9 @@ EXPORTED int sievedb_lookup_name(struct sieve_db *sievedb,
     *result = memset(&sdata, 0, sizeof(struct sieve_data));
 
     r = sqldb_exec(sievedb->db, CMD_SELNAME, bval, &read_cb, &rrock);
-    if (!r && !sdata.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !sdata.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     return r;
 }
@@ -310,7 +324,9 @@ EXPORTED int sievedb_lookup_id(struct sieve_db *sievedb,
     *result = memset(&sdata, 0, sizeof(struct sieve_data));
 
     r = sqldb_exec(sievedb->db, CMD_SELID, bval, &read_cb, &rrock);
-    if (!r && !sdata.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !sdata.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     return r;
 }
@@ -335,7 +351,9 @@ EXPORTED int sievedb_lookup_imapuid(struct sieve_db *sievedb,
     *result = memset(&sdata, 0, sizeof(struct sieve_data));
 
     r = sqldb_exec(sievedb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
-    if (!r && !sdata.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !sdata.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     sdata.imap_uid = imap_uid;
 
@@ -354,7 +372,9 @@ EXPORTED int sievedb_lookup_active(struct sieve_db *sievedb,
     *result = memset(&sdata, 0, sizeof(struct sieve_data));
 
     r = sqldb_exec(sievedb->db, CMD_SELACTIVE, NULL, &read_cb, &rrock);
-    if (!r && !sdata.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !sdata.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     return r;
 }
@@ -485,7 +505,9 @@ EXPORTED int sievedb_get_updates(struct sieve_db *sievedb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
-    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    if (!oldmodseq) {
+        buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    }
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
     r = sqldb_exec(sievedb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
@@ -541,7 +563,9 @@ static int lock_and_execute(struct mailbox *mailbox,
 
     r = proc(mailbox, sdata, rock);
 
-    if (unlock) mailbox_unlock_index(mailbox, NULL);
+    if (unlock) {
+        mailbox_unlock_index(mailbox, NULL);
+    }
 
     return r;
 }
@@ -708,7 +732,9 @@ static int activate_script(struct mailbox *mailbox,
     init_internal();
 
     if (activate) {
-        if (sdata->isactive) return 0;
+        if (sdata->isactive) {
+            return 0;
+        }
 
         r = mailbox_find_index_record(mailbox, sdata->imap_uid, &record);
         if (r) {
@@ -917,7 +943,9 @@ EXPORTED int sieve_ensure_folder(const char *userid,
             r = mkdir(sievedir, 0755);
         }
     }
-    if (r) return IMAP_IOERROR;
+    if (r) {
+        return IMAP_IOERROR;
+    }
 
     struct mboxlock *namespacelock = NULL;
     char *mboxname = sieve_mboxname(userid);
@@ -1039,7 +1067,9 @@ EXPORTED int sieve_script_rebuild(const char *userid,
         mailbox_close(&mailbox);
         free(mboxname);
 
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
     else if (r == CYRUSDB_NOTFOUND) {
         /* Get mtime of script file */

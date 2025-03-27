@@ -85,7 +85,9 @@ EXPORTED int sievedir_foreach(const char *sievedir,
     assert(sievedir);
 
     if ((dp = opendir(sievedir)) == NULL) {
-        if (errno == ENOENT) return SIEVEDIR_OK;
+        if (errno == ENOENT) {
+            return SIEVEDIR_OK;
+        }
 
         xsyslog(LOG_ERR,
                 "IOERROR: can not open sieve directory",
@@ -101,11 +103,15 @@ EXPORTED int sievedir_foreach(const char *sievedir,
         char target[PATH_MAX] = "";
         struct stat sbuf;
 
-        if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
+        if (!strcmp(name, ".") || !strcmp(name, "..")) {
+            continue;
+        }
 
         strlcpy(path + dir_len, name, sizeof(path) - dir_len);
 
-        if (lstat(path, &sbuf) < 0) continue;
+        if (lstat(path, &sbuf) < 0) {
+            continue;
+        }
 
         if (S_ISREG(sbuf.st_mode)) {
             if (flags) {
@@ -133,7 +139,9 @@ EXPORTED int sievedir_foreach(const char *sievedir,
             /* fetch link target */
             ssize_t tgt_len = readlink(path, target, sizeof(target) - 1);
 
-            if (tgt_len > 0) target[tgt_len] = '\0';
+            if (tgt_len > 0) {
+                target[tgt_len] = '\0';
+            }
         }
         else if (flags & SIEVEDIR_IGNORE_JUNK) {
             /* ignore all other entries */
@@ -141,7 +149,9 @@ EXPORTED int sievedir_foreach(const char *sievedir,
         }
 
         r = func(sievedir, name, &sbuf, target, rock);
-        if (r != SIEVEDIR_OK) break;
+        if (r != SIEVEDIR_OK) {
+            break;
+        }
     }
 
     closedir(dp);
@@ -160,7 +170,9 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
 
     int fd = open(buf_cstring(&buf), 0);
     buf_free(&buf);
-    if (fd < 0) return NULL;
+    if (fd < 0) {
+        return NULL;
+    }
 
     buf_refresh_mmap(&buf, 1, fd, script, MAP_UNKNOWN_LEN, "sieve");
 
@@ -180,12 +192,16 @@ EXPORTED int sievedir_valid_name(const struct buf *name)
     const char *ptr;
 
     /* must be at least one character long */
-    if (len < 1) return 0;
+    if (len < 1) {
+        return 0;
+    }
 
     ptr = buf_base(name);
 
     for (lup = 0; lup < len; lup++) {
-        if ((ptr[lup] == '/') || (ptr[lup] == '\0')) return 0;
+        if ((ptr[lup] == '/') || (ptr[lup] == '\0')) {
+            return 0;
+        }
     }
 
     return (lup < SIEVEDIR_MAX_NAME_LEN);
@@ -219,7 +235,9 @@ EXPORTED const char *sievedir_get_active(const char *sievedir)
 
 EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
 {
-    if (!name) return 0;
+    if (!name) {
+        return 0;
+    }
 
     return (strcmpnull(name, sievedir_get_active(sievedir)) == 0);
 }
@@ -355,11 +373,15 @@ EXPORTED int sievedir_put_script(const char *sievedir,
     int r = sieve_script_parse_string(NULL, content, &myerrors, &s);
 
     if (r) {
-        if (s) sieve_script_free(&s);
-        if (errors)
+        if (s) {
+            sieve_script_free(&s);
+        }
+        if (errors) {
             *errors = myerrors;
-        else
+        }
+        else {
             free(myerrors);
+        }
         return SIEVEDIR_INVALID;
     }
 
@@ -432,10 +454,16 @@ EXPORTED int sievedir_put_script(const char *sievedir,
 done:
     if (fd >= 0) {
         close(fd);
-        if (r) xunlink(new_bcpath);
+        if (r) {
+            xunlink(new_bcpath);
+        }
     }
-    if (bc) sieve_free_bytecode(&bc);
-    if (s) sieve_script_free(&s);
+    if (bc) {
+        sieve_free_bytecode(&bc);
+    }
+    if (s) {
+        sieve_script_free(&s);
+    }
 
     return (r ? r : SIEVEDIR_OK);
 }
@@ -443,11 +471,15 @@ done:
 
 EXPORTED int sievedir_valid_path(const char *sievedir)
 {
-    if (!sievedir || *sievedir != '/') return 0;
+    if (!sievedir || *sievedir != '/') {
+        return 0;
+    }
 
     char *resolved = realpath(sievedir, NULL);
 
-    if (!resolved && errno != ENOENT) return 0;
+    if (!resolved && errno != ENOENT) {
+        return 0;
+    }
 
     free(resolved);
 

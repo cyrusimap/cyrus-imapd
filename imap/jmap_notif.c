@@ -94,12 +94,15 @@ HIDDEN int jmap_create_notify_collection(const char *userid,
                                    NULL /*mboxptr*/);
 
         /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r)
+        if (r == IMAP_MAILBOX_LOCKED) {
+            r = 0;
+        }
+        if (r) {
             syslog(LOG_ERR,
                    "IOERROR: failed to create %s (%s)",
                    notifmboxname,
                    error_message(r));
+        }
 
         r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
         mboxname_release(&namespacelock);
@@ -163,7 +166,9 @@ static int append_eventnotif(const char *from,
     const char *ical_uid =
         json_string_value(json_object_get(jnotif, "calendarEventId"));
     int notifications_max = config_getint(IMAPOPT_JMAP_MAX_CALENDAREVENTNOTIFS);
-    if (notifications_max < 0) notifications_max = 0;
+    if (notifications_max < 0) {
+        notifications_max = 0;
+    }
 
     // Prune notifications each time we create a new one.
     if (notifications_max) {
@@ -210,7 +215,9 @@ static int append_eventnotif(const char *from,
                     dlist_getatom(dl, "ID", &val) && !strcmp(val, ical_uid);
             }
             dlist_free(&dl);
-            if (!matches_uid) continue;
+            if (!matches_uid) {
+                continue;
+            }
 
             struct index_record record = *msg_record(msg);
             if (!(record.system_flags & FLAG_DELETED)
@@ -276,7 +283,9 @@ static int append_eventnotif(const char *from,
     fputs(notifstr, fp);
 
     fclose(fp);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     struct appendstate as;
     r = append_setup_mbox(&as,
@@ -288,7 +297,9 @@ static int append_eventnotif(const char *from,
                           0,
                           0,
                           EVENT_MESSAGE_NEW);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     struct body *body = NULL;
     r = append_fromstage(&as, &body, stage, created, 0, NULL, 0, NULL);
@@ -335,7 +346,9 @@ static json_t *build_eventnotif(const char *type,
 
     json_t *jchangedby = json_object();
     if (byemail) {
-        if (!strncasecmp(byemail, "mailto:", 7)) byemail += 7;
+        if (!strncasecmp(byemail, "mailto:", 7)) {
+            byemail += 7;
+        }
         json_object_set_new(jchangedby, "email", json_string(byemail));
     }
     if (byname) {
@@ -478,14 +491,17 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
             jpatch = jmap_patchobject_create(jevent, tmp, 0 /*no_remove*/);
             json_decref(tmp);
         }
-        else
+        else {
             type = "destroyed";
+        }
     }
     else {
         type = "created";
         jevent = jmapical_tojmap(newical, NULL, NULL);
     }
-    if (!jevent) goto done;
+    if (!jevent) {
+        goto done;
+    }
 
     jmapical_remove_peruserprops(jevent);
     jmapical_remove_peruserprops(jpatch);
@@ -505,7 +521,9 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
         from = strconcat("<", byemail, ">", NULL);
         if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-name"))) {
             char *val = charset_decode_mimeheader(*hdr, CHARSET_KEEPCASE);
-            if (val) buf_initmcstr(&byname, val);
+            if (val) {
+                buf_initmcstr(&byname, val);
+            }
         }
     }
     else {
@@ -548,7 +566,9 @@ done:
 
 HIDDEN int calendar_has_sharees(const mbentry_t *mbentry)
 {
-    if (!mbentry->acl) return 0;
+    if (!mbentry->acl) {
+        return 0;
+    }
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     const char *ownerid = mbname_userid(mbname);

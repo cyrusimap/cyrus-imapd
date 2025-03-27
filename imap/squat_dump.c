@@ -172,8 +172,12 @@ static int dump_one(char *name)
     }
 
 out:
-    if (fd >= 0) close(fd);
-    if (index != NULL) squat_search_close(index);
+    if (fd >= 0) {
+        close(fd);
+    }
+    if (index != NULL) {
+        squat_search_close(index);
+    }
     free(fname);
     return 0;
 }
@@ -197,9 +201,13 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "squat_dump", 0, CONFIG_NEED_PARTITION_DATA);
 
-    if (optind == argc) usage(argv[0]);
+    if (optind == argc) {
+        usage(argv[0]);
+    }
 
-    for (i = optind; i < argc; i++) dump_one(argv[i]);
+    for (i = optind; i < argc; i++) {
+        dump_one(argv[i]);
+    }
 
     cyrus_done();
 

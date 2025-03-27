@@ -112,13 +112,16 @@ static int do_search(const char *mboxname,
     memset(&init, 0, sizeof(struct index_init));
 
     for (i = 0; i < nwords; i++) {
-        if (i) buf_putc(&querytext, ' ');
+        if (i) {
+            buf_putc(&querytext, ' ');
+        }
         buf_appendcstr(&querytext, words[i]);
     }
-    if (verbose)
+    if (verbose) {
         fprintf(stderr,
                 "search_test: IMAP query is \"%s\"\n",
                 buf_cstring(&querytext));
+    }
     buf_putc(&querytext, '\r');
     buf_cstring(&querytext);
 
@@ -171,19 +174,28 @@ static int do_search(const char *mboxname,
 
     hash_enumerate(&query->folders_by_name, dump_one_folder, query);
 
-    if (verbose)
+    if (verbose) {
         fprintf(stderr,
                 "search_test: ran query in %.6f sec\n",
                 timesub(&start_time, &end_time));
+    }
 
 out:
-    if (pin) prot_free(pin);
-    if (pout) prot_free(pout);
-    if (searchargs) freesearchargs(searchargs);
+    if (pin) {
+        prot_free(pin);
+    }
+    if (pout) {
+        prot_free(pout);
+    }
+    if (searchargs) {
+        freesearchargs(searchargs);
+    }
     search_query_free(query);
     index_close(&state);
     buf_free(&querytext);
-    if (init.authstate) auth_freestate(init.authstate);
+    if (init.authstate) {
+        auth_freestate(init.authstate);
+    }
     return !!r;
 }
 
@@ -204,13 +216,16 @@ static int do_serialise(char **words, int nwords)
     struct timeval start_time, end_time;
 
     for (i = 0; i < nwords; i++) {
-        if (i) buf_putc(&querytext, ' ');
+        if (i) {
+            buf_putc(&querytext, ' ');
+        }
         buf_appendcstr(&querytext, words[i]);
     }
-    if (verbose)
+    if (verbose) {
         fprintf(stderr,
                 "search_test: IMAP query is \"%s\"\n",
                 buf_cstring(&querytext));
+    }
     buf_putc(&querytext, '\r');
     buf_cstring(&querytext);
 
@@ -240,24 +255,34 @@ static int do_serialise(char **words, int nwords)
     gettimeofday(&start_time, NULL);
     str = search_expr_serialise(searchargs->root);
     gettimeofday(&end_time, NULL);
-    if (verbose)
+    if (verbose) {
         fprintf(stderr,
                 "search_test: serialised query in %.6f sec\n",
                 timesub(&start_time, &end_time));
+    }
 
     gettimeofday(&start_time, NULL);
     e = search_expr_unserialise(str);
     gettimeofday(&end_time, NULL);
-    if (verbose)
+    if (verbose) {
         fprintf(stderr,
                 "search_test: unserialised query in %.6f sec\n",
                 timesub(&start_time, &end_time));
+    }
 
 out:
-    if (pin) prot_free(pin);
-    if (pout) prot_free(pout);
-    if (searchargs) freesearchargs(searchargs);
-    if (e) search_expr_free(e);
+    if (pin) {
+        prot_free(pin);
+    }
+    if (pout) {
+        prot_free(pout);
+    }
+    if (searchargs) {
+        freesearchargs(searchargs);
+    }
+    if (e) {
+        search_expr_free(e);
+    }
     free(str);
     return !!r;
 }
@@ -314,8 +339,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (optind == argc) usage(argv[0]);
-    if (mode == SEARCH && !mboxname) usage(argv[0]);
+    if (optind == argc) {
+        usage(argv[0]);
+    }
+    if (mode == SEARCH && !mboxname) {
+        usage(argv[0]);
+    }
 
     cyrus_init(alt_config,
                "search_test",
@@ -329,7 +358,9 @@ int main(int argc, char **argv)
     case SEARCH:
         if (!userid) {
             userid = freeme = mboxname_to_userid(mboxname);
-            if (!userid) usage(argv[0]);
+            if (!userid) {
+                usage(argv[0]);
+            }
         }
 
         r = do_search(mboxname, multiple, userid, argv + optind, argc - optind);
@@ -360,7 +391,9 @@ EXPORTED void fatal(const char *s, int code)
     fprintf(stderr, "search_test: %s\n", s);
     cyrus_done();
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }

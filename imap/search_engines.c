@@ -128,7 +128,9 @@ EXPORTED int search_part_is_body(int part)
 EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox,
                                                int opts)
 {
-    if (!mailbox) return NULL;
+    if (!mailbox) {
+        return NULL;
+    }
 
     const struct search_engine *se = search_engine();
     return (se->begin_search ? se->begin_search(mailbox, opts) : NULL);
@@ -137,7 +139,9 @@ EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox,
 EXPORTED void search_end_search(search_builder_t *bx)
 {
     const struct search_engine *se = search_engine();
-    if (se->end_search) se->end_search(bx);
+    if (se->end_search) {
+        se->end_search(bx);
+    }
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
@@ -175,28 +179,38 @@ static int flush_batch(search_text_receiver_t *rx, int flags, ptrarray_t *batch)
 
         const char *fname;
         r = message_get_fname(msg, &fname);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         r = warmup_file(fname, 0, 0);
-        if (r)
+        if (r) {
             return r; /* means we failed to open a file,
                          so we'll fail later anyway */
+        }
     }
 
-    if (flags & SEARCH_UPDATE_ALLOW_PARTIALS)
+    if (flags & SEARCH_UPDATE_ALLOW_PARTIALS) {
         indexflags |= INDEX_GETSEARCHTEXT_ALLOW_PARTIALS;
+    }
 
     for (i = 0; i < batch->count; i++) {
         message_t *msg = ptrarray_nth(batch, i);
-        if (!r) r = index_getsearchtext(msg, NULL, rx, indexflags);
+        if (!r) {
+            r = index_getsearchtext(msg, NULL, rx, indexflags);
+        }
         message_unref(&msg);
     }
     ptrarray_truncate(batch, 0);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     if (rx->flush) {
         r = rx->flush(rx);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     return r;
@@ -311,9 +325,13 @@ static void warmup_attachextract_cache(dynarray_t *attachparts)
         struct attachpart *ap = dynarray_nth(attachparts, i);
 
         if (strcmpsafe(ap->fname, fname)) {
-            if (mapped) map_free(&mapped, &mapped_len);
+            if (mapped) {
+                map_free(&mapped, &mapped_len);
+            }
 
-            if (fd != -1) close(fd);
+            if (fd != -1) {
+                close(fd);
+            }
 
             fd = open(ap->fname, O_RDONLY);
             if (fd == -1) {
@@ -364,9 +382,13 @@ static void warmup_attachextract_cache(dynarray_t *attachparts)
         buf_free(&data);
     }
 
-    if (mapped) map_free(&mapped, &mapped_len);
+    if (mapped) {
+        map_free(&mapped, &mapped_len);
+    }
 
-    if (fd != -1) close(fd);
+    if (fd != -1) {
+        close(fd);
+    }
 
     buf_free(&buf);
 }
@@ -384,7 +406,9 @@ static int flush_attachparts(search_text_receiver_t *rx,
     for (int i = 0; i < dynarray_size(attachparts); i++) {
         struct attachpart *ap = dynarray_nth(attachparts, i);
 
-        if (prev_uid == ap->imap_uid) continue;
+        if (prev_uid == ap->imap_uid) {
+            continue;
+        }
 
         prev_uid = ap->imap_uid;
 
@@ -429,8 +453,9 @@ static void build_batch(search_text_receiver_t *rx,
      * we've indexed it when we actually haven't */
     struct mailbox_iter *iter =
         mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials)
+    if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials) {
         mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
+    }
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
@@ -453,10 +478,12 @@ static void build_batch(search_text_receiver_t *rx,
             indexlevel = 0;
         }
 
-        if (!indexlevel)
+        if (!indexlevel) {
             ptrarray_append(batch, msg);
-        else
+        }
+        else {
             message_unref(&msg);
+        }
     }
 
     mailbox_iter_done(&iter);
@@ -476,12 +503,16 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     char *mboxname = xstrdup(mailbox_name(mailbox));
 
     r = rx->begin_mailbox(rx, mailbox, flags);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     // Build message batch
 
     build_batch(rx, mailbox, min_indexlevel, flags, &batch, &is_incomplete);
-    if (!batch.count) goto done;
+    if (!batch.count) {
+        goto done;
+    }
 
     // Split messages with attachments from batch
     int newlen = 0;
@@ -490,23 +521,32 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         if (create_attachpart(mailbox, msg, &attachparts)) {
             message_unref(&msg);
         }
-        else
+        else {
             ptrarray_set(&batch, newlen++, msg);
+        }
     }
 
-    if (newlen < ptrarray_size(&batch)) ptrarray_truncate(&batch, newlen);
+    if (newlen < ptrarray_size(&batch)) {
+        ptrarray_truncate(&batch, newlen);
+    }
 
     // Index text-only messages
     if (batch.count) {
         r = flush_batch(rx, flags, &batch);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
-    if (!dynarray_size(&attachparts)) goto done;
+    if (!dynarray_size(&attachparts)) {
+        goto done;
+    }
 
     // Release mailbox lock
     r = rx->end_mailbox(rx, mailbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
     mailbox_close(&mailbox);
 
     // Log timestamp
@@ -529,10 +569,14 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     // Retake mailbox lock
     r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = rx->begin_mailbox(rx, mailbox, flags);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     // Log timestamp
     if (flags & SEARCH_UPDATE_VERBOSE) {
@@ -568,8 +612,12 @@ done:
     free(mboxname);
     {
         int r2 = rx->end_mailbox(rx, mailbox);
-        if (r) return r;
-        if (r2) return r2;
+        if (r) {
+            return r;
+        }
+        if (r2) {
+            return r2;
+        }
     }
     return is_incomplete ? IMAP_AGAIN : 0;
 }
@@ -611,7 +659,9 @@ EXPORTED char *search_describe_internalised(void *internalised)
 EXPORTED void search_free_internalised(void *internalised)
 {
     const struct search_engine *se = search_engine();
-    if (se->free_internalised) se->free_internalised(internalised);
+    if (se->free_internalised) {
+        se->free_internalised(internalised);
+    }
 }
 
 EXPORTED int search_list_files(const char *userid, strarray_t *files)

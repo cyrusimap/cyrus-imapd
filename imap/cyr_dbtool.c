@@ -88,7 +88,9 @@ static int read_key_value(char **keyptr,
     *keylen = 0;
     *vallen = 0;
     while ((c = getchar()) != EOF) {
-        if (c == '\n') break;
+        if (c == '\n') {
+            break;
+        }
         if ((c == '\t') && inkey) {
             inkey = 0;
             *valptr = stack + *keylen + 1;
@@ -174,11 +176,19 @@ static void batch_commands(struct db *db)
         buf_reset(&val);
         line++;
         c = getword(in, &cmd);
-        if (c == EOF) break;
+        if (c == EOF) {
+            break;
+        }
 
-        if (c == ' ') c = getbastring(in, NULL, &key);
-        if (c == ' ') c = getbastring(in, NULL, &val);
-        if (c == '\r') c = prot_getc(in);
+        if (c == ' ') {
+            c = getbastring(in, NULL, &key);
+        }
+        if (c == ' ') {
+            c = getbastring(in, NULL, &val);
+        }
+        if (c == '\r') {
+            c = prot_getc(in);
+        }
         if (c != '\n') {
             r = IMAP_PROTOCOL_BAD_PARAMETERS;
             goto done;
@@ -196,12 +206,16 @@ static void batch_commands(struct db *db)
             else if (!strcmp(cmd.s, "SHOW")) {
                 r = cyrusdb_foreach(
                     db, key.s, key.len, NULL, aprinter_cb, out, tidp);
-                if (r) goto done;
+                if (r) {
+                    goto done;
+                }
                 prot_flush(out);
             }
             else if (!strcmp(cmd.s, "SET")) {
                 r = cyrusdb_store(db, key.s, key.len, val.s, val.len, tidp);
-                if (r) goto done;
+                if (r) {
+                    goto done;
+                }
             }
             else if (!strcmp(cmd.s, "GET")) {
                 const char *res;
@@ -221,7 +235,9 @@ static void batch_commands(struct db *db)
             }
             else if (!strcmp(cmd.s, "DELETE")) {
                 r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
-                if (r) goto done;
+                if (r) {
+                    goto done;
+                }
             }
             else if (!strcmp(cmd.s, "COMMIT")) {
                 if (!tidp) {
@@ -229,7 +245,9 @@ static void batch_commands(struct db *db)
                     goto done;
                 }
                 r = cyrusdb_commit(db, tid);
-                if (r) goto done;
+                if (r) {
+                    goto done;
+                }
                 tid = NULL;
                 tidp = NULL;
             }
@@ -239,7 +257,9 @@ static void batch_commands(struct db *db)
                     goto done;
                 }
                 r = cyrusdb_abort(db, tid);
-                if (r) goto done;
+                if (r) {
+                    goto done;
+                }
                 tid = NULL;
                 tidp = NULL;
             }
@@ -252,7 +272,9 @@ static void batch_commands(struct db *db)
 
 done:
     if (r) {
-        if (tid) cyrusdb_abort(db, tid);
+        if (tid) {
+            cyrusdb_abort(db, tid);
+        }
         fprintf(stderr,
                 "FAILED: line %d at cmd %.*s with error %s\n",
                 line,
@@ -402,7 +424,9 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "cyr_dbtool", 0, 0);
 
     r = cyrusdb_lockopen(argv[optind + 1], fname, db_flags, &db, tidp);
-    if (r != CYRUSDB_OK) fatal("can't open database", EX_TEMPFAIL);
+    if (r != CYRUSDB_OK) {
+        fatal("can't open database", EX_TEMPFAIL);
+    }
 
     if ((is_get = !strcmp(action, "get"))
         || (is_delete = !strcmp(action, "delete"))
@@ -424,16 +448,22 @@ int main(int argc, char *argv[])
         while (loop) {
             if (is_get) {
                 r = cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
-                if (r) break;
+                if (r) {
+                    break;
+                }
                 printf("%.*s\n", (int) reslen, res);
             }
             else if (is_set) {
                 r = cyrusdb_store(db, key, keylen, value, vallen, tidp);
-                if (r) break;
+                if (r) {
+                    break;
+                }
             }
             else if (is_delete) {
                 r = cyrusdb_delete(db, key, keylen, tidp, 1);
-                if (r) break;
+                if (r) {
+                    break;
+                }
             }
             loop = 0;
             if (use_stdin) {
@@ -456,7 +486,9 @@ int main(int argc, char *argv[])
     }
     else if (!strcmp(action, "dump")) {
         int level = 1;
-        if ((argc - optind) > 3) level = atoi(argv[optind + 3]);
+        if ((argc - optind) > 3) {
+            level = atoi(argv[optind + 3]);
+        }
         r = cyrusdb_dump(db, level);
     }
     else if (!strcmp(action, "consistent")) {
@@ -482,7 +514,9 @@ int main(int argc, char *argv[])
         tid = NULL;
     }
     if (r) {
-        if (tid) cyrusdb_abort(db, tid);
+        if (tid) {
+            cyrusdb_abort(db, tid);
+        }
         printf("ERROR: %s\n", cyrusdb_strerror(r));
     }
 

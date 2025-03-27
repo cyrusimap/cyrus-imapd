@@ -76,7 +76,7 @@ struct namespace_t namespace_cgi = {
     "/cgi-bin",
     NULL,
     http_allow_noauth,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ | ALLOW_POST,
     cgi_init,
@@ -132,7 +132,9 @@ static void req_hdr_to_env(const char *name,
                                   NULL };
 
     /* Ignore private headers in our cache */
-    if (name[0] == ':') return;
+    if (name[0] == ':') {
+        return;
+    }
 
     for (hdr = skip; *hdr && strcasecmp(name, *hdr); hdr++);
 
@@ -184,7 +186,9 @@ static int meth_get(struct transaction_t *txn,
     memset(&resp_body, 0, sizeof(struct body_t));
 
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
-    if (!prefix) return HTTP_NOT_FOUND;
+    if (!prefix) {
+        return HTTP_NOT_FOUND;
+    }
 
     if ((urls = config_getstring(IMAPOPT_HTTPALLOWEDURLS))) {
         tok_t tok = TOK_INITIALIZER(urls, " \t", TOK_TRIMLEFT | TOK_TRIMRIGHT);
@@ -193,17 +197,21 @@ static int meth_get(struct transaction_t *txn,
         while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
         tok_fini(&tok);
 
-        if (!token) return HTTP_NOT_FOUND;
+        if (!token) {
+            return HTTP_NOT_FOUND;
+        }
     }
 
     /* Construct path to script */
     extra = strchr(txn->req_uri->path + strlen(namespace_cgi.prefix) + 1, '/');
     buf_setcstr(&txn->buf, prefix);
-    if (extra)
+    if (extra) {
         buf_appendmap(
             &txn->buf, txn->req_uri->path, extra - txn->req_uri->path);
-    else
+    }
+    else {
         buf_appendcstr(&txn->buf, txn->req_uri->path);
+    }
     script = buf_release(&txn->buf);
     cwd = strconcat(prefix, namespace_cgi.prefix, NULL);
 
@@ -298,7 +306,9 @@ static int meth_get(struct transaction_t *txn,
         /* Read [CR]LF separating headers and body */
         int c = prot_getc(cmd->stdout_prot);
 
-        if (c == '\r') c = prot_getc(cmd->stdout_prot);
+        if (c == '\r') {
+            c = prot_getc(cmd->stdout_prot);
+        }
         if (c != '\n') {
             syslog(LOG_ERR,
                    "Failed to read newline from CGI script %s",
@@ -327,13 +337,19 @@ static int meth_get(struct transaction_t *txn,
         }
     }
 
-    if (command_pclose(&cmd)) ret = HTTP_SERVER_ERROR;
+    if (command_pclose(&cmd)) {
+        ret = HTTP_SERVER_ERROR;
+    }
 
-    if (ret) goto done;
+    if (ret) {
+        goto done;
+    }
 
     /* Check for a status code */
     hdr = spool_getheader(resp_hdrs, "Status");
-    if (hdr) code = http_status_to_code(atoi(hdr[0]));
+    if (hdr) {
+        code = http_status_to_code(atoi(hdr[0]));
+    }
 
     /* Check the type of the CGI response */
     hdr = spool_getheader(resp_hdrs, "Location");
@@ -351,19 +367,25 @@ static int meth_get(struct transaction_t *txn,
             ret = examine_request(txn, hdr[0]);
 
             /* Reprocess the requested method on new URI */
-            if (!ret) ret = process_request(txn);
+            if (!ret) {
+                ret = process_request(txn);
+            }
 
             goto done;
         }
         else {
             /* Client Redirect */
-            if (!code) code = HTTP_FOUND;
+            if (!code) {
+                code = HTTP_FOUND;
+            }
             txn->location = hdr[0];
         }
     }
     else {
         /* Document */
-        if (!code) code = HTTP_OK;
+        if (!code) {
+            code = HTTP_OK;
+        }
     }
 
     /* Output response */

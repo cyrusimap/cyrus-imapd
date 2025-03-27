@@ -57,12 +57,12 @@ static int meth_get_db(struct transaction_t *txn, void *params);
 /* Namespace for DB lookups */
 struct namespace_t namespace_dblookup = {
     URL_NS_DBLOOKUP,
- /*enabled*/ 1,
+    /*enabled*/ 1,
     "dblookup",
     "/dblookup",
     NULL,
     http_allow_noauth,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ,
     NULL,
@@ -109,10 +109,14 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
-    if (!db) goto done;
+    if (!db) {
+        goto done;
+    }
 
     array = carddav_getemail(db, key);
-    if (!array) goto done;
+    if (!array) {
+        goto done;
+    }
 
     json = json_array();
     for (i = 0; i < strarray_size(array); i++) {
@@ -130,8 +134,12 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
 
 done:
     free(result);
-    if (array) strarray_free(array);
-    if (db) carddav_close(db);
+    if (array) {
+        strarray_free(array);
+    }
+    if (db) {
+        carddav_close(db);
+    }
     return ret;
 }
 
@@ -156,17 +164,25 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     }
 
     mboxname = mboxname_abook(userid, mailbox);
-    if (!mboxname) goto done;
+    if (!mboxname) {
+        goto done;
+    }
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
-    if (!mbentry) goto done;
+    if (!mbentry) {
+        goto done;
+    }
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
-    if (!db) goto done;
+    if (!db) {
+        goto done;
+    }
 
     array = carddav_getemail2details(db, key, mbentry, NULL);
-    if (!array) goto done;
+    if (!array) {
+        goto done;
+    }
 
     json = json_array();
     for (i = 0; i < strarray_size(array); i++) {
@@ -186,8 +202,12 @@ done:
     free(mboxname);
     free(result);
     mboxlist_entry_free(&mbentry);
-    if (array) strarray_free(array);
-    if (db) carddav_close(db);
+    if (array) {
+        strarray_free(array);
+    }
+    if (db) {
+        carddav_close(db);
+    }
     return ret;
 }
 
@@ -213,17 +233,25 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     }
 
     mboxname = mboxname_abook(userid, mailbox);
-    if (!mboxname) goto done;
+    if (!mboxname) {
+        goto done;
+    }
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
-    if (!mbentry) goto done;
+    if (!mbentry) {
+        goto done;
+    }
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
-    if (!db) goto done;
+    if (!db) {
+        goto done;
+    }
 
     array = carddav_getemail2details(db, key, mbentry, &ispinned);
-    if (!array) goto done;
+    if (!array) {
+        goto done;
+    }
 
     uids = json_array();
     for (i = 0; i < strarray_size(array); i++) {
@@ -245,8 +273,12 @@ done:
     free(mboxname);
     free(result);
     mboxlist_entry_free(&mbentry);
-    if (array) strarray_free(array);
-    if (db) carddav_close(db);
+    if (array) {
+        strarray_free(array);
+    }
+    if (db) {
+        carddav_close(db);
+    }
     return ret;
 }
 
@@ -278,17 +310,25 @@ static int get_uid2groups(struct transaction_t *txn,
     }
 
     mboxname = mboxname_abook(userid, mailbox);
-    if (!mboxname) goto done;
+    if (!mboxname) {
+        goto done;
+    }
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
-    if (!mbentry) goto done;
+    if (!mbentry) {
+        goto done;
+    }
 
     /* XXX init just incase carddav not enabled? */
     db = carddav_open_userid(userid);
-    if (!db) goto done;
+    if (!db) {
+        goto done;
+    }
 
     array = carddav_getuid2groups(db, key, mbentry, otheruser);
-    if (!array) goto done;
+    if (!array) {
+        goto done;
+    }
 
     json = json_object();
     for (i = 0; i < strarray_size(array); i += 2) {
@@ -310,8 +350,12 @@ done:
     free(mboxname);
     free(result);
     mboxlist_entry_free(&mbentry);
-    if (array) strarray_free(array);
-    if (db) carddav_close(db);
+    if (array) {
+        strarray_free(array);
+    }
+    if (db) {
+        carddav_close(db);
+    }
     return ret;
 }
 
@@ -324,27 +368,39 @@ static int meth_get_db(struct transaction_t *txn,
     userhdrs = spool_getheader(txn->req_hdrs, "User");
     keyhdrs = spool_getheader(txn->req_hdrs, "Key");
 
-    if (!userhdrs) return HTTP_BAD_REQUEST;
-    if (!keyhdrs) return HTTP_BAD_REQUEST;
+    if (!userhdrs) {
+        return HTTP_BAD_REQUEST;
+    }
+    if (!keyhdrs) {
+        return HTTP_BAD_REQUEST;
+    }
 
-    if (userhdrs[1]) return HTTP_NOT_ALLOWED;
-    if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
+    if (userhdrs[1]) {
+        return HTTP_NOT_ALLOWED;
+    }
+    if (keyhdrs[1]) {
+        return HTTP_NOT_ALLOWED;
+    }
 
     spool_cache_header(xstrdup(":dblookup"),
                        strconcat(userhdrs[0], "/", keyhdrs[0], (char *) NULL),
                        txn->req_hdrs);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email"))
+    if (!strcmp(txn->req_uri->path, "/dblookup/email")) {
         return get_email(txn, userhdrs[0], keyhdrs[0]);
+    }
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
+    if (!strcmp(txn->req_uri->path, "/dblookup/email2uids")) {
         return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
+    }
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email2details"))
+    if (!strcmp(txn->req_uri->path, "/dblookup/email2details")) {
         return get_email2details(txn, userhdrs[0], keyhdrs[0]);
+    }
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
+    if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups")) {
         return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
+    }
 
     return HTTP_NOT_FOUND;
 }

@@ -130,7 +130,9 @@ static void find_tier(const char *key,
 {
     strarray_t *tiers = (strarray_t *) rock;
     const char *partition = strstr(key, "searchpartition-");
-    if (!partition) return;
+    if (!partition) {
+        return;
+    }
     strarray_appendm(tiers, xstrndup(key, partition - key));
 }
 #endif /* USE_XAPIAN */
@@ -146,21 +148,26 @@ static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
 
     // mbname
     json_t *jmbname = json_object();
-    if (mbname_userid(mbname))
+    if (mbname_userid(mbname)) {
         json_object_set_new(jmbname, "userid", json_string(userid));
-    if (mbname_domain(mbname))
+    }
+    if (mbname_domain(mbname)) {
         json_object_set_new(
             jmbname, "domain", json_string(mbname_domain(mbname)));
-    if (mbname_localpart(mbname))
+    }
+    if (mbname_localpart(mbname)) {
         json_object_set_new(
             jmbname, "localpart", json_string(mbname_localpart(mbname)));
-    if (mbname_isdeleted(mbname))
+    }
+    if (mbname_isdeleted(mbname)) {
         json_object_set_new(
             jmbname, "isdeleted", json_integer(mbname_isdeleted(mbname)));
+    }
     json_t *jboxes = json_array();
     const strarray_t *boxes = mbname_boxes(mbname);
-    for (i = 0; i < strarray_size(boxes); i++)
+    for (i = 0; i < strarray_size(boxes); i++) {
         json_array_append_new(jboxes, json_string(strarray_nth(boxes, i)));
+    }
     json_object_set_new(jmbname, "boxes", jboxes);
     json_object_set_new(
         jmbname, "intname", json_string(mbname_intname(mbname)));
@@ -245,7 +252,9 @@ static int do_paths(struct findall_data *data, void *rock)
     struct options_t *opts = (struct options_t *) rock;
 
     /* don't want partial matches */
-    if (!data || !data->is_exactmatch) return 0;
+    if (!data || !data->is_exactmatch) {
+        return 0;
+    }
 
     /* Ignore "reserved" entries, like they aren't there */
     if (data->mbentry->mbtype & MBTYPE_RESERVE) {
@@ -268,9 +277,10 @@ static int do_paths(struct findall_data *data, void *rock)
         }
         else {
             // ignore all paths and just print this
-            if (!opts->do_json)
+            if (!opts->do_json) {
                 printf(
                     "%s!%s\n", data->mbentry->server, data->mbentry->partition);
+            }
         }
     }
     else if (!data->mbentry->uniqueid
@@ -299,28 +309,38 @@ static int do_paths(struct findall_data *data, void *rock)
     else {
         if (opts->paths & DO_ARCHIVE) {
             const char *path = mbentry_archivepath(data->mbentry, 0);
-            if (opts->paths == DO_ALL) printf("Archive: ");
+            if (opts->paths == DO_ALL) {
+                printf("Archive: ");
+            }
             printf("%s\n", path);
         }
         if (opts->paths & DO_DATA) {
             const char *path = mbentry_datapath(data->mbentry, 0);
-            if (opts->paths == DO_ALL) printf("Data: ");
+            if (opts->paths == DO_ALL) {
+                printf("Data: ");
+            }
             printf("%s\n", path);
         }
         if (opts->paths & DO_META) {
             const char *path = mbentry_metapath(data->mbentry, 0, 0);
-            if (opts->paths == DO_ALL) printf("Meta: ");
+            if (opts->paths == DO_ALL) {
+                printf("Meta: ");
+            }
             printf("%s\n", path);
         }
         if (opts->paths & DO_SIEVE) {
             const char *path = user_sieve_path(mbname_userid(data->mbname));
-            if (opts->paths == DO_ALL) printf("Sieve: ");
+            if (opts->paths == DO_ALL) {
+                printf("Sieve: ");
+            }
             printf("%s\n", path);
         }
         if (opts->paths & DO_USER) {
             // different interface - caller must free
             char *path = mboxname_conf_getpath(data->mbname, NULL);
-            if (opts->paths == DO_ALL) printf("User: ");
+            if (opts->paths == DO_ALL) {
+                printf("User: ");
+            }
             printf("%s\n", path);
             free(path);
         }
@@ -390,7 +410,9 @@ int main(int argc, char **argv)
             break;
 
         case 'a':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_ALL;
             break;
 
@@ -403,7 +425,9 @@ int main(int argc, char **argv)
             break;
 
         case 'm':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_META;
             break;
 
@@ -416,37 +440,51 @@ int main(int argc, char **argv)
             break;
 
         case 'u':
-            if (opts.mode) usage("Multiple modes given");
+            if (opts.mode) {
+                usage("Multiple modes given");
+            }
             opts.mode = MODE_USER;
             break;
 
         case 'p':
-            if (opts.mode) usage("Multiple modes given");
+            if (opts.mode) {
+                usage("Multiple modes given");
+            }
             opts.mode = MODE_PATH;
             break;
 
         case 'A':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_ARCHIVE;
             break;
 
         case 'D':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_DATA;
             break;
 
         case 'M':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_META;
             break;
 
         case 'S':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_SIEVE;
             break;
 
         case 'U':
-            if (opts.paths) usage("Duplicate selectors given");
+            if (opts.paths) {
+                usage("Duplicate selectors given");
+            }
             opts.paths = DO_USER;
             break;
 
@@ -455,12 +493,16 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!opts.paths) opts.paths = DO_DATA; // default
+    if (!opts.paths) {
+        opts.paths = DO_DATA; // default
+    }
 
     cyrus_init(alt_config, "mbpath", 0, 0);
 
     int nsopts = NAMESPACE_OPTION_ADMIN;
-    if (opts.utf8) nsopts |= NAMESPACE_OPTION_UTF8;
+    if (opts.utf8) {
+        nsopts |= NAMESPACE_OPTION_UTF8;
+    }
     r = mboxname_init_namespace(&mbpath_namespace, nsopts);
     if (r) {
         fatal(error_message(r), EX_SOFTWARE);
@@ -496,8 +538,9 @@ int main(int argc, char **argv)
                 const char *extname =
                     mbname_extname(mbname, &mbpath_namespace, "cyrus");
                 fprintf(stderr, "Invalid mailbox name: '%s'", argv[i]);
-                if (extname && strcmp(extname, argv[i]))
+                if (extname && strcmp(extname, argv[i])) {
                     fprintf(stderr, " ('%s')\n", extname);
+                }
                 fprintf(stderr, "\n");
             }
             if (opts.stop_on_error) {

@@ -237,7 +237,9 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
     while ((token = tok_next(params))) {
         char *value = strchr(token, '=');
 
-        if (value) *value++ = '\0';
+        if (value) {
+            *value++ = '\0';
+        }
 
         if (!strcmp(token, "server_no_context_takeover")) {
             ctx->pmce.deflate.no_context = 1;
@@ -247,25 +249,32 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
         }
         else if (!strcmp(token, "server_max_window_bits")) {
             if (value) {
-                if (*value == '"') value++;
+                if (*value == '"') {
+                    value++;
+                }
                 ctx->pmce.deflate.max_wbits = atoi(value);
             }
-            else
+            else {
                 ctx->pmce.deflate.max_wbits = 0; /* force error */
+            }
         }
         else if (!strcmp(token, "client_max_window_bits")) {
             if (value) {
-                if (*value == '"') value++;
+                if (*value == '"') {
+                    value++;
+                }
                 client_max_wbits = atoi(value);
             }
         }
     }
 
     /* (Re)configure compression context for raw deflate */
-    if (txn->zstrm)
+    if (txn->zstrm) {
         deflateEnd(txn->zstrm);
-    else
+    }
+    else {
         txn->zstrm = xzmalloc(sizeof(z_stream));
+    }
 
     if (deflateInit2(txn->zstrm,
                      Z_DEFAULT_COMPRESSION,
@@ -400,7 +409,9 @@ static int queue_msg(struct transaction_t *txn,
         if (r) {
             syslog(LOG_ERR, "queue_response(): zlib_compress() failed");
 
-            if (err_msg) *err_msg = COMP_FAILED_ERR;
+            if (err_msg) {
+                *err_msg = COMP_FAILED_ERR;
+            }
             return WSLAY_CODE_INTERNAL_SERVER_ERROR;
         }
 
@@ -409,7 +420,9 @@ static int queue_msg(struct transaction_t *txn,
         buf_move(outbuf, &txn->zbuf);
 
         *rsv |= WSLAY_RSV1_BIT;
-        if (pmce_str) *pmce_str = "deflate";
+        if (pmce_str) {
+            *pmce_str = "deflate";
+        }
     }
 
     /* Queue the server response */
@@ -563,14 +576,18 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         }
 
         /* close out the telemetry log for this action */
-        if (logfd >= 0) close(logfd);
+        if (logfd >= 0) {
+            close(logfd);
+        }
         logfd = -1;
 
         break;
     }
 
 err:
-    if (logfd >= 0) close(logfd);
+    if (logfd >= 0) {
+        close(logfd);
+    }
 
     if (err_code) {
         size_t err_msg_len = strlen(err_msg);
@@ -635,7 +652,9 @@ static void parse_extensions(struct transaction_t *txn)
             token = tok_next(&param);
 
             /* Locate a matching extension */
-            while (extp->name && strcmp(token, extp->name)) extp++;
+            while (extp->name && strcmp(token, extp->name)) {
+                extp++;
+            }
 
             /* Check if client wants per-message compression */
             if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
@@ -662,7 +681,9 @@ static void _end_channel(struct transaction_t *txn)
     const char *msg =
         txn->conn->close_str ? txn->conn->close_str : txn->error.desc;
 
-    if (!ctx) return;
+    if (!ctx) {
+        return;
+    }
 
     wslay_event_context_ptr ev = ctx->event;
 
@@ -670,7 +691,9 @@ static void _end_channel(struct transaction_t *txn)
     if (wslay_event_get_write_enabled(ev) && !wslay_event_get_close_sent(ev)) {
         int r;
 
-        if (!msg) msg = "Server unavailable";
+        if (!msg) {
+            msg = "Server unavailable";
+        }
 
         xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
 
@@ -705,7 +728,9 @@ static void _end_channel(struct transaction_t *txn)
 
 static void _h1_shutdown(struct http_connection *conn)
 {
-    if (!conn->ws_ctx || !*conn->ws_ctx) return;
+    if (!conn->ws_ctx || !*conn->ws_ctx) {
+        return;
+    }
 
     struct transaction_t txn = // dummy transaction
         { .conn = conn, .ws_ctx = *conn->ws_ctx, .error = { .desc = NULL } };
@@ -850,13 +875,17 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
     /* Add client data */
     buf_printf(&ctx->log, "%s", txn->conn->clienthost);
-    if (httpd_userid) buf_printf(&ctx->log, " as \"%s\"", httpd_userid);
+    if (httpd_userid) {
+        buf_printf(&ctx->log, " as \"%s\"", httpd_userid);
+    }
     if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
         buf_printf(&ctx->log, " with \"%s\"", hdr[0]);
-        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client"))) {
             buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
-        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With"))) {
             buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
+        }
     }
 
     /* Add request-line */
@@ -897,7 +926,9 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
                       httpd_userid,
                       txn->req_tgt.path,
                       "WS");
-    if (r) fatal("unable to register process", EX_IOERR);
+    if (r) {
+        fatal("unable to register process", EX_IOERR);
+    }
     buf_free(&service);
 
     return 0;

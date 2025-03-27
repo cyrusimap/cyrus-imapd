@@ -149,10 +149,12 @@ static int print_name(const char *name, int utf8)
             putchar('\'');
 
             for (n = 0; *name; name++, n++) {
-                if (*name == '\'')
+                if (*name == '\'') {
                     printf("\\'");
-                else
+                }
+                else {
                     putchar(*name);
+                }
             }
 
             putchar('\'');
@@ -185,7 +187,9 @@ static void long_list(struct stat *statp)
     pwd = getpwuid(statp->st_uid);
     grp = getgrgid(statp->st_gid);
 
-    if (now - statp->st_ctime > SECONDS_PER_YEAR) datefmt = "%b %d  %Y";
+    if (now - statp->st_ctime > SECONDS_PER_YEAR) {
+        datefmt = "%b %d  %Y";
+    }
 
     strftime(datestr, 13, datefmt, localtime(&(statp->st_ctime)));
 
@@ -237,7 +241,9 @@ static int list_cb(struct findall_data *data, void *rock)
     int r = 0;
 
     /* don't want partial matches */
-    if (!data || !data->is_exactmatch) return 0;
+    if (!data || !data->is_exactmatch) {
+        return 0;
+    }
 
     const char *child_name = strarray_nth(mbname_boxes(data->mbname), -1);
     const char *color = "";
@@ -252,7 +258,9 @@ static int list_cb(struct findall_data *data, void *rock)
 
     printf("%s", !(lrock->count++ % lrock->opts->columns) ? "\n" : "    ");
 
-    if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
+    if (lrock->opts->ids) {
+        printf("%-40s ", data->mbentry->uniqueid);
+    }
 
     if (lrock->opts->longlist || lrock->opts->colorize) {
         struct stat sbuf;
@@ -260,15 +268,20 @@ static int list_cb(struct findall_data *data, void *rock)
         memset(&sbuf, 0, sizeof(struct stat));
         r = stat(path, &sbuf);
 
-        if (lrock->opts->longlist) long_list(&sbuf);
+        if (lrock->opts->longlist) {
+            long_list(&sbuf);
+        }
 
         if (lrock->opts->colorize) {
-            if (r != 0)
+            if (r != 0) {
                 color = ANSI_COLOR_RED;
-            else if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL)
+            }
+            else if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) {
                 color = ANSI_COLOR_MAGENTA;
-            else
+            }
+            else {
                 color = ANSI_COLOR_BR_BLUE;
+            }
         }
     }
 
@@ -279,7 +292,9 @@ static int list_cb(struct findall_data *data, void *rock)
         child_name = buf_cstring(&lrock->buf);
     }
     r = print_name(child_name, lrock->opts->utf8);
-    if (*color) printf("%s", ANSI_COLOR_RESET);
+    if (*color) {
+        printf("%s", ANSI_COLOR_RESET);
+    }
 
     if (lrock->opts->column_size) {
         /* fill column */
@@ -288,7 +303,9 @@ static int list_cb(struct findall_data *data, void *rock)
         printf("%-*s", fill > 0 ? fill : 0, "");
     }
 
-    if (lrock->children) strarray_append(lrock->children, data->extname);
+    if (lrock->children) {
+        strarray_append(lrock->children, data->extname);
+    }
 
     return 0;
 }
@@ -304,10 +321,12 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
     if (!r) {
         printf("\n%s:\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
 
-        if (mbentry->mbtype & MBTYPE_RESERVE)
+        if (mbentry->mbtype & MBTYPE_RESERVE) {
             r = IMAP_MAILBOX_NONEXISTENT;
-        else if (mbentry->mbtype & MBTYPE_DELETED)
+        }
+        else if (mbentry->mbtype & MBTYPE_DELETED) {
             r = IMAP_MAILBOX_NONEXISTENT;
+        }
         else if (mbentry->mbtype & MBTYPE_REMOTE) {
             printf("Non-local mailbox: %s!%s\n",
                    mbentry->server,
@@ -327,7 +346,9 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
         /* List children */
         int isinbox = mboxname_isusermailbox(mbname_intname(mbname), 1);
 
-        if (opts->recurse) lrock.children = &names;
+        if (opts->recurse) {
+            lrock.children = &names;
+        }
 
         mbname_push_boxes(mbname, "%");
         mboxlist_findall(&cyr_ls_namespace,
@@ -438,7 +459,9 @@ int main(int argc, char **argv)
         }
     }
 
-    if (opts.columns > 1) opts.column_size = 76 / opts.columns;
+    if (opts.columns > 1) {
+        opts.column_size = 76 / opts.columns;
+    }
 
     cyrus_init(alt_config, "cyr_ls", 0, 0);
 

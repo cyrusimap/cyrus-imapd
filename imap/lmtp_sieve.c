@@ -122,7 +122,9 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = ((deliver_data_t *) v)->m;
 
-    if (phead == NULL) return SIEVE_FAIL;
+    if (phead == NULL) {
+        return SIEVE_FAIL;
+    }
     *body = msg_getheader(m, phead);
 
     if (*body) {
@@ -140,10 +142,12 @@ static void getheaders_cb(const char *name,
 {
     struct buf *contents = (struct buf *) rock;
 
-    if (raw)
+    if (raw) {
         buf_appendcstr(contents, raw);
-    else
+    }
+    else {
         buf_printf(contents, "%s: %s\r\n", name, value);
+    }
 }
 
 static int getheadersection(void *mc, struct buf **contents)
@@ -162,12 +166,16 @@ static int addheader(void *mc, const char *head, const char *body, int index)
 {
     message_data_t *m = ((deliver_data_t *) mc)->m;
 
-    if (head == NULL || body == NULL) return SIEVE_FAIL;
+    if (head == NULL || body == NULL) {
+        return SIEVE_FAIL;
+    }
 
-    if (index < 0)
+    if (index < 0) {
         spool_append_header(xstrdup(head), xstrdup(body), m->hdrcache);
-    else
+    }
+    else {
         spool_prepend_header(xstrdup(head), xstrdup(body), m->hdrcache);
+    }
 
     return SIEVE_OK;
 }
@@ -177,12 +185,16 @@ static int deleteheader(void *mc, const char *head, int index)
 {
     message_data_t *m = ((deliver_data_t *) mc)->m;
 
-    if (head == NULL) return SIEVE_FAIL;
+    if (head == NULL) {
+        return SIEVE_FAIL;
+    }
 
-    if (!index)
+    if (!index) {
         spool_remove_header(head, m->hdrcache);
-    else
+    }
+    else {
         spool_remove_header_instance(head, index, m->hdrcache);
+    }
 
     return SIEVE_OK;
 }
@@ -228,7 +240,9 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
         if (mboxname_isusermailbox(intname, 1)
             && mboxname_userownsmailbox(userid, intname))
         {
-            if (buf_len(&attrib)) buf_putc(&attrib, ' ');
+            if (buf_len(&attrib)) {
+                buf_putc(&attrib, ' ');
+            }
             buf_appendcstr(&attrib, "\\Inbox");
         }
 
@@ -243,8 +257,9 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
             }
             strarray_free(haystack);
         }
-        else
+        else {
             r = 0;
+        }
 
         buf_free(&attrib);
         free(intname);
@@ -253,9 +268,13 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
         for (i = 0; i < strarray_size(uses); i++) {
             char *intname =
                 mboxlist_find_specialuse(strarray_nth(uses, i), userid);
-            if (!intname) r = 0;
+            if (!intname) {
+                r = 0;
+            }
             free(intname);
-            if (!r) break;
+            if (!r) {
+                break;
+            }
         }
     }
 
@@ -293,7 +312,9 @@ static int getfname(void *v, const char **fnamep)
 {
     deliver_data_t *d = (deliver_data_t *) v;
     *fnamep = NULL;
-    if (d->stage) *fnamep = append_stagefname(d->stage);
+    if (d->stage) {
+        *fnamep = append_stagefname(d->stage);
+    }
     /* XXX GLOBAL STUFF HERE */
     return 0;
 }
@@ -348,29 +369,39 @@ static int getenvironment(void *sc __attribute__((unused)),
         if (!strcmp(keyname, "domain")) {
             const char *domain = strchr(config_servername, '.');
 
-            if (domain)
+            if (domain) {
                 domain++;
-            else
+            }
+            else {
                 domain = "";
+            }
 
             *res = xstrdup(domain);
         }
         break;
 
     case 'h':
-        if (!strcmp(keyname, "host")) *res = xstrdup(config_servername);
+        if (!strcmp(keyname, "host")) {
+            *res = xstrdup(config_servername);
+        }
         break;
 
     case 'l':
-        if (!strcmp(keyname, "location")) *res = xstrdup("MDA");
+        if (!strcmp(keyname, "location")) {
+            *res = xstrdup("MDA");
+        }
         break;
 
     case 'n':
-        if (!strcmp(keyname, "name")) *res = xstrdup("Cyrus LMTP");
+        if (!strcmp(keyname, "name")) {
+            *res = xstrdup("Cyrus LMTP");
+        }
         break;
 
     case 'p':
-        if (!strcmp(keyname, "phase")) *res = xstrdup("during");
+        if (!strcmp(keyname, "phase")) {
+            *res = xstrdup("during");
+        }
         break;
 
     case 'r':
@@ -378,15 +409,19 @@ static int getenvironment(void *sc __attribute__((unused)),
             const char *localip, *remoteip,
                 *remotehost = get_clienthost(0, &localip, &remoteip);
 
-            if (!strcmp(keyname + 7, "host"))
+            if (!strcmp(keyname + 7, "host")) {
                 *res = xstrndup(remotehost, strcspn(remotehost, " ["));
-            else if (remoteip && !strcmp(keyname + 7, "ip"))
+            }
+            else if (remoteip && !strcmp(keyname + 7, "ip")) {
                 *res = xstrndup(remoteip, strcspn(remoteip, ";"));
+            }
         }
         break;
 
     case 'v':
-        if (!strcmp(keyname, "version")) *res = xstrdup(CYRUS_VERSION);
+        if (!strcmp(keyname, "version")) {
+            *res = xstrdup(CYRUS_VERSION);
+        }
         break;
     }
 
@@ -409,9 +444,10 @@ static int getbody(void *mc,
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    if (!r)
+    if (!r) {
         message_fetch_part(
             mydata->content, content_types, (struct bodypart ***) parts);
+    }
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
@@ -540,15 +576,20 @@ static int send_rejection(const char *userid,
                config_servername,
                CYRUS_VERSION,
                SIEVE_VERSION);
-    if (origreceip)
+    if (origreceip) {
         buf_printf(&msgbuf, "Original-Recipient: rfc822; %s\r\n", origreceip);
+    }
 
-    if (config_getswitch(IMAPOPT_SIEVE_MDN_PRIVATE))
+    if (config_getswitch(IMAPOPT_SIEVE_MDN_PRIVATE)) {
         buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", session_id());
-    else
+    }
+    else {
         buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", mailreceip);
+    }
 
-    if (origid) buf_printf(&msgbuf, "Original-Message-ID: %s\r\n", origid);
+    if (origid) {
+        buf_printf(&msgbuf, "Original-Message-ID: %s\r\n", origid);
+    }
     buf_printf(&msgbuf,
                "Disposition: "
                "automatic-action/MDN-sent-automatically; deleted\r\n");
@@ -637,7 +678,9 @@ void sieve_srs_init(void)
     }
 
 END:
-    if (saved_secrets) free(saved_secrets);
+    if (saved_secrets) {
+        free(saved_secrets);
+    }
 
     if (srs_status != SRS_SUCCESS) {
         sieve_srs_free();
@@ -733,7 +776,9 @@ static mbentry_t *get_addrbook_mbentry(const char *list, const char *userid)
 
     free(uri);
 
-    if (!abook) return NULL;
+    if (!abook) {
+        return NULL;
+    }
 
     /* MUST match default addressbook case-insensitively */
     if (!strcasecmp(abook, "Default")) {
@@ -773,7 +818,9 @@ static int listcompare(const char *text,
     mbentry_t *mbentry = get_addrbook_mbentry(list, ctx->userid);
     int ret = 0;
 
-    if (!mbentry) return 0;
+    if (!mbentry) {
+        return 0;
+    }
 
     if (!ctx->carddavdb) {
         /* open user's CardDAV DB */
@@ -804,7 +851,9 @@ static int list_addresses(void *rock, struct carddav_data *cdata)
     int i;
 
     /* XXX  Lookup up emails for vcard */
-    if (!cdata->emails) return 0;
+    if (!cdata->emails) {
+        return 0;
+    }
     for (i = 0; i < strarray_size(cdata->emails); i++) {
         /* Find preferred address */
         smtp_envelope_add_rcpt(sm_env, strarray_nth(cdata->emails, i));
@@ -874,7 +923,9 @@ static int send_forward(sieve_redirect_context_t *rc,
         }
     }
 
-    if (srs_return_path) free(srs_return_path);
+    if (srs_return_path) {
+        free(srs_return_path);
+    }
 
     buf_setcstr(&msgbuf, "X-Sieve-Action: redirect\r\n");
 
@@ -894,13 +945,17 @@ static int send_forward(sieve_redirect_context_t *rc,
         }
 
         do {
-            if (!skip) buf_appendcstr(&msgbuf, buf);
+            if (!skip) {
+                buf_appendcstr(&msgbuf, buf);
+            }
         } while (buf[strlen(buf) - 1] != '\n'
                  && prot_fgets(buf, sizeof(buf), file));
     }
 
     r = smtpclient_open(&sm);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     smtpclient_set_auth(sm, ctx->userid);
     smtpclient_set_notify(sm, rc->dsn_notify);
@@ -945,26 +1000,32 @@ static int sieve_redirect(
 
     if (rc->headers) {
         mdata = setup_special_delivery(mdata, rc->headers);
-        if (!mdata)
+        if (!mdata) {
             return SIEVE_FAIL;
-        else
+        }
+        else {
             m = mdata->m;
+        }
     }
 
     res = send_forward(rc, ctx, m->return_path, m->data);
 
-    if (rc->headers) cleanup_special_delivery(mdata);
+    if (rc->headers) {
+        cleanup_special_delivery(mdata);
+    }
 
     if (res == 0) {
         /* mark this message as redirected */
-        if (sievedb) duplicate_mark(&dkey, time(NULL), 0);
+        if (sievedb) {
+            duplicate_mark(&dkey, time(NULL), 0);
+        }
 
         prometheus_increment(CYRUS_LMTP_SIEVE_REDIRECT_TOTAL);
         syslog(LOG_INFO,
                "sieve redirected: %s to: %s",
                m->id ? m->id : "<nomsgid>",
                rc->addr);
-        if (config_auditlog)
+        if (config_auditlog) {
             syslog(LOG_NOTICE,
                    "auditlog: redirect sessionid=<%s> message-id=%s "
                    "target=<%s> userid=<%s>",
@@ -972,6 +1033,7 @@ static int sieve_redirect(
                    m->id ? m->id : "<nomsgid>",
                    rc->addr,
                    ctx->userid);
+        }
         return SIEVE_OK;
     }
     else {
@@ -997,11 +1059,12 @@ static int sieve_discard(void *ac __attribute__((unused)),
 
     /* ok, we won't file it, but log it */
     syslog(LOG_INFO, "sieve discarded: %s", md->id ? md->id : "<nomsgid>");
-    if (config_auditlog)
+    if (config_auditlog) {
         syslog(LOG_NOTICE,
                "auditlog: discard sessionid=<%s> message-id=%s",
                session_id(),
                md->id ? md->id : "<nomsgid>");
+    }
 
     return SIEVE_OK;
 }
@@ -1053,13 +1116,14 @@ static int sieve_reject(
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
         syslog(
             LOG_INFO, "sieve LMTP rejected: %s", md->id ? md->id : "<nomsgid>");
-        if (config_auditlog)
+        if (config_auditlog) {
             syslog(LOG_NOTICE,
                    "auditlog: LMTP reject sessionid=<%s> message-id=%s "
                    "userid=<%s>",
                    session_id(),
                    md->id ? md->id : "<nomsgid>",
                    ctx->userid);
+        }
 
         return SIEVE_OK;
     }
@@ -1075,13 +1139,14 @@ static int sieve_reject(
                "sieve: discarded reject to <> for %s id %s",
                mbname_userid(sd->mbname),
                md->id ? md->id : "<nomsgid>");
-        if (config_auditlog)
+        if (config_auditlog) {
             syslog(LOG_NOTICE,
                    "auditlog: discard-reject sessionid=<%s> message-id=%s "
                    "userid=<%s>",
                    session_id(),
                    md->id ? md->id : "<nomsgid>",
                    ctx->userid);
+        }
         return SIEVE_OK;
     }
 
@@ -1103,7 +1168,7 @@ static int sieve_reject(
                "sieve rejected: %s to: %s",
                md->id ? md->id : "<nomsgid>",
                md->return_path);
-        if (config_auditlog)
+        if (config_auditlog) {
             syslog(LOG_NOTICE,
                    "auditlog: reject sessionid=<%s> message-id=%s target=<%s> "
                    "userid=<%s>",
@@ -1111,6 +1176,7 @@ static int sieve_reject(
                    md->id ? md->id : "<nomsgid>",
                    md->return_path,
                    ctx->userid);
+        }
         return SIEVE_OK;
     }
     else {
@@ -1162,7 +1228,9 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
 
         /* write message body */
         fseek(mydata->m->f, mydata->m->body_offset, SEEK_SET);
-        while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, md.f);
+        while (fgets(buf, sizeof(buf), mydata->m->f)) {
+            fputs(buf, md.f);
+        }
         fflush(md.f);
 
         /* XXX  do we look for updated Date and Message-ID? */
@@ -1171,8 +1239,9 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
 
         mydata = &dd;
     }
-    else
+    else {
         mydata = NULL;
+    }
 
     mbname_free(&mbname);
 
@@ -1225,7 +1294,9 @@ static int sieve_fileinto(void *ac,
                 intname =
                     mboxname_from_external(fc->specialuse, sd->ns, userid);
                 ret = mboxlist_lookup(intname, NULL, NULL);
-                if (ret) free(intname);
+                if (ret) {
+                    free(intname);
+                }
             }
             if (ret) {
                 intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
@@ -1234,14 +1305,18 @@ static int sieve_fileinto(void *ac,
     }
 
     // didn't resolve a name, this will always fail
-    if (!intname) goto done;
+    if (!intname) {
+        goto done;
+    }
 
     if (!mdata) {
         /* just doing destination mailbox resolution */
-        if (fc->resolved_mailbox)
+        if (fc->resolved_mailbox) {
             free(intname);
-        else
+        }
+        else {
             fc->resolved_mailbox = intname;
+        }
         return SIEVE_OK;
     }
 
@@ -1250,7 +1325,9 @@ static int sieve_fileinto(void *ac,
     struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
     unsigned mode = ACTION_FILEINTO;
 
-    if (fc->ikeep_target) mode = ACTION_IMPLICIT | TARGET_SET;
+    if (fc->ikeep_target) {
+        mode = ACTION_IMPLICIT | TARGET_SET;
+    }
 
     if (fc->headers) {
         mdata = setup_special_delivery(mdata, fc->headers);
@@ -1258,8 +1335,9 @@ static int sieve_fileinto(void *ac,
             ret = SIEVE_FAIL;
             goto done;
         }
-        else
+        else {
             md = mdata->m;
+        }
     }
 
     ret = deliver_mailbox(md->f,
@@ -1320,7 +1398,9 @@ static int sieve_fileinto(void *ac,
         }
     }
 
-    if (fc->headers) cleanup_special_delivery(mdata);
+    if (fc->headers) {
+        cleanup_special_delivery(mdata);
+    }
 
 done:
     if (!ret) {
@@ -1348,14 +1428,18 @@ static void add_keywords(strarray_t *flags, json_t *set_keywords, int add)
     for (i = 0; i < strarray_size(flags); i++) {
         const char *flag = strarray_nth(flags, i);
 
-        if (!strcasecmp(flag, "\\Seen"))
+        if (!strcasecmp(flag, "\\Seen")) {
             flag = "$Seen";
-        else if (!strcasecmp(flag, "\\Flagged"))
+        }
+        else if (!strcasecmp(flag, "\\Flagged")) {
             flag = "$Flagged";
-        else if (!strcasecmp(flag, "\\Answered"))
+        }
+        else if (!strcasecmp(flag, "\\Answered")) {
             flag = "$Answered";
-        else if (!strcasecmp(flag, "\\Draft"))
+        }
+        else if (!strcasecmp(flag, "\\Draft")) {
             flag = "$Draft";
+        }
 
         json_object_set_new(
             set_keywords, flag, add ? json_true() : json_false());
@@ -1378,10 +1462,12 @@ static int sieve_snooze(void *ac,
 
     if (sn->headers) {
         mdata = setup_special_delivery(mdata, sn->headers);
-        if (!mdata)
+        if (!mdata) {
             return SIEVE_FAIL;
-        else
+        }
+        else {
             md = mdata->m;
+        }
     }
 
     char *intname = mboxlist_find_specialuse("\\Snoozed", userid);
@@ -1408,7 +1494,9 @@ static int sieve_snooze(void *ac,
     if (sn->tzid) {
         tz = icaltimezone_get_builtin_timezone_from_tzid(sn->tzid);
 
-        if (!tz) tz = icaltimezone_get_builtin_timezone(sn->tzid);
+        if (!tz) {
+            tz = icaltimezone_get_builtin_timezone(sn->tzid);
+        }
         if (!tz) {
             xsyslog(LOG_NOTICE,
                     "Sieve: unknown time zone",
@@ -1480,13 +1568,17 @@ static int sieve_snooze(void *ac,
         if (sn->awaken_mboxid) {
             awaken = mboxlist_find_uniqueid(
                 sn->awaken_mboxid, userid, sd->authstate);
-            if (awaken) awakenid = sn->awaken_mboxid;
+            if (awaken) {
+                awakenid = sn->awaken_mboxid;
+            }
         }
         if (!awakenid && sn->awaken_spluse) {
             awaken = mboxlist_find_specialuse(sn->awaken_spluse, userid);
             if (awaken) {
                 ret = mboxlist_lookup(awaken, &mbentry, NULL);
-                if (!ret) awakenid = mbentry->uniqueid;
+                if (!ret) {
+                    awakenid = mbentry->uniqueid;
+                }
             }
         }
         if (!awakenid && sn->awaken_mbox) {
@@ -1496,7 +1588,9 @@ static int sieve_snooze(void *ac,
                 ret = autosieve_createfolder(
                     userid, sd->authstate, awaken, sn->do_create);
 
-                if (!ret) ret = mboxlist_lookup(awaken, &mbentry, NULL);
+                if (!ret) {
+                    ret = mboxlist_lookup(awaken, &mbentry, NULL);
+                }
                 if (!ret && sn->awaken_spluse) {
                     /* Attempt to add special-use flag to newly created mailbox
                      */
@@ -1511,7 +1605,9 @@ static int sieve_snooze(void *ac,
                     buf_free(&specialuse);
                 }
             }
-            if (!ret) awakenid = mbentry->uniqueid;
+            if (!ret) {
+                awakenid = mbentry->uniqueid;
+            }
         }
 
         if (awakenid) {
@@ -1583,7 +1679,9 @@ static int sieve_snooze(void *ac,
     freeentryatts(annots);
 
 done:
-    if (sn->headers) cleanup_special_delivery(mdata);
+    if (sn->headers) {
+        cleanup_special_delivery(mdata);
+    }
 
     if (!ret) {
         prometheus_increment(CYRUS_LMTP_SIEVE_SNOOZE_TOTAL);
@@ -1681,8 +1779,9 @@ static int sieve_processcal(void *ac,
 
     meth = icalcomponent_get_method(itip);
     if (meth == ICAL_METHOD_NONE) {
-        if (cal->allow_public)
+        if (cal->allow_public) {
             meth = ICAL_METHOD_PUBLISH;
+        }
         else {
             buf_setcstr(&cal->reason, "missing METHOD property");
             syslog(LOG_NOTICE,
@@ -1742,7 +1841,9 @@ static int sieve_processcal(void *ac,
         tok_t tok;
 
         domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
-        if (!domains) domains = config_defdomain;
+        if (!domains) {
+            domains = config_defdomain;
+        }
 
         tok_init(&tok, domains, " \t", TOK_TRIMLEFT | TOK_TRIMRIGHT);
         while ((domain = tok_next(&tok))) {
@@ -1764,10 +1865,13 @@ static int sieve_processcal(void *ac,
         case ICAL_METHOD_POLLSTATUS:
         case ICAL_METHOD_ADD:
             if (kind == ICAL_VPOLL_COMPONENT) {
-                if (meth == ICAL_METHOD_ADD) goto unsupported_method;
+                if (meth == ICAL_METHOD_ADD) {
+                    goto unsupported_method;
+                }
             }
-            else if (meth == ICAL_METHOD_POLLSTATUS)
+            else if (meth == ICAL_METHOD_POLLSTATUS) {
                 goto unsupported_method;
+            }
 
             GCC_FALLTHROUGH
 
@@ -1777,8 +1881,9 @@ static int sieve_processcal(void *ac,
                 goto done;
             }
 
-            if (cal->delete_cancelled)
+            if (cal->delete_cancelled) {
                 sched_flags |= SCHEDFLAG_DELETE_CANCELLED;
+            }
 
             GCC_FALLTHROUGH
 
@@ -1826,18 +1931,21 @@ static int sieve_processcal(void *ac,
                 goto done;
             }
 
-            if (cal->allow_public)
+            if (cal->allow_public) {
                 sched_flags |= SCHEDFLAG_ALLOW_PUBLIC;
+            }
             else if (meth == ICAL_METHOD_PUBLISH) {
                 buf_setcstr(&cal->reason,
                             "configured to NOT process public events");
                 goto done;
             }
 
-            if (cal->updates_only)
+            if (cal->updates_only) {
                 sched_flags |= SCHEDFLAG_UPDATES_ONLY;
-            else if (cal->invites_only)
+            }
+            else if (cal->invites_only) {
                 sched_flags |= SCHEDFLAG_INVITES_ONLY;
+            }
             break;
 
         case ICAL_METHOD_REPLY:
@@ -1930,7 +2038,7 @@ done:
            m->id ? m->id : "<nomsgid>",
            buf_cstring(&cal->outcome),
            buf_cstring(&cal->reason));
-    if (config_auditlog)
+    if (config_auditlog) {
         syslog(LOG_NOTICE,
                "auditlog: processed iMIP sessionid=<%s> message-id=%s"
                " outcome=%s errstr='%s'",
@@ -1938,6 +2046,7 @@ done:
                m->id ? m->id : "<nomsgid>",
                buf_cstring(&cal->outcome),
                buf_cstring(&cal->reason));
+    }
 
     strarray_fini(&sched_addresses);
     if (parts) {
@@ -1948,7 +2057,9 @@ done:
         }
         free(parts);
 
-        if (itip) icalcomponent_free(itip);
+        if (itip) {
+            icalcomponent_free(itip);
+        }
     }
 
     return ret;
@@ -1980,22 +2091,27 @@ static int sieve_keep(void *ac,
         if (!userid) {
             /* shared mailbox request */
             ret = mboxlist_lookup(mbname_intname(sd->mbname), NULL, NULL);
-            if (!ret) intname = xstrdup(mbname_intname(sd->mbname));
+            if (!ret) {
+                intname = xstrdup(mbname_intname(sd->mbname));
+            }
         }
         else {
             mbname_t *mbname = mbname_dup(sd->mbname);
 
             if (strarray_size(mbname_boxes(mbname))) {
                 ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
-                if (!ret)
+                if (!ret) {
                     mode |= TARGET_PLUS_ADDR;
+                }
                 else if (ret == IMAP_MAILBOX_NONEXISTENT
                          && config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)
                          && fuzzy_match(mbname))
                 {
                     /* try delivery to a fuzzy matched mailbox */
                     ret = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
-                    if (!ret) mode |= TARGET_FUZZY;
+                    if (!ret) {
+                        mode |= TARGET_FUZZY;
+                    }
                 }
             }
             if (ret) {
@@ -2010,14 +2126,18 @@ static int sieve_keep(void *ac,
     }
 
     // didn't resolve a name, this will always fail
-    if (!intname) goto done;
+    if (!intname) {
+        goto done;
+    }
 
     if (!mydata) {
         /* just doing destination mailbox resolution */
-        if (kc->resolved_mailbox)
+        if (kc->resolved_mailbox) {
             free(intname);
-        else
+        }
+        else {
             kc->resolved_mailbox = intname;
+        }
         return SIEVE_OK;
     }
 
@@ -2035,8 +2155,9 @@ static int sieve_keep(void *ac,
             ret = SIEVE_FAIL;
             goto done;
         }
-        else
+        else {
             md = mydata->m;
+        }
     }
 
     if (mboxname_isusermailbox(intname, 1)) {
@@ -2063,9 +2184,13 @@ static int sieve_keep(void *ac,
                           quotaoverride,
                           acloverride);
 
-    if (freeme) auth_freestate(freeme);
+    if (freeme) {
+        auth_freestate(freeme);
+    }
 
-    if (kc->headers) cleanup_special_delivery(mydata);
+    if (kc->headers) {
+        cleanup_special_delivery(mydata);
+    }
 
 done:
     if (!ret) {
@@ -2245,7 +2370,9 @@ static void do_fcc(script_data_t *sdata,
                                  fcc->imapflags,
                                  0,
                                  /* annotations */ NULL);
-            if (!r) r = append_commit(&as);
+            if (!r) {
+                r = append_commit(&as);
+            }
 
             if (body) {
                 message_free_body(body);
@@ -2254,7 +2381,9 @@ static void do_fcc(script_data_t *sdata,
 
             append_removestage(stage);
         }
-        if (r || !f) append_abort(&as);
+        if (r || !f) {
+            append_abort(&as);
+        }
     }
 
     if (r) {
@@ -2305,26 +2434,31 @@ static int send_response(
     buf_printf(&msgbuf, "X-Sieve: %s\r\n", SIEVE_VERSION);
     buf_appendcstr(&msgbuf, "X-Sieve-Action: vacation\r\n");
 
-    if (strchr(src->fromaddr, '<'))
+    if (strchr(src->fromaddr, '<')) {
         buf_printf(&msgbuf, "From: %s\r\n", src->fromaddr);
-    else
+    }
+    else {
         buf_printf(&msgbuf, "From: <%s>\r\n", src->fromaddr);
+    }
 
     buf_printf(&msgbuf, "To: <%s>\r\n", src->addr);
     /* check that subject is sane */
     sl = strlen(src->subj);
-    for (i = 0; i < sl; i++)
+    for (i = 0; i < sl; i++) {
         if (Uiscntrl(src->subj[i])) {
             src->subj[i] = '\0';
             break;
         }
+    }
     subj = charset_encode_mimeheader(src->subj, strlen(src->subj), 0);
     buf_printf(&msgbuf,
                "Subject:%s %s\r\n", /* fold before long header body */
                strlen(subj) > 69 ? "\r\n" : "",
                subj);
     free(subj);
-    if (md->id) buf_printf(&msgbuf, "In-Reply-To: %s\r\n", md->id);
+    if (md->id) {
+        buf_printf(&msgbuf, "In-Reply-To: %s\r\n", md->id);
+    }
     buf_appendcstr(&msgbuf, "Auto-Submitted: auto-replied (vacation)\r\n");
     buf_appendcstr(&msgbuf, "MIME-Version: 1.0\r\n");
 
@@ -2453,7 +2587,9 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
-    if (!jfilter) return 0;
+    if (!jfilter) {
+        return 0;
+    }
 
     if (!content->matchmime) {
         if (!content->body) {
@@ -2470,7 +2606,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
     }
 
     /* Run query */
-    if (content->matchmime && !err)
+    if (content->matchmime && !err) {
         matches = jmap_email_matchmime(content->matchmime,
                                        jfilter,
                                        ctx->cstate,
@@ -2479,6 +2615,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
                                        sd->ns,
                                        time(NULL),
                                        &err);
+    }
 
     if (err) {
         const char *type = json_string_value(json_object_get(err, "type"));
@@ -2553,7 +2690,9 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     static strarray_t mark = STRARRAY_INITIALIZER;
     static strarray_t methods = STRARRAY_INITIALIZER;
 
-    if (!mark.count) strarray_append(&mark, "\\flagged");
+    if (!mark.count) {
+        strarray_append(&mark, "\\flagged");
+    }
 
     if (!methods.count) {
         /* XXX  is there an imapd.conf option for this? */
@@ -2661,8 +2800,12 @@ static int sieve_find_script(const char *user,
     /* look in sieve_dir */
     struct buf buf = BUF_INITIALIZER;
 
-    if (user) buf_setcstr(&buf, user);
-    if (domain) buf_printf(&buf, "@%s", domain);
+    if (user) {
+        buf_setcstr(&buf, user);
+    }
+    if (domain) {
+        buf_printf(&buf, "@%s", domain);
+    }
 
     const char *userid = buf_cstring(&buf);
     const char *sievedir = user_sieve_path(userid);
@@ -2745,7 +2888,9 @@ int run_sieve(const mbname_t *mbname,
     }
 
     /* free everything */
-    if (freeauthstate) auth_freestate(freeauthstate);
+    if (freeauthstate) {
+        auth_freestate(freeauthstate);
+    }
     sieve_script_unload(&bc);
 
     /* if there was an error, r is non-zero and
@@ -2765,7 +2910,9 @@ static int autosieve_createfolder(const char *userid,
     int n;
 
     /* Check if internalname or userid are NULL */
-    if (userid == NULL || internalname == NULL) return IMAP_MAILBOX_NONEXISTENT;
+    if (userid == NULL || internalname == NULL) {
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
 
     syslog(LOG_DEBUG,
            "autosievefolder: autosieve_createfolder() was called for user %s, "
@@ -2785,24 +2932,32 @@ static int autosieve_createfolder(const char *userid,
             const char *name = strarray_nth(create, n);
             char *foldername = mboxname_user_mbox(userid, name);
 
-            if (!strcmp(foldername, internalname)) createsievefolder = 1;
+            if (!strcmp(foldername, internalname)) {
+                createsievefolder = 1;
+            }
 
             free(foldername);
-            if (createsievefolder) break;
+            if (createsievefolder) {
+                break;
+            }
         }
 
         strarray_free(create);
     }
 
     // unless configured to create it, drop out now
-    if (!createsievefolder) return IMAP_MAILBOX_NONEXISTENT;
+    if (!createsievefolder) {
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
 
     // lock the namespace and check again before trying to create
     struct mboxlock *namespacelock = mboxname_usernamespacelock(internalname);
 
     // did we lose the race?
     r = mboxlist_lookup(internalname, 0, 0);
-    if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+    if (r != IMAP_MAILBOX_NONEXISTENT) {
+        goto done;
+    }
 
     mbentry_t mbentry = MBENTRY_INITIALIZER;
     mbentry.name = (char *) internalname;

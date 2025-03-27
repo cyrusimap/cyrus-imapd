@@ -99,7 +99,9 @@ static int prom_need_auth(struct transaction_t *txn __attribute__((unused)))
 {
     const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
 
-    if (!strcmp(need_auth, "none")) return 0;
+    if (!strcmp(need_auth, "none")) {
+        return 0;
+    }
 
     return HTTP_UNAUTHORIZED;
 }
@@ -134,12 +136,17 @@ static int prom_get(struct transaction_t *txn,
     const char *mimetype = NULL;
     int r;
 
-    if (strcmp(txn->req_uri->path, "/metrics")) return HTTP_NOT_FOUND;
+    if (strcmp(txn->req_uri->path, "/metrics")) {
+        return HTTP_NOT_FOUND;
+    }
 
     const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
-    if (!strcmp(need_auth, "admin") && !httpd_userisadmin)
+    if (!strcmp(need_auth, "admin") && !httpd_userisadmin) {
         return HTTP_UNAUTHORIZED;
-    if (!strcmp(need_auth, "user") && !httpd_userid) return HTTP_UNAUTHORIZED;
+    }
+    if (!strcmp(need_auth, "user") && !httpd_userid) {
+        return HTTP_UNAUTHORIZED;
+    }
 
     r = prometheus_text_report(&buf, &mimetype);
     if (r) {

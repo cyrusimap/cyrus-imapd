@@ -53,7 +53,9 @@ xmlChar *xmlBufferDetach(xmlBufferPtr buf)
 {
     xmlChar *ret;
 
-    if (!buf) return NULL;
+    if (!buf) {
+        return NULL;
+    }
 
     ret = buf->content;
     buf->content = NULL;

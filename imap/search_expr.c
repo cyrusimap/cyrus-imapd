@@ -125,8 +125,12 @@ static search_expr_t *search_expr_new_nnodes(search_expr_t *parent,
 {
     search_expr_t *e = xzmalloc(sizeof(search_expr_t));
     e->op = op;
-    if (parent) append(parent, e);
-    if (nnodes && *nnodes < UINT_MAX) *nnodes += 1;
+    if (parent) {
+        append(parent, e);
+    }
+    if (nnodes && *nnodes < UINT_MAX) {
+        *nnodes += 1;
+    }
     return e;
 }
 
@@ -211,20 +215,25 @@ EXPORTED void search_expr_append(search_expr_t *parent, search_expr_t *e)
 
 static void search_expr_free_nnodes(search_expr_t *e, unsigned *nnodes)
 {
-    if (!e) return;
+    if (!e) {
+        return;
+    }
     while (e->children) {
         search_expr_t *child = e->children;
         search_expr_detach(e, child);
         search_expr_free_nnodes(child, nnodes);
     }
     if (e->attr) {
-        if (e->attr->internalise)
+        if (e->attr->internalise) {
             e->attr->internalise(NULL, NULL, e->attr->data1, &e->internalised);
+        }
         if (e->attr->free) {
             e->attr->free(&e->value, (struct search_attr **) &e->attr);
         }
     }
-    if (nnodes && *nnodes > 0) *nnodes -= 1;
+    if (nnodes && *nnodes > 0) {
+        *nnodes -= 1;
+    }
     free(e);
 }
 
@@ -251,13 +260,16 @@ static search_expr_t *search_expr_duplicate_nnodes(const search_expr_t *e,
     newe->attr = e->attr && e->attr->dupattr
                      ? e->attr->dupattr((struct search_attr *) e->attr)
                      : e->attr;
-    if (newe->attr && newe->attr->duplicate)
+    if (newe->attr && newe->attr->duplicate) {
         newe->attr->duplicate(&newe->value, &e->value);
-    else
+    }
+    else {
         newe->value = e->value;
+    }
 
-    for (child = e->children; child; child = child->next)
+    for (child = e->children; child; child = child->next) {
         append(newe, search_expr_duplicate_nnodes(child, nnodes));
+    }
 
     return newe;
 }
@@ -285,11 +297,15 @@ EXPORTED int search_expr_apply(search_expr_t *e,
     int r;
 
     r = cb(e, rock);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     for (child = e->children; child; child = child->next) {
         r = search_expr_apply(child, cb, rock);
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return r;
@@ -311,7 +327,9 @@ static void serialise(const search_expr_t *e, struct buf *buf)
     const search_expr_t *child;
 
 #if DEBUG
-    if (e == the_focus) buf_putc(buf, '<');
+    if (e == the_focus) {
+        buf_putc(buf, '<');
+    }
 #endif
     buf_putc(buf, '(');
     buf_appendcstr(buf, op_as_string(e->op));
@@ -319,7 +337,9 @@ static void serialise(const search_expr_t *e, struct buf *buf)
         buf_putc(buf, ' ');
         buf_appendcstr(buf, e->attr->name);
         buf_putc(buf, ' ');
-        if (e->attr->serialise) e->attr->serialise(buf, &e->value);
+        if (e->attr->serialise) {
+            e->attr->serialise(buf, &e->value);
+        }
     }
     for (child = e->children; child; child = child->next) {
         buf_putc(buf, ' ');
@@ -327,7 +347,9 @@ static void serialise(const search_expr_t *e, struct buf *buf)
     }
     buf_putc(buf, ')');
 #if DEBUG
-    if (e == the_focus) buf_putc(buf, '>');
+    if (e == the_focus) {
+        buf_putc(buf, '>');
+    }
 #endif
 }
 
@@ -353,10 +375,12 @@ EXPORTED int search_getseword(struct protstream *prot, char *buf, int maxlen)
     int quoted = 0;
 
     c = prot_getc(prot);
-    if (c == '"')
+    if (c == '"') {
         quoted = 1;
-    else
+    }
+    else {
         prot_ungetc(c, prot);
+    }
 
     while (maxlen > 1 && (c = prot_getc(prot)) != EOF
            && (quoted ? (c != '"') : (c != ' ' && c != ')')))
@@ -365,7 +389,9 @@ EXPORTED int search_getseword(struct protstream *prot, char *buf, int maxlen)
         maxlen--;
     }
     *buf = '\0';
-    if (quoted && c != EOF) c = prot_getc(prot);
+    if (quoted && c != EOF) {
+        c = prot_getc(prot);
+    }
     return c;
 }
 
@@ -378,18 +404,28 @@ static search_expr_t *unserialise(search_expr_t *parent,
     char tmp[128];
 
     c = prot_getc(prot);
-    if (c != '(') goto bad;
+    if (c != '(') {
+        goto bad;
+    }
 
     c = search_getseword(prot, tmp, sizeof(tmp));
-    if (c != ' ' && c != ')') goto bad;
+    if (c != ' ' && c != ')') {
+        goto bad;
+    }
 
     for (op = 0; op < VECTOR_SIZE(op_strings); op++) {
-        if (!strcmp(tmp, op_strings[op])) break;
+        if (!strcmp(tmp, op_strings[op])) {
+            break;
+        }
     }
-    if (op == VECTOR_SIZE(op_strings)) goto bad;
+    if (op == VECTOR_SIZE(op_strings)) {
+        goto bad;
+    }
 
     e = search_expr_new(parent, op);
-    if (c == ')') return e; /* SEOP_TRUE, SEOP_FALSE */
+    if (c == ')') {
+        return e; /* SEOP_TRUE, SEOP_FALSE */
+    }
 
     switch (op) {
     case SEOP_AND:
@@ -397,10 +433,16 @@ static search_expr_t *unserialise(search_expr_t *parent,
     case SEOP_NOT:
         /* parse children */
         for (;;) {
-            if (unserialise(e, prot) == NULL) goto bad;
+            if (unserialise(e, prot) == NULL) {
+                goto bad;
+            }
             c = prot_getc(prot);
-            if (c == ')') break;
-            if (c != ' ') goto bad;
+            if (c == ')') {
+                break;
+            }
+            if (c != ' ') {
+                goto bad;
+            }
         }
         break;
     case SEOP_LT:
@@ -411,16 +453,26 @@ static search_expr_t *unserialise(search_expr_t *parent,
     case SEOP_FUZZYMATCH:
         /* parse attribute */
         c = search_getseword(prot, tmp, sizeof(tmp));
-        if (c != ' ') goto bad;
+        if (c != ' ') {
+            goto bad;
+        }
         e->attr = search_attr_find(tmp);
-        if (e->attr == NULL) goto bad;
+        if (e->attr == NULL) {
+            goto bad;
+        }
         /* parse value */
-        if (e->attr->unserialise) c = e->attr->unserialise(prot, &e->value);
-        if (c != ')') goto bad;
+        if (e->attr->unserialise) {
+            c = e->attr->unserialise(prot, &e->value);
+        }
+        if (c != ')') {
+            goto bad;
+        }
         break;
     default:
         c = prot_getc(prot);
-        if (c != ')') goto bad;
+        if (c != ')') {
+            goto bad;
+        }
         break;
     }
 
@@ -429,7 +481,9 @@ static search_expr_t *unserialise(search_expr_t *parent,
 bad:
     if (e) {
         e->op = SEOP_UNKNOWN;
-        if (parent == NULL) search_expr_free(e);
+        if (parent == NULL) {
+            search_expr_free(e);
+        }
     }
     return NULL;
 }
@@ -444,7 +498,9 @@ EXPORTED search_expr_t *search_expr_unserialise(const char *s)
     struct protstream *prot;
     search_expr_t *root = NULL;
 
-    if (!s || !*s) return NULL;
+    if (!s || !*s) {
+        return NULL;
+    }
     prot = prot_readmap(s, strlen(s));
     root = unserialise(NULL, prot);
 
@@ -458,11 +514,17 @@ EXPORTED search_expr_t *search_expr_unserialise(const char *s)
         int i;
         fputc('\n', stderr);
         fprintf(stderr, "ERROR: failed to unserialise string at or near:\n");
-        if (context_begin) fputs("...", stderr);
+        if (context_begin) {
+            fputs("...", stderr);
+        }
         fwrite(s + context_begin, 1, context_end - context_begin, stderr);
         fputc('\n', stderr);
-        if (context_begin) fputs("---", stderr);
-        for (i = off - context_begin - 1; i > 0; i--) fputc('-', stderr);
+        if (context_begin) {
+            fputs("---", stderr);
+        }
+        for (i = off - context_begin - 1; i > 0; i--) {
+            fputc('-', stderr);
+        }
         fputc('^', stderr);
         fputc('\n', stderr);
     }
@@ -525,8 +587,11 @@ static int has_enough_children(const search_expr_t *e)
         return 1;
     }
 
-    for (child = e->children; child; child = child->next)
-        if (++n >= min) return 1;
+    for (child = e->children; child; child = child->next) {
+        if (++n >= min) {
+            return 1;
+        }
+    }
     return 0;
 }
 
@@ -542,8 +607,9 @@ static int apply_demorgan(search_expr_t **ep,
     assert((*prevp)->next == NULL);
 
     child->op = (child->op == SEOP_AND ? SEOP_OR : SEOP_AND);
-    for (grandp = &child->children; *grandp; grandp = &(*grandp)->next)
+    for (grandp = &child->children; *grandp; grandp = &(*grandp)->next) {
         interpolate(grandp, SEOP_NOT, nnodes);
+    }
     search_expr_free_nnodes(elide(ep), nnodes);
 
     return complexity_check(1, nnodes);
@@ -566,7 +632,9 @@ static int apply_distribution(search_expr_t **ep,
 
     while (complexity_check(r, nnodes) >= 0) {
         orchild = detachp(&or->children);
-        if (orchild == NULL) break;
+        if (orchild == NULL) {
+            break;
+        }
         newand = search_expr_duplicate_nnodes(and, nnodes);
         append(newand, orchild);
         append(newor, newand);
@@ -580,10 +648,12 @@ static int apply_distribution(search_expr_t **ep,
 
 static int invert(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 {
-    if ((*ep)->op == SEOP_NOT)
+    if ((*ep)->op == SEOP_NOT) {
         return apply_demorgan(ep, prevp, nnodes);
-    else
+    }
+    else {
         return apply_distribution(ep, prevp, nnodes);
+    }
 }
 
 /* combine compatible boolean parent and child nodes */
@@ -605,7 +675,9 @@ static void combine(search_expr_t **ep, search_expr_t **prevp, unsigned *nnodes)
 
 static int detrivialise(search_expr_t **ep, unsigned *nnodes)
 {
-    if (!ep || !*ep) return 0;
+    if (!ep || !*ep) {
+        return 0;
+    }
 
     int r = 0;
 
@@ -614,7 +686,9 @@ static int detrivialise(search_expr_t **ep, unsigned *nnodes)
     for (c = e->children; c; c = next) {
         next = c->next;
         int r2 = detrivialise(&c, nnodes);
-        if (!r2) r = r2;
+        if (!r2) {
+            r = r2;
+        }
     }
 
     search_expr_t *detached_children = NULL;
@@ -717,18 +791,28 @@ static int normalise(search_expr_t **ep,
     }
 
 restart:
-    if (changed == INT_MAX) return -1;
+    if (changed == INT_MAX) {
+        return -1;
+    }
 
     changed++;
 
     if (*nnodes > 2 * *nnodes_last_collect + 1) {
-        if (!is_root) return -2;
+        if (!is_root) {
+            return -2;
+        }
 
         r = detrivialise(ep, nnodes);
-        if (r >= 0) r = complexity_check(r, nnodes);
+        if (r >= 0) {
+            r = complexity_check(r, nnodes);
+        }
 
-        if (r < 0) return -1;
-        if (r > 0) changed++;
+        if (r < 0) {
+            return -1;
+        }
+        if (r > 0) {
+            changed++;
+        }
         *nnodes_last_collect = *nnodes;
     }
 
@@ -757,16 +841,24 @@ restart:
         }
         if (child_depth < depth) {
             r = invert(ep, prevp, nnodes);
-            if (r < 0) return -1;
+            if (r < 0) {
+                return -1;
+            }
             goto restart;
         }
         r = normalise(prevp, nnodes, nnodes_last_collect);
         if (r == -2) {
-            if (is_root) goto restart;
+            if (is_root) {
+                goto restart;
+            }
             return -2;
         }
-        if (r < 0) return -1;
-        if (r > 0) goto restart;
+        if (r < 0) {
+            return -1;
+        }
+        if (r > 0) {
+            goto restart;
+        }
     }
 
     return complexity_check(changed, nnodes);
@@ -784,20 +876,26 @@ static void setnext(void *p, void *next)
 
 static int maxcost(const search_expr_t *e, hashu64_table *costcache)
 {
-    if (!e) return 0;
+    if (!e) {
+        return 0;
+    }
 
     if (costcache) {
         intptr_t cost =
             (intptr_t) hashu64_lookup((uint64_t) (uintptr_t) e, costcache);
         assert(cost > INT_MIN && cost < INT_MAX);
-        if (cost) return cost > 0 ? cost : 0;
+        if (cost) {
+            return cost > 0 ? cost : 0;
+        }
     }
 
     int cost = e->attr ? e->attr->cost : 0;
     search_expr_t *child;
     for (child = e->children; child; child = child->next) {
         int childcost = maxcost(child, costcache);
-        if (childcost > cost) cost = childcost;
+        if (childcost > cost) {
+            cost = childcost;
+        }
     }
 
     if (costcache) {
@@ -814,33 +912,43 @@ static int compare(void *p1, void *p2, void *calldata)
     const search_expr_t *e2 = p2;
     int r = 0;
 
-    if (!r) r = maxcost(e1, calldata) - maxcost(e2, calldata);
+    if (!r) {
+        r = maxcost(e1, calldata) - maxcost(e2, calldata);
+    }
 
-    if (!r) r = dnf_depth(e2) - dnf_depth(e1);
+    if (!r) {
+        r = dnf_depth(e2) - dnf_depth(e1);
+    }
 
-    if (!r)
+    if (!r) {
         r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
                        e2->attr ? e2->attr->name : "zzz");
+    }
 
-    if (!r) r = (int) e1->op - (int) e2->op;
+    if (!r) {
+        r = (int) e1->op - (int) e2->op;
+    }
 
     if (!r) {
         struct buf b1 = BUF_INITIALIZER;
         struct buf b2 = BUF_INITIALIZER;
-        if (e1->attr && e1->attr->serialise)
+        if (e1->attr && e1->attr->serialise) {
             e1->attr->serialise(&b1, &e1->value);
-        if (e2->attr && e2->attr->serialise)
+        }
+        if (e2->attr && e2->attr->serialise) {
             e2->attr->serialise(&b2, &e2->value);
+        }
         r = strcmp(buf_cstring(&b1), buf_cstring(&b2));
         buf_free(&b1);
         buf_free(&b2);
     }
 
     if (!r) {
-        if (e1->children || e2->children)
+        if (e1->children || e2->children) {
             r = compare((void *) (e1->children ? e1->children : e1),
                         (void *) (e2->children ? e2->children : e2),
                         calldata);
+        }
     }
 
     return r;
@@ -850,8 +958,9 @@ static void sort_children_internal(search_expr_t *e, hashu64_table *costcache)
 {
     search_expr_t *child;
 
-    for (child = e->children; child; child = child->next)
+    for (child = e->children; child; child = child->next) {
         sort_children_internal(child, costcache);
+    }
 
     e->children = lsort(e->children, getnext, setnext, compare, costcache);
 }
@@ -867,8 +976,9 @@ static void sort_children(search_expr_t *e)
         costcache = NULL; // woot?
     }
 
-    for (child = e->children; child; child = child->next)
+    for (child = e->children; child; child = child->next) {
         sort_children_internal(child, costcache);
+    }
 
     e->children = lsort(e->children, getnext, setnext, compare, costcache);
 
@@ -930,7 +1040,9 @@ static int search_expr_normalise_nnodes(search_expr_t **ep, unsigned *nnodes)
     r = normalise(ep, nnodes, NULL);
     if (r >= 0) {
         int r2 = detrivialise(ep, nnodes);
-        if (!r) r = r2;
+        if (!r) {
+            r = r2;
+        }
     }
     sort_children(*ep);
 #if DEBUG
@@ -952,9 +1064,10 @@ EXPORTED int search_expr_normalise(search_expr_t **ep)
 static int internalise(search_expr_t *e, void *rock)
 {
     struct index_state *state = rock;
-    if (e->attr && e->attr->internalise)
+    if (e->attr && e->attr->internalise) {
         e->attr->internalise(
             state, &e->value, e->attr->data1, &e->internalised);
+    }
     return 0;
 }
 
@@ -995,8 +1108,12 @@ EXPORTED int search_expr_always_same(const search_expr_t *e)
         int res = 1;
         for (child = e->children; child; child = child->next) {
             int cres = search_expr_always_same(child);
-            if (cres == -1) return -1;
-            if (cres == 0) res = 0; // could still be a definite no
+            if (cres == -1) {
+                return -1;
+            }
+            if (cres == 0) {
+                res = 0; // could still be a definite no
+            }
         }
         return res;
     }
@@ -1004,8 +1121,12 @@ EXPORTED int search_expr_always_same(const search_expr_t *e)
         int res = -1;
         for (child = e->children; child; child = child->next) {
             int cres = search_expr_always_same(child);
-            if (cres == 1) return 1;
-            if (cres == 0) res = 0; // could still be a definite yes
+            if (cres == 1) {
+                return 1;
+            }
+            if (cres == 0) {
+                res = 0; // could still be a definite yes
+            }
         }
         return res;
     }
@@ -1064,12 +1185,18 @@ EXPORTED int search_expr_evaluate(message_t *m, const search_expr_t *e)
         assert(e->attr->match);
         return e->attr->match(m, &e->value, e->internalised, e->attr->data1);
     case SEOP_AND:
-        for (child = e->children; child; child = child->next)
-            if (!search_expr_evaluate(m, child)) return 0;
+        for (child = e->children; child; child = child->next) {
+            if (!search_expr_evaluate(m, child)) {
+                return 0;
+            }
+        }
         return 1;
     case SEOP_OR:
-        for (child = e->children; child; child = child->next)
-            if (search_expr_evaluate(m, child)) return 1;
+        for (child = e->children; child; child = child->next) {
+            if (search_expr_evaluate(m, child)) {
+                return 1;
+            }
+        }
         return 0;
     case SEOP_NOT:
         assert(e->children);
@@ -1094,7 +1221,9 @@ EXPORTED int search_expr_uses_attr(const search_expr_t *e, const char *name)
 {
     const search_attr_t *attr = search_attr_find(name);
 
-    if (!attr) return 0;
+    if (!attr) {
+        return 0;
+    }
     return search_expr_apply((search_expr_t *) e, uses_attr, (void *) attr);
 }
 
@@ -1134,17 +1263,22 @@ static int get_countability(search_expr_t *e, void *rock)
 {
     unsigned int *maskp = rock;
 
-    if (e->op == SEOP_TRUE)
+    if (e->op == SEOP_TRUE) {
         *maskp |= SEC_EXISTS;
-    else if (e->op == SEOP_FALSE)
+    }
+    else if (e->op == SEOP_FALSE) {
         *maskp |= SEC_EXISTS | SEC_NOT;
-    else if (e->op == SEOP_NOT)
+    }
+    else if (e->op == SEOP_NOT) {
         *maskp |= SEC_NOT;
+    }
     else if (e->attr) {
-        if (e->attr->get_countability)
+        if (e->attr->get_countability) {
             *maskp |= e->attr->get_countability(&e->value);
-        else
+        }
+        else {
             *maskp |= SEC_UNCOUNTED;
+        }
     }
 
     return 0;
@@ -1180,7 +1314,9 @@ EXPORTED unsigned int search_expr_get_countability(const search_expr_t *e)
 {
     unsigned int mask = 0;
 
-    if (!e) return 0;
+    if (!e) {
+        return 0;
+    }
 
     search_expr_apply((search_expr_t *) e, get_countability, &mask);
     return mask;
@@ -1210,7 +1346,9 @@ static int is_folder_node(const search_expr_t *e)
 
 static int is_indexed_node(const search_expr_t *e)
 {
-    if (e->op == SEOP_NOT) return is_indexed_node(e->children);
+    if (e->op == SEOP_NOT) {
+        return is_indexed_node(e->children);
+    }
 
     return e->attr
            && ((e->op == SEOP_FUZZYMATCH && e->attr->part != SEARCH_PART_NONE)
@@ -1231,17 +1369,23 @@ static int is_folder_or_indexed(search_expr_t *e,
 EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
 {
     // don't descend into "NOT" because we won't want to open those mailboxes
-    if (e->op == SEOP_NOT) return NULL;
+    if (e->op == SEOP_NOT) {
+        return NULL;
+    }
 
     if (is_folder_node(e)) {
         char *res = xstrdupnull(e->value.s);
-        if (res) return res;
+        if (res) {
+            return res;
+        }
     }
 
     const search_expr_t *child;
     for (child = e->children; child; child = child->next) {
         char *res = search_expr_firstmailbox(child);
-        if (res) return res;
+        if (res) {
+            return res;
+        }
     }
 
     return NULL;
@@ -1329,7 +1473,9 @@ static void split(
 
     if (e->op == SEOP_OR) {
         /* top level node */
-        while ((child = detachp(&e->children)) != NULL) split(child, cb, rock);
+        while ((child = detachp(&e->children)) != NULL) {
+            split(child, cb, rock);
+        }
         search_expr_free(e);
     }
     else if (e->op == SEOP_AND) {
@@ -1362,18 +1508,21 @@ static void split(
             search_expr_t *indexed = search_expr_new(NULL, SEOP_AND);
 
             for (prevp = &e->children; *prevp;) {
-                if (is_indexed_node(*prevp))
+                if (is_indexed_node(*prevp)) {
                     append(indexed, detachp(prevp));
-                else
+                }
+                else {
                     prevp = &(*prevp)->next;
+                }
             }
             search_expr_normalise(&indexed); /* in case of a trivial AND */
             if (!e->children) {
                 search_expr_free(e);
                 e = search_expr_new(NULL, SEOP_TRUE);
             }
-            else
+            else {
                 search_expr_normalise(&e);
+            }
             cb(NULL, indexed, e, rock);
         }
         else if (!nfolders) {
@@ -1424,8 +1573,9 @@ static int search_list_match(message_t *m,
     if (!r && buf.len) {
         r = strarray_contains(internal, buf_cstring(&buf)) ? 1 : 0;
     }
-    else
+    else {
         r = 0;
+    }
     buf_free(&buf);
 
     return r;
@@ -1436,7 +1586,9 @@ static void search_list_serialise(struct buf *b, const union search_value *v)
     buf_putc(b, '(');
     int i;
     for (i = 0; i < strarray_size(v->list); i++) {
-        if (i) buf_putc(b, ' ');
+        if (i) {
+            buf_putc(b, ' ');
+        }
         buf_putc(b, '"');
         buf_appendcstr(b, strarray_nth(v->list, i));
         buf_putc(b, '"');
@@ -1451,7 +1603,9 @@ static int search_list_unserialise(struct protstream *prot,
     char tmp[1024];
 
     c = prot_getc(prot);
-    if (c != '(') return EOF;
+    if (c != '(') {
+        return EOF;
+    }
 
     v->list = strarray_new();
     do {
@@ -1459,7 +1613,9 @@ static int search_list_unserialise(struct protstream *prot,
         strarray_append(v->list, tmp);
     } while (c == ' ');
 
-    if (c != ')') return EOF;
+    if (c != ')') {
+        return EOF;
+    }
 
     return prot_getc(prot);
 }
@@ -1470,8 +1626,12 @@ static void search_list_internalise(struct index_state *state
                                     void *data1 __attribute__((unused)),
                                     void **internalisedp)
 {
-    if (*internalisedp) *internalisedp = NULL;
-    if (v) *internalisedp = v->list;
+    if (*internalisedp) {
+        *internalisedp = NULL;
+    }
+    if (v) {
+        *internalisedp = v->list;
+    }
 }
 
 static void search_list_duplicate(union search_value *new,
@@ -1508,11 +1668,13 @@ static int search_string_match(message_t *m,
     struct search_string_internal *internal = internalised;
 
     r = getter(m, &buf);
-    if (!r && buf.len)
+    if (!r && buf.len) {
         r = charset_searchstring(
             internal->s, internal->pat, buf.s, buf.len, charset_flags);
-    else
+    }
+    else {
         r = 0;
+    }
     buf_free(&buf);
 
     return r;
@@ -1586,13 +1748,17 @@ static int search_listid_match(message_t *m,
     r = message_get_listid(m, &buf);
     if (!r) {
         r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
-        if (r) goto out; // success
+        if (r) {
+            goto out; // success
+        }
     }
 
     r = message_get_mailinglist(m, &buf);
     if (!r) {
         r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
-        if (r) goto out; // success
+        if (r) {
+            goto out; // success
+        }
     }
 
     r = 0; // failure
@@ -1625,18 +1791,24 @@ static int search_contenttype_match(message_t *m,
 
             /* match against type */
             r = charset_searchstring(s, pat, type, strlen(type), charset_flags);
-            if (r) goto out; // success
+            if (r) {
+                goto out; // success
+            }
 
             /* match against subtype */
             r = charset_searchstring(
                 s, pat, subtype, strlen(subtype), charset_flags);
-            if (r) goto out; // success
+            if (r) {
+                goto out; // success
+            }
 
             /* match against combined type_subtype */
             snprintf(combined, sizeof(combined), "%s/%s", type, subtype);
             r = charset_searchstring(
                 s, pat, combined, strlen(combined), charset_flags);
-            if (r) goto out; // success
+            if (r) {
+                goto out; // success
+            }
         }
     }
 
@@ -1676,8 +1848,9 @@ static int search_header_match(message_t *m,
             r = buf.len ? 1 : 0;
         }
     }
-    else
+    else {
         r = 0;
+    }
     buf_free(&buf);
 
     return r;
@@ -1723,10 +1896,12 @@ static int search_seq_match(message_t *m,
         (int (*)(message_t *, uint32_t *)) data1;
 
     r = getter(m, &u);
-    if (!r)
+    if (!r) {
         r = seqset_ismember(seq, u);
-    else
+    }
+    else {
         r = 0;
+    }
 
     return r;
 }
@@ -1749,10 +1924,12 @@ static int search_flags_match(message_t *m,
         (int (*)(message_t *, uint32_t *)) data1;
 
     r = getter(m, &u);
-    if (!r)
+    if (!r) {
         r = !!(v->u & u);
-    else
+    }
+    else {
         r = 0;
+    }
 
     return r;
 }
@@ -1760,11 +1937,21 @@ static int search_flags_match(message_t *m,
 static void search_systemflags_serialise(struct buf *b,
                                          const union search_value *v)
 {
-    if ((v->u & FLAG_ANSWERED)) buf_appendcstr(b, "\\Answered");
-    if ((v->u & FLAG_FLAGGED)) buf_appendcstr(b, "\\Flagged");
-    if ((v->u & FLAG_DELETED)) buf_appendcstr(b, "\\Deleted");
-    if ((v->u & FLAG_DRAFT)) buf_appendcstr(b, "\\Draft");
-    if ((v->u & FLAG_SEEN)) buf_appendcstr(b, "\\Seen");
+    if ((v->u & FLAG_ANSWERED)) {
+        buf_appendcstr(b, "\\Answered");
+    }
+    if ((v->u & FLAG_FLAGGED)) {
+        buf_appendcstr(b, "\\Flagged");
+    }
+    if ((v->u & FLAG_DELETED)) {
+        buf_appendcstr(b, "\\Deleted");
+    }
+    if ((v->u & FLAG_DRAFT)) {
+        buf_appendcstr(b, "\\Draft");
+    }
+    if ((v->u & FLAG_SEEN)) {
+        buf_appendcstr(b, "\\Seen");
+    }
 }
 
 static int search_systemflags_unserialise(struct protstream *prot,
@@ -1775,26 +1962,36 @@ static int search_systemflags_unserialise(struct protstream *prot,
 
     c = search_getseword(prot, tmp, sizeof(tmp));
 
-    if (!strcasecmp(tmp, "\\Answered"))
+    if (!strcasecmp(tmp, "\\Answered")) {
         v->u = FLAG_ANSWERED;
-    else if (!strcasecmp(tmp, "\\Flagged"))
+    }
+    else if (!strcasecmp(tmp, "\\Flagged")) {
         v->u = FLAG_FLAGGED;
-    else if (!strcasecmp(tmp, "\\Deleted"))
+    }
+    else if (!strcasecmp(tmp, "\\Deleted")) {
         v->u = FLAG_DELETED;
-    else if (!strcasecmp(tmp, "\\Draft"))
+    }
+    else if (!strcasecmp(tmp, "\\Draft")) {
         v->u = FLAG_DRAFT;
-    else if (!strcasecmp(tmp, "\\Seen"))
+    }
+    else if (!strcasecmp(tmp, "\\Seen")) {
         v->u = FLAG_SEEN;
-    else
+    }
+    else {
         return EOF;
+    }
     return c;
 }
 
 static void search_indexflags_serialise(struct buf *b,
                                         const union search_value *v)
 {
-    if ((v->u & MESSAGE_SEEN)) buf_appendcstr(b, "\\Seen");
-    if ((v->u & MESSAGE_RECENT)) buf_appendcstr(b, "\\Recent");
+    if ((v->u & MESSAGE_SEEN)) {
+        buf_appendcstr(b, "\\Seen");
+    }
+    if ((v->u & MESSAGE_RECENT)) {
+        buf_appendcstr(b, "\\Recent");
+    }
 }
 
 static int search_indexflags_unserialise(struct protstream *prot,
@@ -1805,12 +2002,15 @@ static int search_indexflags_unserialise(struct protstream *prot,
 
     c = search_getseword(prot, tmp, sizeof(tmp));
 
-    if (!strcasecmp(tmp, "\\Seen"))
+    if (!strcasecmp(tmp, "\\Seen")) {
         v->u = MESSAGE_SEEN;
-    else if (!strcasecmp(tmp, "\\Recent"))
+    }
+    else if (!strcasecmp(tmp, "\\Recent")) {
         v->u = MESSAGE_RECENT;
-    else
+    }
+    else {
         return EOF;
+    }
     return c;
 }
 
@@ -1838,10 +2038,12 @@ static void search_keyword_internalise(struct index_state *state,
 
     if (state) {
         r = mailbox_user_flag(state->mailbox, v->s, &num, /*create*/ 0);
-        if (!r)
+        if (!r) {
             num++;
-        else
+        }
+        else {
             num = 0;
+        }
     }
     *internalisedp = (void *) (unsigned long) num;
 }
@@ -1856,14 +2058,18 @@ static int search_keyword_match(message_t *m,
     int num = (int) (unsigned long) internalised;
     uint32_t flags[MAX_USER_FLAGS / 32];
 
-    if (!num) return 0; /* not a valid flag for this mailbox */
+    if (!num) {
+        return 0; /* not a valid flag for this mailbox */
+    }
     num--;
 
     r = message_get_userflags(m, flags);
-    if (!r)
+    if (!r) {
         r = !!(flags[num / 32] & (1U << (num & 31)));
-    else
+    }
+    else {
         r = 0;
+    }
 
     return r;
 }
@@ -1882,15 +2088,19 @@ static int search_time_t_cmp(message_t *m,
 
     r = getter(m, &t);
     if (!r) {
-        if (t < v->t)
+        if (t < v->t) {
             r = -1;
-        else if (t == v->t)
+        }
+        else if (t == v->t) {
             r = 0;
-        else
+        }
+        else {
             r = 1;
+        }
     }
-    else
+    else {
         r = 0;
+    }
     return r;
 }
 
@@ -1905,10 +2115,12 @@ static int search_time_t_match(message_t *m,
         (int (*)(message_t *, time_t *)) data1;
 
     r = getter(m, &t);
-    if (!r)
+    if (!r) {
         r = (v->t == t);
-    else
+    }
+    else {
         r = 0;
+    }
 
     return r;
 }
@@ -1943,15 +2155,19 @@ static int search_uint64_cmp(message_t *m,
 
     r = getter(m, &u);
     if (!r) {
-        if (u < v->u)
+        if (u < v->u) {
             r = -1;
-        else if (u == v->u)
+        }
+        else if (u == v->u) {
             r = 0;
-        else
+        }
+        else {
             r = 1;
+        }
     }
-    else
+    else {
         r = 0;
+    }
     return r;
 }
 
@@ -1966,10 +2182,12 @@ static int search_uint64_match(message_t *m,
         (int (*)(message_t *, uint64_t *)) data1;
 
     r = getter(m, &u);
-    if (!r)
+    if (!r) {
         r = (v->u == u);
-    else
+    }
+    else {
         r = 0;
+    }
 
     return r;
 }
@@ -2005,7 +2223,9 @@ static int search_cid_unserialise(struct protstream *prot,
     char tmp[32];
 
     c = search_getseword(prot, tmp, sizeof(tmp));
-    if (!conversation_id_decode(&cid, tmp)) return EOF;
+    if (!conversation_id_decode(&cid, tmp)) {
+        return EOF;
+    }
     v->u = cid;
     return c;
 }
@@ -2017,9 +2237,10 @@ static void search_folder_internalise(struct index_state *state,
                                       void *data1 __attribute__((unused)),
                                       void **internalisedp)
 {
-    if (state)
+    if (state) {
         *internalisedp = (void *) (unsigned long) (!strcmp(
             mailbox_name(state->mailbox), v->s));
+    }
 }
 
 static int search_folder_match(message_t *m __attribute__((unused)),
@@ -2045,7 +2266,9 @@ static void search_annotation_internalise(struct index_state *state,
                                           void *data1 __attribute__((unused)),
                                           void **internalisedp)
 {
-    if (state) *internalisedp = state->mailbox;
+    if (state) {
+        *internalisedp = state->mailbox;
+    }
 }
 
 struct search_annot_rock
@@ -2059,12 +2282,20 @@ static int _search_annot_match(const struct buf *match, const struct buf *value)
     /* These cases are not explicitly defined in RFC 5257 */
 
     /* NIL matches NIL and nothing else */
-    if (match->s == NULL) return (value->s == NULL);
-    if (value->s == NULL) return 0;
+    if (match->s == NULL) {
+        return (value->s == NULL);
+    }
+    if (value->s == NULL) {
+        return 0;
+    }
 
     /* empty matches empty and nothing else */
-    if (match->len == 0) return (value->len == 0);
-    if (value->len == 0) return 0;
+    if (match->len == 0) {
+        return (value->len == 0);
+    }
+    if (value->len == 0) {
+        return 0;
+    }
 
     /* RFC 5257 seems to define a simple CONTAINS style search */
     return !!memmem(value->s, value->len, match->s, match->len);
@@ -2080,7 +2311,9 @@ static void _search_annot_callback(const char *mboxname __attribute__((unused)),
     struct attvaluelist *l;
 
     for (l = attvalues; l; l = l->next) {
-        if (_search_annot_match(sarock->match, &l->value)) sarock->result = 1;
+        if (_search_annot_match(sarock->match, &l->value)) {
+            sarock->result = 1;
+        }
     }
 }
 
@@ -2093,7 +2326,9 @@ static int search_emailid_match(message_t *m,
     char emailid[26];
 
     int r = message_get_guid(m, &guid);
-    if (r) return 0;
+    if (r) {
+        return 0;
+    }
 
     emailid[0] = 'M';
     memcpy(emailid + 1, message_guid_encode(guid), 24);
@@ -2111,7 +2346,9 @@ static int search_threadid_match(message_t *m,
     char threadid[18];
 
     int r = message_get_cid(m, &cid);
-    if (r) return 0;
+    if (r) {
+        return 0;
+    }
 
     threadid[0] = 'T';
     memcpy(threadid + 1, conversation_id_encode(cid), 16);
@@ -2140,7 +2377,9 @@ static int search_annotation_match(message_t *m,
     message_get_uid(m, &uid);
 
     r = mailbox_get_annotate_state(mailbox, uid, &astate);
-    if (r) goto out;
+    if (r) {
+        goto out;
+    }
     annotate_state_set_auth(astate, sa->isadmin, sa->userid, sa->auth_state);
 
     memset(&rock, 0, sizeof(rock));
@@ -2148,7 +2387,9 @@ static int search_annotation_match(message_t *m,
 
     r = annotate_state_fetch(
         astate, &entries, &attribs, _search_annot_callback, &rock);
-    if (r >= 0) r = rock.result;
+    if (r >= 0) {
+        r = rock.result;
+    }
 
 out:
     strarray_fini(&entries);
@@ -2178,25 +2419,45 @@ static int search_annotation_unserialise(struct protstream *prot,
     char value[1024];
 
     c = prot_getc(prot);
-    if (c != '(') return EOF;
+    if (c != '(') {
+        return EOF;
+    }
 
     c = search_getseword(prot, tmp, sizeof(tmp));
-    if (c != ' ') return EOF;
-    if (strcmp(tmp, "entry")) return EOF;
+    if (c != ' ') {
+        return EOF;
+    }
+    if (strcmp(tmp, "entry")) {
+        return EOF;
+    }
     c = search_getseword(prot, entry, sizeof(entry));
-    if (c != ' ') return EOF;
+    if (c != ' ') {
+        return EOF;
+    }
 
     c = search_getseword(prot, tmp, sizeof(tmp));
-    if (c != ' ') return EOF;
-    if (strcmp(tmp, "attrib")) return EOF;
+    if (c != ' ') {
+        return EOF;
+    }
+    if (strcmp(tmp, "attrib")) {
+        return EOF;
+    }
     c = search_getseword(prot, attrib, sizeof(attrib));
-    if (c != ' ') return EOF;
+    if (c != ' ') {
+        return EOF;
+    }
 
     c = search_getseword(prot, tmp, sizeof(tmp));
-    if (c != ' ') return EOF;
-    if (strcmp(tmp, "value")) return EOF;
+    if (c != ' ') {
+        return EOF;
+    }
+    if (strcmp(tmp, "value")) {
+        return EOF;
+    }
     c = search_getseword(prot, value, sizeof(value));
-    if (c != ')') return EOF;
+    if (c != ')') {
+        return EOF;
+    }
 
     v->annot = (struct searchannot *) xzmalloc(sizeof(struct searchannot));
     v->annot->entry = xstrdup(entry);
@@ -2274,7 +2535,9 @@ static void search_convflags_internalise(struct index_state *state,
                 rock->num =
                     strarray_find_case(rock->cstate->counted_flags, v->s, 0);
                 /* rock->num might be -1 invalid */
-                if (rock->num >= 0) rock->num++;
+                if (rock->num >= 0) {
+                    rock->num++;
+                }
             }
         }
     }
@@ -2291,12 +2554,18 @@ static int search_convflags_match(message_t *m,
     conversation_t conv = CONVERSATION_INIT;
     int r = 0; /* invalid flag name */
 
-    if (!rock->cstate) return 0;
+    if (!rock->cstate) {
+        return 0;
+    }
 
     message_get_cid(m, &cid);
     int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
-    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
-    if (!conv.exists) return 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) {
+        return 0;
+    }
+    if (!conv.exists) {
+        return 0;
+    }
 
     if (rock->num == 0) {
         uint64_t unseen = conv.unseen;
@@ -2330,12 +2599,18 @@ static int search_allconvflags_match(message_t *m,
     conversation_t conv = CONVERSATION_INIT;
     int r = 0; /* invalid flag name */
 
-    if (!rock->cstate) return 0;
+    if (!rock->cstate) {
+        return 0;
+    }
 
     message_get_cid(m, &cid);
     int flags = rock->include_trash ? CONV_WITHFOLDERS : 0;
-    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) return 0;
-    if (!conv.exists) return 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, flags)) {
+        return 0;
+    }
+    if (!conv.exists) {
+        return 0;
+    }
 
     if (rock->num == 0) {
         uint64_t unseen = conv.unseen;
@@ -2350,8 +2625,9 @@ static int search_allconvflags_match(message_t *m,
         }
         r = !unseen;
     }
-    else if (rock->num > 0)
+    else if (rock->num > 0) {
         r = (conv.counts[rock->num - 1] == conv.exists);
+    }
 
     conversation_fini(&conv);
     return r;
@@ -2359,7 +2635,9 @@ static int search_allconvflags_match(message_t *m,
 
 unsigned int search_convflags_get_countability(const union search_value *v)
 {
-    if (!strcasecmp(v->s, "\\Seen")) return SEC_CONVSEEN;
+    if (!strcasecmp(v->s, "\\Seen")) {
+        return SEC_CONVSEEN;
+    }
     return SEC_UNCOUNTED;
 }
 
@@ -2388,12 +2666,17 @@ static int search_convmodseq_match(message_t *m,
     conversation_t conv = CONVERSATION_INIT;
     int r;
 
-    if (!rock->cstate) return 0;
+    if (!rock->cstate) {
+        return 0;
+    }
 
     message_get_cid(m, &cid);
-    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/ 0))
+    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/ 0)) {
         return 0;
-    if (!conv.exists) return 0;
+    }
+    if (!conv.exists) {
+        return 0;
+    }
 
     r = (v->u == conv.modseq);
 
@@ -2409,9 +2692,12 @@ static void conv_rock_new(struct mailbox *mailbox, struct conv_rock **rockp)
     if (!rock->cstate) {
         if (conversations_open_mbox(
                 mailbox_name(mailbox), 1 /*shared*/, &rock->cstate))
+        {
             rock->num = -1; /* invalid */
-        else
+        }
+        else {
             rock->cstate_is_ours = 1;
+        }
     }
 
     *rockp = rock;
@@ -2421,7 +2707,9 @@ static void conv_rock_free(struct conv_rock **rockp)
 {
     struct conv_rock *rock = *rockp;
     if (rock) {
-        if (rock->cstate_is_ours) conversations_abort(&rock->cstate);
+        if (rock->cstate_is_ours) {
+            conversations_abort(&rock->cstate);
+        }
         free(rock);
         *rockp = NULL;
     }
@@ -2441,15 +2729,19 @@ static int search_uint32_cmp(message_t *m,
 
     r = getter(m, &u);
     if (!r) {
-        if (u < v->u)
+        if (u < v->u) {
             r = -1;
-        else if (u == v->u)
+        }
+        else if (u == v->u) {
             r = 0;
-        else
+        }
+        else {
             r = 1;
+        }
     }
-    else
+    else {
         r = 0;
+    }
     return r;
 }
 
@@ -2464,10 +2756,12 @@ static int search_uint32_match(message_t *m,
         (int (*)(message_t *, uint32_t *)) data1;
 
     r = getter(m, &u);
-    if (!r)
+    if (!r) {
         r = (v->u == u);
-    else
+    }
+    else {
         r = 0;
+    }
     return r;
 }
 
@@ -2545,7 +2839,9 @@ static int searchmsg_cb(int isbody,
     }
     else {
         /* body-like */
-        if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
+        if (charset == CHARSET_UNKNOWN_CHARSET) {
+            return 0;
+        }
         sr->result = charset_searchfile(sr->substr,
                                         sr->pat,
                                         data->s,
@@ -2554,7 +2850,9 @@ static int searchmsg_cb(int isbody,
                                         encoding,
                                         charset_flags);
     }
-    if (sr->result) return 1; /* found it, exit early */
+    if (sr->result) {
+        return 1; /* found it, exit early */
+    }
     return 0;
 }
 
@@ -2642,16 +2940,18 @@ static int search_seen_match(message_t *m,
         if (!message_get_uid(m, &uid)) {
             return seqset_ismember(seen, uid);
         }
-        else
+        else {
             return 0;
+        }
     }
     else {
         uint32_t flags;
         if (!message_get_systemflags(m, &flags)) {
             return flags & FLAG_SEEN;
         }
-        else
+        else {
             return 0;
+        }
     }
 }
 
@@ -2666,7 +2966,9 @@ static void done_cb(void *rock __attribute__((unused)))
     hash_iter *iter = hash_table_iter(&attrs_by_name);
     while (hash_iter_next(iter)) {
         struct search_attr *attr = hash_iter_val(iter);
-        if (attr->freeattr) attr->freeattr(&attr);
+        if (attr->freeattr) {
+            attr->freeattr(&attr);
+        }
     }
     hash_iter_free(&iter);
     free_hash_table(&attrs_by_name, NULL);
@@ -3136,8 +3438,9 @@ EXPORTED void search_attr_init(void)
     };
 
     construct_hash_table(&attrs_by_name, VECTOR_SIZE(attrs), 0);
-    for (i = 0; i < VECTOR_SIZE(attrs); i++)
+    for (i = 0; i < VECTOR_SIZE(attrs); i++) {
         hash_insert(attrs[i].name, (void *) &attrs[i], &attrs_by_name);
+    }
 
     search_attr_initialized = 1;
 }
@@ -3161,7 +3464,9 @@ EXPORTED const search_attr_t *search_attr_find(const char *name)
 
 static void field_attr_free(search_attr_t **attrp)
 {
-    if (!attrp) return;
+    if (!attrp) {
+        return;
+    }
     search_attr_t *attr = *attrp;
     free((char *) attr->name);
     free(attr);
@@ -3201,7 +3506,9 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     if (!strcasecmp(field, "bcc") || !strcasecmp(field, "cc")
         || !strcasecmp(field, "to") || !strcasecmp(field, "from")
         || !strcasecmp(field, "subject") || !strcasecmp(field, "message-id"))
+    {
         return search_attr_find(field);
+    }
 
     key = lcase(strconcat("header:", field, (char *) NULL));
     attr = (search_attr_t *) hash_lookup(key, &attrs_by_name);

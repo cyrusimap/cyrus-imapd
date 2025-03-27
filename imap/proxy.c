@@ -73,7 +73,9 @@ EXPORTED void proxy_adddest(struct dest **dlist,
     for (d = *dlist; d != NULL; d = d->next) {
         if (!strcmp(d->server, server)
             && !strcmp(d->authas, authas ? authas : ""))
+        {
             break;
+        }
     }
 
     if (d == NULL) {
@@ -111,12 +113,18 @@ EXPORTED void proxy_downserver(struct backend *s)
     backend_disconnect(s);
 
     /* clear any references to this backend */
-    if (s->inbox && (s == *(s->inbox))) *(s->inbox) = NULL;
-    if (s->current && (s == *(s->current))) *(s->current) = NULL;
+    if (s->inbox && (s == *(s->inbox))) {
+        *(s->inbox) = NULL;
+    }
+    if (s->current && (s == *(s->current))) {
+        *(s->current) = NULL;
+    }
     s->inbox = s->current = NULL;
 
     /* remove the timeout */
-    if (s->timeout) prot_removewaitevent(s->clientin, s->timeout);
+    if (s->timeout) {
+        prot_removewaitevent(s->clientin, s->timeout);
+    }
     s->timeout = NULL;
     s->clientin = NULL;
 }
@@ -178,8 +186,9 @@ EXPORTED struct backend *proxy_findserver(
                     backend_disconnect(ret);
 
                     /* remove the timeout */
-                    if (ret->timeout)
+                    if (ret->timeout) {
                         prot_removewaitevent(ret->clientin, ret->timeout);
+                    }
                     ret->timeout = NULL;
                     ret->clientin = NULL;
                 }
@@ -191,7 +200,9 @@ EXPORTED struct backend *proxy_findserver(
     if (!ret || (ret->sock == -1)) {
         /* need to (re)establish connection to server or create one */
         ret = backend_connect(ret, server, prot, userid, NULL, NULL, -1);
-        if (!ret) return NULL;
+        if (!ret) {
+            return NULL;
+        }
 
         if (clientin) {
             /* add the timeout */
@@ -205,7 +216,9 @@ EXPORTED struct backend *proxy_findserver(
     ret->inbox = inbox;
 
     /* insert server in list of cache connections */
-    if (cache) ptrarray_add(cache, ret);
+    if (cache) {
+        ptrarray_add(cache, ret);
+    }
 
     return ret;
 }
@@ -243,7 +256,9 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
         fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
     }
 
-    if (extra_read_flag && *extra_read_flag) n--;
+    if (extra_read_flag && *extra_read_flag) {
+        n--;
+    }
 
     if (n && protout) {
         /* see who has input */
@@ -280,7 +295,9 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
                     char buf[4096];
                     int c = prot_read(pin, buf, sizeof(buf));
 
-                    if (c == 0 || c < 0) break;
+                    if (c == 0 || c < 0) {
+                        break;
+                    }
                     prot_write(pout, buf, c);
                 } while (pin->cnt > 0);
 
@@ -331,7 +348,9 @@ EXPORTED int proxy_mlookup(const char *name,
         mboxlist_entry_free(&mbentry);
         r = mboxlist_lookup(name, &mbentry, tid);
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
     if (mbentry->mbtype & MBTYPE_RESERVE) {
         r = IMAP_MAILBOX_RESERVED;
     }
@@ -348,10 +367,12 @@ EXPORTED int proxy_mlookup(const char *name,
     }
 
 done:
-    if (!r && mbentryp)
+    if (!r && mbentryp) {
         *mbentryp = mbentry;
-    else
+    }
+    else {
         mboxlist_entry_free(&mbentry);
+    }
 
     return r;
 }

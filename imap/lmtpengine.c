@@ -300,7 +300,9 @@ static void msg_free(message_data_t *m)
 
     if (m->authuser) {
         free(m->authuser);
-        if (m->authstate) auth_freestate(m->authstate);
+        if (m->authstate) {
+            auth_freestate(m->authstate);
+        }
     }
 
     spool_free_hdrcache(m->hdrcache);
@@ -384,7 +386,9 @@ static char *parseautheq(char **strp)
     ret[0] = '\0';
     str = ret;
 
-    if (*s == '<') s++; /* we'll be liberal and accept "<foo>" */
+    if (*s == '<') {
+        s++; /* we'll be liberal and accept "<foo>" */
+    }
     while (1) {
         /* hexchar */
         if (*s == '+') {
@@ -393,10 +397,12 @@ static char *parseautheq(char **strp)
             s++;
 
             for (lup = 0; lup < 2; lup++) {
-                if ((*s >= '0') && (*s <= '9'))
+                if ((*s >= '0') && (*s <= '9')) {
                     (*str) = (*str) & (*s - '0');
-                else if ((*s >= 'A') && (*s <= 'F'))
+                }
+                else if ((*s >= 'A') && (*s <= 'F')) {
                     (*str) = (*str) & (*s - 'A' + 10);
+                }
                 else {
                     free(ret);
                     *strp = s;
@@ -445,25 +451,36 @@ static char *parseaddr(char *s)
 
     p = s;
 
-    if (*p++ != '<') return 0;
+    if (*p++ != '<') {
+        return 0;
+    }
 
     /* at-domain-list */
     while (*p == '@') {
         p++;
         if (*p == '[') {
             p++;
-            while (Uisdigit(*p) || *p == '.') p++;
-            if (*p++ != ']') return 0;
+            while (Uisdigit(*p) || *p == '.') {
+                p++;
+            }
+            if (*p++ != ']') {
+                return 0;
+            }
         }
         else {
-            while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
+            while (Uisalnum(*p) || *p == '.' || *p == '-') {
+                p++;
+            }
         }
-        if (*p == ',' && p[1] == '@')
+        if (*p == ',' && p[1] == '@') {
             p++;
-        else if (*p == ':' && p[1] != '@')
+        }
+        else if (*p == ':' && p[1] != '@') {
             p++;
-        else
+        }
+        else {
             return 0;
+        }
     }
 
     /* local-part */
@@ -471,16 +488,22 @@ static char *parseaddr(char *s)
         p++;
         while (*p && *p != '\"') {
             if (*p == '\\') {
-                if (!*++p) return 0;
+                if (!*++p) {
+                    return 0;
+                }
             }
             p++;
         }
-        if (!*p++) return 0;
+        if (!*p++) {
+            return 0;
+        }
     }
     else {
         while (*p && *p != '@' && *p != '>') {
             if (*p == '\\') {
-                if (!*++p) return 0;
+                if (!*++p) {
+                    return 0;
+                }
             }
             else {
                 if (*p & 128 && !lmtp_strict_rfc2821) {
@@ -489,8 +512,9 @@ static char *parseaddr(char *s)
                        of addresses. */
                     *p = 'X';
                 }
-                if (*p <= ' ' || (*p & 128) || strchr("<>()[]\\,;:\"", *p))
+                if (*p <= ' ' || (*p & 128) || strchr("<>()[]\\,;:\"", *p)) {
                     return 0;
+                }
             }
             p++;
         }
@@ -501,16 +525,26 @@ static char *parseaddr(char *s)
         p++;
         if (*p == '[') {
             p++;
-            while (Uisdigit(*p) || *p == '.') p++;
-            if (*p++ != ']') return 0;
+            while (Uisdigit(*p) || *p == '.') {
+                p++;
+            }
+            if (*p++ != ']') {
+                return 0;
+            }
         }
         else {
-            while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
+            while (Uisalnum(*p) || *p == '.' || *p == '-') {
+                p++;
+            }
         }
     }
 
-    if (*p++ != '>') return 0;
-    if (*p && *p != ' ') return 0;
+    if (*p++ != '>') {
+        return 0;
+    }
+    if (*p && *p != ' ') {
+        return 0;
+    }
 
     return xstrndup(s, p - s);
 }
@@ -560,15 +594,21 @@ static void clean822space(char *buf)
             break;
 
         case ')':
-            if (commentlevel) commentlevel--;
+            if (commentlevel) {
+                commentlevel--;
+            }
             break;
 
         case '\\':
-            if (commentlevel && *from) from++;
+            if (commentlevel && *from) {
+                from++;
+            }
             /* FALL THROUGH */
 
         default:
-            if (!commentlevel) *to++ = c;
+            if (!commentlevel) {
+                *to++ = c;
+            }
             break;
         }
     }
@@ -642,7 +682,9 @@ static int savemsg(struct clientdata *cd,
     /* add a received header */
     time_to_rfc5322(now, datestr, sizeof(datestr));
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
-    if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
+    if (m->authuser) {
+        addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
+    }
     addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
@@ -784,7 +826,9 @@ static int savemsg(struct clientdata *cd,
                 error_message(errno));
         }
         fclose(f);
-        if (func->removespool) func->removespool(m);
+        if (func->removespool) {
+            func->removespool(m);
+        }
         return IMAP_IOERROR;
     }
 
@@ -795,7 +839,9 @@ static int savemsg(struct clientdata *cd,
                         error_message(errno));
         }
         fclose(f);
-        if (func->removespool) func->removespool(m);
+        if (func->removespool) {
+            func->removespool(m);
+        }
         return IMAP_IOERROR;
     }
     m->size = sbuf.st_size;
@@ -818,12 +864,16 @@ static int process_recipient(char *addr,
 {
     assert(addr != NULL && msg != NULL);
 
-    if (*addr == '<') addr++;
+    if (*addr == '<') {
+        addr++;
+    }
 
     /* Skip at-domain-list */
     if (*addr == '@') {
         addr = strchr(addr, ':');
-        if (!addr) return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!addr) {
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
         addr++;
     }
 
@@ -831,7 +881,9 @@ static int process_recipient(char *addr,
     int r = 0;
 
     size_t sl = strlen(addr);
-    if (addr[sl - 1] == '>') sl--;
+    if (addr[sl - 1] == '>') {
+        sl--;
+    }
 
     if (sl) {
         char *rcpt = xstrndup(addr, sl);
@@ -839,7 +891,9 @@ static int process_recipient(char *addr,
         free(rcpt);
 
         int forcedowncase = config_getswitch(IMAPOPT_LMTP_DOWNCASE_RCPT);
-        if (forcedowncase) mbname_downcaseuser(mbname);
+        if (forcedowncase) {
+            mbname_downcaseuser(mbname);
+        }
 
         /* strip username if postuser */
         if (!strcmpsafe(mbname_localpart(mbname),
@@ -848,7 +902,9 @@ static int process_recipient(char *addr,
             mbname_set_localpart(mbname, NULL);
             if (!config_virtdomains
                 || !strcmpsafe(mbname_domain(mbname), config_defdomain))
+            {
                 mbname_set_domain(mbname, NULL);
+            }
         }
 
         if ((r = verify_user(mbname,
@@ -900,7 +956,9 @@ static int localauth_mechlist_override(void *context __attribute__((unused)),
     /* If we are doing local auth, we only support EXTERNAL */
     if (strcmp(option, "mech_list") == 0) {
         *result = "EXTERNAL";
-        if (len) *len = strlen(*result);
+        if (len) {
+            *len = strlen(*result);
+        }
         return SASL_OK;
     }
 
@@ -930,18 +988,24 @@ static int reset_saslconn(sasl_conn_t **conn)
                           NULL,
                           0,
                           conn);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
     if (saslprops.ssf) {
         ret = saslprops_set_tls(&saslprops, *conn);
     }
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -978,7 +1042,9 @@ void lmtpmode(struct lmtp_func *func,
     max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
 
     /* 0 means "unlimited", which really means our internally-defined limit */
-    if (max_msgsize <= 0) max_msgsize = BYTESIZE_UNLIMITED;
+    if (max_msgsize <= 0) {
+        max_msgsize = BYTESIZE_UNLIMITED;
+    }
 
     msg_new(&msg, func->namespace);
 
@@ -1029,8 +1095,9 @@ void lmtpmode(struct lmtp_func *func,
                                                the AUTH command */
         saslprops.ssf = 2;
         buf_setcstr(&saslprops.authid, auth_id);
-        if (saslprops_set_tls(&saslprops, cd.conn) != SASL_OK)
+        if (saslprops_set_tls(&saslprops, cd.conn) != SASL_OK) {
             fatal("saslprops_set_tls() failed: preauth", EX_TEMPFAIL);
+        }
 
         deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     }
@@ -1055,8 +1122,12 @@ void lmtpmode(struct lmtp_func *func,
             goto cleanup;
         }
         p = buf + strlen(buf) - 1;
-        if (p >= buf && *p == '\n') *p-- = '\0';
-        if (p >= buf && *p == '\r') *p-- = '\0';
+        if (p >= buf && *p == '\n') {
+            *p-- = '\0';
+        }
+        if (p >= buf && *p == '\r') {
+            *p-- = '\0';
+        }
 
         /* Only allow LHLO/NOOP/QUIT when there is a shutdown file */
         if (!strchr("LlNnQq", buf[0]) && shutdown_file(buf, sizeof(buf))) {
@@ -1067,8 +1138,9 @@ void lmtpmode(struct lmtp_func *func,
             func->shutdown(0);
         }
 
-        if (config_getswitch(IMAPOPT_CHATTY))
+        if (config_getswitch(IMAPOPT_CHATTY)) {
             syslog(LOG_NOTICE, "command: %s", buf);
+        }
 
         switch (buf[0]) {
         case 'a':
@@ -1139,10 +1211,11 @@ void lmtpmode(struct lmtp_func *func,
                             continue;
                         }
                         else {
-                            if (r != SASL_NOUSER)
+                            if (r != SASL_NOUSER) {
                                 sasl_getprop(cd.conn,
                                              SASL_USERNAME,
                                              (const void **) &userid);
+                            }
 
                             syslog(LOG_ERR,
                                    "badlogin: %s %s (%s) [%s]",
@@ -1242,7 +1315,9 @@ void lmtpmode(struct lmtp_func *func,
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
 
                 for (j = 0; j < msg->rcpt_num; j++) {
-                    if (!msg->rcpt[j]->status) delivered++;
+                    if (!msg->rcpt[j]->status) {
+                        delivered++;
+                    }
                     send_lmtp_error(
                         pout, msg->rcpt[j]->status, msg->rcpt[j]->resp);
                 }
@@ -1487,7 +1562,9 @@ void lmtpmode(struct lmtp_func *func,
 
                 r = process_recipient(
                     rcpt, ignorequota, func->verify_user, msg);
-                if (rcpt) free(rcpt); /* malloc'd in parseaddr() */
+                if (rcpt) {
+                    free(rcpt); /* malloc'd in parseaddr() */
+                }
                 if (r) {
                     send_lmtp_error(pout, r, NULL);
                     continue;
@@ -1503,7 +1580,9 @@ void lmtpmode(struct lmtp_func *func,
                     pout, "250 2.0.0 Ok SESSIONID=<%s>\r\n", session_id());
 
             rset:
-                if (msg) msg_free(msg);
+                if (msg) {
+                    msg_free(msg);
+                }
                 msg_new(&msg, func->namespace);
 
                 continue;
@@ -1603,10 +1682,14 @@ void lmtpmode(struct lmtp_func *func,
 cleanup:
     /* free resources and return; this connection has been closed */
 
-    if (msg) msg_free(msg);
+    if (msg) {
+        msg_free(msg);
+    }
 
     /* security */
-    if (cd.conn) sasl_dispose(&cd.conn);
+    if (cd.conn) {
+        sasl_dispose(&cd.conn);
+    }
     saslprops_reset(&saslprops);
 
     cd.starttls_done = 0;
@@ -1680,14 +1763,18 @@ static int revconvert_lmtp(const char *code)
         return IMAP_MESSAGE_BADHEADER; /* sigh, pick one */
 
     default:
-        if (ISGOOD(c))
+        if (ISGOOD(c)) {
             return 0;
-        else if (TEMPFAIL(c))
+        }
+        else if (TEMPFAIL(c)) {
             return IMAP_AGAIN;
-        else if (PERMFAIL(c))
+        }
+        else if (PERMFAIL(c)) {
             return IMAP_PROTOCOL_ERROR;
-        else
+        }
+        else {
             return IMAP_AGAIN;
+        }
     }
 }
 
@@ -1695,9 +1782,13 @@ static int ask_code(const char *s)
 {
     int ret = 0;
 
-    if (s == NULL) return -1;
+    if (s == NULL) {
+        return -1;
+    }
 
-    if (strlen(s) < 3) return -1;
+    if (strlen(s) < 3) {
+        return -1;
+    }
 
     /* check to make sure 0-2 are digits */
     if ((Uisdigit(s[0]) == 0) || (Uisdigit(s[1]) == 0) || (Uisdigit(s[2]) == 0))
@@ -1728,9 +1819,13 @@ static int getlastresp(
             return IMAP_SERVER_UNAVAILABLE;
         }
 
-        if (!*code) *code = ask_code(buf);
+        if (!*code) {
+            *code = ask_code(buf);
+        }
         if (sa && (*code == 550)) {
-            if (!*sa) *sa = strarray_new();
+            if (!*sa) {
+                *sa = strarray_new();
+            }
             strarray_append(*sa, buf);
         }
     } while (ISCONT(buf));
@@ -1899,7 +1994,9 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     }
     if (code != 354) {
         /* erg? */
-        if (ISGOOD(code)) code = 400;
+        if (ISGOOD(code)) {
+            code = 400;
+        }
         r = IMAP_PROTOCOL_ERROR;
         goto failall;
     }

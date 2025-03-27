@@ -131,8 +131,9 @@ int main(int argc, char *argv[])
     for (i = optind; i < argc; i++) {
         strarray_append(array, argv[i]);
     }
-    if (array->count)
+    if (array->count) {
         mboxlist_findallmulti(NULL, array, 1, 0, 0, dump_me, &irec);
+    }
 
     strarray_free(array);
 
@@ -191,8 +192,12 @@ static int dump_me(struct findall_data *data, void *rock)
     unsigned msgno;
 
     /* don't want partial matches */
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
     const char *name = mbname_intname(data->mbname);
 
@@ -240,28 +245,36 @@ static int dump_me(struct findall_data *data, void *rock)
     n = index_getuidsequence(state, &searchargs, &uidseq);
     search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Answered\" user=\"*\"", uidseq, n);
-    if (uidseq) free(uidseq);
+    if (uidseq) {
+        free(uidseq);
+    }
 
     searchargs.root = systemflag_match(FLAG_DELETED);
     uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
     search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Deleted\" user=\"*\"", uidseq, n);
-    if (uidseq) free(uidseq);
+    if (uidseq) {
+        free(uidseq);
+    }
 
     searchargs.root = systemflag_match(FLAG_DRAFT);
     uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
     search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Draft\" user=\"*\"", uidseq, n);
-    if (uidseq) free(uidseq);
+    if (uidseq) {
+        free(uidseq);
+    }
 
     searchargs.root = systemflag_match(FLAG_FLAGGED);
     uidseq = NULL;
     n = index_getuidsequence(state, &searchargs, &uidseq);
     search_expr_free(searchargs.root);
     print_seq("flag", "name=\"\\Flagged\" user=\"*\"", uidseq, n);
-    if (uidseq) free(uidseq);
+    if (uidseq) {
+        free(uidseq);
+    }
 
     printf("  </flags>\n");
 
@@ -280,17 +293,25 @@ static int dump_me(struct findall_data *data, void *rock)
         struct index_map *im = &state->map[msgno - 1];
         struct index_record record;
 
-        while (im->uid > uids[i] && i < numuids) i++;
-        if (i >= numuids) break;
+        while (im->uid > uids[i] && i < numuids) {
+            i++;
+        }
+        if (i >= numuids) {
+            break;
+        }
 
-        if (im->uid < uids[i]) continue;
+        if (im->uid < uids[i]) {
+            continue;
+        }
 
         /* got a match */
         i++;
         memset(&record, 0, sizeof(struct index_record));
         record.recno = im->recno;
         record.uid = im->uid;
-        if (mailbox_reload_index_record(state->mailbox, &record)) continue;
+        if (mailbox_reload_index_record(state->mailbox, &record)) {
+            continue;
+        }
 
         printf("\n--%s\n", boundary);
         printf("Content-Type: message/rfc822\n");

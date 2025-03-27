@@ -208,7 +208,9 @@ __attribute__((nonnull(3, 4, 5))) static int parseheader(
             else if (c != ' ' && c != '\t') {
                 /* i want to avoid confusing dot-stuffing later */
                 while (c == '.') {
-                    if (!skip) buf_putc(&raw, c);
+                    if (!skip) {
+                        buf_putc(&raw, c);
+                    }
                     c = prot_getc(fin);
                 }
                 r = IMAP_MESSAGE_BADHEADER;
@@ -224,7 +226,9 @@ __attribute__((nonnull(3, 4, 5))) static int parseheader(
 
                 peek = prot_getc(fin);
 
-                if (!skip) buf_appendcstr(&raw, "\r\n");
+                if (!skip) {
+                    buf_appendcstr(&raw, "\r\n");
+                }
                 /* we should peek ahead to see if it's folded whitespace */
                 if (c == '\r' && peek == '\n') {
                     c = prot_getc(fin);
@@ -242,8 +246,9 @@ __attribute__((nonnull(3, 4, 5))) static int parseheader(
                 }
             }
 
-            if (c == ' ' || c == '\t') /* eat the whitespace */
+            if (c == ' ' || c == '\t') /* eat the whitespace */ {
                 break;
+            }
             buf_reset(&body);
             s = BODY;
             /* falls through! */
@@ -254,7 +259,9 @@ __attribute__((nonnull(3, 4, 5))) static int parseheader(
 
                 peek = prot_getc(fin);
 
-                if (!skip) buf_appendcstr(&raw, "\r\n");
+                if (!skip) {
+                    buf_appendcstr(&raw, "\r\n");
+                }
                 /* we should peek ahead to see if it's folded whitespace */
                 if (c == '\r' && peek == '\n') {
                     c = prot_getc(fin);
@@ -288,7 +295,9 @@ __attribute__((nonnull(3, 4, 5))) static int parseheader(
         }
 
         /* copy this to the output */
-        if (s != NAME && !skip) buf_putc(&raw, c);
+        if (s != NAME && !skip) {
+            buf_putc(&raw, c);
+        }
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
@@ -296,10 +305,14 @@ __attribute__((nonnull(3, 4, 5))) static int parseheader(
 
 ph_error:
     /* we still output on error */
-    if (fout) fputs(buf_cstring(&raw), fout);
+    if (fout) {
+        fputs(buf_cstring(&raw), fout);
+    }
 
     /* put the last character back; we'll copy it later */
-    if (c != EOF) prot_ungetc(c, fin);
+    if (c != EOF) {
+        prot_ungetc(c, fin);
+    }
 
     /* and we didn't get a header */
     *headname = NULL;
@@ -309,7 +322,9 @@ ph_error:
     return r;
 
 got_header:
-    if (fout) fputs(buf_cstring(&raw), fout);
+    if (fout) {
+        fputs(buf_cstring(&raw), fout);
+    }
 
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
@@ -339,7 +354,9 @@ static struct header_t *__spool_cache_header(char *name,
     hash_table *table = &cache->cache;
     contents = (ptrarray_t *) hash_lookup(lcname, table);
 
-    if (!contents) contents = hash_insert(lcname, ptrarray_new(), table);
+    if (!contents) {
+        contents = hash_insert(lcname, ptrarray_new(), table);
+    }
     ptrarray_append(contents, hdr);
 
     return hdr;
@@ -355,10 +372,12 @@ EXPORTED void spool_prepend_header_raw(char *name,
     /* link header at head of list */
     hdr->next = cache->head;
 
-    if (cache->head)
+    if (cache->head) {
         cache->head->prev = hdr;
-    else
+    }
+    else {
         cache->tail = hdr;
+    }
 
     cache->head = hdr;
 }
@@ -378,10 +397,12 @@ EXPORTED void spool_append_header_raw(char *name,
     /* link header at tail of list */
     hdr->prev = cache->tail;
 
-    if (cache->tail)
+    if (cache->tail) {
         cache->tail->next = hdr;
-    else
+    }
+    else {
         cache->head = hdr;
+    }
 
     cache->tail = hdr;
 }
@@ -411,27 +432,36 @@ static void __spool_remove_header(const char *name,
         int idx;
 
         /* normalize indices */
-        if (first < 0) first += ptrarray_size(contents);
+        if (first < 0) {
+            first += ptrarray_size(contents);
+        }
         if (last < 0) {
             last += ptrarray_size(contents);
-            if (last < 0) first = 0;
+            if (last < 0) {
+                first = 0;
+            }
         }
-        else if (last >= ptrarray_size(contents))
+        else if (last >= ptrarray_size(contents)) {
             first = last + 1;
+        }
 
         for (idx = last; idx >= first; idx--) {
             /* remove header from ptrarray */
             struct header_t *hdr = ptrarray_remove(contents, idx);
 
             /* unlink header from list */
-            if (hdr->prev)
+            if (hdr->prev) {
                 hdr->prev->next = hdr->next;
-            else
+            }
+            else {
                 cache->head = hdr->next;
-            if (hdr->next)
+            }
+            if (hdr->next) {
                 hdr->next->prev = hdr->prev;
-            else
+            }
+            else {
                 cache->tail = hdr->prev;
+            }
 
             /* free header_t */
             free(hdr->name);
@@ -451,8 +481,12 @@ EXPORTED void spool_remove_header_instance(const char *name,
                                            int n,
                                            hdrcache_t cache)
 {
-    if (!n) return;
-    if (n > 0) n--; /* normalize to zero */
+    if (!n) {
+        return;
+    }
+    if (n > 0) {
+        n--; /* normalize to zero */
+    }
 
     __spool_remove_header(name, n, n, cache);
 }
@@ -536,7 +570,9 @@ EXPORTED void spool_free_hdrcache(hdrcache_t cache)
 {
     int i;
 
-    if (!cache) return;
+    if (!cache) {
+        return;
+    }
 
     free_hash_table(&cache->cache, (void (*)(void *)) __spool_free_hdrcache);
 
@@ -557,7 +593,9 @@ EXPORTED void spool_enum_hdrcache(
 {
     struct header_t *hdr;
 
-    if (!cache) return;
+    if (!cache) {
+        return;
+    }
 
     for (hdr = cache->head; hdr; hdr = hdr->next) {
         proc(hdr->name, hdr->body, hdr->raw, rock);
@@ -621,10 +659,14 @@ EXPORTED int spool_copy_msg(struct protstream *fin, FILE *fout)
                 goto dot;
             }
             /* Remove the dot-stuffing */
-            if (fout) fputs(buf + 1, fout);
+            if (fout) {
+                fputs(buf + 1, fout);
+            }
         }
         else {
-            if (fout) fputs(buf, fout);
+            if (fout) {
+                fputs(buf, fout);
+            }
         }
     }
 

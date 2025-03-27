@@ -124,7 +124,9 @@ EXPORTED int caldav_alarm_init(void)
 
     min_interval =
         config_getduration(IMAPOPT_CALENDAR_MINIMUM_ALARM_INTERVAL, 'm');
-    if (min_interval < 0) min_interval = 0;
+    if (min_interval < 0) {
+        min_interval = 0;
+    }
 
     return sqldb_init();
 }
@@ -255,7 +257,9 @@ static int caldav_alarm_close(sqldb_t *alarmdb)
 {
     assert(my_alarmdb == alarmdb);
 
-    if (--refcount) return 0;
+    if (--refcount) {
+        return 0;
+    }
 
     sqldb_close(&my_alarmdb);
     mboxname_release(&my_alarmdb_lock);
@@ -272,7 +276,9 @@ EXPORTED int caldav_alarm_set_reconstruct(sqldb_t *db)
 
     // create the events table
     int rc = sqldb_exec(db, CMD_CREATE, NULL, NULL, NULL);
-    if (rc != SQLITE_OK) return IMAP_IOERROR;
+    if (rc != SQLITE_OK) {
+        return IMAP_IOERROR;
+    }
 
     // preload the DB into our refcounter
     my_alarmdb = db;
@@ -324,16 +330,24 @@ EXPORTED int caldav_alarm_commit_reconstruct(const char *userid)
 
     sqldb_t *alarmdb = caldav_alarm_open();
     int r = sqldb_begin(alarmdb, "replace_alarms");
-    if (!r) r = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
-    if (!r) r = sqldb_exec(db, CMD_SELECTUSER, bval, &copydb, alarmdb);
-    if (!r)
+    if (!r) {
+        r = sqldb_exec(alarmdb, CMD_DELETEUSER, bval, NULL, NULL);
+    }
+    if (!r) {
+        r = sqldb_exec(db, CMD_SELECTUSER, bval, &copydb, alarmdb);
+    }
+    if (!r) {
         r = sqldb_commit(alarmdb, "replace_alarms");
-    else
+    }
+    else {
         sqldb_rollback(alarmdb, "replace_alarms");
+    }
     caldav_alarm_close(alarmdb);
 
     // if we succeeded, drop the copy of events in this DB
-    if (!r) r = sqldb_exec(db, "DROP TABLE events;", NULL, NULL, NULL);
+    if (!r) {
+        r = sqldb_exec(db, "DROP TABLE events;", NULL, NULL, NULL);
+    }
 
     free(prefix);
 
@@ -377,7 +391,9 @@ static int send_alarm(struct get_alarm_rock *rock,
     const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     annotatemore_lookupmask(
         rock->mboxname, displayname_annot, userid, &calname);
-    if (!calname.len) buf_setcstr(&calname, calid);
+    if (!calname.len) {
+        buf_setcstr(&calname, calid);
+    }
 
     /* get the calendar color annotation */
     const char *color_annot = DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
@@ -412,7 +428,9 @@ static int send_alarm(struct get_alarm_rock *rock,
     struct jmap_caleventid eid = { 0 };
 
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
-    if (prop) eid.ical_uid = icalproperty_get_value_as_string(prop);
+    if (prop) {
+        eid.ical_uid = icalproperty_get_value_as_string(prop);
+    }
     FILL_STRING_PARAM(
         event,
         EVENT_CALENDAR_UID,
@@ -426,7 +444,9 @@ static int send_alarm(struct get_alarm_rock *rock,
     }
 
     // set calendarEventId
-    if (eid.ical_uid) jmap_caleventid_encode(&eid, &buf);
+    if (eid.ical_uid) {
+        jmap_caleventid_encode(&eid, &buf);
+    }
     FILL_STRING_PARAM(event, EVENT_CALENDAR_EVENTID, buf_release(&buf));
 
     // set recurrenceId
@@ -467,14 +487,18 @@ static int send_alarm(struct get_alarm_rock *rock,
         xstrdupsafe(prop ? icalproperty_get_value_as_string(prop) : ""));
 
     const char *timezone = NULL;
-    if (!icaltime_is_date(start) && icaltime_is_utc(start))
+    if (!icaltime_is_date(start) && icaltime_is_utc(start)) {
         timezone = "UTC";
-    else if (icaltime_get_timezone(start))
+    }
+    else if (icaltime_get_timezone(start)) {
         timezone = icaltime_get_location_tzid(start);
-    else if (rock->floatingtz)
+    }
+    else if (rock->floatingtz) {
         timezone = icaltimezone_get_location_tzid(rock->floatingtz);
-    else
+    }
+    else {
         timezone = "[floating]";
+    }
     FILL_STRING_PARAM(event, EVENT_CALENDAR_TIMEZONE, xstrdupsafe(timezone));
     FILL_STRING_PARAM(
         event, EVENT_CALENDAR_START, xstrdup(icaltime_as_ical_string(start)));
@@ -489,7 +513,9 @@ static int send_alarm(struct get_alarm_rock *rock,
          prop = icalcomponent_get_next_property(alarm, ICAL_ATTENDEE_PROPERTY))
     {
         const char *email = icalproperty_get_value_as_string(prop);
-        if (!email) continue;
+        if (!email) {
+            continue;
+        }
         strarray_append(recipients, email);
     }
     FILL_ARRAY_PARAM(event, EVENT_CALENDAR_ALARM_RECIPIENTS, recipients);
@@ -505,7 +531,9 @@ static int send_alarm(struct get_alarm_rock *rock,
          prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY))
     {
         const char *email = icalproperty_get_value_as_string(prop);
-        if (!email) continue;
+        if (!email) {
+            continue;
+        }
         strarray_append(attendee_emails, email);
 
         const char *name = icalproperty_get_parameter_as_string(prop, "CN");
@@ -562,7 +590,9 @@ static int process_alarm_cb(icalcomponent *comp,
     struct hashset *seen_alarms = hashset_new(sizeof(struct alarm_id));
 
     /* Skip cancelled events */
-    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) goto done;
+    if (icalcomponent_get_status(comp) == ICAL_STATUS_CANCELLED) {
+        goto done;
+    }
 
     /* Skip declined events */
     get_schedule_addresses(data->mboxname, data->userid, &sched_addrs);
@@ -572,7 +602,9 @@ static int process_alarm_cb(icalcomponent *comp,
     {
         const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
 
-        if (!attendee) continue;
+        if (!attendee) {
+            continue;
+        }
 
         if (strarray_contains_case(&sched_addrs, attendee)) {
             const char *partstat =
@@ -708,8 +740,9 @@ static int process_alarm_cb(icalcomponent *comp,
         if (check > data->now + 86400 * 60) {
             syslog(LOG_DEBUG, "XXX  pushing off nextcheck");
             time_t next = data->now + 86400 * 30;
-            if (!data->nextcheck || next < data->nextcheck)
+            if (!data->nextcheck || next < data->nextcheck) {
                 data->nextcheck = next;
+            }
             keep_processing_recurrences = 0;
             goto done;
         }
@@ -751,7 +784,9 @@ static int update_alarmdb(const char *mboxname,
     };
 
     sqldb_t *alarmdb = caldav_alarm_open();
-    if (!alarmdb) return -1;
+    if (!alarmdb) {
+        return -1;
+    }
     int rc = SQLITE_OK;
 
     syslog(LOG_DEBUG,
@@ -766,14 +801,18 @@ static int update_alarmdb(const char *mboxname,
            last_run,
            last_err ? last_err : "NULL");
 
-    if (nextcheck)
+    if (nextcheck) {
         rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
-    else
+    }
+    else {
         rc = sqldb_exec(alarmdb, CMD_DELETE, bval, NULL, NULL);
+    }
 
     caldav_alarm_close(alarmdb);
 
-    if (rc == SQLITE_OK) return 0;
+    if (rc == SQLITE_OK) {
+        return 0;
+    }
 
     /* failed? */
     return -1;
@@ -847,8 +886,12 @@ static int has_peruser_alarms_cb(const char *mailbox,
     }
 
 done:
-    if (vpatch) icalcomponent_free(vpatch);
-    if (dl) dlist_free(&dl);
+    if (vpatch) {
+        icalcomponent_free(vpatch);
+    }
+    if (dl) {
+        dlist_free(&dl);
+    }
     return 0;
 }
 
@@ -982,7 +1025,9 @@ static int has_alarms(void *data,
 
                 struct icalrecurrencetype *rrule =
                     icalproperty_get_recurrence(prop);
-                if (!rrule) continue;
+                if (!rrule) {
+                    continue;
+                }
 
                 int recur_interval = rrule->interval;
                 const char *bypart = "";
@@ -1066,9 +1111,12 @@ static int has_alarms(void *data,
             }
 
             if (icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT))
+            {
                 return 1;
-            else if (icalcomponent_get_usedefaultalerts(comp))
+            }
+            else if (icalcomponent_get_usedefaultalerts(comp)) {
                 return 1;
+            }
         }
     }
 
@@ -1132,7 +1180,9 @@ static time_t process_alarms(const char *mboxname,
     struct icalperiodtype range = icalperiodtype_null_period();
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
 
-    if (myical) icalcomponent_free(myical);
+    if (myical) {
+        icalcomponent_free(myical);
+    }
     return rock.nextcheck;
 }
 
@@ -1303,12 +1353,16 @@ static int caldav_alarm_bump_nextcheck(struct caldav_alarm_data *data,
 {
     uint32_t num_retries = data->num_retries;
 
-    if (last_err)
+    if (last_err) {
         num_retries++;
-    else
+    }
+    else {
         last_err = data->last_err;
+    }
 
-    if (!last_run) last_run = data->last_run;
+    if (!last_run) {
+        last_run = data->last_run;
+    }
 
     return update_alarmdb(data->mboxname,
                           data->imap_uid,
@@ -1453,7 +1507,9 @@ static int process_peruser_alarms_cb(const char *mailbox,
         prock->alarm->nextcheck = check;
     }
 
-    if (floatingtz) icaltimezone_free(floatingtz, 1);
+    if (floatingtz) {
+        icaltimezone_free(floatingtz, 1);
+    }
     icalcomponent_free(myical);
     dlist_free(&dl);
 
@@ -1518,8 +1574,9 @@ static int process_valarms(struct mailbox *mailbox,
     }
 
     struct lastalarm_data data;
-    if (read_lastalarm(mailbox, record, &data))
+    if (read_lastalarm(mailbox, record, &data)) {
         data.lastrun = record->internaldate;
+    }
 
     /* Process VALARMs in iCalendar resource */
     char *userid = mboxname_to_userid(mboxname);
@@ -1569,13 +1626,17 @@ static int process_valarms(struct mailbox *mailbox,
                                  /* flags */ 0);
 
     data.lastrun = runtime;
-    if (!dryrun) write_lastalarm(mailbox, record, &data);
+    if (!dryrun) {
+        write_lastalarm(mailbox, record, &data);
+    }
 
     update_alarmdb(
         mboxname, record->uid, data.nextcheck, ALARM_CALENDAR, 0, 0, 0, NULL);
 
 done_item:
-    if (ical) icalcomponent_free(ical);
+    if (ical) {
+        icalcomponent_free(ical);
+    }
     caldav_close(db);
     return 0;
 }
@@ -1611,15 +1672,21 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
            destmboxid);
 
     mr = msgrecord_from_index_record(srcmbox, record);
-    if (!mr) goto done;
+    if (!mr) {
+        goto done;
+    }
 
     /* Fetch message */
     r = msgrecord_get_body(mr, &buf);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Fetch annotations */
     r = msgrecord_extract_annots(mr, &annots);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     mbname = mbname_from_intname(mailbox_name(srcmbox));
     mbname_set_boxes(mbname, NULL);
@@ -1628,7 +1695,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
 
     /* Fetch flags */
     r = msgrecord_extract_flags(mr, userid, &flags);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     if (is_snoozed) {
         /* Add \snoozed pseudo-flag */
@@ -1644,10 +1713,12 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
         {
             const char *flag = jmap_keyword_to_imap(key);
             if (flag) {
-                if (json_is_true(val))
+                if (json_is_true(val)) {
                     strarray_add_case(flags, flag);
-                else
+                }
+                else {
                     strarray_remove_all_case(flags, flag);
+                }
             }
         }
     }
@@ -1689,7 +1760,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     /* Fetch message filename */
     const char *fname;
     r = msgrecord_get_fname(mr, &fname);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Prepare to stage the message */
     if (!(f = append_newstage_full(destname, time(0), 0, &stage, fname))) {
@@ -1700,7 +1773,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     fclose(f);
 
     r = mailbox_open_iwl(destname, &destmbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* XXX: should we look for an existing record with that GUID in the target
      * folder first and just remove this copy if so?  Otherwise we could
@@ -1718,7 +1793,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
                           0,
                           is_snoozed ? EVENT_MESSAGE_NEW
                                      : EVENT_MESSAGE_APPEND);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Append the message to the mailbox */
     r = append_fromstage_full(&as,
@@ -1736,12 +1813,16 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     }
 
     r = append_commit(&as);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
 expunge:
     /* Expunge the resource from the source mailbox (also unset \snoozed) */
     record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
-    if (is_snoozed) record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    if (is_snoozed) {
+        record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+    }
     r = mailbox_rewrite_index_record(srcmbox, record);
     if (r) {
         syslog(LOG_ERR,
@@ -1761,9 +1842,15 @@ done:
     append_removestage(stage);
 
     mailbox_close(&destmbox);
-    if (authstate) auth_freestate(authstate);
-    if (mbname) mbname_free(&mbname);
-    if (mr) msgrecord_unref(&mr);
+    if (authstate) {
+        auth_freestate(authstate);
+    }
+    if (mbname) {
+        mbname_free(&mbname);
+    }
+    if (mr) {
+        msgrecord_unref(&mr);
+    }
     buf_free(&buf);
     free(destname);
 
@@ -1793,7 +1880,9 @@ static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
     /* Lookup mailbox and make sure it is \Scheduled */
     conv_guidrec_mbentry(rec, &mbentry);
 
-    if (!mbentry) return 0;
+    if (!mbentry) {
+        return 0;
+    }
 
     if (mboxname_isscheduledmailbox(mbentry->name, mbentry->mbtype)) {
         frock->mboxname = xstrdup(mbentry->name);
@@ -1828,10 +1917,12 @@ static int find_scheduled_email(const char *emailid,
     r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
     conversations_commit(&cstate);
 
-    if (r == IMAP_OK_COMPLETED)
+    if (r == IMAP_OK_COMPLETED) {
         r = 0;
-    else if (!frock->mboxname)
+    }
+    else if (!frock->mboxname) {
         r = IMAP_NOTFOUND;
+    }
 
     return r;
 }
@@ -1868,7 +1959,9 @@ static int update_unscheduled(const char *mboxname, time_t nextcheck)
     };
 
     sqldb_t *alarmdb = caldav_alarm_open();
-    if (!alarmdb) return -1;
+    if (!alarmdb) {
+        return -1;
+    }
 
     syslog(LOG_DEBUG,
            "update_unscheduled(%s, " TIME_T_FMT ")",
@@ -1886,7 +1979,9 @@ static int update_unscheduled(const char *mboxname, time_t nextcheck)
 
     caldav_alarm_close(alarmdb);
 
-    if (rc == SQLITE_OK) return 0;
+    if (rc == SQLITE_OK) {
+        return 0;
+    }
 
     /* failed? */
     return -1;
@@ -2045,7 +2140,9 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         if (!cancel) {
             /* Retry */
             caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
-            if (sm) smtpclient_close(&sm);
+            if (sm) {
+                smtpclient_close(&sm);
+            }
             goto done;
         }
         else if (onSend) {
@@ -2086,7 +2183,9 @@ static int process_futurerelease(struct caldav_alarm_data *data,
                 json_deep_copy(json_object_get(onSend, "setKeywords"));
         }
     }
-    if (sm) smtpclient_close(&sm);
+    if (sm) {
+        smtpclient_close(&sm);
+    }
 
     if (cancel || config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
         /* Delete the EmailSubmission object immediately */
@@ -2110,7 +2209,9 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     if (do_move) {
         /* Move the scheduled message into the specified mailbox */
-        if (!userid) userid = mboxname_to_userid(data->mboxname);
+        if (!userid) {
+            userid = mboxname_to_userid(data->mboxname);
+        }
 
         const char *emailid =
             json_string_value(json_object_get(submission, "emailId"));
@@ -2163,15 +2264,21 @@ static int process_futurerelease(struct caldav_alarm_data *data,
             }
         }
 
-        if (setkeywords) json_decref(setkeywords);
+        if (setkeywords) {
+            json_decref(setkeywords);
+        }
         mailbox_close(&sched_mbox);
         free(frock.mboxname);
     }
     free(userid);
 
 done:
-    if (submission) json_decref(submission);
-    if (m) message_unref(&m);
+    if (submission) {
+        json_decref(submission);
+    }
+    if (m) {
+        message_unref(&m);
+    }
     buf_free(&buf);
 
     return r;
@@ -2232,7 +2339,9 @@ static int process_snoozed(struct caldav_alarm_data *data,
     }
 
 done:
-    if (snoozed) json_decref(snoozed);
+    if (snoozed) {
+        json_decref(snoozed);
+    }
 
     return r;
 }
@@ -2340,7 +2449,9 @@ static void process_one_record(struct caldav_alarm_data *data,
         icaltimezone *floatingtz =
             caldav_get_calendar_tz(mailbox_name(mailbox), "");
         r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
-        if (floatingtz) icaltimezone_free(floatingtz, 1);
+        if (floatingtz) {
+            icaltimezone_free(floatingtz, 1);
+        }
         break;
     }
 #ifdef WITH_JMAP
@@ -2371,7 +2482,9 @@ static void process_one_record(struct caldav_alarm_data *data,
     }
 
 done:
-    if (r) mailbox_abort(mailbox);
+    if (r) {
+        mailbox_abort(mailbox);
+    }
     mailbox_close(&mailbox);
 }
 
@@ -2383,7 +2496,9 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     int i;
 
     // we don't process alarms on replicas
-    if (config_getswitch(IMAPOPT_REPLICAONLY)) return 0;
+    if (config_getswitch(IMAPOPT_REPLICAONLY)) {
+        return 0;
+    }
 
     // temporarily disable alarms
     const char *suppress_file =
@@ -2417,7 +2532,9 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     };
 
     sqldb_t *alarmdb = caldav_alarm_open();
-    if (!alarmdb) return HTTP_SERVER_ERROR;
+    if (!alarmdb) {
+        return HTTP_SERVER_ERROR;
+    }
 
     int rc =
         sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval, &alarm_read_cb, &rock);
@@ -2460,7 +2577,9 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
             }
             mbname_free(&mbname);
 
-            if (skip_user) continue;
+            if (skip_user) {
+                continue;
+            }
 
             // if we failed to lock the user, or have done too many for this
             // user, skip
@@ -2483,10 +2602,12 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 
         // if we both made some progress AND skipped some, then retry again
         // immediately
-        if (did_some && skipped_some)
+        if (did_some && skipped_some) {
             *intervalp = 0;
-        else
+        }
+        else {
             *intervalp = rock.next - runtime;
+        }
     }
     else {
         // we're testing or reconstructing, run everything!
@@ -2525,7 +2646,9 @@ EXPORTED int caldav_alarm_upgrade()
     strarray_t mailboxes = STRARRAY_INITIALIZER;
 
     sqldb_t *alarmdb = caldav_alarm_open();
-    if (!alarmdb) return HTTP_SERVER_ERROR;
+    if (!alarmdb) {
+        return HTTP_SERVER_ERROR;
+    }
     int rc = sqldb_exec(alarmdb,
                         "SELECT DISTINCT mailbox FROM alarms;",
                         NULL,
@@ -2540,7 +2663,9 @@ EXPORTED int caldav_alarm_upgrade()
         const char *mboxname = strarray_nth(&mailboxes, i);
         syslog(LOG_DEBUG, "UPDATING calalarm database for %s", mboxname);
         rc = mailbox_open_iwl(mboxname, &mailbox);
-        if (rc) continue;
+        if (rc) {
+            continue;
+        }
 
         sqldb_t *alarmdb = caldav_alarm_open();
         /* clean up any existing alarms for this mailbox */
@@ -2550,7 +2675,9 @@ EXPORTED int caldav_alarm_upgrade()
         };
         rc = sqldb_exec(alarmdb, CMD_DELETEMAILBOX, bval, NULL, NULL);
         caldav_alarm_close(alarmdb);
-        if (rc) continue;
+        if (rc) {
+            continue;
+        }
 
         icaltimezone *floatingtz =
             caldav_get_calendar_tz(mailbox_name(mailbox), "");
@@ -2591,13 +2718,17 @@ EXPORTED int caldav_alarm_upgrade()
         mailbox_iter_done(&iter);
         mailbox_close(&mailbox);
 
-        if (floatingtz) icaltimezone_free(floatingtz, 1);
+        if (floatingtz) {
+            icaltimezone_free(floatingtz, 1);
+        }
     }
 
     strarray_fini(&mailboxes);
 
     alarmdb = caldav_alarm_open();
-    if (!alarmdb) return HTTP_SERVER_ERROR;
+    if (!alarmdb) {
+        return HTTP_SERVER_ERROR;
+    }
     sqldb_exec(alarmdb, "DROP TABLE alarm_recipients;", NULL, NULL, NULL);
     sqldb_exec(alarmdb, "DROP TABLE alarms;", NULL, NULL, NULL);
     caldav_alarm_close(alarmdb);
@@ -2641,26 +2772,34 @@ static int upgradev4(sqldb_t *db)
 
         /* Create new table */
         r = sqldb_exec(db, CMD_CREATE_TABLE("new_events"), NULL, NULL, NULL);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* Rewrite calendar alarm records */
         bval[0].val.i = ALARM_CALENDAR;
         bval[1].val.s = buf_cstring(&calpat);
         r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_LIKE, bval, NULL, NULL);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* Rewrite JMAP submission records */
         bval[0].val.i = ALARM_SEND;
         bval[1].val.s = buf_cstring(&subpat);
         r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_LIKE, bval, NULL, NULL);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* Rewrite JMAP snooze records */
         bval[0].val.i = ALARM_SNOOZE;
         bval[1].val.s = buf_cstring(&calpat);
         bval[2].val.s = buf_cstring(&subpat);
         r = sqldb_exec(db, CMD_UPGRADEv4_SET_TYPE_NOT_LIKE, bval, NULL, NULL);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* Drop old table, rename new table, and create indexes.
 
@@ -2737,10 +2876,14 @@ EXPORTED int caldav_alarm_update_floating(struct mailbox *mailbox,
     struct caldav_db *caldavdb = NULL;
     int r;
 
-    if (!mailbox) return 0;
+    if (!mailbox) {
+        return 0;
+    }
 
     caldavdb = frock.caldavdb = caldav_open_mailbox(mailbox);
-    if (!caldavdb) return -1;
+    if (!caldavdb) {
+        return -1;
+    }
 
     const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
     const char *mboxname = mailbox_name(mailbox);

@@ -147,9 +147,13 @@ int main(int argc, char **argv)
             break;
 
         case 'd':
-            if (report_start_time != -1) usage();
+            if (report_start_time != -1) {
+                usage();
+            }
             report_days = atoi(optarg);
-            if (report_days <= 0) usage();
+            if (report_days <= 0) {
+                usage();
+            }
             break;
 
         case 'D': {
@@ -192,7 +196,9 @@ int main(int argc, char **argv)
 
         case 'p':
             prune_months = atoi(optarg);
-            if (prune_months <= 0) usage();
+            if (prune_months <= 0) {
+                usage();
+            }
             break;
 
         case 'l':
@@ -213,7 +219,9 @@ int main(int argc, char **argv)
         fatal(error_message(r), EX_CONFIG);
     }
 
-    if (optind != argc) strlcpy(pattern, argv[optind], sizeof(pattern));
+    if (optind != argc) {
+        strlcpy(pattern, argv[optind], sizeof(pattern));
+    }
 
     if (report_start_time == -1) {
         report_start_time = now - (report_days * 60 * 60 * 24);
@@ -263,14 +271,20 @@ static void usage(void)
 static int do_mailbox(struct findall_data *data,
                       void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
     int r;
     struct mailbox *mailbox = NULL;
     const char *name = mbname_intname(data->mbname);
 
     r = mailbox_open_irl(name, &mailbox);
-    if (r) return 0;
+    if (r) {
+        return 0;
+    }
 
     struct arb_mailbox_data *d =
         mpool_malloc(arb_pool, sizeof(struct arb_mailbox_data));
@@ -388,7 +402,9 @@ static int process_user_p(void *rockp,
     /* remember that 'data' may not be null terminated ! */
     version = strtol(data, &p, 10);
     data = p;
-    if (version < 0) abort();
+    if (version < 0) {
+        abort();
+    }
     /* xxx not checking version */
     lastread = strtol(data, &p, 10);
     data = p;
@@ -426,13 +442,17 @@ static void process_seen(const char *path, const char *user)
     struct db *tmp = NULL;
 
     r = cyrusdb_open(DB, path, 0, &tmp);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     cyrusdb_foreach(
         tmp, "", 0, process_user_p, process_user_cb, (void *) user, NULL);
 
 done:
-    if (tmp) cyrusdb_close(tmp);
+    if (tmp) {
+        cyrusdb_close(tmp);
+    }
 }
 
 static int process_subs_cb(void *rockp __attribute__((unused)),
@@ -483,13 +503,17 @@ static void process_subs(const char *path, const char *user)
     struct db *tmp = NULL;
 
     r = cyrusdb_open(SUBDB, path, 0, &tmp);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     cyrusdb_foreach(
         tmp, "", 0, process_subs_p, process_subs_cb, (void *) user, NULL);
 
 done:
-    if (tmp) cyrusdb_close(tmp);
+    if (tmp) {
+        cyrusdb_close(tmp);
+    }
 }
 
 static void report_users(struct user_list *u)
@@ -528,7 +552,9 @@ static void make_report(const char *key,
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *) data;
 
     /* Skip underread user mailboxes */
-    if (!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1) return;
+    if (!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1) {
+        return;
+    }
 
     char *extname = mboxname_to_external(key, &arb_namespace, NULL);
 
@@ -538,10 +564,14 @@ static void make_report(const char *key,
     }
     else {
         printf("%s %d", extname, mbox->nreaders);
-        if (dousers) report_users(mbox->readers);
+        if (dousers) {
+            report_users(mbox->readers);
+        }
         if (dosubs) {
             printf(" %d", mbox->nsubscribers);
-            if (dousers) report_users(mbox->subscribers);
+            if (dousers) {
+                report_users(mbox->subscribers);
+            }
         }
         printf("\n");
     }

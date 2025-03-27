@@ -120,7 +120,9 @@ int objectstore_put(struct mailbox *mailbox,
     int rc = 0;
 
     rc = init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     obj_def = objectstore_get_object_def(mailbox, record);
 
@@ -184,7 +186,9 @@ int objectstore_get(struct mailbox *mailbox,
     int rc = 0;
 
     rc = init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     obj_def = objectstore_get_object_def(mailbox, record);
 
@@ -223,10 +227,12 @@ int objectstore_get(struct mailbox *mailbox,
             else {
                 /* Write the file */
                 rc = write(fd, buffer.s, len);
-                if (rc == len)
+                if (rc == len) {
                     rc = 0;
-                else
+                }
+                else {
                     rc = -1;
+                }
             }
             buf_free(&buffer);
             close(fd);
@@ -242,7 +248,9 @@ int objectstore_delete(struct mailbox *mailbox,
     int rc = 0;
 
     rc = init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     obj_def = objectstore_get_object_def(mailbox, record);
 

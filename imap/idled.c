@@ -108,13 +108,17 @@ static sqldb_t *db = NULL;
 
 EXPORTED void fatal(const char *msg, int err)
 {
-    if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
+    if (debugmode) {
+        fprintf(stderr, "dying with %s %d\n", msg, err);
+    }
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
     cyrus_done();
 
-    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+    if (err != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(err);
 }
@@ -142,7 +146,9 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     const char *mboxid =
         json_string_value(json_object_get(nrock->msg, "mailboxID"));
 
-    if (!mboxid) return 0;
+    if (!mboxid) {
+        return 0;
+    }
 
     pid_t pid = sqlite3_column_int(stmt, 0);
     unsigned long events = sqlite3_column_int(stmt, 1);
@@ -154,8 +160,9 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     if (timeout && (timeout < time(NULL))) {
         /* This process has been idling for longer than the timeout
          * period, so it probably died.  Remove it from the list. */
-        if (verbose || debugmode)
+        if (verbose || debugmode) {
             syslog(LOG_DEBUG, "    TIMEOUT %s", idle_id_from_addr(client));
+        }
 
         arrayu64_add(nrock->failed_pids, pid);
         return 0;
@@ -165,7 +172,9 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
      */
 
     /* Don't notify the same client more than once */
-    if (pid == nrock->last_pid) return 0;
+    if (pid == nrock->last_pid) {
+        return 0;
+    }
 
     json_error_t jerr;
     json_t *keys =
@@ -179,7 +188,9 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     /* Is it a mailbox in which the client has interest? */
     if (filter == FILTER_SELECTED) {
         /* keyval is currently selected mailbox id */
-        if (!strcmp(mboxid, keyval)) notify = 1;
+        if (!strcmp(mboxid, keyval)) {
+            notify = 1;
+        }
     }
     else if (!mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL)) {
         switch (filter) {
@@ -187,19 +198,25 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
             /* Is it an INBOX or postable by anonymous? */
             if (!mboxname_isusermailbox(mbentry->name, /*isinbox*/ 1)
                 && !(cyrus_acl_myrights(NULL, mbentry->acl) & ACL_POST))
+            {
                 break;
+            }
 
             GCC_FALLTHROUGH
 
         case FILTER_PERSONAL:
             /* keyval is userid */
-            if (mboxname_userownsmailbox(keyval, mbentry->name)) notify = 1;
+            if (mboxname_userownsmailbox(keyval, mbentry->name)) {
+                notify = 1;
+            }
             break;
 
         case FILTER_SUBSCRIBED: {
             /* keyval is userid */
             strarray_t *sublist = mboxlist_sublist(keyval);
-            if (strarray_contains(sublist, mbentry->name)) notify = 1;
+            if (strarray_contains(sublist, mbentry->name)) {
+                notify = 1;
+            }
             strarray_free(sublist);
             break;
         }
@@ -216,7 +233,9 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
             break;
 
         case FILTER_MAILBOXES:
-            if (json_array_find(keys, mbentry->name) >= 0) notify = 1;
+            if (json_array_find(keys, mbentry->name) >= 0) {
+                notify = 1;
+            }
             break;
 
         default:
@@ -224,12 +243,15 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
         }
     }
 
-    if (!notify) goto done;
+    if (!notify) {
+        goto done;
+    }
 
     nrock->last_pid = pid;
 
-    if (verbose || debugmode)
+    if (verbose || debugmode) {
         syslog(LOG_DEBUG, "    fwd NOTIFY %s", idle_id_from_addr(client));
+    }
 
     /* forward the received msg onto our clients */
     int r = idle_send(client, nrock->msg);
@@ -239,7 +261,7 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
          * imapd's socket was unlinked, which means that imapd went
          * through it's graceful shutdown path, so don't syslog.
          * Either way, remove it from the list. */
-        if (r != ENOENT)
+        if (r != ENOENT) {
             syslog(
                 LOG_ERR,
                 "IDLE: error sending message "
@@ -248,9 +270,11 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
                 events,
                 filter,
                 error_message(r));
+        }
 
-        if (verbose || debugmode)
+        if (verbose || debugmode) {
             syslog(LOG_DEBUG, "    forgetting %s", idle_id_from_addr(client));
+        }
 
         arrayu64_add(nrock->failed_pids, pid);
     }
@@ -415,7 +439,9 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
+    if (p) {
+        verbose = atoi(p) + 1;
+    }
 
     while ((opt = getopt(argc, argv, "C:d")) != EOF) {
         switch (opt) {
@@ -481,8 +507,9 @@ int main(int argc, char **argv)
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {
             /* signal all processes to shutdown */
-            if (verbose || debugmode)
+            if (verbose || debugmode) {
                 syslog(LOG_DEBUG, "Detected shutdown file");
+            }
             shut_down(1);
         }
 
@@ -493,8 +520,12 @@ int main(int argc, char **argv)
         /* check for the next input */
         rset = read_set;
         n = signals_select(nfds, &rset, NULL, NULL, &timeout);
-        if (n < 0 && errno == EAGAIN) continue;
-        if (n < 0 && errno == EINTR) continue;
+        if (n < 0 && errno == EAGAIN) {
+            continue;
+        }
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
         if (n == -1) {
             /* uh oh */
             syslog(LOG_ERR, "select(): %m");

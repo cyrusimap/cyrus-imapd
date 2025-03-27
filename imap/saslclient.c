@@ -168,10 +168,15 @@ EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
 EXPORTED void free_callbacks(sasl_callback_t *in)
 {
     int i;
-    if (!in) return;
+    if (!in) {
+        return;
+    }
 
-    for (i = 0; in[i].id != SASL_CB_LIST_END; i++)
-        if (in[i].id == SASL_CB_PASS) free(in[i].context);
+    for (i = 0; in[i].id != SASL_CB_LIST_END; i++) {
+        if (in[i].id == SASL_CB_PASS) {
+            free(in[i].context);
+        }
+    }
 
     free(in);
 }
@@ -196,7 +201,9 @@ HIDDEN int saslclient(sasl_conn_t *conn,
     int sendliteral = sasl_cmd->quote;
     int r;
 
-    if (status) *status = NULL;
+    if (status) {
+        *status = NULL;
+    }
 
     r = sasl_client_start(conn,
                           mechlist,
@@ -207,19 +214,27 @@ HIDDEN int saslclient(sasl_conn_t *conn,
                           &mech);
 
     if (r != SASL_OK && r != SASL_CONTINUE) {
-        if (sasl_result) *sasl_result = r;
-        if (status) *status = sasl_errdetail(conn);
+        if (sasl_result) {
+            *sasl_result = r;
+        }
+        if (status) {
+            *status = sasl_errdetail(conn);
+        }
         return IMAP_SASL_FAIL;
     }
 
     /* build the auth command */
-    if (sasl_cmd->quote)
+    if (sasl_cmd->quote) {
         sprintf(cmdbuf, "%s \"%s\"", sasl_cmd->cmd, mech);
-    else
+    }
+    else {
         sprintf(cmdbuf, "%s %s", sasl_cmd->cmd, mech);
+    }
     prot_printf(pout, "%s", cmdbuf);
 
-    if (!clientout) goto noinitresp; /* no initial response */
+    if (!clientout) {
+        goto noinitresp; /* no initial response */
+    }
 
     /* initial response */
     if (!clientoutlen) { /* zero-length initial response */
@@ -265,8 +280,12 @@ HIDDEN int saslclient(sasl_conn_t *conn,
 
         /* get challenge/reply from the server */
         if (!prot_fgets(buf, AUTH_BUF_SIZE, pin)) {
-            if (sasl_result) *sasl_result = SASL_FAIL;
-            if (status) *status = "EOF from server";
+            if (sasl_result) {
+                *sasl_result = SASL_FAIL;
+            }
+            if (status) {
+                *status = "EOF from server";
+            }
             return IMAP_SASL_PROTERR;
         }
 
@@ -274,18 +293,23 @@ HIDDEN int saslclient(sasl_conn_t *conn,
         base64 = NULL;
         if (!strncasecmp(buf, sasl_cmd->ok, strlen(sasl_cmd->ok))) {
             /* success */
-            if (sasl_cmd->parse_success) /* parse success data */
+            if (sasl_cmd->parse_success) /* parse success data */ {
                 base64 = sasl_cmd->parse_success(buf, status);
+            }
 
             if (!base64 /* no success data */
                 && status)
+            {
                 *status = buf + strlen(sasl_cmd->ok);
+            }
 
             r = SASL_OK;
         }
         else if (!strncasecmp(buf, sasl_cmd->fail, strlen(sasl_cmd->fail))) {
             /* failure */
-            if (status) *status = buf + strlen(sasl_cmd->fail);
+            if (status) {
+                *status = buf + strlen(sasl_cmd->fail);
+            }
             r = SASL_BADAUTH;
             break;
         }
@@ -303,8 +327,12 @@ HIDDEN int saslclient(sasl_conn_t *conn,
             p = buf;
             while (litsize) {
                 if (!(n = prot_read(pin, p, litsize))) {
-                    if (sasl_result) *sasl_result = SASL_FAIL;
-                    if (status) *status = "EOF from server";
+                    if (sasl_result) {
+                        *sasl_result = SASL_FAIL;
+                    }
+                    if (status) {
+                        *status = "EOF from server";
+                    }
                     return IMAP_SASL_PROTERR;
                 }
                 litsize -= n;
@@ -316,15 +344,21 @@ HIDDEN int saslclient(sasl_conn_t *conn,
         }
         else {
             /* unknown response */
-            if (status) *status = buf;
+            if (status) {
+                *status = buf;
+            }
             r = SASL_BADPROT;
         }
 
         if (base64) { /* challenge/success data */
             /* trim CRLF */
             p = base64 + strlen(base64) - 1;
-            if (p >= base64 && *p == '\n') *p-- = '\0';
-            if (p >= base64 && *p == '\r') *p-- = '\0';
+            if (p >= base64 && *p == '\n') {
+                *p-- = '\0';
+            }
+            if (p >= base64 && *p == '\r') {
+                *p-- = '\0';
+            }
 
             /* decode the challenge */
             serverin = buf;
@@ -356,7 +390,9 @@ HIDDEN int saslclient(sasl_conn_t *conn,
 
     } while (r == SASL_CONTINUE || (r == SASL_OK && clientout));
 
-    if (sasl_result) *sasl_result = r;
+    if (sasl_result) {
+        *sasl_result = r;
+    }
 
     return (r == SASL_OK ? 0 : IMAP_SASL_FAIL);
 }

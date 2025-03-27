@@ -211,15 +211,21 @@ static const struct css3_color_t css3_colors[] = {
    https://en.wikipedia.org/wiki/Color_difference */
 EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
 {
-    if (!hexstr || hexstr[0] != '#') return NULL;
+    if (!hexstr || hexstr[0] != '#') {
+        return NULL;
+    }
 
     size_t hexlen = strlen(hexstr);
 
-    if (hexlen != 7 && hexlen != 9) return NULL;
+    if (hexlen != 7 && hexlen != 9) {
+        return NULL;
+    }
 
     /* Convert hex encoded color into separate RGB */
     long hex = strtol(hexstr + 1, NULL, 16);
-    if (hexlen == 9) hex >>= 8; /* drop last 2 digits */
+    if (hexlen == 9) {
+        hex >>= 8; /* drop last 2 digits */
+    }
 
     struct
     {
@@ -241,7 +247,9 @@ EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
         int dG = css->g - C.g;
         int dB = css->b - C.b;
 
-        if (dR == 0 && dG == 0 && dB == 0) return css->name;
+        if (dR == 0 && dG == 0 && dB == 0) {
+            return css->name;
+        }
 
         unsigned dR2 = dR * dR;
         unsigned dG2 = dG * dG;

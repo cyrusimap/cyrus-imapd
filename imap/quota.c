@@ -191,7 +191,9 @@ int main(int argc, char **argv)
     }
 
     /* always report if not fixing, otherwise we do nothing */
-    if (!fflag) do_report = 1;
+    if (!fflag) {
+        do_report = 1;
+    }
 
     cyrus_init(alt_config, "quota", 0, CONFIG_NEED_PARTITION_DATA);
 
@@ -211,26 +213,35 @@ int main(int argc, char **argv)
 
     quota_changelock();
 
-    if (!r) r = buildquotalist(domain, argv + optind, argc - optind, isuser);
+    if (!r) {
+        r = buildquotalist(domain, argv + optind, argc - optind, isuser);
+    }
 
-    if (!r && fflag)
+    if (!r && fflag) {
         r = fixquotas(domain, argv + optind, argc - optind, isuser);
+    }
 
     quota_changelockrelease();
 
-    if (r)
+    if (r) {
         code = convert_code(r);
-    else if (do_report)
+    }
+    else if (do_report) {
         reportquota();
+    }
 
     mboxlist_close();
     mboxlist_done();
 
     /* just for neatness */
-    for (i = 0; i < quota_num; i++) free(quotaroots[i].name);
+    for (i = 0; i < quota_num; i++) {
+        free(quotaroots[i].name);
+    }
     free(quotaroots);
 
-    if (jsonout) json_decref(jsonout);
+    if (jsonout) {
+        json_decref(jsonout);
+    }
 
     cyrus_done();
 
@@ -259,11 +270,13 @@ static void __attribute__((format(printf, 2, 3))) errmsg(int err,
     len = vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
 
-    if (len < sizeof(buf))
+    if (len < sizeof(buf)) {
         len +=
             snprintf(buf + len, sizeof(buf) - len, ": %s", error_message(err));
-    if ((err == IMAP_IOERROR) && (len < sizeof(buf)))
+    }
+    if ((err == IMAP_IOERROR) && (len < sizeof(buf))) {
         len += snprintf(buf + len, sizeof(buf) - len, ": %s", strerror(errno));
+    }
 
     syslog(LOG_ERR, "%s", buf);
     fprintf(stderr, "%s\n", buf);
@@ -277,7 +290,9 @@ static void test_sync_wait(const char *mboxname)
     int status = 0;
 #define TIMEOUT (30 * CLOCKS_PER_SEC)
 
-    if (!test_sync_mode) return;
+    if (!test_sync_mode) {
+        return;
+    }
     /* aha, we're in test synchronisation mode */
 
     syslog(LOG_ERR, "quota -Z waiting for signal to do %s", mboxname);
@@ -316,7 +331,9 @@ static void test_sync_done(const char *mboxname)
 {
     char *filename;
 
-    if (!test_sync_mode) return;
+    if (!test_sync_mode) {
+        return;
+    }
     /* aha, we're in test synchronisation mode */
 
     syslog(LOG_ERR, "quota -Z done with %s", mboxname);
@@ -336,7 +353,9 @@ static int fixquota_addroot(struct quota *q, void *rock)
     const char *userid = (const char *) rock;
     int r;
 
-    if (userid && !mboxname_userownsmailbox(userid, q->root)) return 0;
+    if (userid && !mboxname_userownsmailbox(userid, q->root)) {
+        return 0;
+    }
 
     if (quota_num == quota_alloc) {
         /* Create new qr list entry */
@@ -447,7 +466,9 @@ static int findroot(const char *name, int *thisquota)
 
         /* have we already passed the name, then there can
          * be no further matches */
-        if (strcmp(root, name) > 0) break;
+        if (strcmp(root, name) > 0) {
+            break;
+        }
 
         /* is the mailbox within this root? */
         if (mboxname_is_prefix(name, root)) {
@@ -457,7 +478,9 @@ static int findroot(const char *name, int *thisquota)
         }
     }
 
-    if (*thisquota >= 0) quotaroots[*thisquota].refcount++;
+    if (*thisquota >= 0) {
+        quotaroots[*thisquota].refcount++;
+    }
 
     return 0;
 }
@@ -475,8 +498,12 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     struct txn *txn = NULL;
 
     // skip mailbox types that we don't look at
-    if (mbentry->mbtype & MBTYPE_REMOTE) return 0;
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) return 0;
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+        return 0;
+    }
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        return 0;
+    }
 
     test_sync_wait(mbentry->name);
 
@@ -497,9 +524,13 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
          * mailbox if present */
         if (mailbox_quotaroot(mailbox)) {
             /* unless it's outside the current prefix of course */
-            if (strlen(mailbox_quotaroot(mailbox)) < prefixlen) goto done;
+            if (strlen(mailbox_quotaroot(mailbox)) < prefixlen) {
+                goto done;
+            }
             r = fixquota_fixroot(mailbox, NULL);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
         }
     }
     else {
@@ -512,18 +543,23 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
          * correct root */
         if (strcmpsafe(mailbox_quotaroot(mailbox), root)) {
             r = fixquota_fixroot(mailbox, root);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
         }
 
         /* read the current data */
         quota_init(&localq, root);
         r = quota_read(&localq, &txn, 1);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* add the usage for this mailbox */
         mailbox_get_usage(mailbox, useds);
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++)
+        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
             localq.scanuseds[res] += useds[res];
+        }
 
         /* and mention that this mailbox has been scanned */
         free(localq.scanmbox);
@@ -575,7 +611,9 @@ int fixquota_finish(int thisquota)
     if (!quotaroots[thisquota].refcount) {
         quotaroots[thisquota].deleted = 1;
         fprintf(stderr, "%s: removed\n", root);
-        if (!flag_reportonly) r = quota_deleteroot(root, 0);
+        if (!flag_reportonly) {
+            r = quota_deleteroot(root, 0);
+        }
         if (r) {
             errmsg(r, "failed deleting quotaroot '%s'", root);
         }
@@ -599,7 +637,9 @@ int fixquota_finish(int thisquota)
                     quota_names[res],
                     localq.useds[res],
                     localq.scanuseds[res]);
-            if (!flag_reportonly) localq.useds[res] = localq.scanuseds[res];
+            if (!flag_reportonly) {
+                localq.useds[res] = localq.scanuseds[res];
+            }
             // need to bump modseq, we changed something
             localq.dirty = 1;
         }
@@ -618,10 +658,12 @@ int fixquota_finish(int thisquota)
 done:
     quota_free(&localq);
 
-    if (r)
+    if (r) {
         quota_abort(&tid);
-    else
+    }
+    else {
         quota_commit(&tid);
+    }
 
     return r;
 }
@@ -659,7 +701,9 @@ int fixquota_dopass(
         if (isuser) {
             char *inbox = mboxname_user_mbox(roots[i], NULL);
             r = mboxlist_usermboxtree(roots[i], NULL, cb, inbox, /*flags*/ 0);
-            if (r) errmsg(IMAP_IOERROR, "processing user '%s'", inbox);
+            if (r) {
+                errmsg(IMAP_IOERROR, "processing user '%s'", inbox);
+            }
             free(inbox);
         }
         else {
@@ -667,11 +711,15 @@ int fixquota_dopass(
                 mboxname_from_external(roots[i], &quota_namespace, NULL);
             strlcpy(tail, intname, sizeof(buf) - domainlen);
             r = mboxlist_allmbox(buf, cb, buf, /*flags*/ 0);
-            if (r) errmsg(IMAP_IOERROR, "processing mbox list for '%s'", buf);
+            if (r) {
+                errmsg(IMAP_IOERROR, "processing mbox list for '%s'", buf);
+            }
             free(intname);
         }
 
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return r;
@@ -702,11 +750,12 @@ static void reportquota_resource(struct quota *quota,
     if (jsonroot) {
         json_t *obj = json_object();
         json_object_set_new(obj, "used", json_integer(quota->useds[res]));
-        if (quota->limits[res] > 0)
+        if (quota->limits[res] > 0) {
             json_object_set_new(
                 obj,
                 "limit",
                 json_integer(quota->limits[res] * quota_units[res]));
+        }
         json_object_set_new(jsonroot, quota_names[res], obj);
         return;
     }
@@ -737,14 +786,17 @@ static void reportquota(void)
     int i;
     int res;
 
-    if (!jsonout)
+    if (!jsonout) {
         printf("   Quota   %% Used     Used             Resource Root\n");
+    }
 
     for (i = 0; i < quota_num; i++) {
         struct quota localq;
         int r;
 
-        if (quotaroots[i].deleted) continue;
+        if (quotaroots[i].deleted) {
+            continue;
+        }
 
         /* XXX - cache these from either the parse or the commit again */
         quota_init(&localq, quotaroots[i].name);

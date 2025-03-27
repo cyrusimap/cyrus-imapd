@@ -119,13 +119,16 @@ int main(int argc, char **argv)
                 op = REBUILD;
                 pub = optarg;
                 ver = strchr(optarg, ':');
-                if (ver)
+                if (ver) {
                     *ver++ = '\0';
-                else
+                }
+                else {
                     usage();
+                }
             }
-            else
+            else {
                 usage();
+            }
             break;
 
         case 'v':
@@ -137,8 +140,9 @@ int main(int argc, char **argv)
                 op = WINZONES;
                 winfile = optarg;
             }
-            else
+            else {
                 usage();
+            }
             break;
 
         default:
@@ -177,7 +181,9 @@ int main(int argc, char **argv)
 
         /* Add LEAP record (last updated and hash) */
         snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_LEAPSECFILE);
-        if (verbose) printf("Processing leap seconds file %s\n", buf);
+        if (verbose) {
+            printf("Processing leap seconds file %s\n", buf);
+        }
         if (!(fp = fopen(buf, "r"))) {
             fprintf(stderr, "Could not open leap seconds file %s\n", buf);
         }
@@ -233,7 +239,9 @@ int main(int argc, char **argv)
         struct buf tzidbuf = BUF_INITIALIZER;
         struct buf aliasbuf = BUF_INITIALIZER;
 
-        if (verbose) printf("Processing Windows Zone file %s\n", winfile);
+        if (verbose) {
+            printf("Processing Windows Zone file %s\n", winfile);
+        }
 
         /* Parse the XML file */
         ctxt = xmlNewParserCtxt();
@@ -292,7 +300,9 @@ int main(int argc, char **argv)
                 buf_appendcstr(&aliasbuf, ".ics");
                 alias = buf_cstring(&aliasbuf);
 
-                if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
+                if (verbose) {
+                    printf("\tLINK: %s -> %s\n", alias, tzid);
+                }
 
                 if (symlink(tzid, alias)) {
                     if (errno == EEXIST) {
@@ -371,7 +381,9 @@ void do_zonedir(const char *dir,
 
     signals_poll();
 
-    if (verbose) printf("Rebuilding %s\n", dir);
+    if (verbose) {
+        printf("Rebuilding %s\n", dir);
+    }
 
     dirp = opendir(dir);
     if (!dirp) {
@@ -385,7 +397,9 @@ void do_zonedir(const char *dir,
         struct stat sbuf;
         struct zoneinfo *zi;
 
-        if (*dirent->d_name == '.') continue;
+        if (*dirent->d_name == '.') {
+            continue;
+        }
 
         plen = snprintf(path, sizeof(path), "%s/%s", dir, dirent->d_name);
         lstat(path, &sbuf);
@@ -400,7 +414,9 @@ void do_zonedir(const char *dir,
             ssize_t llen;
 
             /* Isolate tzid in path */
-            if ((llen = readlink(path, link, sizeof(link))) < 0) continue;
+            if ((llen = readlink(path, link, sizeof(link))) < 0) {
+                continue;
+            }
             link[llen - 4] = '\0'; /* Trim ".ics" */
             for (tzid = link; !strncmp(tzid, "../", 3); tzid += 3);
 
@@ -408,7 +424,9 @@ void do_zonedir(const char *dir,
             path[plen - 4] = '\0'; /* Trim ".ics" */
             alias = path + strlen(dir) + 1;
 
-            if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
+            if (verbose) {
+                printf("\tLINK: %s -> %s\n", alias, tzid);
+            }
 
             /* Create hash entry for alias */
             if (!(zi = hash_lookup(alias, tzentries))) {
@@ -436,14 +454,18 @@ void do_zonedir(const char *dir,
             char *alias = NULL;
 
             /* Parse the iCalendar file for important properties */
-            if ((fd = open(path, O_RDONLY)) == -1) continue;
+            if ((fd = open(path, O_RDONLY)) == -1) {
+                continue;
+            }
             map_refresh(fd, 1, &base, &len, MAP_UNKNOWN_LEN, path, NULL);
             close(fd);
 
             ical = icalparser_parse_string(base);
             map_free(&base, &len);
 
-            if (!ical) continue; /* skip non-iCalendar files */
+            if (!ical) {
+                continue; /* skip non-iCalendar files */
+            }
 
             comp = icalcomponent_get_first_component(ical,
                                                      ICAL_VTIMEZONE_COMPONENT);
@@ -456,10 +478,13 @@ void do_zonedir(const char *dir,
                 alias = tzid;
                 tzid = (char *) icalproperty_get_value_as_string(prop);
 
-                if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
+                if (verbose) {
+                    printf("\tLINK: %s -> %s\n", alias, tzid);
+                }
             }
-            else if (verbose)
+            else if (verbose) {
                 printf("\tZONE: %s\n", tzid);
+            }
 
             /* Create/update hash entry for tzid */
             if (!(zi = hash_lookup(tzid, tzentries))) {
@@ -475,7 +500,9 @@ void do_zonedir(const char *dir,
             icalcomponent_free(ical);
 
             /* Check overall lastmod */
-            if (zi->dtstamp > info->dtstamp) info->dtstamp = zi->dtstamp;
+            if (zi->dtstamp > info->dtstamp) {
+                info->dtstamp = zi->dtstamp;
+            }
 
             if (alias) {
                 /* Add alias to the list for this tzid */

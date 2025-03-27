@@ -89,10 +89,12 @@ static const char *get_script_name(const char *filename)
     const char *p;
 
     p = strrchr(filename, '/');
-    if (p == NULL)
+    if (p == NULL) {
         return filename;
-    else
+    }
+    else {
         return p + 1;
+    }
 }
 
 enum SieveFileType {
@@ -304,7 +306,9 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
     /* Create the directory where the sieve scripts will reside */
     r = cyrus_mkdir(script_names.bctmpname, 0755);
-    if (r == -1) goto failed_start;
+    if (r == -1) {
+        goto failed_start;
+    }
 
     /*
      * We open the file that will be used as the bc file. If this file exists,
@@ -358,11 +362,12 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
             xclose(in_fd);
         }
-        else
+        else {
             syslog(LOG_WARNING,
                    "autocreate_sieve: Problem opening"
                    "compiled script %s:%m",
                    compiled_source_script);
+        }
     }
     else {
         do_compile = 1;
@@ -445,8 +450,9 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     fclose(in_stream);
     fclose(out_fp);
 
-    if (!r) /* error */
+    if (!r) /* error */ {
         goto failed3;
+    }
 
     /* Renaming the necessary stuff */
     if (rename(script_names.tmpname1, script_names.scriptname)) {
@@ -588,8 +594,12 @@ struct changesub_rock_st
  */
 static int autochangesub(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
     struct changesub_rock_st *crock = (struct changesub_rock_st *) rock;
     const char *userid = crock->userid;
     struct auth_state *auth_state = crock->auth_state;
@@ -598,12 +608,16 @@ static int autochangesub(struct findall_data *data, void *rock)
     int r;
 
     /* ignore all user mailboxes, we only want shared */
-    if (mboxname_isusermailbox(name, 0)) return 0;
+    if (mboxname_isusermailbox(name, 0)) {
+        return 0;
+    }
 
     r = mboxlist_changesub(name, userid, auth_state, 1, 0, 1, 1);
 
     /* unless this name was explicitly chosen, ignore the failure */
-    if (!was_explicit) return 0;
+    if (!was_explicit) {
+        return 0;
+    }
 
     if (r) {
         syslog(LOG_WARNING,
@@ -664,7 +678,9 @@ static void autosubscribe_sharedfolders(struct namespace *namespace,
     /* otherwise, check if there are particular folders to subscribe */
 
     sub = config_getstring(IMAPOPT_AUTOCREATE_SUBSCRIBE_SHAREDFOLDERS);
-    if (!sub) return;
+    if (!sub) {
+        return;
+    }
 
     changesub_rock.was_explicit = 1;
 
@@ -699,8 +715,12 @@ static void autocreate_specialuse_cb(const char *key,
 {
     struct autocreate_specialuse_rock *ar =
         (struct autocreate_specialuse_rock *) rock;
-    if (strncmp(key, "xlist-", 6)) return;
-    if (strcmp(val, ar->name)) return;
+    if (strncmp(key, "xlist-", 6)) {
+        return;
+    }
+    if (strcmp(val, ar->name)) {
+        return;
+    }
 
     struct buf usebuf = BUF_INITIALIZER;
     buf_putc(&usebuf, '\\');
@@ -753,7 +773,9 @@ static void autocreate_acl_cb(const char *key, const char *val, void *rock)
     struct autocreate_acl_rock *acl_rock = (struct autocreate_acl_rock *) rock;
     int r;
 
-    if (strcmp(key, "autocreate_acl")) return;
+    if (strcmp(key, "autocreate_acl")) {
+        return;
+    }
 
     freeme = xstrdup(val);
     folder = strtok(freeme, " ");
@@ -761,7 +783,9 @@ static void autocreate_acl_cb(const char *key, const char *val, void *rock)
     rights = strtok(NULL, " ");
     junk = strtok(NULL, " ");
 
-    if (strcmpnull(folder, acl_rock->shortname)) goto done;
+    if (strcmpnull(folder, acl_rock->shortname)) {
+        goto done;
+    }
 
     if (!folder || !identifier || !rights || junk) {
         syslog(LOG_WARNING,
@@ -822,7 +846,9 @@ int autocreate_user(struct namespace *namespace, const char *userid)
 #endif
 
     /* check for anonymous */
-    if (!strcmp(userid, "anonymous")) return IMAP_MAILBOX_NONEXISTENT;
+    if (!strcmp(userid, "anonymous")) {
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
 
     char *inboxname = mboxname_user_mbox(userid, NULL);
 
@@ -858,13 +884,17 @@ int autocreate_user(struct namespace *namespace, const char *userid)
      * Do we really need group membership
      * for admins or service_admins?
      */
-    if (global_authisa(auth_state, IMAPOPT_ADMINS)) goto done;
+    if (global_authisa(auth_state, IMAPOPT_ADMINS)) {
+        goto done;
+    }
 
     /*
      * Do we really need group membership
      * for proxyservers?
      */
-    if (global_authisa(auth_state, IMAPOPT_PROXYSERVERS)) goto done;
+    if (global_authisa(auth_state, IMAPOPT_PROXYSERVERS)) {
+        goto done;
+    }
 
     /*
      * Check if user belongs to the autocreate_users group. This option
@@ -893,7 +923,9 @@ int autocreate_user(struct namespace *namespace, const char *userid)
                                MBOXLIST_CREATE_NOTIFY,
                                NULL /*mailboxptr*/);
 
-    if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1, 1);
+    if (!r) {
+        r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1, 1);
+    }
     if (r) {
         syslog(LOG_ERR,
                "autocreateinbox: User %s, INBOX failed. %s",
@@ -906,14 +938,17 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         quota_t newquotas[QUOTA_NUMRESOURCES];
         int res;
 
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++)
+        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
             newquotas[res] = QUOTA_UNLIMITED;
+        }
 
-        if (autocreatequota > 0)
+        if (autocreatequota > 0) {
             newquotas[QUOTA_STORAGE] = autocreatequota / 1024;
+        }
 
-        if (autocreatequotamessage)
+        if (autocreatequotamessage) {
             newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
+        }
 
         r = mboxlist_setquotas(inboxname, newquotas, 0, 0);
         if (r) {
@@ -1006,12 +1041,13 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         free(foldername);
     }
 
-    if (numcrt)
+    if (numcrt) {
         syslog(LOG_INFO,
                "User %s, Inbox subfolders, created %d, subscribed %d",
                userid,
                numcrt,
                numsub);
+    }
 
     /*
      * Check if shared folders are available for subscription.
@@ -1025,16 +1061,18 @@ int autocreate_user(struct namespace *namespace, const char *userid)
     source_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT);
 
     if (source_script) {
-        if (!autocreate_sieve(userid, source_script))
+        if (!autocreate_sieve(userid, source_script)) {
             syslog(LOG_NOTICE,
                    "autocreate_sieve: User %s, default sieve script creation "
                    "succeeded",
                    userid);
-        else
+        }
+        else {
             syslog(LOG_WARNING,
                    "autocreate_sieve: User %s, default sieve script creation "
                    "failed",
                    userid);
+        }
     }
 #endif
 

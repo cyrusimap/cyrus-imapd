@@ -77,7 +77,9 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
 #define found(flags) (mr->have |= (flags))
     int r = 0;
 
-    if (!is_missing(M_ALL)) return 0; /* easy, we already have it */
+    if (!is_missing(M_ALL)) {
+        return 0; /* easy, we already have it */
+    }
 
     if (is_missing(M_MAILBOX)) {
         /* We can't get this for ourselves,
@@ -88,21 +90,27 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
     if (is_missing(M_RECORD)) {
         assert(!mr->isappend);
         r = msgrecord_need(mr, M_MAILBOX);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         if (is_missing(M_RECNO) && is_missing(M_UID)) {
             /* need some way to find the record! */
             return IMAP_NOTFOUND;
         }
         r = mailbox_reload_index_record(mr->mbox, &mr->record);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         found(M_RECORD | M_RECNO | M_UID);
     }
 
     if (is_missing(M_MESSAGE)) {
         r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         mr->msg = message_new_from_record(mr->mbox, &mr->record);
         if (mr->msg) {
@@ -113,9 +121,13 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
 
     if (is_missing(M_CACHE)) {
         r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         r = mailbox_cacherecord(mr->mbox, &mr->record);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         found(M_CACHE);
     }
 
@@ -125,10 +137,14 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
             return IMAP_NOTFOUND;
         }
         r = msgrecord_need(mr, M_MAILBOX | M_UID);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         r = mailbox_get_annotate_state(
             mr->mbox, mr->record.uid, &mr->annot_state);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         found(M_ANNOTATIONS);
     }
 
@@ -228,7 +244,9 @@ EXPORTED msgrecord_t *msgrecord_copy_msgrecord(struct mailbox *mbox,
 
 static void msgrecord_free(msgrecord_t *mr)
 {
-    if (mr->msg) message_unref(&mr->msg);
+    if (mr->msg) {
+        message_unref(&mr->msg);
+    }
     free(mr);
 }
 
@@ -236,9 +254,13 @@ EXPORTED void msgrecord_unref(msgrecord_t **mrp)
 {
     msgrecord_t *mr;
 
-    if (!mrp) return;
+    if (!mrp) {
+        return;
+    }
     mr = (msgrecord_t *) *mrp;
-    if (!mr) return;
+    if (!mr) {
+        return;
+    }
 
     assert(mr->refcount >= 1);
     if (--mr->refcount == 0) {
@@ -251,7 +273,9 @@ EXPORTED int msgrecord_get_systemflags(msgrecord_t *mr, uint32_t *flags)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *flags = mr->record.system_flags;
     return 0;
@@ -261,7 +285,9 @@ EXPORTED int msgrecord_get_internalflags(msgrecord_t *mr, uint32_t *flags)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *flags = mr->record.internal_flags;
     return 0;
@@ -272,7 +298,9 @@ EXPORTED int msgrecord_get_userflags(msgrecord_t *mr,
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     memcpy(
         flags, mr->record.user_flags, sizeof(uint32_t) * (MAX_USER_FLAGS / 32));
@@ -283,7 +311,9 @@ EXPORTED int msgrecord_hasflag(msgrecord_t *mr, const char *flag, int *has)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *has = mailbox_record_hasflag(mr->mbox, &mr->record, flag);
     return 0;
@@ -293,7 +323,9 @@ EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *t = mr->record.internaldate;
     return 0;
@@ -303,12 +335,16 @@ EXPORTED int msgrecord_get_savedate(msgrecord_t *mr, time_t *t)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
-    if (mr->record.savedate)
+    if (mr->record.savedate) {
         *t = mr->record.savedate;
-    else
+    }
+    else {
         *t = mr->record.internaldate;
+    }
     return 0;
 }
 
@@ -316,7 +352,9 @@ EXPORTED int msgrecord_get_lastupdated(msgrecord_t *mr, time_t *t)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *t = mr->record.last_updated;
     return 0;
@@ -326,7 +364,9 @@ EXPORTED int msgrecord_get_cid(msgrecord_t *mr, bit64 *cid)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *cid = mr->record.cid;
     return 0;
@@ -336,7 +376,9 @@ EXPORTED int msgrecord_get_size(msgrecord_t *mr, uint32_t *size)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *size = mr->record.size;
     return 0;
@@ -346,7 +388,9 @@ EXPORTED int msgrecord_get_header_size(msgrecord_t *mr, uint32_t *header_size)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *header_size = mr->record.header_size;
     return 0;
@@ -356,7 +400,9 @@ EXPORTED int msgrecord_get_guid(msgrecord_t *mr, struct message_guid *guid)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *guid = mr->record.guid;
     return 0;
@@ -366,7 +412,9 @@ EXPORTED int msgrecord_get_uid(msgrecord_t *mr, uint32_t *uid)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *uid = mr->record.uid;
     return 0;
@@ -376,7 +424,9 @@ EXPORTED int msgrecord_get_modseq(msgrecord_t *mr, modseq_t *modseq)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *modseq = mr->record.modseq;
     return 0;
@@ -386,7 +436,9 @@ EXPORTED int msgrecord_get_createdmodseq(msgrecord_t *mr, modseq_t *modseq)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *modseq = mr->record.createdmodseq;
     return 0;
@@ -401,7 +453,9 @@ EXPORTED int msgrecord_get_cache_version(msgrecord_t *mr, int *cache_version)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *cache_version = mr->record.cache_version;
     return 0;
@@ -411,7 +465,9 @@ EXPORTED int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *tok = mailbox_cache_get_env(mr->mbox, &mr->record, token);
     return 0;
@@ -421,7 +477,9 @@ EXPORTED int msgrecord_get_cache_item(msgrecord_t *mr, int field, char **item)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     *item = xstrndup(cacheitem_base(&mr->record, field),
                      cacheitem_size(&mr->record, field));
@@ -431,7 +489,9 @@ EXPORTED int msgrecord_get_cache_item(msgrecord_t *mr, int field, char **item)
 EXPORTED int msgrecord_get_mailbox(msgrecord_t *mr, struct mailbox **mboxp)
 {
     int r = msgrecord_need(mr, M_MAILBOX);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     *mboxp = mr->mbox;
     return 0;
 }
@@ -439,7 +499,9 @@ EXPORTED int msgrecord_get_mailbox(msgrecord_t *mr, struct mailbox **mboxp)
 EXPORTED int msgrecord_get_message(msgrecord_t *mr, message_t **msg)
 {
     int r = msgrecord_need(mr, M_MESSAGE);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     *msg = mr->msg;
     return 0;
 }
@@ -447,7 +509,9 @@ EXPORTED int msgrecord_get_message(msgrecord_t *mr, message_t **msg)
 EXPORTED int msgrecord_get_messageid(msgrecord_t *mr, struct buf *buf)
 {
     int r = msgrecord_need(mr, M_MESSAGE);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     return message_get_messageid(mr->msg, buf);
 }
 
@@ -456,12 +520,16 @@ EXPORTED int msgrecord_get_body(msgrecord_t *mr, struct buf *buf)
     int r;
     if (!mr->isappend) {
         r = msgrecord_need(mr, M_CACHE);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     /* Map the message into memory */
     r = mailbox_map_record(mr->mbox, &mr->record, buf);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     return 0;
 }
@@ -470,7 +538,9 @@ EXPORTED int msgrecord_extract_bodystructure(msgrecord_t *mr,
                                              struct body **body)
 {
     int r = msgrecord_need(mr, M_CACHE);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     message_read_bodystructure(&mr->record, body);
     return 0;
 }
@@ -479,7 +549,9 @@ EXPORTED int msgrecord_get_index_record(msgrecord_t *mr,
                                         struct index_record *record)
 {
     int r = msgrecord_need(mr, M_RECORD);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     *record = mr->record;
     return 0;
 }
@@ -487,7 +559,9 @@ EXPORTED int msgrecord_get_index_record(msgrecord_t *mr,
 EXPORTED int msgrecord_get_fname(msgrecord_t *mr, const char **fname)
 {
     int r = msgrecord_need(mr, M_RECORD);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     *fname = mailbox_record_fname(mr->mbox, &mr->record);
     return 0;
 }
@@ -498,7 +572,9 @@ EXPORTED int msgrecord_annot_lookup(msgrecord_t *mr,
                                     struct buf *value)
 {
     int r = msgrecord_need(mr, M_MAILBOX | M_UID | M_ANNOTATIONS);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     return annotatemore_msg_lookup(
         mr->mbox, mr->record.uid, entry, userid, value);
@@ -510,7 +586,9 @@ EXPORTED int msgrecord_annot_findall(msgrecord_t *mr,
                                      void *rock)
 {
     int r = msgrecord_need(mr, M_MAILBOX | M_UID | M_ANNOTATIONS);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     return annotatemore_findall_mailbox(
         mr->mbox, mr->record.uid, entry, /*modseq*/ 0, proc, rock, /*flags*/ 0);
 }
@@ -521,7 +599,9 @@ EXPORTED int msgrecord_annot_set_auth(msgrecord_t *mr,
                                       const struct auth_state *authstate)
 {
     int r = msgrecord_need(mr, M_ANNOTATIONS);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     annotate_state_begin(mr->annot_state); /* safe to call multiple times */
     annotate_state_set_auth(mr->annot_state, isadmin, userid, authstate);
     return 0;
@@ -533,14 +613,18 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
                                    const struct buf *value)
 {
     int r = msgrecord_need(mr, M_ANNOTATIONS | M_RECORD);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     annotate_state_begin(mr->annot_state);
 
     if (!strcmpsafe(userid, "") && !strcmp(entry, IMAP_ANNOT_NS "snoozed")) {
-        if (buf_len(value))
+        if (buf_len(value)) {
             mr->record.internal_flags |= FLAG_INTERNAL_SNOOZED;
-        else
+        }
+        else {
             mr->record.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+        }
     }
 
     return annotate_state_write(mr->annot_state, entry, userid, value);
@@ -549,19 +633,27 @@ EXPORTED int msgrecord_annot_write(msgrecord_t *mr,
 EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
 {
     int r = msgrecord_need(mr, M_ANNOTATIONS);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     annotate_state_begin(mr->annot_state);
 
     struct entryattlist *e;
     struct attvaluelist *av;
     for (e = l; e; e = e->next) {
-        if (strcmp(e->entry, IMAP_ANNOT_NS "snoozed")) continue;
+        if (strcmp(e->entry, IMAP_ANNOT_NS "snoozed")) {
+            continue;
+        }
         for (av = e->attvalues; av; av = av->next) {
-            if (strcmp(av->attrib, "value.shared")) continue;
-            if (buf_len(&av->value))
+            if (strcmp(av->attrib, "value.shared")) {
+                continue;
+            }
+            if (buf_len(&av->value)) {
                 mr->record.internal_flags |= FLAG_INTERNAL_SNOOZED;
-            else
+            }
+            else {
                 mr->record.internal_flags &= ~FLAG_INTERNAL_SNOOZED;
+            }
         }
     }
 
@@ -572,7 +664,9 @@ EXPORTED int msgrecord_extract_annots(msgrecord_t *mr,
                                       struct entryattlist **annots)
 {
     int r = msgrecord_need(mr, M_MAILBOX | M_RECORD | M_ANNOTATIONS);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     // XXX - is there a way to get error return?
     *annots = mailbox_extract_annots(mr->mbox, &mr->record);
     return 0;
@@ -583,7 +677,9 @@ EXPORTED int msgrecord_extract_flags(msgrecord_t *mr,
                                      strarray_t **flags)
 {
     int r = msgrecord_need(mr, M_MAILBOX | M_RECORD);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     *flags = mailbox_extract_flags(mr->mbox, &mr->record, userid);
     return *flags == NULL ? IMAP_INTERNAL : 0;
 }
@@ -592,12 +688,16 @@ EXPORTED int msgrecord_get_index_record_rw(msgrecord_t *mr,
                                            struct index_record **record)
 {
     int r = msgrecord_need(mr, M_MAILBOX);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     assert(mailbox_index_islocked(mr->mbox, 1));
 
     r = msgrecord_need(mr, M_RECORD);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     *record = &mr->record;
     return 0;
 }
@@ -619,7 +719,9 @@ EXPORTED int msgrecord_set_uid(msgrecord_t *mr, uint32_t uid)
 {
     assert(mr->isappend);
     int r = msgrecord_need(mr, M_MAILBOX);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     assert(mailbox_index_islocked(mr->mbox, 1));
     assert(mr->mbox->i.last_uid < uid);
     mr->record.uid = uid;
@@ -637,7 +739,9 @@ EXPORTED int msgrecord_set_systemflags(msgrecord_t *mr, uint32_t system_flags)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     mr->record.system_flags = system_flags;
     return 0;
@@ -648,7 +752,9 @@ EXPORTED int msgrecord_set_internalflags(msgrecord_t *mr,
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     mr->record.internal_flags = internal_flags;
     return 0;
@@ -659,7 +765,9 @@ EXPORTED int msgrecord_set_userflags(msgrecord_t *mr,
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     memcpy(mr->record.user_flags,
            user_flags,
@@ -671,12 +779,16 @@ EXPORTED int msgrecord_set_userflag(msgrecord_t *mr, uint32_t userflag, int val)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
-    if (val)
+    if (val) {
         mr->record.user_flags[userflag / 32] |= 1U << (userflag & 31);
-    else
+    }
+    else {
         mr->record.user_flags[userflag / 32] &= ~(1U << (userflag & 31));
+    }
     return 0;
 }
 
@@ -684,7 +796,9 @@ EXPORTED int msgrecord_set_cache_offset(msgrecord_t *mr, size_t offset)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     mr->record.cache_offset = offset;
     return 0;
@@ -694,7 +808,9 @@ EXPORTED int msgrecord_set_internaldate(msgrecord_t *mr, time_t internaldate)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     mr->record.internaldate = internaldate;
     return 0;
@@ -704,7 +820,9 @@ EXPORTED int msgrecord_set_savedate(msgrecord_t *mr, time_t savedate)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     mr->record.savedate = savedate;
     return 0;
@@ -719,7 +837,9 @@ EXPORTED int msgrecord_set_createdmodseq(msgrecord_t *mr, modseq_t modseq)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
     mr->record.createdmodseq = modseq;
     return 0;
@@ -786,7 +906,9 @@ EXPORTED int msgrecord_find_index_record(struct mailbox *mbox,
 
     r = record.recno ? msgrecord_find_internal(mbox, 0, record.recno, &mr)
                      : msgrecord_find_internal(mbox, record.uid, 0, &mr);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
     *mrp = mr;
 
 done:
@@ -810,7 +932,9 @@ static int msgrecord_save(msgrecord_t *mr)
     }
     else {
         r = msgrecord_need(mr, M_RECORD);
-        if (!r) r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
+        if (!r) {
+            r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
+        }
     }
     return r;
 }

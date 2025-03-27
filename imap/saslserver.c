@@ -73,7 +73,9 @@ EXPORTED int saslserver(sasl_conn_t *conn,
     unsigned int serveroutlen = 0;
     int r = SASL_OK;
 
-    if (success_data) *success_data = NULL;
+    if (success_data) {
+        *success_data = NULL;
+    }
 
     /* initial response */
     if (init_resp) {
@@ -92,9 +94,10 @@ EXPORTED int saslserver(sasl_conn_t *conn,
     }
 
     /* start the exchange */
-    if (r == SASL_OK || r == SASL_CONTINUE)
+    if (r == SASL_OK || r == SASL_CONTINUE) {
         r = sasl_server_start(
             conn, mech, clientin, clientinlen, &serverout, &serveroutlen);
+    }
 
     while (r == SASL_CONTINUE) {
         char *p;
@@ -103,7 +106,9 @@ EXPORTED int saslserver(sasl_conn_t *conn,
         if (serveroutlen) {
             r = sasl_encode64(
                 serverout, serveroutlen, base64, BASE64_BUF_SIZE, NULL);
-            if (r != SASL_OK) break;
+            if (r != SASL_OK) {
+                break;
+            }
             serverout = base64;
         }
         else {
@@ -117,21 +122,29 @@ EXPORTED int saslserver(sasl_conn_t *conn,
         if (!prot_fgets(base64, BASE64_BUF_SIZE, pin)
             || strncasecmp(base64, resp_prefix, strlen(resp_prefix)))
         {
-            if (sasl_result) *sasl_result = SASL_FAIL;
+            if (sasl_result) {
+                *sasl_result = SASL_FAIL;
+            }
             return IMAP_SASL_PROTERR;
         }
 
         /* trim CRLF */
         p = base64 + strlen(base64) - 1;
-        if (p >= base64 && *p == '\n') *p-- = '\0';
-        if (p >= base64 && *p == '\r') *p-- = '\0';
+        if (p >= base64 && *p == '\n') {
+            *p-- = '\0';
+        }
+        if (p >= base64 && *p == '\r') {
+            *p-- = '\0';
+        }
 
         /* trim prefix */
         p = base64 + strlen(resp_prefix);
 
         /* check if client cancelled */
         if (p[0] == '*') {
-            if (sasl_result) *sasl_result = SASL_BADPROT;
+            if (sasl_result) {
+                *sasl_result = SASL_BADPROT;
+            }
             return IMAP_SASL_CANCEL;
         }
 
@@ -139,7 +152,9 @@ EXPORTED int saslserver(sasl_conn_t *conn,
         clientin = base64;
         r = sasl_decode64(
             p, strlen(p), clientin, BASE64_BUF_SIZE, &clientinlen);
-        if (r != SASL_OK) break;
+        if (r != SASL_OK) {
+            break;
+        }
 
         /* do the next step */
         r = sasl_server_step(
@@ -150,9 +165,13 @@ EXPORTED int saslserver(sasl_conn_t *conn,
     if (r == SASL_OK && serverout && success_data) {
         r = sasl_encode64(
             serverout, serveroutlen, base64, BASE64_BUF_SIZE, NULL);
-        if (r == SASL_OK) *success_data = (char *) xstrdup(base64);
+        if (r == SASL_OK) {
+            *success_data = (char *) xstrdup(base64);
+        }
     }
 
-    if (sasl_result) *sasl_result = r;
+    if (sasl_result) {
+        *sasl_result = r;
+    }
     return (r == SASL_OK ? 0 : IMAP_SASL_FAIL);
 }

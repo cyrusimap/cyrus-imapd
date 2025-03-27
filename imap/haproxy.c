@@ -62,13 +62,17 @@ EXPORTED int haproxy_read_hdr(int s, struct sockaddr *to, struct sockaddr *from)
         ret = recv(s, &hdr, sizeof(hdr), MSG_PEEK);
     } while (ret == -1 && errno == EINTR);
 
-    if (ret == -1) return -1;
+    if (ret == -1) {
+        return -1;
+    }
 
     if (ret >= 16 && memcmp(&hdr.v2, v2sig, 12) == 0
         && (hdr.v2.ver_cmd & 0xF0) == 0x20)
     {
         size = 16 + ntohs(hdr.v2.len);
-        if (ret < size) return -1; /* truncated or too large header */
+        if (ret < size) {
+            return -1; /* truncated or too large header */
+        }
 
         switch (hdr.v2.ver_cmd & 0xF) {
         case 0x01: /* PROXY command */
@@ -111,7 +115,9 @@ EXPORTED int haproxy_read_hdr(int s, struct sockaddr *to, struct sockaddr *from)
     }
     else if (ret >= 8 && memcmp(hdr.v1.line, "PROXY", 5) == 0) {
         char *end = memchr(hdr.v1.line, '\r', ret - 1);
-        if (!end || end[1] != '\n') return -1; /* partial or invalid header */
+        if (!end || end[1] != '\n') {
+            return -1; /* partial or invalid header */
+        }
         *end = '\0';                  /* terminate the string to ease parsing */
         size = end + 2 - hdr.v1.line; /* skip header + CRLF */
         /* parse the V1 header using favorite address parsers like inet_pton.

@@ -180,14 +180,18 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
             for (i = 0; i < strarray_size(ext); i += 2) {
                 const char *key = strarray_nth(ext, i);
 
-                if (!strcmp(key, "SIEVE"))
+                if (!strcmp(key, "SIEVE")) {
                     key = "sieveExtensions";
-                else if (!strcmp(key, "NOTIFY"))
+                }
+                else if (!strcmp(key, "NOTIFY")) {
                     key = "notificationMethods";
-                else if (!strcmp(key, "EXTLISTS"))
+                }
+                else if (!strcmp(key, "EXTLISTS")) {
                     key = "externalLists";
-                else
+                }
+                else {
                     continue;
+                }
 
                 tok_t tok = TOK_INITIALIZER(strarray_nth(ext, i + 1),
                                             " ",
@@ -203,7 +207,9 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
                 json_object_set_new(sieve_capabilities, key, vals);
             }
         }
-        if (interp) sieve_interp_free(&interp);
+        if (interp) {
+            sieve_interp_free(&interp);
+        }
     }
 
     json_object_set(account_capabilities, JMAP_URN_SIEVE, sieve_capabilities);
@@ -274,7 +280,9 @@ static int jmap_sieve_get(jmap_req_t *req)
     }
 
     r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/ 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     mailbox_unlock_index(mailbox, NULL);
 
@@ -315,7 +323,9 @@ static int jmap_sieve_get(jmap_req_t *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    if (r) jmap_error(req, jmap_server_error(r));
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
 
@@ -361,7 +371,9 @@ static int putscript(struct mailbox *mailbox,
     r = sieve_script_store(mailbox, sdata, &buf);
 
 done:
-    if (r) *err = jmap_server_error(r);
+    if (r) {
+        *err = jmap_server_error(r);
+    }
 
     buf_free(&buf);
 
@@ -425,13 +437,17 @@ static const char *set_create(struct jmap_req *req,
     int r;
 
     arg = json_object_get(jsieve, "id");
-    if (arg) json_array_append_new(invalid, json_string("id"));
+    if (arg) {
+        json_array_append_new(invalid, json_string("id"));
+    }
 
     arg = json_object_get(jsieve, "name");
-    if (!JNOTNULL(arg))
+    if (!JNOTNULL(arg)) {
         name = id;
-    else if (!json_is_string(arg))
+    }
+    else if (!json_is_string(arg)) {
         json_array_append_new(invalid, json_string("name"));
+    }
     else {
         /* sanity check script name and check for name collision */
         struct buf buf = BUF_INITIALIZER;
@@ -459,11 +475,14 @@ static const char *set_create(struct jmap_req *req,
     }
 
     arg = json_object_get(jsieve, "blobId");
-    if (!arg || !json_is_string(arg))
+    if (!arg || !json_is_string(arg)) {
         json_array_append_new(invalid, json_string("blobId"));
+    }
     else {
         content = script_findblob(req, json_string_value(arg), &buf, &err);
-        if (err) goto done;
+        if (err) {
+            goto done;
+        }
     }
 
     /* Report any property errors and bail out */
@@ -478,7 +497,9 @@ static const char *set_create(struct jmap_req *req,
     sdata.id = id;
     sdata.name = name;
     r = putscript(mailbox, content, &sdata, &err);
-    if (err) goto done;
+    if (err) {
+        goto done;
+    }
 
     if (!r) {
         /* Report script as created, with server-set properties */
@@ -524,7 +545,9 @@ static void set_update(struct jmap_req *req,
     struct sieve_data *sdata = NULL;
     int r = 0;
 
-    if (!id) return;
+    if (!id) {
+        return;
+    }
 
     arg = json_object_get(jsieve, "name");
     if (arg) {
@@ -580,8 +603,9 @@ static void set_update(struct jmap_req *req,
 
     arg = json_object_get(jsieve, "isActive");
     if (arg) {
-        if (!json_is_boolean(arg))
+        if (!json_is_boolean(arg)) {
             json_array_append_new(invalid, json_string("isActive"));
+        }
         else if (json_boolean_value(arg) != sdata->isactive) {
             /* isActive MUST be current value, if present */
             json_array_append_new(invalid, json_string("isActive"));
@@ -590,11 +614,14 @@ static void set_update(struct jmap_req *req,
 
     arg = json_object_get(jsieve, "blobId");
     if (arg) {
-        if (!json_is_string(arg))
+        if (!json_is_string(arg)) {
             json_array_append_new(invalid, json_string("blobId"));
+        }
         else {
             content = script_findblob(req, json_string_value(arg), &buf, &err);
-            if (err) goto done;
+            if (err) {
+                goto done;
+            }
         }
     }
 
@@ -605,10 +632,14 @@ static void set_update(struct jmap_req *req,
         goto done;
     }
 
-    if (name) sdata->name = name;
+    if (name) {
+        sdata->name = name;
+    }
 
     r = putscript(mailbox, content, sdata, &err);
-    if (err) goto done;
+    if (err) {
+        goto done;
+    }
 
     /* Report script as updated, with server-set properties */
     json_t *new_sieve = NULL;
@@ -684,7 +715,9 @@ static void set_activate(const char *id,
 
     /* Lookup currently active script */
     r = sievedb_lookup_active(db, &sdata);
-    if (!r) old_id = xstrdup(sdata->id);
+    if (!r) {
+        old_id = xstrdup(sdata->id);
+    }
 
     if (id) {
         if (id[0] == '#') {
@@ -766,12 +799,16 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
     int r = 1;
 
     if (!strcmp(key, "onSuccessActivateScript")) {
-        if (json_is_string(arg))
+        if (json_is_string(arg)) {
             set->onSuccessActivate = json_string_value(arg);
+        }
         else if (json_is_null(arg) && jmap_is_using(req, JMAP_SIEVE_EXTENSION))
+        {
             set->onSuccessDeactivate = 1;
-        else
+        }
+        else {
             r = 0;
+        }
     }
 
     else if (json_is_boolean(arg) && !strcmp(key, "onSuccessDeactivatescript"))
@@ -779,8 +816,9 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
         set->onSuccessDeactivate = json_boolean_value(arg);
     }
 
-    else
+    else {
         r = 0;
+    }
 
     return r;
 }
@@ -804,7 +842,9 @@ static int jmap_sieve_set(struct jmap_req *req)
                    &sub_args,
                    &set,
                    &jerr);
-    if (jerr) goto done;
+    if (jerr) {
+        goto done;
+    }
 
     db = sievedb_open_userid(req->accountid);
     if (!db) {
@@ -841,10 +881,14 @@ static int jmap_sieve_set(struct jmap_req *req)
         jmap_parser_pop(&parser);
     }
 
-    if (jerr) goto done;
+    if (jerr) {
+        goto done;
+    }
 
     r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/ 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
     set.old_state = buf_release(&buf);
@@ -891,7 +935,9 @@ static int jmap_sieve_set(struct jmap_req *req)
     json_object_foreach(set.update, id, val)
     {
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
-        if (!script_id) continue;
+        if (!script_id) {
+            continue;
+        }
 
         set_update(req, script_id, val, mailbox, db, &set);
     }
@@ -902,7 +948,9 @@ static int jmap_sieve_set(struct jmap_req *req)
     {
         id = json_string_value(val);
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
-        if (!script_id) continue;
+        if (!script_id) {
+            continue;
+        }
 
         set_destroy(script_id, mailbox, db, &set);
     }
@@ -911,10 +959,12 @@ static int jmap_sieve_set(struct jmap_req *req)
         && !json_array_size(set.not_destroyed))
     {
 
-        if (sub_args.onSuccessActivate)
+        if (sub_args.onSuccessActivate) {
             set_activate(sub_args.onSuccessActivate, mailbox, db, &set);
-        else if (sub_args.onSuccessDeactivate)
+        }
+        else if (sub_args.onSuccessDeactivate) {
             set_activate(NULL, mailbox, db, &set);
+        }
     }
 
     /* Build response */
@@ -1014,10 +1064,14 @@ static int filter_match(void *vf, void *rock)
     struct sieve_data *sdata = (struct sieve_data *) rock;
 
     /* name */
-    if (f->name && !strstr(sdata->name, f->name)) return 0;
+    if (f->name && !strstr(sdata->name, f->name)) {
+        return 0;
+    }
 
     /* isActive */
-    if (f->isactive != -1 && ((int) sdata->isactive != f->isactive)) return 0;
+    if (f->isactive != -1 && ((int) sdata->isactive != f->isactive)) {
+        return 0;
+    }
 
     /* All matched. */
     return 1;
@@ -1034,7 +1088,9 @@ static void free_script_info(void *data)
 {
     script_info *info = (script_info *) data;
 
-    if (!info) return;
+    if (!info) {
+        return;
+    }
 
     free(info->id);
     free(info->name);
@@ -1106,14 +1162,18 @@ static int sieve_cmp QSORT_R_COMPAR_ARGS(const void *va,
             break;
 
         case SIEVE_SORT_ACTIVE:
-            if (ma->isactive < mb->isactive)
+            if (ma->isactive < mb->isactive) {
                 ret = -1;
-            else if (ma->isactive > mb->isactive)
+            }
+            else if (ma->isactive > mb->isactive) {
                 ret = 1;
+            }
             break;
         }
 
-        if (ret) return (sort & SIEVE_SORT_DESC) ? -ret : ret;
+        if (ret) {
+            return (sort & SIEVE_SORT_DESC) ? -ret : ret;
+        }
     }
 
     return 0;
@@ -1177,7 +1237,9 @@ static int jmap_sieve_query(jmap_req_t *req)
     }
 
     r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/ 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     mailbox_unlock_index(mailbox, NULL);
 
@@ -1215,7 +1277,9 @@ static int jmap_sieve_query(jmap_req_t *req)
     else if (query.position < 0) {
         query.position += query.total;
     }
-    if (query.position < 0) query.position = 0;
+    if (query.position < 0) {
+        query.position = 0;
+    }
 
     size_t i;
     for (i = 0; i < query.total; i++) {
@@ -1233,7 +1297,9 @@ static int jmap_sieve_query(jmap_req_t *req)
     }
     ptrarray_fini(&frock.matches);
 
-    if (parsed_filter) jmap_filter_free(parsed_filter, &free);
+    if (parsed_filter) {
+        jmap_filter_free(parsed_filter, &free);
+    }
 
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
@@ -1244,7 +1310,9 @@ static int jmap_sieve_query(jmap_req_t *req)
     jmap_ok(req, jmap_query_reply(&query));
 
 done:
-    if (r) jmap_error(req, jmap_server_error(r));
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
     jmap_parser_fini(&parser);
     jmap_query_fini(&query);
 
@@ -1366,7 +1434,9 @@ static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
 
-    if (!m->cache_full) fill_cache(m);
+    if (!m->cache_full) {
+        fill_cache(m);
+    }
 
     *body = spool_getheader(m->cache, phead);
 
@@ -1424,36 +1494,48 @@ static int getenvironment(void *sc __attribute__((unused)),
         if (!strcmp(keyname, "domain")) {
             const char *domain = strchr(config_servername, '.');
 
-            if (domain)
+            if (domain) {
                 domain++;
-            else
+            }
+            else {
                 domain = "";
+            }
 
             *res = xstrdup(domain);
         }
         break;
 
     case 'h':
-        if (!strcmp(keyname, "host")) *res = xstrdup(config_servername);
+        if (!strcmp(keyname, "host")) {
+            *res = xstrdup(config_servername);
+        }
         break;
 
     case 'l':
-        if (!strcmp(keyname, "location")) *res = xstrdup("MDA");
+        if (!strcmp(keyname, "location")) {
+            *res = xstrdup("MDA");
+        }
         break;
 
     case 'n':
-        if (!strcmp(keyname, "name")) *res = xstrdup("Cyrus LMTP");
+        if (!strcmp(keyname, "name")) {
+            *res = xstrdup("Cyrus LMTP");
+        }
         break;
 
     case 'p':
-        if (!strcmp(keyname, "phase")) *res = xstrdup("during");
+        if (!strcmp(keyname, "phase")) {
+            *res = xstrdup("during");
+        }
         break;
 
         /* Not supporting remote host or ip since they'd be the jmap client, not
            the lmtp client */
 
     case 'v':
-        if (!strcmp(keyname, "version")) *res = xstrdup(CYRUS_VERSION);
+        if (!strcmp(keyname, "version")) {
+            *res = xstrdup(CYRUS_VERSION);
+        }
         break;
     }
 
@@ -1493,9 +1575,10 @@ static int getbody(void *mc,
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    if (!r)
+    if (!r) {
         message_fetch_part(
             &m->content, content_types, (struct bodypart ***) parts);
+    }
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
@@ -1539,7 +1622,9 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
         if (mboxname_isusermailbox(intname, 1)
             && mboxname_userownsmailbox(sd->userid, intname))
         {
-            if (buf_len(&attrib)) buf_putc(&attrib, ' ');
+            if (buf_len(&attrib)) {
+                buf_putc(&attrib, ' ');
+            }
             buf_appendcstr(&attrib, "\\Inbox");
         }
 
@@ -1554,8 +1639,9 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
             }
             strarray_free(haystack);
         }
-        else
+        else {
             r = 0;
+        }
 
         buf_free(&attrib);
         free(intname);
@@ -1564,9 +1650,13 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
         for (i = 0; i < strarray_size(uses); i++) {
             char *intname =
                 mboxlist_find_specialuse(strarray_nth(uses, i), sd->userid);
-            if (!intname) r = 0;
+            if (!intname) {
+                r = 0;
+            }
             free(intname);
-            if (!r) break;
+            if (!r) {
+                break;
+            }
         }
     }
 
@@ -1620,7 +1710,9 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
-    if (!jfilter) return 0;
+    if (!jfilter) {
+        return 0;
+    }
 
     int r = 0;
 
@@ -1633,12 +1725,13 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
         }
     }
 
-    if (!md->content.matchmime)
+    if (!md->content.matchmime) {
         md->content.matchmime =
             jmap_email_matchmime_new(&md->content.map, &err);
+    }
 
     /* Run query */
-    if (md->content.matchmime)
+    if (md->content.matchmime) {
         matches = jmap_email_matchmime(md->content.matchmime,
                                        jfilter,
                                        ctx->cstate,
@@ -1647,6 +1740,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
                                        sd->ns,
                                        time(NULL),
                                        &err);
+    }
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
@@ -1699,12 +1793,18 @@ static int keep(void *ac,
 
 static json_t *_fileinto(json_t *args, sieve_fileinto_context_t *fc)
 {
-    if (fc->specialuse)
+    if (fc->specialuse) {
         json_object_set_new(args, "specialuse", json_string(fc->specialuse));
-    if (fc->mailboxid)
+    }
+    if (fc->mailboxid) {
         json_object_set_new(args, "mailboxid", json_string(fc->mailboxid));
-    if (fc->do_create) json_object_set_new(args, "create", json_true());
-    if (fc->copy) json_object_set_new(args, "copy", json_true());
+    }
+    if (fc->do_create) {
+        json_object_set_new(args, "create", json_true());
+    }
+    if (fc->copy) {
+        json_object_set_new(args, "copy", json_true());
+    }
 
     return _strlist(args, "flags", fc->imapflags);
 }
@@ -1756,9 +1856,12 @@ static int redirect(void *ac,
 
     json_t *args = json_object();
 
-    if (rc->dsn_notify)
+    if (rc->dsn_notify) {
         json_object_set_new(args, "notify", json_string(rc->dsn_notify));
-    if (rc->dsn_ret) json_object_set_new(args, "ret", json_string(rc->dsn_ret));
+    }
+    if (rc->dsn_ret) {
+        json_object_set_new(args, "ret", json_string(rc->dsn_ret));
+    }
 
     json_array_append_new(m->actions,
                           json_pack("[s o [s]]", "redirect", args, rc->addr));
@@ -1792,8 +1895,9 @@ static int autorespond(void *ac,
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
 
-    if (m->last_vaca_resp && time(0) < m->last_vaca_resp + arc->seconds)
+    if (m->last_vaca_resp && time(0) < m->last_vaca_resp + arc->seconds) {
         return SIEVE_DONE;
+    }
 
     return SIEVE_OK;
 }
@@ -1815,10 +1919,15 @@ static int send_response(void *ac,
 
         _fileinto(args, &src->fcc);
     }
-    if (src->subj) json_object_set_new(args, "subject", json_string(src->subj));
-    if (src->fromaddr)
+    if (src->subj) {
+        json_object_set_new(args, "subject", json_string(src->subj));
+    }
+    if (src->fromaddr) {
         json_object_set_new(args, "from", json_string(src->fromaddr));
-    if (src->mime) json_object_set_new(args, "mime", json_true());
+    }
+    if (src->mime) {
+        json_object_set_new(args, "mime", json_true());
+    }
 
     json_array_append_new(m->actions,
                           json_pack("[s o [s]]", "vacation", args, src->msg));
@@ -1837,9 +1946,13 @@ static int addheader(void *mc, const char *head, const char *body, int index)
 {
     message_data_t *m = (message_data_t *) mc;
 
-    if (head == NULL || body == NULL) return SIEVE_FAIL;
+    if (head == NULL || body == NULL) {
+        return SIEVE_FAIL;
+    }
 
-    if (!m->cache_full) fill_cache(m);
+    if (!m->cache_full) {
+        fill_cache(m);
+    }
 
     json_t *args = json_object();
 
@@ -1862,9 +1975,13 @@ static int deleteheader(void *mc, const char *head, int index)
 {
     message_data_t *m = (message_data_t *) mc;
 
-    if (head == NULL) return SIEVE_FAIL;
+    if (head == NULL) {
+        return SIEVE_FAIL;
+    }
 
-    if (!m->cache_full) fill_cache(m);
+    if (!m->cache_full) {
+        fill_cache(m);
+    }
 
     json_t *args = json_object();
 
@@ -1872,7 +1989,9 @@ static int deleteheader(void *mc, const char *head, int index)
         spool_remove_header_instance(head, index, m->cache);
 
         json_object_set_new(args, "index", json_integer(abs(index)));
-        if (index < 0) json_object_set_new(args, "last", json_true());
+        if (index < 0) {
+            json_object_set_new(args, "last", json_true());
+        }
     }
     else {
         spool_remove_header(head, m->cache);
@@ -1895,17 +2014,23 @@ static int notify(void *ac,
 
     json_t *args = _strlist(json_object(), "options", nc->options);
 
-    if (nc->from) json_object_set_new(args, "from", json_string(nc->from));
+    if (nc->from) {
+        json_object_set_new(args, "from", json_string(nc->from));
+    }
 
-    if (nc->priority)
+    if (nc->priority) {
         json_object_set_new(args, "importance", json_string(nc->priority));
+    }
 
-    if (nc->message)
+    if (nc->message) {
         json_object_set_new(args, "message", json_string(nc->message));
+    }
 
     json_t *method = json_array();
 
-    if (nc->method) json_array_append_new(method, json_string(nc->method));
+    if (nc->method) {
+        json_array_append_new(method, json_string(nc->method));
+    }
 
     json_array_append_new(m->actions,
                           json_pack("[s o o]", "notify", args, method));
@@ -1926,19 +2051,26 @@ static int snooze(void *ac,
 
     json_t *args = json_object();
 
-    if (sn->awaken_spluse)
+    if (sn->awaken_spluse) {
         json_object_set_new(args, "specialuse", json_string(sn->awaken_spluse));
-    if (sn->awaken_mboxid)
+    }
+    if (sn->awaken_mboxid) {
         json_object_set_new(args, "mailboxid", json_string(sn->awaken_mboxid));
-    if (sn->do_create) json_object_set_new(args, "create", json_true());
-    if (sn->awaken_mbox)
+    }
+    if (sn->do_create) {
+        json_object_set_new(args, "create", json_true());
+    }
+    if (sn->awaken_mbox) {
         json_object_set_new(args, "mailbox", json_string(sn->awaken_mbox));
+    }
 
     _strlist(args, "flags", sn->imapflags);
     _strlist(args, "addflags", sn->addflags);
     _strlist(args, "removeflags", sn->removeflags);
 
-    if (sn->tzid) json_object_set_new(args, "tzid", json_string(sn->tzid));
+    if (sn->tzid) {
+        json_object_set_new(args, "tzid", json_string(sn->tzid));
+    }
 
     if (sn->days && (sn->days & SNOOZE_WDAYS_MASK) != SNOOZE_WDAYS_MASK) {
         json_t *jdays = json_array();
@@ -1993,25 +2125,33 @@ static int processcal(void *ac,
     message_data_t *m = (message_data_t *) mc;
     json_t *args = json_object();
 
-    if (cal->calendarid)
+    if (cal->calendarid) {
         json_object_set_new(args, "calendarid", json_string(cal->calendarid));
+    }
 
-    if (cal->addresses) _strlist(args, "addresses", cal->addresses);
+    if (cal->addresses) {
+        _strlist(args, "addresses", cal->addresses);
+    }
 
-    if (cal->organizers)
+    if (cal->organizers) {
         json_object_set_new(args, "organizers", json_string(cal->organizers));
+    }
 
-    if (cal->allow_public)
+    if (cal->allow_public) {
         json_object_set_new(args, "allowpublic", json_true());
+    }
 
-    if (cal->invites_only)
+    if (cal->invites_only) {
         json_object_set_new(args, "invitesonly", json_true());
+    }
 
-    if (cal->delete_cancelled)
+    if (cal->delete_cancelled) {
         json_object_set_new(args, "deletecanceled", json_true());
+    }
 
-    if (cal->updates_only)
+    if (cal->updates_only) {
         json_object_set_new(args, "updatesonly", json_true());
+    }
 
     /* processimip until this goes away... */
     json_array_append_new(m->actions,
@@ -2165,7 +2305,9 @@ static int jmap_sieve_test(struct jmap_req *req)
             jmap_parser_push(&parser, "mailFrom");
             email = _envelope_address_parse(from, &parser);
             jmap_parser_pop(&parser);
-            if (email) strarray_append(&env_from, email);
+            if (email) {
+                strarray_append(&env_from, email);
+            }
         }
         else {
             jmap_parser_invalid(&parser, "mailFrom");
@@ -2179,7 +2321,9 @@ static int jmap_sieve_test(struct jmap_req *req)
                 jmap_parser_push_index(&parser, "rcptTo", i, NULL);
                 email = _envelope_address_parse(addr, &parser);
                 jmap_parser_pop(&parser);
-                if (email) strarray_append(&env_to, email);
+                if (email) {
+                    strarray_append(&env_to, email);
+                }
             }
         }
         else {
@@ -2250,7 +2394,9 @@ static int jmap_sieve_test(struct jmap_req *req)
 
     if (!bcname) {
         const char *content = script_findblob(req, scriptid, &buf, &err);
-        if (err) goto done;
+        if (err) {
+            goto done;
+        }
 
         /* Generate temporary bytecode file */
         char template[] = "/tmp/sieve-test-bytecode-XXXXXX";
@@ -2302,7 +2448,9 @@ static int jmap_sieve_test(struct jmap_req *req)
         bcname = tmpname = template;
     }
 
-    if (err) goto done;
+    if (err) {
+        goto done;
+    }
 
     /* load the script */
     r = sieve_script_load(bcname, &exe);
@@ -2379,10 +2527,12 @@ static int jmap_sieve_test(struct jmap_req *req)
                           NULL,
                           &m.content.map);
         if (r) {
-            if (r == IMAP_NOTFOUND)
+            if (r == IMAP_NOTFOUND) {
                 err = json_pack("{s:s}", "type", "blobNotFound");
-            else
+            }
+            else {
                 err = jmap_server_error(r);
+            }
 
             json_object_set_new(not_completed, emailid, err);
         }
@@ -2427,7 +2577,9 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
     }
 
-    if (interp_ctx.carddavdb) carddav_close(interp_ctx.carddavdb);
+    if (interp_ctx.carddavdb) {
+        carddav_close(interp_ctx.carddavdb);
+    }
 
     /* Build response */
     if (!json_object_size(completed)) {
@@ -2449,7 +2601,9 @@ static int jmap_sieve_test(struct jmap_req *req)
                       not_completed));
 
 done:
-    if (err) jmap_error(req, err);
+    if (err) {
+        jmap_error(req, err);
+    }
     jmap_parser_fini(&parser);
     sieve_script_unload(&exe);
     sieve_interp_free(&interp);

@@ -92,7 +92,9 @@ EXPORTED int duplicate_init(const char *fname)
     int r = 0;
     char *tofree = NULL;
 
-    if (!fname) fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
+    if (!fname) {
+        fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
+    }
 
     /* create db file name */
     if (!fname) {
@@ -115,7 +117,9 @@ out:
 
 static int make_key(struct buf *key, const duplicate_key_t *dkey)
 {
-    if (!dkey || !dkey->id || !dkey->to || !dkey->date) return IMAP_INTERNAL;
+    if (!dkey || !dkey->id || !dkey->to || !dkey->date) {
+        return IMAP_INTERNAL;
+    }
 
     buf_reset(key);
     buf_appendmap(key, dkey->id, strlen(dkey->id) + 1);
@@ -134,15 +138,21 @@ static int split_key(const char *key, int keylen, duplicate_key_t *dkey)
     const char *p;
 
     /* check the key as a whole is nul-terminated */
-    if (key[keylen - 1] != '\0') return IMAP_INTERNAL;
+    if (key[keylen - 1] != '\0') {
+        return IMAP_INTERNAL;
+    }
 
     /* find the \0 field boundaries */
     for (p = key; p < (key + keylen); p += strlen(p) + 1) {
-        if (n == MAXFIELDS) return IMAP_INTERNAL;
+        if (n == MAXFIELDS) {
+            return IMAP_INTERNAL;
+        }
         fields[n++] = p;
     }
 
-    if (n != 3) return IMAP_INTERNAL;
+    if (n != 3) {
+        return IMAP_INTERNAL;
+    }
     dkey->id = fields[0];
     dkey->to = fields[1];
     dkey->date = fields[2];
@@ -159,10 +169,14 @@ EXPORTED time_t duplicate_check(const duplicate_key_t *dkey)
     size_t len = 0;
     time_t mark = 0;
 
-    if (!duplicate_dbopen) return 0;
+    if (!duplicate_dbopen) {
+        return 0;
+    }
 
     r = make_key(&key, dkey);
-    if (r) return 0;
+    if (r) {
+        return 0;
+    }
 
     do {
         r = cyrusdb_fetch(dupdb, key.s, key.len, &data, &len, NULL);
@@ -209,7 +223,7 @@ EXPORTED void duplicate_log(const duplicate_key_t *dkey, const char *action)
            dkey->id,
            dkey->date,
            action);
-    if (config_auditlog)
+    if (config_auditlog) {
         syslog(LOG_NOTICE,
                "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s "
                "user=<%s> date=<%s>",
@@ -218,6 +232,7 @@ EXPORTED void duplicate_log(const duplicate_key_t *dkey, const char *action)
                dkey->id,
                dkey->to,
                dkey->date);
+    }
 }
 
 EXPORTED void duplicate_mark(const duplicate_key_t *dkey,
@@ -228,10 +243,14 @@ EXPORTED void duplicate_mark(const duplicate_key_t *dkey,
     char data[100];
     int r;
 
-    if (!duplicate_dbopen) return;
+    if (!duplicate_dbopen) {
+        return;
+    }
 
     r = make_key(&key, dkey);
-    if (r) return;
+    if (r) {
+        return;
+    }
 
     memcpy(data, &mark, sizeof(mark));
     memcpy(data + sizeof(mark), &uid, sizeof(uid));
@@ -272,15 +291,20 @@ static int find_cb(void *rock,
     int r;
 
     r = split_key(key, keylen, &dkey);
-    if (r) return 0; /* ignore broken records */
+    if (r) {
+        return 0; /* ignore broken records */
+    }
 
     /* make sure it is a mailbox */
-    if (dkey.to[0] == '.') return 0;
+    if (dkey.to[0] == '.') {
+        return 0;
+    }
 
     /* grab the mark and uid */
     memcpy(&mark, data, sizeof(time_t));
-    if (datalen > (int) sizeof(mark))
+    if (datalen > (int) sizeof(mark)) {
         memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
+    }
 
     r = (*frock->proc)(&dkey, mark, uid, frock->rock);
 
@@ -293,7 +317,9 @@ EXPORTED int duplicate_find(const char *msgid,
 {
     struct findrock frock;
 
-    if (!msgid) msgid = "";
+    if (!msgid) {
+        msgid = "";
+    }
 
     frock.proc = proc;
     frock.rock = rock;
@@ -327,7 +353,9 @@ static int prune_p(void *rock,
     prock->count++;
 
     r = split_key(key, keylen, &dkey);
-    if (r) return 1; /* broken record, want to prune it */
+    if (r) {
+        return 1; /* broken record, want to prune it */
+    }
 
     /* grab the rcpt, make sure it is a mailbox and lookup its expire time */
     if (prock->expire_table && dkey.to[0] && dkey.to[0] != '.') {
@@ -363,7 +391,9 @@ EXPORTED int duplicate_prune(int seconds, struct hash_table *expire_table)
 {
     struct prunerock prock;
 
-    if (seconds < 0) fatal("must specify positive number of seconds", EX_USAGE);
+    if (seconds < 0) {
+        fatal("must specify positive number of seconds", EX_USAGE);
+    }
 
     prock.count = prock.deletions = 0;
     prock.expmark = time(NULL) - seconds;
@@ -410,15 +440,20 @@ static int dump_cb(void *rock,
     drock->count++;
 
     memcpy(&mark, data, sizeof(time_t));
-    if (datalen > (int) sizeof(mark))
+    if (datalen > (int) sizeof(mark)) {
         memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
+    }
 
     r = split_key(key, keylen, &dkey);
-    if (r) goto out;
+    if (r) {
+        goto out;
+    }
     idlen = strlen(dkey.id);
 
     for (i = 0; i < idlen; i++) {
-        if (!isprint((unsigned char) dkey.id[i])) break;
+        if (!isprint((unsigned char) dkey.id[i])) {
+            break;
+        }
     }
 
     if (i != idlen) {
@@ -436,7 +471,9 @@ static int dump_cb(void *rock,
             uid);
 
 out:
-    if (freeme) free(freeme);
+    if (freeme) {
+        free(freeme);
+    }
 
     return 0;
 }

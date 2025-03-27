@@ -150,11 +150,15 @@ EXPORTED unsigned long message_guid_hash(const struct message_guid *guid,
 
     if (hash_size > 1024) {
         /* Pair up chars to get 16 bit values */
-        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2)
+        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2) {
             result += (s[i] << 8) + s[i + 1];
+        }
     }
-    else
-        for (i = 0; i < MESSAGE_GUID_SIZE; i++) result += s[i];
+    else {
+        for (i = 0; i < MESSAGE_GUID_SIZE; i++) {
+            result += s[i];
+        }
+    }
 
     return (result % hash_size);
 }

@@ -91,7 +91,9 @@ static int sieve_vacation_enabled = 0;
 
 HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 {
-    if (!config_getswitch(IMAPOPT_JMAP_VACATION)) return;
+    if (!config_getswitch(IMAPOPT_JMAP_VACATION)) {
+        return;
+    }
 
     if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
         xsyslog(LOG_WARNING,
@@ -116,7 +118,9 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
     sieve_vacation_enabled = ((config_ext & required) == required);
 #endif /* USE_SIEVE */
 
-    if (!sieve_vacation_enabled) return;
+    if (!sieve_vacation_enabled) {
+        return;
+    }
 
     jmap_add_methods(jmap_vacation_methods_standard, settings);
 
@@ -130,7 +134,9 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_vacation_capabilities(json_t *account_capabilities)
 {
-    if (!sieve_vacation_enabled) return;
+    if (!sieve_vacation_enabled) {
+        return;
+    }
 
     json_object_set_new(account_capabilities, JMAP_URN_VACATION, json_object());
 }
@@ -207,7 +213,9 @@ static json_t *vacation_read(jmap_req_t *req,
                 int i, version,
                     requires;
 
-                if (status) *status |= STATUS_CUSTOM;
+                if (status) {
+                    *status |= STATUS_CUSTOM;
+                }
 
                 i = bc_header_parse(bc, &version, &requires);
                 while (i > 0 && i < (int) len) {
@@ -236,7 +244,9 @@ static json_t *vacation_read(jmap_req_t *req,
         isEnabled = isActive && isEnabled;
         json_object_set_new(vacation, "isEnabled", json_boolean(isEnabled));
 
-        if (status && isActive) *status |= STATUS_ACTIVE;
+        if (status && isActive) {
+            *status |= STATUS_ACTIVE;
+        }
     }
     else {
         /* Build empty response */
@@ -265,18 +275,24 @@ static void vacation_get(jmap_req_t *req,
     json_t *vacation = vacation_read(req, mailbox, sdata, NULL);
 
     /* Strip unwanted properties */
-    if (!jmap_wantprop(get->props, "isEnabled"))
+    if (!jmap_wantprop(get->props, "isEnabled")) {
         json_object_del(vacation, "isEnabled");
-    if (!jmap_wantprop(get->props, "fromDate"))
+    }
+    if (!jmap_wantprop(get->props, "fromDate")) {
         json_object_del(vacation, "fromDate");
-    if (!jmap_wantprop(get->props, "toDate"))
+    }
+    if (!jmap_wantprop(get->props, "toDate")) {
         json_object_del(vacation, "toDate");
-    if (!jmap_wantprop(get->props, "subject"))
+    }
+    if (!jmap_wantprop(get->props, "subject")) {
         json_object_del(vacation, "subject");
-    if (!jmap_wantprop(get->props, "textBody"))
+    }
+    if (!jmap_wantprop(get->props, "textBody")) {
         json_object_del(vacation, "textBody");
-    if (!jmap_wantprop(get->props, "htmlBody"))
+    }
+    if (!jmap_wantprop(get->props, "htmlBody")) {
         json_object_del(vacation, "htmlBody");
+    }
 
     /* Add object to list */
     json_array_append_new(get->list, vacation);
@@ -307,7 +323,9 @@ static int jmap_vacation_get(jmap_req_t *req)
     }
 
     r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/ 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     mailbox_unlock_index(mailbox, NULL);
 
@@ -319,8 +337,9 @@ static int jmap_vacation_get(jmap_req_t *req)
 
     r = sievedb_lookup_id(db, JMAP_URN_VACATION, &sdata, 0);
     if (r) {
-        if (r == CYRUSDB_NOTFOUND)
+        if (r == CYRUSDB_NOTFOUND) {
             r = 0;
+        }
         else {
             r = IMAP_INTERNAL;
             goto done;
@@ -336,14 +355,17 @@ static int jmap_vacation_get(jmap_req_t *req)
         {
             const char *id = json_string_value(jval);
 
-            if (!strcmp(id, "singleton"))
+            if (!strcmp(id, "singleton")) {
                 vacation_get(req, mailbox, sdata, &get);
-            else
+            }
+            else {
                 json_array_append(get.not_found, jval);
+            }
         }
     }
-    else
+    else {
         vacation_get(req, mailbox, sdata, &get);
+    }
 
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
@@ -380,8 +402,9 @@ static void vacation_update(struct jmap_req *req,
     vacation = vacation_read(req, mailbox, sdata, &status);
 
     prop = json_object_get(patch, "isEnabled");
-    if (!json_is_boolean(prop))
+    if (!json_is_boolean(prop)) {
         json_array_append_new(invalid, json_string("isEnabled"));
+    }
     else if (json_is_true(prop)
              && !json_equal(prop, json_object_get(vacation, "isEnabled")))
     {
@@ -390,24 +413,29 @@ static void vacation_update(struct jmap_req *req,
     }
 
     prop = json_object_get(patch, "fromDate");
-    if (JNOTNULL(prop) && !json_is_utcdate(prop))
+    if (JNOTNULL(prop) && !json_is_utcdate(prop)) {
         json_array_append_new(invalid, json_string("fromDate"));
+    }
 
     prop = json_object_get(patch, "toDate");
-    if (JNOTNULL(prop) && !json_is_utcdate(prop))
+    if (JNOTNULL(prop) && !json_is_utcdate(prop)) {
         json_array_append_new(invalid, json_string("toDate"));
+    }
 
     prop = json_object_get(patch, "subject");
-    if (JNOTNULL(prop) && !json_is_string(prop))
+    if (JNOTNULL(prop) && !json_is_string(prop)) {
         json_array_append_new(invalid, json_string("subject"));
+    }
 
     prop = json_object_get(patch, "textBody");
-    if (JNOTNULL(prop) && !json_is_string(prop))
+    if (JNOTNULL(prop) && !json_is_string(prop)) {
         json_array_append_new(invalid, json_string("textBody"));
+    }
 
     prop = json_object_get(patch, "htmlBody");
-    if (JNOTNULL(prop) && !json_is_string(prop))
+    if (JNOTNULL(prop) && !json_is_string(prop)) {
         json_array_append_new(invalid, json_string("htmlBody"));
+    }
 
     /* Report any property errors and bail out. */
     if (json_array_size(invalid)) {
@@ -484,7 +512,9 @@ static void vacation_update(struct jmap_req *req,
 
     /* Add vacation action */
     buf_appendcstr(&data, "  vacation");
-    if (subject) buf_printf(&data, " :subject \"%s\"", subject);
+    if (subject) {
+        buf_printf(&data, " :subject \"%s\"", subject);
+    }
     /* XXX  Need to add :addresses */
     /* XXX  Should we add :fcc ? */
 
@@ -492,7 +522,9 @@ static void vacation_update(struct jmap_req *req,
         const char *boundary = makeuuid();
         char *text = NULL;
 
-        if (!textBody) textBody = text = charset_extract_plain(htmlBody);
+        if (!textBody) {
+            textBody = text = charset_extract_plain(htmlBody);
+        }
 
         buf_appendcstr(&data, " :mime text:\r\n");
         buf_printf(&data,
@@ -521,12 +553,15 @@ static void vacation_update(struct jmap_req *req,
     buf_free(&data);
     json_decref(vacation);
 
-    if (r)
+    if (r) {
         err = "Failed to update vacation response";
+    }
     else if (status == STATUS_ENABLE) {
         /* Activate vacation script */
         r = sieve_script_activate(mailbox, sdata);
-        if (r) err = "Failed to enable vacation response";
+        if (r) {
+            err = "Failed to enable vacation response";
+        }
     }
 
     if (r) {
@@ -559,10 +594,14 @@ static int jmap_vacation_set(struct jmap_req *req)
 
     /* Parse arguments */
     jmap_set_parse(req, &parser, vacation_props, NULL, NULL, &set, &jerr);
-    if (jerr) goto done;
+    if (jerr) {
+        goto done;
+    }
 
     r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/ 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     db = sievedb_open_userid(req->accountid);
     if (!db) {
@@ -572,8 +611,9 @@ static int jmap_vacation_set(struct jmap_req *req)
 
     r = sievedb_lookup_id(db, JMAP_URN_VACATION, &sdata, 0);
     if (r) {
-        if (r == CYRUSDB_NOTFOUND)
+        if (r == CYRUSDB_NOTFOUND) {
             r = 0;
+        }
         else {
             r = IMAP_INTERNAL;
             goto done;

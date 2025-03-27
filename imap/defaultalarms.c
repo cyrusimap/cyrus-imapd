@@ -137,16 +137,22 @@ static char *generate_atag(icalcomponent *comp)
 
         if (!icalcomponent_get_x_property_by_name(valarm,
                                                   "X-JMAP-DEFAULT-ALARM"))
+        {
             continue;
+        }
 
         // UID contributes to the atag
         const char *uid = icalcomponent_get_uid(valarm);
-        if (uid) buf_appendcstr(&buf, uid);
+        if (uid) {
+            buf_appendcstr(&buf, uid);
+        }
 
         // TRIGGER contributes to the atag
         icalproperty *prop =
             icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY);
-        if (prop) buf_appendcstr(&buf, icalproperty_as_ical_string(prop));
+        if (prop) {
+            buf_appendcstr(&buf, icalproperty_as_ical_string(prop));
+        }
     }
 
     if (buf_len(&buf)) {
@@ -164,21 +170,31 @@ static int get_alarms_dl(struct dlist *root,
                          struct defaultalarms_record *rec)
 {
     struct dlist *dl = NULL;
-    if (!dlist_getlist(root, name, &dl)) return 0;
+    if (!dlist_getlist(root, name, &dl)) {
+        return 0;
+    }
 
     const char *guidrep = NULL;
-    if (!dlist_getatom(dl, "GUID", &guidrep)) return 0;
+    if (!dlist_getatom(dl, "GUID", &guidrep)) {
+        return 0;
+    }
 
     const char *content = NULL;
-    if (!dlist_getatom(dl, "CONTENT", &content)) return 0;
+    if (!dlist_getatom(dl, "CONTENT", &content)) {
+        return 0;
+    }
 
     const char *atag = NULL;
-    if (!dlist_getatom(dl, "ATAG", &atag)) return 0;
+    if (!dlist_getatom(dl, "ATAG", &atag)) {
+        return 0;
+    }
 
     message_guid_decode(&rec->guid, guidrep);
     if (*content) {
         rec->ical = icalparser_parse_string(content);
-        if (rec->ical == NULL) return 0;
+        if (rec->ical == NULL) {
+            return 0;
+        }
     }
     rec->atag = xstrdupnull(atag);
 
@@ -203,19 +219,27 @@ static int load_legacy_alarms(const char *mboxname,
         }
         free(ownerid);
     }
-    if (r && r != CYRUSDB_NOTFOUND) return r;
+    if (r && r != CYRUSDB_NOTFOUND) {
+        return r;
+    }
 
     buf_trim(buf);
-    if (!buf_len(buf)) return 0;
+    if (!buf_len(buf)) {
+        return 0;
+    }
 
     const char *content = NULL;
     const char *guidrep = NULL;
 
     struct dlist *dl = NULL;
     if (!dlist_parsemap(&dl, 1, buf_base(buf), buf_len(buf))) {
-        if (!dlist_getatom(dl, "CONTENT", &content)) return CYRUSDB_IOERROR;
+        if (!dlist_getatom(dl, "CONTENT", &content)) {
+            return CYRUSDB_IOERROR;
+        }
 
-        if (!dlist_getatom(dl, "GUID", &guidrep)) return CYRUSDB_IOERROR;
+        if (!dlist_getatom(dl, "GUID", &guidrep)) {
+            return CYRUSDB_IOERROR;
+        }
     }
     else {
         content = buf_cstring(buf);
@@ -288,15 +312,18 @@ static int load_alarms(const char *mboxname,
                                &defalarms->with_time,
                                &buf);
 
-        if (!r)
+        if (!r) {
             r = load_legacy_alarms(mboxname,
                                    userid,
                                    CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE,
                                    legacy_flags,
                                    &defalarms->with_date,
                                    &buf);
+        }
 
-        if (r) defaultalarms_fini(defalarms);
+        if (r) {
+            defaultalarms_fini(defalarms);
+        }
     }
 
     free(calhomename);
@@ -392,19 +419,25 @@ static int compare_valarm(const void **va, const void **vb)
         !!icalcomponent_get_first_property(a, ICAL_RELATEDTO_PROPERTY);
     int is_snooze_b =
         !!icalcomponent_get_first_property(b, ICAL_RELATEDTO_PROPERTY);
-    if (is_snooze_a != is_snooze_b) return -(is_snooze_a - is_snooze_b);
+    if (is_snooze_a != is_snooze_b) {
+        return -(is_snooze_a - is_snooze_b);
+    }
 
     // Alarms with UID sort after alarms without UID
     int has_uid_a = !!icalcomponent_get_uid(a);
     int has_uid_b = !!icalcomponent_get_uid(b);
-    if (has_uid_a != has_uid_b) return has_uid_a - has_uid_b;
+    if (has_uid_a != has_uid_b) {
+        return has_uid_a - has_uid_b;
+    }
 
     // Default alarms sort after non-default alarms
     int is_default_a =
         !!icalcomponent_get_x_property_by_name(a, "X-JMAP-DEFAULT-ALARM");
     int is_default_b =
         !!icalcomponent_get_x_property_by_name(b, "X-JMAP-DEFAULT-ALARM");
-    if (is_default_a != is_default_b) return is_default_a - is_default_b;
+    if (is_default_a != is_default_b) {
+        return is_default_a - is_default_b;
+    }
 
     // Break ties by UID
     return strcmpsafe(icalcomponent_get_uid(a), icalcomponent_get_uid(b));
@@ -433,7 +466,9 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
             icalcomponent_get_first_property(valarm, ICAL_RELATEDTO_PROPERTY);
         if (prop) {
             const char *related_uid = icalproperty_get_relatedto(prop);
-            if (related_uid) strarray_append(&related_uids, related_uid);
+            if (related_uid) {
+                strarray_append(&related_uids, related_uid);
+            }
         }
     }
 
@@ -569,8 +604,9 @@ static void merge_alarms(icalcomponent *comp, icalcomponent *alarms)
             else if (is_apple) {
                 icalcomponent_add_component(comp, old);
             }
-            else
+            else {
                 icalcomponent_free(old);
+            }
         }
     } while (old || new);
 
@@ -585,11 +621,15 @@ EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms,
 {
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
-    if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT) return;
+    if (kind != ICAL_VEVENT_COMPONENT && kind != ICAL_VTODO_COMPONENT) {
+        return;
+    }
 
     for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
 
-        if (!icalcomponent_get_usedefaultalerts(comp)) continue;
+        if (!icalcomponent_get_usedefaultalerts(comp)) {
+            continue;
+        }
 
         // Remove any atag that was set before
         icalcomponent_set_usedefaultalerts(comp, 1, NULL);
@@ -598,7 +638,9 @@ EXPORTED void defaultalarms_insert(struct defaultalarms *defalarms,
                                                ? &defalarms->with_date
                                                : &defalarms->with_time;
 
-        if (set_atag) icalcomponent_set_usedefaultalerts(comp, 1, rec->atag);
+        if (set_atag) {
+            icalcomponent_set_usedefaultalerts(comp, 1, rec->atag);
+        }
 
         merge_alarms(comp, rec->ical);
     }
@@ -644,7 +686,9 @@ static int migrate39_rewrite_peruser_data(struct mailbox *mbox,
         goto done;
     }
 
-    if (!data.usedefaultalerts) goto done;
+    if (!data.usedefaultalerts) {
+        goto done;
+    }
 
     int is_date = strlen(cdata->dtstart) == 6;
     icalcomponent *alarms =
@@ -744,8 +788,9 @@ static int migrate39_find_peruser_cb(const char *mboxname
                                      __attribute__((unused)),
                                      void *vrock)
 {
-    if (buf_len(value))
+    if (buf_len(value)) {
         hash_insert(userid, xstrdup(buf_cstring(value)), (hash_table *) vrock);
+    }
 
     return 0;
 }
@@ -963,22 +1008,30 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
 
 done:
     if (json_object_size(caldav_alarm_err)) {
-        if (!err) err = json_object();
+        if (!err) {
+            err = json_object();
+        }
         json_object_set_new(err, "caldavAlarmErrors", caldav_alarm_err);
     }
-    else
+    else {
         json_decref(caldav_alarm_err);
+    }
 
     if (json_object_size(sharee_err)) {
-        if (!err) err = json_object();
+        if (!err) {
+            err = json_object();
+        }
         json_object_set_new(err, "shareeAlarmErrors", sharee_err);
     }
-    else
+    else {
         json_decref(sharee_err);
+    }
 
     *errp = err;
 
-    if (astate) annotate_state_abort(&astate);
+    if (astate) {
+        annotate_state_abort(&astate);
+    }
     defaultalarms_fini(&defalarms);
     mailbox_close(&mbox);
     mbname_free(&mbname);

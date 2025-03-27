@@ -80,18 +80,24 @@ EXPORTED const char *prometheus_stats_dir(void)
     static struct buf statsdir = BUF_INITIALIZER;
     const char *tmp;
 
-    if (buf_len(&statsdir) > 0) return buf_cstring(&statsdir);
+    if (buf_len(&statsdir) > 0) {
+        return buf_cstring(&statsdir);
+    }
 
     if ((tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR))) {
-        if (tmp[0] != '/')
+        if (tmp[0] != '/') {
             fatal("prometheus_stats_dir must be fully qualified", EX_CONFIG);
+        }
 
-        if (strlen(tmp) < 2)
+        if (strlen(tmp) < 2) {
             fatal("prometheus_stats_dir must not be '/'", EX_CONFIG);
+        }
 
         buf_setcstr(&statsdir, tmp);
 
-        if (statsdir.s[statsdir.len - 1] != '/') buf_putc(&statsdir, '/');
+        if (statsdir.s[statsdir.len - 1] != '/') {
+            buf_putc(&statsdir, '/');
+        }
     }
     else {
         buf_setcstr(&statsdir, config_dir);
@@ -109,37 +115,48 @@ static void prometheus_init(void)
     struct prom_stats stats = PROM_STATS_INITIALIZER;
     int r;
 
-    if (promhandle != NULL) return;
+    if (promhandle != NULL) {
+        return;
+    }
 
     prometheus_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
-    if (!prometheus_enabled) return;
+    if (!prometheus_enabled) {
+        return;
+    }
 
     r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
-    if (r < 0 || (size_t) r >= sizeof(stats.ident))
+    if (r < 0 || (size_t) r >= sizeof(stats.ident)) {
         syslog(LOG_WARNING,
                "service name '%s' is longer than " SIZE_T_FMT
                " characters - prometheus label will be truncated",
                config_ident,
                sizeof(stats.ident) - 1);
+    }
 
     r = snprintf(fname,
                  sizeof(fname),
                  "%s%jd",
                  prometheus_stats_dir(),
                  (intmax_t) getpid());
-    if (r < 0 || (size_t) r >= sizeof(fname))
+    if (r < 0 || (size_t) r >= sizeof(fname)) {
         fatal("unable to register stats for prometheus", EX_CONFIG);
+    }
 
     r = cyrus_mkdir(fname, 0755);
-    if (r) goto error;
-    ;
+    if (r) {
+        goto error;
+    };
 
     handle = xzmalloc(sizeof(*handle));
     r = mappedfile_open(&handle->mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     r = mappedfile_writelock(handle->mf);
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
     if (r != sizeof(stats)) {
@@ -153,10 +170,14 @@ static void prometheus_init(void)
     }
 
     r = mappedfile_commit(handle->mf);
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     r = mappedfile_unlock(handle->mf);
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     promhandle = handle;
     cyrus_modules_add(&prometheus_done, NULL);
@@ -185,7 +206,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
     int i, r = 0;
     int unlinked = 0;
 
-    if (!promhandle) return; /* make double-call safe */
+    if (!promhandle) {
+        return; /* make double-call safe */
+    }
 
     /* hold a lock on .doneprocs.lock - this keeps promstatsd from double
      * counting while we're juggling files */
@@ -223,7 +246,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
     }
 
     r = mappedfile_writelock(doneprocs);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     if (mappedfile_size(doneprocs)) {
         memcpy(&accum, mappedfile_base(doneprocs), mappedfile_size(doneprocs));
@@ -247,7 +272,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
     mappedfile_unlock(promhandle->mf);
 
     /* unlink per-process stats file, we don't need it anymore */
-    if (xunlink(mappedfile_fname(promhandle->mf))) goto done;
+    if (xunlink(mappedfile_fname(promhandle->mf))) {
+        goto done;
+    }
     unlinked = 1;
 
     /* accumulate the statistics */
@@ -305,11 +332,17 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
     size_t offset;
     int r;
 
-    if (!prometheus_enabled) return;
+    if (!prometheus_enabled) {
+        return;
+    }
 
-    if (!promhandle) prometheus_init();
+    if (!promhandle) {
+        prometheus_init();
+    }
 
-    if (!prometheus_enabled) return;
+    if (!prometheus_enabled) {
+        return;
+    }
 
     assert(metric_id >= 0 && metric_id < PROM_NUM_METRICS);
 
@@ -360,7 +393,9 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
     unsigned i;
     int r = 0;
 
-    if (!prometheus_enabled) return IMAP_INTERNAL;
+    if (!prometheus_enabled) {
+        return IMAP_INTERNAL;
+    }
 
     buf_reset(buf);
 
@@ -387,7 +422,9 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
         free(report_fname);
     }
 
-    if (!r && mimetype) *mimetype = "text/plain; version=0.0.4";
+    if (!r && mimetype) {
+        *mimetype = "text/plain; version=0.0.4";
+    }
 
     return r;
 }
@@ -404,10 +441,12 @@ EXPORTED enum prom_metric_id prometheus_lookup_label(
             &prom_label_lookup_table[metric][i];
 
         int cmp = strcmp(v->value, value);
-        if (cmp == 0) /* found it */
+        if (cmp == 0) /* found it */ {
             return v->id;
-        if (cmp > 0) /* gone too far, not found */
+        }
+        if (cmp > 0) /* gone too far, not found */ {
             break;
+        }
     }
 
     fatal("invalid metric value -- compile time bug", EX_SOFTWARE);

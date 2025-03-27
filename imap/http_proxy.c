@@ -148,16 +148,22 @@ static int login(struct backend *s,
     hdrcache_t hdrs = NULL;
     char *sid = NULL;
 
-    if (status) *status = NULL;
+    if (status) {
+        *status = NULL;
+    }
 
-    if (noauth) return 0;
+    if (noauth) {
+        return 0;
+    }
 
     /* set the IP addresses */
     addrsize = sizeof(struct sockaddr_storage);
     if (getpeername(s->sock, (struct sockaddr *) &saddr_r, &addrsize)
         || iptostring((struct sockaddr *) &saddr_r, addrsize, remoteip, 60))
     {
-        if (status) *status = "Failed to get remote IP address";
+        if (status) {
+            *status = "Failed to get remote IP address";
+        }
         return SASL_FAIL;
     }
 
@@ -165,7 +171,9 @@ static int login(struct backend *s,
     if (getsockname(s->sock, (struct sockaddr *) &saddr_l, &addrsize)
         || iptostring((struct sockaddr *) &saddr_l, addrsize, localip, 60))
     {
-        if (status) *status = "Failed to get local IP address";
+        if (status) {
+            *status = "Failed to get local IP address";
+        }
         return SASL_FAIL;
     }
 
@@ -174,7 +182,9 @@ static int login(struct backend *s,
         buf_setmap(&buf, s->hostname, strcspn(s->hostname, "."));
         buf_appendcstr(&buf, "_password");
         pass = config_getoverflowstring(buf_cstring(&buf), NULL);
-        if (!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
+        if (!pass) {
+            pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
+        }
         cb = mysasl_callbacks(NULL, /* userid */
                               config_getstring(IMAPOPT_PROXY_AUTHNAME),
                               config_getstring(IMAPOPT_PROXY_REALM),
@@ -190,10 +200,14 @@ static int login(struct backend *s,
                         cb,
                         SASL_USAGE_FLAGS,
                         &s->saslconn);
-    if (r != SASL_OK) goto done;
+    if (r != SASL_OK) {
+        goto done;
+    }
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
-    if (r != SASL_OK) goto done;
+    if (r != SASL_OK) {
+        goto done;
+    }
 
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
@@ -225,7 +239,9 @@ static int login(struct backend *s,
                               base64,
                               BASE64_BUF_SIZE,
                               &clientoutlen);
-            if (r != SASL_OK) break;
+            if (r != SASL_OK) {
+                break;
+            }
 
             clientout = base64;
         }
@@ -240,7 +256,9 @@ static int login(struct backend *s,
             if (clientout) {
                 prot_putc(' ', s->out);
                 if (scheme->flags & AUTH_DATA_PARAM) {
-                    if (sid) prot_printf(s->out, "sid=%s,", sid);
+                    if (sid) {
+                        prot_printf(s->out, "sid=%s,", sid);
+                    }
                     prot_puts(s->out, "data=");
                 }
                 prot_write(s->out, clientout, clientoutlen);
@@ -270,23 +288,30 @@ static int login(struct backend *s,
             r = http_read_response(
                 s, METH_OPTIONS, &code, &hdrs, &resp_body, &errstr);
             if (r) {
-                if (status) *status = errstr;
+                if (status) {
+                    *status = errstr;
+                }
                 break;
             }
 
             if (code == 101) { /* Switching Protocols */
                 if (tls_done) {
                     r = HTTP_BAD_GATEWAY;
-                    if (status) *status = "TLS already active";
+                    if (status) {
+                        *status = "TLS already active";
+                    }
                     break;
                 }
                 else if (backend_starttls(s, NULL, NULL, NULL)) {
                     r = HTTP_SERVER_ERROR;
-                    if (status) *status = "Unable to start TLS";
+                    if (status) {
+                        *status = "Unable to start TLS";
+                    }
                     break;
                 }
-                else
+                else {
                     tls_done = 1;
+                }
             }
         } while (code < 200);
 
@@ -306,10 +331,13 @@ static int login(struct backend *s,
         case 426: /* Upgrade Required */
             if (tls_done) {
                 r = HTTP_BAD_GATEWAY;
-                if (status) *status = "TLS already active";
+                if (status) {
+                    *status = "TLS already active";
+                }
             }
-            else
+            else {
                 need_tls = 1;
+            }
             break;
 
         case 200: /* OK */
@@ -322,7 +350,9 @@ static int login(struct backend *s,
             {
                 /* Special handling of success data for this scheme */
                 serverin = strchr(hdr[0], ' ');
-                if (serverin) serverin++;
+                if (serverin) {
+                    serverin++;
+                }
             }
             if (serverin) {
                 /* Process success data */
@@ -363,7 +393,9 @@ static int login(struct backend *s,
 
                                 /* Add SASL-based schemes to SASL mech list */
                                 if (scheme->saslmech) {
-                                    if (buf_len(&buf)) buf_putc(&buf, ' ');
+                                    if (buf_len(&buf)) {
+                                        buf_putc(&buf, ' ');
+                                    }
                                     buf_appendcstr(&buf, scheme->saslmech);
                                 }
                                 break;
@@ -410,7 +442,9 @@ static int login(struct backend *s,
                         for (scheme = auth_schemes; scheme->name; scheme++) {
                             if (scheme->saslmech
                                 && !strcmp(scheme->saslmech, mech))
+                            {
                                 break;
+                            }
                         }
                     }
                     else {
@@ -425,7 +459,9 @@ static int login(struct backend *s,
                     /* Find the associated WWW-Authenticate header */
                     for (i = 0; hdr && hdr[i]; i++) {
                         len = strcspn(hdr[i], " ");
-                        if (!strncmp(scheme->name, hdr[i], len)) break;
+                        if (!strncmp(scheme->name, hdr[i], len)) {
+                            break;
+                        }
                     }
                 }
 
@@ -467,8 +503,9 @@ static int login(struct backend *s,
                                                    &serverin,
                                                    &serverinlen);
                         if ((r == SASL_OK) && this_sid) {
-                            if (!sid)
+                            if (!sid) {
                                 sid = xstrndup(this_sid, sid_len);
+                            }
                             else if (sid_len != strlen(sid)
                                      || strncmp(this_sid, sid, sid_len))
                             {
@@ -480,7 +517,9 @@ static int login(struct backend *s,
                             }
                         }
 
-                        if (r != SASL_OK) break; /* case 401 */
+                        if (r != SASL_OK) {
+                            break; /* case 401 */
+                        }
                     }
 
                     /* Base64 decode any server challenge, if necessary */
@@ -490,7 +529,9 @@ static int login(struct backend *s,
                                           base64,
                                           BASE64_BUF_SIZE,
                                           &serverinlen);
-                        if (r != SASL_OK) break; /* case 401 */
+                        if (r != SASL_OK) {
+                            break; /* case 401 */
+                        }
 
                         serverin = base64;
                     }
@@ -502,7 +543,9 @@ static int login(struct backend *s,
                                          NULL, /* no prompts */
                                          &clientout,
                                          &clientoutlen);
-                    if (r == SASL_OK) auth_done = 1;
+                    if (r == SASL_OK) {
+                        auth_done = 1;
+                    }
                 }
             }
             break; /* case 401 */
@@ -512,9 +555,13 @@ static int login(struct backend *s,
 
 done:
     free(sid);
-    if (hdrs) spool_free_hdrcache(hdrs);
+    if (hdrs) {
+        spool_free_hdrcache(hdrs);
+    }
 
-    if (r && status && !*status) *status = sasl_errstring(r, NULL, NULL);
+    if (r && status && !*status) {
+        *status = sasl_errstring(r, NULL, NULL);
+    }
 
     return r;
 }
@@ -544,7 +591,9 @@ static int ping(struct backend *s, const char *userid)
         }
     } while (code < 200);
 
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    if (resp_hdrs) {
+        spool_free_hdrcache(resp_hdrs);
+    }
 
     return (code != 200);
 }
@@ -572,21 +621,29 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs,
         tok_t tok;
         char *token;
 
-        while (fwd[1]) ++fwd; /* Skip to last Forwarded header */
+        while (fwd[1]) {
+            ++fwd; /* Skip to last Forwarded header */
+        }
 
         tok_initm(&tok, (char *) fwd[0], ";", 0);
         while ((token = tok_next(&tok))) {
-            if (proto && !strncmp(token, "proto=", 6))
+            if (proto && !strncmp(token, "proto=", 6)) {
                 *proto = token + 6;
-            else if (host && !strncmp(token, "host=", 5))
+            }
+            else if (host && !strncmp(token, "host=", 5)) {
                 *host = token + 5;
+            }
         }
         tok_fini(&tok);
     }
     else {
         /* Use our protocol and host */
-        if (proto) *proto = https ? "https" : "http";
-        if (host) *host = *spool_getheader(req_hdrs, ":authority");
+        if (proto) {
+            *proto = https ? "https" : "http";
+        }
+        if (host) {
+            *host = *spool_getheader(req_hdrs, ":authority");
+        }
     }
 }
 
@@ -600,7 +657,9 @@ static void write_forwarding_hdrs(struct transaction_t *txn,
     const char **fwd = spool_getheader(hdrs, "Forwarded");
 
     /* Add any existing Via headers */
-    for (; via && *via; via++) simple_hdr(txn, "Via", "%s", *via);
+    for (; via && *via; via++) {
+        simple_hdr(txn, "Via", "%s", *via);
+    }
 
     /* Create our own Via header */
     simple_hdr(txn,
@@ -613,7 +672,9 @@ static void write_forwarding_hdrs(struct transaction_t *txn,
                CYRUS_VERSION);
 
     /* Add any existing Forwarded headers */
-    for (; fwd && *fwd; fwd++) simple_hdr(txn, "Forwarded", "%s", *fwd);
+    for (; fwd && *fwd; fwd++) {
+        simple_hdr(txn, "Forwarded", "%s", *fwd);
+    }
 
     /* Create our own Forwarded header */
     if (proto) {
@@ -622,7 +683,9 @@ static void write_forwarding_hdrs(struct transaction_t *txn,
 
         assert(!buf_len(&txn->buf));
         buf_printf(&txn->buf, "proto=%s", proto);
-        if (host) buf_printf(&txn->buf, ";host=%s", *host);
+        if (host) {
+            buf_printf(&txn->buf, ";host=%s", *host);
+        }
         if (httpd_remoteip) {
             len = strcspn(httpd_remoteip, ";");
             buf_printf(&txn->buf, ";for=%.*s", (int) len, httpd_remoteip);
@@ -662,11 +725,15 @@ static void write_cachehdr(const char *name,
                                         NULL };
 
     /* Ignore private headers in our cache */
-    if (name[0] == ':') return;
+    if (name[0] == ':') {
+        return;
+    }
 
     /* Ignore HTTP/1.1 specific hop-by-hop header when proxying to HTTP/2 */
     if (txn->meth == METH_CONNECT && !strcasecmp(name, "Sec-WebSocket-Accept"))
+    {
         return;
+    }
 
     for (hdr = hop_by_hop; *hdr && strcasecmp(name, *hdr); hdr++);
 
@@ -762,7 +829,9 @@ static unsigned pipe_chunk(struct protstream *pin,
     buf_reset(&txn->resp_body.payload);
     for (; len; len -= n) {
         n = prot_readbuf(pin, &txn->resp_body.payload, len);
-        if (!n) break;
+        if (!n) {
+            break;
+        }
     }
 
     len = buf_len(&txn->resp_body.payload);
@@ -787,7 +856,9 @@ static int pipe_resp_body(struct protstream *pin,
     if (resp_body->framing == FRAMING_UNKNOWN) {
         /* Get message framing */
         int r = http_parse_framing(0, resp_hdrs, resp_body, &txn->error.desc);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     /* Read and pipe the body */
@@ -813,15 +884,18 @@ static int pipe_resp_body(struct protstream *pin,
             prot_NONBLOCK(pin);
             c = prot_fgets(buf, PROT_BUFSIZE, pin);
             prot_BLOCK(pin);
-            if (!c) c = prot_fgets(buf, PROT_BUFSIZE, pin);
+            if (!c) {
+                c = prot_fgets(buf, PROT_BUFSIZE, pin);
+            }
             if (!c || sscanf(buf, "%x", &chunk) != 1) {
                 *errstr = "Unable to read chunk size";
                 return HTTP_BAD_GATEWAY;
 
                 /* XXX  Do we need to parse chunk-ext? */
             }
-            else if (chunk > resp_body->max - resp_body->len)
+            else if (chunk > resp_body->max - resp_body->len) {
                 return HTTP_CONTENT_TOO_LARGE;
+            }
 
             if (chunk) {
                 /* Read 'chunk' octets */
@@ -842,7 +916,9 @@ static int pipe_resp_body(struct protstream *pin,
                     int r = http_read_headers(
                         pin, 0 /* read_sep */, &trailers, errstr);
                     if (r) {
-                        if (trailers) spool_free_hdrcache(trailers);
+                        if (trailers) {
+                            spool_free_hdrcache(trailers);
+                        }
                         return (r != HTTP_SERVER_ERROR ? HTTP_BAD_GATEWAY : r);
                     }
                     txn->conn->begin_resp_headers(txn, 0);
@@ -865,8 +941,9 @@ static int pipe_resp_body(struct protstream *pin,
 
     case FRAMING_CLOSE:
         /* Read until EOF */
-        if (pipe_chunk(pin, txn, UINT_MAX) || !pin->eof)
+        if (pipe_chunk(pin, txn, UINT_MAX) || !pin->eof) {
             return HTTP_BAD_GATEWAY;
+        }
 
         break;
 
@@ -954,10 +1031,13 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     }
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, &be_txn);
     if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-        for (; *hdr; hdr++) prot_printf(be->out, "TE: %s\r\n", *hdr);
+        for (; *hdr; hdr++) {
+            prot_printf(be->out, "TE: %s\r\n", *hdr);
+        }
     }
-    if (http_methods[txn->meth].flags & METH_NOBODY)
+    if (http_methods[txn->meth].flags & METH_NOBODY) {
         prot_puts(be->out, "Content-Length: 0\r\n");
+    }
     else if (spool_getheader(txn->req_hdrs, "Transfer-Encoding")
              || spool_getheader(txn->req_hdrs, "Content-Length"))
     {
@@ -974,7 +1054,9 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     do {
         r = http_read_response(
             be, txn->meth, &code, &resp_hdrs, NULL, &txn->error.desc);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         http_err = http_status_to_code(code);
 
@@ -1010,8 +1092,9 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
         }
     } while (code < 200);
 
-    if (r)
+    if (r) {
         proxy_downserver(be);
+    }
     else if (code == 401) {
         /* Don't pipe a 401 response (discard body).
            Frontend should send its own 401 since it will process auth */
@@ -1032,7 +1115,9 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
             break;
 
         default:
-            if (txn->meth == METH_HEAD) break;
+            if (txn->meth == METH_HEAD) {
+                break;
+            }
 
             resp_body.framing = FRAMING_UNKNOWN;
             if (pipe_resp_body(be->in, txn, resp_hdrs, &resp_body)) {
@@ -1044,10 +1129,14 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
     log_proxy_request(http_err, txn, resp_hdrs, &resp_body);
 
-    if (resp_body.flags & BODY_CLOSE) proxy_downserver(be);
+    if (resp_body.flags & BODY_CLOSE) {
+        proxy_downserver(be);
+    }
     buf_free(&resp_body.payload);
 
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    if (resp_hdrs) {
+        spool_free_hdrcache(resp_hdrs);
+    }
 
     return r;
 }
@@ -1135,8 +1224,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be,
         } while (code < 200);
 
         /* Get lock token */
-        if ((hdr = spool_getheader(resp_hdrs, "Lock-Token")))
+        if ((hdr = spool_getheader(resp_hdrs, "Lock-Token"))) {
             lock = xstrdup(*hdr);
+        }
 
         switch (code) {
         case 200:
@@ -1222,8 +1312,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be,
                 dest_be->hostname,
                 CYRUS_VERSION);
     hdr = spool_getheader(txn->req_hdrs, "Overwrite");
-    if (hdr && !strcmp(*hdr, "F"))
+    if (hdr && !strcmp(*hdr, "F")) {
         prot_puts(dest_be->out, "If-None-Match: *\r\n");
+    }
     write_hdr(dest_be->out, "TE", txn->req_hdrs);
     write_hdr(dest_be->out, "Prefer", txn->req_hdrs);
     write_hdr(dest_be->out, "Accept", txn->req_hdrs);
@@ -1270,7 +1361,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be,
 
     log_proxy_request(http_err, txn, resp_hdrs, &resp_body);
 
-    if (txn->flags.conn & CONN_CLOSE) goto done;
+    if (txn->flags.conn & CONN_CLOSE) {
+        goto done;
+    }
 
     delete : if ((txn->meth == METH_MOVE) && (code < 300))
     {
@@ -1287,7 +1380,9 @@ EXPORTED int http_proxy_copy(struct backend *src_be,
                     HTTP_VERSION,
                     src_be->hostname,
                     CYRUS_VERSION);
-        if (lock) prot_printf(src_be->out, "If: (%s)\r\n", lock);
+        if (lock) {
+            prot_printf(src_be->out, "If: (%s)\r\n", lock);
+        }
         prot_puts(src_be->out, "\r\n");
         prot_flush(src_be->out);
 
@@ -1351,7 +1446,9 @@ done:
     }
 
     buf_free(&resp_body.payload);
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    if (resp_hdrs) {
+        spool_free_hdrcache(resp_hdrs);
+    }
 
     return r;
 }
@@ -1433,7 +1530,9 @@ EXPORTED int http_proxy_h2_connect(struct backend *be,
 
 done:
     buf_free(&resp_body.payload);
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    if (resp_hdrs) {
+        spool_free_hdrcache(resp_hdrs);
+    }
 
     return r;
 }
@@ -1506,7 +1605,9 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
                 /* find the txn that this input belongs to */
                 for (idx = 0; idx < ptrarray_size(pipes); idx++) {
                     txn = ptrarray_nth(pipes, idx);
-                    if (pin == txn->be->in) break;
+                    if (pin == txn->be->in) {
+                        break;
+                    }
                 }
 
                 if (pin != txn->be->in) {
@@ -1522,11 +1623,15 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
                     char buf[4096];
                     int c = prot_read(pin, buf, sizeof(buf));
 
-                    if (c == 0 || c < 0) break;
-                    if (pout == clientout)
+                    if (c == 0 || c < 0) {
+                        break;
+                    }
+                    if (pout == clientout) {
                         txn->conn->resp_body_chunk(txn, buf, c, 0, NULL);
-                    else
+                    }
+                    else {
                         prot_write(serverout, buf, c);
+                    }
                 } while (pin->cnt > 0);
 
                 if (prot_error(pin) != NULL) {

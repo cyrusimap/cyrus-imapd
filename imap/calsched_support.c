@@ -85,16 +85,19 @@ EXPORTED int caldav_caluseraddr_read(const char *mboxname,
         }
         val[j] = '\0';
     }
-    else
+    else {
         lpref = INT_MAX;
+    }
 
     strarray_fini(&addr->uris);
     strarray_splitm(&addr->uris, val, ",", STRARRAY_TRIM);
 
-    if (lpref < 0 || lpref > strarray_size(&addr->uris))
+    if (lpref < 0 || lpref > strarray_size(&addr->uris)) {
         addr->pref = strarray_size(&addr->uris);
-    else
+    }
+    else {
         addr->pref = (int) lpref;
+    }
 
     return 0;
 }
@@ -110,14 +113,18 @@ EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
     struct buf buf = BUF_INITIALIZER;
 
     int r = mailbox_get_annotate_state(mbox, 0, &astate);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     if (strarray_size(&addr->uris)) {
         // format: (<pref>";")?addrs[0](","addrs[1..n-1])*
         buf_printf(&buf, "%d;", addr->pref);
         int i;
         for (i = 0; i < strarray_size(&addr->uris); i++) {
-            if (i) buf_putc(&buf, ',');
+            if (i) {
+                buf_putc(&buf, ',');
+            }
             buf_appendcstr(&buf, strarray_nth(&addr->uris, i));
         }
     }
@@ -158,7 +165,9 @@ EXPORTED void get_schedule_addresses(const char *mboxname,
         int i;
         for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
             const char *item = strarray_nth(&caluseraddr.uris, i);
-            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            if (!strncasecmp(item, "mailto:", 7)) {
+                item += 7;
+            }
 
             char *addr = xmlURIUnescapeString(item, strlen(item), NULL);
             strarray_addm(addresses, addr);

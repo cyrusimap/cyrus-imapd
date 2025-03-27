@@ -95,7 +95,9 @@ static inline int is_base64url_char(char c)
 HIDDEN int http_jwt_reset(void)
 {
     EVP_PKEY *pkey;
-    while ((pkey = ptrarray_pop(&pkeys))) EVP_PKEY_free(pkey);
+    while ((pkey = ptrarray_pop(&pkeys))) {
+        EVP_PKEY_free(pkey);
+    }
     is_enabled = 0;
     max_age = 0;
     return 0;
@@ -165,7 +167,9 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
         linenum++;
 
         buf_trim(&line);
-        if (!buf_len(&line)) continue;
+        if (!buf_len(&line)) {
+            continue;
+        }
 
         if (!strcmp("-----BEGIN PUBLIC KEY-----", buf_cstring(&line))) {
             if (state != NONE) {
@@ -226,7 +230,9 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
             continue;
         }
 
-        if (state == NONE) continue;
+        if (state == NONE) {
+            continue;
+        }
 
         buf_append(&buf, &line);
         buf_putc(&buf, '\n');
@@ -235,7 +241,9 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
     r = 0;
 
 done:
-    if (fp) fclose(fp);
+    if (fp) {
+        fclose(fp);
+    }
     buf_free(&buf);
     buf_free(&line);
     return r;
@@ -289,8 +297,12 @@ HIDDEN int http_jwt_init(const char *keydir, int age)
     r = 0;
 
 done:
-    if (fts) fts_close(fts);
-    if (r) http_jwt_reset();
+    if (fts) {
+        fts_close(fts);
+    }
+    if (r) {
+        http_jwt_reset();
+    }
     return r;
 }
 
@@ -301,12 +313,16 @@ HIDDEN int http_jwt_is_enabled(void)
 
 static int parse_token(struct jwt *jwt, const char *in, size_t inlen)
 {
-    if (!in || !inlen || inlen >= INT_MAX) return 0;
+    if (!in || !inlen || inlen >= INT_MAX) {
+        return 0;
+    }
 
     size_t dot[2] = { 0 };
     size_t ndot = 0;
     for (size_t i = 0; i < inlen; i++) {
-        if (is_base64url_char(in[i])) continue;
+        if (is_base64url_char(in[i])) {
+            continue;
+        }
 
         if (in[i] == '.' && ndot < 2) {
             dot[ndot++] = i;
@@ -339,14 +355,22 @@ static int parse_token(struct jwt *jwt, const char *in, size_t inlen)
 
 static int validate_pkey_type(struct jwt *jwt, EVP_PKEY *pkey)
 {
-    if (!jwt->nid) return 0;
+    if (!jwt->nid) {
+        return 0;
+    }
 
 #    if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    if (jwt->nid == EVP_PKEY_HMAC && EVP_PKEY_is_a(pkey, "HMAC")) return 1;
+    if (jwt->nid == EVP_PKEY_HMAC && EVP_PKEY_is_a(pkey, "HMAC")) {
+        return 1;
+    }
 
-    if (jwt->nid == EVP_PKEY_RSA && EVP_PKEY_is_a(pkey, "RSA")) return 1;
+    if (jwt->nid == EVP_PKEY_RSA && EVP_PKEY_is_a(pkey, "RSA")) {
+        return 1;
+    }
 #    else
-    if (jwt->nid == EVP_PKEY_base_id(pkey)) return 1;
+    if (jwt->nid == EVP_PKEY_base_id(pkey)) {
+        return 1;
+    }
 #    endif
 
     return 0;
@@ -373,7 +397,9 @@ static int validate_signature(struct jwt *jwt)
         EVP_PKEY *pkey = ptrarray_nth(&pkeys, i);
         EVP_MD_CTX_reset(ctx);
 
-        if (!validate_pkey_type(jwt, pkey)) continue;
+        if (!validate_pkey_type(jwt, pkey)) {
+            continue;
+        }
 
         if (jwt->nid == EVP_PKEY_HMAC) {
             unsigned char md[EVP_MAX_MD_SIZE];
@@ -479,12 +505,15 @@ static int validate_header(struct jwt *jwt)
         default:;
         }
 
-        if (!strcmp(&alg[2], "256"))
+        if (!strcmp(&alg[2], "256")) {
             jwt->emd = EVP_sha256();
-        else if (!strcmp(&alg[2], "384"))
+        }
+        else if (!strcmp(&alg[2], "384")) {
             jwt->emd = EVP_sha384();
-        else if (!strcmp(&alg[2], "512"))
+        }
+        else if (!strcmp(&alg[2], "512")) {
             jwt->emd = EVP_sha512();
+        }
     }
     if (jwt->nid == EVP_PKEY_NONE || !jwt->emd) {
         xsyslog(LOG_ERR, "Invalid \"alg\" claim", "alg=<%s>", alg);
@@ -544,7 +573,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         has_err = 1;
     }
 
-    if (has_err) goto done;
+    if (has_err) {
+        goto done;
+    }
 
     // Validate claims
 
@@ -611,13 +642,21 @@ HIDDEN int http_jwt_auth(const char *in, size_t inlen, char *out, size_t outlen)
     struct jwt jwt = { 0 };
     int status = SASL_BADAUTH;
 
-    if (!parse_token(&jwt, in, inlen)) goto done;
+    if (!parse_token(&jwt, in, inlen)) {
+        goto done;
+    }
 
-    if (!validate_header(&jwt)) goto done;
+    if (!validate_header(&jwt)) {
+        goto done;
+    }
 
-    if (!validate_signature(&jwt)) goto done;
+    if (!validate_signature(&jwt)) {
+        goto done;
+    }
 
-    if (!validate_payload(&jwt, out, outlen)) goto done;
+    if (!validate_payload(&jwt, out, outlen)) {
+        goto done;
+    }
 
     // out now contains the 'sub' value
     status = SASL_OK;

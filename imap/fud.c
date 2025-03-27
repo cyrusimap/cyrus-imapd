@@ -136,7 +136,9 @@ static int begin_handling(void)
 
         sfromsiz = sizeof(struct sockaddr_storage);
         r = recvfrom(soc, buf, 511, 0, sfrom, &sfromsiz);
-        if (r < 0) return errno;
+        if (r < 0) {
+            return errno;
+        }
 
         mbox = strchr(buf, '|');
         if (mbox) {
@@ -169,7 +171,9 @@ void shut_down(int code)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
 
     proc_settitle_init(argc, argv, envp);
 
@@ -345,7 +349,9 @@ static int do_proxy_request(const char *who,
     r = 0;
 
 done:
-    if (csoc != -1) close(csoc);
+    if (csoc != -1) {
+        close(csoc);
+    }
     return r;
 }
 
@@ -433,7 +439,9 @@ static int handle_request(const char *who,
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
         r = seen_open(who, 0, &seendb);
-        if (!r) r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
+        if (!r) {
+            r = seen_read(seendb, mailbox_uniqueid(mailbox), &sd);
+        }
         seen_close(&seendb);
 
         if (r) {
@@ -455,7 +463,9 @@ static int handle_request(const char *who,
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
-            if (record->uid > recentuid) numrecent++;
+            if (record->uid > recentuid) {
+                numrecent++;
+            }
         }
         mailbox_iter_done(&iter);
     }
@@ -512,7 +522,9 @@ EXPORTED void fatal(const char *s, int code)
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }

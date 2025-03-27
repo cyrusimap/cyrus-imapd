@@ -181,11 +181,15 @@ EXPORTED int idle_send(const struct sockaddr_un *remote, json_t *msg)
     flags |= MSG_DONTWAIT;
 #endif
 
-    if (idle_sock < 0) return IMAP_SERVER_UNAVAILABLE;
+    if (idle_sock < 0) {
+        return IMAP_SERVER_UNAVAILABLE;
+    }
 
     /* Determine size of encoded message */
     size = json_dumpb(msg, NULL, 0, JSON_COMPACT);
-    if (!size) return IMAP_INTERNAL;
+    if (!size) {
+        return IMAP_INTERNAL;
+    }
 
     /* Make sure we have enough space for message and its prepended size*/
     buf_truncate(&buf, size + SIZEOF_SIZE_T);
@@ -220,7 +224,9 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
     char *base;
     ssize_t n;
 
-    if (idle_sock < 0) return NULL;
+    if (idle_sock < 0) {
+        return NULL;
+    }
 
     memset(remote, 0, remote_len);
 

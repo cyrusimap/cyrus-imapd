@@ -220,9 +220,10 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
     struct opstack *top;
 
 #if DEBUG
-    if (bb->verbose > 1)
+    if (bb->verbose > 1) {
         syslog(
             LOG_NOTICE, "Squat opstack_push(op=%s)", search_op_as_string(op));
+    }
 #endif
 
     /* push a new op on the stack */
@@ -238,7 +239,9 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
     bv_setsize(&top->msg_vector, bb->mailbox->i.last_uid + 1);
 
 #if DEBUG
-    if (bb->verbose > 1) opstack_dump(bb, "after push");
+    if (bb->verbose > 1) {
+        opstack_dump(bb, "after push");
+    }
 #endif
 
     return top;
@@ -250,7 +253,9 @@ static void opstack_pop(SquatBuilderData *bb)
     struct opstack *parent;
 
 #if DEBUG
-    if (bb->verbose > 1) syslog(LOG_NOTICE, "Squat opstack_pop()");
+    if (bb->verbose > 1) {
+        syslog(LOG_NOTICE, "Squat opstack_pop()");
+    }
 #endif
 
     /* pop the last operator off the stack */
@@ -261,19 +266,24 @@ static void opstack_pop(SquatBuilderData *bb)
 
     if (parent && child->valid) {
         /* merge the result with the parent node */
-        if (!parent->valid)
+        if (!parent->valid) {
             bv_copy(&parent->msg_vector, &child->msg_vector);
-        else if (parent->op == SEARCH_OP_OR)
+        }
+        else if (parent->op == SEARCH_OP_OR) {
             bv_oreq(&parent->msg_vector, &child->msg_vector);
-        else if (parent->op == SEARCH_OP_AND)
+        }
+        else if (parent->op == SEARCH_OP_AND) {
             bv_andeq(&parent->msg_vector, &child->msg_vector);
+        }
         parent->valid = 1;
     }
 
     bv_fini(&child->msg_vector);
 
 #if DEBUG
-    if (bb->verbose > 1) opstack_dump(bb, "after pop");
+    if (bb->verbose > 1) {
+        opstack_dump(bb, "after pop");
+    }
 #endif
 }
 
@@ -282,7 +292,9 @@ static int drop_indexed_docs(void *closure, const SquatListDoc *doc)
     SquatBuilderData *bb = (SquatBuilderData *) closure;
     unsigned int uid = parse_doc_name(bb, doc->doc_name);
 
-    if (uid) bv_clear(&opstack_top(bb)->msg_vector, uid);
+    if (uid) {
+        bv_clear(&opstack_top(bb)->msg_vector, uid);
+    }
     return SQUAT_CALLBACK_CONTINUE;
 }
 
@@ -291,7 +303,9 @@ static int fill_with_hits(void *closure, char const *doc)
     SquatBuilderData *bb = (SquatBuilderData *) closure;
     unsigned int uid = parse_doc_name(bb, doc);
 
-    if (uid) bv_set(&opstack_top(bb)->msg_vector, uid);
+    if (uid) {
+        bv_set(&opstack_top(bb)->msg_vector, uid);
+    }
     return SQUAT_CALLBACK_CONTINUE;
 }
 
@@ -300,9 +314,10 @@ static void begin_boolean(search_builder_t *bx, int op)
     SquatBuilderData *bb = (SquatBuilderData *) bx;
 
 #if DEBUG
-    if (bb->verbose > 1)
+    if (bb->verbose > 1) {
         syslog(
             LOG_NOTICE, "Squat begin_boolean(op=%s)", search_op_as_string(op));
+    }
 #endif
 
     opstack_push(bb, op);
@@ -313,7 +328,9 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     SquatBuilderData *bb = (SquatBuilderData *) bx;
 
 #if DEBUG
-    if (bb->verbose > 1) syslog(LOG_NOTICE, "Squat end_boolean()");
+    if (bb->verbose > 1) {
+        syslog(LOG_NOTICE, "Squat end_boolean()");
+    }
 #endif
     opstack_pop(bb);
 }
@@ -326,12 +343,17 @@ static void match(search_builder_t *bx, enum search_part part, const char *str)
     int r;
 
 #if DEBUG
-    if (bb->verbose > 1)
+    if (bb->verbose > 1) {
         syslog(LOG_NOTICE, "Squat match(part=%d str=\"%s\")", part, str);
+    }
 #endif
 
-    if (!doctypes_by_part[part]) return;
-    if (parent && parent->op == SEARCH_OP_NOT) return;
+    if (!doctypes_by_part[part]) {
+        return;
+    }
+    if (parent && parent->op == SEARCH_OP_NOT) {
+        return;
+    }
 
     top = opstack_push(bb, /*doesn't matter*/ 0);
     bb->part_types = doctypes_by_part[part];
@@ -343,8 +365,9 @@ static void match(search_builder_t *bx, enum search_part part, const char *str)
     free(mystr);
     charset_free(&utf8);
     if (r != SQUAT_OK) {
-        if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
+        if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT) {
             goto out; /* The rest of the search is still viable */
+        }
         syslog(LOG_ERR,
                "SQUAT string list search failed on string %s "
                "with part types %s: %s",
@@ -356,7 +379,9 @@ static void match(search_builder_t *bx, enum search_part part, const char *str)
     top->valid = 1;
 
 #if DEBUG
-    if (bb->verbose > 1) opstack_dump(bb, "after match");
+    if (bb->verbose > 1) {
+        opstack_dump(bb, "after match");
+    }
 #endif
 
 out:
@@ -377,7 +402,9 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     const char *fname;
     int fd;
 
-    if (!mailbox) return NULL;
+    if (!mailbox) {
+        return NULL;
+    }
 
     if ((opts & SEARCH_MULTIPLE)) {
         syslog(LOG_ERR,
@@ -388,11 +415,12 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 
     fname = mailbox_meta_fname(mailbox, META_SQUAT);
     if ((fd = open(fname, O_RDONLY)) < 0) {
-        if (errno != ENOENT)
+        if (errno != ENOENT) {
             syslog(LOG_ERR,
                    "SQUAT failed to open index file %s: %s",
                    fname,
                    squat_strerror(squat_get_last_error()));
+        }
         return NULL; /* probably not found. Just bail */
     }
     if ((index = squat_search_open(fd)) == NULL) {
@@ -450,7 +478,9 @@ static int add_unindexed(SquatBuilderData *bb)
     r = 0;
 
 #if DEBUG
-    if (bb->verbose > 1) opstack_dump(bb, "after adding unindexed");
+    if (bb->verbose > 1) {
+        opstack_dump(bb, "after adding unindexed");
+    }
 #endif
 
 out:
@@ -467,10 +497,14 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     syslog(bb->verbose > 1 ? LOG_NOTICE : LOG_DEBUG, "Squat run()");
 
     /* check we had balanced ->begin_boolean and ->end_boolean calls */
-    if (bb->depth != 1) goto out;
+    if (bb->depth != 1) {
+        goto out;
+    }
 
     r = add_unindexed(bb);
-    if (r) goto out;
+    if (r) {
+        goto out;
+    }
 
     /* Flatten out the final bit vector into a sequence */
     for (uid = 1; uid <= bb->mailbox->i.last_uid; uid++) {
@@ -480,7 +514,9 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
                      uid,
                      NULL,
                      rock);
-            if (r) goto out;
+            if (r) {
+                goto out;
+            }
         }
     }
 
@@ -492,10 +528,16 @@ static void end_search(search_builder_t *bx)
 {
     SquatBuilderData *bb = (SquatBuilderData *) bx;
 
-    while (bb->depth) opstack_pop(bb);
+    while (bb->depth) {
+        opstack_pop(bb);
+    }
     free(bb->stack);
-    if (bb->index) squat_search_close(bb->index);
-    if (bb->fd >= 0) close(bb->fd);
+    if (bb->index) {
+        squat_search_close(bb->index);
+    }
+    if (bb->fd >= 0) {
+        close(bb->fd);
+    }
     free(bx);
 }
 
@@ -633,7 +675,9 @@ static void begin_part(search_text_receiver_t *rx, enum search_part part)
     /* Figure out what the name of the source document is going to be. */
     assert(part >= 0 && part < SEARCH_NUM_PARTS);
     part_char = part_char_by_part[part];
-    if (!part_char) return;
+    if (!part_char) {
+        return;
+    }
 
     snprintf(d->doc_name, sizeof(d->doc_name), "%c%d", part_char, d->uid);
     d->doc_is_open = 0;
@@ -647,11 +691,12 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
 {
     int s; /* SQUAT error */
 
-    if (d->verbose > 3)
+    if (d->verbose > 3) {
         syslog(LOG_ERR,
                "squat: writing %llu bytes into message %u",
                (unsigned long long) text->len,
                d->uid);
+    }
 
     s = squat_index_append_document(d->index, text->s, text->len);
     if (s != SQUAT_OK) {
@@ -675,7 +720,9 @@ static int append_text(search_text_receiver_t *rx, const struct buf *text)
     int s = 0; /* SQUAT error */
 
     /* nothing to do here if begin_part() exited early or wasn't called */
-    if (!d->doc_name[0]) return 0;
+    if (!d->doc_name[0]) {
+        return 0;
+    }
 
     if (!d->doc_is_open) {
         if (text->len + d->pending_text.len < SQUAT_WORD_SIZE) {
@@ -685,9 +732,10 @@ static int append_text(search_text_receiver_t *rx, const struct buf *text)
         }
 
         /* just went over the threshold */
-        if (d->verbose > 2)
+        if (d->verbose > 2) {
             syslog(
                 LOG_NOTICE, "squat: opening document part '%s'", d->doc_name);
+        }
 
         s = squat_index_open_document(d->index, d->doc_name);
         if (s != SQUAT_OK) {
@@ -702,11 +750,15 @@ static int append_text(search_text_receiver_t *rx, const struct buf *text)
         d->doc_is_open = 1;
 
         /* flush any pending text */
-        if (d->pending_text.len) r = do_append(d, &d->pending_text);
+        if (d->pending_text.len) {
+            r = do_append(d, &d->pending_text);
+        }
         buf_reset(&d->pending_text);
     }
 
-    if (!r) r = do_append(d, text);
+    if (!r) {
+        r = do_append(d, text);
+    }
 
     return r;
 }
@@ -848,8 +900,12 @@ static int begin_mailbox(search_text_receiver_t *rx,
          * and fall back to a full update.  Probably should
          * NOT be silent if the error is anything other than
          * a missing index. */
-        if (old_fd >= 0) old_index = squat_search_open(old_fd);
-        if (old_index == NULL) incremental = 0;
+        if (old_fd >= 0) {
+            old_index = squat_search_open(old_fd);
+        }
+        if (old_index == NULL) {
+            incremental = 0;
+        }
     }
 
     if (incremental) {
@@ -912,14 +968,22 @@ out:
     /* it isn't obvious, but we need to keep old_index and old_fd
      * around until after new_index has been finished. */
     if (r) {
-        if (index != NULL) squat_index_destroy(index);
+        if (index != NULL) {
+            squat_index_destroy(index);
+        }
         d->index = NULL;
-        if (fd >= 0) close(fd);
+        if (fd >= 0) {
+            close(fd);
+        }
         d->fd = -1;
 
-        if (old_index != NULL) squat_search_close(old_index);
+        if (old_index != NULL) {
+            squat_search_close(old_index);
+        }
         d->old_index = NULL;
-        if (old_fd >= 0) close(old_fd);
+        if (old_fd >= 0) {
+            close(old_fd);
+        }
         d->old_fd = -1;
 
         d->mailbox = NULL;
@@ -960,7 +1024,9 @@ static int end_mailbox(search_text_receiver_t *rx,
     int r = 0; /* IMAP error code or syscall return */
     int s = 0; /* SQUAT error code */
 
-    if (!d->index) return 0;
+    if (!d->index) {
+        return 0;
+    }
 
     s = squat_index_finish(d->index);
     if (s != SQUAT_OK) {
@@ -995,7 +1061,9 @@ static int end_mailbox(search_text_receiver_t *rx,
     /* OK, we successfully created the index under the temporary file name.
        Let's rename it to make it the real index. */
     r = mailbox_meta_rename(d->mailbox, META_SQUAT);
-    if (r) goto out;
+    if (r) {
+        goto out;
+    }
 
     if (d->verbose) {
         stop_stats(&d->mailbox_stats);
@@ -1005,13 +1073,19 @@ static int end_mailbox(search_text_receiver_t *rx,
     r = 0;
 
 out:
-    if (d->old_index) squat_search_close(d->old_index);
+    if (d->old_index) {
+        squat_search_close(d->old_index);
+    }
     d->old_index = NULL;
-    if (d->old_fd >= 0) close(d->old_fd);
+    if (d->old_fd >= 0) {
+        close(d->old_fd);
+    }
     d->old_fd = -1;
 
     d->index = NULL;
-    if (d->fd >= 0) close(d->fd);
+    if (d->fd >= 0) {
+        close(d->fd);
+    }
     d->fd = -1;
 
     d->mailbox = NULL;

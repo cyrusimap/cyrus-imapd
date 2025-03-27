@@ -131,16 +131,20 @@ EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
-    if (recurse_code)
+    if (recurse_code) {
         exit(code);
-    else
+    }
+    else {
         recurse_code = 0;
+    }
 
     prot_printf(deliver_out, "421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     cyrus_done();
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -230,7 +234,9 @@ int main(int argc, char **argv)
                 usage();
                 /* NOTREACHED */
             }
-            if (*optarg) mailboxname = optarg;
+            if (*optarg) {
+                mailboxname = optarg;
+            }
             break;
 
         case 'a':
@@ -387,7 +393,9 @@ static int deliver_msg(char *return_path,
     txn->isdotstuffed = 0;
     txn->tempfail_unknown_mailbox = 0;
     txn->rcpt_num = numusers ? numusers : 1;
-    if (mailbox) ml = strlen(mailbox);
+    if (mailbox) {
+        ml = strlen(mailbox);
+    }
     if (numusers == 0) {
         /* just deliver to mailbox 'mailbox' */
         const char *BB = config_getstring(IMAPOPT_POSTUSER);
@@ -413,8 +421,9 @@ static int deliver_msg(char *return_path,
                         mailbox);
 
                 /* add the domain if we have one */
-                if (ulen < strlen(users[j]))
+                if (ulen < strlen(users[j])) {
                     strcat(txn->rcpt[j].addr, users[j] + ulen);
+                }
             }
             else {
                 txn->rcpt[j].addr = xstrdup(users[j]);

@@ -20,7 +20,9 @@ static icalcomponent *parse_file(const char *fname)
     icalcomponent *component = NULL;
     FILE *stream = fopen(fname, "r");
 
-    if (!stream) return NULL;
+    if (!stream) {
+        return NULL;
+    }
 
     icalparser *parser = icalparser_new();
     icalparser_set_gen_data(parser, stream);

@@ -85,23 +85,31 @@ HIDDEN void sched_param_fini(struct caldav_sched_param *sparam)
 
 HIDDEN icalproperty *find_attendee(icalcomponent *comp, const char *match)
 {
-    if (!comp) return NULL;
+    if (!comp) {
+        return NULL;
+    }
 
     icalproperty *prop = icalcomponent_get_first_invitee(comp);
 
     for (; prop; prop = icalcomponent_get_next_invitee(comp)) {
         const char *attendee = icalproperty_get_decoded_calendaraddress(prop);
-        if (!attendee) continue;
+        if (!attendee) {
+            continue;
+        }
 
         /* Skip where not the server's responsibility */
         icalparameter *param = icalproperty_get_scheduleagent_parameter(prop);
         if (param) {
             icalparameter_scheduleagent agent =
                 icalparameter_get_scheduleagent(param);
-            if (agent != ICAL_SCHEDULEAGENT_SERVER) continue;
+            if (agent != ICAL_SCHEDULEAGENT_SERVER) {
+                continue;
+            }
         }
 
-        if (!strcasecmp(attendee, match)) return prop;
+        if (!strcasecmp(attendee, match)) {
+            return prop;
+        }
     }
 
     return NULL;
@@ -109,16 +117,22 @@ HIDDEN icalproperty *find_attendee(icalcomponent *comp, const char *match)
 
 HIDDEN const char *get_organizer(icalcomponent *comp)
 {
-    if (!comp) return NULL;
+    if (!comp) {
+        return NULL;
+    }
     icalproperty *prop =
         icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
-    if (!organizer) return NULL;
+    if (!organizer) {
+        return NULL;
+    }
     icalparameter *param = icalproperty_get_scheduleagent_parameter(prop);
     /* check if we're supposed to send replies to the organizer */
     if (param
         && icalparameter_get_scheduleagent(param) != ICAL_SCHEDULEAGENT_SERVER)
+    {
         return NULL;
+    }
     return organizer;
 }
 
@@ -126,10 +140,14 @@ static icalparameter_partstat get_partstat(icalcomponent *comp,
                                            const char *attendee)
 {
     icalproperty *prop = find_attendee(comp, attendee);
-    if (!prop) return ICAL_PARTSTAT_NEEDSACTION;
+    if (!prop) {
+        return ICAL_PARTSTAT_NEEDSACTION;
+    }
     icalparameter *param =
         icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
-    if (!param) return ICAL_PARTSTAT_NEEDSACTION;
+    if (!param) {
+        return ICAL_PARTSTAT_NEEDSACTION;
+    }
     return icalparameter_get_partstat(param);
 }
 
@@ -137,8 +155,9 @@ HIDDEN int partstat_changed(icalcomponent *oldcomp,
                             icalcomponent *newcomp,
                             const char *attendee)
 {
-    if (!attendee)
+    if (!attendee) {
         return 1; // something weird is going on, treat it as a change
+    }
     return (get_partstat(oldcomp, attendee) != get_partstat(newcomp, attendee));
 }
 
@@ -213,15 +232,21 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
             struct pick_scheddefault_rock rock = { 0 };
 
             buf_setcstr(&buf, SCHED_INBOX);
-            if (buf.len && buf.s[buf.len - 1] == '/') buf_truncate(&buf, -1);
+            if (buf.len && buf.s[buf.len - 1] == '/') {
+                buf_truncate(&buf, -1);
+            }
             strarray_append(&rock.ignore, buf_cstring(&buf));
 
             buf_setcstr(&buf, SCHED_OUTBOX);
-            if (buf.len && buf.s[buf.len - 1] == '/') buf_truncate(&buf, -1);
+            if (buf.len && buf.s[buf.len - 1] == '/') {
+                buf_truncate(&buf, -1);
+            }
             strarray_append(&rock.ignore, buf_cstring(&buf));
 
             buf_setcstr(&buf, MANAGED_ATTACH);
-            if (buf.len && buf.s[buf.len - 1] == '/') buf_truncate(&buf, -1);
+            if (buf.len && buf.s[buf.len - 1] == '/') {
+                buf_truncate(&buf, -1);
+            }
             strarray_append(&rock.ignore, buf_cstring(&buf));
 
             mboxlist_mboxtree(
@@ -236,7 +261,9 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
 
     if (collname) {
         size_t len = strlen(collname);
-        if (collname[len - 1] == '/') collname[len - 1] = '\0';
+        if (collname[len - 1] == '/') {
+            collname[len - 1] = '\0';
+        }
     }
 
     buf_free(&buf);
@@ -339,12 +366,18 @@ static struct icaltimetype _get_datetime(icalcomponent *comp,
 
         for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
             tz = icalcomponent_get_timezone(c, tzid);
-            if (tz != NULL) break;
+            if (tz != NULL) {
+                break;
+            }
         }
 
-        if (tz == NULL) tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+        if (tz == NULL) {
+            tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+        }
 
-        if (tz != NULL) ret = icaltime_set_timezone(&ret, tz);
+        if (tz != NULL) {
+            ret = icaltime_set_timezone(&ret, tz);
+        }
     }
 
     return ret;
@@ -463,7 +496,9 @@ static const char *deliver_merge_reply(icalcomponent *ical, // current iCalendar
                 case ICAL_RRULE_PROPERTY: {
                     struct icalrecurrencetype *rrule =
                         icalproperty_get_recurrence(prop);
-                    if (rrule) ptrarray_append(&rrules, rrule);
+                    if (rrule) {
+                        ptrarray_append(&rrules, rrule);
+                    }
                     break;
                 }
 
@@ -536,8 +571,12 @@ static const char *deliver_merge_reply(icalcomponent *ical, // current iCalendar
                          this = icalrecur_iterator_next(ritr))
                     {
                         int diff = icaltime_compare(recurid, this);
-                        if (diff > 0) continue;
-                        if (!diff) valid = 1;
+                        if (diff > 0) {
+                            continue;
+                        }
+                        if (!diff) {
+                            valid = 1;
+                        }
                         break;
                     }
                     icalrecur_iterator_free(ritr);
@@ -580,9 +619,13 @@ static const char *deliver_merge_reply(icalcomponent *ical, // current iCalendar
         att = icalcomponent_get_first_invitee(itip);
         attendee = icalproperty_get_decoded_calendaraddress(att);
         param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
-        if (param) partstat = icalparameter_get_partstat(param);
+        if (param) {
+            partstat = icalparameter_get_partstat(param);
+        }
         param = icalproperty_get_first_parameter(att, ICAL_CN_PARAMETER);
-        if (param) cn = icalparameter_get_cn(param);
+        if (param) {
+            cn = icalparameter_get_cn(param);
+        }
 
         /* Find matching attendee in existing object */
         for (prop = icalcomponent_get_first_invitee(comp);
@@ -625,7 +668,9 @@ static const char *deliver_merge_reply(icalcomponent *ical, // current iCalendar
                                               ICAL_SCHEDULESTATUS_PARAMETER);
 #ifdef HAVE_VPOLL_SUPPORT
         /* Handle VPOLL reply */
-        if (kind == ICAL_VPOLL_COMPONENT) deliver_merge_vpoll_reply(comp, itip);
+        if (kind == ICAL_VPOLL_COMPONENT) {
+            deliver_merge_vpoll_reply(comp, itip);
+        }
 #endif
     }
 
@@ -662,7 +707,9 @@ static int deliver_merge_request(const char *attendee,
     {
         prop = icalcomponent_get_first_property(tz, ICAL_TZID_PROPERTY);
         tzid = icalproperty_get_tzid(prop);
-        if (!tzid) continue;
+        if (!tzid) {
+            continue;
+        }
 
         hash_insert(tzid, tz, tz_table);
     }
@@ -677,7 +724,9 @@ static int deliver_merge_request(const char *attendee,
         /* Lookup this TZID in the hash table */
         prop = icalcomponent_get_first_property(itip, ICAL_TZID_PROPERTY);
         tzid = icalproperty_get_tzid(prop);
-        if (!tzid) continue;
+        if (!tzid) {
+            continue;
+        }
 
         tz = hash_lookup(tzid, tz_table);
         if (tz) {
@@ -713,7 +762,9 @@ static int deliver_merge_request(const char *attendee,
 
     /* Process each "real" component in the iTIP request */
     itip = icalcomponent_get_first_real_component(request);
-    if (kind == ICAL_NO_COMPONENT) kind = icalcomponent_isa(itip);
+    if (kind == ICAL_NO_COMPONENT) {
+        kind = icalcomponent_isa(itip);
+    }
     for (; itip; itip = icalcomponent_get_next_component(request, kind)) {
         /* Clone the new/modified component from iTIP request */
         icalcomponent *new_comp = icalcomponent_clone(itip);
@@ -742,10 +793,12 @@ static int deliver_merge_request(const char *attendee,
                and RSVP=TRUE as well */
             cur_seq = icalcomponent_get_sequence(comp);
             new_seq = icalcomponent_get_sequence(itip);
-            if (new_seq > cur_seq)
+            if (new_seq > cur_seq) {
                 deliver_inbox = 1;
-            else if (partstat_changed(comp, itip, organizer))
+            }
+            else if (partstat_changed(comp, itip, organizer)) {
                 deliver_inbox = 1;
+            }
 
             /* Copy over any COMPLETED, PERCENT-COMPLETE,
                or TRANSP properties from current component to iTIP component */
@@ -861,8 +914,9 @@ static int deliver_merge_request(const char *attendee,
             {
                 prop = icalcomponent_get_first_property(new_comp,
                                                         ICAL_TRANSP_PROPERTY);
-                if (prop)
+                if (prop) {
                     icalproperty_set_transp(prop, ICAL_TRANSP_TRANSPARENT);
+                }
                 else {
                     prop = icalproperty_new_transp(ICAL_TRANSP_TRANSPARENT);
                     icalcomponent_add_property(new_comp, prop);
@@ -885,7 +939,9 @@ static int deliver_merge_request(const char *attendee,
             next = icalcomponent_get_next_component(ical, kind);
             prop = icalcomponent_get_first_property(comp,
                                                     ICAL_RECURRENCEID_PROPERTY);
-            if (!prop) continue;
+            if (!prop) {
+                continue;
+            }
 
             recurid = icalproperty_get_value_as_string(prop);
 
@@ -1010,7 +1066,9 @@ static int deliver_merge_add(icalcomponent *ical, // current iCalendar
             break;
         }
     }
-    if (!master_comp) return HTTP_NOT_FOUND;
+    if (!master_comp) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Process component in the iTIP request */
     itip = icalcomponent_get_first_real_component(add);
@@ -1070,7 +1128,9 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
         nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
         switch (icalproperty_isa(prop)) {
         case ICAL_CATEGORIES_PROPERTY:
-            if (!ical_categories_is_color(prop)) break;
+            if (!ical_categories_is_color(prop)) {
+                break;
+            }
 
             GCC_FALLTHROUGH
 
@@ -1138,8 +1198,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
            recipient,
            sparam->flags);
 
-    if (icalp) *icalp = NULL;
-    if (attendeep) *attendeep = NULL;
+    if (icalp) {
+        *icalp = NULL;
+    }
+    if (attendeep) {
+        *attendeep = NULL;
+    }
 
     if (!strcmpsafe(sender, recipient)) {
         /* Ignore iTIP sent from and to the same address */
@@ -1149,21 +1213,28 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
 
     /* Create header cache */
     txn.req_hdrs = spool_new_hdrcache();
-    if (!txn.req_hdrs) goto done;
+    if (!txn.req_hdrs) {
+        goto done;
+    }
 
     /* Set scheduling headers for JMAP CalendarEventNotification */
     char *sched_sender_address = NULL;
-    if (mailfrom && mailfrom->mailbox)
+    if (mailfrom && mailfrom->mailbox) {
         sched_sender_address = address_get_all(mailfrom, 0);
-    if (!sched_sender_address) sched_sender_address = xstrdupnull(sender);
-    if (sched_sender_address)
+    }
+    if (!sched_sender_address) {
+        sched_sender_address = xstrdupnull(sender);
+    }
+    if (sched_sender_address) {
         spool_append_header(xstrdup("Schedule-Sender-Address"),
                             sched_sender_address,
                             txn.req_hdrs);
-    if (mailfrom && mailfrom->name)
+    }
+    if (mailfrom && mailfrom->name) {
         spool_append_header(xstrdup("Schedule-Sender-Name"),
                             xstrdup(mailfrom->name),
                             txn.req_hdrs);
+    }
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
     mailboxname = caldav_mboxname(sparam->userid, SCHED_INBOX);
@@ -1229,8 +1300,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
     caldav_lookup_uid(caldavdb, uid, &cdata);
 
     if (cdata->dav.mailbox) {
-        if (cdata->dav.mailbox_byname)
+        if (cdata->dav.mailbox_byname) {
             mbname = mbname_from_intname(cdata->dav.mailbox);
+        }
         else {
             mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
             if (!mbentry) {
@@ -1304,7 +1376,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
         buf_reset(&resource);
         /* Sanitize the UID */
         for (const char *p = uid; *p; p++) {
-            if (isascii(*p) && !iscntrl(*p)) buf_putc(&resource, *p);
+            if (isascii(*p) && !iscntrl(*p)) {
+                buf_putc(&resource, *p);
+            }
         }
         buf_appendcstr(&resource, ".ics");
 
@@ -1349,23 +1423,35 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
             int reject = 0;
             switch (kind) {
             case ICAL_VEVENT_COMPONENT:
-                if (cdata->comp_type != CAL_COMP_VEVENT) reject = 1;
+                if (cdata->comp_type != CAL_COMP_VEVENT) {
+                    reject = 1;
+                }
                 break;
             case ICAL_VTODO_COMPONENT:
-                if (cdata->comp_type != CAL_COMP_VTODO) reject = 1;
+                if (cdata->comp_type != CAL_COMP_VTODO) {
+                    reject = 1;
+                }
                 break;
             case ICAL_VJOURNAL_COMPONENT:
-                if (cdata->comp_type != CAL_COMP_VJOURNAL) reject = 1;
+                if (cdata->comp_type != CAL_COMP_VJOURNAL) {
+                    reject = 1;
+                }
                 break;
             case ICAL_VFREEBUSY_COMPONENT:
-                if (cdata->comp_type != CAL_COMP_VFREEBUSY) reject = 1;
+                if (cdata->comp_type != CAL_COMP_VFREEBUSY) {
+                    reject = 1;
+                }
                 break;
             case ICAL_VAVAILABILITY_COMPONENT:
-                if (cdata->comp_type != CAL_COMP_VAVAILABILITY) reject = 1;
+                if (cdata->comp_type != CAL_COMP_VAVAILABILITY) {
+                    reject = 1;
+                }
                 break;
 #ifdef HAVE_VPOLL_SUPPORT
             case ICAL_VPOLL_COMPONENT:
-                if (cdata->comp_type != CAL_COMP_VPOLL) reject = 1;
+                if (cdata->comp_type != CAL_COMP_VPOLL) {
+                    reject = 1;
+                }
                 break;
 #endif
             default:
@@ -1380,7 +1466,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
                     const char *organizer =
                         icalproperty_get_decoded_calendaraddress(prop);
                     if (organizer) {
-                        if (strcasecmp(cdata->organizer, organizer)) reject = 1;
+                        if (strcasecmp(cdata->organizer, organizer)) {
+                            reject = 1;
+                        }
                     }
                 }
             }
@@ -1469,14 +1557,18 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
                 mboxevent_free(&mboxevent);
             }
 
-            if (!r) goto inbox;
+            if (!r) {
+                goto inbox;
+            }
         }
         break;
     }
 
     case ICAL_METHOD_REPLY:
         attendee = deliver_merge_reply(ical, itip);
-        if (attendeep) *attendeep = attendee;
+        if (attendeep) {
+            *attendeep = attendee;
+        }
         break;
 
     case ICAL_METHOD_PUBLISH:
@@ -1486,7 +1578,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(
 
     case ICAL_METHOD_ADD:
         r = deliver_merge_add(ical, itip);
-        if (r) goto inbox;
+        if (r) {
+            goto inbox;
+        }
         break;
 #ifdef HAVE_VPOLL_SUPPORT
     case ICAL_METHOD_POLLSTATUS:
@@ -1635,15 +1729,23 @@ inbox:
 
 done:
     strarray_fini(&recipient_addresses);
-    if (icalp)
+    if (icalp) {
         *icalp = ical;
-    else if (ical)
+    }
+    else if (ical) {
         icalcomponent_free(ical);
-    if (oldical) icalcomponent_free(oldical);
-    if (itip) icalcomponent_free(itip);
+    }
+    if (oldical) {
+        icalcomponent_free(oldical);
+    }
+    if (itip) {
+        icalcomponent_free(itip);
+    }
     mailbox_close(&inbox);
     mailbox_close(&mailbox);
-    if (caldavdb) caldav_close(caldavdb);
+    if (caldavdb) {
+        caldav_close(caldavdb);
+    }
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     free(mailboxname);

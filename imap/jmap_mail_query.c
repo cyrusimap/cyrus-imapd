@@ -67,11 +67,15 @@
 static int _email_threadkeyword_is_valid(const char *keyword)
 {
     /* \Seen is always supported */
-    if (!strcasecmp(keyword, "$Seen")) return 1;
+    if (!strcasecmp(keyword, "$Seen")) {
+        return 1;
+    }
 
     const char *counted_flags =
         config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
-    if (!counted_flags) return 0;
+    if (!counted_flags) {
+        return 0;
+    }
 
     /* We really shouldn't do all this string mangling for each keyword */
     strarray_t *flags = strarray_split(counted_flags, " ", STRARRAY_TRIM);
@@ -81,7 +85,9 @@ static int _email_threadkeyword_is_valid(const char *keyword)
         const char *kw = keyword;
         if (*flag == '\\') { // special case \ => $
             flag++;
-            if (*kw != '$') continue;
+            if (*kw != '$') {
+                continue;
+            }
             kw++;
         }
         if (!strcasecmp(flag, kw)) {
@@ -131,7 +137,9 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
 static int _get_sharedaddressbook_cb(struct findall_data *data, void *rock)
 {
     mbentry_t **mbentryp = rock;
-    if (!data || !data->mbentry) return 0;
+    if (!data || !data->mbentry) {
+        return 0;
+    }
     *mbentryp = mboxlist_entry_copy(data->mbentry);
     return CYRUSDB_DONE;
 }
@@ -194,14 +202,20 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(
     /* prefilter to see if there are any fields that we will need to look up */
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
-        if (!arg) continue;
+        if (!arg) {
+            continue;
+        }
         const char *groupid =
             c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
-        if (!groupid) continue; // avoid looking up if invalid!
+        if (!groupid) {
+            continue; // avoid looking up if invalid!
+        }
         havefield = 1;
         break;
     }
-    if (!havefield) goto done;
+    if (!havefield) {
+        goto done;
+    }
 
     /* ensure we have preconditions for lookups */
     if (!cfilter->contactgroups.size) {
@@ -227,11 +241,12 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(
         mbname_t *mbname = mbname_from_intname(othermb->name);
         int r2 =
             carddav_set_otheruser(cfilter->carddavdb, mbname_userid(mbname));
-        if (r2)
+        if (r2) {
             syslog(LOG_NOTICE,
                    "DBNOTICE: failed to open otheruser %s contacts for %s",
                    mbname_userid(mbname),
                    cfilter->accountid);
+        }
         mbname_free(&mbname);
     }
 
@@ -239,11 +254,17 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(
 
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
-        if (!arg) continue;
+        if (!arg) {
+            continue;
+        }
         const char *groupid =
             c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
-        if (!groupid) continue;
-        if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
+        if (!groupid) {
+            continue;
+        }
+        if (hash_lookup(groupid, &cfilter->contactgroups)) {
+            continue;
+        }
 
         /* Lookup group member email addresses */
         mbentry_t *mbentry = NULL;
@@ -271,7 +292,9 @@ done:
 HIDDEN int jmap_email_hasattachment(const struct body *part,
                                     json_t *imagesize_by_partid)
 {
-    if (!part) return 0;
+    if (!part) {
+        return 0;
+    }
 
     if (!strcmp(part->type, "MULTIPART")) {
         int i;
@@ -319,7 +342,9 @@ HIDDEN int jmap_email_hasattachment(const struct body *part,
             }
         }
     }
-    if (filename) return 1;
+    if (filename) {
+        return 1;
+    }
 
     /* Signatures are no attachments */
     if (!strcmp(part->type, "APPLICATION")
@@ -393,21 +418,31 @@ static int _email_extract_bodies_internal(const struct body *parts,
 
         /* Determine part type */
         enum parttype parttype = OTHER;
-        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "PLAIN"))
+        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "PLAIN")) {
             parttype = PLAIN;
+        }
         else if (!strcmp(part->type, "TEXT")
                  && !strcmp(part->subtype, "RICHTEXT"))
+        {
             parttype = PLAIN; // RFC 1341
+        }
         else if (!strcmp(part->type, "TEXT")
                  && !strcmp(part->subtype, "ENRICHED"))
+        {
             parttype = PLAIN; // RFC 1563
+        }
         else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "HTML"))
+        {
             parttype = HTML;
-        else if (!strcmp(part->type, "MULTIPART"))
+        }
+        else if (!strcmp(part->type, "MULTIPART")) {
             parttype = MULTIPART;
+        }
         else if (!strcmp(part->type, "IMAGE") || !strcmp(part->type, "AUDIO")
                  || !strcmp(part->type, "VIDEO"))
+        {
             parttype = INLINE_MEDIA;
+        }
 
         /* Determine disposition name, if any. */
         const char *dispname = NULL;
@@ -463,13 +498,22 @@ static int _email_extract_bodies_internal(const struct body *parts,
                 continue;
             }
             else if (in_alternative) {
-                if (parttype == PLAIN) htmllist = NULL;
-                if (parttype == HTML) textlist = NULL;
+                if (parttype == PLAIN) {
+                    htmllist = NULL;
+                }
+                if (parttype == HTML) {
+                    textlist = NULL;
+                }
             }
-            if (textlist) ptrarray_append(textlist, (void *) part);
-            if (htmllist) ptrarray_append(htmllist, (void *) part);
-            if ((!textlist || !htmllist) && parttype == INLINE_MEDIA)
+            if (textlist) {
+                ptrarray_append(textlist, (void *) part);
+            }
+            if (htmllist) {
+                ptrarray_append(htmllist, (void *) part);
+            }
+            if ((!textlist || !htmllist) && parttype == INLINE_MEDIA) {
                 ptrarray_append(attslist, (void *) part);
+            }
         }
         else {
             ptrarray_append(attslist, (void *) part);
@@ -480,13 +524,15 @@ static int _email_extract_bodies_internal(const struct body *parts,
         int j;
         /* Found HTML part only */
         if (textlist && htmllist && textlist_count == textlist->count) {
-            for (j = htmllist_count; j < htmllist->count; j++)
+            for (j = htmllist_count; j < htmllist->count; j++) {
                 ptrarray_append(textlist, ptrarray_nth(htmllist, j));
+            }
         }
         /* Found TEXT part only */
         if (htmllist && textlist && htmllist_count == htmllist->count) {
-            for (j = textlist_count; j < textlist->count; j++)
+            for (j = textlist_count; j < textlist->count; j++) {
                 ptrarray_append(htmllist, ptrarray_nth(textlist, j));
+            }
         }
     }
 
@@ -550,7 +596,9 @@ static int _matchmime_tr_begin_message(search_text_receiver_t *rx,
 {
     const struct message_guid *guid;
     int r = message_get_guid(msg, &guid);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
     return xapian_dbw_begin_doc(tr->matchmime->dbw, guid, 'G');
@@ -679,10 +727,14 @@ static xapian_query_t *_email_matchmime_contactgroup(
             int i;
             for (i = 0; i < strarray_size(members); i++) {
                 const char *member = strarray_nth(members, i);
-                if (!strchr(member, '@')) continue;
+                if (!strchr(member, '@')) {
+                    continue;
+                }
                 xapian_query_t *xsubq =
                     xapian_query_new_match(db, part, member);
-                if (xsubq) ptrarray_append(&xsubqs, xsubq);
+                if (xsubq) {
+                    ptrarray_append(&xsubqs, xsubq);
+                }
             }
             if (ptrarray_size(&xsubqs)) {
                 xq = xapian_query_new_compound(db,
@@ -790,7 +842,9 @@ static xapian_query_t *build_type_query(xapian_db_t *db, const char *type)
     for (i = 0; i < strarray_size(&types); i++) {
         const char *t = strarray_nth(&types, i);
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_TYPE, t);
-        if (xq) ptrarray_append(&xqs, xq);
+        if (xq) {
+            ptrarray_append(&xqs, xq);
+        }
     }
     xapian_query_t *xq = xapian_query_new_compound(
         db, /*is_or*/ 1, (xapian_query_t **) xqs.data, xqs.count);
@@ -817,7 +871,9 @@ struct convmatch
 static void convmatch_reset(struct convmatch *convmatch,
                             struct conversations_state *cstate)
 {
-    if (!convmatch) return;
+    if (!convmatch) {
+        return;
+    }
 
     int i;
     for (i = 0; i < dynarray_size(&convmatch->convs); i++) {
@@ -848,9 +904,13 @@ static int _email_matchmime_convkeyword(struct convmatch *convmatch,
     else {
         num = strarray_find_case(convmatch->cstate->counted_flags, flag, 0);
         /* num might be -1 invalid */
-        if (num >= 0) num++;
+        if (num >= 0) {
+            num++;
+        }
     }
-    if (num < 0) return 0;
+    if (num < 0) {
+        return 0;
+    }
 
     if (convmatch->in_state == 0) {
         /* First conv keyword to match, initialize matcher */
@@ -894,10 +954,12 @@ static int _email_matchmime_convkeyword(struct convmatch *convmatch,
          * 2: all messages have flag set
          */
         int flagmatch = 0;
-        if (num == 0 && conv->unseen != conv->exists)
+        if (num == 0 && conv->unseen != conv->exists) {
             flagmatch = conv->unseen > 0 ? 1 : 2;
-        else if (num > 0 && conv->counts[num - 1])
+        }
+        else if (num > 0 && conv->counts[num - 1]) {
             flagmatch = conv->exists > conv->counts[num - 1] ? 1 : 2;
+        }
 
         if (flagmatch && op == MATCHMIME_CONVKEYWORDS_SOME) {
             matches = 1;
@@ -944,25 +1006,32 @@ static int _email_matchmime_evaluate(json_t *filter,
         int matches;
 
         if (!strcasecmpsafe(strop, "AND")) {
-            if (!json_array_size(conditions)) return 0;
+            if (!json_array_size(conditions)) {
+                return 0;
+            }
 
             op = SEOP_AND;
             matches = 1;
         }
         else if (!strcasecmpsafe(strop, "OR")) {
-            if (!json_array_size(conditions)) return 0;
+            if (!json_array_size(conditions)) {
+                return 0;
+            }
 
             op = SEOP_OR;
             matches = 0;
         }
         else if (!strcasecmpsafe(strop, "NOT")) {
-            if (!json_array_size(conditions)) return 1;
+            if (!json_array_size(conditions)) {
+                return 1;
+            }
 
             op = SEOP_NOT;
             matches = 1;
         }
-        else
+        else {
             return 0;
+        }
 
         json_t *condition;
         size_t i;
@@ -1009,7 +1078,9 @@ static int _email_matchmime_evaluate(json_t *filter,
                 continue;
             }
             void *xq = xapian_query_new_match(db, i, match);
-            if (xq) ptrarray_push(&childqueries, xq);
+            if (xq) {
+                ptrarray_push(&childqueries, xq);
+            }
         }
         xapian_query_t *xq =
             xapian_query_new_compound(db,
@@ -1119,22 +1190,30 @@ static int _email_matchmime_evaluate(json_t *filter,
     if ((match = json_string_value(json_object_get(filter, "inReplyTo")))) {
         xapian_query_t *xq =
             xapian_query_new_match(db, SEARCH_PART_INREPLYTO, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        if (xq) {
+            ptrarray_append(&xqs, xq);
+        }
     }
     if ((match = json_string_value(json_object_get(filter, "listId")))) {
         xapian_query_t *xq =
             xapian_query_new_match(db, SEARCH_PART_LISTID, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        if (xq) {
+            ptrarray_append(&xqs, xq);
+        }
     }
     if ((match = json_string_value(json_object_get(filter, "messageId")))) {
         xapian_query_t *xq =
             xapian_query_new_match(db, SEARCH_PART_MESSAGEID, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        if (xq) {
+            ptrarray_append(&xqs, xq);
+        }
     }
     if ((match = json_string_value(json_object_get(filter, "references")))) {
         xapian_query_t *xq =
             xapian_query_new_match(db, SEARCH_PART_REFERENCES, match);
-        if (xq) ptrarray_append(&xqs, xq);
+        if (xq) {
+            ptrarray_append(&xqs, xq);
+        }
     }
     if (JNOTNULL(jval = json_object_get(filter, "isHighPriority"))) {
         xapian_query_t *xq =
@@ -1142,7 +1221,9 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (xq && !json_boolean_value(jval)) {
             xq = xapian_query_new_not(db, xq);
         }
-        if (xq) ptrarray_append(&xqs, xq);
+        if (xq) {
+            ptrarray_append(&xqs, xq);
+        }
     }
     // ignore attachmentBody
 
@@ -1159,8 +1240,9 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (matches) {
             have_matches += xqs_count; // assumes one xapian query per criteria
         }
-        else
+        else {
             return 0;
+        }
     }
 
     /* size */
@@ -1176,8 +1258,9 @@ static int _email_matchmime_evaluate(json_t *filter,
                 if (size >= jint) {
                     have_matches++;
                 }
-                else
+                else {
                     return 0;
+                }
             }
             if ((jint = json_integer_value(json_object_get(filter, "maxSize")))
                 > 0)
@@ -1185,8 +1268,9 @@ static int _email_matchmime_evaluate(json_t *filter,
                 if (size < jint) {
                     have_matches++;
                 }
-                else
+                else {
                     return 0;
+                }
             }
         }
     }
@@ -1199,8 +1283,9 @@ static int _email_matchmime_evaluate(json_t *filter,
             if (json_boolean(has_att) == jval) {
                 have_matches++;
             }
-            else
+            else {
                 return 0;
+            }
         }
     }
 
@@ -1229,8 +1314,9 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (matches) {
             have_matches++;
         }
-        else
+        else {
             return 0;
+        }
     }
 
     /* before */
@@ -1240,8 +1326,9 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (internaldate < t) {
             have_matches++;
         }
-        else
+        else {
             return 0;
+        }
     }
     /* after */
     if (JNOTNULL(jval = json_object_get(filter, "after"))) {
@@ -1250,8 +1337,9 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (internaldate >= t) {
             have_matches++;
         }
-        else
+        else {
             return 0;
+        }
     }
 
     /* allInThreadHaveKeyword */
@@ -1349,7 +1437,9 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field,
 
 static int _matchmime_need_attachextract(json_t *jfilter)
 {
-    if (!jfilter) return 0;
+    if (!jfilter) {
+        return 0;
+    }
 
     const char *criteria;
     json_t *jval;
@@ -1363,7 +1453,9 @@ static int _matchmime_need_attachextract(json_t *jfilter)
     size_t i;
     json_array_foreach(json_object_get(jfilter, "conditions"), i, jval)
     {
-        if (_matchmime_need_attachextract(jval)) return 1;
+        if (_matchmime_need_attachextract(jval)) {
+            return 1;
+        }
     }
 
     return 0;
@@ -1463,11 +1555,19 @@ HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime,
 HIDDEN void jmap_email_matchmime_free(matchmime_t **matchmimep)
 {
     matchmime_t *matchmime = *matchmimep;
-    if (!matchmime) return;
+    if (!matchmime) {
+        return;
+    }
 
-    if (matchmime->m) message_unref(&matchmime->m);
-    if (matchmime->dbw) xapian_dbw_close(matchmime->dbw);
-    if (matchmime->dbpath) removedir(matchmime->dbpath);
+    if (matchmime->m) {
+        message_unref(&matchmime->m);
+    }
+    if (matchmime->dbw) {
+        xapian_dbw_close(matchmime->dbw);
+    }
+    if (matchmime->dbpath) {
+        removedir(matchmime->dbpath);
+    }
     free(matchmime->dbpath);
 
     struct convmatch *convmatch = matchmime->convmatch;
@@ -1524,7 +1624,9 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
         }
         r = jmap_email_contactfilter_from_filtercondition(
             &parser, jf, &cfilter);
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
     ptrarray_fini(&work);
     if (r) {
@@ -1591,7 +1693,9 @@ done:
 
 static void headermatch_normalize(struct jmap_headermatch *hm, struct buf *val)
 {
-    if (!buf_len(val)) return;
+    if (!buf_len(val)) {
+        return;
+    }
 
     buf_cstring(val);
     buf_trim(val);
@@ -1607,7 +1711,9 @@ static void headermatch_normalize(struct jmap_headermatch *hm, struct buf *val)
         }
         *s = toupper(*s);
     }
-    if (!*s) return;
+    if (!*s) {
+        return;
+    }
 
     /* Convert value */
     buf_setcstr(val, charset_conv_convert(hm->conv, buf_cstring(val)));
@@ -1655,7 +1761,9 @@ HIDDEN struct jmap_headermatch *jmap_headermatch_new(const char *header,
 
 HIDDEN void jmap_headermatch_free(struct jmap_headermatch **hmp)
 {
-    if (!hmp || !*hmp) return;
+    if (!hmp || !*hmp) {
+        return;
+    }
 
     struct jmap_headermatch *hm = *hmp;
 
@@ -1673,7 +1781,9 @@ HIDDEN void jmap_headermatch_free(struct jmap_headermatch **hmp)
 HIDDEN struct jmap_headermatch *jmap_headermatch_dup(
     struct jmap_headermatch *hm)
 {
-    if (!hm) return NULL;
+    if (!hm) {
+        return NULL;
+    }
 
     struct jmap_headermatch *hm2 = xzmalloc(sizeof(struct jmap_headermatch));
     jmap_headermatch_init(hm2);
@@ -1744,10 +1854,14 @@ HIDDEN int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg)
             }
 
             /* Find next header value, if any */
-            if (*q) q += (q[1] == '\n') ? 2 : 1;
+            if (*q) {
+                q += (q[1] == '\n') ? 2 : 1;
+            }
             p = q;
             q = strchr(p, ':');
-            if (q) p = q + 1;
+            if (q) {
+                p = q + 1;
+            }
         } while (!match && *p);
     }
 

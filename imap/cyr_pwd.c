@@ -112,12 +112,16 @@ int main(int argc, char **argv)
 
     mbname = mbname_from_path(".");
 
-    if (mbname) extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+    if (mbname) {
+        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+    }
 
-    if (extname)
+    if (extname) {
         printf("%s\n", extname);
-    else
+    }
+    else {
         fprintf(stderr, "ERROR: not in Cyrus UUID mailbox directory\n");
+    }
 
     mbname_free(&mbname);
 

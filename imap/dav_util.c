@@ -77,8 +77,12 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox,
 
     if (!ddata->alive) {
         /* New resource */
-        if (etag) *etag = NULL;
-        if (lastmod) *lastmod = 0;
+        if (etag) {
+            *etag = NULL;
+        }
+        if (lastmod) {
+            *lastmod = 0;
+        }
     }
     else if (ddata->imap_uid) {
         /* Mapped URL */
@@ -95,13 +99,21 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox,
             return r;
         }
 
-        if (etag) *etag = message_guid_encode(&record->guid);
-        if (lastmod) *lastmod = record->internaldate;
+        if (etag) {
+            *etag = message_guid_encode(&record->guid);
+        }
+        if (lastmod) {
+            *lastmod = record->internaldate;
+        }
     }
     else {
         /* Unmapped URL (empty resource) */
-        if (etag) *etag = NULL;
-        if (lastmod) *lastmod = ddata->creationdate;
+        if (etag) {
+            *etag = NULL;
+        }
+        if (lastmod) {
+            *lastmod = ddata->creationdate;
+        }
     }
 
     return 0;
@@ -189,8 +201,9 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
         fprintf(f, "Content-Type: %s\r\n", hdr[0]);
     }
-    else
+    else {
         fputs("Content-Type: application/octet-stream\r\n", f);
+    }
 
     if (!datalen) {
         datalen = strlen(data);
@@ -262,10 +275,12 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
 
         /* XXX - casemerge?  Doesn't matter with flags */
         if (add_imapflags) {
-            if (flaglist)
+            if (flaglist) {
                 strarray_cat(flaglist, add_imapflags);
-            else
+            }
+            else {
                 flaglist = strarray_dup(add_imapflags);
+            }
         }
         if (del_imapflags && flaglist) {
             int i;
@@ -302,8 +317,9 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         strarray_free(flaglist);
         freeentryatts(annots);
 
-        if (r)
+        if (r) {
             append_abort(&as);
+        }
         else {
             /* Commit the append to the mailbox */
             if ((r = append_commit(&as))) {

@@ -130,16 +130,20 @@ int main(int argc, char **argv)
             break;
 
         case 'r':
-            if (cmd == 0)
+            if (cmd == 0) {
                 cmd = CMD_REID;
-            else
+            }
+            else {
                 usage();
+            }
             break;
         case 't':
-            if (cmd == 0)
+            if (cmd == 0) {
                 cmd = CMD_TIME;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         default:
@@ -148,10 +152,14 @@ int main(int argc, char **argv)
     }
 
     /* must provide a command */
-    if (!cmd) usage();
+    if (!cmd) {
+        usage();
+    }
 
     /* must provide some mailboxes */
-    if (optind == argc) usage();
+    if (optind == argc) {
+        usage();
+    }
 
     cyrus_init(alt_config, "mbtool", 0, 0);
 
@@ -207,7 +215,9 @@ static int do_timestamp(const mbname_t *mbname)
 
     /* Open/lock header */
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     struct mailbox_iter *iter =
         mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
@@ -215,7 +225,9 @@ static int do_timestamp(const mbname_t *mbname)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
-        if (llabs(record->internaldate - record->gmtime) < 86400) continue;
+        if (llabs(record->internaldate - record->gmtime) < 86400) {
+            continue;
+        }
 
         struct index_record copyrecord = *record;
 
@@ -227,7 +239,9 @@ static int do_timestamp(const mbname_t *mbname)
         copyrecord.internaldate = copyrecord.gmtime;
 
         r = mailbox_rewrite_index_record(mailbox, &copyrecord);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
 done:
@@ -250,7 +264,9 @@ static int do_reid(const mbname_t *mbname)
     const char *name = mbname_intname(mbname);
 
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     if (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) {
         mailbox_make_uniqueid(mailbox);
@@ -261,7 +277,9 @@ static int do_reid(const mbname_t *mbname)
     }
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     free(mbentry->uniqueid);
     mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
@@ -277,14 +295,22 @@ done:
 
 int do_cmd(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
     int *valp = (int *) rock;
 
-    if (*valp == CMD_TIME) return do_timestamp(data->mbname);
+    if (*valp == CMD_TIME) {
+        return do_timestamp(data->mbname);
+    }
 
-    if (*valp == CMD_REID) return do_reid(data->mbname);
+    if (*valp == CMD_REID) {
+        return do_reid(data->mbname);
+    }
 
     return 0;
 }

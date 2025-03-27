@@ -152,7 +152,9 @@ int main(int argc, char **argv)
     }
     else {
         int i;
-        for (i = optind; i < argc; i++) do_user(argv[i], (void *) audit_tool);
+        for (i = optind; i < argc; i++) {
+            do_user(argv[i], (void *) audit_tool);
+        }
     }
 
     libcyrus_run_delayed();

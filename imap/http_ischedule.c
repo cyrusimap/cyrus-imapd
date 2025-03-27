@@ -128,7 +128,7 @@ struct namespace_t namespace_ischedule = {
     "/ischedule",
     ISCHED_WELLKNOWN_URI,
     http_allow_noauth,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
     isched_init,
@@ -169,7 +169,7 @@ struct namespace_t namespace_domainkey = {
     "/domainkeys",
     "/.well-known/domainkey",
     http_allow_noauth,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ,
     NULL,
@@ -212,8 +212,12 @@ void isched_capa_hdr(struct transaction_t *txn,
     mtime = MAX(compile_time, sbuf.st_mtime);
     txn->resp_body.iserial =
         mtime + (rscale_calendars ? rscale_calendars->num_elements : 0);
-    if (lastmod) *lastmod = mtime;
-    if (sb) *sb = sbuf;
+    if (lastmod) {
+        *lastmod = mtime;
+    }
+    if (sb) {
+        *sb = sbuf;
+    }
 }
 
 /* iSchedule Receiver Capabilities */
@@ -231,7 +235,9 @@ static int meth_get_isched(struct transaction_t *txn,
     static int bufsiz = 0;
 
     /* Initialize */
-    if (!lastmod) message_guid_set_null(&prev_guid);
+    if (!lastmod) {
+        message_guid_set_null(&prev_guid);
+    }
 
     /* Fill in iSchedule-Capabilities */
     isched_capa_hdr(txn, &lastmod, &sbuf);
@@ -270,7 +276,9 @@ static int meth_get_isched(struct transaction_t *txn,
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -356,8 +364,9 @@ static int meth_get_isched(struct transaction_t *txn,
             xmlNewProp(
                 type, BAD_CAST "content-type", BAD_CAST buf_cstring(&txn->buf));
 
-            if (mime->version)
+            if (mime->version) {
                 xmlNewProp(type, BAD_CAST "version", BAD_CAST mime->version);
+            }
         }
 
         node = xmlNewChild(capa, NULL, BAD_CAST "attachments", NULL);
@@ -373,7 +382,9 @@ static int meth_get_isched(struct transaction_t *txn,
         }
 
         maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
-        if (maxlen <= 0) maxlen = BYTESIZE_UNLIMITED;
+        if (maxlen <= 0) {
+            maxlen = BYTESIZE_UNLIMITED;
+        }
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%" PRIi64, maxlen);
         xmlNewChild(capa,
@@ -456,7 +467,9 @@ static int meth_post_isched(struct transaction_t *txn,
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
         for (mime = isched_mime_types; mime->content_type; mime++) {
-            if (is_mediatype(mime->content_type, hdr[0])) break;
+            if (is_mediatype(mime->content_type, hdr[0])) {
+                break;
+            }
         }
     }
     if (!mime || !mime->content_type) {
@@ -503,10 +516,12 @@ static int meth_post_isched(struct transaction_t *txn,
         authd = 1;
     }
     else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
-        if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED))
+        if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) {
             authd = 1;
-        else
+        }
+        else {
             txn->error.desc = "No signature";
+        }
     }
     else {
         authd = dkim_auth(txn);
@@ -552,10 +567,12 @@ static int meth_post_isched(struct transaction_t *txn,
 
     switch (kind) {
     case ICAL_VFREEBUSY_COMPONENT:
-        if (meth == ICAL_METHOD_REQUEST)
+        if (meth == ICAL_METHOD_REQUEST) {
             ret = sched_busytime_query(txn, mime, ical);
-        else
+        }
+        else {
             goto invalid_meth;
+        }
         break;
 
     case ICAL_VEVENT_COMPONENT:
@@ -563,7 +580,9 @@ static int meth_post_isched(struct transaction_t *txn,
     case ICAL_VPOLL_COMPONENT:
         switch (meth) {
         case ICAL_METHOD_POLLSTATUS:
-            if (kind != ICAL_VPOLL_COMPONENT) goto invalid_meth;
+            if (kind != ICAL_VPOLL_COMPONENT) {
+                goto invalid_meth;
+            }
 
             GCC_FALLTHROUGH
 
@@ -571,7 +590,9 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_CANCEL: {
             unsigned flags = SCHEDFLAG_ISCHEDULE;
-            if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
+            if (meth == ICAL_METHOD_REPLY) {
+                flags |= SCHEDFLAG_IS_REPLY;
+            }
             struct sched_data sched_data = {
                 SCHED_MECH_ISCHEDULE,        flags, ical, NULL, NULL,
                 ICAL_SCHEDULEFORCESEND_NONE, NULL,  NULL, NULL
@@ -605,18 +626,22 @@ static int meth_post_isched(struct transaction_t *txn,
                         recipient, &sparam, /*schedule_addresses*/ NULL);
 
                     /* Don't allow scheduling with remote users via iSchedule */
-                    if (sparam.flags & SCHEDTYPE_REMOTE) r = HTTP_FORBIDDEN;
+                    if (sparam.flags & SCHEDTYPE_REMOTE) {
+                        r = HTTP_FORBIDDEN;
+                    }
                     sched_param_fini(&sparam);
 
-                    if (r)
+                    if (r) {
                         sched_data.status = REQSTAT_NOUSER;
-                    else
+                    }
+                    else {
                         sched_deliver(httpd_userid,
                                       httpd_userid,
                                       httpd_userid,
                                       recipient,
                                       &sched_data,
                                       authstate);
+                    }
 
                     xml_add_schedresponse(root,
                                           NULL,
@@ -648,7 +673,9 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
 done:
-    if (ical) icalcomponent_free(ical);
+    if (ical) {
+        icalcomponent_free(ical);
+    }
 
     return ret;
 }
@@ -675,16 +702,22 @@ int isched_send(struct caldav_sched_param *sparam,
     *xml = NULL;
     memset(&txn, 0, sizeof(struct transaction_t));
 
-    if (sparam->flags & SCHEDTYPE_REMOTE)
+    if (sparam->flags & SCHEDTYPE_REMOTE) {
         uri = ISCHED_WELLKNOWN_URI;
-    else
+    }
+    else {
         uri = namespace_ischedule.prefix;
+    }
 
     /* Open connection to iSchedule receiver.
        Use header buffer to construct remote server[:port][/tls][/noauth] */
     buf_setcstr(&txn.buf, sparam->server);
-    if (sparam->port) buf_printf(&txn.buf, ":%u", sparam->port);
-    if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&txn.buf, "/tls");
+    if (sparam->port) {
+        buf_printf(&txn.buf, ":%u", sparam->port);
+    }
+    if (sparam->flags & SCHEDTYPE_SSL) {
+        buf_appendcstr(&txn.buf, "/tls");
+    }
     if (sparam->flags & SCHEDTYPE_REMOTE) {
         /* Using DKIM rather than HTTP Auth */
         buf_appendcstr(&txn.buf, "/noauth");
@@ -696,7 +729,9 @@ int isched_send(struct caldav_sched_param *sparam,
                           NULL,
                           NULL,
                           httpd_in);
-    if (!be) return HTTP_UNAVAILABLE;
+    if (!be) {
+        return HTTP_UNAVAILABLE;
+    }
 
     /* Setup HTTP connection for reading response */
     memset(&conn, 0, sizeof(struct http_connection));
@@ -714,7 +749,9 @@ int isched_send(struct caldav_sched_param *sparam,
      */
     buf_reset(&hdrs);
     buf_printf(&hdrs, "Host: %s", sparam->server);
-    if (sparam->port) buf_printf(&hdrs, ":%u", sparam->port);
+    if (sparam->port) {
+        buf_printf(&hdrs, ":%u", sparam->port);
+    }
     buf_printf(&hdrs, "\r\n");
     buf_printf(&hdrs, "Cache-Control: no-cache, no-transform\r\n");
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -897,7 +934,9 @@ response:
                 }
             }
 
-            if (!bodylen) bodylen = strlen(body); /* Need to send body again */
+            if (!bodylen) {
+                bodylen = strlen(body); /* Need to send body again */
+            }
             goto redirect;
 
         default:
@@ -905,7 +944,9 @@ response:
         }
     }
 
-    if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
+    if (txn.req_hdrs) {
+        spool_free_hdrcache(txn.req_hdrs);
+    }
     buf_free(&txn.req_body.payload);
     buf_free(&txn.buf);
 
@@ -928,16 +969,22 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim,
 
     domain = (const char *) dkim_sig_getdomain(sig);
     selector = (const char *) dkim_sig_getselector(sig);
-    if (!domain || !selector) return DKIM_CBSTAT_ERROR;
+    if (!domain || !selector) {
+        return DKIM_CBSTAT_ERROR;
+    }
 
     query = (const char *) dkim_sig_gettagvalue(sig, 0, (u_char *) "q");
-    if (!query) query = "dns/txt"; /* implicit default */
+    if (!query) {
+        query = "dns/txt"; /* implicit default */
+    }
 
     /* Parse the q= tag */
     tok_init(&tok, query, ":", 0);
     while ((type = tok_next(&tok))) {
         /* Split type/options */
-        if ((opts = strchr(type, '/'))) *opts++ = '\0';
+        if ((opts = strchr(type, '/'))) {
+            *opts++ = '\0';
+        }
 
 #    ifdef IOPTEST /* CalConnect ioptest */
         if (1) {
@@ -948,7 +995,9 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim,
             struct buf path = BUF_INITIALIZER;
             FILE *f;
 
-            if (!prefix) continue;
+            if (!prefix) {
+                continue;
+            }
 
             buf_setcstr(&path, prefix);
             buf_printf(&path,
@@ -967,7 +1016,9 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim,
                        strerror(errno));
             }
             buf_free(&path);
-            if (!f) continue;
+            if (!f) {
+                continue;
+            }
 
             memset(buf, '\0', buflen);
             fgets((char *) buf, buflen, f);
@@ -1001,7 +1052,9 @@ static void dkim_cachehdr(const char *name,
     int dup_hdr = name && lastname && !strcmp(name, lastname);
 
     /* Ignore private headers in our cache */
-    if (name && name[0] == ':') return;
+    if (name && name[0] == ':') {
+        return;
+    }
 
     /* Combine header fields of the same name.
      * Our hash table will always feed us duplicate headers consecutively.
@@ -1017,10 +1070,12 @@ static void dkim_cachehdr(const char *name,
         tok_t tok;
         char *token, sep = ':';
 
-        if (!dup_hdr)
+        if (!dup_hdr) {
             buf_setcstr(hdrfield, name);
-        else
+        }
+        else {
             sep = ',';
+        }
 
         /* Trim leading/trailing WSP around comma-separated values */
         tok_init(&tok, contents, ",", TOK_TRIMLEFT | TOK_TRIMRIGHT | TOK_EMPTY);
@@ -1038,10 +1093,14 @@ static int dkim_auth(struct transaction_t *txn)
     DKIM *dkim = NULL;
     DKIM_STAT stat;
 
-    if (!dkim_lib) return 0;
+    if (!dkim_lib) {
+        return 0;
+    }
 
     dkim = dkim_verify(dkim_lib, NULL /* id */, NULL, &stat);
-    if (!dkim) return 0;
+    if (!dkim) {
+        return 0;
+    }
 
 #    ifdef TEST
     {
@@ -1075,8 +1134,9 @@ static int dkim_auth(struct transaction_t *txn)
         stat = dkim_eom(dkim, NULL);
     }
 
-    if (stat == DKIM_STAT_OK)
+    if (stat == DKIM_STAT_OK) {
         authd = 1;
+    }
     else if (stat == DKIM_STAT_CBREJECT) {
         txn->error.desc = "Unable to verify: HTTP request-line mismatch";
     }
@@ -1086,8 +1146,9 @@ static int dkim_auth(struct transaction_t *txn)
         if (sig) {
             const char *sigerr, *sslerr;
 
-            if (dkim_sig_getbh(sig) == DKIM_SIGBH_MISMATCH)
+            if (dkim_sig_getbh(sig) == DKIM_SIGBH_MISMATCH) {
                 sigerr = "body hash mismatch";
+            }
             else {
                 DKIM_SIGERROR err = dkim_sig_geterror(sig);
 
@@ -1096,12 +1157,14 @@ static int dkim_auth(struct transaction_t *txn)
 
             assert(!buf_len(&txn->buf));
             buf_printf(&txn->buf, "%s: %s", dkim_getresultstr(stat), sigerr);
-            if ((sslerr = dkim_sig_getsslbuf(sig)))
+            if ((sslerr = dkim_sig_getsslbuf(sig))) {
                 buf_printf(&txn->buf, ": %s", sslerr);
+            }
             txn->error.desc = buf_cstring(&txn->buf);
         }
-        else
+        else {
             txn->error.desc = dkim_getresultstr(stat);
+        }
     }
 
     dkim_free(dkim);
@@ -1111,7 +1174,9 @@ static int dkim_auth(struct transaction_t *txn)
 #else
 static int dkim_auth(struct transaction_t *txn __attribute__((unused)))
 {
-    if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) return 1;
+    if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) {
+        return 1;
+    }
 
     syslog(LOG_WARNING, "DKIM-Signature provided, but DKIM isn't supported");
 
@@ -1136,7 +1201,9 @@ static int meth_get_domainkey(struct transaction_t *txn,
     buf_appendcstr(&pathbuf, txn->req_uri->path);
     path = buf_cstring(&pathbuf);
     r = stat(path, &sbuf);
-    if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
+    if (r || !S_ISREG(sbuf.st_mode)) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Generate Etag */
     assert(!buf_len(&txn->buf));
@@ -1156,9 +1223,13 @@ static int meth_get_domainkey(struct transaction_t *txn,
         resp_body->lastmod = sbuf.st_mtime;
         resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1170,7 +1241,9 @@ static int meth_get_domainkey(struct transaction_t *txn,
 
     if (txn->meth == METH_GET) {
         /* Open and mmap the file */
-        if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+        if ((fd = open(path, O_RDONLY)) == -1) {
+            return HTTP_SERVER_ERROR;
+        }
         map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
     }
 
@@ -1214,7 +1287,9 @@ static void isched_init(struct buf *serverinfo)
                (ver >> 24) & 0xff,
                (ver >> 16) & 0xff,
                (ver >> 8) & 0xff);
-    if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
+    if (ver & 0xff) {
+        buf_printf(serverinfo, ".%u", ver & 0xff);
+    }
 
     if (namespace_ischedule.enabled) {
         int fd;
@@ -1319,6 +1394,8 @@ static void isched_shutdown(void)
     buf_free(&privkey);
     buf_free(&tmpbuf);
     buf_free(&b64req);
-    if (dkim_lib) dkim_close(dkim_lib);
+    if (dkim_lib) {
+        dkim_close(dkim_lib);
+    }
 #endif
 }

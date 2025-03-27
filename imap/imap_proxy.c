@@ -147,7 +147,9 @@ struct backend *proxy_findinboxserver(const char *userid)
     int r = mboxlist_lookup(inbox, &mbentry, NULL);
     free(inbox);
 
-    if (r) return NULL;
+    if (r) {
+        return NULL;
+    }
 
     if (mbentry->mbtype & MBTYPE_REMOTE) {
         s = proxy_findserver(mbentry->server,
@@ -204,12 +206,15 @@ static int pipe_response(struct backend *s,
            long line.
            if 'last' is set, we've seen the tag we're looking for, we're
            just reading the end of the line. */
-        if (!cont) eol[0] = '\0';
+        if (!cont) {
+            eol[0] = '\0';
+        }
 
         if (!prot_fgets(buf, sizeof(buf), s->in)) {
             /* uh oh */
-            if (s == backend_current && !force_notfatal)
+            if (s == backend_current && !force_notfatal) {
                 fatal("Lost connection to selected backend", EX_UNAVAILABLE);
+            }
             proxy_downserver(s);
             return PROXY_NOCONNECTION;
         }
@@ -234,9 +239,10 @@ static int pipe_response(struct backend *s,
                     r = PROXY_BAD;
                     break;
                 default: /* huh? no result? */
-                    if (s == backend_current && !force_notfatal)
+                    if (s == backend_current && !force_notfatal) {
                         fatal("Lost connection to selected backend",
                               EX_UNAVAILABLE);
+                    }
                     proxy_downserver(s);
                     r = PROXY_NOCONNECTION;
                     break;
@@ -260,7 +266,9 @@ static int pipe_response(struct backend *s,
 
             /* write out this part, but we have to keep reading until we
                hit the end of the line */
-            if (!last || include_last) prot_write(imapd_out, buf, sl);
+            if (!last || include_last) {
+                prot_write(imapd_out, buf, sl);
+            }
             cont = 1;
             continue;
         }
@@ -268,7 +276,9 @@ static int pipe_response(struct backend *s,
             int i;
             int litlen = 0, islit = 0;
 
-            if (!last || include_last) prot_write(imapd_out, buf, sl);
+            if (!last || include_last) {
+                prot_write(imapd_out, buf, sl);
+            }
 
             /* now we have to see if this line ends with a literal */
             if (sl < 64) {
@@ -306,7 +316,9 @@ static int pipe_response(struct backend *s,
                         /* EOF or other error */
                         return -1;
                     }
-                    if (!last || include_last) prot_write(imapd_out, buf, j);
+                    if (!last || include_last) {
+                        prot_write(imapd_out, buf, j);
+                    }
                     litlen -= j;
                 }
 
@@ -560,8 +572,9 @@ static int check_subs(mbentry_t *mbentry,
     for (i = 0; i < subs->count; i++) {
         const char *name = strarray_nth(subs, i);
 
-        if (strncmp(mbentry->name, name, namelen))
+        if (strncmp(mbentry->name, name, namelen)) {
             continue;
+        }
         else if (!name[namelen]) { /* exact match */
             *flags |= MBOX_ATTRIBUTE_SUBSCRIBED;
             break;
@@ -655,8 +668,9 @@ int pipe_lsub(struct backend *s,
         c = getword(s->in, &tagb);
 
         if (c == EOF) {
-            if (s == backend_current && !force_notfatal)
+            if (s == backend_current && !force_notfatal) {
                 fatal("Lost connection to selected backend", EX_UNAVAILABLE);
+            }
             proxy_downserver(s);
             r = PROXY_NOCONNECTION;
             goto out;
@@ -665,9 +679,10 @@ int pipe_lsub(struct backend *s,
         if (!strncmp(tag, tagb.s, taglen)) {
             char buf[2048];
             if (!prot_fgets(buf, sizeof(buf), s->in)) {
-                if (s == backend_current && !force_notfatal)
+                if (s == backend_current && !force_notfatal) {
                     fatal("Lost connection to selected backend",
                           EX_UNAVAILABLE);
+                }
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -690,9 +705,10 @@ int pipe_lsub(struct backend *s,
                 r = PROXY_BAD;
                 break;
             default: /* huh? no result? */
-                if (s == backend_current && !force_notfatal)
+                if (s == backend_current && !force_notfatal) {
                     fatal("Lost connection to selected backend",
                           EX_UNAVAILABLE);
+                }
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 break;
@@ -703,8 +719,9 @@ int pipe_lsub(struct backend *s,
         c = getword(s->in, &cmd);
 
         if (c == EOF) {
-            if (s == backend_current && !force_notfatal)
+            if (s == backend_current && !force_notfatal) {
                 fatal("Lost connection to selected backend", EX_UNAVAILABLE);
+            }
             proxy_downserver(s);
             r = PROXY_NOCONNECTION;
             goto out;
@@ -718,7 +735,9 @@ int pipe_lsub(struct backend *s,
             else {
                 prot_printf(imapd_out, "%s %s ", tagb.s, cmd.s);
                 r = pipe_to_end_of_response(s, force_notfatal);
-                if (r != PROXY_OK) goto out;
+                if (r != PROXY_OK) {
+                    goto out;
+                }
             }
         }
         else {
@@ -736,10 +755,13 @@ int pipe_lsub(struct backend *s,
                          attr->id && strcasecmp(name.s, attr->id);
                          attr++);
 
-                    if (attr->id)
+                    if (attr->id) {
                         attributes |= attr->flag;
+                    }
                     else {
-                        if (buf_len(&extraflags)) buf_putc(&extraflags, ' ');
+                        if (buf_len(&extraflags)) {
+                            buf_putc(&extraflags, ' ');
+                        }
                         buf_appendcstr(&extraflags, name.s);
                     }
                 } while (c == ' ');
@@ -751,9 +773,10 @@ int pipe_lsub(struct backend *s,
             }
 
             if (c != ' ') {
-                if (s == backend_current && !force_notfatal)
+                if (s == backend_current && !force_notfatal) {
                     fatal("Bad LSUB response from selected backend",
                           EX_UNAVAILABLE);
+                }
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -763,9 +786,10 @@ int pipe_lsub(struct backend *s,
             c = getastring(s->in, s->out, &sep);
 
             if (c != ' ') {
-                if (s == backend_current && !force_notfatal)
+                if (s == backend_current && !force_notfatal) {
                     fatal("Bad LSUB response from selected backend",
                           EX_UNAVAILABLE);
+                }
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -787,11 +811,14 @@ int pipe_lsub(struct backend *s,
             }
             buf_cstring(&ext);
 
-            if (c == '\r') c = prot_getc(s->in);
+            if (c == '\r') {
+                c = prot_getc(s->in);
+            }
             if (c != '\n') {
-                if (s == backend_current && !force_notfatal)
+                if (s == backend_current && !force_notfatal) {
                     fatal("Bad LSUB response from selected backend",
                           EX_UNAVAILABLE);
+                }
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -804,8 +831,9 @@ int pipe_lsub(struct backend *s,
             mbentry_t *mbentry = NULL;
             exist_r = mboxlist_lookup(intname, &mbentry, NULL);
             free(intname);
-            if (!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
+            if (!exist_r && (mbentry->mbtype & MBTYPE_RESERVE)) {
                 exist_r = IMAP_MAILBOX_RESERVED;
+            }
 
             /* suppress responses to client if we're just building subs list */
             suppress_resp = build_list_only;
@@ -891,7 +919,9 @@ static int chomp(struct protstream *p, const char *s)
         c = prot_getc(p);
     }
     if (*s) {
-        if (c != EOF) prot_ungetc(c, p);
+        if (c != EOF) {
+            prot_ungetc(c, p);
+        }
         c = EOF;
     }
     return c;
@@ -908,14 +938,18 @@ static char *grab(struct protstream *p, char end)
 
     ret[0] = '\0';
     while ((c = prot_getc(p)) != end) {
-        if (c == EOF) break;
+        if (c == EOF) {
+            break;
+        }
         if (cur == alloc - 1) {
             alloc += BUFGROWSIZE;
             ret = xrealloc(ret, alloc);
         }
         ret[cur++] = c;
     }
-    if (cur) ret[cur] = '\0';
+    if (cur) {
+        ret[cur] = '\0';
+    }
 
     return ret;
 }
@@ -1035,7 +1069,9 @@ static void copy_cb(uint32_t seqno, unsigned item, void *datap, void *rock)
                 free(cur_msg->idate);
                 sep = ' ';
             }
-            if (sep == '(') prot_putc('(', imapd_out);
+            if (sep == '(') {
+                prot_putc('(', imapd_out);
+            }
             prot_printf(imapd_out, ")\r\n");
         }
 
@@ -1091,7 +1127,9 @@ void proxy_copy(const char *tag,
     prot_printf(
         s->out, "%s Append {" SIZE_T_FMT "+}\r\n%s", tag, strlen(name), name);
 
-    if (crock.uidset) sequence = freeme = seqset_cstring(crock.uidset);
+    if (crock.uidset) {
+        sequence = freeme = seqset_cstring(crock.uidset);
+    }
     res = proxy_fetch(sequence, 1 /*usinguid*/, FETCH_BODY, &copy_cb, &crock);
 
     if (res == PROXY_OK) {
@@ -1114,16 +1152,19 @@ void proxy_copy(const char *tag,
                 if (appenduid) {
                     appenduid += strlen("[appenduid ");
                     b = strchr(appenduid, ']');
-                    if (b) *b = '\0';
+                    if (b) {
+                        *b = '\0';
+                    }
                     prot_printf(imapd_out,
                                 "%s OK [COPYUID %s] %s\r\n",
                                 tag,
                                 appenduid,
                                 error_message(IMAP_OK_COMPLETED));
                 }
-                else
+                else {
                     prot_printf(
                         imapd_out, "%s OK %s\r\n", tag, s->last_result.s);
+                }
             }
             else {
                 prot_printf(imapd_out,
@@ -1164,7 +1205,9 @@ int proxy_fetch(
     char sep = '(';
     int c;
 
-    if (!items) return PROXY_BAD;
+    if (!items) {
+        return PROXY_BAD;
+    }
 
     proxy_gentag(mytag, sizeof(mytag));
     prot_printf(backend_current->out,
@@ -1197,7 +1240,9 @@ int proxy_fetch(
 
         /* read a line */
         c = prot_getc(backend_current->in);
-        if (c != '*') break;
+        if (c != '*') {
+            break;
+        }
         c = prot_getc(backend_current->in);
         if (c != ' ') { /* protocol error */
             c = EOF;
@@ -1242,23 +1287,34 @@ int proxy_fetch(
             case 'b':
             case 'B': /* body[]? */
                 c = chomp(backend_current->in, "ody[]");
-                if (c == ' ') c = prot_getc(backend_current->in);
+                if (c == ' ') {
+                    c = prot_getc(backend_current->in);
+                }
                 if (c != '{') {
                     /* NIL? */
                     eatline(backend_current->in, c);
                     c = EOF;
                 }
-                else
+                else {
                     c = getuint32(backend_current->in, &size);
-                if (c == '}') c = prot_getc(backend_current->in);
-                if (c == '\r') c = prot_getc(backend_current->in);
-                if (c != '\n') c = EOF;
+                }
+                if (c == '}') {
+                    c = prot_getc(backend_current->in);
+                }
+                if (c == '\r') {
+                    c = prot_getc(backend_current->in);
+                }
+                if (c != '\n') {
+                    c = EOF;
+                }
 
                 if (c != EOF) {
                     /* read literal data */
                     while (size) {
                         int n = prot_readbuf(backend_current->in, &data, size);
-                        if (!n) break;
+                        if (!n) {
+                            break;
+                        }
 
                         size -= n;
                     }
@@ -1273,8 +1329,9 @@ int proxy_fetch(
                 if (c != ' ') {
                     c = EOF;
                 }
-                else
+                else {
                     c = prot_getc(backend_current->in);
+                }
                 if (c != '(') {
                     c = EOF;
                 }
@@ -1291,8 +1348,9 @@ int proxy_fetch(
                 if (c != ' ') {
                     c = EOF;
                 }
-                else
+                else {
                     c = prot_getc(backend_current->in);
+                }
                 if (c != '"') {
                     c = EOF;
                 }
@@ -1323,8 +1381,9 @@ int proxy_fetch(
             if (c == ' ') {
                 c = prot_getc(backend_current->in);
             }
-            else if (c == ')')
+            else if (c == ')') {
                 break;
+            }
             else {
                 c = EOF;
                 break;
@@ -1332,8 +1391,12 @@ int proxy_fetch(
         }
         /* if c == EOF we have either a protocol error or a situation
            we can't handle, and we should die. */
-        if (c == ')') c = prot_getc(backend_current->in);
-        if (c == '\r') c = prot_getc(backend_current->in);
+        if (c == ')') {
+            c = prot_getc(backend_current->in);
+        }
+        if (c == '\r') {
+            c = prot_getc(backend_current->in);
+        }
         if (c != '\n') {
             c = EOF;
             break;
@@ -1384,7 +1447,9 @@ int proxy_catenate_url(struct backend *s,
     for (/* each examine response */;;) {
         /* read a line */
         c = prot_getc(s->in);
-        if (c != '*') break;
+        if (c != '*') {
+            break;
+        }
         c = prot_getc(s->in);
         if (c != ' ') { /* protocol error */
             c = EOF;
@@ -1436,7 +1501,9 @@ int proxy_catenate_url(struct backend *s,
     next_resp:
         /* read a line */
         c = prot_getc(s->in);
-        if (c != '*') break;
+        if (c != '*') {
+            break;
+        }
         c = prot_getc(s->in);
         if (c != ' ') { /* protocol error */
             c = EOF;
@@ -1479,14 +1546,26 @@ int proxy_catenate_url(struct backend *s,
             case 'b':
             case 'B':
                 c = chomp(s->in, "ody[");
-                while (c != ']') c = prot_getc(s->in);
-                if (c == ']') c = prot_getc(s->in);
-                if (c == ' ') c = prot_getc(s->in);
+                while (c != ']') {
+                    c = prot_getc(s->in);
+                }
+                if (c == ']') {
+                    c = prot_getc(s->in);
+                }
+                if (c == ' ') {
+                    c = prot_getc(s->in);
+                }
                 if (c == '{') {
                     c = getuint32(s->in, &sz);
-                    if (c == '}') c = prot_getc(s->in);
-                    if (c == '\r') c = prot_getc(s->in);
-                    if (c != '\n') c = EOF;
+                    if (c == '}') {
+                        c = prot_getc(s->in);
+                    }
+                    if (c == '\r') {
+                        c = prot_getc(s->in);
+                    }
+                    if (c != '\n') {
+                        c = EOF;
+                    }
                     if (sz > maxsize) {
                         r = IMAP_MESSAGE_TOO_LARGE;
                         eatline(s->in, c);
@@ -1509,7 +1588,9 @@ int proxy_catenate_url(struct backend *s,
                         int j = (sz > sizeof(buf) ? sizeof(buf) : sz);
 
                         j = prot_read(s->in, buf, j);
-                        if (!j) break;
+                        if (!j) {
+                            break;
+                        }
                         fwrite(buf, j, 1, f);
                         sz -= j;
                     }
@@ -1526,8 +1607,9 @@ int proxy_catenate_url(struct backend *s,
             if (c == ' ') {
                 c = prot_getc(s->in);
             }
-            else if (c == ')')
+            else if (c == ')') {
                 break;
+            }
             else {
                 c = EOF;
                 break;
@@ -1536,8 +1618,12 @@ int proxy_catenate_url(struct backend *s,
 
         /* if c == EOF we have either a protocol error or a situation
            we can't handle, and we should die. */
-        if (c == ')') c = prot_getc(s->in);
-        if (c == '\r') c = prot_getc(s->in);
+        if (c == ')') {
+            c = prot_getc(s->in);
+        }
+        if (c == '\r') {
+            c = prot_getc(s->in);
+        }
         if (c != '\n') {
             c = EOF;
             break;
@@ -1561,7 +1647,9 @@ unselect:
     for (/* each unselect response */;;) {
         /* read a line */
         c = prot_getc(s->in);
-        if (c != '*') break;
+        if (c != '*') {
+            break;
+        }
         c = prot_getc(s->in);
         if (c != ' ') { /* protocol error */
             c = EOF;
@@ -1609,7 +1697,9 @@ int annotate_fetch_proxy(const char *server,
                           &backend_current,
                           &backend_inbox,
                           imapd_in);
-    if (!be) return IMAP_SERVER_UNAVAILABLE;
+    if (!be) {
+        return IMAP_SERVER_UNAVAILABLE;
+    }
 
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
@@ -1664,7 +1754,9 @@ int annotate_store_proxy(const char *server,
                           &backend_current,
                           &backend_inbox,
                           imapd_in);
-    if (!be) return IMAP_SERVER_UNAVAILABLE;
+    if (!be) {
+        return IMAP_SERVER_UNAVAILABLE;
+    }
 
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
@@ -1693,9 +1785,13 @@ int annotate_store_proxy(const char *server,
             prot_putc(' ', be->out);
             prot_printamap(be->out, av->value.s, av->value.len);
 
-            if (av->next) prot_putc(' ', be->out);
+            if (av->next) {
+                prot_putc(' ', be->out);
+            }
         }
-        if (e->next) prot_putc(' ', be->out);
+        if (e->next) {
+            prot_putc(' ', be->out);
+        }
     }
     prot_printf(be->out, ")\r\n");
     prot_flush(be->out);
@@ -1785,7 +1881,9 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
         for (/* each annotation response */;;) {
             /* read a line */
             c = prot_getc(be->in);
-            if (c != '*') break;
+            if (c != '*') {
+                break;
+            }
             c = prot_getc(be->in);
             if (c != ' ') { /* protocol error */
                 c = EOF;
@@ -1793,7 +1891,9 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
             }
 
             c = chomp(be->in, buf_cstring(&cmd));
-            if (c == ' ') c = prot_getc(be->in);
+            if (c == ' ') {
+                c = prot_getc(be->in);
+            }
             if ((c == EOF) || (c != '\"')) {
                 /* we don't care about this response */
                 eatline(be->in, c);

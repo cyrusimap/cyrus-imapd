@@ -90,7 +90,9 @@ static void idle_notify(json_t *msg)
                pid,
                error_message(r));
     }
-    if (errno == ENOENT) errno = 0;
+    if (errno == ENOENT) {
+        errno = 0;
+    }
 }
 
 /*
@@ -103,7 +105,9 @@ EXPORTED int idle_init(void)
     int s;
     int r;
 
-    if (!idle_enabled()) return -1;
+    if (!idle_enabled()) {
+        return -1;
+    }
 
     r = idle_make_client_address(&local);
     assert(r);
@@ -112,13 +116,17 @@ EXPORTED int idle_init(void)
 
     idle_method_desc = "poll";
 
-    if (!idle_init_sock(&local)) return -1;
+    if (!idle_init_sock(&local)) {
+        return -1;
+    }
 
     s = idle_get_sock();
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+    if (fdflags != -1) {
+        fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+    }
     if (fdflags == -1) {
         idle_done_sock();
         return -1;
@@ -147,7 +155,9 @@ EXPORTED int idle_start(unsigned long events,
 {
     int r;
 
-    if (!idle_enabled()) return 0;
+    if (!idle_enabled()) {
+        return 0;
+    }
 
     json_t *array = json_array();
     int i;
@@ -204,7 +214,9 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
 {
     int r;
 
-    if (!idle_started) return;
+    if (!idle_started) {
+        return;
+    }
 
     pid_t pid = getpid();
     json_t *msg = json_pack(
@@ -223,10 +235,12 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
                error_message(r));
     }
 
-    if (filter == FILTER_NONE)
+    if (filter == FILTER_NONE) {
         idle_started = 0;
-    else
+    }
+    else {
         idle_started &= ~filter;
+    }
 }
 
 EXPORTED void idle_done(void)

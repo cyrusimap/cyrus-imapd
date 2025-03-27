@@ -110,9 +110,15 @@ static int print_procinfo(pid_t pid,
                           void *rock __attribute__((unused)))
 {
     printf("%d %s %s", (int) pid, servicename, host);
-    if (user) printf(" %s", user);
-    if (mailbox) printf(" %s", mailbox);
-    if (cmdname) printf(" %s", cmdname);
+    if (user) {
+        printf(" %s", user);
+    }
+    if (mailbox) {
+        printf(" %s", mailbox);
+    }
+    if (cmdname) {
+        printf(" %s", cmdname);
+    }
     printf("\n");
     return 0;
 }
@@ -149,17 +155,22 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
         switch (imapopts[i].t) {
         case OPT_BITFIELD:
             if (only_changed) {
-                if (imapopts[i].def.x == imapopts[i].val.x) break;
+                if (imapopts[i].def.x == imapopts[i].val.x) {
+                    break;
+                }
             }
-            if (want_since && since < imapopts[i].last_modified)
+            if (want_since && since < imapopts[i].last_modified) {
                 highlight(imapopts[i].last_modified);
+            }
             printf("%s:", imapopts[i].optname);
             for (j = 0; imapopts[i].enum_options[j].name; j++) {
                 /* multiple names? Use only the non-legacy (first) one */
                 if (j
                     && imapopts[i].enum_options[j].val
                            == imapopts[i].enum_options[j - 1].val)
+                {
                     continue;
+                }
                 if (imapopts[i].val.x & imapopts[i].enum_options[j].val) {
                     printf(" %s", imapopts[i].enum_options[j].name);
                 }
@@ -170,20 +181,25 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
         case OPT_BYTESIZE:
         case OPT_DURATION:
             if (only_changed) {
-                if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
+                if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s)) {
                     break;
+                }
             }
-            if (want_since && since < imapopts[i].last_modified)
+            if (want_since && since < imapopts[i].last_modified) {
                 highlight(imapopts[i].last_modified);
+            }
             printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s);
             break;
 
         case OPT_ENUM:
             if (only_changed) {
-                if (imapopts[i].def.e == imapopts[i].val.e) break;
+                if (imapopts[i].def.e == imapopts[i].val.e) {
+                    break;
+                }
             }
-            if (want_since && since < imapopts[i].last_modified)
+            if (want_since && since < imapopts[i].last_modified) {
                 highlight(imapopts[i].last_modified);
+            }
             printf("%s:", imapopts[i].optname);
             for (j = 0; imapopts[i].enum_options[j].name; j++) {
                 if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
@@ -196,10 +212,13 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
 
         case OPT_INT:
             if (only_changed) {
-                if (imapopts[i].def.i == imapopts[i].val.i) break;
+                if (imapopts[i].def.i == imapopts[i].val.i) {
+                    break;
+                }
             }
-            if (want_since && since < imapopts[i].last_modified)
+            if (want_since && since < imapopts[i].last_modified) {
                 highlight(imapopts[i].last_modified);
+            }
             printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
             break;
 
@@ -222,8 +241,9 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 }
                 free(freeme);
             }
-            if (want_since && since < imapopts[i].last_modified)
+            if (want_since && since < imapopts[i].last_modified) {
                 highlight(imapopts[i].last_modified);
+            }
             printf("%s: %s\n",
                    imapopts[i].optname,
                    imapopts[i].val.s ? imapopts[i].val.s : "");
@@ -231,10 +251,13 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
 
         case OPT_SWITCH:
             if (only_changed) {
-                if (imapopts[i].def.b == imapopts[i].val.b) break;
+                if (imapopts[i].def.b == imapopts[i].val.b) {
+                    break;
+                }
             }
-            if (want_since && since < imapopts[i].last_modified)
+            if (want_since && since < imapopts[i].last_modified) {
                 highlight(imapopts[i].last_modified);
+            }
             printf("%s: %s\n",
                    imapopts[i].optname,
                    imapopts[i].val.b ? "yes" : "no");
@@ -258,8 +281,9 @@ static void do_defconf(int want_since, uint32_t since)
      */
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        if (want_since && since < imapopts[i].last_modified)
+        if (want_since && since < imapopts[i].last_modified) {
             highlight(imapopts[i].last_modified);
+        }
         switch (imapopts[i].t) {
         case OPT_BITFIELD:
             printf("%s:", imapopts[i].optname);
@@ -268,7 +292,9 @@ static void do_defconf(int want_since, uint32_t since)
                 if (j
                     && imapopts[i].enum_options[j].val
                            == imapopts[i].enum_options[j - 1].val)
+                {
                     continue;
+                }
                 if (imapopts[i].def.x & imapopts[i].enum_options[j].val) {
                     printf(" %s", imapopts[i].enum_options[j].name);
                 }
@@ -316,26 +342,36 @@ static int known_overflowkey(const char *key)
 {
     const char *match;
     /* any partition is OK (XXX: are there name restrictions to check?) */
-    if (!strncmp(key, "partition-", 10)) return 1;
+    if (!strncmp(key, "partition-", 10)) {
+        return 1;
+    }
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "metapartition-", 14)) {
-        if (config_getoverflowstring(key + 4, NULL)) return 1;
+        if (config_getoverflowstring(key + 4, NULL)) {
+            return 1;
+        }
     }
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "archivepartition-", 17)) {
-        if (config_getoverflowstring(key + 7, NULL)) return 1;
+        if (config_getoverflowstring(key + 7, NULL)) {
+            return 1;
+        }
     }
 
     /* XXX prefixed with a tier, which we don't currently validate here */
     match = strstr(key, "searchpartition-");
     if (match) {
-        if (config_getoverflowstring(match + 6, NULL)) return 1;
+        if (config_getoverflowstring(match + 6, NULL)) {
+            return 1;
+        }
     }
 
     /* legacy xlist-flag settings are OK */
-    if (!strncmp(key, "xlist-", 6)) return 1;
+    if (!strncmp(key, "xlist-", 6)) {
+        return 1;
+    }
 
     return 0;
 }
@@ -345,7 +381,9 @@ static int known_regularkey(const char *key)
     int i;
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        if (!strcmp(imapopts[i].optname, key)) return 1;
+        if (!strcmp(imapopts[i].optname, key)) {
+            return 1;
+        }
     }
 
     return 0;
@@ -369,17 +407,25 @@ static void lint_callback(const char *key, const char *val, void *rock)
     struct service_item *svc;
     int i;
 
-    if (known_overflowkey(key)) return;
+    if (known_overflowkey(key)) {
+        return;
+    }
 
     if (!strncmp(key, "sasl_", 5)) {
-        if (known_saslkey(key + 5)) return;
+        if (known_saslkey(key + 5)) {
+            return;
+        }
     }
 
     for (svc = cbrock->known_services; svc; svc = svc->next) {
         if (!strncmp(key, svc->prefix, svc->prefixlen)) {
             /* check if it's a known key */
-            if (known_regularkey(key + svc->prefixlen)) return;
-            if (known_overflowkey(key + svc->prefixlen)) return;
+            if (known_regularkey(key + svc->prefixlen)) {
+                return;
+            }
+            if (known_overflowkey(key + svc->prefixlen)) {
+                return;
+            }
         }
     }
 
@@ -392,15 +438,25 @@ static void lint_callback(const char *key, const char *val, void *rock)
         }
         else if (!strncmp(key, channel, channel_len)) {
             /* channel prefix must be separated by an underscore */
-            if (strlen(key) <= channel_len + 1) break;
-            if (key[channel_len] != '_') break;
+            if (strlen(key) <= channel_len + 1) {
+                break;
+            }
+            if (key[channel_len] != '_') {
+                break;
+            }
 
             /* channel prefix only applies to sync_* options */
-            if (strncmp(key + channel_len + 1, "sync_", strlen("sync_"))) break;
+            if (strncmp(key + channel_len + 1, "sync_", strlen("sync_"))) {
+                break;
+            }
 
             /* check if it's a known key */
-            if (known_regularkey(key + channel_len + 1)) return;
-            if (known_overflowkey(key + channel_len + 1)) return;
+            if (known_regularkey(key + channel_len + 1)) {
+                return;
+            }
+            if (known_overflowkey(key + channel_len + 1)) {
+                return;
+            }
         }
     }
 
@@ -456,19 +512,27 @@ static uint32_t parse_since_version(const char *str)
     /* politely strip 'cyrus-imapd[- ]' from start of version string */
     if (!strncmp(str, PACKAGE_NAME, pnlen)
         && (str[pnlen] == '-' || str[pnlen] == ' '))
+    {
         str += pnlen + 1;
+    }
 
     for (p = str, i = 0; *p; p++) {
         if (cyrus_isdigit(*p)) {
             saw_digit++;
             parts[i] *= 10;
             parts[i] += *p - '0';
-            if (parts[i] > 255) usage();
+            if (parts[i] > 255) {
+                usage();
+            }
         }
         else if (*p == '.') {
-            if (!saw_digit) usage();
+            if (!saw_digit) {
+                usage();
+            }
             saw_digit = 0;
-            if (++i > 2) break;
+            if (++i > 2) {
+                break;
+            }
         }
         else if (*p == '-') {
             break;
@@ -529,7 +593,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (optind >= argc) usage();
+    if (optind >= argc) {
+        usage();
+    }
 
     /* we don't need to read config to handle this one */
     if (!strcmp(argv[optind], "version")) {
@@ -539,18 +605,24 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, srvname, 0, 0);
 
-    if (!strcmp(argv[optind], "proc"))
+    if (!strcmp(argv[optind], "proc")) {
         do_proc();
-    else if (!strcmp(argv[optind], "conf-all"))
+    }
+    else if (!strcmp(argv[optind], "conf-all")) {
         do_conf(0, want_since, since);
-    else if (!strcmp(argv[optind], "conf"))
+    }
+    else if (!strcmp(argv[optind], "conf")) {
         do_conf(1, want_since, since);
-    else if (!strcmp(argv[optind], "conf-default"))
+    }
+    else if (!strcmp(argv[optind], "conf-default")) {
         do_defconf(want_since, since);
-    else if (!strcmp(argv[optind], "conf-lint"))
+    }
+    else if (!strcmp(argv[optind], "conf-lint")) {
         do_lint();
-    else
+    }
+    else {
         usage();
+    }
 
     cyrus_done();
 

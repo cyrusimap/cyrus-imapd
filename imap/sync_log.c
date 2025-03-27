@@ -100,10 +100,14 @@ EXPORTED void sync_log_init(void)
     int i;
 
     /* sync_log_init() may be called more than once */
-    if (channels) strarray_free(channels);
+    if (channels) {
+        strarray_free(channels);
+    }
 
     conf = config_getstring(IMAPOPT_SYNC_LOG_CHANNELS);
-    if (!conf) conf = "\"\"";
+    if (!conf) {
+        conf = "\"\"";
+    }
     channels = strarray_split(conf, " ", 0);
     /*
      * The sysadmin can specify "" in the value of sync_log_channels to
@@ -112,7 +116,9 @@ EXPORTED void sync_log_init(void)
      * have been using the default sync log channel for sync_client.
      */
     i = strarray_find(channels, "\"\"", 0);
-    if (i >= 0) strarray_set(channels, i, NULL);
+    if (i >= 0) {
+        strarray_set(channels, i, NULL);
+    }
 
     strarray_free(unsuppressable);
     unsuppressable = NULL;
@@ -120,7 +126,9 @@ EXPORTED void sync_log_init(void)
     if (conf) {
         unsuppressable = strarray_split(conf, " ", 0);
         i = strarray_find(unsuppressable, "\"\"", 0);
-        if (i >= 0) strarray_set(unsuppressable, i, NULL);
+        if (i >= 0) {
+            strarray_set(unsuppressable, i, NULL);
+        }
     }
 
     conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
@@ -157,22 +165,28 @@ static char *sync_log_fname(const char *channel)
 {
     static char buf[MAX_MAILBOX_PATH];
 
-    if (channel)
+    if (channel) {
         snprintf(buf, MAX_MAILBOX_PATH, "%s/sync/%s/log", config_dir, channel);
-    else
+    }
+    else {
         snprintf(buf, MAX_MAILBOX_PATH, "%s/sync/log", config_dir);
+    }
 
     return buf;
 }
 
 static int sync_log_enabled(const char *channel)
 {
-    if (!config_getswitch(IMAPOPT_SYNC_LOG))
-        return 0;                       /* entire mechanism is disabled */
-    if (!sync_log_suppressed) return 1; /* _suppress() wasn't called */
-    if (unsuppressable && strarray_contains(unsuppressable, channel))
+    if (!config_getswitch(IMAPOPT_SYNC_LOG)) {
+        return 0; /* entire mechanism is disabled */
+    }
+    if (!sync_log_suppressed) {
+        return 1; /* _suppress() wasn't called */
+    }
+    if (unsuppressable && strarray_contains(unsuppressable, channel)) {
         return 1; /* channel is unsuppressable */
-    return 0;     /* suppressed */
+    }
+    return 0; /* suppressed */
 }
 
 static void sync_log_base(const char *channel, const char *string)
@@ -211,7 +225,9 @@ static void sync_log_base(const char *channel, const char *string)
         /* Check that the file wasn't renamed after it was opened above */
         if ((fstat(fd, &sbuffd) == 0) && (stat(fname, &sbuffile) == 0)
             && (sbuffd.st_ino == sbuffile.st_ino))
+        {
             break;
+        }
 
         lock_unlock(fd, fname);
         xclose(fd);
@@ -226,8 +242,9 @@ static void sync_log_base(const char *channel, const char *string)
         return;
     }
 
-    if (retry_write(fd, string, strlen(string)) < 0)
+    if (retry_write(fd, string, strlen(string)) < 0) {
         syslog(LOG_ERR, "write() to %s failed: %s", fname, strerror(errno));
+    }
 
     (void) fsync(fd); /* paranoia */
     lock_unlock(fd, fname);
@@ -236,17 +253,29 @@ static void sync_log_base(const char *channel, const char *string)
 
 EXPORTED struct buf *sync_log_rightnow_buf()
 {
-    if (!channels) return NULL;
-    if (!rightnow_log) return NULL;
-    if (!buf_len(rightnow_log)) return NULL;
+    if (!channels) {
+        return NULL;
+    }
+    if (!rightnow_log) {
+        return NULL;
+    }
+    if (!buf_len(rightnow_log)) {
+        return NULL;
+    }
     return rightnow_log;
 }
 
 EXPORTED void sync_log_reset()
 {
-    if (!channels) return;
-    if (!rightnow_log) return;
-    if (!buf_len(rightnow_log)) return;
+    if (!channels) {
+        return;
+    }
+    if (!rightnow_log) {
+        return;
+    }
+    if (!buf_len(rightnow_log)) {
+        return;
+    }
     syslog(LOG_NOTICE,
            "SYNCNOTICE: rightnow log leaked %s",
            buf_cstring(rightnow_log));
@@ -272,8 +301,9 @@ static const char *sync_quote_name(const char *name)
 
     for (src = 0; name[src]; src++) {
         c = name[src];
-        if ((c == '\r') || (c == '\n'))
+        if ((c == '\r') || (c == '\n')) {
             fatal("Illegal line break in folder name", EX_IOERR);
+        }
 
         /* quoteable characters */
         if ((c == '\\') || (c == '\"') || (c == '{') || (c == '}')) {
@@ -288,7 +318,9 @@ static const char *sync_quote_name(const char *name)
 
         buf[dst++] = c;
 
-        if (dst > MAX_MAILBOX_BUFFER) fatal("word too long", EX_IOERR);
+        if (dst > MAX_MAILBOX_BUFFER) {
+            fatal("word too long", EX_IOERR);
+        }
     }
 
 end:
@@ -335,7 +367,9 @@ static char *va_format(const char *fmt, va_list ap)
         }
     }
 
-    if (buf[len - 1] != '\n') buf[len++] = '\n';
+    if (buf[len - 1] != '\n') {
+        buf[len++] = '\n';
+    }
     buf[len] = '\0';
 
     return buf;
@@ -349,17 +383,23 @@ EXPORTED void sync_log(const char *fmt, ...)
 
     init_internal();
 
-    if (!channels) return;
+    if (!channels) {
+        return;
+    }
 
     va_start(ap, fmt);
     val = va_format(fmt, ap);
     va_end(ap);
 
-    if (rightnow_log) buf_appendcstr(rightnow_log, val);
+    if (rightnow_log) {
+        buf_appendcstr(rightnow_log, val);
+    }
 
     for (i = 0; i < channels->count; i++) {
         const char *channel = channels->data[i];
-        if (sync_log_enabled(channel)) sync_log_base(channel, val);
+        if (sync_log_enabled(channel)) {
+            sync_log_base(channel, val);
+        }
     }
 }
 
@@ -495,9 +535,15 @@ EXPORTED sync_log_reader_t *sync_log_reader_create_with_fd(int fd)
  */
 EXPORTED void sync_log_reader_free(sync_log_reader_t *slr)
 {
-    if (!slr) return;
-    if (slr->input) prot_free(slr->input);
-    if (slr->fd_is_ours && slr->fd >= 0) close(slr->fd);
+    if (!slr) {
+        return;
+    }
+    if (slr->input) {
+        prot_free(slr->input);
+    }
+    if (slr->fd_is_ours && slr->fd >= 0) {
+        close(slr->fd);
+    }
     free(slr->log_file);
     free(slr->work_file);
     buf_free(&slr->type);
@@ -528,7 +574,9 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
 
     if (slr->input) {
         r = sync_log_reader_end(slr);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     if (buf_len(&slr->contentbuf)) {
@@ -548,8 +596,9 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
     else {
         /* Check for sync_log file */
         if (stat(slr->log_file, &sbuf) < 0) {
-            if (errno == ENOENT)
+            if (errno == ENOENT) {
                 return IMAP_AGAIN; /* no problem, try again later */
+            }
             syslog(LOG_ERR, "Failed to stat %s: %m", slr->log_file);
             return IMAP_IOERROR;
         }
@@ -604,7 +653,9 @@ EXPORTED const char *sync_log_reader_get_file_name(const sync_log_reader_t *slr)
  */
 EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
 {
-    if (!slr->input) return 0;
+    if (!slr->input) {
+        return 0;
+    }
 
     if (slr->input) {
         prot_free(slr->input);
@@ -647,14 +698,22 @@ EXPORTED int sync_log_reader_getitem(sync_log_reader_t *slr,
     const char *arg1s = NULL;
     const char *arg2s = NULL;
 
-    if (!slr->input) return EOF;
+    if (!slr->input) {
+        return EOF;
+    }
 
     for (;;) {
-        if ((c = getword(slr->input, &slr->type)) == EOF) return EOF;
+        if ((c = getword(slr->input, &slr->type)) == EOF) {
+            return EOF;
+        }
 
         /* Ignore blank lines */
-        if (c == '\r') c = prot_getc(slr->input);
-        if (c == '\n') continue;
+        if (c == '\r') {
+            c = prot_getc(slr->input);
+        }
+        if (c == '\n') {
+            continue;
+        }
 
         if (c != ' ') {
             syslog(LOG_ERR, "Invalid input");
@@ -662,16 +721,22 @@ EXPORTED int sync_log_reader_getitem(sync_log_reader_t *slr,
             continue;
         }
 
-        if ((c = getastring(slr->input, 0, &slr->arg1)) == EOF) return EOF;
+        if ((c = getastring(slr->input, 0, &slr->arg1)) == EOF) {
+            return EOF;
+        }
         arg1s = slr->arg1.s;
 
         arg2s = NULL;
         if (c == ' ') {
-            if ((c = getastring(slr->input, 0, &slr->arg2)) == EOF) return EOF;
+            if ((c = getastring(slr->input, 0, &slr->arg2)) == EOF) {
+                return EOF;
+            }
             arg2s = slr->arg2.s;
         }
 
-        if (c == '\r') c = prot_getc(slr->input);
+        if (c == '\r') {
+            c = prot_getc(slr->input);
+        }
         if (c != '\n') {
             syslog(LOG_ERR, "Garbage at end of input line");
             eatline(slr->input, c);

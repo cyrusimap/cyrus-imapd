@@ -327,7 +327,9 @@ static int squat_index_copy_document(SquatIndex *index,
     char *buf;
     int r = squat_index_open_document(index, name);
 
-    if (r != SQUAT_OK) return (r);
+    if (r != SQUAT_OK) {
+        return (r);
+    }
 
     squat_set_last_error(SQUAT_ERR_OK);
     if ((buf = prepare_buffered_write(&index->out, 10)) == NULL) {
@@ -352,7 +354,9 @@ static void doc_ID_map_init(struct doc_ID_map *doc_ID_map)
 
 static void doc_ID_map_free(struct doc_ID_map *doc_ID_map)
 {
-    if (doc_ID_map->map) free(doc_ID_map->map);
+    if (doc_ID_map->map) {
+        free(doc_ID_map->map);
+    }
 
     memset(doc_ID_map, 0, sizeof(struct doc_ID_map));
 }
@@ -432,7 +436,9 @@ static int add_word_callback(void *closure, char *name, int doc_ID)
     struct doc_ID_map *doc_ID_map = &index->doc_ID_map;
 
     /* Find doc_ID in the new index which corresponds to this old doc_ID */
-    if ((doc_ID = doc_ID_map_lookup(doc_ID_map, doc_ID)) == 0) return SQUAT_ERR;
+    if ((doc_ID = doc_ID_map_lookup(doc_ID_map, doc_ID)) == 0) {
+        return SQUAT_ERR;
+    }
 
     add_word_to_trie(index, name + 1, doc_ID);
 
@@ -721,7 +727,9 @@ static int add_to_table(SquatIndex *index,
         e = t->entries + ch;
         t = e->table;
         /* Allocate the next branch node if it doesn't already exist. */
-        if (t == NULL) e->table = t = word_table_new();
+        if (t == NULL) {
+            e->table = t = word_table_new();
+        }
 
         data++;
         data_len--;
@@ -1554,11 +1562,16 @@ static int dump_index_trie_words_no_file(SquatIndex *index,
     int r = SQUAT_OK;
     int existing = 0;
 
-    if (!old_index) return (SQUAT_OK); /* Should never happen? */
+    if (!old_index) {
+        return (SQUAT_OK); /* Should never happen? */
+    }
 
-    if (squat_count_docs(old_index, first_char, &existing) != SQUAT_OK)
+    if (squat_count_docs(old_index, first_char, &existing) != SQUAT_OK) {
         return (SQUAT_ERR);
-    if (existing == 0) return (SQUAT_OK);
+    }
+    if (existing == 0) {
+        return (SQUAT_OK);
+    }
 
     /* Allocate all the necessary document-ID linked list entries at once. */
     doc_table = (WordDocEntry *) xmalloc(sizeof(WordDocEntry) * existing);
@@ -1750,7 +1763,9 @@ cleanup:
     /* If we're bailing out because of an error, we might not have
        released all the temporary file resources. */
     for (i = 0; i < VECTOR_SIZE(index->index_buffers); i++) {
-        if (index->index_buffers[i].fd >= 0) close(index->index_buffers[i].fd);
+        if (index->index_buffers[i].fd >= 0) {
+            close(index->index_buffers[i].fd);
+        }
         buf_free(&index->index_buffers[i].buf);
     }
     free(index->tmp_path);

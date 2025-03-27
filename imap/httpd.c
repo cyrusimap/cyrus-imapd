@@ -167,16 +167,21 @@ HIDDEN int zlib_compress(struct transaction_t *txn,
     z_stream *zstrm = txn->zstrm;
     unsigned flush, pending;
 
-    if (flags & COMPRESS_START) deflateReset(zstrm);
+    if (flags & COMPRESS_START) {
+        deflateReset(zstrm);
+    }
 
-    if (txn->ws_ctx)
+    if (txn->ws_ctx) {
         flush = Z_SYNC_FLUSH;
+    }
     else {
         /* Only flush for static content or on last (zero-length) chunk */
-        if (flags & COMPRESS_END)
+        if (flags & COMPRESS_END) {
             flush = Z_FINISH;
-        else
+        }
+        else {
             flush = Z_NO_FLUSH;
+        }
     }
 
     zstrm->next_in = (Bytef *) buf;
@@ -257,7 +262,9 @@ static void brotli_done(struct transaction_t *txn)
     if (txn) {
         BrotliEncoderState *brotli = txn->brotli;
 
-        if (brotli) BrotliEncoderDestroyInstance(brotli);
+        if (brotli) {
+            BrotliEncoderDestroyInstance(brotli);
+        }
 
         txn->brotli = NULL;
     }
@@ -344,7 +351,9 @@ static void zstd_done(struct transaction_t *txn)
     if (txn) {
         ZSTD_CCtx *cctx = txn->zstd;
 
-        if (cctx) ZSTD_freeCCtx(cctx);
+        if (cctx) {
+            ZSTD_freeCCtx(cctx);
+        }
 
         txn->zstd = NULL;
     }
@@ -375,7 +384,9 @@ static int zstd_compress(struct transaction_t *txn,
     ZSTD_CCtx *cctx = txn->zstd;
     size_t remaining;
 
-    if (flags & COMPRESS_START) ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
+    if (flags & COMPRESS_START) {
+        ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
+    }
 
     buf_reset(&txn->zbuf);
     buf_ensure(&txn->zbuf, ZSTD_compressBound(len));
@@ -575,7 +586,7 @@ static struct namespace_t namespace_default = {
     "",
     NULL,
     http_allow_noauth,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ,
     NULL,
@@ -679,8 +690,9 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
             prot_write(txn->conn->pout, data, datalen);
             prot_puts(txn->conn->pout, "\r\n");
 
-            if (txn->flags.trailer & TRAILER_CMD5)
+            if (txn->flags.trailer & TRAILER_CMD5) {
                 MD5Update(md5ctx, data, datalen);
+            }
         }
         if (last_chunk) {
             /* Terminate the HTTP/1.1 body with a zero-length chunk */
@@ -723,8 +735,9 @@ static void httpd_reset(struct http_connection *conn)
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
-        if (http_namespaces[i]->enabled && http_namespaces[i]->reset)
+        if (http_namespaces[i]->enabled && http_namespaces[i]->reset) {
             http_namespaces[i]->reset();
+        }
     }
 
     /* Reset available authentication schemes */
@@ -771,7 +784,9 @@ static void httpd_reset(struct http_connection *conn)
 
     /* Reset auxiliary connection contexts */
     conn_reset_t proc;
-    while ((proc = ptrarray_pop(&conn->reset_callbacks))) proc(conn);
+    while ((proc = ptrarray_pop(&conn->reset_callbacks))) {
+        proc(conn);
+    }
     ptrarray_fini(&conn->reset_callbacks);
 
     xmlFreeParserCtxt(conn->xml);
@@ -835,7 +850,9 @@ int service_init(int argc __attribute__((unused)),
 
     LIBXML_TEST_VERSION
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     /* Initialize HTTP connection */
@@ -945,8 +962,12 @@ int service_init(int argc __attribute__((unused)),
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
     for (i = 0; http_namespaces[i]; i++) {
-        if (allow_trace) http_namespaces[i]->allow |= ALLOW_TRACE;
-        if (http_namespaces[i]->init) http_namespaces[i]->init(&serverinfo);
+        if (allow_trace) {
+            http_namespaces[i]->allow |= ALLOW_TRACE;
+        }
+        if (http_namespaces[i]->init) {
+            http_namespaces[i]->init(&serverinfo);
+        }
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
@@ -1027,7 +1048,9 @@ int service_main(int argc __attribute__((unused)),
                         SASL_USAGE_FLAGS,
                         &httpd_saslconn)
         != SASL_OK)
+    {
         fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
+    }
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
@@ -1035,18 +1058,23 @@ int service_main(int argc __attribute__((unused)),
     /* no HTTP clients seem to use "auth-int" */
     secprops->max_ssf = 0;    /* "auth" only */
     secprops->maxbufsize = 0; /* don't need maxbuf */
-    if (sasl_setprop(httpd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
+    if (sasl_setprop(httpd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK) {
         fatal("Failed to set SASL property", EX_TEMPFAIL);
+    }
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf)
         != SASL_OK)
+    {
         fatal("Failed to set SASL property", EX_TEMPFAIL);
+    }
 
     if (httpd_remoteip) {
         char hbuf[NI_MAXHOST], *p;
 
         /* Create pre-authentication telemetry log based on client IP */
         strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
-        if ((p = strchr(hbuf, ';'))) *p = '\0';
+        if ((p = strchr(hbuf, ';'))) {
+            *p = '\0';
+        }
         http_conn.logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
     }
 
@@ -1067,7 +1095,9 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
-    if (http_jwt_is_enabled()) avail_auth_schemes |= AUTH_BEARER;
+    if (http_jwt_is_enabled()) {
+        avail_auth_schemes |= AUTH_BEARER;
+    }
 
     httpd_tls_required =
         config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
@@ -1079,7 +1109,9 @@ int service_main(int argc __attribute__((unused)),
                       NULL,
                       NULL,
                       NULL);
-    if (r) fatal("unable to register process", EX_IOERR);
+    if (r) {
+        fatal("unable to register process", EX_IOERR);
+    }
     proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
     /* Construct Alt-Svc header value */
@@ -1089,7 +1121,9 @@ int service_main(int argc __attribute__((unused)),
 
     /* Set inactivity timer */
     httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT, 'm');
-    if (httpd_timeout < 0) httpd_timeout = 0;
+    if (httpd_timeout < 0) {
+        httpd_timeout = 0;
+    }
     prot_settimeout(httpd_in, httpd_timeout);
     prot_setflushonread(httpd_in, httpd_out);
 
@@ -1109,12 +1143,15 @@ int service_main(int argc __attribute__((unused)),
         do_h2 = http2_preface(&http_conn);
     }
 
-    if (do_h2 && http2_start_session(NULL, &http_conn) != 0)
+    if (do_h2 && http2_start_session(NULL, &http_conn) != 0) {
         fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+    }
 
     /* Setup the signal handler for keepalive heartbeat */
     httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE, 's');
-    if (httpd_keepalive < 0) httpd_keepalive = 0;
+    if (httpd_keepalive < 0) {
+        httpd_keepalive = 0;
+    }
     if (httpd_keepalive) {
         struct sigaction action;
 
@@ -1180,7 +1217,9 @@ void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    if (allow_cors) free_wildmats(allow_cors);
+    if (allow_cors) {
+        free_wildmats(allow_cors);
+    }
 
     strarray_free(httpd_log_headers);
 
@@ -1197,8 +1236,9 @@ void shut_down(int code)
 
     /* Do any namespace specific cleanup */
     for (i = 0; http_namespaces[i]; i++) {
-        if (http_namespaces[i]->enabled && http_namespaces[i]->shutdown)
+        if (http_namespaces[i]->enabled && http_namespaces[i]->shutdown) {
             http_namespaces[i]->shutdown();
+        }
     }
 
     xmlCleanupParser();
@@ -1241,13 +1281,14 @@ void shut_down(int code)
     prometheus_increment(code ? CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_OK);
 
-    if (config_auditlog)
+    if (config_auditlog) {
         syslog(LOG_NOTICE,
                "auditlog: traffic sessionid=<%s>"
                " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(),
                bytes_in,
                bytes_out);
+    }
 
     saslprops_free(&saslprops);
 
@@ -1299,7 +1340,9 @@ EXPORTED void fatal(const char *s, int code)
 
     syslog(LOG_ERR, "%s%s", fatal, s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -1347,14 +1390,19 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 
     buf_printf(serverinfo, " OpenSSL/%u.%u.%u", major, minor, fix);
 
-    if (status == 0)
+    if (status == 0) {
         buf_appendcstr(serverinfo, "-dev");
-    else if (status < 15)
+    }
+    else if (status < 15) {
         buf_printf(serverinfo, "-beta%u", status);
-    else if (patch)
+    }
+    else if (patch) {
         buf_putc(serverinfo, patch + 'a' - 1);
+    }
 
-    if (!tls_enabled()) return HTTP_UNAVAILABLE;
+    if (!tls_enabled()) {
+        return HTTP_UNAVAILABLE;
+    }
 
     SSL_CTX *ctx = NULL;
     if (tls_init_serverengine("http", 5 /* depth */, client_auth, &ctx) == -1) {
@@ -1430,7 +1478,9 @@ static int reset_saslconn(sasl_conn_t **conn)
                           NULL,
                           SASL_USAGE_FLAGS,
                           conn);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(0);
 
@@ -1438,7 +1488,9 @@ static int reset_saslconn(sasl_conn_t **conn)
     secprops->max_ssf = 0;    /* "auth" only */
     secprops->maxbufsize = 0; /* don't need maxbuf */
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
@@ -1449,7 +1501,9 @@ static int reset_saslconn(sasl_conn_t **conn)
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -1471,8 +1525,12 @@ static int parse_request_line(struct transaction_t *txn)
 
     /* Trim CRLF from request-line */
     p = req_line->buf + strlen(req_line->buf);
-    if (p[-1] == '\n') *--p = '\0';
-    if (p[-1] == '\r') *--p = '\0';
+    if (p[-1] == '\n') {
+        *--p = '\0';
+    }
+    if (p[-1] == '\r') {
+        *--p = '\0';
+    }
 
     /* Parse request-line = method SP request-target SP HTTP-version CRLF */
     tok_initm(&tok, req_line->buf, " ", 0);
@@ -1558,7 +1616,9 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
             buf_printf(&txn->buf, "https://%s", hdr[0]);
             if (strcmp(path, "*")) {
                 buf_appendcstr(&txn->buf, path);
-                if (query) buf_printf(&txn->buf, "?%s", query);
+                if (query) {
+                    buf_printf(&txn->buf, "?%s", query);
+                }
             }
 
             txn->location = buf_cstring(&txn->buf);
@@ -1577,13 +1637,16 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
     }
     else {
         /* Tell client to authenticate */
-        if (sasl_result == SASL_CONTINUE)
+        if (sasl_result == SASL_CONTINUE) {
             txn->error.desc = "Continue authentication exchange";
-        else if (sasl_result)
+        }
+        else if (sasl_result) {
             txn->error.desc = "Authentication failed";
-        else
+        }
+        else {
             txn->error.desc =
                 "Must authenticate to access the specified target";
+        }
 
         return HTTP_UNAUTHORIZED;
     }
@@ -1594,7 +1657,9 @@ static int check_method(struct transaction_t *txn)
     const char **hdr;
     struct request_line_t *req_line = &txn->req_line;
 
-    if (txn->flags.redirect) return 0;
+    if (txn->flags.redirect) {
+        return 0;
+    }
 
     /* Check for HTTP method override */
     if (!strcmp(req_line->meth, "POST")
@@ -1609,7 +1674,9 @@ static int check_method(struct transaction_t *txn)
                         && strcmp(http_methods[txn->meth].name, req_line->meth);
          txn->meth++);
 
-    if (txn->meth == METH_UNKNOWN) return HTTP_NOT_IMPLEMENTED;
+    if (txn->meth == METH_UNKNOWN) {
+        return HTTP_NOT_IMPLEMENTED;
+    }
 
     return 0;
 }
@@ -1619,7 +1686,9 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     int ret = 0;
     const char **hdr;
 
-    if (txn->flags.redirect) return 0;
+    if (txn->flags.redirect) {
+        return 0;
+    }
 
     /* Check for Host header (mandatory for HTTP/1.1) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Host"))) {
@@ -1640,7 +1709,9 @@ static int preauth_check_hdrs(struct transaction_t *txn)
 
         case VER_2:
             /* Check for :authority pseudo header */
-            if (spool_getheader(txn->req_hdrs, ":authority")) break;
+            if (spool_getheader(txn->req_hdrs, ":authority")) {
+                break;
+            }
 
             GCC_FALLTHROUGH
 
@@ -1648,11 +1719,13 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             /* Create an :authority pseudo header from URI */
             if (txn->req_uri->server) {
                 buf_setcstr(&txn->buf, txn->req_uri->server);
-                if (txn->req_uri->port)
+                if (txn->req_uri->port) {
                     buf_printf(&txn->buf, ":%d", txn->req_uri->port);
+                }
             }
-            else
+            else {
                 buf_setcstr(&txn->buf, config_servername);
+            }
 
             spool_cache_header(
                 xstrdup(":authority"), buf_release(&txn->buf), txn->req_hdrs);
@@ -1665,13 +1738,19 @@ static int preauth_check_hdrs(struct transaction_t *txn)
                                   txn->req_hdrs,
                                   &txn->req_body,
                                   &txn->error.desc)))
+    {
         return ret;
+    }
 
     /* Check for Expectations */
-    if ((ret = parse_expect(txn))) return ret;
+    if ((ret = parse_expect(txn))) {
+        return ret;
+    }
 
     /* Check for Connection options */
-    if ((ret = parse_connection(txn))) return ret;
+    if ((ret = parse_connection(txn))) {
+        return ret;
+    }
 
     syslog(LOG_DEBUG,
            "conn flags: %#x  upgrade flags: %#x  tls req: %d",
@@ -1719,13 +1798,17 @@ static int preauth_check_hdrs(struct transaction_t *txn)
         {
             txn->flags.upgrade |= UPGRADE_TLS;
         }
-        if (http2_enabled) txn->flags.upgrade |= UPGRADE_HTTP2;
+        if (http2_enabled) {
+            txn->flags.upgrade |= UPGRADE_HTTP2;
+        }
     }
 
-    if (txn->flags.upgrade)
+    if (txn->flags.upgrade) {
         txn->flags.conn |= CONN_UPGRADE;
-    else
+    }
+    else {
         txn->flags.conn &= ~CONN_UPGRADE;
+    }
 
     return 0;
 }
@@ -1743,7 +1826,9 @@ static int check_namespace(struct transaction_t *txn)
         size_t len;
 
         /* Skip disabled namespaces */
-        if (!http_namespaces[i]->enabled) continue;
+        if (!http_namespaces[i]->enabled) {
+            continue;
+        }
 
         /* Handle any /.well-known/ bootstrapping */
         if (http_namespaces[i]->well_known) {
@@ -1758,7 +1843,9 @@ static int check_namespace(struct transaction_t *txn)
                     &txn->buf, "%s://%s", https ? "https" : "http", hdr[0]);
                 buf_appendcstr(&txn->buf, http_namespaces[i]->prefix);
                 buf_appendcstr(&txn->buf, path + len);
-                if (query) buf_printf(&txn->buf, "?%s", query);
+                if (query) {
+                    buf_printf(&txn->buf, "?%s", query);
+                }
                 txn->location = buf_cstring(&txn->buf);
 
                 return HTTP_MOVED;
@@ -1779,7 +1866,9 @@ static int check_namespace(struct transaction_t *txn)
 
         /* Check if method is supported in this namespace */
         meth_t = &namespace->methods[txn->meth];
-        if (!meth_t->proc) return HTTP_NOT_ALLOWED;
+        if (!meth_t->proc) {
+            return HTTP_NOT_ALLOWED;
+        }
 
         if (config_getswitch(IMAPOPT_READONLY)
             && !(http_methods[txn->meth].flags & METH_SAFE)
@@ -1815,7 +1904,9 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
     int ret = 0, r = 0;
     const char **hdr;
 
-    if (txn->flags.redirect) return 0;
+    if (txn->flags.redirect) {
+        return 0;
+    }
 
     /* Perform authentication, if necessary */
     if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
@@ -1915,7 +2006,9 @@ static void postauth_check_hdrs(struct transaction_t *txn)
 {
     const char **hdr;
 
-    if (txn->flags.redirect) return;
+    if (txn->flags.redirect) {
+        return;
+    }
 
     /* Check if this is a Cross-Origin Resource Sharing request */
     if (allow_cors && (hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
@@ -1951,7 +2044,9 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 for (wild = allow_cors; wild->pat; wild++) {
                     if (wildmat(buf_cstring(&txn->buf), wild->pat)) {
                         /* If we have a non-negative match, allow request */
-                        if (!wild->not) txn->flags.cors = CORS_SIMPLE;
+                        if (!wild->not) {
+                            txn->flags.cors = CORS_SIMPLE;
+                        }
                         break;
                     }
                 }
@@ -2040,10 +2135,14 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     const struct namespace_t *namespace;
     struct request_line_t *req_line = &txn->req_line;
 
-    if (!uri) uri = req_line->uri;
+    if (!uri) {
+        uri = req_line->uri;
+    }
 
     /* Check method */
-    if ((ret = check_method(txn))) return ret;
+    if ((ret = check_method(txn))) {
+        return ret;
+    }
 
     /* Parse request-target URI */
     if (!(txn->req_uri = parse_uri(txn->meth, uri, 1, &txn->error.desc))) {
@@ -2051,15 +2150,21 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     }
 
     /* Perform pre-authentication check of headers */
-    if ((ret = preauth_check_hdrs(txn))) return ret;
+    if ((ret = preauth_check_hdrs(txn))) {
+        return ret;
+    }
 
     /* Find the namespace of the requested resource */
-    if ((ret = check_namespace(txn))) return ret;
+    if ((ret = check_namespace(txn))) {
+        return ret;
+    }
 
     /* Perform check of authentication headers */
     ret = auth_check_hdrs(txn, &sasl_result);
 
-    if (ret && ret != HTTP_UNAUTHORIZED) return ret;
+    if (ret && ret != HTTP_UNAUTHORIZED) {
+        return ret;
+    }
 
     /* Register service/module and method */
     namespace = txn->req_tgt.namespace;
@@ -2075,7 +2180,9 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
                       httpd_userid,
                       txn->req_tgt.path,
                       txn->req_line.meth);
-    if (r) fatal("unable to register process", EX_IOERR);
+    if (r) {
+        fatal("unable to register process", EX_IOERR);
+    }
     proc_settitle(buf_cstring(&txn->buf),
                   txn->conn->clienthost,
                   httpd_userid,
@@ -2088,12 +2195,16 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
         ret = HTTP_UNAUTHORIZED;
     }
 
-    if (ret) return client_need_auth(txn, sasl_result);
+    if (ret) {
+        return client_need_auth(txn, sasl_result);
+    }
 
     /* Parse any query parameters */
     construct_hash_table(&txn->req_qparams, 10, 1);
     query = URI_QUERY(txn->req_uri);
-    if (query) parse_query_params(txn, query);
+    if (query) {
+        parse_query_params(txn, query);
+    }
 
     /* Perform post-authentication check of headers */
     postauth_check_hdrs(txn);
@@ -2138,7 +2249,9 @@ static void transaction_reset(struct transaction_t *txn)
 
     memset(&txn->req_line, 0, sizeof(struct request_line_t));
 
-    if (txn->req_uri) xmlFreeURI(txn->req_uri);
+    if (txn->req_uri) {
+        xmlFreeURI(txn->req_uri);
+    }
     txn->req_uri = NULL;
 
     /* XXX - split this into a req_tgt cleanup */
@@ -2148,7 +2261,9 @@ static void transaction_reset(struct transaction_t *txn)
 
     free_hash_table(&txn->req_qparams, (void (*)(void *)) &freestrlist);
 
-    if (txn->req_hdrs) spool_free_hdrcache(txn->req_hdrs);
+    if (txn->req_hdrs) {
+        spool_free_hdrcache(txn->req_hdrs);
+    }
     txn->req_hdrs = NULL;
 
     txn->req_body.flags = 0;
@@ -2173,7 +2288,9 @@ EXPORTED void transaction_free(struct transaction_t *txn)
 {
     /* Cleanup auxiliary stream contexts */
     txn_done_t proc;
-    while ((proc = ptrarray_pop(&txn->done_callbacks))) proc(txn);
+    while ((proc = ptrarray_pop(&txn->done_callbacks))) {
+        proc(txn);
+    }
     ptrarray_fini(&txn->done_callbacks);
 
     transaction_reset(txn);
@@ -2238,10 +2355,14 @@ static int http1_input(struct transaction_t *txn)
     /* Examine request */
     syslog(LOG_DEBUG, "examine request");
     ret = examine_request(txn, NULL);
-    if (ret) goto done;
+    if (ret) {
+        goto done;
+    }
 
     /* Start method processing alarm (HTTP/1.1 only) */
-    if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
+    if (txn->flags.ver == VER_1_1) {
+        alarm(httpd_keepalive);
+    }
 
     /* Process the requested method */
     syslog(LOG_DEBUG, "process request");
@@ -2249,8 +2370,9 @@ static int http1_input(struct transaction_t *txn)
 
 done:
     /* Handle errors (success responses handled by method functions) */
-    if (ret)
+    if (ret) {
         error_response(ret, txn);
+    }
 
     else if (txn->be) {
         /* Add this backend to list of current pipes */
@@ -2309,7 +2431,9 @@ static void cmdloop(struct http_connection *conn)
         do {
             /* Flush any buffered output */
             prot_flush(httpd_out);
-            if (txn.be) prot_flush(txn.be->out);
+            if (txn.be) {
+                prot_flush(txn.be->out);
+            }
 
             /* Run delayed actions from this command */
             libcyrus_run_delayed();
@@ -2443,7 +2567,9 @@ EXPORTED xmlURIPtr parse_uri(unsigned meth,
     return p_uri;
 
 bad_request:
-    if (p_uri) xmlFreeURI(p_uri);
+    if (p_uri) {
+        xmlFreeURI(p_uri);
+    }
     return NULL;
 }
 
@@ -2459,7 +2585,9 @@ EXPORTED time_t calc_compile_time(const char *time, const char *date)
     sscanf(date, "%3s %2d %4d", month, &tm.tm_mday, &tm.tm_year);
     tm.tm_year -= 1900;
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-        if (!strcmp(month, monthname[tm.tm_mon])) break;
+        if (!strcmp(month, monthname[tm.tm_mon])) {
+            break;
+        }
     }
 
     return mktime(&tm);
@@ -2472,7 +2600,9 @@ static int parse_expect(struct transaction_t *txn)
     int i, ret = 0;
 
     /* Expect not supported by HTTP/1.0 clients */
-    if (exp && txn->flags.ver == VER_1_0) return HTTP_EXPECT_FAILED;
+    if (exp && txn->flags.ver == VER_1_0) {
+        return HTTP_EXPECT_FAILED;
+    }
 
     /* Look for interesting expectations.  Unknown == error */
     for (i = 0; !ret && exp && exp[i]; i++) {
@@ -2503,7 +2633,9 @@ static void parse_upgrade(struct transaction_t *txn)
     const char **upgrade = spool_getheader(txn->req_hdrs, "Upgrade");
     int i;
 
-    if (!upgrade) return;
+    if (!upgrade) {
+        return;
+    }
 
     for (i = 0; upgrade[i]; i++) {
         tok_t tok =
@@ -2538,7 +2670,9 @@ static void parse_upgrade(struct transaction_t *txn)
 
         tok_fini(&tok);
 
-        if (txn->flags.conn & CONN_UPGRADE) break;
+        if (txn->flags.conn & CONN_UPGRADE) {
+            break;
+        }
     }
 }
 
@@ -2553,7 +2687,9 @@ static int parse_connection(struct transaction_t *txn)
         txn->flags.conn |= CONN_CLOSE;
     }
 
-    if (!conn) return 0;
+    if (!conn) {
+        return 0;
+    }
 
     if (txn->flags.ver == VER_2) {
         txn->error.desc = "Connection not allowed in HTTP/2";
@@ -2605,8 +2741,12 @@ static int parse_connection(struct transaction_t *txn)
 /* Compare accept quality values so that they sort in descending order */
 static int compare_accept(const struct accept *a1, const struct accept *a2)
 {
-    if (a2->qual < a1->qual) return -1;
-    if (a2->qual > a1->qual) return 1;
+    if (a2->qual < a1->qual) {
+        return -1;
+    }
+    if (a2->qual > a1->qual) {
+        return 1;
+    }
     return 0;
 }
 
@@ -2628,10 +2768,12 @@ dynarray_t *parse_accept(const char **hdr)
 
             message_parse_type(token, &type, &subtype, &params);
 
-            if (type)
+            if (type) {
                 accept.token = lcase(strconcat(type, "/", subtype, NULL));
-            else
+            }
+            else {
                 accept.token = lcase(xstrdup(token));
+            }
 
             for (param = params; param; param = param->next) {
                 if (!strcasecmp(param->attribute, "q")) {
@@ -2777,10 +2919,12 @@ static void comma_list_body(struct buf *buf,
     for (i = 0; vals[i]; i++) {
         if (flags & (1 << i)) {
             buf_appendcstr(buf, sep);
-            if (has_args)
+            if (has_args) {
                 buf_vprintf(buf, vals[i], args);
-            else
+            }
+            else {
                 buf_appendcstr(buf, vals[i]);
+            }
             sep = ", ";
         }
         else if (has_args) {
@@ -2827,7 +2971,9 @@ EXPORTED void list_auth_schemes(struct transaction_t *txn)
                 /* Generate the initial challenge */
                 http_auth(scheme->name, txn);
 
-                if (!auth_chal->param) continue; /* If fail, skip it */
+                if (!auth_chal->param) {
+                    continue; /* If fail, skip it */
+                }
             }
             WWW_Authenticate(scheme->name, auth_chal->param);
         }
@@ -2858,8 +3004,9 @@ EXPORTED void allow_hdr(struct transaction_t *txn,
                    (allow & ALLOW_MKCOL) ? ", MKCOL" : "",
                    (allow & ALLOW_WRITE) ? ", LOCK, UNLOCK" : "",
                    (allow & ALLOW_ACL) ? ", ACL" : "");
-        if ((allow & ALLOW_CAL) && (allow & ALLOW_MKCOL))
+        if ((allow & ALLOW_CAL) && (allow & ALLOW_MKCOL)) {
             simple_hdr(txn, name, "MKCALENDAR");
+        }
     }
 }
 
@@ -2914,10 +3061,14 @@ static void write_cachehdr(const char *name,
                                         NULL };
 
     /* Ignore private headers in our cache */
-    if (name[0] == ':') return;
+    if (name[0] == ':') {
+        return;
+    }
 
     for (hdr = hop_by_hop; *hdr; hdr++) {
-        if (!strcasecmp(name, *hdr)) return;
+        if (!strcasecmp(name, *hdr)) {
+            return;
+        }
     }
 
     simple_hdr(txn, name, "%s", contents);
@@ -2982,13 +3133,17 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
 
     /* Add client data */
     buf_printf(logbuf, "%s", txn->conn->clienthost);
-    if (httpd_userid) buf_printf(logbuf, " as \"%s\"", httpd_userid);
+    if (httpd_userid) {
+        buf_printf(logbuf, " as \"%s\"", httpd_userid);
+    }
     if (txn->req_hdrs && (hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
         buf_printf(logbuf, " with \"%s\"", hdr[0]);
-        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client"))) {
             buf_printf(logbuf, " by \"%s\"", hdr[0]);
-        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With"))) {
             buf_printf(logbuf, " by \"%s\"", hdr[0]);
+        }
     }
 
     /* Add session id */
@@ -3006,7 +3161,9 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
                 if (code != HTTP_URI_TOO_LONG && *txn->req_line.buf) {
                     const char *p =
                         txn->req_line.ver + strlen(txn->req_line.ver) + 1;
-                    if (*p) buf_printf(logbuf, " %s", p);
+                    if (*p) {
+                        buf_printf(logbuf, " %s", p);
+                    }
                 }
             }
         }
@@ -3129,7 +3286,9 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
             }
         }
 
-        if (*sep == ';') buf_appendcstr(logbuf, ")");
+        if (*sep == ';') {
+            buf_appendcstr(logbuf, ")");
+        }
     }
 
     if (txn->flags.redirect) {
@@ -3191,7 +3350,9 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
         buf_printf(logbuf, "%serror=%s", sep, txn->error.desc);
         sep = "; ";
     }
-    if (*sep == ';') buf_appendcstr(logbuf, ")");
+    if (*sep == ';') {
+        buf_appendcstr(logbuf, ")");
+    }
 
     /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);
@@ -3242,7 +3403,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             simple_hdr(txn, "Link", "%s", strarray_nth(&resp_body->links, i));
         }
 
-        if (code >= HTTP_OK) break;
+        if (code >= HTTP_OK) {
+            break;
+        }
 
         /* Fall through as provisional response */
         GCC_FALLTHROUGH
@@ -3256,7 +3419,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         prot_flush(httpd_out);
 
         /* Restart method processing alarm (HTTP/1.1 only) */
-        if (!txn->ws_ctx && (txn->flags.ver == VER_1_1)) alarm(httpd_keepalive);
+        if (!txn->ws_ctx && (txn->flags.ver == VER_1_1)) {
+            alarm(httpd_keepalive);
+        }
 
         log_request(code, txn);
         return;
@@ -3455,8 +3620,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             comma_list_hdr(
                 txn, "Accept-Encoding", ce_strings, accept_encodings);
         }
-        else
+        else {
             simple_hdr(txn, "Accept-Encoding", "identity");
+        }
         break;
 
     case HTTP_UNAVAILABLE:
@@ -3470,15 +3636,21 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     /* Validators */
     if (resp_body->lock) {
         simple_hdr(txn, "Lock-Token", "<%s>", resp_body->lock);
-        if (txn->flags.cors) Access_Control_Expose("Lock-Token");
+        if (txn->flags.cors) {
+            Access_Control_Expose("Lock-Token");
+        }
     }
     if (resp_body->ctag) {
         simple_hdr(txn, "CTag", "%s", resp_body->ctag);
-        if (txn->flags.cors) Access_Control_Expose("CTag");
+        if (txn->flags.cors) {
+            Access_Control_Expose("CTag");
+        }
     }
     if (resp_body->stag) {
         simple_hdr(txn, "Schedule-Tag", "\"%s\"", resp_body->stag);
-        if (txn->flags.cors) Access_Control_Expose("Schedule-Tag");
+        if (txn->flags.cors) {
+            Access_Control_Expose("Schedule-Tag");
+        }
     }
     if (resp_body->etag) {
         simple_hdr(txn,
@@ -3486,7 +3658,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                    "%s\"%s\"",
                    resp_body->enc.proc ? "W/" : "",
                    resp_body->etag);
-        if (txn->flags.cors) Access_Control_Expose("ETag");
+        if (txn->flags.cors) {
+            Access_Control_Expose("ETag");
+        }
     }
     if (resp_body->lastmod) {
         /* Last-Modified MUST NOT be in the future */
@@ -3503,11 +3677,15 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         };
 
         comma_list_hdr(txn, "Preference-Applied", prefs, resp_body->prefs);
-        if (txn->flags.cors) Access_Control_Expose("Preference-Applied");
+        if (txn->flags.cors) {
+            Access_Control_Expose("Preference-Applied");
+        }
     }
     if (resp_body->cmid) {
         simple_hdr(txn, "Cal-Managed-ID", "%s", resp_body->cmid);
-        if (txn->flags.cors) Access_Control_Expose("Cal-Managed-ID");
+        if (txn->flags.cors) {
+            Access_Control_Expose("Cal-Managed-ID");
+        }
     }
     if (resp_body->type) {
         simple_hdr(txn, "Content-Type", "%s", resp_body->type);
@@ -3555,7 +3733,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             simple_hdr(txn, "Content-Location", "%s", (const char *) uri);
             free(uri);
 
-            if (txn->flags.cors) Access_Control_Expose("Content-Location");
+            if (txn->flags.cors) {
+                Access_Control_Expose("Content-Location");
+            }
         }
         if (resp_body->md5) {
             content_md5_hdr(txn, resp_body->md5);
@@ -3810,8 +3990,9 @@ EXPORTED void write_body(long code,
         return;
     }
 
-    if (txn->flags.te & TE_CHUNKED)
+    if (txn->flags.te & TE_CHUNKED) {
         last_chunk = !(code || len);
+    }
     else {
         /* Handle static content as last chunk */
         last_chunk = 1;
@@ -3828,8 +4009,12 @@ EXPORTED void write_body(long code,
     if (txn->resp_body.enc.proc) {
         unsigned flags = 0;
 
-        if (code) flags |= COMPRESS_START;
-        if (last_chunk) flags |= COMPRESS_END;
+        if (code) {
+            flags |= COMPRESS_START;
+        }
+        if (last_chunk) {
+            flags |= COMPRESS_END;
+        }
 
         if (txn->resp_body.enc.proc(txn, flags, buf, len) < 0) {
             fatal("Error while compressing data", EX_SOFTWARE);
@@ -3841,7 +4026,9 @@ EXPORTED void write_body(long code,
 
     if (code) {
         /* Initial call - prepare response header based on CE, TE and version */
-        if (do_md5) MD5Init(&ctx);
+        if (do_md5) {
+            MD5Init(&ctx);
+        }
 
         if (txn->flags.te & ~TE_CHUNKED) {
             /* Transfer-Encoded content MUST be chunked */
@@ -3902,8 +4089,9 @@ EXPORTED void write_body(long code,
             /* HTTP/1.0 doesn't support chunked - close-delimit the body */
             txn->flags.conn = CONN_CLOSE;
         }
-        else if (do_md5)
+        else if (do_md5) {
             txn->flags.trailer |= TRAILER_CMD5;
+        }
 
         response_header(code, txn);
 
@@ -3917,7 +4105,9 @@ EXPORTED void write_body(long code,
             return;
 
         default:
-            if (txn->meth == METH_HEAD) return;
+            if (txn->meth == METH_HEAD) {
+                return;
+            }
 
             if (!outlen && last_chunk) {
                 /* Zero-length body */
@@ -3962,10 +4152,12 @@ EXPORTED void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 
             /* Leave root element open */
             for (cp = buf + --bufsiz, n = 0; *cp != '/'; cp--, n++);
-            if (*(cp + 1) == '>')
+            if (*(cp + 1) == '>') {
                 memmove(cp, cp + 1, n); /* <root/> */
-            else
+            }
+            else {
                 bufsiz -= n + 1; /* </root> */
+            }
         }
 
         /* Output the XML response */
@@ -3999,11 +4191,15 @@ EXPORTED void xml_partial_response(struct transaction_t *txn,
     }
 
     /* Start with clean buffer */
-    if (!*buf) *buf = xmlBufferCreate();
+    if (!*buf) {
+        *buf = xmlBufferCreate();
+    }
 
     if (node) {
         /* Add leading indent to buffer */
-        for (n = 0; n < level * MARKUP_INDENT; n++) xmlBufferCCat(*buf, " ");
+        for (n = 0; n < level * MARKUP_INDENT; n++) {
+            xmlBufferCCat(*buf, " ");
+        }
 
         /* Dump XML node into buffer */
         xmlNodeDump(*buf, doc, node, level, config_httpprettytelemetry);
@@ -4267,7 +4463,9 @@ HIDDEN void log_cachehdr(const char *name,
     struct buf *buf = (struct buf *) rock;
 
     /* Ignore private headers in our cache */
-    if (name[0] == ':') return;
+    if (name[0] == ':') {
+        return;
+    }
 
     if (!strcasecmp(name, "authorization") && strchr(contents, ' ')) {
         /* Replace authorization credentials with an ellipsis */
@@ -4281,10 +4479,12 @@ HIDDEN void log_cachehdr(const char *name,
                    (int) strlen(creds),
                    "...");
     }
-    else if (raw)
+    else if (raw) {
         buf_appendcstr(buf, raw);
-    else
+    }
+    else {
         buf_printf(buf, "%c%s: %s\r\n", toupper(name[0]), name + 1, contents);
+    }
 }
 
 static int auth_success(struct transaction_t *txn, const char *userid)
@@ -4327,8 +4527,9 @@ static int auth_success(struct transaction_t *txn, const char *userid)
         /* Rewind log to current request and truncate it */
         off_t end = lseek(logfd, 0, SEEK_END);
 
-        if (ftruncate(logfd, end - buf_len(&txn->buf)))
+        if (ftruncate(logfd, end - buf_len(&txn->buf))) {
             syslog(LOG_ERR, "IOERROR: failed to truncate http log");
+        }
 
         /* Close existing telemetry log */
         close(logfd);
@@ -4338,16 +4539,19 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     prot_setlog(httpd_out, PROT_NO_FD);
 
     /* Create telemetry log based on new userid */
-    if (txn->conn->sess_ctx)
+    if (txn->conn->sess_ctx) {
         txn->conn->logfd = logfd = telemetry_log(userid, NULL, NULL, 0);
-    else
+    }
+    else {
         txn->conn->logfd = logfd =
             telemetry_log(userid, httpd_in, httpd_out, 0);
+    }
 
     if (logfd != -1) {
         /* Log credential-redacted request */
-        if (write(logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0)
+        if (write(logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0) {
             syslog(LOG_ERR, "IOERROR: failed to write to http log");
+        }
     }
 
     buf_reset(&txn->buf);
@@ -4442,7 +4646,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         for (scheme = auth_schemes; scheme->name; scheme++) {
             if (slen && !strncasecmp(scheme->name, creds, slen)) {
                 /* Found a supported scheme, see if its available */
-                if (!(avail_auth_schemes & scheme->id)) scheme = NULL;
+                if (!(avail_auth_schemes & scheme->id)) {
+                    scheme = NULL;
+                }
                 break;
             }
         }
@@ -4476,7 +4682,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
                 realm = config_getstring(IMAPOPT_RSS_REALM);
                 break;
             }
-            if (!realm) realm = config_servername;
+            if (!realm) {
+                realm = config_servername;
+            }
 
             /* Create initial challenge (base64 buffer is static) */
             snprintf(base64, BASE64_BUF_SIZE, "realm=\"%s\"", realm);
@@ -4498,7 +4706,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
                                    &sid_len,
                                    &clientin,
                                    &clientinlen);
-        if (r != SASL_OK) return r;
+        if (r != SASL_OK) {
+            return r;
+        }
 
         if (sid) {
             const char *mysid = session_id();
@@ -4543,11 +4753,17 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         }
         *pass++ = '\0';
         domain = strchr(user, '@');
-        if (domain) *domain++ = '\0';
+        if (domain) {
+            *domain++ = '\0';
+        }
         extra = strchr(user, '%');
-        if (extra) *extra++ = '\0';
+        if (extra) {
+            *extra++ = '\0';
+        }
         plus = strchr(user, '+');
-        if (plus) *plus++ = '\0';
+        if (plus) {
+            *plus++ = '\0';
+        }
 
         /* Verify the password */
         char *realuser = domain ? strconcat(user, "@", domain, (char *) NULL)
@@ -4559,7 +4775,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         if (status) {
             if (*user == '\0') // TB can send "Authorization: Basic Og=="
+            {
                 txn->error.desc = "All-whitespace username.";
+            }
             syslog(LOG_NOTICE,
                    "badlogin: %s Basic %s %s",
                    txn->conn->clienthost,
@@ -4568,7 +4786,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             free(realuser);
 
             /* Don't allow user probing */
-            if (status == SASL_NOUSER) status = SASL_BADAUTH;
+            if (status == SASL_NOUSER) {
+                status = SASL_BADAUTH;
+            }
             return status;
         }
         free(realuser);
@@ -4583,7 +4803,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
          * write the canonicalized userid into the buffer */
         base64[0] = 0;
         status = http_jwt_auth(clientin, clientinlen, base64, BASE64_BUF_SIZE);
-        if (status) return status;
+        if (status) {
+            return status;
+        }
         canon_user = user = base64;
 
         /* Successful authentication - fall through */
@@ -4688,7 +4910,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         user = (const char *) canon_user;
     }
 
-    if (httpd_authid) free(httpd_authid);
+    if (httpd_authid) {
+        free(httpd_authid);
+    }
     httpd_authid = xstrdup(user);
 
     authzid = spool_getheader(txn->req_hdrs, "Authorize-As");
@@ -4697,7 +4921,9 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         user = authzid[0];
 
         status = proxy_authz(&user, txn);
-        if (status) return status;
+        if (status) {
+            return status;
+        }
     }
 
     /* Post-process the successful authentication. */
@@ -4726,14 +4952,26 @@ EXPORTED int etagcmp(const char *hdr, const char *etag)
 {
     size_t len;
 
-    if (!etag) return -1;            /* no representation       */
-    if (!strcmp(hdr, "*")) return 0; /* any representation      */
+    if (!etag) {
+        return -1; /* no representation       */
+    }
+    if (!strcmp(hdr, "*")) {
+        return 0; /* any representation      */
+    }
 
     len = strlen(etag);
-    if (!strncmp(hdr, "W/", 2)) hdr += 2; /* skip weak prefix        */
-    if (*hdr++ != '\"') return 1;         /* match/skip open DQUOTE  */
-    if (strlen(hdr) != len + 1) return 1; /* make sure lengths match */
-    if (hdr[len] != '\"') return 1;       /* match close DQUOTE      */
+    if (!strncmp(hdr, "W/", 2)) {
+        hdr += 2; /* skip weak prefix        */
+    }
+    if (*hdr++ != '\"') {
+        return 1; /* match/skip open DQUOTE  */
+    }
+    if (strlen(hdr) != len + 1) {
+        return 1; /* make sure lengths match */
+    }
+    if (hdr[len] != '\"') {
+        return 1; /* match close DQUOTE      */
+    }
 
     return strncmp(hdr, etag, len);
 }
@@ -4750,7 +4988,9 @@ static unsigned etag_match(const char *hdr[], const char *etag)
     for (i = 0; !match && hdr[i]; i++) {
         tok_init(&tok, hdr[i], ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
         while (!match && (token = tok_next(&tok))) {
-            if (!etagcmp(token, etag)) match = 1;
+            if (!etagcmp(token, etag)) {
+                match = 1;
+            }
         }
         tok_fini(&tok);
     }
@@ -4767,10 +5007,14 @@ static int parse_ranges(const char *hdr,
     tok_t tok;
     char *token;
 
-    if (!len) return HTTP_OK; /* need to know length of representation */
+    if (!len) {
+        return HTTP_OK; /* need to know length of representation */
+    }
 
     /* we only handle byte-unit */
-    if (!hdr || strncmp(hdr, "bytes=", 6)) return HTTP_OK;
+    if (!hdr || strncmp(hdr, "bytes=", 6)) {
+        return HTTP_OK;
+    }
 
     tok_init(&tok, hdr + 6, ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
     while ((token = tok_next(&tok))) {
@@ -4779,31 +5023,47 @@ static int parse_ranges(const char *hdr,
         unsigned long last = len - 1;
         char *p, *endp;
 
-        if (!(p = strchr(token, '-'))) continue; /* bad byte-range-set */
+        if (!(p = strchr(token, '-'))) {
+            continue; /* bad byte-range-set */
+        }
 
         if (p == token) {
             /* suffix-byte-range-spec */
             unsigned long suffix = strtoul(++p, &endp, 10);
 
-            if (endp == p || *endp) continue; /* bad suffix-length */
-            if (!suffix) continue;            /* unsatisfiable suffix-length */
+            if (endp == p || *endp) {
+                continue; /* bad suffix-length */
+            }
+            if (!suffix) {
+                continue; /* unsatisfiable suffix-length */
+            }
 
             /* don't start before byte zero */
-            if (suffix < len) first = len - suffix;
+            if (suffix < len) {
+                first = len - suffix;
+            }
         }
         else {
             /* byte-range-spec */
             first = strtoul(token, &endp, 10);
-            if (endp != p) continue;    /* bad first-byte-pos */
-            if (first >= len) continue; /* unsatisfiable first-byte-pos */
+            if (endp != p) {
+                continue; /* bad first-byte-pos */
+            }
+            if (first >= len) {
+                continue; /* unsatisfiable first-byte-pos */
+            }
 
             if (*++p) {
                 /* last-byte-pos */
                 last = strtoul(p, &endp, 10);
-                if (*endp || last < first) continue; /* bad last-byte-pos */
+                if (*endp || last < first) {
+                    continue; /* bad last-byte-pos */
+                }
 
                 /* don't go past end of representation */
-                if (last >= len) last = len - 1;
+                if (last >= len) {
+                    last = len - 1;
+                }
             }
         }
 
@@ -4820,10 +5080,12 @@ static int parse_ranges(const char *hdr,
         new->first = first;
         new->last = last;
 
-        if (tail)
+        if (tail) {
             tail->next = new;
-        else
+        }
+        else {
             *ranges = new;
+        }
         tail = new;
     }
 
@@ -4846,17 +5108,22 @@ EXPORTED int check_precond(struct transaction_t *txn,
 
     /* Step 1 */
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
-        if (!etag_match(hdr, etag)) return HTTP_PRECOND_FAILED;
+        if (!etag_match(hdr, etag)) {
+            return HTTP_PRECOND_FAILED;
+        }
 
         /* Continue to step 3 */
     }
 
     /* Step 2 */
     else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-        if (time_from_rfc5322(hdr[0], &since, DATETIME_FULL) < 0)
+        if (time_from_rfc5322(hdr[0], &since, DATETIME_FULL) < 0) {
             return HTTP_BAD_REQUEST;
+        }
 
-        if (lastmod > since) return HTTP_PRECOND_FAILED;
+        if (lastmod > since) {
+            return HTTP_PRECOND_FAILED;
+        }
 
         /* Continue to step 3 */
     }
@@ -4864,10 +5131,12 @@ EXPORTED int check_precond(struct transaction_t *txn,
     /* Step 3 */
     if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
         if (etag_match(hdr, etag)) {
-            if (txn->meth == METH_GET || txn->meth == METH_HEAD)
+            if (txn->meth == METH_GET || txn->meth == METH_HEAD) {
                 return HTTP_NOT_MODIFIED;
-            else
+            }
+            else {
                 return HTTP_PRECOND_FAILED;
+            }
         }
 
         /* Continue to step 5 */
@@ -4877,10 +5146,13 @@ EXPORTED int check_precond(struct transaction_t *txn,
     else if ((txn->meth == METH_GET || txn->meth == METH_HEAD)
              && (hdr = spool_getheader(hdrcache, "If-Modified-Since")))
     {
-        if (time_from_rfc5322(hdr[0], &since, DATETIME_FULL) < 0)
+        if (time_from_rfc5322(hdr[0], &since, DATETIME_FULL) < 0) {
             return HTTP_BAD_REQUEST;
+        }
 
-        if (lastmod <= since) return HTTP_NOT_MODIFIED;
+        if (lastmod <= since) {
+            return HTTP_NOT_MODIFIED;
+        }
 
         /* Continue to step 5 */
     }
@@ -4898,8 +5170,9 @@ EXPORTED int check_precond(struct transaction_t *txn,
         }
 
         /* Only process Range if If-Range isn't present or validator matches */
-        if (!hdr || (since && (lastmod <= since)) || !etagcmp(hdr[0], etag))
+        if (!hdr || (since && (lastmod <= since)) || !etagcmp(hdr[0], etag)) {
             return HTTP_PARTIAL;
+        }
     }
 
     /* Step 6 */
@@ -4998,7 +5271,9 @@ static int list_well_known(struct transaction_t *txn)
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -5092,8 +5367,9 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         /* Parse the path */
         ret = cparams->parse_path(
             txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-        if (ret)
+        if (ret) {
             return ret;
+        }
         else if (!(txn->req_tgt.allow & ALLOW_CONNECT)) {
             return HTTP_NOT_ALLOWED;
         }
@@ -5118,7 +5394,9 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         ret = http_proxy_h2_connect(be, txn);
         if (!ret) {
@@ -5174,7 +5452,9 @@ static int meth_get(struct transaction_t *txn,
     /* Check if this is a request for /.well-known/ listing */
     len = strlen(WELL_KNOWN_PREFIX);
     if (!strncmp(txn->req_uri->path, WELL_KNOWN_PREFIX, len)) {
-        if (txn->req_uri->path[len] == '/') len++;
+        if (txn->req_uri->path[len] == '/') {
+            len++;
+        }
         if (txn->req_uri->path[len] == '\0') {
             return list_well_known(txn);
         }
@@ -5184,7 +5464,9 @@ static int meth_get(struct transaction_t *txn,
 
     /* Serve up static pages */
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
-    if (!prefix) return HTTP_NOT_FOUND;
+    if (!prefix) {
+        return HTTP_NOT_FOUND;
+    }
 
     if (*prefix != '/') {
         /* Remote content */
@@ -5197,7 +5479,9 @@ static int meth_get(struct transaction_t *txn,
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -5210,7 +5494,9 @@ static int meth_get(struct transaction_t *txn,
         while ((token = tok_next(&tok)) && strcmp(token, txn->req_uri->path));
         tok_fini(&tok);
 
-        if (!token) return HTTP_NOT_FOUND;
+        if (!token) {
+            return HTTP_NOT_FOUND;
+        }
     }
 
     buf_setcstr(&pathbuf, prefix);
@@ -5225,7 +5511,9 @@ static int meth_get(struct transaction_t *txn,
     }
 
     /* See if file exists and get Content-Length & Last-Modified time */
-    if (r || !S_ISREG(sbuf.st_mode)) return HTTP_NOT_FOUND;
+    if (r || !S_ISREG(sbuf.st_mode)) {
+        return HTTP_NOT_FOUND;
+    }
 
     if (!resp_body->type) {
         /* Caller hasn't specified the Content-Type */
@@ -5268,9 +5556,13 @@ static int meth_get(struct transaction_t *txn,
         resp_body->lastmod = sbuf.st_mtime;
         resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -5282,7 +5574,9 @@ static int meth_get(struct transaction_t *txn,
 
     if (txn->meth == METH_GET) {
         /* Open and mmap the file */
-        if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+        if ((fd = open(path, O_RDONLY)) == -1) {
+            return HTTP_SERVER_ERROR;
+        }
         map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
     }
 
@@ -5311,8 +5605,9 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
     /* Special case "*" - show all features/methods available on server */
     if (!strcmp(txn->req_uri->path, "*")) {
         for (i = 0; http_namespaces[i]; i++) {
-            if (http_namespaces[i]->enabled)
+            if (http_namespaces[i]->enabled) {
                 txn->req_tgt.allow |= http_namespaces[i]->allow;
+            }
         }
 
         if (ws_enabled && (txn->flags.ver == VER_2)) {
@@ -5324,7 +5619,9 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
         if (parse_path) {
             /* Parse the path */
             r = parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
-            if (r) return r;
+            if (r) {
+                return r;
+            }
         }
         else if (!strcmp(txn->req_uri->path, "/") && ws_enabled
                  && (txn->flags.ver == VER_2))
@@ -5348,12 +5645,14 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
                                && strcmp(http_methods[meth].name, hdr[0]);
                      meth++);
 
-                if (meth == METH_UNKNOWN)
+                if (meth == METH_UNKNOWN) {
                     txn->flags.cors = 0;
+                }
                 else {
                     /* Check Method against those supported by the resource */
-                    if (!txn->req_tgt.namespace->methods[meth].proc)
+                    if (!txn->req_tgt.namespace->methods[meth].proc) {
                         txn->flags.cors = 0;
+                    }
                 }
             }
         }
@@ -5421,16 +5720,20 @@ static void trace_cachehdr(const char *name,
     };
 
     /* Ignore private headers in our cache */
-    if (name[0] == ':') return;
+    if (name[0] == ':') {
+        return;
+    }
 
     for (hdr = sensitive; *hdr && strcmp(name, *hdr); hdr++);
 
     if (!*hdr) {
-        if (raw)
+        if (raw) {
             buf_appendcstr(buf, raw);
-        else
+        }
+        else {
             buf_printf(
                 buf, "%c%s: %s\r\n", toupper(name[0]), name + 1, contents);
+        }
     }
 }
 
@@ -5446,7 +5749,9 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
     txn->flags.cc |= CC_NOCACHE;
 
     /* Make sure method is allowed */
-    if (!(txn->req_tgt.allow & ALLOW_TRACE)) return HTTP_NOT_ALLOWED;
+    if (!(txn->req_tgt.allow & ALLOW_TRACE)) {
+        return HTTP_NOT_ALLOWED;
+    }
 
     if ((hdr = spool_getheader(txn->req_hdrs, "Max-Forwards"))) {
         max_fwd = strtoul(hdr[0], NULL, 10);
@@ -5458,7 +5763,9 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
 
         if ((r = parse_path(
                  txn->req_uri->path, &txn->req_tgt, &txn->error.desc)))
+        {
             return r;
+        }
 
         if (txn->req_tgt.mbentry && txn->req_tgt.mbentry->server) {
             /* Remote mailbox */
@@ -5471,7 +5778,9 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
                                   NULL,
                                   NULL,
                                   httpd_in);
-            if (!be) return HTTP_UNAVAILABLE;
+            if (!be) {
+                return HTTP_UNAVAILABLE;
+            }
 
             return http_pipe_req_resp(be, txn);
         }
@@ -5559,7 +5868,9 @@ EXPORTED int http_read_req_body(struct transaction_t *txn)
            body->flags,
            body->framing);
 
-    if (body->flags & BODY_DONE) return 0;
+    if (body->flags & BODY_DONE) {
+        return 0;
+    }
     body->flags |= BODY_DONE;
 
     if (body->flags & BODY_CONTINUE) {
@@ -5582,7 +5893,9 @@ EXPORTED int http_read_req_body(struct transaction_t *txn)
 
 void request_target_fini(struct request_target_t *tgt)
 {
-    if (!tgt) return;
+    if (!tgt) {
+        return;
+    }
     free(tgt->userid);
     tgt->userid = NULL;
     mboxlist_entry_free(&tgt->mbentry);

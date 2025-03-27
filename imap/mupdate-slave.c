@@ -174,7 +174,9 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     int r;
     enum mupdate_cmd_response response;
 
-    if (!handle || !handle->saslcompleted) return;
+    if (!handle || !handle->saslcompleted) {
+        return;
+    }
 
     pool = new_mpool(131072); /* Arbitrary, but large (128k) */
 
@@ -192,7 +194,9 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     /* Now, resync the database by comparing the remote mbox with our local*/
     r = mupdate_synchronize(&remote_boxes, pool);
     free_mpool(pool);
-    if (r) return;
+    if (r) {
+        return;
+    }
 
     mupdate_signal_db_synced();
 
@@ -376,7 +380,9 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
     } /* Loop */
 
     /* Don't leak the descriptor! */
-    if (kickconn >= 0) close(kickconn);
+    if (kickconn >= 0) {
+        close(kickconn);
+    }
     close(kicksock);
 
     return NULL;

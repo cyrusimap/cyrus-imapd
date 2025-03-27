@@ -76,7 +76,9 @@ static struct extractor_ctx *global_extractor = NULL;
 
 static void extractor_disconnect(struct extractor_ctx *ext)
 {
-    if (!ext) return;
+    if (!ext) {
+        return;
+    }
 
     struct backend *be = ext->be;
     syslog(LOG_DEBUG, "extractor_disconnect(%p)", be);
@@ -90,7 +92,9 @@ static void extractor_disconnect(struct extractor_ctx *ext)
     backend_disconnect(be);
 
     /* remove the timeout */
-    if (be->timeout) prot_removewaitevent(be->clientin, be->timeout);
+    if (be->timeout) {
+        prot_removewaitevent(be->clientin, be->timeout);
+    }
     be->timeout = NULL;
     be->clientin = NULL;
 }
@@ -248,7 +252,9 @@ static int extractor_httpreq(struct extractor_ctx *ext,
     do {
         // Connect to backend
         r = extractor_connect(ext);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         struct backend *be = ext->be;
 
@@ -257,9 +263,13 @@ static int extractor_httpreq(struct extractor_ctx *ext,
 
         r = prot_putbuf(be->out, &req_buf);
 
-        if (!r && req_body) r = prot_putbuf(be->out, req_body);
+        if (!r && req_body) {
+            r = prot_putbuf(be->out, req_body);
+        }
 
-        if (!r) r = prot_flush(be->out);
+        if (!r) {
+            r = prot_flush(be->out);
+        }
 
         if (r == EOF) {
             r = IMAP_IOERROR;
@@ -327,7 +337,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                         error_message(r));
                 *res_statuscode = 599;
             }
-            else
+            else {
                 xsyslog((*res_statuscode == 200 || *res_statuscode == 201
                          || *res_statuscode == 404)
                             ? LOG_DEBUG
@@ -337,6 +347,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                         method,
                         url,
                         *res_statuscode);
+            }
 
             if (*res_statuscode == 200 || *res_statuscode == 201) {
                 /* Abide by server's timeout, if any */
@@ -345,7 +356,9 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                     && (p = strstr(hdr[0], "timeout=")))
                 {
                     int timeout = atoi(p + 8);
-                    if (be->timeout) be->timeout->mark = time(NULL) + timeout;
+                    if (be->timeout) {
+                        be->timeout->mark = time(NULL) + timeout;
+                    }
                 }
             }
             retry = 0;
@@ -390,7 +403,9 @@ static void generate_record_id(struct buf *id,
     const char *types[2] = { rec->type, rec->subtype };
     for (int i = 0; i < 2; i++) {
 
-        if (i) buf_putc(id, '_');
+        if (i) {
+            buf_putc(id, '_');
+        }
 
         for (const char *s = types[i]; *s; s++) {
             if (('a' <= *s && *s <= 'z') || ('A' <= *s && *s <= 'Z')
@@ -507,7 +522,9 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         goto gotdata;
     }
 
-    if (statuscode == 599) goto done;
+    if (statuscode == 599) {
+        goto done;
+    }
 
     // otherwise we're going to try three times to PUT this request to the
     // server!
@@ -531,7 +548,9 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         /* Send attachment to service for text extraction */
         r = extractor_httpreq(
             ext, "PUT", guidstr, ctype, data, &statuscode, &body);
-        if (r == IMAP_IOERROR) goto done;
+        if (r == IMAP_IOERROR) {
+            goto done;
+        }
 
         if (statuscode == 200 || statuscode == 201) {
             // we got a result, yay
@@ -589,20 +608,22 @@ gotdata:
                             tempfname,
                             cachefname);
                 }
-                else
+                else {
                     xsyslog(LOG_DEBUG,
                             "wrote to cache",
                             "cachefname=<%s>",
                             cachefname);
+                }
             }
 
             xunlink(tempfname);
         }
-        else
+        else {
             xsyslog(LOG_WARNING,
                     "could not create temp file",
                     "tempfname=<%s>",
                     tempfname);
+        }
         free(tempfname);
     }
 
@@ -628,12 +649,15 @@ EXPORTED void attachextract_init(struct protstream *clientin)
     attachextract_request_timeout = config_getduration(
         IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_REQUEST_TIMEOUT, 's');
 
-    if (attachextract_idle_timeout < attachextract_request_timeout)
+    if (attachextract_idle_timeout < attachextract_request_timeout) {
         attachextract_idle_timeout = attachextract_request_timeout;
+    }
 
     const char *exturl =
         config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
-    if (!exturl) return;
+    if (!exturl) {
+        return;
+    }
 
     /* Initialize extractor URL */
     char scheme[6], server[100], path[256], *p;
@@ -651,13 +675,16 @@ EXPORTED void attachextract_init(struct protstream *clientin)
 
     /* Normalize URL parts */
     https = (scheme[4] == 's');
-    if (*(p = path + strlen(path) - 1) == '/') *p = '\0';
+    if (*(p = path + strlen(path) - 1) == '/') {
+        *p = '\0';
+    }
     if ((p = strrchr(server, ':'))) {
         *p++ = '\0';
         port = atoi(p);
     }
-    else
+    else {
         port = https ? 443 : 80;
+    }
 
     /* Build servername, port, and options */
     struct buf buf = BUF_INITIALIZER;
@@ -675,7 +702,9 @@ EXPORTED void attachextract_destroy(void)
 
     syslog(LOG_DEBUG, "extractor_destroy(%p)", ext);
 
-    if (!ext) return;
+    if (!ext) {
+        return;
+    }
 
     extractor_disconnect(ext);
     free(ext->be);

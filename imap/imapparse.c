@@ -103,7 +103,9 @@ EXPORTED int getxstring(struct protstream *pin,
     uint32_t i, len;
     static int lminus = -1;
 
-    if (lminus == -1) lminus = config_getswitch(IMAPOPT_LITERALMINUS);
+    if (lminus == -1) {
+        lminus = config_getswitch(IMAPOPT_LITERALMINUS);
+    }
 
     buf_reset(buf);
 
@@ -139,7 +141,9 @@ EXPORTED int getxstring(struct protstream *pin,
             }
             else if (c == EOF || c == '\r' || c == '\n') {
                 buf_cstring(buf);
-                if (c != EOF) prot_ungetc(c, pin);
+                if (c != EOF) {
+                    prot_ungetc(c, pin);
+                }
                 return EOF;
             }
             buf_putc(buf, c);
@@ -177,19 +181,25 @@ EXPORTED int getxstring(struct protstream *pin,
         }
         if (c != '}') {
             buf_cstring(buf);
-            if (c != EOF) prot_ungetc(c, pin);
+            if (c != EOF) {
+                prot_ungetc(c, pin);
+            }
             return EOF;
         }
         c = prot_getc(pin);
         if (c != '\r') {
             buf_cstring(buf);
-            if (c != EOF) prot_ungetc(c, pin);
+            if (c != EOF) {
+                prot_ungetc(c, pin);
+            }
             return EOF;
         }
         c = prot_getc(pin);
         if (c != '\n') {
             buf_cstring(buf);
-            if (c != EOF) prot_ungetc(c, pin);
+            if (c != EOF) {
+                prot_ungetc(c, pin);
+            }
             return EOF;
         }
 
@@ -214,7 +224,9 @@ EXPORTED int getxstring(struct protstream *pin,
          * literal, do not unget anything even if we don't like the literal */
         if (!(flags & GXS_BINARY)
             && strlen(buf_cstring(buf)) != (unsigned) buf_len(buf))
+        {
             return EOF; /* Disallow imbedded NUL */
+        }
         return prot_getc(pin);
 
     default:
@@ -229,9 +241,12 @@ EXPORTED int getxstring(struct protstream *pin,
                     /* gotta handle NIL here too */
                     if ((flags & GXS_NIL) && buf->len == 3
                         && !memcmp(buf->s, "NIL", 3))
+                    {
                         buf_free(buf);
-                    else
+                    }
+                    else {
                         buf_cstring(buf);
+                    }
                     return c;
                 }
                 buf_putc(buf, c);
@@ -283,7 +298,9 @@ EXPORTED int getxstring(struct protstream *pin,
 
 fail:
     buf_cstring(buf);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 }
 
@@ -301,14 +318,18 @@ static int _getint(struct protstream *pin, uint64_t max, uint64_t *num)
     }
 
     if (!buf_len(&buf)) {
-        if (c != EOF) prot_ungetc(c, pin);
+        if (c != EOF) {
+            prot_ungetc(c, pin);
+        }
         return EOF;
     }
 
     errno = 0;
     *num = strtoull(buf_cstring(&buf), NULL, 10);
 
-    if (errno || *num > max) fatal("num too big", EX_PROTOCOL);
+    if (errno || *num > max) {
+        fatal("num too big", EX_PROTOCOL);
+    }
 
     return c;
 }
@@ -408,34 +429,49 @@ EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
 EXPORTED void eatline(struct protstream *pin, int c)
 {
     for (;;) {
-        if (c == '\n') return;
+        if (c == '\n') {
+            return;
+        }
 
         /* Several of the parser helper functions return EOF
            even if an unexpected character (other than EOF) is received.
            We need to confirm that the stream is actually at EOF. */
-        if (c == EOF && (prot_IS_EOF(pin) || prot_IS_ERROR(pin))) return;
+        if (c == EOF && (prot_IS_EOF(pin) || prot_IS_ERROR(pin))) {
+            return;
+        }
 
         /* see if it's a literal */
         if (c == '{') {
             c = prot_getc(pin);
             uint64_t size = 0;
             while (cyrus_isdigit(c)) {
-                if (size > 429496729 || (size == 429496729 && (c > '5')))
+                if (size > 429496729 || (size == 429496729 && (c > '5'))) {
                     break; /* don't fatal, just drop out of literal parsing */
+                }
                 size = size * 10 + c - '0';
                 c = prot_getc(pin);
             }
-            if (c != '+') continue;
+            if (c != '+') {
+                continue;
+            }
             c = prot_getc(pin);
-            if (c != '}') continue;
+            if (c != '}') {
+                continue;
+            }
             c = prot_getc(pin);
             /* optional \r */
-            if (c == '\r') c = prot_getc(pin);
-            if (c != '\n') continue;
+            if (c == '\r') {
+                c = prot_getc(pin);
+            }
+            if (c != '\n') {
+                continue;
+            }
             /* successful literal, consume it */
             while (size--) {
                 c = prot_getc(pin);
-                if (c == EOF) return;
+                if (c == EOF) {
+                    return;
+                }
             }
         }
         c = prot_getc(pin);
@@ -467,7 +503,9 @@ static int get_search_date(struct protstream *pin, time_t *start, time_t *end)
     }
 
     /* Day of month */
-    if (!isdigit(c)) goto baddate;
+    if (!isdigit(c)) {
+        goto baddate;
+    }
     tm.tm_mday = c - '0';
     c = prot_getc(pin);
     if (isdigit(c)) {
@@ -475,49 +513,73 @@ static int get_search_date(struct protstream *pin, time_t *start, time_t *end)
         c = prot_getc(pin);
     }
 
-    if (c != '-') goto baddate;
+    if (c != '-') {
+        goto baddate;
+    }
     c = prot_getc(pin);
 
     /* Month name */
-    if (!isalpha(c)) goto baddate;
+    if (!isalpha(c)) {
+        goto baddate;
+    }
     month[0] = c;
     c = prot_getc(pin);
-    if (!isalpha(c)) goto baddate;
+    if (!isalpha(c)) {
+        goto baddate;
+    }
     month[1] = c;
     c = prot_getc(pin);
-    if (!isalpha(c)) goto baddate;
+    if (!isalpha(c)) {
+        goto baddate;
+    }
     month[2] = c;
     c = prot_getc(pin);
     month[3] = '\0';
     lcase(month);
 
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-        if (!strcmp(month, monthname[tm.tm_mon])) break;
+        if (!strcmp(month, monthname[tm.tm_mon])) {
+            break;
+        }
     }
-    if (tm.tm_mon == 12) goto baddate;
+    if (tm.tm_mon == 12) {
+        goto baddate;
+    }
 
-    if (c != '-') goto baddate;
+    if (c != '-') {
+        goto baddate;
+    }
     c = prot_getc(pin);
 
     /* Year */
-    if (!isdigit(c)) goto baddate;
+    if (!isdigit(c)) {
+        goto baddate;
+    }
     tm.tm_year = c - '0';
     c = prot_getc(pin);
-    if (!isdigit(c)) goto baddate;
+    if (!isdigit(c)) {
+        goto baddate;
+    }
     tm.tm_year = tm.tm_year * 10 + c - '0';
     c = prot_getc(pin);
     if (isdigit(c)) {
-        if (tm.tm_year < 19) goto baddate;
+        if (tm.tm_year < 19) {
+            goto baddate;
+        }
         tm.tm_year -= 19;
         tm.tm_year = tm.tm_year * 10 + c - '0';
         c = prot_getc(pin);
-        if (!isdigit(c)) goto baddate;
+        if (!isdigit(c)) {
+            goto baddate;
+        }
         tm.tm_year = tm.tm_year * 10 + c - '0';
         c = prot_getc(pin);
     }
 
     if (quoted) {
-        if (c != '\"') goto baddate;
+        if (c != '\"') {
+            goto baddate;
+        }
         c = prot_getc(pin);
     }
 
@@ -555,13 +617,19 @@ EXPORTED int get_search_source_mboxes(struct protstream *pin,
 
     do {
         c = getastring(pin, pout, &extname);
-        if (!buf_len(&extname)) goto bad;
+        if (!buf_len(&extname)) {
+            goto bad;
+        }
 
         intname = mboxname_from_external(
             buf_cstring(&extname), searchargs->namespace, searchargs->userid);
-        if (intname) strarray_appendm(mboxes, intname);
+        if (intname) {
+            strarray_appendm(mboxes, intname);
+        }
 
-        if (!multi) goto done;
+        if (!multi) {
+            goto done;
+        }
 
     } while (c == ' ');
 
@@ -580,8 +648,12 @@ done:
 
 bad:
     buf_free(&extname);
-    if (c == IMAP_LITERAL_TOO_LARGE) return c;
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        return c;
+    }
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 }
 
@@ -605,7 +677,9 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
 
     do {
         c = getword(pin, &opt);
-        if (!opt.s[0]) break;
+        if (!opt.s[0]) {
+            break;
+        }
 
         lcase(opt.s);
         if (!strcmp(opt.s, "selected")) {
@@ -645,7 +719,9 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
 
     } while (c == ' ');
 
-    if (c == IMAP_LITERAL_TOO_LARGE) return c;
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        return c;
+    }
     if (c != ')') {
         prot_printf(pout,
                     "%s BAD Missing close parenthesis in Esearch\r\n",
@@ -664,7 +740,9 @@ EXPORTED int get_search_source_opts(struct protstream *pin,
     return c;
 
 bad:
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 }
 
@@ -688,7 +766,9 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
 
     do {
         c = getword(pin, &opt);
-        if (!opt.s[0]) break;
+        if (!opt.s[0]) {
+            break;
+        }
 
         lcase(opt.s);
         if (!strcmp(opt.s, "min")) {
@@ -777,7 +857,9 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
     return c;
 
 bad:
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 }
 
@@ -797,7 +879,9 @@ static int get_search_annotation(struct protstream *pin,
     struct buf attrib = BUF_INITIALIZER;
     struct buf value = BUF_INITIALIZER;
 
-    if (c != ' ') goto bad;
+    if (c != ' ') {
+        goto bad;
+    }
 
     /* parse the entry */
     c = getastring(pin, pout, &entry);
@@ -818,7 +902,9 @@ static int get_search_annotation(struct protstream *pin,
 
     /* parse the value */
     c = getbnstring(pin, pout, &value);
-    if (c <= EOF) goto bad;
+    if (c <= EOF) {
+        goto bad;
+    }
 
     sa = xzmalloc(sizeof(*sa));
     sa->entry = buf_release(&entry);
@@ -838,8 +924,12 @@ bad:
     buf_free(&attrib);
     buf_free(&value);
 
-    if (c == IMAP_LITERAL_TOO_LARGE) return c;
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        return c;
+    }
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 }
 
@@ -857,9 +947,10 @@ static void string_match(search_expr_t *parent,
         op = SEOP_FUZZYMATCH;
         searchval = xstrdup(val); // keep search value as-is
     }
-    else
+    else {
         searchval = charset_convert(
             val, base->charset, charset_flags | CHARSET_KEEPCASE);
+    }
 
     e = search_expr_new(parent, op);
     e->attr = attr;
@@ -892,7 +983,9 @@ static void systemflag_match(search_expr_t *parent, unsigned int flag, int not)
 {
     search_expr_t *e;
 
-    if (not) parent = search_expr_new(parent, SEOP_NOT);
+    if (not) {
+        parent = search_expr_new(parent, SEOP_NOT);
+    }
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find("systemflags");
     e->value.u = flag;
@@ -902,7 +995,9 @@ static void indexflag_match(search_expr_t *parent, unsigned int flag, int not)
 {
     search_expr_t *e;
 
-    if (not) parent = search_expr_new(parent, SEOP_NOT);
+    if (not) {
+        parent = search_expr_new(parent, SEOP_NOT);
+    }
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find("indexflags");
     e->value.u = flag;
@@ -915,7 +1010,9 @@ static void convflag_match(search_expr_t *parent,
 {
     search_expr_t *e;
 
-    if (not) parent = search_expr_new(parent, SEOP_NOT);
+    if (not) {
+        parent = search_expr_new(parent, SEOP_NOT);
+    }
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find(matchall ? "allconvflags" : "convflags");
     e->value.s = xstrdup(flagname);
@@ -958,11 +1055,15 @@ static int get_search_criterion(struct protstream *pin,
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
         c = getcharset(pin, pout, &arg);
-        if (c != ' ') goto missingcharset;
+        if (c != ' ') {
+            goto missingcharset;
+        }
         lcase(arg.s);
         charset_free(&base->charset);
         base->charset = charset_lookupname(arg.s);
-        if (base->charset == CHARSET_UNKNOWN_CHARSET) goto badcharset;
+        if (base->charset == CHARSET_UNKNOWN_CHARSET) {
+            goto badcharset;
+        }
         if ((client_capa & CAPA_UTF8_ACCEPT)
             && strcmp("utf-8", charset_canon_name(base->charset)))
         {
@@ -975,18 +1076,24 @@ static int get_search_criterion(struct protstream *pin,
     lcase(criteria.s);
     switch (criteria.s[0]) {
     case '\0':
-        if (c != '(') goto badcri;
+        if (c != '(') {
+            goto badcri;
+        }
         e = search_expr_new(parent, SEOP_AND);
         do {
             c = get_search_criterion(pin, pout, e, base);
         } while (c == ' ');
-        if (c <= EOF) return c;
+        if (c <= EOF) {
+            return c;
+        }
         if (c != ')') {
             prot_printf(
                 pout,
                 "%s BAD Missing required close paren in Search command\r\n",
                 base->tag);
-            if (c != EOF) prot_ungetc(c, pin);
+            if (c != EOF) {
+                prot_ungetc(c, pin);
+            }
             return EOF;
         }
         c = prot_getc(pin);
@@ -1004,8 +1111,9 @@ static int get_search_criterion(struct protstream *pin,
             e->attr = search_attr_find("uid");
             ptrarray_append(&base->result_vars, e);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case '0':
@@ -1025,7 +1133,9 @@ static int get_search_criterion(struct protstream *pin,
                 "%s BAD [UIDREQUIRED] Message numbers are not allowed in"
                 " Search after UIDONLY is enabled\r\n",
                 base->tag);
-            if (c != EOF) prot_ungetc(c, pin);
+            if (c != EOF) {
+                prot_ungetc(c, pin);
+            }
             return EOF;
         }
 
@@ -1034,12 +1144,15 @@ static int get_search_criterion(struct protstream *pin,
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("msgno");
             seq = seqset_parse(criteria.s, NULL, /*maxval*/ 0);
-            if (!seq) goto badcri;
+            if (!seq) {
+                goto badcri;
+            }
             seqset_free(&seq);
             e->value.s = xstrdup(criteria.s);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'a':
@@ -1053,49 +1166,71 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "annotation")) { /* RFC 5257 */
             struct searchannot *annot = NULL;
             c = get_search_annotation(pin, pout, base, c, &annot);
-            if (c <= EOF) goto badcri;
+            if (c <= EOF) {
+                goto badcri;
+            }
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("annotation");
             e->value.annot = annot;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'b':
         if (!strcmp(criteria.s, "before")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("internaldate");
             e->value.t = start;
         }
         else if (!strcmp(criteria.s, "bcc")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "body")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'c':
         if (!strcmp(criteria.s, "cc")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (hasconv && !strcmp(criteria.s, "convflag")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getword(pin, &arg);
             lcase(arg.s);
             convflag_match(parent, arg.s, /*not*/ 0, /*all*/ 0);
@@ -1117,9 +1252,13 @@ static int get_search_criterion(struct protstream *pin,
         else if (hasconv && !strcmp(criteria.s, "convmodseq"))
         { /* nonstandard */
             modseq_t ms;
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getmodseq(pin, &ms);
-            if (c == EOF) goto badnumber;
+            if (c == EOF) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("convmodseq");
             e->value.u = ms;
@@ -1127,26 +1266,39 @@ static int get_search_criterion(struct protstream *pin,
         else if ((base->state & GETSEARCH_CHARSET_KEYWORD)
                  && !strcmp(criteria.s, "charset"))
         { /* RFC 3501 */
-            if (c != ' ') goto missingcharset;
+            if (c != ' ') {
+                goto missingcharset;
+            }
             c = getcharset(pin, pout, &arg);
-            if (c != ' ') goto missingcharset;
+            if (c != ' ') {
+                goto missingcharset;
+            }
             lcase(arg.s);
             charset_free(&base->charset);
             base->charset = charset_lookupname(arg.s);
-            if (base->charset == CHARSET_UNKNOWN_CHARSET) goto badcharset;
+            if (base->charset == CHARSET_UNKNOWN_CHARSET) {
+                goto badcharset;
+            }
         }
         else if (!strcmp(criteria.s, "cid")) { /* nonstandard */
             conversation_id_t cid;
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getword(pin, &arg);
-            if (c == EOF) goto badnumber;
-            if (!conversation_id_decode(&cid, arg.s)) goto badnumber;
+            if (c == EOF) {
+                goto badnumber;
+            }
+            if (!conversation_id_decode(&cid, arg.s)) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("cid");
             e->value.u = cid;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'd':
@@ -1157,26 +1309,36 @@ static int get_search_criterion(struct protstream *pin,
             systemflag_match(parent, FLAG_DRAFT, /*not*/ 0);
         }
         else if (!strcmp(criteria.s, "deliveredto")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'e':
         if (!strcmp(criteria.s, "emailid")) { /* RFC 8474 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             bytestring_match(parent, arg.s, criteria.s, base);
 
             base->did_objectid = 1;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'f':
@@ -1184,38 +1346,57 @@ static int get_search_criterion(struct protstream *pin,
             systemflag_match(parent, FLAG_FLAGGED, /*not*/ 0);
         }
         else if (!strcmp(criteria.s, "folder")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("folder");
             e->value.s =
                 mboxname_from_external(arg.s, base->namespace, base->userid);
         }
         else if (!strcmp(criteria.s, "from")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "fuzzy")) { /* RFC 6203 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             base->fuzzy_depth++;
             c = get_search_criterion(pin, pout, parent, base);
             base->fuzzy_depth--;
-            if (c <= EOF) return c;
+            if (c <= EOF) {
+                return c;
+            }
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'h':
         if (!strcmp(criteria.s, "header")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg2);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
 
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find_field(arg.s);
@@ -1226,101 +1407,139 @@ static int get_search_criterion(struct protstream *pin,
                 e->attr = NULL;
             }
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'i':
         if ((base->state & GETSEARCH_SOURCE) && !strcmp(criteria.s, "in"))
         { /* RFC 7377 */
             c = get_search_source_opts(pin, pout, base);
-            if (c <= EOF) return c;
+            if (c <= EOF) {
+                return c;
+            }
             keep_charset = 1;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'k':
         if (!strcmp(criteria.s, "keyword")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getword(pin, &arg);
-            if (!imparse_isatom(arg.s)) goto badflag;
+            if (!imparse_isatom(arg.s)) {
+                goto badflag;
+            }
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find("keyword");
             e->value.s = xstrdup(arg.s);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'l':
         if (!strcmp(criteria.s, "larger")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getuint32(pin, &u);
-            if (c == EOF) goto badnumber;
+            if (c == EOF) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_GT);
             e->attr = search_attr_find("size");
             e->value.u = u;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'm':
         if (!strcmp(criteria.s, "modseq")) { /* RFC 7162 */
             modseq_t modseq;
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             /* Check for optional search-modseq-ext */
             c = getqstring(pin, pout, &arg);
             if (c != EOF) {
-                if (c != ' ') goto missingarg;
+                if (c != ' ') {
+                    goto missingarg;
+                }
                 c = getword(pin, &arg);
-                if (c != ' ') goto missingarg;
+                if (c != ' ') {
+                    goto missingarg;
+                }
             }
             c = getmodseq(pin, &modseq);
-            if (c == EOF) goto badnumber;
+            if (c == EOF) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("modseq");
             e->value.u = modseq;
 
             base->state |= GETSEARCH_MODSEQ; // CONDSTORE enabling command
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'n':
         if (!strcmp(criteria.s, "not")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             e = search_expr_new(parent, SEOP_NOT);
             c = get_search_criterion(pin, pout, e, base);
-            if (c <= EOF) return c;
+            if (c <= EOF) {
+                return c;
+            }
         }
         else if (!strcmp(criteria.s, "new")) { /* RFC 3501 */
             e = search_expr_new(parent, SEOP_AND);
             indexflag_match(e, MESSAGE_SEEN, /*not*/ 1);
             indexflag_match(e, MESSAGE_RECENT, /*not*/ 0);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'o':
         if (!strcmp(criteria.s, "or")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             e = search_expr_new(parent, SEOP_OR);
             c = get_search_criterion(pin, pout, e, base);
-            if (c <= EOF) return c;
-            if (c != ' ') goto missingarg;
+            if (c <= EOF) {
+                return c;
+            }
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_criterion(pin, pout, e, base);
-            if (c <= EOF) return c;
+            if (c <= EOF) {
+                return c;
+            }
         }
         else if (!strcmp(criteria.s, "old")) { /* RFC 3501 */
             indexflag_match(parent, MESSAGE_RECENT, /*not*/ 1);
         }
         else if (!strcmp(criteria.s, "older")) { /* RFC 5032 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
 #if SIZEOF_TIME_T >= 8
             uint64_t uu;
             c = getuint64(pin, &uu);
@@ -1329,19 +1548,26 @@ static int get_search_criterion(struct protstream *pin,
             c = getuint32(pin, &u);
             end = now - u;
 #endif
-            if (c == EOF) goto badinterval;
+            if (c == EOF) {
+                goto badinterval;
+            }
             e = search_expr_new(parent, SEOP_LE);
             e->attr = search_attr_find("internaldate");
             e->value.t = end;
         }
         else if (!strcmp(criteria.s, "on")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             date_range(parent, "internaldate", start, end);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'r':
@@ -1352,11 +1578,14 @@ static int get_search_criterion(struct protstream *pin,
                  && !strcmp(criteria.s, "return"))
         { /* RFC 4731 */
             c = get_search_return_opts(pin, pout, base);
-            if (c == EOF) return EOF;
+            if (c == EOF) {
+                return EOF;
+            }
             keep_charset = 1;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 's':
@@ -1367,23 +1596,35 @@ static int get_search_criterion(struct protstream *pin,
             e->value.u = 15;
         }
         else if (!strcmp(criteria.s, "savedbefore")) { /* RFC 8514 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("savedate");
             e->value.u = start;
         }
         else if (!strcmp(criteria.s, "savedon")) { /* RFC 8514 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             date_range(parent, "savedate", start, end);
         }
         else if (!strcmp(criteria.s, "savedsince")) { /* RFC 8514 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("savedate");
             e->value.u = start;
@@ -1392,107 +1633,165 @@ static int get_search_criterion(struct protstream *pin,
             indexflag_match(parent, MESSAGE_SEEN, /*not*/ 0);
         }
         else if (!strcmp(criteria.s, "sentbefore")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("sentdate");
             e->value.t = start;
         }
         else if (!strcmp(criteria.s, "senton")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             date_range(parent, "sentdate", start, end);
         }
         else if (!strcmp(criteria.s, "sentsince")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("sentdate");
             e->value.t = start;
         }
         else if (!strcmp(criteria.s, "since")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = get_search_date(pin, &start, &end);
-            if (c == EOF) goto baddate;
+            if (c == EOF) {
+                goto baddate;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
             e->value.t = start;
         }
         else if (!strcmp(criteria.s, "smaller")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getuint32(pin, &u);
-            if (c == EOF) goto badnumber;
+            if (c == EOF) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("size");
             e->value.u = u;
         }
         else if (!strcmp(criteria.s, "spamabove")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c == IMAP_LITERAL_TOO_LARGE) return c;
-            if (c == EOF) goto badnumber;
+            if (c == IMAP_LITERAL_TOO_LARGE) {
+                return c;
+            }
+            if (c == EOF) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("spamscore");
             e->value.u = (int) ((atof(buf_cstring(&arg)) * 100) + 0.5);
         }
         else if (!strcmp(criteria.s, "spambelow")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c == IMAP_LITERAL_TOO_LARGE) return c;
-            if (c == EOF) goto badnumber;
+            if (c == IMAP_LITERAL_TOO_LARGE) {
+                return c;
+            }
+            if (c == EOF) {
+                goto badnumber;
+            }
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("spamscore");
             e->value.u = (int) ((atof(buf_cstring(&arg)) * 100) + 0.5);
         }
         else if (!strcmp(criteria.s, "subject")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 't':
         if (!strcmp(criteria.s, "to")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "text")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "threadid")) { /* RFC 8474 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             bytestring_match(parent, arg.s, criteria.s, base);
 
             base->did_objectid = 1;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'u':
         if (!strcmp(criteria.s, "uid")) { /* RFC 3501 */
             seqset_t *seq;
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getword(pin, &arg);
-            if (!strcmp("$", arg.s)) goto result_var;
-            if (!imparse_issequence(arg.s)) goto badcri;
+            if (!strcmp("$", arg.s)) {
+                goto result_var;
+            }
+            if (!imparse_issequence(arg.s)) {
+                goto badcri;
+            }
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find(criteria.s);
             seq = seqset_parse(arg.s, NULL, /*maxval*/ 0);
-            if (!seq) goto badcri;
+            if (!seq) {
+                goto badcri;
+            }
             seqset_free(&seq);
             e->value.s = xstrdup(arg.s);
         }
@@ -1512,50 +1811,74 @@ static int get_search_criterion(struct protstream *pin,
             systemflag_match(parent, FLAG_FLAGGED, /*not*/ 1);
         }
         else if (!strcmp(criteria.s, "unkeyword")) { /* RFC 3501 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getword(pin, &arg);
-            if (!imparse_isatom(arg.s)) goto badflag;
+            if (!imparse_isatom(arg.s)) {
+                goto badflag;
+            }
             e = search_expr_new(parent, SEOP_NOT);
             e = search_expr_new(e, SEOP_MATCH);
             e->attr = search_attr_find("keyword");
             e->value.s = xstrdup(arg.s);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'x':
         if (!strcmp(criteria.s, "xattachmentname")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, "attachmentname", base);
         }
         else if (!strcmp(criteria.s, "xattachmentbody")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, "attachmentbody", base);
         }
         else if (!strcmp(criteria.s, "xlistid")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, "listid", base);
         }
         else if (!strcmp(criteria.s, "xcontenttype")) { /* nonstandard */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
             c = getastring(pin, pout, &arg);
-            if (c <= EOF) goto missingarg;
+            if (c <= EOF) {
+                goto missingarg;
+            }
             string_match(parent, arg.s, "contenttype", base);
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     case 'y':
         if (!strcmp(criteria.s, "younger")) { /* RFC 5032 */
-            if (c != ' ') goto missingarg;
+            if (c != ' ') {
+                goto missingarg;
+            }
 #if SIZEOF_TIME_T >= 8
             uint64_t uu;
             c = getuint64(pin, &uu);
@@ -1564,21 +1887,28 @@ static int get_search_criterion(struct protstream *pin,
             c = getuint32(pin, &u);
             start = now - u;
 #endif
-            if (c == EOF) goto badinterval;
+            if (c == EOF) {
+                goto badinterval;
+            }
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
             e->value.t = start;
         }
-        else
+        else {
             goto badcri;
+        }
         break;
 
     default:
     badcri:
-        if (c == IMAP_LITERAL_TOO_LARGE) return c;
+        if (c == IMAP_LITERAL_TOO_LARGE) {
+            return c;
+        }
 
         prot_printf(pout, "%s BAD Invalid Search criteria\r\n", base->tag);
-        if (c != EOF) prot_ungetc(c, pin);
+        if (c != EOF) {
+            prot_ungetc(c, pin);
+        }
         return EOF;
     }
 
@@ -1586,22 +1916,30 @@ static int get_search_criterion(struct protstream *pin,
         fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_PROTOCOL);
     }
 
-    if (!keep_charset) base->state &= ~GETSEARCH_CHARSET_KEYWORD;
-    if (base->state & GETSEARCH_SOURCE)
+    if (!keep_charset) {
+        base->state &= ~GETSEARCH_CHARSET_KEYWORD;
+    }
+    if (base->state & GETSEARCH_SOURCE) {
         base->state &= ~GETSEARCH_SOURCE;
-    else
+    }
+    else {
         base->state &= ~GETSEARCH_RETURN;
+    }
 
     return c;
 
 missingarg:
-    if (c == IMAP_LITERAL_TOO_LARGE) return c;
+    if (c == IMAP_LITERAL_TOO_LARGE) {
+        return c;
+    }
 
     prot_printf(pout,
                 "%s BAD Missing required argument to Search %s\r\n",
                 base->tag,
                 criteria.s);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 badflag:
@@ -1609,28 +1947,38 @@ badflag:
                 "%s BAD Invalid flag name %s in Search command\r\n",
                 base->tag,
                 arg.s);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 baddate:
     prot_printf(pout, "%s BAD Invalid date in Search command\r\n", base->tag);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 badnumber:
     prot_printf(pout, "%s BAD Invalid number in Search command\r\n", base->tag);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 badinterval:
     prot_printf(
         pout, "%s BAD Invalid interval in Search command\r\n", base->tag);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 missingcharset:
     prot_printf(pout, "%s BAD Missing charset\r\n", base->tag);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 badcharset:
@@ -1638,14 +1986,18 @@ badcharset:
                 "%s BAD %s\r\n",
                 base->tag,
                 error_message(IMAP_UNRECOGNIZED_CHARSET));
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 
 utf8accept:
     prot_printf(pout,
                 "%s BAD Charset MUST be UTF-8 when using UTF8=ACCEPT\r\n",
                 base->tag);
-    if (c != EOF) prot_ungetc(c, pin);
+    if (c != EOF) {
+        prot_ungetc(c, pin);
+    }
     return EOF;
 }
 

@@ -92,7 +92,9 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
 
 HIDDEN void jmap_notes_init(jmap_settings_t *settings)
 {
-    if (!config_getstring(IMAPOPT_NOTESMAILBOX)) return;
+    if (!config_getstring(IMAPOPT_NOTESMAILBOX)) {
+        return;
+    }
 
     jmap_add_methods(jmap_notes_methods_standard, settings);
 
@@ -106,7 +108,9 @@ HIDDEN void jmap_notes_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_notes_capabilities(json_t *account_capabilities)
 {
-    if (!config_getstring(IMAPOPT_NOTESMAILBOX)) return;
+    if (!config_getstring(IMAPOPT_NOTESMAILBOX)) {
+        return;
+    }
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(
@@ -181,10 +185,12 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
     /* notes collection */
     int r = lookup_notes_collection(accountid, &mbentry);
     if (!r) { // happy path
-        if (mbentryp)
+        if (mbentryp) {
             *mbentryp = mbentry;
-        else
+        }
+        else {
             mboxlist_entry_free(&mbentry);
+        }
         return 0;
     }
 
@@ -197,8 +203,9 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
     r = lookup_notes_collection(accountid, &mbentry);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        if (!mbentry)
+        if (!mbentry) {
             goto done;
+        }
         else if (mbentry->server) {
             proxy_findserver(mbentry->server,
                              &http_protocol,
@@ -245,10 +252,12 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
 
 done:
     mboxname_release(&namespacelock);
-    if (mbentryp && !r)
+    if (mbentryp && !r) {
         *mbentryp = mbentry;
-    else
+    }
+    else {
         mboxlist_entry_free(&mbentry);
+    }
     return r;
 }
 
@@ -270,7 +279,9 @@ static int _note_get(message_t *msg,
     if (want_created) {
         r = message_get_field(
             msg, "X-Mail-Created-Date", MESSAGE_DECODED | MESSAGE_TRIM, buf);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         json_object_set_new(note, "created", json_string(buf_cstring(buf)));
     }
@@ -280,7 +291,9 @@ static int _note_get(message_t *msg,
         uint32_t system_flags;
 
         r = message_get_systemflags(msg, &system_flags);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         json_object_set_new(
             note, "isFlagged", json_boolean(system_flags & FLAG_FLAGGED));
@@ -292,7 +305,9 @@ static int _note_get(message_t *msg,
         time_t t;
 
         r = message_get_savedate(msg, &t);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
         json_object_set_new(note, "lastSaved", json_string(datestr));
@@ -302,7 +317,9 @@ static int _note_get(message_t *msg,
     if (jmap_wantprop(props, "title")) {
         buf_reset(buf);
         r = message_get_subject(msg, buf);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         json_object_set_new(note, "title", json_string(buf_cstring(buf)));
     }
@@ -315,9 +332,15 @@ static int _note_get(message_t *msg,
 
         buf_reset(buf);
         r = message_get_body(msg, buf);
-        if (!r) r = message_get_encoding(msg, &encoding);
-        if (!r) r = message_get_charset_id(msg, &charset_id);
-        if (r) return r;
+        if (!r) {
+            r = message_get_encoding(msg, &encoding);
+        }
+        if (!r) {
+            r = message_get_charset_id(msg, &charset_id);
+        }
+        if (r) {
+            return r;
+        }
 
         charset = charset_lookupname(charset_id);
         if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
@@ -336,8 +359,12 @@ static int _note_get(message_t *msg,
         const char *type = NULL, *subtype = NULL;
 
         r = message_get_type(msg, &type);
-        if (!r) r = message_get_subtype(msg, &subtype);
-        if (r) return r;
+        if (!r) {
+            r = message_get_subtype(msg, &subtype);
+        }
+        if (r) {
+            return r;
+        }
 
         int isHTML =
             !strcasecmpsafe("text", type) && !strcasecmpsafe("html", subtype);
@@ -383,13 +410,17 @@ static void foreach_note(
                                   "X-Uniform-Type-Identifier",
                                   MESSAGE_DECODED | MESSAGE_TRIM,
                                   &buf);
-        if (r || strcmp(APPLE_NOTES_ID, buf_cstring(&buf))) continue;
+        if (r || strcmp(APPLE_NOTES_ID, buf_cstring(&buf))) {
+            continue;
+        }
 
         r = message_get_field(msg,
                               "X-Universally-Unique-Identifier",
                               MESSAGE_DECODED | MESSAGE_TRIM,
                               &buf);
-        if (r) continue;
+        if (r) {
+            continue;
+        }
 
         void *data = NULL;
         const char *id = buf_cstring(&buf);
@@ -474,7 +505,9 @@ static int jmap_note_get(jmap_req_t *req)
 
     r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Does the client request specific notes? */
     if (JNOTNULL(get.ids)) {
@@ -588,8 +621,9 @@ static int _note_create(struct mailbox *mailbox,
     *new_note = json_object();
 
     prop = json_object_get(note, "id");
-    if (prop)
+    if (prop) {
         uid = json_string_value(prop);
+    }
     else {
         uid = makeuuid();
         json_object_set_new(*new_note, "id", json_string(uid));
@@ -601,10 +635,12 @@ static int _note_create(struct mailbox *mailbox,
     time_to_rfc5322(now, datestr, sizeof(datestr));
 
     prop = json_object_get(note, "created");
-    if (prop)
+    if (prop) {
         created = json_string_value(prop);
-    else
+    }
+    else {
         created = datestr;
+    }
 
     prop = json_object_get(note, "title");
     if (prop) {
@@ -631,8 +667,9 @@ static int _note_create(struct mailbox *mailbox,
             body = charset_qpencode_mimebody(
                 buf_base(&buf), buf_len(&buf), 0, NULL);
         }
-        else
+        else {
             body = buf_release(&buf);
+        }
     }
     else {
         body = xstrdup("");
@@ -640,16 +677,20 @@ static int _note_create(struct mailbox *mailbox,
     }
 
     prop = json_object_get(note, "isHTML");
-    if (prop)
+    if (prop) {
         isHTML = json_boolean_value(prop);
-    else
+    }
+    else {
         json_object_set_new(*new_note, "isHTML", json_false());
+    }
 
     prop = json_object_get(note, "isFlagged");
-    if (prop)
+    if (prop) {
         isFlagged = json_boolean_value(prop);
-    else
+    }
+    else {
         json_object_set_new(*new_note, "isFlagged", json_false());
+    }
 
     buf_reset(&buf);
     if (strchr(httpd_userid, '@')) {
@@ -689,7 +730,9 @@ static int _note_create(struct mailbox *mailbox,
         r = IMAP_IOERROR;
     }
     fclose(f);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Prepare to append the message to the mailbox */
     r = append_setup_mbox(&as,
@@ -710,7 +753,9 @@ static int _note_create(struct mailbox *mailbox,
     }
 
     /* Append the message to the mailbox */
-    if (isFlagged) strarray_append(&flags, "\\Flagged");
+    if (isFlagged) {
+        strarray_append(&flags, "\\Flagged");
+    }
     r = append_fromstage(
         &as, &bodypart, stage, now, 0, &flags, 0, /*annots*/ NULL);
 
@@ -741,10 +786,12 @@ done:
     strarray_fini(&flags);
     append_removestage(stage);
     if (mailbox) {
-        if (r)
+        if (r) {
             mailbox_abort(mailbox);
-        else
+        }
+        else {
             r = mailbox_commit(mailbox);
+        }
     }
     if (r) {
         json_decref(*new_note);
@@ -917,7 +964,9 @@ static int jmap_note_set(jmap_req_t *req)
     r = mailbox_open_iwl(mbentry->name, &mbox);
     assert(mbox);
     mboxlist_entry_free(&mbentry);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     buf_printf(&buf, MODSEQ_FMT, mbox->i.highestmodseq);
     set.old_state = buf_release(&buf);
@@ -940,7 +989,9 @@ static int jmap_note_set(jmap_req_t *req)
         }
         else if (!_notes_setargs_check(NULL /*id*/, val, &err)) {
             r = _note_create(mbox, val, &new_note);
-            if (r) err = jmap_server_error(r);
+            if (r) {
+                err = jmap_server_error(r);
+            }
         }
         if (err) {
             json_object_set_new(set.not_created, creation_id, err);
@@ -1056,9 +1107,13 @@ static int jmap_note_changes(jmap_req_t *req)
     mboxlist_entry_free(&mbentry);
 
     r = mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0);
-    if (r) userflag = -1;
+    if (r) {
+        userflag = -1;
+    }
 
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     struct mailbox_iter *iter =
         mailbox_iter_init(mbox, changes.since_modseq, 0);
@@ -1077,10 +1132,14 @@ static int jmap_note_changes(jmap_req_t *req)
             /* Skip any notes that have been replaced by an update */
             if (userflag >= 0
                 && record->user_flags[userflag / 32] & (1U << (userflag & 31)))
+            {
                 continue;
+            }
 
             /* Skip any notes created AND deleted since modseq */
-            if (record->createdmodseq > changes.since_modseq) continue;
+            if (record->createdmodseq > changes.since_modseq) {
+                continue;
+            }
 
             change_list = changes.destroyed;
         }
@@ -1096,7 +1155,9 @@ static int jmap_note_changes(jmap_req_t *req)
                               "X-Universally-Unique-Identifier",
                               MESSAGE_DECODED | MESSAGE_TRIM,
                               &buf))
+        {
             continue;
+        }
         id = buf_cstring(&buf);
 
         if (changes.max_changes) {

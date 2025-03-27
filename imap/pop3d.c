@@ -237,7 +237,9 @@ static int popd_canon_user(sasl_conn_t *conn,
     size_t n;
     int r;
 
-    if (!ulen) ulen = strlen(user);
+    if (!ulen) {
+        ulen = strlen(user);
+    }
 
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
         /* make a working copy of the auth[z]id */
@@ -255,7 +257,9 @@ static int popd_canon_user(sasl_conn_t *conn,
             n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
             /* make a copy of the subfolder */
-            if (popd_subfolder) free(popd_subfolder);
+            if (popd_subfolder) {
+                free(popd_subfolder);
+            }
             popd_subfolder = NULL;
             popd_subfolder = xstrndup(p, n);
 
@@ -306,7 +310,9 @@ static int popd_proxy_policy(sasl_conn_t *conn,
         char *p;
 
         /* make a working copy of the authzid */
-        if (!rlen) rlen = strlen(requested_user);
+        if (!rlen) {
+            rlen = strlen(requested_user);
+        }
         if (rlen >= MAX_MAILBOX_BUFFER) {
             sasl_seterror(conn, 0, "buffer overflow while proxying");
             return SASL_BUFOVER;
@@ -362,7 +368,9 @@ static void popd_reset(void)
     count_dele = 0;
 
     /* close local mailbox */
-    if (popd_mailbox) mailbox_close(&popd_mailbox);
+    if (popd_mailbox) {
+        mailbox_close(&popd_mailbox);
+    }
 
     /* close backend connection */
     if (backend) {
@@ -384,13 +392,14 @@ static void popd_reset(void)
         prot_free(popd_out);
     }
 
-    if (config_auditlog)
+    if (config_auditlog) {
         syslog(LOG_NOTICE,
                "auditlog: traffic sessionid=<%s>"
                " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(),
                bytes_in,
                bytes_out);
+    }
 
     popd_in = popd_out = NULL;
 
@@ -442,7 +451,9 @@ int service_init(int argc, char **argv, char **envp __attribute__((unused)))
     int r;
     int opt;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -536,15 +547,20 @@ int service_main(int argc __attribute__((unused)),
                         0,
                         &popd_saslconn)
         != SASL_OK)
+    {
         fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
+    }
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
-    if (sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
+    if (sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK) {
         fatal("Failed to set SASL property", EX_TEMPFAIL);
+    }
     if (sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf)
         != SASL_OK)
+    {
         fatal("Failed to set SASL property", EX_TEMPFAIL);
+    }
 
     if (localip) {
         popd_haveaddr = 1;
@@ -554,13 +570,17 @@ int service_main(int argc __attribute__((unused)),
 
     /* Set inactivity timer */
     popd_timeout = config_getduration(IMAPOPT_POPTIMEOUT, 'm');
-    if (popd_timeout < 10 * 60) popd_timeout = 10 * 60;
+    if (popd_timeout < 10 * 60) {
+        popd_timeout = 10 * 60;
+    }
     prot_settimeout(popd_in, popd_timeout);
     prot_setflushonread(popd_in, popd_out);
 
     /* we were connected on pop3s port so we should do
        TLS negotiation immediatly */
-    if (pop3s == 1) cmd_stls(1);
+    if (pop3s == 1) {
+        cmd_stls(1);
+    }
 
     /* Create APOP challenge for banner */
     *popd_apop_chal = 0;
@@ -573,7 +593,9 @@ int service_main(int argc __attribute__((unused)),
     }
 
     prot_printf(popd_out, "+OK");
-    if (config_serverinfo) prot_printf(popd_out, " %s", config_servername);
+    if (config_serverinfo) {
+        prot_printf(popd_out, " %s", config_servername);
+    }
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         prot_printf(popd_out, " Cyrus POP3 %s", CYRUS_VERSION);
     }
@@ -640,7 +662,9 @@ void shut_down(int code)
     proc_cleanup(&proc_handle);
 
     /* close local mailbox */
-    if (popd_mailbox) mailbox_close(&popd_mailbox);
+    if (popd_mailbox) {
+        mailbox_close(&popd_mailbox);
+    }
 
     if (popd_map) {
         free(popd_map);
@@ -679,13 +703,14 @@ void shut_down(int code)
         prot_free(popd_out);
     }
 
-    if (config_auditlog)
+    if (config_auditlog) {
         syslog(LOG_NOTICE,
                "auditlog: traffic sessionid=<%s>"
                " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(),
                bytes_in,
                bytes_out);
+    }
 
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
@@ -724,7 +749,9 @@ EXPORTED void fatal(const char *s, int code)
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -742,16 +769,22 @@ static int expunge_deleted(void)
     /* loop over all known messages looking for deletes */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
         /* not deleted? skip */
-        if (!popd_map[msgno - 1].deleted) continue;
+        if (!popd_map[msgno - 1].deleted) {
+            continue;
+        }
 
         /* error reading? abort */
         memset(&record, 0, sizeof(struct index_record));
         record.recno = popd_map[msgno - 1].recno;
         r = mailbox_reload_index_record(popd_mailbox, &record);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         /* already expunged? skip */
-        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
+        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            continue;
+        }
 
         /* mark expunged */
         record.system_flags |= FLAG_DELETED;
@@ -760,7 +793,9 @@ static int expunge_deleted(void)
 
         /* store back to the mailbox */
         r = mailbox_rewrite_index_record(popd_mailbox, &record);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         mboxevent_extract_record(mboxevent, popd_mailbox, &record);
     }
@@ -812,7 +847,9 @@ static void cmdloop(void)
                           popd_userid,
                           popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                           NULL);
-        if (r) fatal("unable to register process", EX_IOERR);
+        if (r) {
+            fatal("unable to register process", EX_IOERR);
+        }
         proc_settitle(config_ident,
                       popd_clienthost,
                       popd_userid,
@@ -863,8 +900,12 @@ static void cmdloop(void)
         }
 
         p = inputbuf + strlen(inputbuf);
-        if (p > inputbuf && p[-1] == '\n') *--p = '\0';
-        if (p > inputbuf && p[-1] == '\r') *--p = '\0';
+        if (p > inputbuf && p[-1] == '\n') {
+            *--p = '\0';
+        }
+        if (p > inputbuf && p[-1] == '\r') {
+            *--p = '\0';
+        }
 
         /* Parse into keyword and argument */
         for (p = inputbuf; *p && !Uisspace(*p); p++);
@@ -895,8 +936,9 @@ static void cmdloop(void)
         }
         lcase(inputbuf);
 
-        if (config_getswitch(IMAPOPT_CHATTY))
+        if (config_getswitch(IMAPOPT_CHATTY)) {
             syslog(LOG_NOTICE, "command: %s", inputbuf);
+        }
 
         /* register process */
         r = proc_register(&proc_handle,
@@ -906,7 +948,9 @@ static void cmdloop(void)
                           popd_userid,
                           popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                           inputbuf);
-        if (r) fatal("unable to register process", EX_IOERR);
+        if (r) {
+            fatal("unable to register process", EX_IOERR);
+        }
         proc_settitle(config_ident,
                       popd_clienthost,
                       popd_userid,
@@ -919,8 +963,12 @@ static void cmdloop(void)
                 int minpollsec = config_getduration(IMAPOPT_POPMINPOLL, 'm');
 
                 /* check preconditions! */
-                if (!popd_mailbox) goto done;
-                if (mailbox_lock_index(popd_mailbox, LOCK_EXCLUSIVE)) goto done;
+                if (!popd_mailbox) {
+                    goto done;
+                }
+                if (mailbox_lock_index(popd_mailbox, LOCK_EXCLUSIVE)) {
+                    goto done;
+                }
 
                 /* mark dirty in case everything else misses it - we're updating
                  * at least the last login */
@@ -956,8 +1004,9 @@ static void cmdloop(void)
                 telemetry_rusage(popd_userid);
                 return;
             }
-            else
+            else {
                 prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
+            }
         }
         else if (!strcmp(inputbuf, "capa")) {
             if (arg) {
@@ -977,16 +1026,20 @@ static void cmdloop(void)
                 }
             }
             else if (!strcmp(inputbuf, "pass")) {
-                if (!arg)
+                if (!arg) {
                     prot_printf(popd_out, "-ERR Missing argument\r\n");
-                else
+                }
+                else {
                     cmd_pass(arg);
+                }
             }
             else if (!strcmp(inputbuf, "apop") && *popd_apop_chal) {
-                if (!arg)
+                if (!arg) {
                     prot_printf(popd_out, "-ERR Missing argument\r\n");
-                else
+                }
+                else {
                     cmd_apop(arg);
+                }
             }
             else if (!strcmp(inputbuf, "auth")) {
                 cmd_auth(arg);
@@ -1034,18 +1087,20 @@ static void cmdloop(void)
             else {
                 prot_printf(popd_out, "+OK scan listing follows\r\n");
                 for (msgno = 1; msgno <= popd_exists; msgno++) {
-                    if (!popd_map[msgno - 1].deleted)
+                    if (!popd_map[msgno - 1].deleted) {
                         prot_printf(popd_out,
                                     "%u %u\r\n",
                                     msgno,
                                     popd_map[msgno - 1].size);
+                    }
                 }
                 prot_printf(popd_out, ".\r\n");
             }
         }
         else if (!strcmp(inputbuf, "retr")) {
-            if (!arg)
+            if (!arg) {
                 prot_printf(popd_out, "-ERR Missing argument\r\n");
+            }
             else {
                 msgno = parse_msgno(&arg);
                 if (msgno) {
@@ -1056,8 +1111,9 @@ static void cmdloop(void)
             }
         }
         else if (!strcmp(inputbuf, "dele")) {
-            if (!arg)
+            if (!arg) {
                 prot_printf(popd_out, "-ERR Missing argument\r\n");
+            }
             else if (config_popuseacl && !(popd_myrights & ACL_DELETEMSG)) {
                 prot_printf(popd_out,
                             "-ERR [SYS/PERM] %s\r\n",
@@ -1078,14 +1134,17 @@ static void cmdloop(void)
             }
         }
         else if (!strcmp(inputbuf, "noop")) {
-            if (arg)
+            if (arg) {
                 prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
-            else
+            }
+            else {
                 prot_printf(popd_out, "+OK\r\n");
+            }
         }
         else if (!strcmp(inputbuf, "rset")) {
-            if (arg)
+            if (arg) {
                 prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
+            }
             else {
                 for (msgno = 1; msgno <= popd_exists; msgno++) {
                     popd_map[msgno - 1].deleted = 0;
@@ -1100,7 +1159,9 @@ static void cmdloop(void)
             uint32_t lines;
             int r;
 
-            if (!p) p = "";
+            if (!p) {
+                p = "";
+            }
             while (*p && Uisspace(*p)) {
                 p++;
             }
@@ -1139,7 +1200,9 @@ static void cmdloop(void)
             else {
                 prot_printf(popd_out, "+OK unique-id listing follows\r\n");
                 for (msgno = 1; msgno <= popd_exists; msgno++) {
-                    if (!popd_map[msgno - 1].deleted) uidl_msg(msgno);
+                    if (!popd_map[msgno - 1].deleted) {
+                        uidl_msg(msgno);
+                    }
                 }
                 prot_printf(popd_out, ".\r\n");
             }
@@ -1173,8 +1236,9 @@ unsigned parse_msgno(char **ptr)
         prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
         *ptr = (char *) p;
     }
-    else if (msg_exists_or_err(msgno))
+    else if (msg_exists_or_err(msgno)) {
         return msgno;
+    }
 
     return 0;
 }
@@ -1249,11 +1313,13 @@ static void cmd_stls(int pop3s)
 
         syslog(LOG_ERR, "[pop3d] error initializing TLS");
 
-        if (pop3s == 0)
+        if (pop3s == 0) {
             prot_printf(
                 popd_out, "-ERR [SYS/PERM] %s\r\n", "Error initializing TLS");
-        else
+        }
+        else {
             shut_down(0);
+        }
 
         return;
     }
@@ -1279,9 +1345,12 @@ static void cmd_stls(int pop3s)
                                  &tls_conn);
 
     /* put the iplocalport and ipremoteport back */
-    if (localip) buf_initm(&saslprops.iplocalport, localip, strlen(localip));
-    if (remoteip)
+    if (localip) {
+        buf_initm(&saslprops.iplocalport, localip, strlen(localip));
+    }
+    if (remoteip) {
         buf_initm(&saslprops.ipremoteport, remoteip, strlen(remoteip));
+    }
 
     /* if error */
     if (result == -1) {
@@ -1351,7 +1420,9 @@ static void cmd_apop(char *response)
         }
 
         /* Don't allow user probing */
-        if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+        if (sasl_result == SASL_NOUSER) {
+            sasl_result = SASL_BADAUTH;
+        }
 
         prot_printf(popd_out,
                     "-ERR [AUTH] authenticating: %s\r\n",
@@ -1454,7 +1525,9 @@ static void cmd_pass(char *pass)
     if (!strcmp(popd_userid, "anonymous")) {
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
             pass = beautify_string(pass);
-            if (strlen(pass) > 500) pass[500] = '\0';
+            if (strlen(pass) > 500) {
+                pass[500] = '\0';
+            }
             syslog(LOG_NOTICE, "login: %s anonymous %s", popd_clienthost, pass);
         }
         else {
@@ -1533,7 +1606,9 @@ static void cmd_pass(char *pass)
 
     /* popd_authstate may have been set as a side effect
      * of sasl_checkpass() calling mysasl_proxy_policy */
-    if (popd_authstate) auth_freestate(popd_authstate);
+    if (popd_authstate) {
+        auth_freestate(popd_authstate);
+    }
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1697,9 +1772,10 @@ static void cmd_auth(char *arg)
         default:
             /* failed authentication */
             if (authtype) {
-                if (sasl_result != SASL_NOUSER)
+                if (sasl_result != SASL_NOUSER) {
                     sasl_getprop(
                         popd_saslconn, SASL_USERNAME, (const void **) &userid);
+                }
 
                 syslog(LOG_NOTICE,
                        "badlogin: %s %s (%s) [%s]",
@@ -1720,7 +1796,9 @@ static void cmd_auth(char *arg)
             }
 
             /* Don't allow user probing */
-            if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+            if (sasl_result == SASL_NOUSER) {
+                sasl_result = SASL_BADAUTH;
+            }
 
             prot_printf(popd_out,
                         "-ERR [AUTH] authenticating: %s\r\n",
@@ -1835,7 +1913,9 @@ int openinbox(void)
         /* NOTE - if we have a subfolder, autocreateinbox should still create
          * it if it's an autocreate folder - otherwise tough luck */
         r = autocreate_user(&popd_namespace, popd_userid);
-        if (!r) r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+        if (!r) {
+            r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+        }
     }
 #endif
 
@@ -1977,7 +2057,9 @@ int openinbox(void)
         exists = 0;
 
         unsigned iterflags = ITER_SKIP_EXPUNGED;
-        if (config_popuseimapflags) iterflags |= ITER_SKIP_DELETED;
+        if (config_popuseimapflags) {
+            iterflags |= ITER_SKIP_DELETED;
+        }
 
         struct mailbox_iter *iter =
             mailbox_iter_init(popd_mailbox, 0, iterflags);
@@ -1999,7 +2081,9 @@ int openinbox(void)
             popd_map[exists].seen = 0;
             exists++;
 
-            if (exists >= popd_mailbox->i.exists) break; /* we're full! */
+            if (exists >= popd_mailbox->i.exists) {
+                break; /* we're full! */
+            }
         }
 
         mailbox_iter_done(&iter);
@@ -2061,12 +2145,14 @@ int openinbox(void)
     mboxlist_entry_free(&mbentry);
     mbname_free(&mbname);
 
-    if (statusline)
+    if (statusline) {
         prot_printf(popd_out, "+OK%s", statusline);
-    else
+    }
+    else {
         prot_printf(popd_out,
                     "+OK Mailbox locked and ready SESSIONID=<%s>\r\n",
                     session_id());
+    }
     prot_flush(popd_out);
 
     return 0;
@@ -2112,15 +2198,22 @@ static int blat(int msgno, int lines)
     }
     prot_printf(popd_out, "+OK Message follows\r\n");
     while (lines != thisline) {
-        if (!fgets(buf, sizeof(buf), msgfile)) break;
+        if (!fgets(buf, sizeof(buf), msgfile)) {
+            break;
+        }
 
         if (thisline < 0) {
-            if (buf[0] == '\r' && buf[1] == '\n') thisline = 0;
+            if (buf[0] == '\r' && buf[1] == '\n') {
+                thisline = 0;
+            }
         }
-        else
+        else {
             thisline++;
+        }
 
-        if (buf[0] == '.') (void) prot_putc('.', popd_out);
+        if (buf[0] == '.') {
+            (void) prot_putc('.', popd_out);
+        }
         do {
             prot_printf(popd_out, "%s", buf);
         } while (buf[strlen(buf) - 1] != '\n'
@@ -2129,7 +2222,9 @@ static int blat(int msgno, int lines)
     fclose(msgfile);
 
     /* Protect against messages not ending in CRLF */
-    if (buf[strlen(buf) - 1] != '\n') prot_printf(popd_out, "\r\n");
+    if (buf[strlen(buf) - 1] != '\n') {
+        prot_printf(popd_out, "\r\n");
+    }
 
     /* Clients may become confused when the .\r\n sequence gets split
      * up across packets.  Flush first to prevent that. */
@@ -2159,11 +2254,15 @@ static int reset_saslconn(sasl_conn_t **conn)
                           NULL,
                           0,
                           conn);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
@@ -2174,7 +2273,9 @@ static int reset_saslconn(sasl_conn_t **conn)
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -2233,23 +2334,36 @@ static int update_seen(void)
     struct index_record record;
     int r = 0;
 
-    if (!config_popuseimapflags) return 0;
+    if (!config_popuseimapflags) {
+        return 0;
+    }
 
-    if (config_popuseacl && !(popd_myrights & ACL_SETSEEN)) return 0;
+    if (config_popuseacl && !(popd_myrights & ACL_SETSEEN)) {
+        return 0;
+    }
 
     /* we know this mailbox must be owned by the user, because
      * all POP mailboxes are */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
-        if (!popd_map[msgno - 1].seen) continue; /* don't even need to check */
+        if (!popd_map[msgno - 1].seen) {
+            continue; /* don't even need to check */
+        }
         memset(&record, 0, sizeof(struct index_record));
         record.recno = popd_map[msgno - 1].recno;
-        if (mailbox_reload_index_record(popd_mailbox, &record)) continue;
-        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
-            continue;                                  /* already expunged */
-        if (record.system_flags & FLAG_SEEN) continue; /* already seen */
+        if (mailbox_reload_index_record(popd_mailbox, &record)) {
+            continue;
+        }
+        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            continue; /* already expunged */
+        }
+        if (record.system_flags & FLAG_SEEN) {
+            continue; /* already seen */
+        }
         record.system_flags |= FLAG_SEEN;
         r = mailbox_rewrite_index_record(popd_mailbox, &record);
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return r;

@@ -227,7 +227,9 @@ EXPORTED int partlist_foreach(partlist_t *part_list,
     for (i = 0; i < part_list->size; i++) {
         r = proc(&part_list->items[i], rock);
 
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return r;
@@ -592,10 +594,18 @@ HIDDEN const char *partlist_local_find_freespace_most(int percent,
         partlist_local_init();
     }
 
-    if (available) *available = 0;
-    if (total) *total = 0;
-    if (tavailable) *tavailable = 0;
-    if (ttotal) *ttotal = 0;
+    if (available) {
+        *available = 0;
+    }
+    if (total) {
+        *total = 0;
+    }
+    if (tavailable) {
+        *tavailable = 0;
+    }
+    if (ttotal) {
+        *ttotal = 0;
+    }
 
     partlist_bump_action(partlist_local);
 
@@ -619,8 +629,12 @@ HIDDEN const char *partlist_local_find_freespace_most(int percent,
         available_tmp = partlist_local->items[i].available;
         total_tmp = partlist_local->items[i].total;
 
-        if (tavailable) *tavailable += available_tmp;
-        if (ttotal) *ttotal += total_tmp;
+        if (tavailable) {
+            *tavailable += available_tmp;
+        }
+        if (ttotal) {
+            *ttotal += total_tmp;
+        }
 
         if (percent) {
             percent_available = 0.;
@@ -632,16 +646,24 @@ HIDDEN const char *partlist_local_find_freespace_most(int percent,
             {
                 percent_available_max = percent_available;
                 item = partlist_local->items[i].item;
-                if (available) *available = available_tmp;
-                if (total) *total = total_tmp;
+                if (available) {
+                    *available = available_tmp;
+                }
+                if (total) {
+                    *total = total_tmp;
+                }
             }
         }
         else {
             if (available_tmp > available_max) {
                 available_max = available_tmp;
                 item = partlist_local->items[i].item;
-                if (available) *available = available_tmp;
-                if (total) *total = total_tmp;
+                if (available) {
+                    *available = available_tmp;
+                }
+                if (total) {
+                    *total = total_tmp;
+                }
             }
         }
     }

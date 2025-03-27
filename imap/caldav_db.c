@@ -121,19 +121,25 @@ EXPORTED int caldav_init(void)
     if (!icaltime_is_null_time(date)) {
         caldav_epoch = icaltime_as_timet_with_zone(date, NULL);
     }
-    if (caldav_epoch == -1) caldav_epoch = INT_MIN;
+    if (caldav_epoch == -1) {
+        caldav_epoch = INT_MIN;
+    }
 
     /* Get max date-time */
     date = icaltime_from_string(config_getstring(IMAPOPT_CALDAV_MAXDATETIME));
     if (!icaltime_is_null_time(date)) {
         caldav_eternity = icaltime_as_timet_with_zone(date, NULL);
     }
-    if (caldav_eternity == -1) caldav_eternity = INT_MAX;
+    if (caldav_eternity == -1) {
+        caldav_eternity = INT_MAX;
+    }
 
     r = sqldb_init();
     caldav_alarm_init();
 
-    if (!r) caldav_initialized = 1;
+    if (!r) {
+        caldav_initialized = 1;
+    }
     return r;
 }
 
@@ -142,7 +148,9 @@ EXPORTED int caldav_done(void)
     int r;
     caldav_alarm_done();
     r = sqldb_done();
-    if (!r) caldav_initialized = 0;
+    if (!r) {
+        caldav_initialized = 0;
+    }
     return r;
 }
 
@@ -153,7 +161,9 @@ EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
     init_internal();
 
     sqldb_t *db = dav_open_userid(userid);
-    if (!db) return NULL;
+    if (!db) {
+        return NULL;
+    }
 
     caldavdb = xzmalloc(sizeof(struct caldav_db));
     caldavdb->db = db;
@@ -189,7 +199,9 @@ EXPORTED struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox)
     }
 
     sqldb_t *db = dav_open_mailbox(mailbox);
-    if (!db) return NULL;
+    if (!db) {
+        return NULL;
+    }
 
     caldavdb = xzmalloc(sizeof(struct caldav_db));
     caldavdb->db = db;
@@ -202,7 +214,9 @@ EXPORTED int caldav_close(struct caldav_db *caldavdb)
 {
     int r = 0;
 
-    if (!caldavdb) return 0;
+    if (!caldavdb) {
+        return 0;
+    }
 
     free(caldavdb->sched_inbox);
     buf_free(&caldavdb->mailbox);
@@ -317,7 +331,9 @@ static void read_cdata(sqlite3_stmt *stmt,
     cdata->dav.modseq = sqlite3_column_int64(stmt, 17);
     cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 18);
 
-    if (skip_tombstones && !cdata->dav.alive) return;
+    if (skip_tombstones && !cdata->dav.alive) {
+        return;
+    }
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
     cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
@@ -347,7 +363,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     int skip_tombstones = !(rrock->flags & RROCK_FLAG_TOMBSTONES);
     read_cdata(stmt, db, skip_tombstones, cdata);
-    if (skip_tombstones && !cdata->dav.alive) return 0;
+    if (skip_tombstones && !cdata->dav.alive) {
+        return 0;
+    }
 
     if (rrock->cb) {
         /* We can use the column data directly for the callback */
@@ -400,7 +418,9 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
     r = sqldb_exec(caldavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock);
-    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !cdata.dav.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     /* always add the mailbox and resource, so error responses don't
      * crash out */
@@ -436,7 +456,9 @@ EXPORTED int caldav_lookup_imapuid(struct caldav_db *caldavdb,
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
     r = sqldb_exec(caldavdb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
-    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !cdata.dav.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     cdata.dav.mailbox = mailbox;
     cdata.dav.imap_uid = imap_uid;
@@ -466,7 +488,9 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb,
     *result = memset(&cdata, 0, sizeof(struct caldav_data));
 
     r = sqldb_exec(caldavdb->db, CMD_SELUID, bval, &read_cb, &rrock);
-    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+    if (!r && !cdata.dav.rowid) {
+        r = CYRUSDB_NOTFOUND;
+    }
 
     return r;
 }
@@ -579,9 +603,13 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
     if (cdata->dav.rowid) {
         int r =
             sqldb_exec(caldavdb->db, CMD_DELETE_JSCALCACHE, bval, NULL, NULL);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         r = sqldb_exec(caldavdb->db, CMD_UPDATE, bval, NULL, NULL);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         if (!cdata->dav.alive) {
             struct sqldb_bindval bvaljs[] = {
@@ -591,12 +619,16 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
             };
             r = sqldb_exec(
                 caldavdb->db, CMD_UPDATE_JSCAL_TOMBSTONES, bvaljs, NULL, NULL);
-            if (r) return r;
+            if (r) {
+                return r;
+            }
         }
     }
     else {
         int r = sqldb_exec(caldavdb->db, CMD_INSERT, bval, NULL, NULL);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         cdata->dav.rowid = sqldb_lastid(caldavdb->db);
     }
 
@@ -667,12 +699,16 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_READFIELDS " WHERE");
-    if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (mailbox) {
+        buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    }
     if (kind >= 0) {
         /* Use a negative value to signal that we accept ALL components types */
         buf_appendcstr(&sqlbuf, " comp_type = :comp_type AND");
     }
-    if (!oldmodseq) buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    if (!oldmodseq) {
+        buf_appendcstr(&sqlbuf, " alive = 1 AND");
+    }
     buf_appendcstr(&sqlbuf, " modseq > :modseq ORDER BY modseq LIMIT :limit;");
 
     r = sqldb_exec(caldavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
@@ -698,7 +734,9 @@ static void check_mattach_cb(icalcomponent *comp, void *rock)
              prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY))
         {
 
-            if (icalproperty_get_managedid_parameter(prop)) *mattach = 1;
+            if (icalproperty_get_managedid_parameter(prop)) {
+                *mattach = 1;
+            }
         }
     }
 }
@@ -897,9 +935,13 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
     }
 
     if (ptrarray_size(&filter->mbentries)) {
-        if (nargs++) buf_appendcstr(stmt, " AND");
+        if (nargs++) {
+            buf_appendcstr(stmt, " AND");
+        }
 
-        if (ptrarray_size(&filter->mbentries) > 1) buf_appendcstr(stmt, " (");
+        if (ptrarray_size(&filter->mbentries) > 1) {
+            buf_appendcstr(stmt, " (");
+        }
 
         for (int i = 0; i < ptrarray_size(&filter->mbentries); i++) {
             mbentry_t *mbentry = ptrarray_nth(&filter->mbentries, i);
@@ -908,7 +950,9 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
                                     ? mbentry->uniqueid
                                     : mbentry->name;
 
-            if (i) buf_appendcstr(stmt, " OR");
+            if (i) {
+                buf_appendcstr(stmt, " OR");
+            }
             buf_printf(stmt,
                        " mailbox = %s",
                        bval("mailbox",
@@ -917,11 +961,15 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
                             bvals));
         }
 
-        if (ptrarray_size(&filter->mbentries) > 1) buf_appendcstr(stmt, " )");
+        if (ptrarray_size(&filter->mbentries) > 1) {
+            buf_appendcstr(stmt, " )");
+        }
     }
 
     if (dynarray_size(&filter->jscal_ids)) {
-        if (nargs++) buf_appendcstr(stmt, " AND");
+        if (nargs++) {
+            buf_appendcstr(stmt, " AND");
+        }
 
         int have_recurid = 0;
         for (int i = 0; i < dynarray_size(&filter->jscal_ids); i++) {
@@ -951,17 +999,22 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
             buf_appendcstr(stmt, " )");
         }
         else {
-            if (dynarray_size(&filter->jscal_ids) > 1)
+            if (dynarray_size(&filter->jscal_ids) > 1) {
                 buf_appendcstr(stmt, " (");
+            }
 
             for (int i = 0; i < dynarray_size(&filter->jscal_ids); i++) {
                 struct caldav_jscal_id *id =
                     dynarray_nth(&filter->jscal_ids, i);
                 assert(id->ical_uid);
 
-                if (i) buf_appendcstr(stmt, " OR");
+                if (i) {
+                    buf_appendcstr(stmt, " OR");
+                }
 
-                if (id->ical_recurid) buf_appendcstr(stmt, " (");
+                if (id->ical_recurid) {
+                    buf_appendcstr(stmt, " (");
+                }
 
                 buf_printf(stmt,
                            " ical_uid = %s",
@@ -985,13 +1038,16 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
                 }
             }
 
-            if (dynarray_size(&filter->jscal_ids) > 1)
+            if (dynarray_size(&filter->jscal_ids) > 1) {
                 buf_appendcstr(stmt, " )");
+            }
         }
     }
 
     if (filter->imap_uid) {
-        if (nargs++) buf_appendcstr(stmt, " AND");
+        if (nargs++) {
+            buf_appendcstr(stmt, " AND");
+        }
         buf_printf(stmt,
                    " imap_uid = %s",
                    bval("imap_uid",
@@ -1009,7 +1065,9 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
             strarray_append(&bvals->strpool, icaltime_as_ical_string(dt));
             const char *arg = strarray_nth(&bvals->strpool, -1);
 
-            if (nargs++) buf_appendcstr(stmt, " AND");
+            if (nargs++) {
+                buf_appendcstr(stmt, " AND");
+            }
             buf_printf(stmt,
                        " jscal_objs.dtend > %s",
                        bval("after",
@@ -1023,7 +1081,9 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
             strarray_append(&bvals->strpool, icaltime_as_ical_string(dt));
             const char *arg = strarray_nth(&bvals->strpool, -1);
 
-            if (nargs++) buf_appendcstr(stmt, " AND");
+            if (nargs++) {
+                buf_appendcstr(stmt, " AND");
+            }
             buf_printf(stmt,
                        " jscal_objs.dtstart < %s",
                        bval("before",
@@ -1034,22 +1094,32 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
     }
 
     if (filter->op && ptrarray_size(&filter->subfilters)) {
-        if (nargs++) buf_appendcstr(stmt, " AND");
+        if (nargs++) {
+            buf_appendcstr(stmt, " AND");
+        }
 
-        if (ptrarray_size(&filter->subfilters) > 1) buf_appendcstr(stmt, " (");
+        if (ptrarray_size(&filter->subfilters) > 1) {
+            buf_appendcstr(stmt, " (");
+        }
 
         for (int i = 0; i < ptrarray_size(&filter->subfilters); i++) {
             struct caldav_jscal_filter *sub =
                 ptrarray_nth(&filter->subfilters, i);
             switch (filter->op) {
             case CALDAV_JSCAL_AND:
-                if (i) buf_appendcstr(stmt, " AND");
+                if (i) {
+                    buf_appendcstr(stmt, " AND");
+                }
                 break;
             case CALDAV_JSCAL_OR:
-                if (i) buf_appendcstr(stmt, " OR");
+                if (i) {
+                    buf_appendcstr(stmt, " OR");
+                }
                 break;
             case CALDAV_JSCAL_NOT:
-                if (i) buf_appendcstr(stmt, " AND");
+                if (i) {
+                    buf_appendcstr(stmt, " AND");
+                }
                 buf_appendcstr(stmt, " NOT");
                 break;
             default:
@@ -1060,16 +1130,22 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
             buf_appendcstr(stmt, " )");
         }
 
-        if (ptrarray_size(&filter->subfilters) > 1) buf_appendcstr(stmt, " )");
+        if (ptrarray_size(&filter->subfilters) > 1) {
+            buf_appendcstr(stmt, " )");
+        }
     }
 
-    if (!nargs) buf_appendcstr(stmt, " TRUE");
+    if (!nargs) {
+        buf_appendcstr(stmt, " TRUE");
+    }
 }
 
 static int filters_sched_inbox(struct caldav_db *caldavdb,
                                struct caldav_jscal_filter *f)
 {
-    if (!f) return 0;
+    if (!f) {
+        return 0;
+    }
 
     int i;
     for (i = 0; i < ptrarray_size(&f->mbentries); i++) {
@@ -1078,12 +1154,15 @@ static int filters_sched_inbox(struct caldav_db *caldavdb,
                                 ? mbentry->uniqueid
                                 : mbentry->name;
 
-        if (!strcmpsafe(mbarg, caldavdb->sched_inbox)) return 1;
+        if (!strcmpsafe(mbarg, caldavdb->sched_inbox)) {
+            return 1;
+        }
     }
 
     for (i = 0; i < ptrarray_size(&f->subfilters); i++) {
-        if (filters_sched_inbox(caldavdb, ptrarray_nth(&f->subfilters, i)))
+        if (filters_sched_inbox(caldavdb, ptrarray_nth(&f->subfilters, i))) {
             return 1;
+        }
     }
 
     return 0;
@@ -1151,7 +1230,9 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
         buf_appendcstr(&stmt, " ORDER BY ");
         size_t i;
         for (i = 0; i < nsort; i++) {
-            if (i) buf_appendcstr(&stmt, ", ");
+            if (i) {
+                buf_appendcstr(&stmt, ", ");
+            }
             switch (sort[i] & ~CAL_SORT_DESC) {
             case CAL_SORT_ICAL_UID:
                 buf_appendcstr(&stmt, "ical_uid");
@@ -1208,7 +1289,9 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
                                    struct caldav_data *cdata,
                                    icalcomponent *ical)
 {
-    if (cdata->comp_type != CAL_COMP_VEVENT) return 0;
+    if (cdata->comp_type != CAL_COMP_VEVENT) {
+        return 0;
+    }
     assert(cdata->dav.rowid);
 
     dynarray_t old_jscals;
@@ -1229,7 +1312,9 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     };
     struct read_jscals_rock rock = { &old_jscals, &strpool };
     r = sqldb_exec(caldavdb->db, CMD_SELJSCALOBJS, bval, read_jscals_cb, &rock);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Determine new JMAP objects, ordered ascending by recurid */
     struct hashset *seen_recurids = hashset_new(sizeof(struct icaltimetype));
@@ -1277,7 +1362,9 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
             continue;
         }
 
-        if (!utc) utc = icaltimezone_get_utc_timezone();
+        if (!utc) {
+            utc = icaltimezone_get_utc_timezone();
+        }
         icaltimetype dtstart = icalcomponent_get_dtstart(comp);
         dtstart = icaltime_convert_to_zone(dtstart, utc);
         icaltimetype dtend = icalcomponent_get_dtend(comp);
@@ -1371,7 +1458,9 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     int i;
     for (i = 0; i < ptrarray_size(&upsert); i++) {
         r = caldav_upsert_jscal(caldavdb, ptrarray_nth(&upsert, i));
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
 done:
@@ -1476,10 +1565,12 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb,
     if (prop) {
         const char *val = icalproperty_get_value_as_string(prop);
         if (val) {
-            if (!strcasecmp(val, "secret"))
+            if (!strcasecmp(val, "secret")) {
                 cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-            else if (!strcasecmp(val, "private"))
+            }
+            else if (!strcasecmp(val, "private")) {
                 cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
+            }
         }
     }
 
@@ -1515,7 +1606,9 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb,
         prop && !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
 
     int r = caldav_write(caldavdb, cdata);
-    if (!r) r = caldav_writeical_jmap(caldavdb, cdata, ical);
+    if (!r) {
+        r = caldav_writeical_jmap(caldavdb, cdata, ical);
+    }
     return r;
 }
 
@@ -1568,7 +1661,9 @@ EXPORTED int caldav_write_jscalcache(struct caldav_db *caldavdb,
 
     /* clean up existing records if any */
     r = sqldb_exec(caldavdb->db, CMD_DELETE_JSCALCACHE_USER, bval, NULL, NULL);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* insert the cache record */
     return sqldb_exec(
@@ -1635,11 +1730,14 @@ EXPORTED void caldav_jscal_filter_by_after(struct caldav_jscal_filter *f,
 
 EXPORTED void caldav_jscal_filter_fini(struct caldav_jscal_filter *f)
 {
-    if (!f) return;
+    if (!f) {
+        return;
+    }
 
     mbentry_t *mbentry;
-    while ((mbentry = ptrarray_pop(&f->mbentries)))
+    while ((mbentry = ptrarray_pop(&f->mbentries))) {
         mboxlist_entry_free(&mbentry);
+    }
     ptrarray_fini(&f->mbentries);
 
     for (int i = 0; i < dynarray_size(&f->jscal_ids); i++) {
@@ -1663,7 +1761,9 @@ EXPORTED void caldav_jscal_filter_fini(struct caldav_jscal_filter *f)
 
 EXPORTED void caldav_jscal_filter_free(struct caldav_jscal_filter **fp)
 {
-    if (!fp || !*fp) return;
+    if (!fp || !*fp) {
+        return;
+    }
 
     caldav_jscal_filter_fini(*fp);
     free(*fp);
@@ -1713,16 +1813,24 @@ static int _add_shareacls(const mbentry_t *mbentry, void *rock)
         int access;
 
         rightstr = strchr(userid, '\t');
-        if (!rightstr) break;
+        if (!rightstr) {
+            break;
+        }
         *rightstr++ = '\0';
 
         nextid = strchr(rightstr, '\t');
-        if (!nextid) break;
+        if (!nextid) {
+            break;
+        }
         *nextid++ = '\0';
 
         /* skip system users and owner */
-        if (is_system_user(userid)) continue;
-        if (!strcmp(userid, share->userid)) continue;
+        if (is_system_user(userid)) {
+            continue;
+        }
+        if (!strcmp(userid, share->userid)) {
+            continue;
+        }
 
         cyrus_acl_strtomask(rightstr, &access);
 
@@ -1731,21 +1839,31 @@ static int _add_shareacls(const mbentry_t *mbentry, void *rock)
 
         // if it's the principal, we have each user with principal read access
         if (isprincipal) {
-            if ((access & DACL_READ) == DACL_READ) set |= CALSHARE_HAVEPRIN;
+            if ((access & DACL_READ) == DACL_READ) {
+                set |= CALSHARE_HAVEPRIN;
+            }
         }
         // if it's the Outbox, we have each user with reply ability
         else if (isoutbox) {
             if ((access & (DACL_INVITE | DACL_REPLY))
                 == (DACL_INVITE | DACL_REPLY))
+            {
                 set |= CALSHARE_HAVESCHED;
+            }
         }
         // and if they can see anything else, then we NEED the above!
         else {
-            if (access & ACL_READ) set |= CALSHARE_WANTPRIN;
-            if (access & ACL_INSERT) set |= CALSHARE_WANTSCHED;
+            if (access & ACL_READ) {
+                set |= CALSHARE_WANTPRIN;
+            }
+            if (access & ACL_INSERT) {
+                set |= CALSHARE_WANTSCHED;
+            }
         }
 
-        if (set != have) hash_insert(userid, (void *) set, &share->user_access);
+        if (set != have) {
+            hash_insert(userid, (void *) set, &share->user_access);
+        }
     }
 
     free(acl);
@@ -1824,12 +1942,16 @@ EXPORTED int caldav_update_shareacls(const char *userid)
 
     if (strcmp(rock.principalacl, rock.newprincipalacl)) {
         r = mboxlist_updateacl_raw(rock.principalname, rock.newprincipalacl);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     if (strcmp(rock.outboxacl, rock.newoutboxacl)) {
         r = mboxlist_updateacl_raw(rock.outboxname, rock.newoutboxacl);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
 done:
@@ -1885,7 +2007,9 @@ static icaltimezone *_get_calendar_tz(const char *mboxname, const char *userid)
     if (!r && buf_len(&attrib)) {
         tz = icaltimezone_get_builtin_timezone(buf_cstring(&attrib));
         buf_free(&attrib);
-        if (tz) return icaltimezone_copy(tz);
+        if (tz) {
+            return icaltimezone_copy(tz);
+        }
     }
 
     /*  Check for CALDAV:calendar-timezone */

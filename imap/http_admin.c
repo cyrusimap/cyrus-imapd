@@ -99,7 +99,7 @@ struct namespace_t namespace_admin = {
     "/admin",
     NULL,
     http_allow_noauth_get,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ,
     admin_init,
@@ -137,7 +137,9 @@ static void admin_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_admin.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_ADMIN;
 
-    if (!namespace_admin.enabled) return;
+    if (!namespace_admin.enabled) {
+        return;
+    }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
@@ -165,10 +167,14 @@ static int meth_get(struct transaction_t *txn,
     char *p;
     int i;
 
-    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+    if (!httpd_userid) {
+        return HTTP_UNAUTHORIZED;
+    }
 
     /* Admins only */
-    if (!(httpd_userisadmin || httpd_userisproxyadmin)) return HTTP_FORBIDDEN;
+    if (!(httpd_userisadmin || httpd_userisproxyadmin)) {
+        return HTTP_FORBIDDEN;
+    }
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
@@ -176,25 +182,33 @@ static int meth_get(struct transaction_t *txn,
 
     /* Skip namespace */
     p += strlen(namespace_admin.prefix);
-    if (*p == '/') *p++ = '\0';
+    if (*p == '/') {
+        *p++ = '\0';
+    }
 
     /* Check if we're in murder space */
     len = strcspn(p, "/");
     if (config_mupdate_server && len == 6 && !strncmp(p, "murder", len)) {
         p += len;
-        if (!*p || !*++p) return action_murder(txn);
+        if (!*p || !*++p) {
+            return action_murder(txn);
+        }
 
         /* Get backend server */
         len = strcspn(p, "/");
         tgt->userid = xstrndup(p, len);
         p += len;
-        if (*p == '/') *p++ = '\0';
+        if (*p == '/') {
+            *p++ = '\0';
+        }
     }
 
     /* Get collection (action) */
     tgt->collection = p;
     p += strcspn(p, "/");
-    if (*p == '/') *p++ = '\0';
+    if (*p == '/') {
+        *p++ = '\0';
+    }
 
     /* Find the matching action */
     for (i = 0; actions[i].name; i++) {
@@ -204,8 +218,9 @@ static int meth_get(struct transaction_t *txn,
         }
     }
 
-    if (!action)
+    if (!action) {
         return HTTP_NOT_FOUND;
+    }
 
     else if (tgt->userid && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* Proxy to backend */
@@ -218,13 +233,16 @@ static int meth_get(struct transaction_t *txn,
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
 
-    else
+    else {
         return action(txn);
+    }
 }
 
 /* Perform a murder action */
@@ -296,7 +314,9 @@ static int action_murder(struct transaction_t *txn)
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -388,7 +408,9 @@ static int action_menu(struct transaction_t *txn)
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -489,7 +511,9 @@ static int action_proc(struct transaction_t *txn)
         for (i = 0; columns[i].key; i++) {
             if (Ukey == columns[i].key) {
                 key = *param->s;
-                if (isupper((int) key)) columns[i].key = tolower((int) key);
+                if (isupper((int) key)) {
+                    columns[i].key = tolower((int) key);
+                }
                 break;
             }
         }
@@ -641,25 +665,33 @@ static void get_part_stats(const char *key, const char *val, void *rock)
     long blocks_percent_used;
 
     if (prock->meta) {
-        if (strncmp("meta", key, 4)) return;
+        if (strncmp("meta", key, 4)) {
+            return;
+        }
         key += 4;
     }
-    if (strncmp("partition-", key, 10)) return;
+    if (strncmp("partition-", key, 10)) {
+        return;
+    }
 
     part = key + 10;
     path = val;
 
-    if (statvfs(path, &s)) return;
+    if (statvfs(path, &s)) {
+        return;
+    }
 
     blocks_used = s.f_blocks - s.f_bfree;
     blocks_percent_used =
         (long) (blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
 
     buf_printf_markup(body, level++, "<tr>");
-    if (prock->defpart && !strcmp(part, prock->defpart))
+    if (prock->defpart && !strcmp(part, prock->defpart)) {
         buf_printf_markup(body, level, "<td><i>%s</i></td>", part);
-    else
+    }
+    else {
         buf_printf_markup(body, level, "<td>%s</td>", part);
+    }
     buf_printf_markup(body,
                       level,
                       "<td align=\"right\">%ld</td>",
@@ -720,7 +752,9 @@ static int action_df(struct transaction_t *txn)
         txn->resp_body.maxage = 600; /* 10 min */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -809,7 +843,9 @@ static int known_regular(const char *key)
     int i;
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        if (!strcmp(imapopts[i].optname, key)) return 1;
+        if (!strcmp(imapopts[i].optname, key)) {
+            return 1;
+        }
     }
 
     return 0;
@@ -820,25 +856,35 @@ static unsigned known_overflow(const char *key)
     const char *match;
 
     /* any SASL key is OK */
-    if (!strncmp(key, "sasl_", 5)) return OVER_SASL;
+    if (!strncmp(key, "sasl_", 5)) {
+        return OVER_SASL;
+    }
 
     /* any partition is OK */
-    if (!strncmp(key, "partition-", 10)) return OVER_PARTITION;
+    if (!strncmp(key, "partition-", 10)) {
+        return OVER_PARTITION;
+    }
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "metapartition-", 14)
         && config_getoverflowstring(key + 4, NULL))
+    {
         return OVER_PARTITION;
+    }
 
     /* only valid if there's a partition with the same name */
     if (!strncmp(key, "archivepartition-", 17)
         && config_getoverflowstring(key + 7, NULL))
+    {
         return OVER_PARTITION;
+    }
 
     /* only valid if there's a partition with the same name */
     if ((match = strstr(key, "searchpartition-"))
         && config_getoverflowstring(match + 6, NULL))
+    {
         return OVER_PARTITION;
+    }
 
     return OVER_UNKNOWN;
 }
@@ -922,7 +968,9 @@ static void print_imapopt(struct imapopt_s *imapopt,
                     resp, level--, "%s", imapopt->enum_options[i].name);
             }
 
-            if (!((i + 1) % 6)) buf_printf_markup(resp, level, "<br>");
+            if (!((i + 1) % 6)) {
+                buf_printf_markup(resp, level, "<br>");
+            }
         }
         break;
 
@@ -1072,7 +1120,9 @@ static int action_conf(struct transaction_t *txn)
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 

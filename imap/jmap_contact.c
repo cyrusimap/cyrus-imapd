@@ -382,8 +382,12 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
         if (!strcasecmp(name, "fn")) {
             json_object_set_new(obj, "name", jmap_utf8string(propval));
@@ -392,14 +396,20 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
         else if (!strcasecmp(name, "member")
                  || !strcasecmp(name, "x-addressbookserver-member"))
         {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
+            if (strncmp(propval, "urn:uuid:", 9)) {
+                continue;
+            }
             json_object_set_new(contactids_set, propval + 9, json_true());
         }
 
         else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
+            if (strncmp(propval, "urn:uuid:", 9)) {
+                continue;
+            }
             struct vparse_param *param = vparse_get_param(ventry, "userid");
-            if (!param) continue;
+            if (!param) {
+                continue;
+            }
             json_t *object = json_object_get(otherids_sets, param->value);
             if (!object) {
                 object = json_object();
@@ -463,10 +473,14 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Load message containing the resource and parse vcard data */
     struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
@@ -674,17 +688,25 @@ static int _contacts_get(struct jmap_req *req,
     else {
         rock.rows = 0;
         r = carddav_get_cards(db, mbentry, req->userid, NULL, kind, cb, &rock);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     if (hashu64_count(&rock.jmapcache)) {
         r = carddav_begin(db);
-        if (!r) hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
-        if (r)
+        if (!r) {
+            hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
+        }
+        if (r) {
             carddav_abort(db);
-        else
+        }
+        else {
             r = carddav_commit(db);
-        if (r) goto done;
+        }
+        if (r) {
+            goto done;
+        }
     }
 
     /* Build response */
@@ -698,7 +720,9 @@ done:
     mailbox_close(&rock.mailbox);
     mboxlist_entry_free(&rock.mbentry);
     free_hashu64_table(&rock.jmapcache, free);
-    if (db) carddav_close(db);
+    if (db) {
+        carddav_close(db);
+    }
     return r;
 }
 
@@ -710,7 +734,9 @@ static int jmap_contactgroup_get(struct jmap_req *req)
 static const char *_json_array_get_string(const json_t *obj, size_t index)
 {
     const json_t *jval = json_array_get(obj, index);
-    if (!jval) return NULL;
+    if (!jval) {
+        return NULL;
+    }
     const char *val = json_string_value(jval);
     return val;
 }
@@ -725,7 +751,9 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
     int rights =
         mbentry && jmap_hasrights_mbentry(urock->req, mbentry, JACL_READITEMS);
     mboxlist_entry_free(&mbentry);
-    if (!rights) return 0;
+    if (!rights) {
+        return 0;
+    }
 
     /* Count, but don't process items that exceed the maximum record count. */
     if (urock->changes->max_changes
@@ -737,14 +765,17 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
 
     /* Report item as updated or destroyed. */
     if (dav.alive) {
-        if (dav.createdmodseq <= urock->changes->since_modseq)
+        if (dav.createdmodseq <= urock->changes->since_modseq) {
             json_array_append_new(urock->changes->updated, json_string(uid));
-        else
+        }
+        else {
             json_array_append_new(urock->changes->created, json_string(uid));
+        }
     }
     else {
-        if (dav.createdmodseq <= urock->changes->since_modseq)
+        if (dav.createdmodseq <= urock->changes->since_modseq) {
             json_array_append_new(urock->changes->destroyed, json_string(uid));
+        }
     }
 
     /* Fetch record to determine modseq. */
@@ -809,7 +840,9 @@ static int _contacts_changes(struct jmap_req *req, int kind)
                             -1 /*max_records*/,
                             &getchanges_cb,
                             &rock);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     strip_spurious_deletes(&rock);
 
@@ -822,7 +855,9 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
-    if (r) jmap_error(req, jmap_server_error(r));
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     carddav_close(db);
@@ -855,7 +890,9 @@ static int _add_group_entries(struct jmap_req *req,
     size_t index;
     struct buf buf = BUF_INITIALIZER;
 
-    if (ventry && atof(ventry->v.value) >= 4.0) group_propname = "MEMBER";
+    if (ventry && atof(ventry->v.value) >= 4.0) {
+        group_propname = "MEMBER";
+    }
 
     vparse_delete_entries(card, NULL, group_propname);
 
@@ -1015,7 +1052,9 @@ static void _contacts_set(struct jmap_req *req,
     }
 
     r = carddav_create_defaultaddressbook(req->accountid);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* create */
     const char *key;
@@ -1197,7 +1236,9 @@ static void _contacts_set(struct jmap_req *req,
             r = mailbox_open_iwl(mbentry->name, &mailbox);
         }
         mboxlist_entry_free(&mbentry);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         syslog(LOG_NOTICE,
                "jmap: remove %s %s/%s",
@@ -1219,7 +1260,9 @@ static void _contacts_set(struct jmap_req *req,
     }
 
     /* force modseq to stable */
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+    if (mailbox) {
+        mailbox_unlock_index(mailbox, NULL);
+    }
 
     set.new_state =
         modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, JMAP_MODSEQ_RELOAD));
@@ -1228,7 +1271,9 @@ static void _contacts_set(struct jmap_req *req,
     r = 0;
 
 done:
-    if (r) jmap_error(req, jmap_server_error(r));
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     mailbox_close(&newmailbox);
@@ -1276,27 +1321,39 @@ static int _parse_date(const char *date,
     yp = date;
     if (yp[0] < '0' || yp[0] > '9' || yp[1] < '0' || yp[1] > '9' || yp[2] < '0'
         || yp[2] > '9' || yp[3] < '0' || yp[3] > '9')
+    {
         return -1;
+    }
 
     mp = &yp[4];
 
-    if (*mp == '-')
+    if (*mp == '-') {
         mp++;
-    else if (require_hyphens)
+    }
+    else if (require_hyphens) {
         return -1;
+    }
 
-    if (mp[0] < '0' || mp[0] > '9' || mp[1] < '0' || mp[1] > '9') return -1;
+    if (mp[0] < '0' || mp[0] > '9' || mp[1] < '0' || mp[1] > '9') {
+        return -1;
+    }
 
     dp = &mp[2];
 
-    if (*dp == '-')
+    if (*dp == '-') {
         dp++;
-    else if (require_hyphens)
+    }
+    else if (require_hyphens) {
         return -1;
+    }
 
-    if (dp[0] < '0' || dp[0] > '9' || dp[1] < '0' || dp[1] > '9') return -1;
+    if (dp[0] < '0' || dp[0] > '9' || dp[1] < '0' || dp[1] > '9') {
+        return -1;
+    }
 
-    if (dp[2] != '\0') return -1;
+    if (dp[2] != '\0') {
+        return -1;
+    }
 
     /* convert to integer. ascii digits are 0x30-0x37, so we can take bottom
      * four bits and multiply */
@@ -1312,25 +1369,38 @@ static int _parse_date(const char *date,
 
 static void _date_to_jmap(struct vparse_entry *entry, struct buf *buf)
 {
-    if (!entry) goto no_date;
+    if (!entry) {
+        goto no_date;
+    }
 
     unsigned y, m, d;
-    if (_parse_date(entry->v.value, &y, &m, &d, 0)) goto no_date;
+    if (_parse_date(entry->v.value, &y, &m, &d, 0)) {
+        goto no_date;
+    }
 
-    if (y < 1604 || m > 12 || d > 31) goto no_date;
+    if (y < 1604 || m > 12 || d > 31) {
+        goto no_date;
+    }
 
     const struct vparse_param *param;
     for (param = entry->params; param; param = param->next) {
-        if (!strcasecmp(param->name, "x-apple-omit-year"))
+        if (!strcasecmp(param->name, "x-apple-omit-year")) {
             /* XXX compare value with actual year? */
             y = 0;
-        if (!strcasecmp(param->name, "x-fm-no-month")) m = 0;
-        if (!strcasecmp(param->name, "x-fm-no-day")) d = 0;
+        }
+        if (!strcasecmp(param->name, "x-fm-no-month")) {
+            m = 0;
+        }
+        if (!strcasecmp(param->name, "x-fm-no-day")) {
+            d = 0;
+        }
     }
 
     /* sigh, magic year 1604 has been seen without X-APPLE-OMIT-YEAR, making
      * me wonder what the bloody point is */
-    if (y == 1604) y = 0;
+    if (y == 1604) {
+        y = 0;
+    }
 
     buf_reset(buf);
     buf_printf(buf, "%04d-%02d-%02d", y, m, d);
@@ -1343,21 +1413,51 @@ no_date:
 static const char *_servicetype(const char *type)
 {
     /* add new services here */
-    if (!strcasecmp(type, "aim")) return "AIM";
-    if (!strcasecmp(type, "facebook")) return "Facebook";
-    if (!strcasecmp(type, "flickr")) return "Flickr";
-    if (!strcasecmp(type, "gadugadu")) return "GaduGadu";
-    if (!strcasecmp(type, "github")) return "GitHub";
-    if (!strcasecmp(type, "googletalk")) return "GoogleTalk";
-    if (!strcasecmp(type, "icq")) return "ICQ";
-    if (!strcasecmp(type, "jabber")) return "Jabber";
-    if (!strcasecmp(type, "linkedin")) return "LinkedIn";
-    if (!strcasecmp(type, "msn")) return "MSN";
-    if (!strcasecmp(type, "myspace")) return "MySpace";
-    if (!strcasecmp(type, "qq")) return "QQ";
-    if (!strcasecmp(type, "skype")) return "Skype";
-    if (!strcasecmp(type, "twitter")) return "Twitter";
-    if (!strcasecmp(type, "yahoo")) return "Yahoo";
+    if (!strcasecmp(type, "aim")) {
+        return "AIM";
+    }
+    if (!strcasecmp(type, "facebook")) {
+        return "Facebook";
+    }
+    if (!strcasecmp(type, "flickr")) {
+        return "Flickr";
+    }
+    if (!strcasecmp(type, "gadugadu")) {
+        return "GaduGadu";
+    }
+    if (!strcasecmp(type, "github")) {
+        return "GitHub";
+    }
+    if (!strcasecmp(type, "googletalk")) {
+        return "GoogleTalk";
+    }
+    if (!strcasecmp(type, "icq")) {
+        return "ICQ";
+    }
+    if (!strcasecmp(type, "jabber")) {
+        return "Jabber";
+    }
+    if (!strcasecmp(type, "linkedin")) {
+        return "LinkedIn";
+    }
+    if (!strcasecmp(type, "msn")) {
+        return "MSN";
+    }
+    if (!strcasecmp(type, "myspace")) {
+        return "MySpace";
+    }
+    if (!strcasecmp(type, "qq")) {
+        return "QQ";
+    }
+    if (!strcasecmp(type, "skype")) {
+        return "Skype";
+    }
+    if (!strcasecmp(type, "twitter")) {
+        return "Twitter";
+    }
+    if (!strcasecmp(type, "yahoo")) {
+        return "Yahoo";
+    }
 
     syslog(LOG_NOTICE, "unknown service type %s", type);
     return type;
@@ -1415,7 +1515,9 @@ static json_t *vcardprop_from_vcard_entry(struct vparse_entry *entry)
         // are for internal use anyway.
         buf_reset(&buf);
         for (int i = 0; i < strarray_size(entry->v.values); i++) {
-            if (i) buf_putc(&buf, entry->multivaluesep);
+            if (i) {
+                buf_putc(&buf, entry->multivaluesep);
+            }
             buf_appendcstr(&buf, strarray_nth(entry->v.values, i));
         }
         json_array_append_new(vprop, json_string(buf_cstring(&buf)));
@@ -1455,8 +1557,12 @@ static json_t *jmap_contact_from_vcard(const char *userid,
 
     const strarray_t *n = vparse_multival(card, "n");
     const strarray_t *org = vparse_multival(card, "org");
-    if (!n) n = empty ? empty : (empty = strarray_new());
-    if (!org) org = empty ? empty : (empty = strarray_new());
+    if (!n) {
+        n = empty ? empty : (empty = strarray_new());
+    }
+    if (!org) {
+        org = empty ? empty : (empty = strarray_new());
+    }
 
     /* name fields: Family; Given; Middle; Prefix; Suffix. */
 
@@ -1492,7 +1598,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
      * CardDAV clients. that's fixed, but there's now lots of cards with it
      * stored in the wrong place, so check both */
     const char *item = vparse_stringval(card, "title");
-    if (!item) item = strarray_safenth(org, 2);
+    if (!item) {
+        item = strarray_safenth(org, 2);
+    }
     json_object_set_new(obj, "jobTitle", jmap_utf8string(item));
 
     json_t *adr = json_array();
@@ -1541,7 +1649,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    if (label) label_len = strlen(label);
+                    if (label) {
+                        label_len = strlen(label);
+                    }
                 }
             }
             json_object_set_new(item, "type", json_string(type));
@@ -1562,11 +1672,15 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 newline++;
             }
             if (*extended) {
-                if (newline++) buf_putc(&buf, '\n');
+                if (newline++) {
+                    buf_putc(&buf, '\n');
+                }
                 buf_appendcstr(&buf, extended);
             }
             if (*street) {
-                if (newline) buf_putc(&buf, '\n');
+                if (newline) {
+                    buf_putc(&buf, '\n');
+                }
                 buf_appendcstr(&buf, street);
             }
 
@@ -1616,13 +1730,16 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                         type = "work";
                     }
                     else if (!strcasecmp(param->value, "pref")) {
-                        if (defaultEmailIndex < 0)
+                        if (defaultEmailIndex < 0) {
                             defaultEmailIndex = emailIndex;
+                        }
                     }
                 }
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    if (label) label_len = strlen(label);
+                    if (label) {
+                        label_len = strlen(label);
+                    }
                 }
             }
             json_object_set_new(item, "type", json_string(type));
@@ -1663,7 +1780,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    if (label) label_len = strlen(label);
+                    if (label) {
+                        label_len = strlen(label);
+                    }
                 }
             }
             json_object_set_new(item, "type", json_string(type));
@@ -1681,13 +1800,16 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             for (param = entry->params; param; param = param->next) {
                 if (!strcasecmp(param->name, "label")) {
                     label = param->value;
-                    if (label) label_len = strlen(label);
+                    if (label) {
+                        label_len = strlen(label);
+                    }
                 }
             }
             json_object_set_new(item, "type", json_string("uri"));
-            if (label)
+            if (label) {
                 json_object_set_new(
                     item, "label", json_stringn(label, label_len));
+            }
             json_object_set_new(item, "value", json_string(entry->v.value));
             json_array_append_new(online, item);
         }
@@ -1699,7 +1821,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
             }
             json_object_set_new(item, "type", json_string("username"));
-            if (label) json_object_set_new(item, "label", json_string(label));
+            if (label) {
+                json_object_set_new(item, "label", json_string(label));
+            }
             json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
         }
@@ -1715,7 +1839,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
             }
             json_object_set_new(item, "type", json_string("username"));
-            if (label) json_object_set_new(item, "label", json_string(label));
+            if (label) {
+                json_object_set_new(item, "label", json_string(label));
+            }
             json_object_set_new(
                 item, "value", jmap_utf8string(value ? value : entry->v.value));
             json_array_append_new(online, item);
@@ -1728,7 +1854,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 }
             }
             json_object_set_new(item, "type", json_string("other"));
-            if (label) json_object_set_new(item, "label", json_string(label));
+            if (label) {
+                json_object_set_new(item, "label", json_string(label));
+            }
             json_object_set_new(item, "value", jmap_utf8string(entry->v.value));
             json_array_append_new(online, item);
         }
@@ -1750,7 +1878,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
         }
     }
 
-    if (defaultEmailIndex < 0) defaultEmailIndex = 0;
+    if (defaultEmailIndex < 0) {
+        defaultEmailIndex = 0;
+    }
     json_object_set_new(
         json_array_get(emails, defaultEmailIndex), "isDefault", json_true());
 
@@ -1804,7 +1934,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
         }
         buf_free(&blobid);
     }
-    if (!file) file = json_null();
+    if (!file) {
+        file = json_null();
+    }
 
     json_object_set_new(obj, "avatar", file);
     free(type);
@@ -1822,7 +1954,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     buf_free(&buf);
     annotatemore_msg_lookupmask(mailbox, record->uid, annot, userid, &buf);
     double val = 0;
-    if (buf.len) val = strtod(buf_cstring(&buf), NULL);
+    if (buf.len) {
+        val = strtod(buf_cstring(&buf), NULL);
+    }
 
     // need to keep the x- version while AJAXUI is around
     json_object_set_new(obj, "importance", json_real(val));
@@ -1830,7 +1964,9 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     /* XXX - other fields */
 
     buf_free(&buf);
-    if (empty) strarray_free(empty);
+    if (empty) {
+        strarray_free(empty);
+    }
 
     free_hash_table(&labels, NULL);
 
@@ -1858,10 +1994,14 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Load message containing the resource and parse vcard data */
     struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
@@ -2009,8 +2149,9 @@ static struct contact_textfilter *contact_textfilter_new(const char *query)
                     buf_putc(&buf, *p);
                 }
             }
-            else
+            else {
                 buf_putc(&buf, *p);
+            }
         }
         else {
             if (*p == '\'' || *(p + 1) == '\0') {
@@ -2068,8 +2209,9 @@ static int contact_textfilter_match(struct contact_textfilter *f,
                 goto done;
             }
         }
-        else if (!f->is_any)
+        else if (!f->is_any) {
             goto done;
+        }
     }
 
     /* Validate loose term search */
@@ -2095,8 +2237,9 @@ static int contact_textfilter_match(struct contact_textfilter *f,
                 goto done;
             }
         }
-        else if (!f->is_any)
+        else if (!f->is_any) {
             goto done;
+        }
     }
 
     /* All loose terms and phrases matched */
@@ -2192,7 +2335,9 @@ static hash_table *getorset_termset(ptrarray_t *cached_termsets,
     int i;
     for (i = 0; i < ptrarray_size(cached_termsets); i++) {
         struct named_termset *nts = ptrarray_nth(cached_termsets, i);
-        if (!strcmp(nts->propname, propname)) return &nts->termset;
+        if (!strcmp(nts->propname, propname)) {
+            return &nts->termset;
+        }
     }
     struct named_termset *nts = xzmalloc(sizeof(struct named_termset));
     nts->propname = propname;
@@ -2210,7 +2355,9 @@ static int contact_filter_match_textprop(json_t *jentry,
     /* Skip matching if possible */
     if (!propfilter
         && (!textfilter || contact_textfilter_matched_all(textfilter)))
+    {
         return 1;
+    }
 
     /* Evaluate search on text value */
     hash_table *termset = getorset_termset(cached_termsets, propname);
@@ -2228,7 +2375,9 @@ static int contact_filter_match_contactinfo(
     /* Skip matching if possible */
     if (!propfilter
         && (!textfilter || contact_textfilter_matched_all(textfilter)))
+    {
         return 1;
+    }
 
     /* Combine values into text buffer */
     json_t *jlist = json_object_get(jentry, propname);
@@ -2238,11 +2387,17 @@ static int contact_filter_match_contactinfo(
     json_array_foreach(jlist, i, jinfo)
     {
         const char *val = json_string_value(json_object_get(jinfo, "value"));
-        if (!val) continue;
-        if (i) buf_putc(&buf, ' ');
+        if (!val) {
+            continue;
+        }
+        if (i) {
+            buf_putc(&buf, ' ');
+        }
         buf_appendcstr(&buf, val);
     }
-    if (propfilter && !buf_len(&buf)) return 0;
+    if (propfilter && !buf_len(&buf)) {
+        return 0;
+    }
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, propname);
@@ -2261,7 +2416,9 @@ static int contact_filter_match_addresses(json_t *jentry,
     /* Skip matching if possible */
     if (!propfilter
         && (!textfilter || contact_textfilter_matched_all(textfilter)))
+    {
         return 1;
+    }
 
     /* Combine values into text buffer */
     json_t *jlist = json_object_get(jentry, propname);
@@ -2292,7 +2449,9 @@ static int contact_filter_match_addresses(json_t *jentry,
             buf_appendcstr(&buf, val);
         }
     }
-    if (propfilter && !buf_len(&buf)) return 0;
+    if (propfilter && !buf_len(&buf)) {
+        return 0;
+    }
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, propname);
@@ -2326,7 +2485,9 @@ static int contact_filter_match(void *vf, void *rock)
     }
 
     /* Match text filters */
-    if (f->text) contact_textfilter_reset(f->text);
+    if (f->text) {
+        contact_textfilter_reset(f->text);
+    }
     if (!contact_filter_match_textprop(
             contact, "prefix", f->prefix, f->text, &cfrock->cached_termsets)
         || !contact_filter_match_textprop(contact,
@@ -2366,7 +2527,9 @@ static int contact_filter_match(void *vf, void *rock)
         return 0;
     }
 
-    if (f->text && !contact_textfilter_matched_all(f->text)) return 0;
+    if (f->text && !contact_textfilter_matched_all(f->text)) {
+        return 0;
+    }
 
     /* inContactGroup */
     if (f->inContactGroup) {
@@ -2388,7 +2551,9 @@ static int contact_filter_match(void *vf, void *rock)
             }
         }
         strarray_free(gids);
-        if (!m) return 0;
+        if (!m) {
+            return 0;
+        }
     }
 
     /* All matched. */
@@ -2780,11 +2945,15 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
     mboxlist_entry_free(&mbentry);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* Load record. */
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Load contact from record. */
     struct vparse_card *vcard = record_to_vcard(crock->mailbox, &record);
@@ -2830,7 +2999,9 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
         }
         ptrarray_fini(&cfrock.cached_termsets);
         /* Skip non-matching entries */
-        if (!matches) goto done;
+        if (!matches) {
+            goto done;
+        }
     }
 
     /* Update statistics */
@@ -2860,7 +3031,9 @@ static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
     }
 
 done:
-    if (entry) json_decref(entry);
+    if (entry) {
+        json_decref(entry);
+    }
     return r;
 }
 
@@ -2890,24 +3063,33 @@ static enum contactsquery_sort *contactsquery_buildsort(json_t *jsort)
     {
         const char *prop =
             json_string_value(json_object_get(jcomp, "property"));
-        if (!strcmp(prop, "uid")) sort[i] = CONTACTS_SORT_UID;
+        if (!strcmp(prop, "uid")) {
+            sort[i] = CONTACTS_SORT_UID;
+        }
         /* Comparators for Contact */
-        else if (!strcmp(prop, "isFlagged"))
+        else if (!strcmp(prop, "isFlagged")) {
             sort[i] = CONTACTS_SORT_ISFLAGGED;
-        else if (!strcmp(prop, "firstName"))
+        }
+        else if (!strcmp(prop, "firstName")) {
             sort[i] = CONTACTS_SORT_FIRSTNAME;
-        else if (!strcmp(prop, "lastName"))
+        }
+        else if (!strcmp(prop, "lastName")) {
             sort[i] = CONTACTS_SORT_LASTNAME;
-        else if (!strcmp(prop, "nickname"))
+        }
+        else if (!strcmp(prop, "nickname")) {
             sort[i] = CONTACTS_SORT_NICKNAME;
-        else if (!strcmp(prop, "company"))
+        }
+        else if (!strcmp(prop, "company")) {
             sort[i] = CONTACTS_SORT_COMPANY;
+        }
         /* Comparators for ContactGroup */
-        else if (!strcmp(prop, "name"))
+        else if (!strcmp(prop, "name")) {
             sort[i] = CONTACTS_SORT_NAME;
+        }
 
-        if (json_object_get(jcomp, "isAscending") == json_false())
+        if (json_object_get(jcomp, "isAscending") == json_false()) {
             sort[i] |= CONTACTS_SORT_DESC;
+        }
     }
 
     return sort;
@@ -2957,7 +3139,9 @@ static int contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
                   - json_boolean_value(json_object_get(jb, "isFlagged"));
             break;
         }
-        if (ret) return (*comp & CONTACTS_SORT_DESC) ? -ret : ret;
+        if (ret) {
+            return (*comp & CONTACTS_SORT_DESC) ? -ret : ret;
+        }
     }
 
     return 0;
@@ -3041,8 +3225,9 @@ static int _contactsquery(
             json_string_value(json_object_get(jcomp, "property"));
         is_complexsort = strcmpsafe("uid", prop);
     }
-    else
+    else {
         is_complexsort = json_array_size(query.sort) > 0;
+    }
 
     /* Inspect every entry in this accounts addressbook mailboxes. */
     struct contactsquery_rock rock = {
@@ -3053,8 +3238,12 @@ static int _contactsquery(
         /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, wantuid, &cdata);
-        if (!r) _query_cb(&rock, cdata);
-        if (r == CYRUSDB_NOTFOUND) r = 0;
+        if (!r) {
+            _query_cb(&rock, cdata);
+        }
+        if (r == CYRUSDB_NOTFOUND) {
+            r = 0;
+        }
     }
     else if (!is_complexsort && query.position >= 0 && !query.anchor) {
         /* Fast-path simple query with carddav db */
@@ -3096,8 +3285,9 @@ static int _contactsquery(
                 size_t anchor_pos = 0;
                 for (; anchor_pos < json_array_size(query.ids); anchor_pos++) {
                     json_t *jid = json_array_get(query.ids, anchor_pos);
-                    if (!strcmpsafe(query.anchor, json_string_value(jid)))
+                    if (!strcmpsafe(query.anchor, json_string_value(jid))) {
                         break;
+                    }
                 }
                 /* Determine start of windowed result ids */
                 if (anchor_pos < json_array_size(query.ids)) {
@@ -3110,16 +3300,18 @@ static int _contactsquery(
                         startpos = anchor_pos + query.anchor_offset;
                     }
                 }
-                else
+                else {
                     err = json_pack("{s:s}", "type", "anchorNotFound");
+                }
             }
             else if (query.position < 0) {
                 startpos = (size_t) -query.position > json_array_size(query.ids)
                                ? 0
                                : json_array_size(query.ids) + query.position;
             }
-            else
+            else {
                 startpos = query.position;
+            }
             /* Apply window to result list */
             if (startpos < json_array_size(query.ids)) {
                 json_t *windowed_ids = json_array();
@@ -3131,8 +3323,9 @@ static int _contactsquery(
                         json_array_append(windowed_ids,
                                           json_array_get(query.ids, j));
                     }
-                    else
+                    else {
                         break;
+                    }
                 }
                 json_decref(query.ids);
                 query.ids = windowed_ids;
@@ -3146,10 +3339,14 @@ static int _contactsquery(
         }
     }
     /* Clean up callback state */
-    if (rock.mailbox) mailbox_close(&rock.mailbox);
+    if (rock.mailbox) {
+        mailbox_close(&rock.mailbox);
+    }
     /* Handle callback errors */
     if (r || err) {
-        if (!err) err = jmap_server_error(r);
+        if (!err) {
+            err = jmap_server_error(r);
+        }
         jmap_error(req, err);
         goto done;
     }
@@ -3166,7 +3363,9 @@ done:
     if (parsed_filter) {
         jmap_filter_free(parsed_filter, _filter_free);
     }
-    if (db) carddav_close(db);
+    if (db) {
+        carddav_close(db);
+    }
     return 0;
 }
 
@@ -3265,11 +3464,16 @@ static int _emails_to_card(struct vparse_card *card,
         struct vparse_entry *entry =
             vparse_add_entry(card, group, "EMAIL", value);
 
-        if (!strcmpsafe(type, "personal")) type = "home";
-        if (strcmpsafe(type, "other")) vparse_add_param(entry, "TYPE", type);
+        if (!strcmpsafe(type, "personal")) {
+            type = "home";
+        }
+        if (strcmpsafe(type, "other")) {
+            vparse_add_param(entry, "TYPE", type);
+        }
 
-        if (jisDefault && json_is_true(jisDefault))
+        if (jisDefault && json_is_true(jisDefault)) {
             vparse_add_param(entry, "TYPE", "pref");
+        }
 
         buf_reset(&buf);
     }
@@ -3333,10 +3537,12 @@ static int _phones_to_card(struct vparse_card *card,
         struct vparse_entry *entry =
             vparse_add_entry(card, group, "TEL", value);
 
-        if (!strcmp(type, "mobile"))
+        if (!strcmp(type, "mobile")) {
             vparse_add_param(entry, "TYPE", "CELL");
-        else if (strcmp(type, "other"))
+        }
+        else if (strcmp(type, "other")) {
             vparse_add_param(entry, "TYPE", type);
+        }
 
         buf_reset(&buf);
     }
@@ -3347,17 +3553,39 @@ static int _phones_to_card(struct vparse_card *card,
 static int _is_im(const char *type)
 {
     /* add new services here */
-    if (!strcasecmp(type, "aim")) return 1;
-    if (!strcasecmp(type, "facebook")) return 1;
-    if (!strcasecmp(type, "gadugadu")) return 1;
-    if (!strcasecmp(type, "googletalk")) return 1;
-    if (!strcasecmp(type, "icq")) return 1;
-    if (!strcasecmp(type, "jabber")) return 1;
-    if (!strcasecmp(type, "msn")) return 1;
-    if (!strcasecmp(type, "qq")) return 1;
-    if (!strcasecmp(type, "skype")) return 1;
-    if (!strcasecmp(type, "twitter")) return 1;
-    if (!strcasecmp(type, "yahoo")) return 1;
+    if (!strcasecmp(type, "aim")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "facebook")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "gadugadu")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "googletalk")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "icq")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "jabber")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "msn")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "qq")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "skype")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "twitter")) {
+        return 1;
+    }
+    if (!strcasecmp(type, "yahoo")) {
+        return 1;
+    }
 
     return 0;
 }
@@ -3410,7 +3638,9 @@ static int _online_to_card(struct vparse_card *card,
         if (!strcmp(type, "uri")) {
             struct vparse_entry *entry =
                 vparse_add_entry(card, NULL, "URL", value);
-            if (label) vparse_add_param(entry, "LABEL", label);
+            if (label) {
+                vparse_add_param(entry, "LABEL", label);
+            }
         }
         else if (!strcmp(type, "username")) {
             if (label && _is_im(label)) {
@@ -3424,14 +3654,18 @@ static int _online_to_card(struct vparse_card *card,
                                      NULL,
                                      "X-SOCIAL-PROFILE",
                                      ""); // XXX - URL calculated, ick
-                if (label) vparse_add_param(entry, "TYPE", label);
+                if (label) {
+                    vparse_add_param(entry, "TYPE", label);
+                }
                 vparse_add_param(entry, "X-USER", value);
             }
         }
         else if (!strcmp(type, "other")) {
             struct vparse_entry *entry =
                 vparse_add_entry(card, NULL, "X-FM-ONLINE-OTHER", value);
-            if (label) vparse_add_param(entry, "LABEL", label);
+            if (label) {
+                vparse_add_param(entry, "LABEL", label);
+            }
         }
     }
     buf_free(&buf);
@@ -3513,9 +3747,10 @@ static int _addresses_to_card(struct vparse_card *card,
             buf_printf(&buf, "adr%d", i);
             group = buf_cstring(&buf);
 
-            if (label)
+            if (label) {
                 vparse_add_entry(
                     card, group, VCARD_APPLE_LABEL_PROPERTY, label);
+            }
             if (countrycode) {
                 struct buf lcode = BUF_INITIALIZER;
                 buf_setcstr(&lcode, countrycode);
@@ -3530,7 +3765,9 @@ static int _addresses_to_card(struct vparse_card *card,
 
         struct vparse_entry *entry = vparse_add_entry(card, group, "ADR", NULL);
 
-        if (strcmpsafe(type, "other")) vparse_add_param(entry, "TYPE", type);
+        if (strcmpsafe(type, "other")) {
+            vparse_add_param(entry, "TYPE", type);
+        }
 
         entry->multivaluesep = ';';
         entry->v.values = strarray_new();
@@ -3553,23 +3790,33 @@ static int _date_to_card(struct vparse_card *card,
                          const char *key,
                          json_t *jval)
 {
-    if (!jval) return -1;
+    if (!jval) {
+        return -1;
+    }
     const char *val = json_string_value(jval);
-    if (!val) return -1;
+    if (!val) {
+        return -1;
+    }
 
     /* JMAP dates are always YYYY-MM-DD */
     unsigned y, m, d;
-    if (_parse_date(val, &y, &m, &d, 1)) return -1;
+    if (_parse_date(val, &y, &m, &d, 1)) {
+        return -1;
+    }
 
     /* range checks. month and day just get basic sanity checks because we're
      * not carrying a full calendar implementation here. JMAP says zero is valid
      * so we'll allow that and deal with it later on */
-    if (m > 12 || d > 31) return -1;
+    if (m > 12 || d > 31) {
+        return -1;
+    }
 
     /* all years are valid in JMAP, but ISO8601 only allows Gregorian ie >=
      * 1583. moreover, iOS uses 1604 as a magic number for "unknown", so we'll
      * say 1605 is the minimum */
-    if (y > 0 && y < 1605) return -1;
+    if (y > 0 && y < 1605) {
+        return -1;
+    }
 
     /* everything in range. now comes the fun bit. vCard v3 says BDAY is
      * YYYY-MM-DD. It doesn't reference ISO8601 (vCard v4 does) and make no
@@ -3600,7 +3847,9 @@ static int _date_to_card(struct vparse_card *card,
     vparse_delete_entries(card, NULL, key);
 
     /* no values, we're done! */
-    if (no_year && no_month && no_day) return 0;
+    if (no_year && no_month && no_day) {
+        return 0;
+    }
 
     /* build the value */
     static char buf[11];
@@ -3608,18 +3857,28 @@ static int _date_to_card(struct vparse_card *card,
     struct vparse_entry *entry = vparse_add_entry(card, NULL, key, buf);
 
     /* set all the round-trip flags, sigh */
-    if (no_year) vparse_add_param(entry, "X-APPLE-OMIT-YEAR", "1604");
-    if (no_month) vparse_add_param(entry, "X-FM-NO-MONTH", "1");
-    if (no_day) vparse_add_param(entry, "X-FM-NO-DAY", "1");
+    if (no_year) {
+        vparse_add_param(entry, "X-APPLE-OMIT-YEAR", "1604");
+    }
+    if (no_month) {
+        vparse_add_param(entry, "X-FM-NO-MONTH", "1");
+    }
+    if (no_day) {
+        vparse_add_param(entry, "X-FM-NO-DAY", "1");
+    }
 
     return 0;
 }
 
 static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
 {
-    if (!jval) return -1;
+    if (!jval) {
+        return -1;
+    }
     const char *val = json_string_value(jval);
-    if (!val) return -1;
+    if (!val) {
+        return -1;
+    }
     vparse_replace_entry(card, NULL, key, val);
     return 0;
 }
@@ -3671,7 +3930,9 @@ static int _blob_to_card(struct jmap_req *req,
     case 0:
         if (!buf_len(&ctx.content_type)
             || strchr(buf_cstring(&ctx.content_type), '/'))
+        {
             break;
+        }
 
         /* Fall through */
         GCC_FALLTHROUGH
@@ -3685,7 +3946,9 @@ static int _blob_to_card(struct jmap_req *req,
 
     default:
         /* Not found, or system error */
-        if (!errors->blobNotFound) errors->blobNotFound = json_array();
+        if (!errors->blobNotFound) {
+            errors->blobNotFound = json_array();
+        }
         json_array_append(errors->blobNotFound, jblobId);
         goto done;
     }
@@ -3755,31 +4018,45 @@ static void _make_fn(struct vparse_card *card)
 
     if (n) {
         v = strarray_safenth(n->v.values, 3); // prefix
-        if (*v) strarray_append(name, v);
+        if (*v) {
+            strarray_append(name, v);
+        }
 
         v = strarray_safenth(n->v.values, 1); // first
-        if (*v) strarray_append(name, v);
+        if (*v) {
+            strarray_append(name, v);
+        }
 
         v = strarray_safenth(n->v.values, 2); // middle
-        if (*v) strarray_append(name, v);
+        if (*v) {
+            strarray_append(name, v);
+        }
 
         v = strarray_safenth(n->v.values, 0); // last
-        if (*v) strarray_append(name, v);
+        if (*v) {
+            strarray_append(name, v);
+        }
 
         v = strarray_safenth(n->v.values, 4); // suffix
-        if (*v) strarray_append(name, v);
+        if (*v) {
+            strarray_append(name, v);
+        }
     }
 
     if (!strarray_size(name)) {
         v = vparse_stringval(card, "NICKNAME");
-        if (v && v[0]) strarray_append(name, v);
+        if (v && v[0]) {
+            strarray_append(name, v);
+        }
     }
 
     char *fn = NULL;
-    if (strarray_size(name))
+    if (strarray_size(name)) {
         fn = strarray_join(name, " ");
-    else
+    }
+    else {
         fn = xstrdup(" ");
+    }
 
     strarray_free(name);
     vparse_replace_entry(card, NULL, "FN", fn);
@@ -3797,12 +4074,16 @@ static int vcardprop_to_vcard(json_t *vprop,
                    && json_is_string(json_array_get(vprop, 2))
                    && json_is_string(json_array_get(vprop, 3));
 
-    if (!is_valid) return -1;
+    if (!is_valid) {
+        return -1;
+    }
 
     // Check if this is a X-property or IANA name.
     if (reject_iana
         && strncasecmp("X-", json_string_value(json_array_get(vprop, 0)), 2))
+    {
         return -1;
+    }
 
     // Validate parameter object.
     const char *group = NULL;
@@ -3813,7 +4094,9 @@ static int vcardprop_to_vcard(json_t *vprop,
         if (!json_is_string(pval)) {
             return -1;
         }
-        if (!strcasecmp(pname, "group")) group = json_string_value(pval);
+        if (!strcasecmp(pname, "group")) {
+            group = json_string_value(pval);
+        }
     }
 
     // Set vCard property.
@@ -4009,7 +4292,9 @@ static int _json_to_card(struct jmap_req *req,
             }
             struct vparse_entry *nick = _card_multi(card, "NICKNAME", ',');
             strarray_truncate(nick->v.values, 0);
-            if (*val) strarray_set(nick->v.values, 0, val);
+            if (*val) {
+                strarray_set(nick->v.values, 0, val);
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "birthday")) {
@@ -4058,22 +4343,30 @@ static int _json_to_card(struct jmap_req *req,
         }
         else if (!strcmp(key, "emails")) {
             int r = _emails_to_card(card, jval, invalid);
-            if (r) continue;
+            if (r) {
+                continue;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "phones")) {
             int r = _phones_to_card(card, jval, invalid);
-            if (r) continue;
+            if (r) {
+                continue;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "online")) {
             int r = _online_to_card(card, jval, invalid);
-            if (r) continue;
+            if (r) {
+                continue;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "addresses")) {
             int r = _addresses_to_card(card, jval, invalid);
-            if (r) continue;
+            if (r) {
+                continue;
+            }
             record_is_dirty = 1;
         }
         else if (!strcmp(key, "notes")) {
@@ -4109,15 +4402,18 @@ static int _json_to_card(struct jmap_req *req,
         }
     }
 
-    if (json_array_size(invalid) || errors->blobNotFound) return 0;
+    if (json_array_size(invalid) || errors->blobNotFound) {
+        return 0;
+    }
 
     if (name_is_dirty) {
         _make_fn(card);
         record_is_dirty = 1;
     }
 
-    if (!record_is_dirty && has_noncontent)
+    if (!record_is_dirty && has_noncontent) {
         return HTTP_NO_CONTENT; /* no content */
+    }
 
     buf_free(&buf);
     return 0;
@@ -4227,7 +4523,9 @@ static int _contact_set_create(jmap_req_t *req,
         }
     }
     carddav_close(db);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Determine mailbox and resource name of card.
      * We attempt to reuse the UID as DAV resource name; but
@@ -4286,8 +4584,9 @@ static int _contact_set_create(jmap_req_t *req,
             r = 0;
             goto done;
         }
-        else if (r)
+        else if (r) {
             goto done;
+        }
     }
 
     const char *name = NULL;
@@ -4457,7 +4756,9 @@ static int _contact_set_update(jmap_req_t *req,
         json_object_del(jcard, "addressbookId");
         free(mboxname);
 
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
@@ -4480,7 +4781,9 @@ static int _contact_set_update(jmap_req_t *req,
     struct index_record record;
 
     r = mailbox_find_index_record(*mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     olduid = cdata->dav.imap_uid;
     resource = xstrdup(cdata->dav.resource);
@@ -4497,8 +4800,9 @@ static int _contact_set_update(jmap_req_t *req,
     }
 
     struct vparse_card *card = vcard->objects;
-    if (!vparse_get_entry(card, NULL, "VERSION"))
+    if (!vparse_get_entry(card, NULL, "VERSION")) {
         vparse_replace_entry(card, NULL, "VERSION", "3.0");
+    }
     vparse_replace_entry(card, NULL, "PRODID", _prodid);
 
     *item = json_object();
@@ -4513,10 +4817,12 @@ static int _contact_set_update(jmap_req_t *req,
         json_object_foreach(jcard, key, jval)
         {
             if (!strcmp(key, "name")) {
-                if (json_is_string(jval))
+                if (json_is_string(jval)) {
                     namep = jval;
-                else
+                }
+                else {
                     json_array_append_new(invalid, json_string("name"));
+                }
             }
             else if (!strcmp(key, "contactIds")) {
                 members = jval;
@@ -4562,7 +4868,9 @@ static int _contact_set_update(jmap_req_t *req,
         }
         else if (!vparse_get_entry(card, NULL, "N")) {
             struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
-            if (entry) vparse_replace_entry(card, NULL, "N", entry->v.value);
+            if (entry) {
+                vparse_replace_entry(card, NULL, "N", entry->v.value);
+            }
         }
         if (members) {
             _add_group_entries(req, card, members, invalid);
@@ -4593,15 +4901,21 @@ static int _contact_set_update(jmap_req_t *req,
                        "jmap: touch contact %s/%s",
                        req->accountid,
                        resource);
-                if (strarray_contains_case(flags, "\\Flagged"))
+                if (strarray_contains_case(flags, "\\Flagged")) {
                     record.system_flags |= FLAG_FLAGGED;
-                else
+                }
+                else {
                     record.system_flags &= ~FLAG_FLAGGED;
+                }
                 annotate_state_t *state = NULL;
                 r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
                 annotate_state_set_auth(state, 0, req->userid, req->authstate);
-                if (!r) r = annotate_state_store(state, annots);
-                if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
+                if (!r) {
+                    r = annotate_state_store(state, annots);
+                }
+                if (!r) {
+                    r = mailbox_rewrite_index_record(*mailbox, &record);
+                }
                 if (!r) {
                     json_decref(*item);
                     *item = json_null();
@@ -4768,11 +5082,15 @@ static void _contact_copy(jmap_req_t *req,
 
     /* Read source event */
     r = mailbox_open_irl(mbentry->name, &src_mbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     struct index_record record;
     r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &record);
-    if (!r) src_card = _from_record(req, src_db, src_mbox, &record);
+    if (!r) {
+        src_card = _from_record(req, src_db, src_mbox, &record);
+    }
     if (!src_card) {
         syslog(LOG_ERR, "contact_copy: can't convert %s to JMAP", src_id);
         r = IMAP_INTERNAL;
@@ -4808,8 +5126,9 @@ static void _contact_copy(jmap_req_t *req,
                                      "notFound",
                                      errors.blobNotFound);
             }
-            else
+            else {
                 *set_err = jmap_server_error(r);
+            }
         }
         json_decref(item);
         goto done;
@@ -4820,10 +5139,12 @@ static void _contact_copy(jmap_req_t *req,
 
 done:
     if (r && *set_err == NULL) {
-        if (r == CYRUSDB_NOTFOUND)
+        if (r == CYRUSDB_NOTFOUND) {
             *set_err = json_pack("{s:s}", "type", "notFound");
-        else
+        }
+        else {
             *set_err = jmap_server_error(r);
+        }
     }
     mboxlist_entry_free(&mbentry);
     mailbox_close(&dst_mbox);
@@ -4960,7 +5281,9 @@ static int _contacts_copy(struct jmap_req *req,
 
 done:
     json_decref(destroy_cards);
-    if (src_db) carddav_close(src_db);
+    if (src_db) {
+        carddav_close(src_db);
+    }
     mboxname_release(&srcnamespacelock);
     mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
@@ -4979,7 +5302,9 @@ static json_t *_contact_from_record(jmap_req_t *req,
     struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
     if (!vcard || !vcard->objects) {
-        if (vcard) vparse_free_card(vcard);
+        if (vcard) {
+            vparse_free_card(vcard);
+        }
         return NULL;
     }
 
@@ -5043,23 +5368,32 @@ addressbook_sharewith_to_rights_iter:
     json_object_foreach(jsharewith, name, jval)
     {
         int mask;
-        if (!strcmp("mayRead", name))
+        if (!strcmp("mayRead", name)) {
             mask = JACL_READITEMS;
-        else if (!strcmp("mayWrite", name))
+        }
+        else if (!strcmp("mayWrite", name)) {
             mask = JACL_WRITEALL;
-        else if (!strcmp("mayDelete", name))
+        }
+        else if (!strcmp("mayDelete", name)) {
             mask = JACL_DELETE;
-        else if (!strcmp("mayAdmin", name))
+        }
+        else if (!strcmp("mayAdmin", name)) {
             mask = JACL_ADMIN_ADDRBOOK;
-        else
+        }
+        else {
             continue;
+        }
 
-        if (iteration == 1 && !json_boolean_value(jval))
+        if (iteration == 1 && !json_boolean_value(jval)) {
             newrights &= ~mask;
-        else if (iteration == 2 && json_boolean_value(jval))
+        }
+        else if (iteration == 2 && json_boolean_value(jval)) {
             newrights |= mask;
+        }
     }
-    if (++iteration == 2) goto addressbook_sharewith_to_rights_iter;
+    if (++iteration == 2) {
+        goto addressbook_sharewith_to_rights_iter;
+    }
 
     /* Allow to set addressbook properties */
     if (newrights) {
@@ -5084,11 +5418,14 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     int r = 0;
 
     /* Only addressbooks... */
-    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) return 0;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) {
+        return 0;
+    }
 
     /* ...which are at least readable or visible... */
-    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
+    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)) {
         return rock->skip_hidden ? 0 : IMAP_PERMISSION_DENIED;
+    }
 
     // needed for some fields
     int rights = jmap_myrights_mbentry(rock->req, mbentry);
@@ -5118,7 +5455,9 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         r = annotatemore_lookupmask_mbe(
             mbentry, displayname_annot, req->userid, &attrib);
         /* fall back to last part of mailbox name */
-        if (r || !attrib.len) buf_setcstr(&attrib, id);
+        if (r || !attrib.len) {
+            buf_setcstr(&attrib, id);
+        }
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
         buf_free(&attrib);
     }
@@ -5218,7 +5557,9 @@ static int jmap_addressbook_get(struct jmap_req *req)
 
             mboxlist_entry_free(&mbentry);
             free(mboxname);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
         }
     }
     else {
@@ -5226,7 +5567,9 @@ static int jmap_addressbook_get(struct jmap_req *req)
         r = mboxlist_mboxtree(
             cardhomename, &getaddressbooks_cb, &rock, MBOXTREE_SKIP_ROOT);
         free(cardhomename);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     /* Build response */
@@ -5259,15 +5602,18 @@ static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     /* Ignore any mailboxes that aren't (possibly deleted) addressbooks. */
-    if (!mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype))
+    if (!mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) {
         return 0;
+    }
 
     /* Ignore mailboxes that are hidden from us. */
     /* XXX Deleted mailboxes loose their ACL so we can't determine
      * if they ever could be read by the authenticated user. We
      * need to leak these deleted entries to not mess up client state. */
     if (!(mbentry->mbtype & MBTYPE_DELETED) || strcmpsafe(mbentry->acl, "")) {
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) return 0;
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            return 0;
+        }
     }
 
     mbname = mbname_from_intname(mbentry->name);
@@ -5276,14 +5622,17 @@ static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
 
     /* Report this addressbook as created, updated or destroyed. */
     if (mbentry->mbtype & MBTYPE_DELETED) {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
+        if (mbentry->createdmodseq <= rock->changes->since_modseq) {
             json_array_append_new(rock->changes->destroyed, json_string(id));
+        }
     }
     else {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
+        if (mbentry->createdmodseq <= rock->changes->since_modseq) {
             json_array_append_new(rock->changes->updated, json_string(id));
-        else
+        }
+        else {
             json_array_append_new(rock->changes->created, json_string(id));
+        }
     }
 
 done:
@@ -5393,8 +5742,9 @@ static void setaddressbook_readprops(jmap_req_t *req,
                 /* unsubscribing own addressbook isn't supported */
                 jmap_parser_invalid(parser, "isSubscribed");
             }
-            else
+            else {
                 props->isSubscribed = -1; // ignore
+            }
         }
     }
     else if (JNOTNULL(jprop)) {
@@ -5471,11 +5821,14 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     struct buf val = BUF_INITIALIZER;
     int r;
 
-    if (!jmap_hasrights(req, mboxname, JACL_READITEMS) && !ignore_acl)
+    if (!jmap_hasrights(req, mboxname, JACL_READITEMS) && !ignore_acl) {
         return IMAP_MAILBOX_NONEXISTENT;
+    }
 
     r = mailbox_open_iwl(mboxname, &mbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
@@ -5537,7 +5890,9 @@ static int setaddressbook_writeprops(jmap_req_t *req,
 
     buf_free(&val);
     if (mbox) {
-        if (r) mailbox_abort(mbox);
+        if (r) {
+            mailbox_abort(mbox);
+        }
         mailbox_close(&mbox);
     }
     return r;
@@ -5614,7 +5969,9 @@ static void setaddressbooks_destroy(jmap_req_t *req,
                 error_message(r));
         goto done;
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     jmap_myrights_delete(req, mboxname);
 
@@ -5645,7 +6002,9 @@ static void setaddressbooks_destroy(jmap_req_t *req,
 done:
     if (db) {
         int rr = carddav_close(db);
-        if (!r) r = rr;
+        if (!r) {
+            r = rr;
+        }
     }
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -5674,11 +6033,15 @@ static char *setaddressbooks_create_rewriteacl(jmap_req_t *req,
         int access;
 
         rightstr = strchr(userid, '\t');
-        if (!rightstr) break;
+        if (!rightstr) {
+            break;
+        }
         *rightstr++ = '\0';
 
         nextid = strchr(rightstr, '\t');
-        if (!nextid) break;
+        if (!nextid) {
+            break;
+        }
         *nextid++ = '\0';
 
         if (!strcmp(userid, req->accountid) || is_system_user(userid)) {
@@ -5915,7 +6278,9 @@ static int jmap_addressbook_set(struct jmap_req *req)
     }
 
     r = carddav_create_defaultaddressbook(req->accountid);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* create */
     const char *key;
@@ -5938,8 +6303,9 @@ static int jmap_addressbook_set(struct jmap_req *req)
         if (!err) {
             json_object_set_new(set.created, key, record);
         }
-        else
+        else {
             json_object_set_new(set.not_created, key, err);
+        }
     }
 
     /* update */
@@ -5965,8 +6331,9 @@ static int jmap_addressbook_set(struct jmap_req *req)
         if (!err) {
             json_object_set_new(set.updated, id, record);
         }
-        else
+        else {
             json_object_set_new(set.not_updated, id, err);
+        }
     }
 
     /* destroy */
@@ -5995,8 +6362,9 @@ static int jmap_addressbook_set(struct jmap_req *req)
         if (!err) {
             json_array_append_new(set.destroyed, json_string(id));
         }
-        else
+        else {
             json_object_set_new(set.not_destroyed, id, err);
+        }
     }
 
     set.new_state =
@@ -6163,7 +6531,9 @@ static char *_value_to_uri_blobid(vcardproperty *prop,
 {
     if (!blobid && version == VCARD_VERSION_40) {
         const char *uri = vcardvalue_get_uri(vcardproperty_get_value(prop));
-        if (uri) return xstrdup(uri);
+        if (uri) {
+            return xstrdup(uri);
+        }
     }
 
     struct message_guid guid;
@@ -6174,7 +6544,9 @@ static char *_value_to_uri_blobid(vcardproperty *prop,
             vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
         struct buf buf = BUF_INITIALIZER;
 
-        if (!*type) *type = xstrdup("application/octet-stream");
+        if (!*type) {
+            *type = xstrdup("application/octet-stream");
+        }
 
         if (param) {
             vcardproperty_remove_parameter_by_ref(prop, param);
@@ -6256,18 +6628,26 @@ static json_t *_to_jmap_date(vcardproperty *prop)
         else if (!strncasecmp(param_name, "X-FM-NO-", 8)) {
             param_name += 8;
 
-            if (!strcasecmp(param_name, "MONTH"))
+            if (!strcasecmp(param_name, "MONTH")) {
                 m = 0;
-            else if (!strcasecmp(param_name, "DAY"))
+            }
+            else if (!strcasecmp(param_name, "DAY")) {
                 d = 0;
+            }
         }
     }
 
     /* sigh, magic year 1604 has been seen without X-APPLE-OMIT-YEAR, making
      * me wonder what the bloody point is */
-    if (y > 0 && y != 1604) json_object_set_new(jdate, "year", json_integer(y));
-    if (m > 0) json_object_set_new(jdate, "month", json_integer(m));
-    if (d > 0) json_object_set_new(jdate, "day", json_integer(d));
+    if (y > 0 && y != 1604) {
+        json_object_set_new(jdate, "year", json_integer(y));
+    }
+    if (m > 0) {
+        json_object_set_new(jdate, "month", json_integer(m));
+    }
+    if (d > 0) {
+        json_object_set_new(jdate, "day", json_integer(d));
+    }
 
     return jdate;
 }
@@ -6320,7 +6700,9 @@ static void _add_vcard_params(json_t *obj,
             GCC_FALLTHROUGH
 
         case VCARD_AUTHORNAME_PARAMETER:
-            if (!key) key = "name";
+            if (!key) {
+                key = "name";
+            }
 
             if (prop_kind == VCARD_NOTE_PROPERTY) {
                 json_t *author = json_object_get_vanew(obj, "author", "{}");
@@ -6681,12 +7063,15 @@ static void jscomps_from_vcard(json_t *obj,
                 int field_idx = atoi(val);
                 int val_idx = 0;
 
-                if (field_idx >= (int) st->num_fields) continue;
+                if (field_idx >= (int) st->num_fields) {
+                    continue;
+                }
 
                 kind = comp_kinds[field_idx].name;
 
-                if (vcardstrarray_size(sa) > 1)
+                if (vcardstrarray_size(sa) > 1) {
                     val_idx = atoi(vcardstrarray_element_at(sa, 1));
+                }
 
                 val = vcardstrarray_element_at(st->field[field_idx], val_idx);
             }
@@ -6718,8 +7103,9 @@ static void jscomps_from_vcard(json_t *obj,
          ckind->name && ckind->idx < st->num_fields;
          ckind++)
     {
-        if ((ckind->flags & FIELD_SKIP) && st->num_fields > ckind->alt_idx)
+        if ((ckind->flags & FIELD_SKIP) && st->num_fields > ckind->alt_idx) {
             continue;
+        }
 
         sa = st->field[ckind->idx];
         for (i = 0; sa && i < vcardstrarray_size(sa); i++) {
@@ -6729,8 +7115,9 @@ static void jscomps_from_vcard(json_t *obj,
                 /* Skip values that appear in other fields */
                 if (ckind->flags & FIELD_EXT) {
                     vcardstrarray *alt_sa = st->field[ckind->alt_idx];
-                    if (alt_sa && vcardstrarray_find(alt_sa, val) >= 0)
+                    if (alt_sa && vcardstrarray_find(alt_sa, val) >= 0) {
                         continue;
+                    }
                 }
 
                 comps = json_object_get_vanew(obj, "components", "[]");
@@ -6747,7 +7134,9 @@ static void jscomps_from_vcard(json_t *obj,
                             break;
                         }
                     }
-                    if (k > json_array_size(comps)) continue;
+                    if (k > json_array_size(comps)) {
+                        continue;
+                    }
                 }
                 else {
                     comp = json_pack("{s:s}", "kind", ckind->name);
@@ -6877,12 +7266,16 @@ static void jsprop_from_vcard(vcardproperty *prop,
         GCC_FALLTHROUGH
 
     case VCARD_DEATHDATE_PROPERTY:
-        if (!kind) kind = "death";
+        if (!kind) {
+            kind = "death";
+        }
 
         GCC_FALLTHROUGH
 
     case VCARD_ANNIVERSARY_PROPERTY:
-        if (!kind) kind = "wedding";
+        if (!kind) {
+            kind = "wedding";
+        }
 
         subprop.key = "date";
         subprop.val = _to_jmap_date(prop);
@@ -6903,7 +7296,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
         GCC_FALLTHROUGH
 
     case VCARD_DEATHPLACE_PROPERTY: {
-        if (!kind) kind = "death";
+        if (!kind) {
+            kind = "death";
+        }
 
         const char *comp = "full";
 
@@ -7093,7 +7488,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
             user = jmap_utf8string(prop_value);
         }
         else {
-            if (prop_value && *prop_value) uri = jmap_utf8string(prop_value);
+            if (prop_value && *prop_value) {
+                uri = jmap_utf8string(prop_value);
+            }
 
             param_flags |= ALLOW_USERNAME_PARAM;
         }
@@ -7174,7 +7571,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
         strarray_t *ids =
             hash_lookup(prop_group ? prop_group : "", crock->adrs);
 
-        if (!ids) goto unmapped;
+        if (!ids) {
+            goto unmapped;
+        }
 
         for (int i = 0; i < strarray_size(ids); i++) {
             json_t *addrs = json_object_get_vanew(obj, "addresses", "{}");
@@ -7235,7 +7634,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
         if (param) {
             sortas = vcardparameter_get_sortas(param);
             sort = vcardstrarray_element_at(sortas, 0);
-            if (!*sort) sort = NULL;
+            if (!*sort) {
+                sort = NULL;
+            }
         }
 
         jprop = json_pack("{s:o* s:o* s:s*}",
@@ -7250,7 +7651,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
             name = vcardstrarray_element_at(org, i);
             if (sortas && i < vcardstrarray_size(sortas)) {
                 sort = vcardstrarray_element_at(sortas, i);
-                if (!*sort) sort = NULL;
+                if (!*sort) {
+                    sort = NULL;
+                }
             }
             else {
                 sort = NULL;
@@ -7387,10 +7790,12 @@ static void jsprop_from_vcard(vcardproperty *prop,
         goto links;
 
     case VCARD_VERSION_PROPERTY:
-        if (crock->flags & IGNORE_VCARD_VERSION)
+        if (crock->flags & IGNORE_VCARD_VERSION) {
             break;
-        else
+        }
+        else {
             goto unmapped;
+        }
 
         /* Security Properties */
     case VCARD_KEY_PROPERTY: {
@@ -7444,7 +7849,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
     case VCARD_FBURL_PROPERTY: {
         json_t *cals = json_object_get_vanew(obj, "calendars", "{}");
 
-        if (!kind) kind = "freeBusy";
+        if (!kind) {
+            kind = "freeBusy";
+        }
 
         param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM
                       | ALLOW_MEDIATYPE_PARAM;
@@ -7463,7 +7870,9 @@ static void jsprop_from_vcard(vcardproperty *prop,
             param =
                 vcardproperty_get_first_parameter(prop, VCARD_JSPTR_PARAMETER);
 
-            if (!crock->patch) crock->patch = json_object();
+            if (!crock->patch) {
+                crock->patch = json_object();
+            }
             json_object_set_new(
                 crock->patch, vcardparameter_get_jsptr(param), val);
         }
@@ -7630,7 +8039,9 @@ static void props_by_altid_cb(const char *altid, void *val, void *rock)
                 json_object_get_vanew(crock->card, "localizations", "{}");
             json_t *tmp = json_object();
 
-            if (!prop_id) prop_id = *altid ? altid : _prop_id(prop);
+            if (!prop_id) {
+                prop_id = *altid ? altid : _prop_id(prop);
+            }
 
             jsprop_from_vcard(prop, tmp, prop_id, crock);
             json_object_update_new(
@@ -7738,7 +8149,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
             break;
 
         case VCARD_ORG_PROPERTY:
-            if (group) hash_insert(group, xstrdup(_prop_id(prop)), &orgs);
+            if (group) {
+                hash_insert(group, xstrdup(_prop_id(prop)), &orgs);
+            }
             break;
 
         case VCARD_X_PROPERTY:
@@ -7787,7 +8200,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
     }
 
     if (crock.version == VCARD_VERSION_NONE || crock.version == VCARD_VERSION_X)
+    {
         goto done;
+    }
 
     /* Don't combine geographical props unless at least one ADR has GROUP set */
     if (hash_numrecords(&adrs) == 1 && hash_lookup("", &adrs)) {
@@ -7813,7 +8228,9 @@ static json_t *jmap_card_from_vcard(const char *userid,
         buf_free(&buf);
         annotatemore_msg_lookupmask(mailbox, record->uid, annot, userid, &buf);
         double val = 0;
-        if (buf_len(&buf)) val = strtod(buf_cstring(&buf), NULL);
+        if (buf_len(&buf)) {
+            val = strtod(buf_cstring(&buf), NULL);
+        }
 
         json_object_set_new(jcard, "cyrusimap.org:importance", json_real(val));
     }
@@ -7849,10 +8266,14 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
         mailbox_close(&crock->mailbox);
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     if (!crock->args.disable_uri_as_blobid
         && cdata->jmapversion == JMAPCACHE_CARDVERSION)
@@ -7860,7 +8281,9 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
         /* We only cache contacts with media as blobids */
         json_error_t jerr;
         obj = json_loads(cdata->jmapdata, 0, &jerr);
-        if (obj) goto gotvalue;
+        if (obj) {
+            goto gotvalue;
+        }
     }
 
     /* Load message containing the resource and parse vcard data */
@@ -7876,8 +8299,9 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     /* Convert the vCard to a JSContact Card. */
     int from_vcard_flags = IGNORE_DERIVED_PROPS;
-    if (crock->args.disable_uri_as_blobid)
+    if (crock->args.disable_uri_as_blobid) {
         from_vcard_flags |= DISABLE_URI_AS_BLOBID;
+    }
 
     obj = jmap_card_from_vcard(crock->req->userid,
                                vcard,
@@ -8306,7 +8730,9 @@ static int card_filter_match_listprop(json_t *jentry,
     {
 
         if (!val_keys) {
-            if (buf_len(&buf)) buf_putc(&buf, ' ');
+            if (buf_len(&buf)) {
+                buf_putc(&buf, ' ');
+            }
             buf_appendcstr(&buf, id);
         }
         else {
@@ -8322,13 +8748,19 @@ static int card_filter_match_listprop(json_t *jentry,
             for (key = *val_keys; *key; key++) {
                 const char *val =
                     json_string_value(json_object_get(jinfo, key));
-                if (!val) continue;
-                if (buf_len(&buf)) buf_putc(&buf, ' ');
+                if (!val) {
+                    continue;
+                }
+                if (buf_len(&buf)) {
+                    buf_putc(&buf, ' ');
+                }
                 buf_appendcstr(&buf, val);
             }
         }
     }
-    if (propfilter && !buf_len(&buf)) return 0;
+    if (propfilter && !buf_len(&buf)) {
+        return 0;
+    }
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, propname);
@@ -8349,7 +8781,9 @@ static const char *jsname_comp(json_t *name,
     size_t i;
     json_t *jinfo;
 
-    if (!defsep) defsep = " ";
+    if (!defsep) {
+        defsep = " ";
+    }
     sep = defsep;
 
     buf_reset(buf);
@@ -8365,7 +8799,9 @@ static const char *jsname_comp(json_t *name,
         }
 
         if (!strcmp(compname, kind)) {
-            if (buf_len(buf)) buf_appendcstr(buf, sep);
+            if (buf_len(buf)) {
+                buf_appendcstr(buf, sep);
+            }
             buf_appendcstr(buf, val);
         }
 
@@ -8390,7 +8826,9 @@ static int card_filter_match_fullname(json_t *jentry,
     /* Combine name component values into text buffer */
     json_t *name = json_object_get(jentry, "name");
     const char *val = json_string_value(json_object_get(name, "full"));
-    if (propfilter && !val) return 0;
+    if (propfilter && !val) {
+        return 0;
+    }
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, "name");
@@ -8416,7 +8854,9 @@ static int card_filter_match_namecomp(json_t *jentry,
     json_t *name = json_object_get(jentry, "name");
     struct buf buf = BUF_INITIALIZER;
     const char *val = jsname_comp(name, compname, &buf);
-    if (propfilter && !val) return 0;
+    if (propfilter && !val) {
+        return 0;
+    }
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, compname);
@@ -8451,7 +8891,9 @@ static int card_filter_match_address(json_t *jentry,
 
         val = json_string_value(json_object_get(jinfo, "full"));
         if (val) {
-            if (buf_len(&buf)) buf_putc(&buf, ' ');
+            if (buf_len(&buf)) {
+                buf_putc(&buf, ' ');
+            }
             buf_appendcstr(&buf, val);
             continue;
         }
@@ -8462,12 +8904,16 @@ static int card_filter_match_address(json_t *jentry,
         {
             val = json_string_value(json_object_get(jcomp, "value"));
             if (val) {
-                if (buf_len(&buf)) buf_putc(&buf, ' ');
+                if (buf_len(&buf)) {
+                    buf_putc(&buf, ' ');
+                }
                 buf_appendcstr(&buf, val);
             }
         }
     }
-    if (propfilter && !buf_len(&buf)) return 0;
+    if (propfilter && !buf_len(&buf)) {
+        return 0;
+    }
 
     /* Evaluate search on text buffer */
     hash_table *termset = getorset_termset(cached_termsets, "address");
@@ -8501,7 +8947,9 @@ static int card_filter_match(void *vf, void *rock)
     }
 
     /* Match text filters */
-    if (f->text) contact_textfilter_reset(f->text);
+    if (f->text) {
+        contact_textfilter_reset(f->text);
+    }
     if (!card_filter_match_fullname(
             card, f->fullName, f->text, &cfrock->cached_termsets)
         || !card_filter_match_namecomp(
@@ -8606,7 +9054,9 @@ static int card_filter_match(void *vf, void *rock)
         return 0;
     }
 
-    if (f->text && !contact_textfilter_matched_all(f->text)) return 0;
+    if (f->text && !contact_textfilter_matched_all(f->text)) {
+        return 0;
+    }
 
     /* inCardGroup */
     if (f->inCardGroup) {
@@ -8628,7 +9078,9 @@ static int card_filter_match(void *vf, void *rock)
             }
         }
         strarray_free(gids);
-        if (!m) return 0;
+        if (!m) {
+            return 0;
+        }
     }
 
     /* All matched. */
@@ -8668,7 +9120,9 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     if (cdata->jmapversion == JMAPCACHE_CARDVERSION) {
         json_error_t jerr;
         entry = json_loads(cdata->jmapdata, 0, &jerr);
-        if (entry) goto gotvalue;
+        if (entry) {
+            goto gotvalue;
+        }
     }
 
     /* Open mailbox. */
@@ -8678,11 +9132,15 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
         r = mailbox_open_irl(mbentry->name, &crock->mailbox);
     }
     mboxlist_entry_free(&mbentry);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* Load record. */
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Load contact from record. */
     entry = _card_from_record(
@@ -8716,7 +9174,9 @@ gotvalue:
         }
         ptrarray_fini(&cfrock.cached_termsets);
         /* Skip non-matching entries */
-        if (!matches) goto done;
+        if (!matches) {
+            goto done;
+        }
     }
 
     /* Update statistics */
@@ -8746,7 +9206,9 @@ gotvalue:
     }
 
 done:
-    if (entry) json_decref(entry);
+    if (entry) {
+        json_decref(entry);
+    }
     return r;
 }
 
@@ -8761,22 +9223,30 @@ static enum contactsquery_sort *cardquery_buildsort(json_t *jsort)
     {
         const char *prop =
             json_string_value(json_object_get(jcomp, "property"));
-        if (!strcmp(prop, "uid")) sort[i] = CONTACTS_SORT_UID;
+        if (!strcmp(prop, "uid")) {
+            sort[i] = CONTACTS_SORT_UID;
+        }
         /* Comparators for Card */
-        else if (!strcmp(prop, "name/given"))
+        else if (!strcmp(prop, "name/given")) {
             sort[i] = CONTACTS_SORT_FIRSTNAME;
-        else if (!strcmp(prop, "name/surname"))
+        }
+        else if (!strcmp(prop, "name/surname")) {
             sort[i] = CONTACTS_SORT_LASTNAME;
-        else if (!strcmp(prop, "nickName"))
+        }
+        else if (!strcmp(prop, "nickName")) {
             sort[i] = CONTACTS_SORT_NICKNAME;
-        else if (!strcmp(prop, "organization"))
+        }
+        else if (!strcmp(prop, "organization")) {
             sort[i] = CONTACTS_SORT_COMPANY;
+        }
         /* Comparators for CardGroup */
-        else if (!strcmp(prop, "name"))
+        else if (!strcmp(prop, "name")) {
             sort[i] = CONTACTS_SORT_NAME;
+        }
 
-        if (json_object_get(jcomp, "isAscending") == json_false())
+        if (json_object_get(jcomp, "isAscending") == json_false()) {
             sort[i] |= CONTACTS_SORT_DESC;
+        }
     }
 
     return sort;
@@ -8792,8 +9262,12 @@ static const char *jsname_sortas(json_t *card,
     if (name) {
         json_t *sortas = json_object_get(name, "sortAs");
 
-        if (sortas) val = json_string_value(json_object_get(sortas, comp));
-        if (!val) val = jsname_comp(name, comp, buf);
+        if (sortas) {
+            val = json_string_value(json_object_get(sortas, comp));
+        }
+        if (!val) {
+            val = jsname_comp(name, comp, buf);
+        }
     }
 
     return val;
@@ -8813,9 +9287,13 @@ static const char *jsorg_sortas(json_t *card, struct buf *buf)
         json_object_foreach(orgs, id, org)
         {
             val = json_string_value(json_object_get(org, "sortAs"));
-            if (!val) val = json_string_value(json_object_get(org, "name"));
+            if (!val) {
+                val = json_string_value(json_object_get(org, "name"));
+            }
 
-            if (buf_len(buf)) buf_putc(buf, ' ');
+            if (buf_len(buf)) {
+                buf_putc(buf, ' ');
+            }
             buf_appendcstr(buf, val);
         }
     }
@@ -8869,7 +9347,9 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
 
         ret = strcmpsafe(vala, valb);
         if (ret) {
-            if (*comp & CONTACTS_SORT_DESC) ret = -ret;
+            if (*comp & CONTACTS_SORT_DESC) {
+                ret = -ret;
+            }
             break;
         }
     }
@@ -8915,7 +9395,9 @@ static void _jsunknown_to_vcard(struct jmap_parser *parser,
 
     vcardcomponent_add_property(card, prop);
 
-    if (key) jmap_parser_pop(parser);
+    if (key) {
+        jmap_parser_pop(parser);
+    }
     free(val);
 }
 
@@ -8998,7 +9480,9 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser,
             jmap_parser_invalid(parser, id);
         }
         else if (vcardproperty_is_multivalued(pkind)) {
-            if (!text) text = vcardstrarray_new(1);
+            if (!text) {
+                text = vcardstrarray_new(1);
+            }
             vcardstrarray_append(text, id);
         }
         else {
@@ -9047,7 +9531,9 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
     vcardparameter *new = NULL, *param = NULL;
     static struct buf buf = BUF_INITIALIZER;
 
-    if (!jprop) return;
+    if (!jprop) {
+        return;
+    }
 
     switch (pkind) {
     case VCARD_TYPE_PARAMETER:
@@ -9056,18 +9542,23 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
             json_t *set;
 
             param = vcardproperty_get_first_parameter(prop, pkind);
-            if (!param) param = new = vcardparameter_new(pkind);
+            if (!param) {
+                param = new = vcardparameter_new(pkind);
+            }
 
             json_object_foreach(jprop, type, set)
             {
                 const char *mytype;
 
-                if (!strcasecmp("private", type))
+                if (!strcasecmp("private", type)) {
                     mytype = "home";
-                else if (!strcasecmp("mobile", type))
+                }
+                else if (!strcasecmp("mobile", type)) {
                     mytype = "cell";
-                else
+                }
+                else {
                     mytype = type;
+                }
 
                 vcardparameter_add_value_from_string(param, mytype);
             }
@@ -9143,7 +9634,9 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
     }
 
     if (param) {
-        if (new) vcardproperty_add_parameter(prop, param);
+        if (new) {
+            vcardproperty_add_parameter(prop, param);
+        }
     }
     else if (jprop) {
         jmap_parser_invalid(parser, key);
@@ -9380,14 +9873,18 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser,
                     r |= rock->u.prop_cb(parser, altobj, &my_l10n, card);
                 }
 
-                if (patched) json_decref(patched);
+                if (patched) {
+                    json_decref(patched);
+                }
             }
             else {
                 json_t *path;
                 size_t len, i;
 
                 buf_printf(&buf, "localizations/%s/", lang);
-                if (id) buf_printf(&buf, "%s/", id);
+                if (id) {
+                    buf_printf(&buf, "%s/", id);
+                }
                 buf_printf(&buf, "%s/", key);
                 len = buf_len(&buf);
 
@@ -9400,7 +9897,9 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser,
                 buf_reset(&buf);
             }
 
-            if (invalid) json_decref(invalid);
+            if (invalid) {
+                json_decref(invalid);
+            }
         }
 
         json_decref(patches);
@@ -9465,7 +9964,9 @@ static unsigned _jsmultiobject_to_card(struct jmap_parser *parser,
         json_object_del(jval, id);
         jmap_parser_pop(parser);
 
-        if (!r1) break;
+        if (!r1) {
+            break;
+        }
     }
 
     jmap_parser_pop(parser);
@@ -9541,7 +10042,9 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser,
 {
     json_t *comps = json_object_get(obj, "components");
 
-    if (!comps) return NULL;
+    if (!comps) {
+        return NULL;
+    }
 
     if (!json_array_size(comps)) {
         jmap_parser_invalid(parser, "components");
@@ -9677,13 +10180,17 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser,
             /* Add phonetic to proper field */
             if (phonetic) {
                 field = &ph.field[ckind->idx];
-                if (!*field) *field = vcardstrarray_new(1);
+                if (!*field) {
+                    *field = vcardstrarray_new(1);
+                }
                 vcardstrarray_append(*field, phonetic);
             }
 
             /* Add value to proper field */
             field = &vals.field[ckind->idx];
-            if (!*field) *field = vcardstrarray_new(1);
+            if (!*field) {
+                *field = vcardstrarray_new(1);
+            }
             vcardstrarray_append(*field, val);
 
             if (isordered) {
@@ -9702,7 +10209,9 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser,
 
             if (args->derived) {
                 /* Create derived value from fields */
-                if (i) buf_appendcstr(args->derived, sep ? sep : defsep);
+                if (i) {
+                    buf_appendcstr(args->derived, sep ? sep : defsep);
+                }
                 buf_appendcstr(args->derived, val);
                 sep = NULL;
             }
@@ -9710,7 +10219,9 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser,
             /* Also add values from ext fields to backward-compat fields */
             if (ckind->flags & FIELD_BWD) {
                 field = &vals.field[ckind->alt_idx];
-                if (!*field) *field = vcardstrarray_new(1);
+                if (!*field) {
+                    *field = vcardstrarray_new(1);
+                }
                 vcardstrarray_append(*field, val);
             }
         }
@@ -9752,20 +10263,26 @@ fail:
     for (unsigned i = 0; i < vals.num_fields; i++) {
         vcardstrarray *sa = vals.field[i];
 
-        if (sa) vcardstrarray_free(sa);
+        if (sa) {
+            vcardstrarray_free(sa);
+        }
     }
     if (ph_system) {
         for (unsigned i = 0; i < ph.num_fields; i++) {
             vcardstrarray *sa = ph.field[i];
 
-            if (sa) vcardstrarray_free(sa);
+            if (sa) {
+                vcardstrarray_free(sa);
+            }
         }
     }
     if (jscomps) {
         for (unsigned i = 0; i < jscomps->num_fields; i++) {
             vcardstrarray *sa = jscomps->field[i];
 
-            if (sa) vcardstrarray_free(sa);
+            if (sa) {
+                vcardstrarray_free(sa);
+            }
         }
         free(jscomps);
     }
@@ -9837,7 +10354,9 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser,
         goto done;
     }
 
-    if (!fullName) args.derived = &buf;
+    if (!fullName) {
+        args.derived = &buf;
+    }
 
     prop = _jscomps_to_vcard(parser, jval, card, &args);
 
@@ -9980,7 +10499,9 @@ static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser,
     }
     else if (jprop) {
         jmap_parser_invalid(parser, "sortAs");
-        if (units) vcardstrarray_free(units);
+        if (units) {
+            vcardstrarray_free(units);
+        }
         return NULL;
     }
 
@@ -10275,13 +10796,17 @@ static vcardproperty *_jscomm_to_vcard(struct jmap_parser *parser,
         size_t i, len = strlen(val), have_scheme = 0;
 
         for (i = 0; i < len; i++) {
-            if (!isascii(val[i]) || !isprint(val[i]) || isspace(val[i]))
+            if (!isascii(val[i]) || !isprint(val[i]) || isspace(val[i])) {
                 break;
-            else if (i && val[i] == ':')
+            }
+            else if (i && val[i] == ':') {
                 have_scheme = 1;
+            }
         }
 
-        if (!have_scheme || i < len) val_kind = "TEXT";
+        if (!have_scheme || i < len) {
+            val_kind = "TEXT";
+        }
 
         prop = vcardproperty_new(crock->kind);
         vcardproperty_set_value_from_string(prop, val, val_kind);
@@ -10475,7 +11000,9 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser,
             case 0:
                 if (!buf_len(&ctx.content_type)
                     || strchr(buf_cstring(&ctx.content_type), '/'))
+                {
                     break;
+                }
 
                 /* Fall through */
                 GCC_FALLTHROUGH
@@ -10486,8 +11013,9 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser,
 
             default:
                 /* Not found, or system error */
-                if (!rrock->errors->blobNotFound)
+                if (!rrock->errors->blobNotFound) {
                     rrock->errors->blobNotFound = json_array();
+                }
                 json_array_append(rrock->errors->blobNotFound, jprop);
                 return NULL;
             }
@@ -10513,7 +11041,9 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser,
             buf_truncate(&buf, buf_len(&buf) + len64);
             uri = buf_cstring(&buf);
 
-            if (!media_type) media_type = buf_release(&ctx.content_type);
+            if (!media_type) {
+                media_type = buf_release(&ctx.content_type);
+            }
             blob = &ctx.blob;
 
             json_object_del(obj, "blobId");
@@ -10605,7 +11135,9 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser,
                 const struct comp_kind *ckind2 =
                     kind2 ? _field_name_to_kind(kind2, adr_comp_kinds) : NULL;
 
-                if (!ckind1 || !ckind2) break;
+                if (!ckind1 || !ckind2) {
+                    break;
+                }
 
                 if (ckind1 > ckind2) {
                     json_t *tmp = json_copy(comp1);
@@ -10615,7 +11147,9 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser,
                 }
             }
 
-            if (!swap) break;
+            if (!swap) {
+                break;
+            }
         }
     }
 
@@ -11100,7 +11634,9 @@ static unsigned _vcardprops_to_card(struct jmap_parser *parser,
 
 static void reject_reserved_props(json_t *jsobj, struct jmap_parser *parser)
 {
-    if (JNULL(jsobj)) return;
+    if (JNULL(jsobj)) {
+        return;
+    }
 
     const char *key;
     json_t *jval;
@@ -11710,7 +12246,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
 
     parser.invalid = NULL;
 
-    if (json_array_size(errors->invalid) || errors->blobNotFound) goto done;
+    if (json_array_size(errors->invalid) || errors->blobNotFound) {
+        goto done;
+    }
 
     /* Set group label on grouped properties */
     hash_enumerate(&groups, &_set_groups, NULL);
@@ -11723,8 +12261,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
         record_is_dirty = 1;
     }
 
-    if (!record_is_dirty && has_noncontent)
+    if (!record_is_dirty && has_noncontent) {
         r = HTTP_NO_CONTENT; /* no content */
+    }
 
 done:
     free_hash_table(&groups, (void (*)(void *)) &ptrarray_free);
@@ -11799,7 +12338,9 @@ static int _card_set_create(jmap_req_t *req,
         }
     }
     carddav_close(db);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Determine mailbox and resource name of card.
      * We attempt to reuse the UID as DAV resource name; but
@@ -11886,8 +12427,9 @@ static int _card_set_create(jmap_req_t *req,
             r = 0;
             goto done;
         }
-        else if (r)
+        else if (r) {
             goto done;
+        }
     }
 
     /* Make copies of media/cryptoKeys properties
@@ -12110,7 +12652,9 @@ static int _card_set_update(jmap_req_t *req,
         json_object_del(jcard, "addressBookIds");
         free(mboxname);
 
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
@@ -12133,7 +12677,9 @@ static int _card_set_update(jmap_req_t *req,
     struct index_record record;
 
     r = mailbox_find_index_record(*mailbox, cdata->dav.imap_uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     olduid = cdata->dav.imap_uid;
     resource = xstrdup(cdata->dav.resource);
@@ -12162,8 +12708,12 @@ static int _card_set_update(jmap_req_t *req,
                    resource);
             r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
             annotate_state_set_auth(state, 0, req->userid, req->authstate);
-            if (!r) r = annotate_state_store(state, annots);
-            if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
+            if (!r) {
+                r = annotate_state_store(state, annots);
+            }
+            if (!r) {
+                r = mailbox_rewrite_index_record(*mailbox, &record);
+            }
             if (!r) {
                 *item = json_null();
 
@@ -12344,7 +12894,9 @@ static json_t *_card_from_record(jmap_req_t *req,
 {
     vcardcomponent *vcard = record_to_vcard_x(mailbox, record);
 
-    if (!vcard) return NULL;
+    if (!vcard) {
+        return NULL;
+    }
 
     /* Patch JMAP event */
     json_t *jcard = jmap_card_from_vcard(
@@ -12513,7 +13065,9 @@ static int jmap_card_parse(jmap_req_t *req)
         json_t *jcard = NULL;
         int r = 0;
 
-        if (!blobid) continue;
+        if (!blobid) {
+            continue;
+        }
 
         /* Find blob */
         blob_ctx.blobid = blobid;
@@ -12537,8 +13091,9 @@ static int jmap_card_parse(jmap_req_t *req)
         vcard = vcard_parse_buf_x(&blob_ctx.blob);
         if (vcard) {
             int from_vcard_flags = IGNORE_DERIVED_PROPS;
-            if (args.disable_uri_as_blobid)
+            if (args.disable_uri_as_blobid) {
                 from_vcard_flags |= DISABLE_URI_AS_BLOBID;
+            }
 
             jcard = jmap_card_from_vcard(
                 req->userid, vcard, db, mailbox, &record, from_vcard_flags);
@@ -12564,7 +13119,9 @@ static int jmap_card_parse(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_parse_fini(&parse);
-    if (db) carddav_close(db);
+    if (db) {
+        carddav_close(db);
+    }
     free_hash_table(args.props, NULL);
     free(args.props);
     return 0;
@@ -12581,7 +13138,9 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     mbentry_t *freeme = NULL;
     int r;
 
-    if (ctx->blobid[0] != 'V') return 0;
+    if (ctx->blobid[0] != 'V') {
+        return 0;
+    }
 
     if (!jmap_decode_rawdata_blobid(
             ctx->blobid, &mboxid, &uid, NULL, NULL, &propname, &guid))
@@ -12671,8 +13230,9 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         else if (mediatype) {
             buf_setcstr(&ctx->content_type, mediatype);
         }
-        else
+        else {
             buf_reset(&ctx->content_type);
+        }
 
         buf_setcstr(&ctx->encoding, "BINARY");
     }
@@ -12724,7 +13284,9 @@ done:
         }
         ctx->errstr = desc;
     }
-    if (vcard) vcardcomponent_free(vcard);
+    if (vcard) {
+        vcardcomponent_free(vcard);
+    }
     mailbox_close(&mailbox);
     mboxlist_entry_free(&freeme);
     free(mboxid);
@@ -12746,7 +13308,9 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     mbentry_t *freeme = NULL;
     int r;
 
-    if (ctx->blobid[0] != 'V') return 0;
+    if (ctx->blobid[0] != 'V') {
+        return 0;
+    }
 
     if (!jmap_decode_rawdata_blobid(
             ctx->blobid, &mboxid, &uid, NULL, NULL, &prop, &guid))
@@ -12830,8 +13394,9 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         else if (mediatype) {
             buf_setcstr(&ctx->content_type, mediatype);
         }
-        else
+        else {
             buf_reset(&ctx->content_type);
+        }
 
         buf_setcstr(&ctx->encoding, "BINARY");
     }
@@ -12841,8 +13406,9 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
                 vparse_get_entry(vcard->objects, NULL, "VERSION");
 
             buf_setcstr(&ctx->content_type, "text/vcard");
-            if (entry)
+            if (entry) {
                 buf_printf(&ctx->content_type, "; version=%s", entry->v.value);
+            }
         }
 
         buf_setcstr(&ctx->encoding, "8BIT");
@@ -12864,7 +13430,9 @@ done:
         }
         ctx->errstr = desc;
     }
-    if (vcard) vparse_free_card(vcard);
+    if (vcard) {
+        vparse_free_card(vcard);
+    }
     mailbox_close(&mailbox);
     mboxlist_entry_free(&freeme);
     free(mboxid);

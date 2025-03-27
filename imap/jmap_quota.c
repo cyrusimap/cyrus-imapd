@@ -136,8 +136,9 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
         if (strcmp("mail", json_string_value(jval))) {
             json_array_append(get.not_found, jval);
         }
-        else
+        else {
             want_mail_quota = 1;
+        }
     }
 
     if (want_mail_quota) {
@@ -254,15 +255,21 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
     char *id = NULL;
 
     mboxlist_lookup(q->root, &mbentry, NULL);
-    if (!mbentry) return 0;
+    if (!mbentry) {
+        return 0;
+    }
 
     /* Filter out unsupported quotas */
     switch (mbtype_isa(mbentry->mbtype)) {
     case MBTYPE_EMAIL:
-        if (!jmap_is_using(qrock->req, JMAP_URN_MAIL)) goto done;
+        if (!jmap_is_using(qrock->req, JMAP_URN_MAIL)) {
+            goto done;
+        }
 
         /* We can only deal with INBOX */
-        if (strcmp(mbentry->name, qrock->inboxname)) goto done;
+        if (strcmp(mbentry->name, qrock->inboxname)) {
+            goto done;
+        }
 
         name = "root";
         type_masks[QUOTA_STORAGE] |= JMAP_TYPE_EMAIL;
@@ -296,7 +303,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         break;
 
     case MBTYPE_JMAPSUBMIT:
-        if (!jmap_is_using(qrock->req, JMAP_URN_MAIL)) goto done;
+        if (!jmap_is_using(qrock->req, JMAP_URN_MAIL)) {
+            goto done;
+        }
 
         name = "submission";
         type_masks[QUOTA_STORAGE] |= JMAP_TYPE_EMAILSUBMISSION;
@@ -306,7 +315,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
     case MBTYPE_SIEVE:
         if (!jmap_is_using(qrock->req, JMAP_URN_VACATION)
             && !jmap_is_using(qrock->req, JMAP_URN_SIEVE))
+        {
             goto done;
+        }
 
         name = "sieve";
         if (jmap_is_using(qrock->req, JMAP_URN_VACATION)) {
@@ -320,7 +331,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 
     case MBTYPE_CALENDAR:
         /* Assuming this is calendar-home-set */
-        if (!jmap_is_using(qrock->req, JMAP_URN_CALENDARS)) goto done;
+        if (!jmap_is_using(qrock->req, JMAP_URN_CALENDARS)) {
+            goto done;
+        }
 
         name = "calendars";
         type_masks[QUOTA_STORAGE] |= JMAP_TYPE_CALENDAREVENT;
@@ -330,7 +343,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 
     case MBTYPE_ADDRESSBOOK:
         /* Assuming this is addressbook-home-set */
-        if (!jmap_is_using(qrock->req, JMAP_CONTACTS_EXTENSION)) goto done;
+        if (!jmap_is_using(qrock->req, JMAP_CONTACTS_EXTENSION)) {
+            goto done;
+        }
 
         name = "addressbooks";
         type_masks[QUOTA_STORAGE] |= JMAP_TYPE_CONTACT | JMAP_TYPE_CONTACTGROUP;
@@ -343,8 +358,12 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
     id = buf_release(&buf);
 
     for (qres = 0; qres < QUOTA_NUMRESOURCES; qres++) {
-        if (!type_masks[qres]) continue;
-        if (q->limits[qres] == QUOTA_UNLIMITED) continue;
+        if (!type_masks[qres]) {
+            continue;
+        }
+        if (q->limits[qres] == QUOTA_UNLIMITED) {
+            continue;
+        }
 
         struct jquota_root_t *jroot = xzmalloc(sizeof(struct jquota_root_t));
 
@@ -717,13 +736,19 @@ static int filter_match(void *vf, void *rock)
     struct jquota_root_t *jroot = (struct jquota_root_t *) rock;
 
     /* name */
-    if (f->name && !strstr(jroot->name, f->name)) return 0;
+    if (f->name && !strstr(jroot->name, f->name)) {
+        return 0;
+    }
 
     /* scope */
-    if (f->scope && !strstr("account", f->scope)) return 0;
+    if (f->scope && !strstr("account", f->scope)) {
+        return 0;
+    }
 
     /* resourceType */
-    if (f->resourceType && !strstr(jroot->junits, f->resourceType)) return 0;
+    if (f->resourceType && !strstr(jroot->junits, f->resourceType)) {
+        return 0;
+    }
 
     /* type */
     if (f->type) {
@@ -735,7 +760,9 @@ static int filter_match(void *vf, void *rock)
                 break;
             }
         }
-        if (!jtype->name) return 0;
+        if (!jtype->name) {
+            return 0;
+        }
     }
 
     /* All matched. */
@@ -805,7 +832,9 @@ static int quota_cmp QSORT_R_COMPAR_ARGS(const void *va,
             break;
         }
 
-        if (ret) return (sort & QUOTA_SORT_DESC) ? -ret : ret;
+        if (ret) {
+            return (sort & QUOTA_SORT_DESC) ? -ret : ret;
+        }
     }
 
     return 0;
@@ -900,7 +929,9 @@ static int jmap_quota_query(jmap_req_t *req)
     else if (query.position < 0) {
         query.position += query.total;
     }
-    if (query.position < 0) query.position = 0;
+    if (query.position < 0) {
+        query.position = 0;
+    }
 
     size_t i;
     for (i = 0; i < query.total; i++) {
@@ -918,7 +949,9 @@ static int jmap_quota_query(jmap_req_t *req)
     }
     ptrarray_fini(&frock.matches);
 
-    if (parsed_filter) jmap_filter_free(parsed_filter, &free);
+    if (parsed_filter) {
+        jmap_filter_free(parsed_filter, &free);
+    }
 
     /* Build response */
     modseq_t quotamodseq = mboxname_readquotamodseq(qrock.inboxname);
@@ -930,7 +963,9 @@ static int jmap_quota_query(jmap_req_t *req)
     jmap_ok(req, jmap_query_reply(&query));
 
 done:
-    if (r) jmap_error(req, jmap_server_error(r));
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
     jmap_parser_fini(&parser);
     jmap_query_fini(&query);
 

@@ -324,10 +324,12 @@ EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
 {
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
-    if (userid)
+    if (userid) {
         dav_getpath_byuserid(fname, userid);
-    else
+    }
+    else {
         buf_setcstr(fname, mailbox_meta_fname(mailbox, META_DAV));
+    }
 
     free(userid);
 }
@@ -342,7 +344,9 @@ EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
 
 EXPORTED sqldb_t *dav_open_userid(const char *userid)
 {
-    if (reconstruct_db) return reconstruct_db;
+    if (reconstruct_db) {
+        return reconstruct_db;
+    }
 
     sqldb_t *db = NULL;
     struct buf fname = BUF_INITIALIZER;
@@ -358,7 +362,9 @@ EXPORTED sqldb_t *dav_open_userid(const char *userid)
 
 EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 {
-    if (reconstruct_db) return reconstruct_db;
+    if (reconstruct_db) {
+        return reconstruct_db;
+    }
 
     sqldb_t *db = NULL;
     struct buf fname = BUF_INITIALIZER;
@@ -396,7 +402,9 @@ EXPORTED int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox)
 
 EXPORTED int dav_close(sqldb_t **dbp)
 {
-    if (reconstruct_db) return 0;
+    if (reconstruct_db) {
+        return 0;
+    }
 
     return sqldb_close(dbp);
 }
@@ -460,11 +468,15 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     if (addproc) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
-        if (writelock)
+        if (writelock) {
             r = mailbox_open_iwl(mbentry->name, &mailbox);
-        else
+        }
+        else {
             r = mailbox_open_irl(mbentry->name, &mailbox);
-        if (!r) r = addproc(mailbox);
+        }
+        if (!r) {
+            r = addproc(mailbox);
+        }
         mailbox_close(&mailbox);
     }
 
@@ -477,7 +489,9 @@ static void run_audit_tool(const char *tool,
                            const char *dstdb)
 {
     pid_t pid = fork();
-    if (pid < 0) return;
+    if (pid < 0) {
+        return;
+    }
 
     if (pid == 0) {
         /* child */
@@ -521,26 +535,35 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
         r = sqldb_begin(reconstruct_db, "reconstruct");
 #ifdef WITH_DAV
         // make all the alarm updates to go this database too
-        if (!r) r = caldav_alarm_set_reconstruct(reconstruct_db);
+        if (!r) {
+            r = caldav_alarm_set_reconstruct(reconstruct_db);
+        }
 #endif
         // reconstruct everything
-        if (!r)
+        if (!r) {
             r = mboxlist_usermboxtree(
                 userid, NULL, _dav_reconstruct_mb, (void *) userid, 0);
+        }
 #ifdef WITH_DAV
         // make sure all the alarms are resolved
-        if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/ 1);
+        if (!r) {
+            r = caldav_alarm_process(0, NULL, /*dryrun*/ 1);
+        }
         // commit events over to ther alarm database if we're keeping them
-        if (!r && !audit_tool)
+        if (!r && !audit_tool) {
             r = caldav_alarm_commit_reconstruct(userid);
-        else
+        }
+        else {
             caldav_alarm_rollback_reconstruct();
+        }
 #endif
         // and commit to this DB
-        if (r)
+        if (r) {
             sqldb_rollback(reconstruct_db, "reconstruct");
-        else
+        }
+        else {
             sqldb_commit(reconstruct_db, "reconstruct");
+        }
         sqldb_close(&reconstruct_db);
     }
 
@@ -639,11 +662,15 @@ static int sievedb_upgrade(sqldb_t *db)
         /* Create an array of SHA1 for the content in each record */
         srock.sha1 = &sha1;
         r = sqldb_exec(db, CMD_GET_v12_ROWS, NULL, &sievedb_upgrade_cb, &srock);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* Rename 'content' -> 'contentid' */
         r = sqldb_exec(db, CMD_ALTER_v12_TABLE, NULL, NULL, NULL);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         /* Rewrite 'contentid' columns with actual ids (SHA1) */
         for (rowid = 1; rowid < strarray_size(&sha1); rowid++) {
@@ -651,21 +678,29 @@ static int sievedb_upgrade(sqldb_t *db)
             bval[1].val.s = strarray_nth(&sha1, rowid);
 
             r = sqldb_exec(db, CMD_UPDATE_v13_ROW, bval, NULL, NULL);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
         }
     }
     else if (db->version == 13) {
         /* Fetch mailbox name from first record */
         r = sqldb_exec(db, CMD_GET_v13_ROW1, NULL, &sievedb_upgrade_cb, &srock);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
     /* This will only be set if we are upgrading from v12 or v13
        AND there are records in the table */
-    if (!srock.mboxname) goto done;
+    if (!srock.mboxname) {
+        goto done;
+    }
 
     r = mboxlist_lookup_allow_all(srock.mboxname, &mbentry, NULL);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Rewrite 'mailbox' columns with mboxid rather than mboxname */
     bval[2].val.s = mbentry->uniqueid;

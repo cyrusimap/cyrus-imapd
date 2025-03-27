@@ -246,26 +246,35 @@ static const char *dbfname(struct cyrusdb *db)
     const char *fname = NULL;
 
     /* find absolute path to db files in configuration */
-    if (!strcmp(db->name, FNAME_MBOXLIST))
+    if (!strcmp(db->name, FNAME_MBOXLIST)) {
         fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
-    else if (!strcmp(db->name, FNAME_QUOTADB))
+    }
+    else if (!strcmp(db->name, FNAME_QUOTADB)) {
         fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
-    else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS))
+    }
+    else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS)) {
         fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
-    else if (!strcmp(db->name, FNAME_DELIVERDB))
+    }
+    else if (!strcmp(db->name, FNAME_DELIVERDB)) {
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
-    else if (!strcmp(db->name, FNAME_TLSSESSIONS))
+    }
+    else if (!strcmp(db->name, FNAME_TLSSESSIONS)) {
         fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
-    else if (!strcmp(db->name, FNAME_PTSDB))
+    }
+    else if (!strcmp(db->name, FNAME_PTSDB)) {
         fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
-    else if (!strcmp(db->name, FNAME_STATUSCACHEDB))
+    }
+    else if (!strcmp(db->name, FNAME_STATUSCACHEDB)) {
         fname = config_getstring(IMAPOPT_STATUSCACHE_DB_PATH);
+    }
 
     /* use default if no special path was found */
-    if (!fname)
+    if (!fname) {
         snprintf(buf, MAX_MAILBOX_PATH, "%s%s", config_dir, db->name);
-    else
+    }
+    else {
         snprintf(buf, MAX_MAILBOX_PATH, "%s", fname);
+    }
 
     return buf;
 }
@@ -278,15 +287,21 @@ static void check_convert(struct cyrusdb *db, const char *fname)
     int r;
 
     /* unable to detect current type, assume all is good */
-    if (!detectname) return;
+    if (!detectname) {
+        return;
+    }
 
     /* strip the -nosync from the name if present */
     xstrncpy(backendbuf, *db->configptr, 100);
     p = strstr(backendbuf, "-nosync");
-    if (p) *p = '\0';
+    if (p) {
+        *p = '\0';
+    }
 
     /* ignore files that are already the right type */
-    if (!strcmp(backendbuf, detectname)) return;
+    if (!strcmp(backendbuf, detectname)) {
+        return;
+    }
 
     /* otherwise we need to upgrade! */
     syslog(LOG_NOTICE,
@@ -296,7 +311,9 @@ static void check_convert(struct cyrusdb *db, const char *fname)
            *db->configptr);
 
     r = cyrusdb_convert(fname, fname, detectname, *db->configptr);
-    if (r) syslog(LOG_NOTICE, "conversion failed %s", fname);
+    if (r) {
+        syslog(LOG_NOTICE, "conversion failed %s", fname);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -338,18 +355,22 @@ int main(int argc, char *argv[])
         case 'r':
             libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
             msg = "recovering cyrus databases";
-            if (op == NONE)
+            if (op == NONE) {
                 op = RECOVER;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'c':
             msg = "checkpointing cyrus databases";
-            if (op == NONE)
+            if (op == NONE) {
                 op = CHECKPOINT;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'x':
@@ -380,8 +401,9 @@ int main(int argc, char *argv[])
     syslog(LOG_NOTICE, "%s", msg);
 
     /* detect backends */
-    for (i = 0; dblist[i].name != NULL; i++)
+    for (i = 0; dblist[i].name != NULL; i++) {
         dblist[i].archiver = cyrusdb_getarchiver(*dblist[i].configptr);
+    }
 
     /* sort dbenvs */
     qsort(dblist, N(dblist) - 1, sizeof(struct cyrusdb), &compdb);
@@ -389,13 +411,19 @@ int main(int argc, char *argv[])
     for (i = 0; dblist[i].name; i++) {
         const char *fname = dbfname(&dblist[i]);
 
-        if (op == RECOVER) check_convert(&dblist[i], fname);
+        if (op == RECOVER) {
+            check_convert(&dblist[i], fname);
+        }
 
         /* if we need to archive this db, add it to the list */
-        if (dblist[i].doarchive) strarray_add(&files, fname);
+        if (dblist[i].doarchive) {
+            strarray_add(&files, fname);
+        }
 
         /* deal with each dbenv once */
-        if (dblist[i + 1].archiver == dblist[i].archiver) continue;
+        if (dblist[i + 1].archiver == dblist[i].archiver) {
+            continue;
+        }
 
         r = r2 = 0;
         switch (op) {
@@ -415,7 +443,9 @@ int main(int argc, char *argv[])
 
                 if (dirp) {
                     while ((dirent = readdir(dirp)) != NULL) {
-                        if (dirent->d_name[0] == '.') continue;
+                        if (dirent->d_name[0] == '.') {
+                            continue;
+                        }
                         file = strconcat(
                             backup2, "/", dirent->d_name, (char *) NULL);
                         xunlink(file);
@@ -427,16 +457,22 @@ int main(int argc, char *argv[])
                 r2 = rmdir(backup2);
 
                 /* move db.backup1 to db.backup2 */
-                if (r2 == 0 || errno == ENOENT) r2 = rename(backup1, backup2);
+                if (r2 == 0 || errno == ENOENT) {
+                    r2 = rename(backup1, backup2);
+                }
 
                 /* make a new db.backup1 */
-                if (r2 == 0 || errno == ENOENT) r2 = mkdir(backup1, 0755);
+                if (r2 == 0 || errno == ENOENT) {
+                    r2 = mkdir(backup1, 0755);
+                }
 
                 rotated = 1;
             }
 
             /* do the archive */
-            if (r2 == 0) r2 = dblist[i].archiver(&files, backup1);
+            if (r2 == 0) {
+                r2 = dblist[i].archiver(&files, backup1);
+            }
 
             if (r2) {
                 syslog(LOG_ERR,
@@ -460,7 +496,9 @@ int main(int argc, char *argv[])
     if (op == RECOVER && reserve_flag) {
         int upgraded = 0;
         process_mboxlist(&upgraded);
-        if (upgraded) annotatemore_upgrade();
+        if (upgraded) {
+            annotatemore_upgrade();
+        }
     }
 
     free(dirname);

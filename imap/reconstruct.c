@@ -262,10 +262,12 @@ int main(int argc, char **argv)
             break;
 
         case 'V':
-            if (!strcasecmp(optarg, "max"))
+            if (!strcasecmp(optarg, "max")) {
                 setversion = MAILBOX_MINOR_VERSION;
-            else
+            }
+            else {
                 setversion = atoi(optarg);
+            }
             break;
 
         default:
@@ -364,7 +366,9 @@ int main(int argc, char **argv)
     }
 
     /* set up reconstruct rock */
-    if (fflag) rrock.discovered = strarray_new();
+    if (fflag) {
+        rrock.discovered = strarray_new();
+    }
     construct_hash_table(&rrock.visited, 2047, 1); /* XXX magic numbers */
 
     /* Normal Operation */
@@ -401,7 +405,9 @@ int main(int argc, char **argv)
         char *domain = NULL;
 
         /* save domain */
-        if (config_virtdomains) domain = strchr(argv[i], '@');
+        if (config_virtdomains) {
+            domain = strchr(argv[i], '@');
+        }
 
         buf_setcstr(&buf, argv[i]);
 
@@ -417,12 +423,16 @@ int main(int argc, char **argv)
         if (rflag) {
             /* build a pattern for submailboxes */
             int atidx = buf_findchar(&buf, 0, '@');
-            if (atidx >= 0) buf_truncate(&buf, atidx);
+            if (atidx >= 0) {
+                buf_truncate(&buf, atidx);
+            }
             buf_putc(&buf, recon_namespace.hier_sep);
             buf_putc(&buf, '*');
 
             /* append the domain */
-            if (domain) buf_appendcstr(&buf, domain);
+            if (domain) {
+                buf_appendcstr(&buf, domain);
+            }
 
             /* reconstruct the submailboxes */
             mboxlist_findall(&recon_namespace,
@@ -466,7 +476,9 @@ int main(int argc, char **argv)
         free(name);
     }
 
-    if (rrock.discovered) strarray_free(rrock.discovered);
+    if (rrock.discovered) {
+        strarray_free(rrock.discovered);
+    }
     free_hash_table(&rrock.visited, NULL);
 
     buf_free(&buf);
@@ -535,7 +547,9 @@ static void usage(void)
  */
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 {
-    if ((mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) return 0;
+    if ((mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
+        return 0;
+    }
 
     mboxlist_findone(
         &recon_namespace, mbentry->name, 1, 0, 0, do_reconstruct, rock);
@@ -548,7 +562,9 @@ static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
  */
 static int do_reconstruct(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
+    if (!data) {
+        return 0;
+    }
     struct reconstruct_rock *rrock = (struct reconstruct_rock *) rock;
     int r;
     struct mailbox *mailbox = NULL;
@@ -558,19 +574,27 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     int prefer_mbentry = reconstruct_flags & RECONSTRUCT_PREFER_MBOXLIST;
 
     /* ignore partial matches */
-    if (!data->is_exactmatch) return 0;
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
     /* ignore intermediates */
-    if ((data->mbentry->mbtype & MBTYPE_INTERMEDIATE)) return 0;
+    if ((data->mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+        return 0;
+    }
     /* ignore remote */
-    if ((data->mbentry->mbtype & MBTYPE_REMOTE)) return 0;
+    if ((data->mbentry->mbtype & MBTYPE_REMOTE)) {
+        return 0;
+    }
 
     signals_poll();
 
     name = mbname_intname(data->mbname);
 
     /* don't repeat */
-    if (hash_lookup(name, &rrock->visited)) return 0;
+    if (hash_lookup(name, &rrock->visited)) {
+        return 0;
+    }
 
     struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
@@ -757,17 +781,20 @@ static int do_reconstruct(struct findall_data *data, void *rock)
 
     if (mbentry_dirty && make_changes) {
         r = mboxlist_update(mbentry_byname, 1);
-        if (r)
+        if (r) {
             syslog(LOG_ERR,
                    "IOERROR: failed to update mbentry for %s (%s)",
                    name,
                    error_message(r));
+        }
     }
     mboxlist_entry_free(&mbentry_byname);
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &recon_namespace, NULL);
-    if (!(reconstruct_flags & RECONSTRUCT_QUIET)) printf("%s\n", extname);
+    if (!(reconstruct_flags & RECONSTRUCT_QUIET)) {
+        printf("%s\n", extname);
+    }
 
     strncpy(
         outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
@@ -790,22 +817,34 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         struct stat sbuf;
 
         ptr = strstr(outpath, "cyrus.header");
-        if (!ptr) return 0;
+        if (!ptr) {
+            return 0;
+        }
         *ptr = 0;
 
         r = chdir(outpath);
-        if (r) return 0;
+        if (r) {
+            return 0;
+        }
 
         /* we recurse down this directory to see if there's any mailboxes
            under this not in the mailboxes database */
         dirp = opendir(".");
-        if (!dirp) return 0;
+        if (!dirp) {
+            return 0;
+        }
 
         while ((dirent = readdir(dirp)) != NULL) {
             /* mailbox directories never have a dot in them */
-            if (strchr(dirent->d_name, '.')) continue;
-            if (stat(dirent->d_name, &sbuf) < 0) continue;
-            if (!S_ISDIR(sbuf.st_mode)) continue;
+            if (strchr(dirent->d_name, '.')) {
+                continue;
+            }
+            if (stat(dirent->d_name, &sbuf) < 0) {
+                continue;
+            }
+            if (!S_ISDIR(sbuf.st_mode)) {
+                continue;
+            }
 
             /* ok, we found a directory that doesn't have a dot in it;
                is there a cyrus.header file? */
@@ -814,7 +853,9 @@ static int do_reconstruct(struct findall_data *data, void *rock)
                      "%s%s",
                      dirent->d_name,
                      FNAME_HEADER);
-            if (stat(fnamebuf, &sbuf) < 0) continue;
+            if (stat(fnamebuf, &sbuf) < 0) {
+                continue;
+            }
 
             /* ok, we have a real mailbox directory */
             char buf[MAX_MAILBOX_NAME];
@@ -824,14 +865,17 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             do {
                 r = mboxlist_lookup(buf, NULL, NULL);
             } while (r == IMAP_AGAIN);
-            if (!r)
+            if (!r) {
                 continue; /* mailbox exists; it'll be reconstructed
                              with a -r */
+            }
 
-            if (r != IMAP_MAILBOX_NONEXISTENT)
+            if (r != IMAP_MAILBOX_NONEXISTENT) {
                 break; /* erg? */
-            else
+            }
+            else {
                 r = 0; /* reset error condition */
+            }
 
             printf("discovered %s\n", buf);
             strarray_append(rrock->discovered, buf);
@@ -908,7 +952,9 @@ static void reconstruct_mbentry(const char *header_path)
             root = config_partitiondir(mbentry->partition);
         }
         const char *p = header_path + strlen(root);
-        if (*p == '/') p++;
+        if (*p == '/') {
+            p++;
+        }
 
         if (!strncmp(p, "uuid/", 5)) {
             /* Try to gleen UID from path */

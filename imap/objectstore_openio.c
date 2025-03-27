@@ -63,7 +63,9 @@ static int openio_sds_lazy_init(void)
     struct oio_error_s *err = NULL;
     int v, rc;
 
-    if (sds) return 0;
+    if (sds) {
+        return 0;
+    }
 
     /* Turn the OIO logging ON/OFF */
 
@@ -78,29 +80,39 @@ static int openio_sds_lazy_init(void)
         switch (*verbosity) {
         case 'q':
         case 'Q':
-            if (!strcasecmp(verbosity, "quiet")) oio_log_nothing();
+            if (!strcasecmp(verbosity, "quiet")) {
+                oio_log_nothing();
+            }
             break;
         case 't':
         case 'T':
-            if (!found && strcasecmp(verbosity, "trace")) break;
+            if (!found && strcasecmp(verbosity, "trace")) {
+                break;
+            }
             found = 1;
             oio_log_more();
             // FALLTHROUGH
         case 'd':
         case 'D':
-            if (!found && strcasecmp(verbosity, "debug")) break;
+            if (!found && strcasecmp(verbosity, "debug")) {
+                break;
+            }
             found = 1;
             oio_log_more();
             // FALLTHROUGH
         case 'i':
         case 'I':
-            if (!found && strcasecmp(verbosity, "info")) break;
+            if (!found && strcasecmp(verbosity, "info")) {
+                break;
+            }
             found = 1;
             oio_log_more();
             // FALLTHROUGH
         case 'n':
         case 'N':
-            if (!found && strcasecmp(verbosity, "notice")) break;
+            if (!found && strcasecmp(verbosity, "notice")) {
+                break;
+            }
             found = 1;
             oio_log_more();
             // one more call to pass from ERR to WARN
@@ -109,7 +121,9 @@ static int openio_sds_lazy_init(void)
     }
 
     if (!namespace) namespace = config_getstring(IMAPOPT_OPENIO_NAMESPACE);
-    if (!account) account = config_getstring(IMAPOPT_OPENIO_ACCOUNT);
+    if (!account) {
+        account = config_getstring(IMAPOPT_OPENIO_ACCOUNT);
+    }
 
     if (!namespace || !*namespace) {
         syslog(LOG_ERR, "OIOSDS: no namespace configured");
@@ -129,15 +143,17 @@ static int openio_sds_lazy_init(void)
 
     v = config_getduration(IMAPOPT_OPENIO_RAWX_TIMEOUT, 's');
     rc = oio_sds_configure(sds, OIOSDS_CFG_TIMEOUT_RAWX, &v, sizeof(int));
-    if (0 != rc)
+    if (0 != rc) {
         syslog(LOG_WARNING,
                "OIOSDS: could not set the query timeout to rawx services: %m");
+    }
 
     v = config_getduration(IMAPOPT_OPENIO_PROXY_TIMEOUT, 's');
     rc = oio_sds_configure(sds, OIOSDS_CFG_TIMEOUT_PROXY, &v, sizeof(int));
-    if (0 != rc)
+    if (0 != rc) {
         syslog(LOG_WARNING,
                "OIOSDS: could not set the query timeout to proxy services: %m");
+    }
 
     syslog(LOG_DEBUG, "OIOSDS: client ready to namespace %s", namespace);
     return 0;
@@ -157,7 +173,9 @@ static struct oio_url_s *mailbox_openio_name(struct mailbox *mailbox,
 
     url = oio_url_empty();
     oio_url_set(url, OIOURL_NS, namespace);
-    if (account) oio_url_set(url, OIOURL_ACCOUNT, account);
+    if (account) {
+        oio_url_set(url, OIOURL_ACCOUNT, account);
+    }
     oio_url_set(url, OIOURL_USER, mboxname_to_userid(mailbox->name));
     oio_url_set(url, OIOURL_PATH, filename);
     return url;
@@ -172,10 +190,14 @@ int objectstore_put(struct mailbox *mailbox,
     int rc, already_saved = 0;
 
     rc = openio_sds_lazy_init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     rc = objectstore_is_filename_in_container(mailbox, record, &already_saved);
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     add_message_guid(mailbox, record);
 
@@ -233,7 +255,9 @@ int objectstore_get(struct mailbox *mailbox,
     int rc;
 
     rc = openio_sds_lazy_init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     url = mailbox_openio_name(mailbox, record);
 
@@ -268,7 +292,9 @@ int objectstore_delete(struct mailbox *mailbox,
     int rc;
 
     rc = openio_sds_lazy_init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     url = mailbox_openio_name(mailbox, record);
 
@@ -311,7 +337,9 @@ int objectstore_is_filename_in_container(struct mailbox *mailbox,
     *phas = 0;
 
     rc = openio_sds_lazy_init();
-    if (rc) return rc;
+    if (rc) {
+        return rc;
+    }
 
     url = mailbox_openio_name(mailbox, record);
 

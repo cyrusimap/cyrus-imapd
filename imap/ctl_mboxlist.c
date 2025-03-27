@@ -167,7 +167,9 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
         next = xzmalloc(sizeof(struct mb_node));
         strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
         strlcpy(next->location, mdata->location, sizeof(next->location));
-        if (!strncmp(cmd, "MAILBOX", 7)) next->acl = xstrdup(mdata->acl);
+        if (!strncmp(cmd, "MAILBOX", 7)) {
+            next->acl = xstrdup(mdata->acl);
+        }
 
         *act_tail = next;
         act_tail = &(next->next);
@@ -180,7 +182,9 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
     struct popmupdaterock *rock = (struct popmupdaterock *) rockp;
     int r = 0;
 
-    if (mbentry->mbtype & MBTYPE_DELETED) return 0;
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+        return 0;
+    }
 
     /* realpart is 'hostname!partition' */
     char *realpart =
@@ -235,10 +239,14 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
         }
 
         /* in any case, free the node. */
-        if (act_head->acl) free(act_head->acl);
+        if (act_head->acl) {
+            free(act_head->acl);
+        }
         tmp = act_head;
         act_head = act_head->next;
-        if (tmp) free(tmp);
+        if (tmp) {
+            free(tmp);
+        }
     }
     else {
         /* if they do not match, do an explicit MUPDATE find on the
@@ -500,7 +508,9 @@ static void do_pop_mupdate(void)
         int count = 0;
         struct mb_node *me;
 
-        for (me = wipe_head; me != NULL; me = me->next) count++;
+        for (me = wipe_head; me != NULL; me = me->next) {
+            count++;
+        }
 
         if (count > 0) {
             fprintf(stderr, "OK to delete %d local mailboxes? ", count);
@@ -567,7 +577,9 @@ static json_t *acl_to_json(const char *aclstr)
         char *name, *val;
 
         q = strchr(p, '\t');
-        if (!q) break;
+        if (!q) {
+            break;
+        }
 
         name = xstrndup(p, q - p);
         q++;
@@ -577,8 +589,9 @@ static json_t *acl_to_json(const char *aclstr)
             val = xstrndup(q, p - q);
             p++;
         }
-        else
+        else {
             val = xstrdup(q);
+        }
 
         json_object_set_new(jacl, name, json_string(val));
 
@@ -598,7 +611,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     static struct buf buf = BUF_INITIALIZER;
 
     /* skip if we're limiting by partition and this one doesn't match */
-    if (d->partition && strcmpsafe(d->partition, mbentry->partition)) return 0;
+    if (d->partition && strcmpsafe(d->partition, mbentry->partition)) {
+        return 0;
+    }
 
     jobj = json_object();
 
@@ -699,7 +714,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 
     printf("%s%s", d->sep, output);
 
-    if (d->sep && !*d->sep) d->sep = ",\n";
+    if (d->sep && !*d->sep) {
+        d->sep = ",\n";
+    }
 
     free(output);
     json_decref(jparent);
@@ -717,7 +734,9 @@ static void do_dump(const char *part, int purge, int intermediary)
 
     /* Dump Database */
     int flags = MBOXTREE_TOMBSTONES;
-    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+    if (intermediary) {
+        flags |= MBOXTREE_INTERMEDIATES;
+    }
 
     puts("{");
     mboxlist_allmbox("", &dump_cb, &d, flags);
@@ -801,7 +820,9 @@ static void do_undump_legacy(void)
         int r = mboxlist_updatelock(newmbentry, /*localonly*/ 1);
         mboxlist_entry_free(&newmbentry);
 
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return;
@@ -1096,15 +1117,19 @@ static int compar_mbox(const void **v1, const void **v2)
     /* non-mailboxes get pushed to the end of the array,
        otherwise we do an ASCII sort */
     if (d1->type & MBOX) {
-        if (d2->type & MBOX)
+        if (d2->type & MBOX) {
             return strcmp(d1->mboxname, d2->mboxname);
-        else
+        }
+        else {
             return -1;
+        }
     }
-    else if (d2->type & MBOX)
+    else if (d2->type & MBOX) {
         return 1;
-    else
+    }
+    else {
         return 0;
+    }
 }
 
 static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
@@ -1116,18 +1141,21 @@ static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
 
     /* skip deleted mailboxes and mailboxes without partition
        as they cannot have a path in the filesystem */
-    if (mbentry->partition == NULL || mbentry->mbtype & MBTYPE_DELETED)
+    if (mbentry->partition == NULL || mbentry->mbtype & MBTYPE_DELETED) {
         return 0;
+    }
 
-    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS)
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
         add_path(
             mboxes, MBOX, mbentry->name, mbentry->partition, mbentry->uniqueid);
-    else
+    }
+    else {
         add_path(mboxes,
                  MBOX | UUID,
                  mbentry->uniqueid,
                  mbentry->partition,
                  mbentry->name);
+    }
 
     return 0;
 }
@@ -1144,10 +1172,12 @@ static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
 
         found_mailbox_entry = ptrarray_nth(mboxes, i);
 
-        if (found_mailbox_entry->type & UUID)
+        if (found_mailbox_entry->type & UUID) {
             mbname = found_mailbox_entry->path;
-        else
+        }
+        else {
             mbname = found_mailbox_entry->mboxname;
+        }
 
         // Walk the directories to see if the mailbox does have
         // paths on the filesystem.
@@ -1183,7 +1213,9 @@ static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
     /* now report all unmatched mailboxes found in filesystem */
     for (i = 0; i < ptrarray_size(found); i++) {
         found_path_entry = ptrarray_nth(found, i);
-        if (!(found_path_entry->type & MBOX)) break;
+        if (!(found_path_entry->type & MBOX)) {
+            break;
+        }
         if (!(found_path_entry->type & MATCHED)) {
             printf("'%s' has a directory '%s' but no DB entry\n",
                    found_path_entry->mboxname,
@@ -1258,11 +1290,14 @@ static void do_verify(void)
             add_path(found, type | UUID, name, part, path);
         }
 
-        if (!(dirp = opendir(entry->path))) continue;
+        if (!(dirp = opendir(entry->path))) {
+            continue;
+        }
         while ((dirent = readdir(dirp))) {
             const char *fname = FNAME_HEADER;
-            if (dirent->d_name[0] == '.')
+            if (dirent->d_name[0] == '.') {
                 continue;
+            }
             else if (!strcmp(dirent->d_name, fname + 1)) {
                 /* XXX - check that it can be opened */
                 entry->type |= MBOX;
@@ -1292,7 +1327,9 @@ static void do_verify(void)
                 }
                 else {
                     /* possibly a mailbox directory */
-                    if (name[0] && !(entry->type & DOMAIN)) strcat(name, ".");
+                    if (name[0] && !(entry->type & DOMAIN)) {
+                        strcat(name, ".");
+                    }
                     strcat(name, dirent->d_name);
                 }
 
@@ -1396,24 +1433,30 @@ int main(int argc, char *argv[])
             break;
 
         case 'd':
-            if (op == NONE)
+            if (op == NONE) {
                 op = DUMP;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'u':
-            if (op == NONE)
+            if (op == NONE) {
                 op = UNDUMP;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'm':
-            if (op == NONE)
+            if (op == NONE) {
                 op = M_POPULATE;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'p':
@@ -1433,10 +1476,12 @@ int main(int argc, char *argv[])
             break;
 
         case 'v':
-            if (op == NONE)
+            if (op == NONE) {
                 op = VERIFY;
-            else
+            }
+            else {
                 usage();
+            }
             break;
 
         case 'i':
@@ -1453,11 +1498,21 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (op != M_POPULATE && (local_authoritative || warn_only)) usage();
-    if (op != DUMP && partition) usage();
-    if (op != DUMP && dopurge) usage();
-    if (op != DUMP && dointermediary) usage();
-    if (op != UNDUMP && undump_legacy) usage();
+    if (op != M_POPULATE && (local_authoritative || warn_only)) {
+        usage();
+    }
+    if (op != DUMP && partition) {
+        usage();
+    }
+    if (op != DUMP && dopurge) {
+        usage();
+    }
+    if (op != DUMP && dointermediary) {
+        usage();
+    }
+    if (op != UNDUMP && undump_legacy) {
+        usage();
+    }
 
     cyrus_init(alt_config, "ctl_mboxlist", 0, 0);
     global_sasl_init(1, 0, NULL);

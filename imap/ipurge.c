@@ -218,8 +218,9 @@ int main(int argc, char *argv[])
         for (; optind < argc; optind++) {
             strarray_append(array, argv[optind]);
         }
-        if (array->count)
+        if (array->count) {
             mboxlist_findallmulti(NULL, array, 1, 0, 0, purge_findall, NULL);
+        }
         strarray_free(array);
     }
 
@@ -261,7 +262,9 @@ static int purge_one(const mbname_t *mbname)
 
     if (!forceall) {
         /* DON'T purge INBOX* and user.* */
-        if (mbname_userid(mbname)) return 0;
+        if (mbname_userid(mbname)) {
+            return 0;
+        }
     }
 
     memset(&stats, '\0', sizeof(mbox_stats_t));
@@ -294,8 +297,12 @@ static int purge_one(const mbname_t *mbname)
 static int purge_findall(struct findall_data *data,
                          void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
     return purge_one(data->mbname);
 }
 
@@ -343,21 +350,29 @@ static unsigned purge_check(struct mailbox *mailbox,
     stats->total++;
     stats->total_bytes += record->size;
 
-    if (skipflagged && record->system_flags & FLAG_FLAGGED) return 0;
+    if (skipflagged && record->system_flags & FLAG_FLAGGED) {
+        return 0;
+    }
 
-    if (onlydeleted && !(record->system_flags & FLAG_DELETED)) return 0;
+    if (onlydeleted && !(record->system_flags & FLAG_DELETED)) {
+        return 0;
+    }
 
     if (exact == 1) {
         if (days >= 0) {
             /* printf("comparing %ld :: %ld\n", my_time, the_record->sentdate);
              */
             if (((my_time - (time_t) senttime) / 86400) == (days / 86400)) {
-                if (invertmatch) return 0;
+                if (invertmatch) {
+                    return 0;
+                }
                 deleteit(record->size, stats);
                 return dryrun ? (void) print_record(mailbox, record), 0 : 1;
             }
             else {
-                if (!invertmatch) return 0;
+                if (!invertmatch) {
+                    return 0;
+                }
                 deleteit(record->size, stats);
                 return dryrun ? (void) print_record(mailbox, record), 0 : 1;
             }
@@ -365,12 +380,16 @@ static unsigned purge_check(struct mailbox *mailbox,
         if (size >= 0) {
             /* check size */
             if (record->size == (unsigned) size) {
-                if (invertmatch) return 0;
+                if (invertmatch) {
+                    return 0;
+                }
                 deleteit(record->size, stats);
                 return dryrun ? (void) print_record(mailbox, record), 0 : 1;
             }
             else {
-                if (!invertmatch) return 0;
+                if (!invertmatch) {
+                    return 0;
+                }
                 deleteit(record->size, stats);
                 return dryrun ? (void) print_record(mailbox, record), 0 : 1;
             }

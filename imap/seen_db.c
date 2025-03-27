@@ -115,7 +115,9 @@ EXPORTED int seen_open(const char *user, int flags, struct seen **seendbptr)
 
     /* open the seendb corresponding to user */
     fname = seen_getpath(user);
-    if (flags & SEEN_CREATE) cyrus_mkdir(fname, 0755);
+    if (flags & SEEN_CREATE) {
+        cyrus_mkdir(fname, 0755);
+    }
     r = cyrusdb_open(DB, fname, dbflags | CYRUSDB_CONVERT, &seendb->db);
     if (r) {
         if (!(flags & SEEN_SILENT)) {
@@ -345,7 +347,9 @@ EXPORTED int seen_close(struct seen **seendbptr)
     struct seen *seendb = *seendbptr;
     int r;
 
-    if (!seendb) return 0;
+    if (!seendb) {
+        return 0;
+    }
 
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_close(%s)", seendb->user);
@@ -406,12 +410,15 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
     }
 
     /* noop */
-    if (!userid) return 0;
+    if (!userid) {
+        return 0;
+    }
 
     r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (!r)
+    if (!r) {
         r = cyrusdb_delete(
             seendb->db, uniqueid, strlen(uniqueid), &seendb->tid, 1);
+    }
     seen_close(&seendb);
 
     return r;
@@ -436,7 +443,9 @@ HIDDEN int seen_delete_user(const char *user)
         syslog(LOG_DEBUG, "seen_db: seen_delete_user(%s)", user);
     }
 
-    if (xunlink(fname)) r = IMAP_IOERROR;
+    if (xunlink(fname)) {
+        r = IMAP_IOERROR;
+    }
 
     free(fname);
     return r;
@@ -487,8 +496,12 @@ HIDDEN int seen_copy(const char *userid,
         r = seen_open(userid, SEEN_SILENT, &seendb);
 
         /* just be silent if it's missing */
-        if (!r) r = seen_lockread(seendb, mailbox_uniqueid(oldmailbox), &sd);
-        if (!r) r = seen_write(seendb, mailbox_uniqueid(newmailbox), &sd);
+        if (!r) {
+            r = seen_lockread(seendb, mailbox_uniqueid(oldmailbox), &sd);
+        }
+        if (!r) {
+            r = seen_write(seendb, mailbox_uniqueid(newmailbox), &sd);
+        }
 
         seen_close(&seendb);
         seen_freedata(&sd);
@@ -511,7 +524,9 @@ EXPORTED int seen_compare(struct seendata *a, struct seendata *b)
 {
     if (a->lastuid == b->lastuid && a->lastread == b->lastread
         && a->lastchange == b->lastchange && !strcmp(a->seenuids, b->seenuids))
+    {
         return 1;
+    }
 
     return 0;
 }
@@ -538,8 +553,12 @@ static int seen_merge_cb(void *rockp,
     }
     else {
         seen_freedata(&oldsd);
-        if (newsd.lastuid > oldsd.lastuid) dirty = 1;
-        if (newsd.lastread > oldsd.lastread) dirty = 1;
+        if (newsd.lastuid > oldsd.lastuid) {
+            dirty = 1;
+        }
+        if (newsd.lastread > oldsd.lastread) {
+            dirty = 1;
+        }
     }
 
     if (dirty) {
@@ -565,12 +584,17 @@ HIDDEN int seen_merge(struct seen *seendb, const char *newfile)
     r = cyrusdb_open(DB, newfile, 0, &newdb);
     /* if it doesn't exist, there's nothing
      * to do, so abort without an error */
-    if (r == CYRUSDB_NOTFOUND) return 0;
+    if (r == CYRUSDB_NOTFOUND) {
+        return 0;
+    }
 
-    if (!r)
+    if (!r) {
         r = cyrusdb_foreach(newdb, "", 0, NULL, seen_merge_cb, seendb, NULL);
+    }
 
-    if (newdb) cyrusdb_close(newdb);
+    if (newdb) {
+        cyrusdb_close(newdb);
+    }
 
     return r;
 }

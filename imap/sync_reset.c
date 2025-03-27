@@ -95,8 +95,12 @@ static void shut_down(int code)
 
     libcyrus_run_delayed();
 
-    if (sync_userid) free(sync_userid);
-    if (sync_authstate) auth_freestate(sync_authstate);
+    if (sync_userid) {
+        free(sync_userid);
+    }
+    if (sync_authstate) {
+        auth_freestate(sync_authstate);
+    }
 
     seen_done();
 
@@ -116,7 +120,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "sync_reset: %s\n", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -150,11 +156,15 @@ static int reset_single(const char *userid)
     char *inbox = mboxname_user_mbox(userid, 0);
     r = mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
     free(inbox);
-    if (r) goto fail;
+    if (r) {
+        goto fail;
+    }
 
     r = mboxlist_usermboxtree(
         userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
-    if (r) goto fail;
+    if (r) {
+        goto fail;
+    }
 
     for (i = mblist->count; i; i--) {
         const char *name = strarray_nth(mblist, i - 1);
@@ -165,11 +175,14 @@ static int reset_single(const char *userid)
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             printf("skipping already removed mailbox %s\n", name);
         }
-        else if (r)
+        else if (r) {
             goto fail;
+        }
     }
 
-    if (mbentry) r = user_deletedata(mbentry, 1);
+    if (mbentry) {
+        r = user_deletedata(mbentry, 1);
+    }
 
 fail:
     mboxname_release(&namespacelock);

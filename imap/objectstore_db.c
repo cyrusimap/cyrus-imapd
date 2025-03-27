@@ -79,7 +79,9 @@ static void free_message_info()
 
 static void free_message_list()
 {
-    if (message_list.message) free(message_list.message);
+    if (message_list.message) {
+        free(message_list.message);
+    }
     message_list.count = 0;
     message_list.message = NULL;
 }
@@ -146,8 +148,9 @@ static char **delete_element_in_array(char **src,
             ifound++;
             free(src[i]);
         }
-        else
+        else {
             tmp[i - ifound] = src[i];
+        }
     }
     free(src);
     *bfound = ifound;
@@ -227,11 +230,13 @@ static int get_guid_callback(void *data __attribute__((unused)),
                     const char *pend = ret + strlen(fname);
                     if (!parseuint32(pstart, &pend, &uid)
                         && message_guid_decode(&guid, argv[0]))
+                    {
                         message_list.message =
                             append_to_list_array(message_list.message,
                                                  &message_list.count,
                                                  guid,
                                                  uid);
+                    }
                 }
             }
             ret = p;
@@ -320,7 +325,9 @@ static sqldb_t *open_db_userid(struct mailbox *mailbox)
 
     // remove domain from user string ;
     path = strstr(user, "@");
-    if (path) *path = '\0';
+    if (path) {
+        *path = '\0';
+    }
 
     // now remove tail part part after user/<username>/
     path = strstr(user_path, user);
@@ -392,8 +399,10 @@ static sqldb_t *manage_db_open(struct mailbox *mailbox)
     sqldb_t *db = NULL;
     if (opened_mailboxname && bkeep_db_open && opened_db) {
         char *ret = strstr(opened_mailboxname, mailbox->name);
-        if (ret)            // same mailbox ?
+        if (ret) // same mailbox ?
+        {
             db = opened_db; // use this
+        }
         else {
             keep_user_message_db_open(
                 0); // commit all changes and close this database
@@ -401,8 +410,9 @@ static sqldb_t *manage_db_open(struct mailbox *mailbox)
             db = open_db_userid(mailbox); // open new database for new mailbox
         }
     }
-    else
+    else {
         db = open_db_userid(mailbox);
+    }
     return db;
 }
 
@@ -454,8 +464,9 @@ EXPORTED int add_message_guid(struct mailbox *mailbox,
             opened_db = db;
             opened_mailboxname = mailbox->name;
         }
-        else
+        else {
             sqldb_close(&db);
+        }
     }
     return rc == SQLITE_OK;
 }
@@ -521,8 +532,9 @@ EXPORTED int delete_message_guid(struct mailbox *mailbox,
             opened_db = db;
             opened_mailboxname = mailbox->name;
         }
-        else
+        else {
             sqldb_close(&db);
+        }
     }
     return (rc == SQLITE_OK);
 }
@@ -547,16 +559,18 @@ EXPORTED struct message *get_list_of_message(struct mailbox *mailbox,
             opened_db = db;
             opened_mailboxname = mailbox->name;
         }
-        else
+        else {
             sqldb_close(&db);
+        }
     }
 
     if (rc == SQLITE_OK) {
         *count = message_list.count;
         return message_list.message;
     }
-    else
+    else {
         return NULL;
+    }
 }
 
 EXPORTED int discard_list()

@@ -78,12 +78,16 @@ static int deluserseen(const mbentry_t *mbentry,
     int r = 0;
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     char *userid = mboxname_to_userid(mbentry->name);
     if (userid) {
         printf("removing seen for %s on %s\n", userid, mailbox_name(mailbox));
-        if (do_remove) seen_delete_mailbox(userid, mailbox);
+        if (do_remove) {
+            seen_delete_mailbox(userid, mailbox);
+        }
         free(userid);
     }
 

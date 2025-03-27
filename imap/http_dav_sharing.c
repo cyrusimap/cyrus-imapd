@@ -109,7 +109,9 @@ static struct buf *from_xml(xmlDocPtr doc)
     /* Dump XML response tree into a text buffer */
     xmlDocDumpFormatMemoryEnc(
         doc, &xml, &len, "utf-8", config_httpprettytelemetry);
-    if (xml) buf_initm(buf, (char *) xml, len);
+    if (xml) {
+        buf_initm(buf, (char *) xml, len);
+    }
 
     return buf;
 }
@@ -312,7 +314,7 @@ struct namespace_t namespace_notify = {
     "/dav/notifications",
     NULL,
     http_allow_noauth_get,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     MBTYPE_COLLECTION,
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE | ALLOW_DAV | ALLOW_PROPPATCH
      | ALLOW_ACL),
@@ -349,7 +351,9 @@ struct namespace_t namespace_notify = {
 
 static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
 {
-    if (!namespace_principal.enabled) return;
+    if (!namespace_principal.enabled) {
+        return;
+    }
 
     if (!config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX)) {
         fatal("Required 'davnotificationsprefix' option is not set", EX_CONFIG);
@@ -417,8 +421,9 @@ static int _create_notify_collection(const char *userid, mbentry_t **mbentryp)
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mbentry_t *mbentry = *mbentryp;
-        if (!mbentry)
+        if (!mbentry) {
             goto done;
+        }
         else if (mbentry->server) {
             proxy_findserver(mbentry->server,
                              &http_protocol,
@@ -439,12 +444,13 @@ static int _create_notify_collection(const char *userid, mbentry_t **mbentryp)
                                    0 /*flags*/,
                                    NULL);
 
-        if (r)
+        if (r) {
             xsyslog(LOG_ERR,
                     "IOERROR: failed to create notify collection",
                     "mailbox=<%s> error=<%s>",
                     mbentry->name,
                     error_message(r));
+        }
     }
 
 done:
@@ -467,12 +473,13 @@ static int create_notify_collection(const char *userid,
     if (!r && mailboxp) {
         /* Open mailbox for writing */
         r = mailbox_open_iwl(mbentry->name, mailboxp);
-        if (r)
+        if (r) {
             xsyslog(LOG_ERR,
                     "IOERROR: failed to open notify collection",
                     "mailbox=<%s> error=<%s>",
                     mbentry->name,
                     error_message(r));
+        }
     }
 
     mboxlist_entry_free(&mbentry);
@@ -509,7 +516,9 @@ static int my_dav_auth(const char *userid)
 
 static void my_dav_reset(void)
 {
-    if (auth_webdavdb) webdav_close(auth_webdavdb);
+    if (auth_webdavdb) {
+        webdav_close(auth_webdavdb);
+    }
     auth_webdavdb = NULL;
 }
 
@@ -547,7 +556,9 @@ static int notify_get(struct transaction_t *txn,
     } notify_type;
     int r, ret = 0;
 
-    if (!record || !record->uid) return HTTP_NO_CONTENT;
+    if (!record || !record->uid) {
+        return HTTP_NO_CONTENT;
+    }
 
     if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))
         && is_mediatype(DAVSHARING_CONTENT_TYPE, hdr[0]))
@@ -784,9 +795,15 @@ static int notify_get(struct transaction_t *txn,
     write_body(HTTP_OK, txn, buf_cstring(outbuf), buf_len(outbuf));
 
 done:
-    if (dtstamp) xmlFree(dtstamp);
-    if (notify) xmlFreeDoc(notify->doc);
-    if (indoc) xmlFreeDoc(indoc);
+    if (dtstamp) {
+        xmlFree(dtstamp);
+    }
+    if (notify) {
+        xmlFreeDoc(notify->doc);
+    }
+    if (indoc) {
+        xmlFreeDoc(indoc);
+    }
     buf_destroy(outbuf);
     dlist_free(&dl);
 
@@ -853,7 +870,9 @@ static struct dlist *notify_extract_dl(xmlDocPtr doc)
                     size_t len;
 
                     /* Skip disabled namespaces */
-                    if (!http_namespaces[i]->enabled) continue;
+                    if (!http_namespaces[i]->enabled) {
+                        continue;
+                    }
 
                     /* See if the prefix matches - terminated with NUL or '/' */
                     len = strlen(http_namespaces[i]->prefix);
@@ -902,7 +921,9 @@ static int dav_store_notification(struct transaction_t *txn,
 
     mbentry_t *mbentry = NULL;
     r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Find message UID for the resource */
     webdav_lookup_resource(db, mbentry, resource, &wdata, 0);
@@ -951,8 +972,9 @@ static int dav_store_notification(struct transaction_t *txn,
 
     /* Dump XML response tree into a text buffer */
     xmlbuf = from_xml(doc);
-    if (!buf_len(xmlbuf))
+    if (!buf_len(xmlbuf)) {
         r = HTTP_SERVER_ERROR;
+    }
     else {
         /* Store the resource */
         r = dav_store_resource(txn,
@@ -1133,7 +1155,9 @@ HIDDEN int notify_post(struct transaction_t *txn)
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -1146,7 +1170,9 @@ HIDDEN int notify_post(struct transaction_t *txn)
         txn->error.desc = "Missing request body";
         ret = HTTP_BAD_REQUEST;
     }
-    if (ret) goto done;
+    if (ret) {
+        goto done;
+    }
 
     /* Make sure it is an invite-reply element */
     if (xmlStrcmp(root->name, BAD_CAST "invite-reply")) {
@@ -1156,14 +1182,18 @@ HIDDEN int notify_post(struct transaction_t *txn)
     }
 
     resource = txn->req_tgt.resource;
-    if (!resource) legacy = 1;
+    if (!resource) {
+        legacy = 1;
+    }
 
     /* Fetch needed elements */
     for (node = xmlFirstElementChild(root); node;
          node = xmlNextElementSibling(node))
     {
         if (!xmlStrncmp(node->name, BAD_CAST "invite-", 7)) {
-            if (!xmlStrcmp(node->name, BAD_CAST "invite-accepted")) add = 1;
+            if (!xmlStrcmp(node->name, BAD_CAST "invite-accepted")) {
+                add = 1;
+            }
             resp = node;
         }
         else if (legacy) {
@@ -1308,7 +1338,9 @@ HIDDEN int notify_post(struct transaction_t *txn)
                      : namespace_addressbook.prefix;
 
     mbname = mbname_from_intname(mboxname);
-    if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
+    if (!mbname_domain(mbname)) {
+        mbname_set_domain(mbname, httpd_extradomain);
+    }
 
     make_collection_url(&txn->buf, url_prefix, /*haszzzz*/ 0, mbname, "");
 
@@ -1366,9 +1398,15 @@ HIDDEN int notify_post(struct transaction_t *txn)
     }
 
 done:
-    if (freeme) xmlFree(freeme);
-    if (root) xmlFreeDoc(root->doc);
-    if (notify) xmlFreeDoc(notify->doc);
+    if (freeme) {
+        xmlFree(freeme);
+    }
+    if (root) {
+        xmlFreeDoc(root->doc);
+    }
+    if (notify) {
+        xmlFreeDoc(notify->doc);
+    }
     webdav_close(webdavdb);
     mbname_free(&mbname);
     dlist_free(&dl);
@@ -1419,13 +1457,17 @@ static int notify_parse_path(const char *path,
 
     /* Skip namespace */
     p += len;
-    if (!*p || !*++p) return 0;
+    if (!*p || !*++p) {
+        return 0;
+    }
 
     /* Check if we're in user space */
     len = strcspn(p, "/");
     if (!strncmp(p, USER_COLLECTION_PREFIX, len)) {
         p += len;
-        if (!*p || !*++p) return 0;
+        if (!*p || !*++p) {
+            return 0;
+        }
 
         /* Get user id */
         len = strcspn(p, "/");
@@ -1433,14 +1475,19 @@ static int notify_parse_path(const char *path,
 
         if (httpd_extradomain) {
             char *at = strchr(tgt->userid, '@');
-            if (at && !strcmp(at + 1, httpd_extradomain)) *at = 0;
+            if (at && !strcmp(at + 1, httpd_extradomain)) {
+                *at = 0;
+            }
         }
 
         p += len;
-        if (!*p || !*++p) goto done;
+        if (!*p || !*++p) {
+            goto done;
+        }
     }
-    else
+    else {
         return HTTP_NOT_FOUND; /* need to specify a userid */
+    }
 
     /* Get resource */
     len = strcspn(p, "/");
@@ -1499,7 +1546,9 @@ done:
     /* Set proper Allow bits based on path components */
     tgt->allow |= ALLOW_ACL;
 
-    if (tgt->resource) tgt->allow |= ALLOW_POST | ALLOW_DELETE;
+    if (tgt->resource) {
+        tgt->allow |= ALLOW_POST | ALLOW_DELETE;
+    }
 
     return 0;
 }
@@ -1546,10 +1595,12 @@ static void parse_acl(hash_table *table, const char *origacl)
 
         cyrus_acl_strtomask(rights, &mask);
         /* XXX and if strtomask fails? */
-        if (is_negative)
+        if (is_negative) {
             id_rights->negative |= mask;
-        else
+        }
+        else {
             id_rights->positive |= mask;
+        }
     }
 
     free(acl);
@@ -1572,13 +1623,19 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
     struct auth_state *authstate;
     int isadmin;
 
-    if ((rights & DACL_SHARE) != DACL_SHARE) return; /* not shared */
-    if (!strcmp(userid, irock->owner)) return;       /* user is owner */
+    if ((rights & DACL_SHARE) != DACL_SHARE) {
+        return; /* not shared */
+    }
+    if (!strcmp(userid, irock->owner)) {
+        return; /* user is owner */
+    }
 
     authstate = auth_newstate(userid);
     isadmin = global_authisa(authstate, IMAPOPT_ADMINS);
     auth_freestate(authstate);
-    if (isadmin) return; /* user is an admin */
+    if (isadmin) {
+        return; /* user is an admin */
+    }
 
     irock->is_shared = 1;
 
@@ -1600,8 +1657,12 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
         }
         else {
             const char *domain = httpd_extradomain;
-            if (!domain) domain = config_defdomain;
-            if (!domain) domain = config_servername;
+            if (!domain) {
+                domain = config_defdomain;
+            }
+            if (!domain) {
+                domain = config_servername;
+            }
 
             buf_printf(&irock->fctx->buf, "mailto:%s@%s", userid, domain);
         }
@@ -1611,7 +1672,9 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
         /* Lookup invite status */
         r = annotatemore_lookupmask(
             irock->fctx->mbentry->name, annot, userid, &value);
-        if (!r && buf_len(&value)) resp = buf_cstring(&value);
+        if (!r && buf_len(&value)) {
+            resp = buf_cstring(&value);
+        }
         xmlNewChild(sharee, NULL, BAD_CAST resp, NULL);
         buf_free(&value);
 
@@ -1620,10 +1683,12 @@ static void xml_add_sharee(const char *userid, void *data, void *rock)
                         NULL,
                         BAD_CAST(irock->legacy ? "access" : "share-access"),
                         NULL);
-        if ((rights & DACL_SHARERW) == DACL_SHARERW)
+        if ((rights & DACL_SHARERW) == DACL_SHARERW) {
             xmlNewChild(access, NULL, BAD_CAST "read-write", NULL);
-        else
+        }
+        else {
             xmlNewChild(access, NULL, BAD_CAST "read", NULL);
+        }
     }
 }
 
@@ -1651,8 +1716,9 @@ HIDDEN void xml_add_shareaccess(struct propfind_ctx *fctx,
             }
             xmlNewChild(node, ns, BAD_CAST "shared-owner", NULL);
         }
-        else if (!legacy)
+        else if (!legacy) {
             xmlNewChild(node, NULL, BAD_CAST "not-shared", NULL);
+        }
 
         free_hash_table(&table, &free);
     }
@@ -1661,10 +1727,12 @@ HIDDEN void xml_add_shareaccess(struct propfind_ctx *fctx,
         xmlNewChild(node, fctx->ns[NS_CS], BAD_CAST "shared", NULL);
     }
     else {
-        if ((rights & DACL_SHARERW) == DACL_SHARERW)
+        if ((rights & DACL_SHARERW) == DACL_SHARERW) {
             xmlNewChild(node, NULL, BAD_CAST "read-write", NULL);
-        else
+        }
+        else {
             xmlNewChild(node, NULL, BAD_CAST "read", NULL);
+        }
     }
 }
 
@@ -1679,7 +1747,9 @@ HIDDEN int propfind_shareaccess(const xmlChar *name,
 {
     xmlNodePtr node;
 
-    if (!fctx->mbentry) return HTTP_NOT_FOUND;
+    if (!fctx->mbentry) {
+        return HTTP_NOT_FOUND;
+    }
 
     node = xml_add_prop(
         HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK], name, ns, NULL, 0);
@@ -1705,9 +1775,12 @@ HIDDEN int propfind_invite(const xmlChar *name,
                                  rock != 0 /* legacy */ };
     xmlNodePtr node;
 
-    if (!fctx->mbentry) return HTTP_NOT_FOUND;
-    if (!(httpd_myrights(httpd_authstate, fctx->mbentry) & DACL_ADMIN))
+    if (!fctx->mbentry) {
+        return HTTP_NOT_FOUND;
+    }
+    if (!(httpd_myrights(httpd_authstate, fctx->mbentry) & DACL_ADMIN)) {
         return HTTP_NO_PRIVS;
+    }
 
     fctx->flags.cs_sharing = (rock != 0);
 
@@ -1760,7 +1833,9 @@ HIDDEN int propfind_sharedurl(const xmlChar *name,
                    "/%s/%s",
                    USER_COLLECTION_PREFIX,
                    mbname_localpart(mbname));
-        if (domain) buf_printf(&fctx->buf, "@%s", domain);
+        if (domain) {
+            buf_printf(&fctx->buf, "@%s", domain);
+        }
     }
     buf_putc(&fctx->buf, '/');
 
@@ -1792,8 +1867,9 @@ HIDDEN int propfind_notifyurl(const xmlChar *name,
 {
     xmlNodePtr node;
 
-    if (!(namespace_principal.enabled && fctx->req_tgt->userid))
+    if (!(namespace_principal.enabled && fctx->req_tgt->userid)) {
         return HTTP_NOT_FOUND;
+    }
 
     node = xml_add_prop(
         HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK], name, ns, NULL, 0);
@@ -1866,7 +1942,9 @@ static int propfind_notifytype(const xmlChar *name,
     const char *ns_href, *type;
     int i;
 
-    if (!wdata->filename) return HTTP_NOT_FOUND;
+    if (!wdata->filename) {
+        return HTTP_NOT_FOUND;
+    }
 
     node = xml_add_prop(
         HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK], name, ns, NULL, 0);
@@ -1878,10 +1956,12 @@ static int propfind_notifytype(const xmlChar *name,
     dlist_getlist(dl, "A", &al);
 
     if (rock /* calendarserver-sharing */) {
-        if (!strcmp(type, SHARE_INVITE_NOTIFICATION))
+        if (!strcmp(type, SHARE_INVITE_NOTIFICATION)) {
             type = "invite-notification";
-        else if (!strcmp(type, SHARE_REPLY_NOTIFICATION))
+        }
+        else if (!strcmp(type, SHARE_REPLY_NOTIFICATION)) {
             type = "invite-reply";
+        }
     }
     else {
         /* Check if we already have this ns-href, otherwise create a new one */
@@ -2070,7 +2150,9 @@ HIDDEN int dav_create_invite(xmlNodePtr *notify,
         xmlNodePtr type, princ;
 
         *notify = init_xml_response("notification", NS_DAV, NULL, ns);
-        if (!*notify) return HTTP_SERVER_ERROR;
+        if (!*notify) {
+            return HTTP_SERVER_ERROR;
+        }
 
         time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
         xmlNewChild(*notify, NULL, BAD_CAST "dtstamp", BAD_CAST dtstamp);
@@ -2110,7 +2192,9 @@ HIDDEN int dav_create_invite(xmlNodePtr *notify,
 
     /* Lookup invite status */
     r = annotatemore_lookupmask(tgt->mbentry->name, annot, sharee, &buf);
-    if (!r && buf_len(&buf)) response = buf_cstring(&buf);
+    if (!r && buf_len(&buf)) {
+        response = buf_cstring(&buf);
+    }
 
     /* Patch in response and share-access */
     node = xmlNewNode(ns[NS_DAV], BAD_CAST response);
@@ -2159,7 +2243,9 @@ HIDDEN int dav_post_share(struct transaction_t *txn,
                               NULL,
                               NULL,
                               httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -2174,11 +2260,14 @@ HIDDEN int dav_post_share(struct transaction_t *txn,
         txn->error.desc = "Missing request body";
         ret = HTTP_BAD_REQUEST;
     }
-    if (ret) goto done;
+    if (ret) {
+        goto done;
+    }
 
     /* Make sure it is a share-resource element */
-    if (!xmlStrcmp(root->name, BAD_CAST "share"))
+    if (!xmlStrcmp(root->name, BAD_CAST "share")) {
         legacy = 1;
+    }
     else if (xmlStrcmp(root->name, BAD_CAST "share-resource")) {
         txn->error.desc = "Missing share-resource element in POST request";
         ret = HTTP_BAD_REQUEST;
@@ -2196,18 +2285,22 @@ HIDDEN int dav_post_share(struct transaction_t *txn,
             if (!xmlStrcmp(sharee->name, BAD_CAST "remove")) {
                 access = SHARE_NONE;
             }
-            else if (xmlStrcmp(sharee->name, BAD_CAST "set"))
+            else if (xmlStrcmp(sharee->name, BAD_CAST "set")) {
                 continue;
+            }
         }
-        else if (xmlStrcmp(sharee->name, BAD_CAST "sharee"))
+        else if (xmlStrcmp(sharee->name, BAD_CAST "sharee")) {
             continue;
+        }
 
         for (node = xmlFirstElementChild(sharee); node;
              node = xmlNextElementSibling(node))
         {
             if (!xmlStrcmp(node->name, BAD_CAST "href")) {
                 href = xmlNodeGetContent(node);
-                if (access == SHARE_NONE) break;
+                if (access == SHARE_NONE) {
+                    break;
+                }
             }
 
             if (legacy) {
@@ -2265,8 +2358,9 @@ HIDDEN int dav_post_share(struct transaction_t *txn,
                                txn->req_tgt.mbentry->name,
                                error_message(r));
                     }
-                    else
+                    else {
                         userid = xstrdup("-anonymous");
+                    }
                 }
             }
             else {
@@ -2280,10 +2374,12 @@ HIDDEN int dav_post_share(struct transaction_t *txn,
                     memset(&principal, 0, sizeof(struct request_target_t));
                     r = princ_params.parse_path(
                         (const char *) uri->path, &principal, &errstr);
-                    if (!r && principal.userid)
+                    if (!r && principal.userid) {
                         userid = principal.userid;
-                    else if (principal.userid)
+                    }
+                    else if (principal.userid) {
                         free(principal.userid);
+                    }
 
                     xmlFreeURI(uri);
                 }
@@ -2344,14 +2440,20 @@ HIDDEN int dav_post_share(struct transaction_t *txn,
 
             xmlFree(href);
         }
-        if (content) xmlFree(content);
+        if (content) {
+            xmlFree(content);
+        }
 
         ret = HTTP_NO_CONTENT;
     }
 
 done:
-    if (root) xmlFreeDoc(root->doc);
-    if (notify) xmlFreeDoc(notify->doc);
+    if (root) {
+        xmlFreeDoc(root->doc);
+    }
+    if (notify) {
+        xmlFreeDoc(notify->doc);
+    }
     buf_free(&resource);
     mboxname_release(&namespacelock);
     dav_run_notifications();

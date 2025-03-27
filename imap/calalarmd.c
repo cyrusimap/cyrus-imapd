@@ -70,13 +70,17 @@ static struct namespace calalarmd_namespace;
 
 EXPORTED void fatal(const char *msg, int err)
 {
-    if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
+    if (debugmode) {
+        fprintf(stderr, "dying with %s %d\n", msg, err);
+    }
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
     cyrus_done();
 
-    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+    if (err != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(err);
 }
@@ -168,7 +172,9 @@ int main(int argc, char **argv)
 
         totaltime = timesub(&start, &end);
         tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
-        if (tosleep > 0) sleep(tosleep);
+        if (tosleep > 0) {
+            sleep(tosleep);
+        }
 
         session_new_id(); // so we know which actions happened in the same run
     }

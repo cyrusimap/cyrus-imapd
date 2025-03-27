@@ -191,7 +191,9 @@ EXPORTED const char *user_sieve_path(const char *inuser)
      * XXX much further up somewhere, but that may require deep surgery.
      */
     for (p = user; p && *p; p++) {
-        if (*p == '^') *p = '.';
+        if (*p == '^') {
+            *p = '.';
+        }
     }
 
     mbname_t *mbname = mbname_from_userid(user);
@@ -399,7 +401,9 @@ static int user_renamesieve(const char *olduser, const char *newuser)
     int r;
 
     /* oh well */
-    if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
+    if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
+        return 0;
+    }
 
     if (config_virtdomains && (domain = strchr(olduser, '@'))) {
         char d = (char) dir_hash_c(domain + 1, config_fulldirhash);
@@ -460,7 +464,9 @@ static int user_renamesieve(const char *olduser, const char *newuser)
      *
      * XXX this doesn't rename sieve scripts
      */
-    if (!r) r = rename(oldpath, newpath);
+    if (!r) {
+        r = rename(oldpath, newpath);
+    }
     if (r < 0) {
         if (errno == ENOENT) {
             syslog(
@@ -532,11 +538,15 @@ static int _user_renameacl(const struct namespace *namespace,
 
     while (!r && acl) {
         rights = strchr(acl, '\t');
-        if (!rights) break;
+        if (!rights) {
+            break;
+        }
         *rights++ = '\0';
 
         nextid = strchr(rights, '\t');
-        if (!nextid) break;
+        if (!nextid) {
+            break;
+        }
         *nextid++ = '\0';
 
         if (!strcmp(acl, olduser)) {
@@ -544,7 +554,7 @@ static int _user_renameacl(const struct namespace *namespace,
             r = mboxlist_setacl(
                 namespace, mbentry->name, newuser, rights, 1, newuser, NULL);
             /* delete ACL for olduser */
-            if (!r)
+            if (!r) {
                 r = mboxlist_setacl(namespace,
                                     mbentry->name,
                                     olduser,
@@ -552,6 +562,7 @@ static int _user_renameacl(const struct namespace *namespace,
                                     1,
                                     newuser,
                                     NULL);
+            }
         }
 
         acl = nextid;
@@ -571,7 +582,9 @@ EXPORTED int user_renameacl(const struct namespace *namespace,
     mbentry_t *mbentry = NULL;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     r = _user_renameacl(namespace, mbentry, olduser, newuser);
 
@@ -610,7 +623,9 @@ EXPORTED int user_copyquotaroot(const char *oldname, const char *newname)
 
     quota_init(&q, oldname);
     r = quota_read(&q, NULL, 0);
-    if (!r) mboxlist_setquotas(newname, q.limits, 0, 0);
+    if (!r) {
+        mboxlist_setquotas(newname, q.limits, 0, 0);
+    }
     quota_free(&q);
 
     return r;
@@ -680,10 +695,14 @@ EXPORTED char *user_hash_xapian(const char *userid, const char *root)
     int r;
 
     r = mboxlist_lookup_allow_all(inboxname, &mbentry, NULL);
-    if (r) goto out;
+    if (r) {
+        goto out;
+    }
 
     mbname = mbname_from_intname(mbentry->name);
-    if (!mbname_userid(mbname)) goto out;
+    if (!mbname_userid(mbname)) {
+        goto out;
+    }
 
     if (mbentry->mbtype & MBTYPE_LEGACY_DIRS || !mbentry->uniqueid) {
         basedir = user_hash_xapian_byname(mbname, root);
@@ -707,7 +726,7 @@ EXPORTED char *user_hash_xapian_byname(const mbname_t *mbname, const char *root)
     const char *localpart = mbname_localpart(mbname);
     char c[2], d[2];
 
-    if (domain)
+    if (domain) {
         basedir = strconcat(root,
                             FNAME_DOMAINDIR,
                             dir_hash_b(domain, config_fulldirhash, d),
@@ -718,13 +737,15 @@ EXPORTED char *user_hash_xapian_byname(const mbname_t *mbname, const char *root)
                             FNAME_USERDIR,
                             localpart,
                             (char *) NULL);
-    else
+    }
+    else {
         basedir = strconcat(root,
                             "/",
                             dir_hash_b(localpart, config_fulldirhash, c),
                             FNAME_USERDIR,
                             localpart,
                             (char *) NULL);
+    }
 
     return basedir;
 }
@@ -762,7 +783,9 @@ EXPORTED struct mboxlock *user_namespacelock_full(const char *userid,
     struct mboxlock *namelock;
     const char *name = _namelock_name_from_userid(userid);
     int r = mboxname_lock(name, &namelock, locktype);
-    if (r) return NULL;
+    if (r) {
+        return NULL;
+    }
     return namelock;
 }
 

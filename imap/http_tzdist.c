@@ -147,7 +147,7 @@ struct namespace_t namespace_tzdist = {
     "/tzdist",
     TZDIST_WELLKNOWN_URI,
     http_allow_noauth,
- /*authschemes*/ 0,
+    /*authschemes*/ 0,
     /*mbtype*/ 0,
     ALLOW_READ,
     tzdist_init,
@@ -270,10 +270,18 @@ static void open_shape_file(struct buf *serverinfo)
 
 static void close_shape_file()
 {
-    if (tz_world.dbf) DBFClose(tz_world.dbf);
-    if (tz_world.shp) SHPClose(tz_world.shp);
-    if (tz_aq.dbf) DBFClose(tz_aq.dbf);
-    if (tz_aq.shp) SHPClose(tz_aq.shp);
+    if (tz_world.dbf) {
+        DBFClose(tz_world.dbf);
+    }
+    if (tz_world.shp) {
+        SHPClose(tz_world.shp);
+    }
+    if (tz_aq.dbf) {
+        DBFClose(tz_aq.dbf);
+    }
+    if (tz_aq.shp) {
+        SHPClose(tz_aq.shp);
+    }
 }
 
 static int pt_in_poly(int nvert, double *vx, double *vy, double px, double py)
@@ -363,7 +371,9 @@ static int pt_near_poly(
         geo2vec(vy[i], vx[i], &b);
 
         /* Check if either end point of the line is within range */
-        if (vec_diff(p, &a) <= range || vec_diff(p, &b) <= range) return 1;
+        if (vec_diff(p, &a) <= range || vec_diff(p, &b) <= range) {
+            return 1;
+        }
 
         /* Find unit normal vector (n) for plane passing through a & b */
         vec_normal(vec_cross_prod(&a, &b, &n));
@@ -429,7 +439,9 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
             if (vec_diff(&p, &b) <= dist) {
                 /* Point is near a base, check if it has a known time zone */
                 tzid = DBFReadStringAttribute(tz_aq.dbf, i, 1 /* column 2 */);
-                if (strcmp(tzid, "unknown")) strarray_append(tzids, tzid);
+                if (strcmp(tzid, "unknown")) {
+                    strarray_append(tzids, tzid);
+                }
             }
 
             SHPDestroyObject(base);
@@ -582,8 +594,9 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
                     /* Uninhabited */
                     tzid = "Etc/GMT";
                 }
-                else
+                else {
                     tzid = "Etc/GMT-6";
+                }
             }
         }
         else {
@@ -680,7 +693,9 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
     namespace_tzdist.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_TZDIST;
 
-    if (!namespace_tzdist.enabled) return;
+    if (!namespace_tzdist.enabled) {
+        return;
+    }
 
     /* Open zoneinfo db */
     if (zoneinfo_open(NULL)) {
@@ -728,9 +743,13 @@ static void tzdist_shutdown(void)
 
     close_shape_file();
 
-    if (!leap_seconds) return;
+    if (!leap_seconds) {
+        return;
+    }
 
-    while ((leap = ptrarray_pop(leap_seconds))) free(leap);
+    while ((leap = ptrarray_pop(leap_seconds))) {
+        free(leap);
+    }
     ptrarray_free(leap_seconds);
 }
 
@@ -749,20 +768,28 @@ static int meth_get(struct transaction_t *txn,
 
     /* Skip namespace */
     p += strlen(namespace_tzdist.prefix);
-    if (*p == '/') *p++ = '\0';
+    if (*p == '/') {
+        *p++ = '\0';
+    }
 
     /* Check for path after prefix */
     if (*p) {
         /* Get collection (action) */
         tgt->collection = p;
         p += strcspn(p, "/");
-        if (*p == '/') *p++ = '\0';
+        if (*p == '/') {
+            *p++ = '\0';
+        }
 
         if (!strcmp(tgt->collection, "capabilities")) {
-            if (!*p) action = &action_capa;
+            if (!*p) {
+                action = &action_capa;
+            }
         }
         else if (!strcmp(tgt->collection, "leapseconds")) {
-            if (!*p) action = &action_leap;
+            if (!*p) {
+                action = &action_leap;
+            }
         }
         else if (!strcmp(tgt->collection, "zones")) {
             if (!*p) {
@@ -772,7 +799,9 @@ static int meth_get(struct transaction_t *txn,
                 /* Get resource (tzid) */
                 tgt->resource = p;
                 p += strlen(p);
-                if (p[-1] == '/') *--p = '\0';
+                if (p[-1] == '/') {
+                    *--p = '\0';
+                }
 
                 /* Check for sub-action */
                 p = strstr(tgt->resource, "observances");
@@ -792,11 +821,13 @@ static int meth_get(struct transaction_t *txn,
         }
     }
 
-    if (!action || levels > 3)
+    if (!action || levels > 3) {
         return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
+    }
 
-    if (tgt->resource && strchr(tgt->resource, '.')) /* paranoia */
+    if (tgt->resource && strchr(tgt->resource, '.')) /* paranoia */ {
         return json_error_response(txn, TZ_NOT_FOUND, NULL, NULL);
+    }
 
     return action(txn);
 }
@@ -832,9 +863,13 @@ static int action_capa(struct transaction_t *txn)
         txn->resp_body.lastmod = compile_time;
         txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -849,7 +884,9 @@ static int action_capa(struct transaction_t *txn)
         json_t *formats;
 
         /* Get info record from the database */
-        if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
+        if (zoneinfo_lookup_info(&info)) {
+            return HTTP_SERVER_ERROR;
+        }
 
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%s:%s", info.data->s, info.data->next->s);
@@ -1006,7 +1043,9 @@ static int action_leap(struct transaction_t *txn)
     struct zoneinfo info, leap;
 
     /* Get info record from the database */
-    if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
+    if (zoneinfo_lookup_info(&info)) {
+        return HTTP_SERVER_ERROR;
+    }
 
     /* Get leap record from the database */
     if ((r = zoneinfo_lookup_leap(&leap))) {
@@ -1027,9 +1066,13 @@ static int action_leap(struct transaction_t *txn)
         resp_body->lastmod = leap.dtstamp;
         resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1114,7 +1157,9 @@ static int list_cb(const char *tzid,
     snprintf(tzidbuf, sizeof(tzidbuf), "%.*s", tzidlen, tzid);
 
     if (lrock->tztable) {
-        if (hash_lookup(tzidbuf, lrock->tztable)) return 0;
+        if (hash_lookup(tzidbuf, lrock->tztable)) {
+            return 0;
+        }
         hash_insert(tzidbuf, (void *) 0xDEADBEEF, lrock->tztable);
     }
 
@@ -1140,8 +1185,9 @@ static int list_cb(const char *tzid,
 
         json_object_set_new(tz, "aliases", aliases);
 
-        for (sl = zi->data; sl; sl = sl->next)
+        for (sl = zi->data; sl; sl = sl->next) {
             json_array_append_new(aliases, json_string(sl->s));
+        }
     }
 
     return 0;
@@ -1162,7 +1208,9 @@ static int action_list(struct transaction_t *txn)
     json_t *root = NULL;
 
     /* Get info record from the database */
-    if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
+    if (zoneinfo_lookup_info(&info)) {
+        return HTTP_SERVER_ERROR;
+    }
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("pattern", &txn->req_qparams))) {
@@ -1267,9 +1315,13 @@ static int action_list(struct transaction_t *txn)
         resp_body->lastmod = lastmod;
         resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1300,7 +1352,9 @@ static int action_list(struct transaction_t *txn)
         if (latitude <= 90) {
             geo_tzids = tzid_from_geo(txn, latitude, longitude, uncertainty);
             pattern = strarray_nth(geo_tzids, 0);
-            if (!pattern) pattern = "/"; /* force lookup failure */
+            if (!pattern) {
+                pattern = "/"; /* force lookup failure */
+            }
         }
 
         if (pattern) {
@@ -1348,13 +1402,16 @@ static int action_get(struct transaction_t *txn)
              mime->content_type && !is_mediatype(mime->content_type, param->s);
              mime++);
     }
-    else if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+    else if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
         mime = get_accept_type(hdr, tz_mime_types);
-    else
+    }
+    else {
         mime = tz_mime_types;
+    }
 
-    if (!mime || !mime->content_type)
+    if (!mime || !mime->content_type) {
         return json_error_response(txn, TZ_INVALID_FORMAT, NULL, NULL);
+    }
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("start", &txn->req_qparams))) {
@@ -1400,9 +1457,13 @@ static int action_get(struct transaction_t *txn)
         resp_body->lastmod = lastmod;
         resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1425,10 +1486,14 @@ static int action_get(struct transaction_t *txn)
         buf_reset(&pathbuf);
         buf_printf(&pathbuf, "%s/%s.ics", zoneinfo_dir, tzid);
         path = buf_cstring(&pathbuf);
-        if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+        if ((fd = open(path, O_RDONLY)) == -1) {
+            return HTTP_SERVER_ERROR;
+        }
 
         map_refresh(fd, 1, &msg_base, &msg_size, MAP_UNKNOWN_LEN, path, NULL);
-        if (!msg_base) return HTTP_SERVER_ERROR;
+        if (!msg_base) {
+            return HTTP_SERVER_ERROR;
+        }
 
         ical = icalparser_parse_string(msg_base);
         map_free(&msg_base, &msg_size);
@@ -1486,8 +1551,9 @@ static int action_get(struct transaction_t *txn)
                 /* Truncate and convert the VTIMEZONE */
                 bit32 leapcnt = 0;
 
-                if (!strcmp(mime->content_type + 16, "-leap"))
+                if (!strcmp(mime->content_type + 16, "-leap")) {
                     leapcnt = leap_seconds->count - 2;
+                }
 
                 buf = _icaltimezone_as_tzif(ical, leapcnt, &start, &end);
             }
@@ -1503,14 +1569,18 @@ static int action_get(struct transaction_t *txn)
         icalcomponent_add_property(vtz, prop);
 
         /* Convert to requested MIME type */
-        if (!buf) buf = mime->from_object(ical);
+        if (!buf) {
+            buf = mime->from_object(ical);
+        }
         datalen = buf_len(buf);
         data = buf_release(buf);
         buf_destroy(buf);
 
         /* Set Content-Disposition filename */
         buf_setcstr(&pathbuf, tzid);
-        if (mime->file_ext) buf_printf(&pathbuf, ".%s", mime->file_ext);
+        if (mime->file_ext) {
+            buf_printf(&pathbuf, ".%s", mime->file_ext);
+        }
         resp_body->dispo.fname = buf_cstring(&pathbuf);
 
         txn->flags.vary |= VARY_ACCEPT;
@@ -1520,7 +1590,9 @@ static int action_get(struct transaction_t *txn)
 
     write_body(precond, txn, data, datalen);
 
-    if (data) free(data);
+    if (data) {
+        free(data);
+    }
 
     return 0;
 }
@@ -1544,16 +1616,19 @@ static int action_expand(struct transaction_t *txn)
 
     /* Sanity check the parameters */
     param = hash_lookup("start", &txn->req_qparams);
-    if (!param || param->next) /* mandatory, once only */
+    if (!param || param->next) /* mandatory, once only */ {
         return json_error_response(txn, TZ_INVALID_START, param, NULL);
+    }
 
     start = icaltime_from_string(param->s);
-    if (!icaltime_is_utc(start)) /* MUST be UTC */
+    if (!icaltime_is_utc(start)) /* MUST be UTC */ {
         return json_error_response(txn, TZ_INVALID_START, param, &start);
+    }
 
     param = hash_lookup("end", &txn->req_qparams);
-    if (!param || param->next) /* mandatory, once only */
+    if (!param || param->next) /* mandatory, once only */ {
         return json_error_response(txn, TZ_INVALID_END, param, NULL);
+    }
 
     end = icaltime_from_string(param->s);
     if (!icaltime_is_utc(end) /* MUST be UTC */
@@ -1607,9 +1682,13 @@ static int action_expand(struct transaction_t *txn)
         resp_body->lastmod = lastmod;
         resp_body->maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;
-        if (!httpd_userisanonymous) txn->flags.cc |= CC_PUBLIC;
+        if (!httpd_userisanonymous) {
+            txn->flags.cc |= CC_PUBLIC;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1634,10 +1713,14 @@ static int action_expand(struct transaction_t *txn)
         buf_reset(&pathbuf);
         buf_printf(&pathbuf, "%s/%s.ics", zoneinfo_dir, tzid);
         path = buf_cstring(&pathbuf);
-        if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
+        if ((fd = open(path, O_RDONLY)) == -1) {
+            return HTTP_SERVER_ERROR;
+        }
 
         map_refresh(fd, 1, &msg_base, &msg_size, MAP_UNKNOWN_LEN, path, NULL);
-        if (!msg_base) return HTTP_SERVER_ERROR;
+        if (!msg_base) {
+            return HTTP_SERVER_ERROR;
+        }
 
         ical = icalparser_parse_string(msg_base);
         map_free(&msg_base, &msg_size);
@@ -1663,7 +1746,9 @@ static int action_expand(struct transaction_t *txn)
                 if (obs->offset_from == obs->offset_to
                     && prev_isdst == obs->is_daylight
                     && !strcmp(prev_name, obs->name))
+                {
                     continue;
+                }
 
                 /* UT and local time 1 second before onset */
                 off.seconds = -1;
@@ -1777,19 +1862,24 @@ static int json_response(int code,
             return HTTP_SERVER_ERROR;
         }
         else if (resp) {
-            if (*resp) free(*resp);
+            if (*resp) {
+                free(*resp);
+            }
             *resp = buf;
             buf = NULL;
         }
     }
-    else if (resp)
+    else if (resp) {
         json = *resp;
+    }
 
     /* Output the JSON object */
-    if (code == HTTP_OK)
+    if (code == HTTP_OK) {
         txn->resp_body.type = "application/json; charset=utf-8";
-    else
+    }
+    else {
         txn->resp_body.type = "application/problem+json; charset=utf-8";
+    }
     write_body(code, txn, json, json ? strlen(json) : 0);
 
     return 0;
@@ -1832,16 +1922,21 @@ static int json_error_response(struct transaction_t *txn,
             break;
         }
     }
-    else if (param->next)
+    else if (param->next) {
         fmt = "Multiple %s parameters";
-    else if (!param->s || !param->s[0])
+    }
+    else if (!param->s || !param->s[0]) {
         fmt = "Missing %s value";
-    else if (!time)
+    }
+    else if (!time) {
         fmt = "Invalid %s value";
-    else if (!icaltime_is_utc(*time))
+    }
+    else if (!icaltime_is_utc(*time)) {
         fmt = "Invalid %s UTC value";
-    else
+    }
+    else {
         fmt = "End date-time <= start date-time";
+    }
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, fmt, param_name);
@@ -1922,8 +2017,12 @@ static void buf_append_utcoffset_as_iso_string(struct buf *buf, int off)
     m = (abs(off) % 3600) / 60;
     s = abs(off) % 60;
     buf_printf(buf, "%d", h);
-    if (m || s) buf_printf(buf, ":%02d", m);
-    if (s) buf_printf(buf, ":%02d", s);
+    if (m || s) {
+        buf_printf(buf, ":%02d", m);
+    }
+    if (s) {
+        buf_printf(buf, ":%02d", s);
+    }
 }
 
 /* Generate a POSIX rule from iCal RRULE.
@@ -1939,8 +2038,12 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     int hour;
 
     prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
-    if (prop) rrule = icalproperty_get_recurrence(prop);
-    if (!rrule) return 0;
+    if (prop) {
+        rrule = icalproperty_get_recurrence(prop);
+    }
+    if (!rrule) {
+        return 0;
+    }
 
 #ifdef HAVE_RSCALE
     if (rrule->rscale && strcasecmp(rrule->rscale, "GREGORIAN")) {
@@ -1983,7 +2086,9 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
             /* Find month that contains this yday */
             yday += 365;
             for (month = 0; month < 12; month++) {
-                if (yday <= month_doy_offsets[0][month]) break;
+                if (yday <= month_doy_offsets[0][month]) {
+                    break;
+                }
             }
         }
         else {
@@ -2030,8 +2135,12 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     /* time - default is 02:00:00 */
     if (hour != 2 || at.minute || at.second) {
         buf_printf(buf, "/%d", hour);
-        if (at.minute || at.second) buf_printf(buf, ":%02u", at.minute);
-        if (at.second) buf_printf(buf, ":%02u", at.second);
+        if (at.minute || at.second) {
+            buf_printf(buf, ":%02u", at.minute);
+        }
+        if (at.second) {
+            buf_printf(buf, ":%02u", at.second);
+        }
     }
 
     icalrecurrencetype_unref(rrule);
@@ -2073,15 +2182,21 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
     tzif = buf_new();
 
     vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
-    if (!vtz) return tzif;
+    if (!vtz) {
+        return tzif;
+    }
 
     if (leapcnt) {
         leap = ptrarray_nth(leap_seconds, 1);
         leap_init = leap->sec;
     }
 
-    if (!startp) startp = &start;
-    if (!endp || icaltime_is_null_time(*endp)) endp = &end;
+    if (!startp) {
+        startp = &start;
+    }
+    if (!endp || icaltime_is_null_time(*endp)) {
+        endp = &end;
+    }
 
     /* Create an array of observances */
     obsarray = icalarray_new(sizeof(struct observance), 100);
@@ -2126,7 +2241,9 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
         buf_reset(&abbrev);
 
         leap_sec = 0;
-        if (leapcnt) leap = ptrarray_nth(leap_seconds, leapidx);
+        if (leapcnt) {
+            leap = ptrarray_nth(leap_seconds, leapidx);
+        }
 
         /* Populate array of transitions & types */
         for (n = 0; n < obsarray->num_elements; n++) {
@@ -2182,7 +2299,9 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
                     && (obs->is_gmt == types[typeidx].isgmt)
                     && !strcmp(obs->name,
                                buf_cstring(&abbrev) + types[typeidx].idx))
+                {
                     break;
+                }
             }
 
             if (typeidx == typecnt) {
@@ -2192,7 +2311,9 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
 
                 /* Check for existing abbreviation */
                 while (p < endp) {
-                    if (!strcmp(p, obs->name)) break;
+                    if (!strcmp(p, obs->name)) {
+                        break;
+                    }
                     p += strlen(p) + 1;
                 }
 
@@ -2214,8 +2335,9 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
             if (leapcnt) {
                 while (t >= leap->t && leapidx < leap_seconds->count) {
                     leap_sec = leap->sec - leap_init;
-                    if (++leapidx < leap_seconds->count)
+                    if (++leapidx < leap_seconds->count) {
                         leap = ptrarray_nth(leap_seconds, leapidx);
+                    }
                 }
                 t += leap_sec;
             }
@@ -2237,14 +2359,18 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
 
         /* Transition times */
         for (n = 0; n < timecnt; n++) {
-            if (do_bit64)
+            if (do_bit64) {
                 buf_appendbit64(tzif, times[n].t);
-            else
+            }
+            else {
                 buf_appendbit32(tzif, times[n].t);
+            }
         }
 
         /* Transition time indices */
-        for (n = 0; n < timecnt; n++) buf_putc(tzif, times[n].idx);
+        for (n = 0; n < timecnt; n++) {
+            buf_putc(tzif, times[n].idx);
+        }
 
         /* Types structures */
         for (n = 0; n < typecnt; n++) {
@@ -2265,10 +2391,12 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
 
                 leap = ptrarray_nth(leap_seconds, leapidx);
                 t = leap->t + leap_sec;
-                if (do_bit64)
+                if (do_bit64) {
                     buf_appendbit64(tzif, t);
-                else
+                }
+                else {
                     buf_appendbit32(tzif, t);
+                }
 
                 leap_sec = leap->sec - leap_init;
                 buf_appendbit32(tzif, leap_sec);
@@ -2276,10 +2404,14 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
         }
 
         /* Standard/wall indicators */
-        for (n = 0; n < typecnt; n++) buf_putc(tzif, types[n].isstd);
+        for (n = 0; n < typecnt; n++) {
+            buf_putc(tzif, types[n].isstd);
+        }
 
         /* GMT/local indicators */
-        for (n = 0; n < typecnt; n++) buf_putc(tzif, types[n].isgmt);
+        for (n = 0; n < typecnt; n++) {
+            buf_putc(tzif, types[n].isgmt);
+        }
     }
 
     free(times);
@@ -2331,8 +2463,9 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent *ical,
         {
             buf_printf(tzif, "<%s>", obs->name);
         }
-        else
+        else {
             buf_appendcstr(tzif, obs->name);
+        }
 
         /* std offset */
         buf_append_utcoffset_as_iso_string(tzif, obs->offset_to);

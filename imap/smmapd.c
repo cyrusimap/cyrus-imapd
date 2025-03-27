@@ -169,7 +169,9 @@ EXPORTED void fatal(const char *s, int code)
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -182,7 +184,9 @@ int service_init(int argc, char **argv, char **envp)
 {
     int r, opt;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
@@ -231,7 +235,9 @@ int service_main(int argc __attribute__((unused)),
 
     smmapd_clienthost = get_clienthost(0, &localip, &remoteip);
 
-    if (begin_handling() != 0) shut_down(0);
+    if (begin_handling() != 0) {
+        shut_down(0);
+    }
 
     /* prepare for new connection */
     smmapd_reset();
@@ -247,7 +253,9 @@ static int check_quotas(const char *name)
     qdiffs[QUOTA_STORAGE] = 0;
     qdiffs[QUOTA_MESSAGE] = 1;
 
-    if (!quota_findroot(root, sizeof(root), name)) return 0; /* no root, fine */
+    if (!quota_findroot(root, sizeof(root), name)) {
+        return 0; /* no root, fine */
+    }
 
     return quota_check_useds(root, qdiffs);
 }
@@ -259,8 +267,12 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
     mbname_t *mbname = mbname_from_recipient(key, &map_namespace);
 
-    if (skipplus) mbname_set_boxes(mbname, NULL);
-    if (forcedowncase) mbname_downcaseuser(mbname);
+    if (skipplus) {
+        mbname_set_boxes(mbname, NULL);
+    }
+    if (forcedowncase) {
+        mbname_downcaseuser(mbname);
+    }
 
     /* see if it is a shared mailbox address */
     if (!strcmpsafe(mbname_userid(mbname), BB)) {
@@ -287,7 +299,9 @@ static int verify_user(const char *key, struct auth_state *authstate)
         mboxlist_entry_free(&mbentry);
         r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     if (!mbname_userid(mbname)) {
         long aclcheck = ACL_POST;
@@ -382,11 +396,12 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
 done:
     mboxlist_entry_free(&mbentry);
-    if (r)
+    if (r) {
         syslog(LOG_DEBUG,
                "verify_user(%s) failed: %s",
                mbname_userid(mbname),
                error_message(r));
+    }
     mbname_free(&mbname);
 
     return r;
@@ -453,20 +468,22 @@ static int begin_handling(void)
             break;
 
         case 0:
-            if (config_getswitch(IMAPOPT_AUDITLOG))
+            if (config_getswitch(IMAPOPT_AUDITLOG)) {
                 syslog(LOG_NOTICE,
                        "auditlog: ok userid=<%s> client=<%s>",
                        key,
                        smmapd_clienthost);
+            }
             prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3 + strlen(key), key);
             break;
 
         case IMAP_MAILBOX_NONEXISTENT:
-            if (config_getswitch(IMAPOPT_AUDITLOG))
+            if (config_getswitch(IMAPOPT_AUDITLOG)) {
                 syslog(LOG_NOTICE,
                        "auditlog: nonexistent userid=<%s> client=<%s>",
                        key,
                        smmapd_clienthost);
+            }
             prot_printf(map_out,
                         SIZE_T_FMT ":NOTFOUND %s,",
                         9 + strlen(error_message(r)),
@@ -474,11 +491,12 @@ static int begin_handling(void)
             break;
 
         case IMAP_QUOTA_EXCEEDED:
-            if (config_getswitch(IMAPOPT_AUDITLOG))
+            if (config_getswitch(IMAPOPT_AUDITLOG)) {
                 syslog(LOG_NOTICE,
                        "auditlog: overquota userid=<%s> client=<%s>",
                        key,
                        smmapd_clienthost);
+            }
             if (!config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
                 prot_printf(map_out,
                             SIZE_T_FMT ":TEMP %s,",
@@ -489,23 +507,26 @@ static int begin_handling(void)
             /* fall through - permanent failure */
 
         default:
-            if (config_getswitch(IMAPOPT_AUDITLOG))
+            if (config_getswitch(IMAPOPT_AUDITLOG)) {
                 syslog(LOG_NOTICE,
                        "auditlog: failed userid=<%s> client=<%s>",
                        key ? key : "",
                        smmapd_clienthost);
-            if (errstring)
+            }
+            if (errstring) {
                 prot_printf(map_out,
                             SIZE_T_FMT ":PERM %s (%s),",
                             5 + strlen(error_message(r)) + 3
                                 + strlen(errstring),
                             error_message(r),
                             errstring);
-            else
+            }
+            else {
                 prot_printf(map_out,
                             SIZE_T_FMT ":PERM %s,",
                             5 + strlen(error_message(r)),
                             error_message(r));
+            }
             break;
         }
     }
