@@ -32,25 +32,6 @@ And you need permission to send to the cyrus-announce mailing list.
 
 .. endblob releaseprereqs
 
-Order of operations
-===================
-
-Sometimes you're releasing several new versions all at once(ish), for example
-maybe there's been a security fix that affected 3.12, 3.10 and 3.8.  (Heaven
-forbid.)
-
-Github's release page will put a "Latest Release" graphic on the release with
-the newest tag (by timestamp, I think).  This means that, if you're doing new
-releases for several different versions, you want to do the oldest one first,
-and only do the release for the current-stable branch last.
-
-If you start at the current stable branch and then work your way backwards
-through the older ones, you'll get Github saying "3.8.15 is the Latest
-Release" even though 3.12.3 was also just released... so, even though
-releasing the current-stable fix feels more urgent, suck it up and get the
-older-branch ones out first.
-
-
 Release notes
 =============
 
@@ -185,9 +166,14 @@ Time to upload the release tarball and signature file!
 5. *Leave every field on the page as it is (probably blank!), except*:
 6. Use the "Attach binaries by dropping them here or selecting them" widget
    to upload the tarball and signature files
-7. If this is an alpha/beta/rc release, click the "This is a pre-release"
-   checkbox
-8. Click "Save".  The commit message from the tag annotation will be used
+7. If this is an alpha/beta/rc release, make sure the "This is a pre-release"
+   checkbox is *unchecked*
+8. If this *isn't* a pre-release, then if and *only* if this is a release of
+   the latest series of Cyrus, ensure the "Set as the latest release" checkbox
+   is *checked*.  In other words, if the latest stable release is 3.10.4 and
+   you're releasing 3.10.5, choose "Set as the latest release".  If you're
+   releasing 3.8.9, don't.
+9. Click "Save".  The commit message from the tag annotation will be used
    as the release description.
 
 Tell the world
