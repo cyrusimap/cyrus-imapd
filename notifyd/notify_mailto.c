@@ -79,7 +79,9 @@ char *notify_mailto(const char *class,
     int fds[2];
 
     /* XXX check/parse options (mailto URI) */
-    if (nopt < 1) return strdup("NO mailto URI not specified");
+    if (nopt < 1) {
+        return strdup("NO mailto URI not specified");
+    }
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i"; /* ignore dots */
@@ -89,7 +91,9 @@ char *notify_mailto(const char *class,
     smbuf[5] = options[0];
     smbuf[6] = NULL;
 
-    if (pipe(fds)) return strdup("NO mailto could not open pipe");
+    if (pipe(fds)) {
+        return strdup("NO mailto could not open pipe");
+    }
 
     if ((sm_pid = fork()) == 0) {
         /* i'm the child! run sendmail! */
@@ -105,7 +109,9 @@ char *notify_mailto(const char *class,
     close(fds[0]);
     sm = fdopen(fds[1], "w");
 
-    if (!sm) return strdup("NO mailto could not spawn sendmail process");
+    if (!sm) {
+        return strdup("NO mailto could not spawn sendmail process");
+    }
 
     t = time(NULL);
     snprintf(outmsgid,

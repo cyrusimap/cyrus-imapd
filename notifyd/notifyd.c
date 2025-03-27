@@ -147,20 +147,39 @@ static int do_notify(void)
          */
         method = (cp = buf);
 
-        if (cp) class = (cp = fetch_arg(cp, tail));
-        if (cp) priority = (cp = fetch_arg(cp, tail));
-        if (cp) user = (cp = fetch_arg(cp, tail));
-        if (cp) mailbox = (cp = fetch_arg(cp, tail));
+        if (cp) {
+            class = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            priority = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            user = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            mailbox = (cp = fetch_arg(cp, tail));
+        }
 
-        if (cp) cp = fetch_arg(cp, tail); /* skip to nopt */
-        if (cp) nopt = strtol(cp, NULL, 10);
-        if (nopt < 0 || errno == ERANGE) cp = NULL;
+        if (cp) {
+            cp = fetch_arg(cp, tail); /* skip to nopt */
+        }
+        if (cp) {
+            nopt = strtol(cp, NULL, 10);
+        }
+        if (nopt < 0 || errno == ERANGE) {
+            cp = NULL;
+        }
 
-        for (i = 0; cp && i < nopt; i++)
+        for (i = 0; cp && i < nopt; i++) {
             strarray_append(&options, cp = fetch_arg(cp, tail));
+        }
 
-        if (cp) message = (cp = fetch_arg(cp, tail));
-        if (cp) fname = (cp = fetch_arg(cp, tail));
+        if (cp) {
+            message = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            fname = (cp = fetch_arg(cp, tail));
+        }
 
         if (!message) {
             syslog(LOG_ERR, "malformed notify request");
@@ -168,12 +187,15 @@ static int do_notify(void)
             return 0;
         }
 
-        if (!*method)
+        if (!*method) {
             nmethod = default_method;
+        }
         else {
             nmethod = methods;
             while (nmethod->name) {
-                if (!strcasecmp(nmethod->name, method)) break;
+                if (!strcasecmp(nmethod->name, method)) {
+                    break;
+                }
                 nmethod++;
             }
         }
@@ -220,7 +242,9 @@ EXPORTED void fatal(const char *s, int code)
 
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -240,7 +264,9 @@ EXPORTED int service_init(int argc,
     int opt;
     const char *method = "null";
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "m:")) != EOF) {
         switch (opt) {
@@ -254,11 +280,15 @@ EXPORTED int service_init(int argc,
 
     default_method = methods;
     while (default_method->name) {
-        if (!strcasecmp(default_method->name, method)) break;
+        if (!strcasecmp(default_method->name, method)) {
+            break;
+        }
         default_method++;
     }
 
-    if (!default_method) fatal("unknown notification method %s", EX_USAGE);
+    if (!default_method) {
+        fatal("unknown notification method %s", EX_USAGE);
+    }
 
     signals_set_shutdown(&shut_down);
 

@@ -81,7 +81,9 @@ char *notify_zephyr(const char *class,
     struct buf msgbody = BUF_INITIALIZER;
     char *lines[2];
 
-    if (!*user) return xstrdup("NO zephyr recipient not specified");
+    if (!*user) {
+        return xstrdup("NO zephyr recipient not specified");
+    }
 
     if ((retval = ZInitialize()) != ZERR_NONE) {
         syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");

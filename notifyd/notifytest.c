@@ -80,7 +80,9 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
     const char *myarg = (arg ? arg : "");
     int len = strlen(myarg) + 1;
 
-    if (*buflen + len > max_size) return -1;
+    if (*buflen + len > max_size) {
+        return -1;
+    }
 
     strcat(buf + *buflen, myarg);
     *buflen += len;
@@ -122,19 +124,31 @@ static int notify(const char *notifyd_path,
      */
 
     r = add_arg(buf, MAXSIZE, method, &buflen);
-    if (!r) r = add_arg(buf, MAXSIZE, class, &buflen);
-    if (!r) r = add_arg(buf, MAXSIZE, priority, &buflen);
-    if (!r) r = add_arg(buf, MAXSIZE, user, &buflen);
-    if (!r) r = add_arg(buf, MAXSIZE, mailbox, &buflen);
+    if (!r) {
+        r = add_arg(buf, MAXSIZE, class, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, MAXSIZE, priority, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, MAXSIZE, user, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, MAXSIZE, mailbox, &buflen);
+    }
 
     snprintf(noptstr, sizeof(noptstr), "%d", nopt);
-    if (!r) r = add_arg(buf, MAXSIZE, noptstr, &buflen);
+    if (!r) {
+        r = add_arg(buf, MAXSIZE, noptstr, &buflen);
+    }
 
     for (i = 0; !r && i < nopt; i++) {
         r = add_arg(buf, MAXSIZE, options[i], &buflen);
     }
 
-    if (!r) r = add_arg(buf, MAXSIZE, message, &buflen);
+    if (!r) {
+        r = add_arg(buf, MAXSIZE, message, &buflen);
+    }
 
     if (r) {
         perror("dgram too big");
@@ -158,8 +172,8 @@ int main(int argc, char *argv[])
     int c;
     int flag_error = 0;
 
-    while ((c = getopt(argc, argv, "f:n:c:p:u:m:t:")) != EOF) switch (c)
-        {
+    while ((c = getopt(argc, argv, "f:n:c:p:u:m:t:")) != EOF) {
+        switch (c) {
         case 'f':
             path = optarg;
             break;
@@ -185,8 +199,11 @@ int main(int argc, char *argv[])
             flag_error = 1;
             break;
         }
+    }
 
-    if (!path || !message) flag_error = 1;
+    if (!path || !message) {
+        flag_error = 1;
+    }
 
     if (flag_error) {
         (void) fprintf(stderr,
@@ -204,7 +221,9 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (!*user) user = getpwuid(getuid())->pw_name;
+    if (!*user) {
+        user = getpwuid(getuid())->pw_name;
+    }
 
     return notify(path,
                   method,
