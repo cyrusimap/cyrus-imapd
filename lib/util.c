@@ -455,10 +455,9 @@ EXPORTED int removedir(const char *path)
 // destination directory before returning
 EXPORTED int cyrus_rename(const char *src, const char *dest)
 {
-    char *copy = xstrdup(dest);
-    const char *dir = dirname(copy);
+    char *copyd = xstrdup(dest);
+    const char *dir = dirname(copyd);
     int r = 0;
-    int saved_errno = 0;
 
 #if defined(O_DIRECTORY)
     int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
@@ -466,23 +465,23 @@ EXPORTED int cyrus_rename(const char *src, const char *dest)
     int dirfd = open(dir, O_RDONLY, 0600);
 #endif
     if (dirfd < 0) {
-        free(copy);
+        free(copyd);
         return dirfd;
     }
 
-    r = renameat(AT_FDCWD, src, dirfd, dest);
+    char *copyb = xstrdup(dest);
+    const char *file = basename(copyb);
+
+    r = renameat(AT_FDCWD, src, dirfd, file);
     if (!r) r = fsync(dirfd);
 
     // make sure close doesn't clear errno
-    if (r) {
-        saved_errno = errno;
-    }
-
+    int saved_errno = errno;
     close(dirfd);
-    free(copy);
-
     errno = saved_errno;
 
+    free(copyd);
+    free(copyb);
     return r;
 }
 
