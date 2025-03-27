@@ -4125,7 +4125,7 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
             printf("renaming tempdir into place\n");
         }
         removedir(destdir);
-        r = rename(tempdestdir, destdir);
+        r = cyrus_rename(tempdestdir, destdir);
         if (r) {
             printf("ERROR: failed to rename into place %s to %s\n", tempdestdir, destdir);
             goto out;

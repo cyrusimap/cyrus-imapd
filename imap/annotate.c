@@ -4651,7 +4651,7 @@ EXPORTED int annotatemore_upgrade(void)
     buf_appendcstr(&buf, ".OLD");
 
     /* rename db file to backup */
-    r = rename(fname, buf_cstring(&buf));
+    r = cyrus_rename(fname, buf_cstring(&buf));
     free(fname);
     if (r) goto done;
     

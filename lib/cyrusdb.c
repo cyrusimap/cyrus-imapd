@@ -608,7 +608,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
 
     /* created a new filename - so it's a replace-in-place */
     if (newfname) {
-        r = rename(newfname, fromfname);
+        r = cyrus_rename(newfname, fromfname);
         if (r) goto err;
     }
 

@@ -410,7 +410,7 @@ int main(int argc, char *argv[])
 
             /* upgrade from the old stamp filename to the new */
             snprintf(oldfile, sizeof(oldfile), "%s/newsstamp", config_dir);
-            rename(oldfile, sfile);
+            cyrus_rename(oldfile, sfile);
         }
 
         if ((fd = open(sfile, O_RDWR | O_CREAT, 0644)) == -1) {

@@ -331,7 +331,7 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
     const char *fname = mailbox_meta_fname(mailbox, metafile);
     const char *newfname = mailbox_meta_newfname(mailbox, metafile);
 
-    if (rename(newfname, fname))
+    if (cyrus_rename(newfname, fname))
         return IMAP_IOERROR;
 
     return 0;
@@ -7617,7 +7617,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
         oldfname = xstrdup(fname);
         newfname = xstrdup(mailbox_record_fname(mailbox, &record));
-        r = rename(oldfname, newfname);
+        r = cyrus_rename(oldfname, newfname);
         free(oldfname);
         free(newfname);
         if (r) {
