@@ -252,7 +252,7 @@ int do_redirect(action_list_t *a, const char *addr, char *deliverby,
 
     assert(a != NULL);
 
-    /* xxx we should validate addr */
+    /* XXX we should validate addr */
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {

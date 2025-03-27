@@ -77,7 +77,7 @@ extern const char *sieved_clienthost;
 extern int sieved_domainfromip;
 extern int sieved_userisadmin;
 
-/* xxx these are both leaked, but we only handle one connection at a
+/* XXX these are both leaked, but we only handle one connection at a
  * time... */
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 static const char *referral_host = NULL;

@@ -118,7 +118,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
     return pts->make_authstate(identifier, size, reply, dsize);
 }
 
-/* xxx this just uses the UNIX canonicalization semantics, which is
+/* XXX this just uses the UNIX canonicalization semantics, which is
  * most likely wrong */
 
 /* Map of which characters are allowed by auth_canonifyid.

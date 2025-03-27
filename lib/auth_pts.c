@@ -347,7 +347,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     const char *config_dir =
         libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
 
-    /* xxx this sucks, but it seems to be the only way to satisfy the linker */
+    /* XXX this sucks, but it seems to be the only way to satisfy the linker */
     if(the_ptscache_db == NULL) {
         the_ptscache_db = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB);
     }

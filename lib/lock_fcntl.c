@@ -189,7 +189,7 @@ EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
         r = fcntl(fd, F_SETLKW, &fl);
         if (r != -1) return 0;
         if (errno == EINTR) continue;
-        /* xxx help! */
+        /* XXX help! */
         return -1;
     }
 }

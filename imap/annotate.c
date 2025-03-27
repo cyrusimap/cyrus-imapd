@@ -961,7 +961,7 @@ static int split_attribs(const char *data, int datalen,
     /* initialize metadata */
     memset(mdata, 0, sizeof(struct annotate_metadata));
 
-    /* xxx sanity check the data? */
+    /* XXX sanity check the data? */
     if (datalen <= 0)
             return 1;
     /*
@@ -1273,7 +1273,7 @@ EXPORTED annotate_state_t *annotate_state_new(void)
 
 static void annotate_state_start(annotate_state_t *state)
 {
-    /* xxx better way to determine a size for this table? */
+    /* XXX better way to determine a size for this table? */
     construct_hash_table(&state->entry_table, 100, 1);
     construct_hash_table(&state->server_table, 10, 1);
 }
@@ -2835,7 +2835,7 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
 
             if (proxy_fetch_func && state->orig_entry && state->mbentry->server &&
                 !hash_lookup(state->mbentry->server, &state->server_table)) {
-                /* xxx ignoring result */
+                /* XXX ignoring result */
                 proxy_fetch_func(state->mbentry->server, state->mbentry->ext_name,
                                  state->orig_entry, state->orig_attribute);
                 hash_insert(state->mbentry->server, (void *)0xDEADBEEF, &state->server_table);

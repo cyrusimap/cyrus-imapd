@@ -84,7 +84,7 @@
 *       The last two values may be different when talking to a crippled
 *       - ahem - export controled peer (e.g. 40/128).
 *
-* xxx we need to offer a callback to do peer issuer certification.
+* XXX we need to offer a callback to do peer issuer certification.
 *     data that should be available for inspection:
 *       If the peer offered a certificate _and_ the certificate could be
 *       verified successfully, part of the certificate data are available as:
@@ -1379,7 +1379,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
             syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s",
                    peer_CN, issuer_CN);
 
-        /* xxx verify that we like the peer_issuer/issuer_CN */
+        /* XXX verify that we like the peer_issuer/issuer_CN */
 
         if (peer_CN[0]) {
             /* save the peer id for our caller */
@@ -1862,7 +1862,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
             syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s",
                    peer_CN, issuer_CN);
 
-        /* xxx verify that we like the peer_issuer/issuer_CN */
+        /* XXX verify that we like the peer_issuer/issuer_CN */
 
         if (authid != NULL) {
             /* save the peer id for our caller */

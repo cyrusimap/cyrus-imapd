@@ -269,7 +269,7 @@ EXPORTED int imclient_connect(struct imclient **imclient,
     }
 
   /* client new connection */
-  saslresult=sasl_client_new("imap", /* xxx ideally this should be configurable */
+  saslresult=sasl_client_new("imap", /* XXX ideally this should be configurable */
                              (*imclient)->servername,
                              NULL, NULL,
                              cbs ? cbs : callbacks,
@@ -1291,7 +1291,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
   return (result.replytype != replytype_ok);
 }
 
-/* xxx service is not needed here */
+/* XXX service is not needed here */
 EXPORTED int imclient_authenticate(struct imclient *imclient,
                           char *mechlist,
                           char *service __attribute__((unused)),
@@ -1866,7 +1866,7 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
 
     sts = SSL_connect(imclient->tls_conn);
     if (sts <= 0) {
-        printf("[ SSL_connect error %d ]\n", sts); /* xxx get string error? */
+        printf("[ SSL_connect error %d ]\n", sts); /* XXX get string error? */
         session = SSL_get_session(imclient->tls_conn);
         if (session) {
             SSL_CTX_remove_session(imclient->tls_ctx, session);
@@ -1955,7 +1955,7 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
 
   imclient->tls_on = 1;
 
-  auth_id=""; /* xxx this really should be peer_CN or
+  auth_id=""; /* XXX this really should be peer_CN or
                  issuer_CN but I can't figure out which is
                  which at the moment */
 

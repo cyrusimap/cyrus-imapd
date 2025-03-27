@@ -95,7 +95,7 @@ static int expire_cb(void *rockp,
     /* We only get called when we want to delete it */
     syslog(LOG_DEBUG, "deleting entry for %s", key);
 
-    /* xxx maybe we should use transactions for this */
+    /* XXX maybe we should use transactions for this */
     cyrusdb_delete((struct db *)rockp, key, keylen, NULL, 0);
     return 0;
 }

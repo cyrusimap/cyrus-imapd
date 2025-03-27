@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "fetchnews", 0, 0);
 
     /* connect to the peer */
-    /* xxx configurable port number? */
+    /* XXX configurable port number? */
     if ((psock = init_net(peer, "119", &pin, &pout)) < 0) {
         fprintf(stderr, "connection to %s failed\n", peer);
         cyrus_done();

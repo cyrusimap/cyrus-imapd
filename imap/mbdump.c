@@ -665,7 +665,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
         /* Dump sieve files
          *
-         * xxx can't use home directories currently
+         * XXX can't use home directories currently
          * (it makes almost no sense in the conext of a murder) */
         if (!sieve_usehomedir) {
             const char *sieve_path = user_sieve_path(userid);
@@ -980,7 +980,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             }
 
             c = getbastring(pin, pout, &content);
-            /* xxx binary */
+            /* XXX binary */
 
             if(c != ' ') {
                 r = IMAP_PROTOCOL_ERROR;
@@ -1122,7 +1122,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             else realname = file.s + 6;
 
             if(sieve_usehomedir) {
-                /* xxx! */
+                /* XXX! */
                 syslog(LOG_ERR,
                        "dropping sieve file %s since this host is " \
                        "configured for sieve_usehomedir",

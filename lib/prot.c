@@ -1561,7 +1561,7 @@ EXPORTED int prot_select(struct protgroup *readstreams, int extra_read_fd,
 #endif
     }
 
-    /* xxx we should probably do a nonblocking select on the remaining
+    /* XXX we should probably do a nonblocking select on the remaining
      * protstreams instead of skipping this part entirely */
     if(!retval) {
         time_t sleepfor;

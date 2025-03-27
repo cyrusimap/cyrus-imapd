@@ -88,7 +88,7 @@ static int chkmbox(struct findall_data *data, void *rock __attribute__((unused))
     if (r == IMAP_MAILBOX_NONEXISTENT)
        return 0;
 
-    /* xxx reserved mailboxes? */
+    /* XXX reserved mailboxes? */
 
     if (r) {
         fprintf(stderr, "bad mailbox %s in chkmbox: %s\n", name, error_message(r));

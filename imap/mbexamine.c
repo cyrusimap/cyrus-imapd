@@ -239,7 +239,7 @@ static int do_examine(struct findall_data *data, void *rock)
 
     printf(" Mailbox Header Info:\n");
     printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox, 0));
-    printf("  Mailbox ACL: %s\n", mailbox_acl(mailbox)); /* xxx parse */
+    printf("  Mailbox ACL: %s\n", mailbox_acl(mailbox)); /* XXX parse */
     printf("  Unique ID: %s\n", mailbox_uniqueid(mailbox));
     printf("  User Flags: ");
 
