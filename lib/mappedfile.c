@@ -459,7 +459,7 @@ EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
         goto done;
     }
 
-    r = rename(mf->fname, newname);
+    r = renameat(AT_FDCWD, mf->fname, dirfd, newname);
     if (r < 0) {
         xsyslog(LOG_ERR, "IOERROR: rename failed",
                          "filename=<%s> newname=<%s>",
