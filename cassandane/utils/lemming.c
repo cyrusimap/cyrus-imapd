@@ -77,7 +77,9 @@ static void no_cores(void)
     if (lim.rlim_cur) {
         lim.rlim_cur = 0;
         r = setrlimit(RLIMIT_CORE, &lim);
-        if (r) syslog(LOG_ERR, "setrlimit failed: %m");
+        if (r) {
+            syslog(LOG_ERR, "setrlimit failed: %m");
+        }
     }
 }
 
@@ -113,8 +115,12 @@ static int retry_write(int fd, const void *vbuf, int len)
 
     do {
         n = write(fd, buf, len);
-        if (n < 0) return -1;
-        if (n == 0) return -1; /* WTF? */
+        if (n < 0) {
+            return -1;
+        }
+        if (n == 0) {
+            return -1; /* WTF? */
+        }
         buf += n;
         len -= n;
     } while (len > 0);
@@ -182,17 +188,22 @@ static const char *read_line_from_client(void)
             syslog(LOG_ERR, "cannot read command: %m");
             exit(1);
         }
-        if (n == 0) break; /* EOF */
+        if (n == 0) {
+            break; /* EOF */
+        }
         len += n;
-        if (line[len - 1] == '\r' || line[len - 1] == '\n')
+        if (line[len - 1] == '\r' || line[len - 1] == '\n') {
             break; /* have a whole line */
+        }
     }
     close(fd);
     //     syslog(LOG_ERR, "read total of %d bytes", len);
 
     /* nul-terminate and trim the line */
     line[len] = '\0';
-    while (len > 0 && isspace(line[len - 1])) line[--len] = '\0';
+    while (len > 0 && isspace(line[len - 1])) {
+        line[--len] = '\0';
+    }
 
     return line;
 }
@@ -244,7 +255,9 @@ int main(int argc, char **argv)
             usage();
         }
     }
-    if (optind < argc) usage();
+    if (optind < argc) {
+        usage();
+    }
 
     openlog("lemming", LOG_PID, LOG_LOCAL6);
 
@@ -282,10 +295,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!strcmp(mode, "serve"))
+    if (!strcmp(mode, "serve")) {
         mode = read_line_from_client();
-    else if (delay_ms)
+    }
+    else if (delay_ms) {
         poll(NULL, 0, delay_ms);
+    }
 
     if (!strcmp(mode, "success")) {
         lemming_success();

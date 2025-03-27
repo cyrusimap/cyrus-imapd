@@ -59,7 +59,9 @@ EXPORTED void openlog(const char *ident, int option, int facility)
 {
     const char *syslog_fname;
 
-    if (is_opened) closelog();
+    if (is_opened) {
+        closelog();
+    }
 
     syslog_fname = getenv("CASSANDANE_SYSLOG_FNAME");
     if (syslog_fname) {
@@ -79,7 +81,9 @@ EXPORTED void closelog(void)
 {
     real_closelog();
 
-    if (out) fclose(out);
+    if (out) {
+        fclose(out);
+    }
     out = NULL;
     free(myident);
     myident = NULL;
@@ -95,11 +99,14 @@ static void fake_vsyslog(int priority, const char *format, va_list ap)
     int saved_errno = errno;
     int logmask;
 
-    if (!is_opened) return; /* no file to write to */
+    if (!is_opened) {
+        return; /* no file to write to */
+    }
 
     logmask = setlogmask(0); /* get the real syslog's current mask */
-    if (!(logmask & LOG_MASK(LOG_PRI(priority))))
+    if (!(logmask & LOG_MASK(LOG_PRI(priority)))) {
         return; /* do not want messages of this priority logged */
+    }
 
     gettimeofday(&now, NULL);
 

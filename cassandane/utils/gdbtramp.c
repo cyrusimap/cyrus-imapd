@@ -85,10 +85,14 @@ int main(int argc, char **argv)
 
     openlog("gdbtramp", LOG_PERROR | LOG_PID, LOG_LOCAL6);
 
-    if (argc != 3) usage();
+    if (argc != 3) {
+        usage();
+    }
     binary = argv[1];
     pid = atoi(argv[2]);
-    if (pid <= 0) usage();
+    if (pid <= 0) {
+        usage();
+    }
 
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handle_sigusr1;
@@ -98,10 +102,12 @@ int main(int argc, char **argv)
     }
 
     prog = strrchr(binary, '/');
-    if (prog)
+    if (prog) {
         prog++;
-    else
+    }
+    else {
         prog = binary;
+    }
 
     snprintf(gdbx_filename,
              sizeof(gdbx_filename),
