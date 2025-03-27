@@ -244,7 +244,9 @@ EXPORTED int gettimeofday(struct timeval *tv, ...)
 EXPORTED time_t time(time_t *tp)
 {
     time_t tt = to_time_t(transform(now()));
-    if (tp) *tp = tt;
+    if (tp) {
+        *tp = tt;
+    }
     return tt;
 }
 

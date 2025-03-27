@@ -176,21 +176,31 @@ void __cunit_wrap_test(const char *name, void (*fn)(void))
 {
     code = name;
     running = INTEST;
-    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0) exit(1);
+    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0) {
+        exit(1);
+    }
     fn();
-    if (timeouts_flag && timeout_end() < 0) exit(1);
+    if (timeouts_flag && timeout_end() < 0) {
+        exit(1);
+    }
     running = IDLE;
 }
 
 int __cunit_wrap_fixture(const char *name, int (*fn)(void))
 {
     int r = setjmp(jbuf);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
     code = name;
     running = INFIXTURE;
-    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0) exit(1);
+    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0) {
+        exit(1);
+    }
     r = fn();
-    if (timeouts_flag && timeout_end() < 0) exit(1);
+    if (timeouts_flag && timeout_end() < 0) {
+        exit(1);
+    }
     running = IDLE;
     return r;
 }
@@ -202,8 +212,12 @@ static void describe_params(const struct cunit_param *params,
     const struct cunit_param *p;
     int n;
 
-    if (maxlen <= 4) return;
-    if (!params || !params->name) return;
+    if (maxlen <= 4) {
+        return;
+    }
+    if (!params || !params->name) {
+        return;
+    }
 
     for (p = params; p->name; p++) {
         n = snprintf(buf,
@@ -226,7 +240,9 @@ static void params_assign(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    for (p = params; p->name; p++) *(p->variable) = p->values[p->idx];
+    for (p = params; p->name; p++) {
+        *(p->variable) = p->values[p->idx];
+    }
 
     if (verbose) {
         char buf[1024];
@@ -241,7 +257,9 @@ void __cunit_params_begin(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    if (!params || !params[0].name) return;
+    if (!params || !params[0].name) {
+        return;
+    }
 
     if (!params[0].values) {
         /* first call: split the original value of the
@@ -259,7 +277,9 @@ void __cunit_params_begin(struct cunit_param *params)
             }
         }
     }
-    for (p = params; p->name; p++) p->idx = 0;
+    for (p = params; p->name; p++) {
+        p->idx = 0;
+    }
     params_assign(params);
     current_params = params;
 }
@@ -268,13 +288,19 @@ int __cunit_params_next(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    if (!params || !params[0].name) return 0;
+    if (!params || !params[0].name) {
+        return 0;
+    }
 
     for (p = params; p->name; p++) {
-        if (++p->idx < p->nvalues) break;
+        if (++p->idx < p->nvalues) {
+            break;
+        }
         p->idx = 0;
     }
-    if (!p->name) return 0; /* incremented off the end */
+    if (!p->name) {
+        return 0; /* incremented off the end */
+    }
     params_assign(params);
     return 1;
 }
@@ -307,8 +333,9 @@ CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue,
         buf[sizeof(buf) - 1] = '\0';
     }
 
-    if (verbose > 1 && bValue)
+    if (verbose > 1 && bValue) {
         fprintf(stderr, "    %s:%u %s\n", strFile, uiLine, buf);
+    }
 
     return CU_assertImplementation(
         bValue, uiLine, buf, strFile, strFunction, bFatal);
@@ -337,13 +364,17 @@ static void run_tests(void)
 
     /* Setup to catch long-running tests.  This seems to be
      * particularly a problem on CentOS 5.5. */
-    if (timeouts_flag && timeout_init(handle_timeout) < 0) exit(1);
+    if (timeouts_flag && timeout_init(handle_timeout) < 0) {
+        exit(1);
+    }
 
     if (xml_flag) {
         if (num_testspecs == 0) {
             /* not specified: run all tests in order listed */
             CU_automated_run_tests();
-            if (timeouts_flag) timeout_fini();
+            if (timeouts_flag) {
+                timeout_fini();
+            }
             return;
         }
         fprintf(stderr,
@@ -352,14 +383,20 @@ static void run_tests(void)
         exit(1);
     }
 
-    if (verbose) CU_basic_set_mode(CU_BRM_VERBOSE);
+    if (verbose) {
+        CU_basic_set_mode(CU_BRM_VERBOSE);
+    }
 
     if (num_testspecs == 0) {
         /* not specified: run all tests in order listed */
         err = CU_basic_run_tests();
         running = IDLE; /* Just In Case */
-        if (timeouts_flag) timeout_fini();
-        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed) exit(1);
+        if (timeouts_flag) {
+            timeout_fini();
+        }
+        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed) {
+            exit(1);
+        }
         return;
     }
 
@@ -373,7 +410,9 @@ static void run_tests(void)
         xstrncpy(suitename, testspecs[i], sizeof(suitename));
         if ((testname = strchr(suitename, ':')) != NULL) {
             *testname++ = '\0';
-            if (*testname == '\0') testname = NULL;
+            if (*testname == '\0') {
+                testname = NULL;
+            }
         }
 
         suite = CU_get_suite_by_name(suitename, CU_get_registry());
@@ -399,10 +438,14 @@ static void run_tests(void)
             err = CU_basic_run_test(suite, test);
             running = IDLE; /* Just In Case */
         }
-        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed) exit(1);
+        if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed) {
+            exit(1);
+        }
     }
 
-    if (timeouts_flag) timeout_fini();
+    if (timeouts_flag) {
+        timeout_fini();
+    }
 }
 
 static void list_tests(void)

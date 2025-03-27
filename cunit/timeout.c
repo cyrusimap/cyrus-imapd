@@ -61,7 +61,9 @@ static int timeout_fd = -1;
 static void sigusr1_handler(int sig __attribute__((unused)))
 {
     // fprintf(stderr, "timeout: received SIGUSR1\n");
-    if (timeout_callback) timeout_callback();
+    if (timeout_callback) {
+        timeout_callback();
+    }
 }
 
 static void timeout_mainloop(int fd, pid_t pid)
@@ -207,7 +209,9 @@ int timeout_begin(int millisec)
     int r;
 
     // fprintf(stderr, "timeout_begin\n");
-    if (timeout_fd < 0) return -1;
+    if (timeout_fd < 0) {
+        return -1;
+    }
 
     c = CMD_BEGIN;
     r = write(timeout_fd, &c, sizeof(c));
@@ -229,7 +233,9 @@ int timeout_end(void)
     int r;
 
     // fprintf(stderr, "timeout_end\n");
-    if (timeout_fd < 0) return -1;
+    if (timeout_fd < 0) {
+        return -1;
+    }
 
     c = CMD_END;
     r = write(timeout_fd, &c, sizeof(c));
@@ -252,10 +258,12 @@ void timeout_fini(void)
 
     if (timeout_pid > 0) {
         r = kill(timeout_pid, SIGTERM);
-        if (r < 0 && errno != ESRCH)
+        if (r < 0 && errno != ESRCH) {
             perror("timeout: kill");
-        else
+        }
+        else {
             waitpid(timeout_pid, &status, 0);
+        }
         timeout_pid = -1;
     }
 
