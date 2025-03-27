@@ -4,10 +4,10 @@
  *
    export LD_LIBRARY_PATH=/path/to/cyrus/lib
    export PKG_CONFIG_PATH=/path/to/cyrus/lib/pkgconfig
-   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags libcyrus_min)
-   export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other libcyrus_min)
-   export LDLIBS=$(pkg-config --libs-only-l libcyrus_min)
-   make example_libcyrus_min
+   export CFLAGS=-Wall -Wextra -Werror -g -O0 $(pkg-config --cflags
+ libcyrus_min) export LDFLAGS=$(pkg-config --libs-only-L --libs-only-other
+ libcyrus_min) export LDLIBS=$(pkg-config --libs-only-l libcyrus_min) make
+ example_libcyrus_min
    ./example_libcyrus_min
  */
 
@@ -28,8 +28,8 @@
 #include "strhash.h"
 #include "tok.h"
 #include "xmalloc.h"
-#include "xunlink.h"
 #include "xsha1.h"
+#include "xunlink.h"
 
 #include <getopt.h>
 #include <inttypes.h>
@@ -152,13 +152,8 @@ void test_proc(void)
 {
     struct proc_handle *handle = NULL;
 
-    proc_register(&handle,
-                  0,
-                  "servicename",
-                  "clienthost",
-                  "userid",
-                  "mailbox",
-                  "cmd");
+    proc_register(
+        &handle, 0, "servicename", "clienthost", "userid", "mailbox", "cmd");
 
     proc_cleanup(&handle);
 
@@ -238,7 +233,7 @@ void test_xmalloc(void)
 
 void test_xsha1(void)
 {
-    SHA1_CTX ctx = {0};
+    SHA1_CTX ctx = { 0 };
     unsigned char digest[SHA1_DIGEST_LENGTH];
     const unsigned char data[] = "this is some data";
 
@@ -261,7 +256,7 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
