@@ -102,15 +102,25 @@ static regex_t *bc_compile_regex(const char *s,
 /* Determine if addr is a system address */
 static int sysaddr(const char *addr)
 {
-    if (!strncasecmp(addr, "MAILER-DAEMON", 13)) return 1;
+    if (!strncasecmp(addr, "MAILER-DAEMON", 13)) {
+        return 1;
+    }
 
-    if (!strncasecmp(addr, "LISTSERV", 8)) return 1;
+    if (!strncasecmp(addr, "LISTSERV", 8)) {
+        return 1;
+    }
 
-    if (!strncasecmp(addr, "majordomo", 9)) return 1;
+    if (!strncasecmp(addr, "majordomo", 9)) {
+        return 1;
+    }
 
-    if (strstr(addr, "-request@")) return 1;
+    if (strstr(addr, "-request@")) {
+        return 1;
+    }
 
-    if (!strncmp(addr, "owner-", 6)) return 1;
+    if (!strncmp(addr, "owner-", 6)) {
+        return 1;
+    }
 
     return 0;
 }
@@ -137,7 +147,9 @@ static char *look_for_me(char *myaddr,
         /* loop through each address in the header */
         while (!found && (a = address_itr_next(&ai)) != NULL) {
             char *addr = address_get_all(a, 0);
-            if (!addr) addr = xstrdup("");
+            if (!addr) {
+                addr = xstrdup("");
+            }
 
             if (!strcasecmp(addr, myaddr)) {
                 free(addr);
@@ -199,15 +211,21 @@ static int shouldRespond(void *m,
        Unsubscribe", "List-Post", "List-Owner" or "List-Archive" [RFC 2369]
        header field. */
     for (j = 0; list_fields[j]; j++) {
-        if (interp->getheader(m, list_fields[j], &body) == SIEVE_OK) goto out;
+        if (interp->getheader(m, list_fields[j], &body) == SIEVE_OK) {
+            goto out;
+        }
     }
 
     /* If the sender has requested no vacation response */
     if (interp->getheader(m, "x-ignorevacation", &body) == SIEVE_OK) {
         /* we don't deal with comments, etc. here */
         /* skip leading white-space */
-        while (*body[0] && Uisspace(*body[0])) body[0]++;
-        if (strcasecmp(body[0], "no")) goto out;
+        while (*body[0] && Uisspace(*body[0])) {
+            body[0]++;
+        }
+        if (strcasecmp(body[0], "no")) {
+            goto out;
+        }
     }
 
     /* Implementations SHOULD NOT respond to any message that has an
@@ -216,8 +234,12 @@ static int shouldRespond(void *m,
     if (interp->getheader(m, "auto-submitted", &body) == SIEVE_OK) {
         /* we don't deal with comments, etc. here */
         /* skip leading white-space */
-        while (*body[0] && Uisspace(*body[0])) body[0]++;
-        if (strcasecmp(body[0], "no")) goto out;
+        while (*body[0] && Uisspace(*body[0])) {
+            body[0]++;
+        }
+        if (strcasecmp(body[0], "no")) {
+            goto out;
+        }
     }
 
     /* is there a Precedence keyword of "junk | bulk | list"? */
@@ -225,33 +247,49 @@ static int shouldRespond(void *m,
     if (interp->getheader(m, "precedence", &body) == SIEVE_OK) {
         /* we don't deal with comments, etc. here */
         /* skip leading white-space */
-        while (*body[0] && Uisspace(*body[0])) body[0]++;
+        while (*body[0] && Uisspace(*body[0])) {
+            body[0]++;
+        }
         if (!strcasecmp(body[0], "junk") || !strcasecmp(body[0], "bulk")
             || !strcasecmp(body[0], "list"))
+        {
             goto out;
+        }
     }
 
     /* Note: the domain-part of all addresses are canonicalized */
     /* grab my address from the envelope */
     l = interp->getenvelope(m, "to", &body);
-    if (l != SIEVE_OK) goto out;
+    if (l != SIEVE_OK) {
+        goto out;
+    }
     l = SIEVE_DONE;
-    if (!body[0]) goto out;
+    if (!body[0]) {
+        goto out;
+    }
     myaddr = address_canonicalise(body[0]);
 
     l = interp->getenvelope(m, "from", &body);
-    if (l != SIEVE_OK) goto out;
+    if (l != SIEVE_OK) {
+        goto out;
+    }
     l = SIEVE_DONE;
-    if (!body[0]) goto out;
+    if (!body[0]) {
+        goto out;
+    }
     /* we have to parse this address & decide whether we
        want to respond to it */
     reply_to = address_canonicalise(body[0]);
 
     /* first, is there a reply-to address? */
-    if (reply_to == NULL) goto out;
+    if (reply_to == NULL) {
+        goto out;
+    }
 
     /* is it from me? */
-    if (myaddr && !strcmp(myaddr, reply_to)) goto out;
+    if (myaddr && !strcmp(myaddr, reply_to)) {
+        goto out;
+    }
 
     /* ok, is it any of the other addresses i've
        specified? */
@@ -264,28 +302,40 @@ static int shouldRespond(void *m,
             address = parse_string(address, variables);
         }
 
-        if (!strcmp(address, reply_to)) goto out;
+        if (!strcmp(address, reply_to)) {
+            goto out;
+        }
     }
 
     /* ok, is it a system address? */
-    if (sysaddr(reply_to)) goto out;
+    if (sysaddr(reply_to)) {
+        goto out;
+    }
 
     /* ok, we're willing to respond to the sender.
        but is this message to me?  that is, is my address
        in the [Resent]-To, [Resent]-Cc or [Resent]-Bcc fields? */
-    if (interp->getheader(m, "to", &body) == SIEVE_OK)
+    if (interp->getheader(m, "to", &body) == SIEVE_OK) {
         found = look_for_me(myaddr, addresses, body, variables, requires);
-    if (!found && interp->getheader(m, "cc", &body) == SIEVE_OK)
+    }
+    if (!found && interp->getheader(m, "cc", &body) == SIEVE_OK) {
         found = look_for_me(myaddr, addresses, body, variables, requires);
-    if (!found && interp->getheader(m, "bcc", &body) == SIEVE_OK)
+    }
+    if (!found && interp->getheader(m, "bcc", &body) == SIEVE_OK) {
         found = look_for_me(myaddr, addresses, body, variables, requires);
-    if (!found && interp->getheader(m, "resent-to", &body) == SIEVE_OK)
+    }
+    if (!found && interp->getheader(m, "resent-to", &body) == SIEVE_OK) {
         found = look_for_me(myaddr, addresses, body, variables, requires);
-    if (!found && interp->getheader(m, "resent-cc", &body) == SIEVE_OK)
+    }
+    if (!found && interp->getheader(m, "resent-cc", &body) == SIEVE_OK) {
         found = look_for_me(myaddr, addresses, body, variables, requires);
-    if (!found && interp->getheader(m, "resent-bcc", &body) == SIEVE_OK)
+    }
+    if (!found && interp->getheader(m, "resent-bcc", &body) == SIEVE_OK) {
         found = look_for_me(myaddr, addresses, body, variables, requires);
-    if (found) l = SIEVE_OK;
+    }
+    if (found) {
+        l = SIEVE_OK;
+    }
 
     /* ok, ok, if we got here maybe we should reply */
 out:
@@ -376,7 +426,9 @@ static dynarray_t *prepare_needles(strarray_t *pl,
 
 static void free_needles(dynarray_t *needles)
 {
-    if (!needles) return;
+    if (!needles) {
+        return;
+    }
 
     int n, numneedles = dynarray_size(needles);
 
@@ -448,10 +500,12 @@ static int do_comparisons(dynarray_t *needles,
 
         int tmp = do_comparison(needle, hay, comp, comprock, match_vars);
 
-        if (tmp < 0)
+        if (tmp < 0) {
             res = tmp;
-        else
+        }
+        else {
             res |= tmp;
+        }
     }
 
     return res;
@@ -512,7 +566,9 @@ static int eval_bc_test(sieve_interp_t *interp,
     case BC_NOT:
         res = eval_bc_test(
             interp, m, sc, bc, &i, variables, duptrack_list, version, requires);
-        if (res >= 0) res = !res; /* Only invert in non-error case */
+        if (res >= 0) {
+            res = !res; /* Only invert in non-error case */
+        }
         break;
 
     case BC_EXISTS: {
@@ -531,7 +587,9 @@ static int eval_bc_test(sieve_interp_t *interp,
                 str = parse_string(str, variables);
             }
 
-            if (interp->getheader(m, str, &val) != SIEVE_OK) res = 0;
+            if (interp->getheader(m, str, &val) != SIEVE_OK) {
+                res = 0;
+            }
         }
 
         free(strarray_takevf(test.u.sl));
@@ -543,7 +601,9 @@ static int eval_bc_test(sieve_interp_t *interp,
         int sizevar = test.u.sz.t;
         int x = test.u.sz.n;
 
-        if (interp->getsize(m, &s) != SIEVE_OK) break;
+        if (interp->getsize(m, &s) != SIEVE_OK) {
+            break;
+        }
 
         if (sizevar == B_OVER) {
             /* over */
@@ -657,15 +717,19 @@ static int eval_bc_test(sieve_interp_t *interp,
             /* Try the next string if we don't have this one */
             if (op == BC_ENVELOPE) {
                 /* Envelope */
-                if (interp->getenvelope(m, this_header, &val) != SIEVE_OK)
+                if (interp->getenvelope(m, this_header, &val) != SIEVE_OK) {
                     continue;
+                }
 
-                if (!strcmp(this_header, "from")) reverse_path = 1;
+                if (!strcmp(this_header, "from")) {
+                    reverse_path = 1;
+                }
             }
             else {
                 /* Address Header */
-                if (interp->getheader(m, this_header, &val) != SIEVE_OK)
+                if (interp->getheader(m, this_header, &val) != SIEVE_OK) {
                     continue;
+                }
 #if VERBOSE
                 printf(
                     " [%d] address header %s is %s\n", x, this_header, val[0]);
@@ -732,7 +796,9 @@ static int eval_bc_test(sieve_interp_t *interp,
                         goto envelope_err;
                     }
 
-                    if (!addr) addr = xstrdup("");
+                    if (!addr) {
+                        addr = xstrdup("");
+                    }
 
                     if (match == B_COUNT) {
                         count++;
@@ -854,7 +920,9 @@ static int eval_bc_test(sieve_interp_t *interp,
                         needles, decoded_header, comp, comprock, match_vars);
                     free(decoded_header);
 
-                    if (res < 0) goto header_err;
+                    if (res < 0) {
+                        goto header_err;
+                    }
                 }
             }
         }
@@ -1076,7 +1144,9 @@ static int eval_bc_test(sieve_interp_t *interp,
         res = interp->getbody(m, content_types, &val);
         free(content_types);
 
-        if (res != SIEVE_OK) goto body_err;
+        if (res != SIEVE_OK) {
+            goto body_err;
+        }
 
         /* bodypart(s) exist, now to test them */
 
@@ -1102,7 +1172,9 @@ static int eval_bc_test(sieve_interp_t *interp,
 
         /* free the bodypart array */
         free(val);
-        if (res < 0) goto body_err;
+        if (res < 0) {
+            goto body_err;
+        }
 
         if (match == B_COUNT) {
             snprintf(scount, SCOUNT_SIZE, "%u", count);
@@ -1389,7 +1461,9 @@ static int eval_bc_test(sieve_interp_t *interp,
 
             str = strarray_nth(test.u.sl, x);
 
-            if (!extension_isactive(interp, str)) res = 0;
+            if (!extension_isactive(interp, str)) {
+                res = 0;
+            }
         }
 
         free(strarray_takevf(test.u.sl));
@@ -1413,7 +1487,9 @@ static int eval_bc_test(sieve_interp_t *interp,
             }
 
             res = interp->getmailboxexists(sc, extname);
-            if (res) break;
+            if (res) {
+                break;
+            }
         }
 
         free(strarray_takevf(test.u.mm.keylist));
@@ -1437,7 +1513,9 @@ static int eval_bc_test(sieve_interp_t *interp,
             }
 
             res = interp->getmailboxidexists(sc, extname);
-            if (res) break;
+            if (res) {
+                break;
+            }
         }
 
         free(strarray_takevf(test.u.mm.keylist));
@@ -1481,16 +1559,20 @@ static int eval_bc_test(sieve_interp_t *interp,
             keyname = parse_string(keyname, variables);
         }
 
-        if (op == BC_ENVIRONMENT)
+        if (op == BC_ENVIRONMENT) {
             interp->getenvironment(sc, keyname, &val);
-        else if (op == BC_NOTIFYMETHODCAPABILITY) {
-            if (!strcasecmp(keyname, "online"))
-                val = xstrdup("maybe");
-            else if (!strcasecmp(keyname, "fcc"))
-                val = xstrdup("no");
         }
-        else
+        else if (op == BC_NOTIFYMETHODCAPABILITY) {
+            if (!strcasecmp(keyname, "online")) {
+                val = xstrdup("maybe");
+            }
+            else if (!strcasecmp(keyname, "fcc")) {
+                val = xstrdup("no");
+            }
+        }
+        else {
             interp->getmetadata(sc, extname, keyname, &val);
+        }
 
         if (val) {
             res = do_comparisons(needles, val, comp, comprock, match_vars);
@@ -1531,9 +1613,13 @@ static int eval_bc_test(sieve_interp_t *interp,
             }
 
             interp->getmetadata(sc, extname, keyname, &val);
-            if (!val) res = 0;
+            if (!val) {
+                res = 0;
+            }
             free(val);
-            if (!res) break;
+            if (!res) {
+                break;
+            }
         }
 
         free(strarray_takevf(test.u.mm.keylist));
@@ -1554,8 +1640,9 @@ static int eval_bc_test(sieve_interp_t *interp,
                 str = parse_string(str, variables);
             }
 
-            if (interp->isvalidlist(interp->interp_context, str) != SIEVE_OK)
+            if (interp->isvalidlist(interp->interp_context, str) != SIEVE_OK) {
                 res = 0;
+            }
         }
 
         break;
@@ -1573,10 +1660,14 @@ static int eval_bc_test(sieve_interp_t *interp,
             if (requires & BFE_VARIABLES) {
                 str = parse_string(str, variables);
                 char *p = strchr(str, ':');
-                if (p) p[1] = '\0';
+                if (p) {
+                    p[1] = '\0';
+                }
             }
 
-            if (!strarray_contains_case(interp->notifymethods, str)) res = 0;
+            if (!strarray_contains_case(interp->notifymethods, str)) {
+                res = 0;
+            }
         }
 
         break;
@@ -1594,15 +1685,18 @@ static int eval_bc_test(sieve_interp_t *interp,
         last = test.u.dup.last;
 
         res = 1;
-        if (!dc.seconds)
+        if (!dc.seconds) {
             res = 0;
+        }
         else if (type == B_HEADER) {
             /* fetch header body */
             const char **hdr;
-            if (interp->getheader(m, idval, &hdr) != SIEVE_OK)
+            if (interp->getheader(m, idval, &hdr) != SIEVE_OK) {
                 res = 0;
-            else
+            }
+            else {
                 idval = hdr[0];
+            }
         }
         else if (requires & BFE_VARIABLES) {
             /* substitute variables in uniqueid */
@@ -1624,8 +1718,9 @@ static int eval_bc_test(sieve_interp_t *interp,
                    (to be processed iff script executes successfully) */
                 do_duptrack(duptrack_list, &dc);
             }
-            else
+            else {
                 free(dc.id);
+            }
         }
         break;
     }
@@ -1669,8 +1764,9 @@ static int eval_bc_test(sieve_interp_t *interp,
 
             res = interp->jmapquery(interp->interp_context, sc, m, json);
         }
-        else
+        else {
             res = 0;
+        }
         break;
 
     default:
@@ -1689,14 +1785,18 @@ void unwrap_flaglist(strarray_t *strlist,
                      strarray_t **flaglist,
                      variable_list_t *variables)
 {
-    if (!strlist) return;
+    if (!strlist) {
+        return;
+    }
 
     int len = strarray_size(strlist);
 
     if (len) {
         int i;
 
-        if (!*flaglist) *flaglist = strarray_new();
+        if (!*flaglist) {
+            *flaglist = strarray_new();
+        }
 
         for (i = 0; i < len; i++) {
             const char *flag;
@@ -1769,9 +1869,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
      * a) have bytecode
      * b) it is atleast long enough for the magic number, the version
      *    and one opcode */
-    if (!bc) return SIEVE_FAIL;
-    if (bc_cur->len < (BYTECODE_MAGIC_LEN + 2 * sizeof(bytecode_input_t)))
+    if (!bc) {
         return SIEVE_FAIL;
+    }
+    if (bc_cur->len < (BYTECODE_MAGIC_LEN + 2 * sizeof(bytecode_input_t))) {
+        return SIEVE_FAIL;
+    }
 
     ip = bc_header_parse(bc, &version, &requires);
     if (ip < 0) {
@@ -1833,13 +1936,17 @@ int sieve_eval_bc(sieve_execute_t *exe,
                 actionflags = strarray_dup(variables->var);
             }
 
-            if (i->edited_headers) i->getheadersection(m, &headers);
+            if (i->edited_headers) {
+                i->getheadersection(m, &headers);
+            }
 
             res = do_keep(i, sc, 0 /*implicit*/, actions, actionflags, headers);
-            if (res == SIEVE_RUN_ERROR)
+            if (res == SIEVE_RUN_ERROR) {
                 *errmsg = "Keep can not be used with Reject";
-            else
+            }
+            else {
                 implicit_keep = 0;
+            }
 
             actionflags = NULL;
             break;
@@ -1848,7 +1955,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
         case B_DISCARD:
             res = do_discard(actions);
 
-            if (res == SIEVE_OK) implicit_keep = 0;
+            if (res == SIEVE_OK) {
+                implicit_keep = 0;
+            }
             break;
 
         case B_REJECT:
@@ -1863,10 +1972,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
                             (op == B_EREJECT) ? ACTION_EREJECT : ACTION_REJECT,
                             reason);
 
-            if (res == SIEVE_RUN_ERROR)
+            if (res == SIEVE_RUN_ERROR) {
                 *errmsg = "[e]Reject can not be used with any other action";
-            else
+            }
+            else {
                 implicit_keep = 0;
+            }
 
             break;
         }
@@ -1883,8 +1994,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
             struct buf *headers = NULL;
             unsigned flags = 0;
 
-            if (!cmd.u.f.copy) flags |= CANCEL_KEEP;
-            if (cmd.u.f.create) flags |= CREATE_MAILBOX;
+            if (!cmd.u.f.copy) {
+                flags |= CANCEL_KEEP;
+            }
+            if (cmd.u.f.create) {
+                flags |= CREATE_MAILBOX;
+            }
 
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
@@ -1901,7 +2016,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
                 actionflags = strarray_dup(variables->var);
             }
 
-            if (i->edited_headers) i->getheadersection(m, &headers);
+            if (i->edited_headers) {
+                i->getheadersection(m, &headers);
+            }
 
             res = do_fileinto(i,
                               sc,
@@ -1913,10 +2030,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
                               actionflags,
                               headers);
 
-            if (res == SIEVE_RUN_ERROR)
+            if (res == SIEVE_RUN_ERROR) {
                 *errmsg = "Fileinto can not be used with Reject";
-            else if (!cmd.u.f.copy)
+            }
+            else if (!cmd.u.f.copy) {
                 implicit_keep = 0;
+            }
 
             actionflags = NULL;
             break;
@@ -1939,12 +2058,15 @@ int sieve_eval_bc(sieve_execute_t *exe,
             }
 
             if (requires & BFE_VARIABLES) {
-                if (awaken_mbox)
+                if (awaken_mbox) {
                     awaken_mbox = parse_string(awaken_mbox, variables);
-                if (awaken_mboxid)
+                }
+                if (awaken_mboxid) {
                     awaken_mboxid = parse_string(awaken_mboxid, variables);
-                if (awaken_spluse)
+                }
+                if (awaken_spluse) {
                     awaken_spluse = parse_string(awaken_spluse, variables);
+                }
                 tzid = parse_string(tzid, variables);
             }
 
@@ -1957,7 +2079,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
 
             actionflags = strarray_dup(variables->var);
 
-            if (i->edited_headers) i->getheadersection(m, &headers);
+            if (i->edited_headers) {
+                i->getheadersection(m, &headers);
+            }
 
             res = do_snooze(actions,
                             awaken_mbox,
@@ -1972,10 +2096,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
                             actionflags,
                             headers);
 
-            if (res == SIEVE_RUN_ERROR)
+            if (res == SIEVE_RUN_ERROR) {
                 *errmsg = "Snooze can not be used with Reject";
-            else
+            }
+            else {
                 implicit_keep = 0;
+            }
 
             actionflags = NULL;
             break;
@@ -2043,7 +2169,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
                 deliverby = buf_release(&by_value);
             }
 
-            if (i->edited_headers) i->getheadersection(m, &headers);
+            if (i->edited_headers) {
+                i->getheadersection(m, &headers);
+            }
 
             res = do_redirect(actions,
                               address,
@@ -2054,10 +2182,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
                               !cmd.u.r.copy,
                               headers);
 
-            if (res == SIEVE_RUN_ERROR)
+            if (res == SIEVE_RUN_ERROR) {
                 *errmsg = "Redirect can not be used with Reject";
-            else if (!cmd.u.r.copy)
+            }
+            else if (!cmd.u.r.copy) {
                 implicit_keep = 0;
+            }
 
             break;
         }
@@ -2301,7 +2431,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
                                     requires);
 
             if (respond != SIEVE_OK) {
-                if (cmd.u.v.fcc.flags) free(strarray_takevf(cmd.u.v.fcc.flags));
+                if (cmd.u.v.fcc.flags) {
+                    free(strarray_takevf(cmd.u.v.fcc.flags));
+                }
 
                 if (respond != SIEVE_DONE) {
                     res = SIEVE_RUN_ERROR; /* something is bad */
@@ -2362,8 +2494,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
                               handle,
                               &fcc);
 
-            if (res == SIEVE_RUN_ERROR)
+            if (res == SIEVE_RUN_ERROR) {
                 *errmsg = "Vacation can not be used with Reject or Vacation";
+            }
 
             break;
         }
@@ -2388,10 +2521,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
 
             res = i->getinclude(sc, script, isglobal, fpath, sizeof(fpath));
             if (res != SIEVE_OK) {
-                if (isoptional == 0)
+                if (isoptional == 0) {
                     *errmsg = "Include can not find script";
-                else
+                }
+                else {
                     res = SIEVE_OK;
+                }
                 break;
             }
             res = sieve_script_load(fpath, &exe);
@@ -2402,10 +2537,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
                 }
             }
             else if (res != SIEVE_OK) { /* SIEVE_FAIL */
-                if (isoptional == 0)
+                if (isoptional == 0) {
                     *errmsg = "Include can not load script";
-                else
+                }
+                else {
                     res = SIEVE_OK;
+                }
                 break;
             }
 
@@ -2423,10 +2560,12 @@ int sieve_eval_bc(sieve_execute_t *exe,
         }
 
         case B_RETURN:
-            if (is_incl)
+            if (is_incl) {
                 goto done;
-            else
+            }
+            else {
                 res = 1;
+            }
             break;
 
         case B_SET: {
@@ -2549,7 +2688,9 @@ int sieve_eval_bc(sieve_execute_t *exe,
                 /* get the header values */
                 if (name && i->getheader(m, name, &vals) == SIEVE_OK) {
                     for (nval = 0; vals[nval]; nval++) {
-                        if (match == B_COUNT) continue; /* count only */
+                        if (match == B_COUNT) {
+                            continue; /* count only */
+                        }
 
                         /* decode header value and add to strarray_t */
                         strarray_appendm(
@@ -2691,11 +2832,15 @@ int sieve_eval_bc(sieve_execute_t *exe,
             break;
 
         default:
-            if (errmsg) *errmsg = "Invalid sieve bytecode";
+            if (errmsg) {
+                *errmsg = "Invalid sieve bytecode";
+            }
             return SIEVE_FAIL;
         }
 
-        if (res) break; /* we've encountered an error */
+        if (res) {
+            break; /* we've encountered an error */
+        }
     }
 
 done:
@@ -2708,7 +2853,9 @@ done:
         strarray_t *actionflags = strarray_dup(variables->var);
         struct buf *headers = NULL;
 
-        if (i->edited_headers) i->getheadersection(m, &headers);
+        if (i->edited_headers) {
+            i->getheadersection(m, &headers);
+        }
 
         if (i->ikeep.folder) {
             res = do_fileinto(i,

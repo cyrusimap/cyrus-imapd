@@ -76,7 +76,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -156,10 +158,12 @@ int main(int argc, char *argv[])
     close(script_fd);
 
     if (bc) {
-        if (gen_script)
+        if (gen_script) {
             generate_script(bc, len);
-        else
+        }
+        else {
             dump2(bc, len);
+        }
         exit(0);
     }
     else {
@@ -171,8 +175,9 @@ static void print_string(const char *label, const char *str)
 {
     size_t len;
 
-    if (str)
+    if (str) {
         len = strlen(str);
+    }
     else {
         str = "[nil]";
         len = -1;
@@ -190,7 +195,9 @@ static void print_stringlist(const char *label, strarray_t *list)
     for (x = 0; x < list_len; x++) {
         const char *str = strarray_nth(list, x);
 
-        if (!(x % 5)) printf("\n\t\t");
+        if (!(x % 5)) {
+            printf("\n\t\t");
+        }
         print_string(" ", str);
     }
     printf("\n\t]");
@@ -217,11 +224,15 @@ static void print_vallist(const char *label,
     for (x = 0; x < list_len; x++) {
         uint64_t i = arrayu64_nth(list, x);
 
-        if (!(x % 5)) printf("\n\t\t");
-        if (print_cb)
+        if (!(x % 5)) {
+            printf("\n\t\t");
+        }
+        if (print_cb) {
             print_cb(i);
-        else
+        }
+        else {
             printf(" %" PRIu64, i);
+        }
     }
     printf("\n\t]");
 
@@ -608,7 +619,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
     int version,
         requires;
 
-    if (!d) return;
+    if (!d) {
+        return;
+    }
 
     i = bc_header_parse(d, &version, &requires);
     if (i < 0) {
@@ -619,7 +632,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
     printf("Bytecode version: %d\n", version);
     if (version >= 0x11) {
         printf("Require:");
-        if (requires & BFE_VARIABLES) printf(" Variables");
+        if (requires & BFE_VARIABLES) {
+            printf(" Variables");
+        }
         printf("\n");
     }
     printf("\n");
@@ -730,24 +745,27 @@ static void dump2(bytecode_input_t *d, int bc_len)
         case B_ADDFLAG_ORIG:
         case B_ADDFLAG:
             printf("ADDFLAG");
-            if (cmd.type >= B_ADDFLAG)
+            if (cmd.type >= B_ADDFLAG) {
                 print_string(" VARIABLE", cmd.u.fl.variable);
+            }
             print_stringlist(" FLAGS", cmd.u.fl.flags);
             break;
 
         case B_SETFLAG_ORIG:
         case B_SETFLAG:
             printf("SETFLAG");
-            if (cmd.type >= B_SETFLAG)
+            if (cmd.type >= B_SETFLAG) {
                 print_string(" VARIABLE", cmd.u.fl.variable);
+            }
             print_stringlist(" FLAGS", cmd.u.fl.flags);
             break;
 
         case B_REMOVEFLAG_ORIG:
         case B_REMOVEFLAG:
             printf("REMOVEFLAG");
-            if (cmd.type >= B_REMOVEFLAG)
+            if (cmd.type >= B_REMOVEFLAG) {
                 print_string(" VARIABLE", cmd.u.fl.variable);
+            }
             print_stringlist(" FLAGS", cmd.u.fl.flags);
             break;
 
@@ -954,12 +972,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 static void generate_token(const char *token, unsigned indent, struct buf *buf)
 {
-    if (token) buf_printf(buf, "%*s%s", indent, "", token);
+    if (token) {
+        buf_printf(buf, "%*s%s", indent, "", token);
+    }
 }
 
 static void generate_number(const char *tag, unsigned n, struct buf *buf)
 {
-    if (tag) buf_printf(buf, " %s", tag);
+    if (tag) {
+        buf_printf(buf, " %s", tag);
+    }
     buf_printf(buf, " %d", n);
 }
 
@@ -1005,8 +1027,9 @@ static void generate_string_capa(const char *tag,
                        s,
                        (size_t) (has_lf - s) == strlen(s) - 1 ? "" : "\n");
         }
-        else
+        else {
             buf_printf(buf, " \"%s%s\"", *s == '\\' ? "\\" : "", s);
+        }
     }
 }
 
@@ -1024,23 +1047,31 @@ static void generate_stringlist_capa(const char *tag,
     int i, len = strarray_size(sl);
     const char *sep = " [";
 
-    if (!len) return;
+    if (!len) {
+        return;
+    }
 
     if (requires)
     *
         requires
     |= capa;
 
-    if (tag) buf_printf(buf, " %s", tag);
+    if (tag) {
+        buf_printf(buf, " %s", tag);
+    }
 
-    if (len == 1) sep = " ";
+    if (len == 1) {
+        sep = " ";
+    }
     for (i = 0; i < len; i++) {
         const char *s = strarray_nth(sl, i);
 
         buf_printf(buf, "%s\"%s%s\"", sep, *s == '\\' ? "\\" : "", s);
         sep = ", ";
     }
-    if (len > 1) buf_putc(buf, ']');
+    if (len > 1) {
+        buf_putc(buf, ']');
+    }
 }
 
 static void generate_stringlist(const char *tag,
@@ -1067,11 +1098,17 @@ static void generate_valuelist(const char *name,
     int i, len = arrayu64_size(vl);
     const char *sep = " [";
 
-    if (!len) return;
+    if (!len) {
+        return;
+    }
 
-    if (name) buf_printf(buf, " %s", name);
+    if (name) {
+        buf_printf(buf, " %s", name);
+    }
 
-    if (len == 1) sep = " ";
+    if (len == 1) {
+        sep = " ";
+    }
     for (i = 0; i < len; i++) {
         const uint64_t u = arrayu64_nth(vl, i);
 
@@ -1079,11 +1116,14 @@ static void generate_valuelist(const char *name,
             buf_appendcstr(buf, sep);
             gen_cb(u, buf);
         }
-        else
+        else {
             buf_printf(buf, "%s%" PRIu64, sep, u);
+        }
         sep = ", ";
     }
-    if (len > 1) buf_putc(buf, ']');
+    if (len > 1) {
+        buf_putc(buf, ']');
+    }
 }
 
 static void generate_index(int index,
@@ -1533,7 +1573,9 @@ static int generate_block(bytecode_input_t *bc,
             pos = bc_action_parse(bc, pos, version, &cmd);
             pos = generate_block(
                 bc, pos, cmd.u.jump, version, 0, indent + 4, requires, buf);
-            if (!elsif) generate_token("}\n", indent, buf);
+            if (!elsif) {
+                generate_token("}\n", indent, buf);
+            }
             continue;
 
         case B_JUMP:
@@ -1543,8 +1585,9 @@ static int generate_block(bytecode_input_t *bc,
                 elsif = 1;
                 indent -= 4;
             }
-            else
+            else {
                 generate_token("else {\n", indent - 4, buf);
+            }
 
             pos = generate_block(
                 bc, pos, cmd.u.jump, version, elsif, indent, requires, buf);
@@ -1627,8 +1670,9 @@ static int generate_block(bytecode_input_t *bc,
                                     strtoul(cmd.u.r.bytime, NULL, 10),
                                     buf);
                 }
-                else
+                else {
                     generate_string(":byabsolutetime", cmd.u.r.bytime, buf);
+                }
                 INSERT_FOLD(indent + 4, buf);
             }
             generate_string_capa(":bymode",
@@ -1769,8 +1813,9 @@ static int generate_block(bytecode_input_t *bc,
                 requires
             |= SIEVE_CAPA_VACATION;
             generate_token("vacation", indent, buf);
-            if (!(cmd.u.v.seconds % 86400))
+            if (!(cmd.u.v.seconds % 86400)) {
                 generate_number(":days", cmd.u.v.seconds / 86400, buf);
+            }
             else {
                 *
                     requires
@@ -1786,7 +1831,9 @@ static int generate_block(bytecode_input_t *bc,
                 generate_fileinto(&cmd.u.v.fcc, 1, requires, buf);
             }
             generate_switch(":mime", cmd.u.v.mime, buf);
-            if (!strrchr(cmd.u.v.message, '\n')) INSERT_FOLD(indent + 4, buf);
+            if (!strrchr(cmd.u.v.message, '\n')) {
+                INSERT_FOLD(indent + 4, buf);
+            }
             generate_string(NULL, cmd.u.v.message, buf);
             break;
 
@@ -1798,8 +1845,9 @@ static int generate_block(bytecode_input_t *bc,
                 requires
             |= SIEVE_CAPA_INCLUDE;
             generate_token("include", indent, buf);
-            if (cmd.u.inc.location == B_GLOBAL)
+            if (cmd.u.inc.location == B_GLOBAL) {
                 generate_switch(":global", 1, buf);
+            }
             generate_switch(":once", cmd.u.inc.once, buf);
             generate_switch(":optional", cmd.u.inc.optional, buf);
             generate_string(NULL, cmd.u.inc.script, buf);
@@ -1992,7 +2040,9 @@ static void generate_script(bytecode_input_t *d, int bc_len)
     = 0;
     struct buf buf = BUF_INITIALIZER;
 
-    if (!d) return;
+    if (!d) {
+        return;
+    }
 
     i = bc_header_parse(d, &version, &req);
     if (i < 0) {

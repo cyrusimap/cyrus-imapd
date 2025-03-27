@@ -75,7 +75,9 @@ int do_reject(action_list_t *a, int action, const char *msg)
             || a->a == ACTION_VACATION || a->a == ACTION_SETFLAG
             || a->a == ACTION_ADDFLAG || a->a == ACTION_REMOVEFLAG
             || a->a == ACTION_MARK || a->a == ACTION_UNMARK)
+        {
             return SIEVE_RUN_ERROR;
+        }
         a = a->next;
     }
 
@@ -182,7 +184,9 @@ int do_fileinto(sieve_interp_t *i,
     const char *errmsg;
     int ret;
 
-    if (!i->fileinto) return SIEVE_INTERNAL_ERROR;
+    if (!i->fileinto) {
+        return SIEVE_INTERNAL_ERROR;
+    }
 
     assert(a != NULL);
 
@@ -268,8 +272,9 @@ int do_redirect(action_list_t *a,
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
             return SIEVE_RUN_ERROR;
+        }
 
         b = a;
         a = a->next;
@@ -374,8 +379,9 @@ int do_discard(action_list_t *a)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_DISCARD) /* don't bother doing twice */
+        if (a->a == ACTION_DISCARD) /* don't bother doing twice */ {
             return 0;
+        }
 
         b = a;
         a = a->next;
@@ -401,7 +407,9 @@ static int makehash(unsigned char hash[],
     MD5Init(&ctx);
     MD5Update(&ctx, s1, strlen(s1));
     MD5Update(&ctx, s2, strlen(s2));
-    if (s3) MD5Update(&ctx, s3, strlen(s3));
+    if (s3) {
+        MD5Update(&ctx, s3, strlen(s3));
+    }
     MD5Final(hash, &ctx);
 
     return SIEVE_OK;
@@ -425,7 +433,9 @@ int do_vacation(action_list_t *a,
     while (a != NULL) {
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT
             || a->a == ACTION_VACATION) /* vacation can't be used twice */
+        {
             return SIEVE_RUN_ERROR;
+        }
 
         b = a;
         a = a->next;
@@ -444,10 +454,12 @@ int do_vacation(action_list_t *a,
     a->u.vac.send.fcc.specialuse = fcc->specialuse;
     a->u.vac.send.fcc.do_create = fcc->do_create;
     a->u.vac.send.fcc.imapflags = fcc->imapflags;
-    if (handle)
+    if (handle) {
         makehash(a->u.vac.autoresp.hash, addr, handle, NULL);
-    else
+    }
+    else {
         makehash(a->u.vac.autoresp.hash, addr, fromaddr, msg);
+    }
     a->u.vac.autoresp.seconds = seconds;
 
     b->next = a;
@@ -467,8 +479,9 @@ int do_mark(action_list_t *a)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
             return SIEVE_RUN_ERROR;
+        }
 
         b = a;
         a = a->next;
@@ -496,8 +509,9 @@ int do_unmark(action_list_t *a)
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT)
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
             return SIEVE_RUN_ERROR;
+        }
 
         b = a;
         a = a->next;
@@ -646,9 +660,15 @@ void free_action_list(action_list_t *a)
             break;
 
         case ACTION_VACATION:
-            if (a->u.vac.send.subj) free(a->u.vac.send.subj);
-            if (a->u.vac.send.addr) free(a->u.vac.send.addr);
-            if (a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
+            if (a->u.vac.send.subj) {
+                free(a->u.vac.send.subj);
+            }
+            if (a->u.vac.send.addr) {
+                free(a->u.vac.send.addr);
+            }
+            if (a->u.vac.send.fromaddr) {
+                free(a->u.vac.send.fromaddr);
+            }
             strarray_free(a->u.vac.send.fcc.imapflags);
             break;
 

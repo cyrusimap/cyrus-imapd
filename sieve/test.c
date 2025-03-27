@@ -170,10 +170,12 @@ static void getheaders_cb(const char *name,
 {
     struct buf *contents = (struct buf *) rock;
 
-    if (raw)
+    if (raw) {
         buf_appendcstr(contents, raw);
-    else
+    }
+    else {
         buf_printf(contents, "%s: %s\r\n", name, value);
+    }
 }
 
 static int getheadersection(void *mc, struct buf **contents)
@@ -192,7 +194,9 @@ static int addheader(void *mc, const char *head, const char *body, int index)
 {
     message_data_t *m = (message_data_t *) mc;
 
-    if (head == NULL || body == NULL) return SIEVE_FAIL;
+    if (head == NULL || body == NULL) {
+        return SIEVE_FAIL;
+    }
 
     if (index < 0) {
         printf("appending header '%s: %s'\n", head, body);
@@ -211,7 +215,9 @@ static int deleteheader(void *mc, const char *head, int index)
 {
     message_data_t *m = (message_data_t *) mc;
 
-    if (head == NULL) return SIEVE_FAIL;
+    if (head == NULL) {
+        return SIEVE_FAIL;
+    }
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
@@ -235,42 +241,56 @@ static int getenvironment(void *sc, const char *keyname, char **res)
         if (!strcmp(keyname, "domain")) {
             const char *domain = strchr(sd->host, '.');
 
-            if (domain)
+            if (domain) {
                 domain++;
-            else
+            }
+            else {
                 domain = "";
+            }
 
             *res = xstrdup(domain);
         }
         break;
 
     case 'h':
-        if (!strcmp(keyname, "host")) *res = xstrdup(sd->host);
+        if (!strcmp(keyname, "host")) {
+            *res = xstrdup(sd->host);
+        }
         break;
 
     case 'l':
-        if (!strcmp(keyname, "location")) *res = xstrdup("MDA");
+        if (!strcmp(keyname, "location")) {
+            *res = xstrdup("MDA");
+        }
         break;
 
     case 'n':
-        if (!strcmp(keyname, "name")) *res = xstrdup("Cyrus LMTP");
+        if (!strcmp(keyname, "name")) {
+            *res = xstrdup("Cyrus LMTP");
+        }
         break;
 
     case 'p':
-        if (!strcmp(keyname, "phase")) *res = xstrdup("during");
+        if (!strcmp(keyname, "phase")) {
+            *res = xstrdup("during");
+        }
         break;
 
     case 'r':
         if (!strncmp(keyname, "remote-", 7)) {
-            if (!strcmp(keyname + 7, "host"))
+            if (!strcmp(keyname + 7, "host")) {
                 *res = xstrdup(sd->remotehost);
-            else if (sd->remoteip && !strcmp(keyname + 7, "ip"))
+            }
+            else if (sd->remoteip && !strcmp(keyname + 7, "ip")) {
                 *res = xstrdup(sd->remoteip);
+            }
         }
         break;
 
     case 'v':
-        if (!strcmp(keyname, "version")) *res = xstrdup(CYRUS_VERSION);
+        if (!strcmp(keyname, "version")) {
+            *res = xstrdup(CYRUS_VERSION);
+        }
         break;
     }
 
@@ -324,9 +344,10 @@ static int getbody(void *mc,
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    if (!r)
+    if (!r) {
         message_fetch_part(
             &m->content, content_types, (struct bodypart ***) parts);
+    }
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
@@ -381,10 +402,12 @@ static int reject(void *ac,
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int *) ic;
 
-    if (rc->is_extended)
+    if (rc->is_extended) {
         printf("LMTP rejecting message '%s' with '%s'\n", m->name, rc->msg);
-    else
+    }
+    else {
         printf("rejecting message '%s' with '%s'\n", m->name, rc->msg);
+    }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
@@ -518,7 +541,9 @@ static int notify(void *ac,
         if (nc->options) {
             int i;
             for (i = 0; i < strarray_size(nc->options); i++) {
-                if (i) printf(", ");
+                if (i) {
+                    printf(", ");
+                }
                 printf("%s", strarray_nth(nc->options, i));
             }
         }
@@ -580,11 +605,17 @@ static int autorespond(void *ac,
         else {
             printf("' in %d days? ", arc->seconds / DAY2SEC);
         }
-        if (!scanf(" %c", &yn)) return SIEVE_FAIL;
+        if (!scanf(" %c", &yn)) {
+            return SIEVE_FAIL;
+        }
     }
 
-    if (TOLOWER(yn) == 'y') return SIEVE_DONE;
-    if (TOLOWER(yn) == 'n') return SIEVE_OK;
+    if (TOLOWER(yn) == 'y') {
+        return SIEVE_DONE;
+    }
+    if (TOLOWER(yn) == 'n') {
+        return SIEVE_OK;
+    }
 
     return SIEVE_FAIL;
 }
@@ -627,7 +658,9 @@ static int jmapquery(void *ic __attribute__((unused)),
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
-    if (!jfilter) return 0;
+    if (!jfilter) {
+        return 0;
+    }
 
     int r = 0;
 
@@ -647,7 +680,7 @@ static int jmapquery(void *ic __attribute__((unused)),
     }
 
     /* Run query */
-    if (md->content.matchmime)
+    if (md->content.matchmime) {
         matches = jmap_email_matchmime(md->content.matchmime,
                                        jfilter,
                                        NULL,
@@ -656,6 +689,7 @@ static int jmapquery(void *ic __attribute__((unused)),
                                        sd->ns,
                                        time(NULL),
                                        &err);
+    }
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
@@ -715,8 +749,8 @@ int main(int argc, char *argv[])
     strarray_append(&e_from, "");
     strarray_append(&e_to, "");
 
-    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:u:")) != EOF) switch (c)
-        {
+    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:u:")) != EOF) {
+        switch (c) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -753,10 +787,12 @@ int main(int argc, char *argv[])
             usage(argv[0]);
             break;
         }
+    }
 
     if (!script) {
-        if ((argc - optind) < 2)
+        if ((argc - optind) < 2) {
             usage(argv[0]);
+        }
         else {
             message = argv[optind];
             script = argv[optind + 1];
@@ -771,7 +807,9 @@ int main(int argc, char *argv[])
     // anyone authstate
     sd.authstate = auth_newstate("anyone");
 
-    if (!sd.host) sd.host = config_servername;
+    if (!sd.host) {
+        sd.host = config_servername;
+    }
 
     /* Check if script is bytecode or text */
     f = fopen(script, "r");
@@ -891,7 +929,9 @@ int main(int argc, char *argv[])
         }
 
         f = fdopen(fd, "r");
-        if (f) m = new_msg(f, sbuf.st_size, message);
+        if (f) {
+            m = new_msg(f, sbuf.st_size, message);
+        }
         if (!f || !m) {
             printf("can not open message '%s'\n", message);
             exit(1);
@@ -921,7 +961,9 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (m) free_msg(m);
+    if (m) {
+        free_msg(m);
+    }
     strarray_fini(&e_from);
     strarray_fini(&e_to);
     auth_freestate(sd.authstate);
@@ -933,7 +975,9 @@ EXPORTED void fatal(const char *message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
 
-    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+    if (rc != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(rc);
 }

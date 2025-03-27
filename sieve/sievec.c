@@ -164,7 +164,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }

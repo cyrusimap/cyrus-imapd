@@ -485,7 +485,9 @@ EXPORTED int bc_header_parse(bytecode_input_t *bc, int *version, int *requires)
         requires
     = 0;
 
-    if (memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) return -1;
+    if (memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
+        return -1;
+    }
 
     pos = BYTECODE_MAGIC_LEN / sizeof(bytecode_input_t);
 
@@ -682,8 +684,9 @@ static int bc_args_parse(bytecode_input_t *bc,
 
             z->tag = ntohl(bc[pos++].value);
 
-            if (z->tag == B_TIMEZONE)
+            if (z->tag == B_TIMEZONE) {
                 pos = bc_string_parse(bc, pos, &z->offset);
+            }
             break;
         }
 
@@ -758,10 +761,12 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc,
             case B_REGEX:
             case B_COUNT:
             case B_VALUE:
-                if (opcode == BC_ADDRESS_PRE_INDEX)
+                if (opcode == BC_ADDRESS_PRE_INDEX) {
                     opcode = BC_ADDRESS;
-                else
+                }
+                else {
                     opcode = BC_HEADER;
+                }
 
                 fmt = cmd_args_table[opcode].fmt;
                 offsets = cmd_args_table[opcode].offsets;

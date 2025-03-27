@@ -152,10 +152,12 @@ static int octet_cmp_(const char *text,
         r = casemap ? toupper(text[i]) - toupper(pat[i]) : text[i] - pat[i];
     }
 
-    if (r == 0)
+    if (r == 0) {
         return (tlen - plen);
-    else
+    }
+    else {
         return r;
+    }
 }
 
 static int octet_cmp(const char *text, size_t tlen, const char *pat)
@@ -202,7 +204,9 @@ static int new_var(strarray_t *match_vars)
 {
     int size = strarray_size(match_vars);
 
-    if (size - 1 > MAX_MATCH_VARS) return size;
+    if (size - 1 > MAX_MATCH_VARS) {
+        return size;
+    }
 
     return strarray_append(match_vars, "");
 }
@@ -212,7 +216,9 @@ static void set_var(int var_num,
                     const char *val_end,
                     strarray_t *match_vars)
 {
-    if (var_num > MAX_MATCH_VARS) return;
+    if (var_num > MAX_MATCH_VARS) {
+        return;
+    }
 
     char *val = xstrndup(val_start, val_end - val_start);
     strarray_setm(match_vars, var_num, val);
@@ -224,7 +230,9 @@ static int append_var(const char *val_start,
 {
     int size = strarray_size(match_vars);
 
-    if (size - 1 > MAX_MATCH_VARS) return size;
+    if (size - 1 > MAX_MATCH_VARS) {
+        return size;
+    }
 
     char *val = xstrndup(val_start, val_end - val_start);
     return strarray_appendm(match_vars, val);
@@ -419,10 +427,12 @@ static int octet_regex(const char *text,
         for (var_num = 0; var_num < nmatch; var_num++) {
             regmatch_t *m = &pm[var_num];
 
-            if (m->rm_so < 0)
+            if (m->rm_so < 0) {
                 new_var(match_vars);
-            else
+            }
+            else {
                 append_var(text + m->rm_so, text + m->rm_eo, match_vars);
+            }
         }
     }
     return r;

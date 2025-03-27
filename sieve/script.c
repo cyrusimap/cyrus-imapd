@@ -276,7 +276,9 @@ static int _sieve_script_parse_only(sieve_interp_t *interp,
 
     if (!interp) {
         interp = myinterp = sieve_build_nonexec_interp();
-        if (!myinterp) return SIEVE_FAIL;
+        if (!myinterp) {
+            return SIEVE_FAIL;
+        }
     }
 
     *out_errors = NULL;
@@ -296,7 +298,9 @@ static int _sieve_script_parse_only(sieve_interp_t *interp,
         *out_errors = buf_release(&errors);
     }
 
-    if (myinterp) sieve_interp_free(&myinterp);
+    if (myinterp) {
+        sieve_interp_free(&myinterp);
+    }
     buf_free(&errors);
     return res;
 }
@@ -332,7 +336,9 @@ EXPORTED int sieve_script_parse_string(sieve_interp_t *interp,
     struct yy_buffer_state *buffer = sieve_scan_string(s);
     sieve_script_t *myscript = NULL;
 
-    if (!script) script = &myscript;
+    if (!script) {
+        script = &myscript;
+    }
 
     int res = _sieve_script_parse_only(interp, errors, script);
 
@@ -346,7 +352,9 @@ EXPORTED void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
         buf_free(&(*s)->sieveerr);
-        if ((*s)->cmds) free_tree((*s)->cmds);
+        if ((*s)->cmds) {
+            free_tree((*s)->cmds);
+        }
         free(*s);
         *s = NULL;
     }
@@ -361,12 +369,16 @@ static void add_header(sieve_interp_t *i,
     const char **h;
     char *decoded_header;
     /* get header value */
-    if (isenv)
+    if (isenv) {
         i->getenvelope(message_context, header, &h);
-    else
+    }
+    else {
         i->getheader(message_context, header, &h);
+    }
 
-    if (!h || !h[0]) return;
+    if (!h || !h[0]) {
+        return;
+    }
 
     decoded_header = charset_parse_mimeheader(h[0], 0 /*flags*/);
     buf_appendcstr(out, decoded_header);
@@ -381,7 +393,9 @@ static int build_notify_message(sieve_interp_t *i,
     const char *c;
     size_t n;
 
-    if (msg == NULL) return SIEVE_OK;
+    if (msg == NULL) {
+        return SIEVE_OK;
+    }
 
     /* construct the message */
     c = msg;
@@ -408,7 +422,9 @@ static int build_notify_message(sieve_interp_t *i,
             c += 5;
             n = 0;
             if (*c++ == '[') {
-                while (*c != ']') n = n * 10 + (*c++ - '0');
+                while (*c != ']') {
+                    n = n * 10 + (*c++ - '0');
+                }
                 c += 2; /* skip ]$ */
             }
 
@@ -417,7 +433,9 @@ static int build_notify_message(sieve_interp_t *i,
             /* we only use the first text part */
             if (parts && parts[0] && parts[0]->decoded_body) {
                 size_t size = strlen(parts[0]->decoded_body);
-                if (n && size > n) size = n;
+                if (n && size > n) {
+                    size = n;
+                }
                 buf_appendmap(out, parts[0]->decoded_body, size);
             }
 
@@ -425,7 +443,9 @@ static int build_notify_message(sieve_interp_t *i,
             if (parts) {
                 sieve_bodypart_t **p;
 
-                for (p = parts; *p; p++) free(*p);
+                for (p = parts; *p; p++) {
+                    free(*p);
+                }
                 free(parts);
             }
         }
@@ -479,7 +499,9 @@ static int send_notify_callback(sieve_interp_t *interp,
 
     nc.message = buf_cstring(&out);
     nc.fname = NULL;
-    if (interp->getfname) interp->getfname(message_context, &nc.fname);
+    if (interp->getfname) {
+        interp->getfname(message_context, &nc.fname);
+    }
 
     ret = interp->notify(
         &nc, interp->interp_context, script_context, message_context, errmsg);
@@ -566,7 +588,9 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
     sieve_bytecode_t *bc;
     int dofree = 0;
 
-    if (!fname || !ret) return SIEVE_FAIL;
+    if (!fname || !ret) {
+        return SIEVE_FAIL;
+    }
 
     if (stat(fname, &sbuf) == -1) {
         if (errno == ENOENT) {
@@ -597,7 +621,9 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
     /* see if we already have this script loaded */
     bc = ex->bc_list;
     while (bc) {
-        if (sbuf.st_ino == bc->inode) break;
+        if (sbuf.st_ino == bc->inode) {
+            break;
+        }
         bc = bc->next;
     }
 
@@ -611,14 +637,18 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
                     "IOERROR: can not open sieve script",
                     "fname=<%s>",
                     fname);
-            if (dofree) free(ex);
+            if (dofree) {
+                free(ex);
+            }
             return SIEVE_FAIL;
         }
         if (fstat(fd, &sbuf) == -1) {
             xsyslog(
                 LOG_ERR, "IOERROR: fstating sieve script", "fname=<%s>", fname);
             close(fd);
-            if (dofree) free(ex);
+            if (dofree) {
+                free(ex);
+            }
             return SIEVE_FAIL;
         }
 
@@ -665,8 +695,9 @@ EXPORTED int sieve_script_unload(sieve_execute_t **s)
     }
     /*i added this else, i'm not sure why, but this function always returned
      * SIEVE_FAIL*/
-    else
+    else {
         return SIEVE_FAIL;
+    }
     return SIEVE_OK;
 }
 
@@ -686,17 +717,19 @@ static int do_sieve_error(int ret,
                           const char *errmsg)
 {
     if (ret != SIEVE_OK) {
-        if (lastaction == -1) /* we never executed an action */
+        if (lastaction == -1) /* we never executed an action */ {
             snprintf(actions_string + strlen(actions_string),
                      ACTIONS_STRING_LEN - strlen(actions_string),
                      "script execution failed: %s\n",
                      errmsg ? errmsg : sieve_errstr(ret));
-        else
+        }
+        else {
             snprintf(actions_string + strlen(actions_string),
                      ACTIONS_STRING_LEN - strlen(actions_string),
                      "%s action failed: %s\n",
                      action_to_string(lastaction),
                      errmsg ? errmsg : sieve_errstr(ret));
+        }
     }
 
     /* Process notify actions */
@@ -714,10 +747,12 @@ static int do_sieve_error(int ret,
             n = n->next;
         }
 
-        if (notify_list) free_notify_list(notify_list);
+        if (notify_list) {
+            free_notify_list(notify_list);
+        }
         notify_list = NULL; /* don't try any notifications again */
 
-        if (notify_ret != SIEVE_OK)
+        if (notify_ret != SIEVE_OK) {
             return do_sieve_error(ret,
                                   interp,
                                   script_context,
@@ -729,13 +764,15 @@ static int do_sieve_error(int ret,
                                   implicit_keep,
                                   actions_string,
                                   errmsg);
+        }
     }
 
     if ((ret != SIEVE_OK) && interp->execute_err) {
         char buf[ERR_BUF_SIZE];
-        if (lastaction == -1) /* we never executed an action */
+        if (lastaction == -1) /* we never executed an action */ {
             snprintf(
                 buf, ERR_BUF_SIZE, "%s", errmsg ? errmsg : sieve_errstr(ret));
+        }
         else {
             if (interp->lastitem) {
                 snprintf(buf,
@@ -774,10 +811,11 @@ static int do_sieve_error(int ret,
                                 &errmsg);
         buf_destroy(keep_context.headers);
         ret |= keep_ret;
-        if (keep_ret == SIEVE_OK)
+        if (keep_ret == SIEVE_OK) {
             snprintf(actions_string + strlen(actions_string),
                      ACTIONS_STRING_LEN - strlen(actions_string),
                      "Kept\n");
+        }
         else {
             implicit_keep = 0; /* don't try an implicit keep again */
             return do_sieve_error(ret,
@@ -794,7 +832,9 @@ static int do_sieve_error(int ret,
         }
     }
 
-    if (actions) free_action_list(actions);
+    if (actions) {
+        free_action_list(actions);
+    }
 
     return ret;
 }
@@ -825,7 +865,9 @@ static int do_action_list(sieve_interp_t *interp,
         switch (a->a) {
         case ACTION_REJECT:
         case ACTION_EREJECT:
-            if (!interp->reject) return SIEVE_INTERNAL_ERROR;
+            if (!interp->reject) {
+                return SIEVE_INTERNAL_ERROR;
+            }
             ret = interp->reject(&a->u.rej,
                                  interp->interp_context,
                                  script_context,
@@ -834,16 +876,19 @@ static int do_action_list(sieve_interp_t *interp,
             free(interp->lastitem);
             interp->lastitem = xstrdup(a->u.rej.msg);
 
-            if (ret == SIEVE_OK)
+            if (ret == SIEVE_OK) {
                 snprintf(actions_string + strlen(actions_string),
                          ACTIONS_STRING_LEN - strlen(actions_string),
                          "%s with: %s\n",
                          (a->a == ACTION_EREJECT) ? "eRejected" : "Rejected",
                          a->u.rej.msg);
+            }
 
             break;
         case ACTION_FILEINTO:
-            if (!interp->fileinto) return SIEVE_INTERNAL_ERROR;
+            if (!interp->fileinto) {
+                return SIEVE_INTERNAL_ERROR;
+            }
             ret = interp->fileinto(&a->u.fil,
                                    interp->interp_context,
                                    script_context,
@@ -852,14 +897,17 @@ static int do_action_list(sieve_interp_t *interp,
             free(interp->lastitem);
             interp->lastitem = xstrdup(a->u.fil.mailbox);
 
-            if (ret == SIEVE_OK)
+            if (ret == SIEVE_OK) {
                 snprintf(actions_string + strlen(actions_string),
                          ACTIONS_STRING_LEN - strlen(actions_string),
                          "Filed into: %s\n",
                          a->u.fil.mailbox);
+            }
             break;
         case ACTION_SNOOZE:
-            if (!interp->snooze) return SIEVE_INTERNAL_ERROR;
+            if (!interp->snooze) {
+                return SIEVE_INTERNAL_ERROR;
+            }
             ret = interp->snooze(&a->u.snz,
                                  interp->interp_context,
                                  script_context,
@@ -868,13 +916,16 @@ static int do_action_list(sieve_interp_t *interp,
             free(interp->lastitem);
             interp->lastitem = NULL;
 
-            if (ret == SIEVE_OK)
+            if (ret == SIEVE_OK) {
                 snprintf(actions_string + strlen(actions_string),
                          ACTIONS_STRING_LEN - strlen(actions_string),
                          "Snoozed\n");
+            }
             break;
         case ACTION_KEEP:
-            if (!interp->keep) return SIEVE_INTERNAL_ERROR;
+            if (!interp->keep) {
+                return SIEVE_INTERNAL_ERROR;
+            }
             ret = interp->keep(&a->u.keep,
                                interp->interp_context,
                                script_context,
@@ -882,13 +933,16 @@ static int do_action_list(sieve_interp_t *interp,
                                &errmsg);
             free(interp->lastitem);
             interp->lastitem = NULL;
-            if (ret == SIEVE_OK)
+            if (ret == SIEVE_OK) {
                 snprintf(actions_string + strlen(actions_string),
                          ACTIONS_STRING_LEN - strlen(actions_string),
                          "Kept\n");
+            }
             break;
         case ACTION_REDIRECT:
-            if (!interp->redirect) return SIEVE_INTERNAL_ERROR;
+            if (!interp->redirect) {
+                return SIEVE_INTERNAL_ERROR;
+            }
             ret = interp->redirect(&a->u.red,
                                    interp->interp_context,
                                    script_context,
@@ -896,29 +950,34 @@ static int do_action_list(sieve_interp_t *interp,
                                    &errmsg);
             free(interp->lastitem);
             interp->lastitem = xstrdup(a->u.red.addr);
-            if (ret == SIEVE_OK)
+            if (ret == SIEVE_OK) {
                 snprintf(actions_string + strlen(actions_string),
                          ACTIONS_STRING_LEN - strlen(actions_string),
                          "Redirected to %s\n",
                          a->u.red.addr);
+            }
             break;
         case ACTION_DISCARD:
-            if (interp->discard) /* discard is optional */
+            if (interp->discard) /* discard is optional */ {
                 ret = interp->discard(NULL,
                                       interp->interp_context,
                                       script_context,
                                       message_context,
                                       &errmsg);
+            }
             free(interp->lastitem);
             interp->lastitem = NULL;
-            if (ret == SIEVE_OK)
+            if (ret == SIEVE_OK) {
                 snprintf(actions_string + strlen(actions_string),
                          ACTIONS_STRING_LEN - strlen(actions_string),
                          "Discarded\n");
+            }
             break;
 
         case ACTION_VACATION: {
-            if (!interp->vacation) return SIEVE_INTERNAL_ERROR;
+            if (!interp->vacation) {
+                return SIEVE_INTERNAL_ERROR;
+            }
 
             /* first, let's figure out if we should respond to this */
             ret = interp->vacation->autorespond(&a->u.vac.autoresp,
@@ -937,10 +996,11 @@ static int do_action_list(sieve_interp_t *interp,
                                                       message_context,
                                                       &errmsg);
 
-                if (ret == SIEVE_OK)
+                if (ret == SIEVE_OK) {
                     snprintf(actions_string + strlen(actions_string),
                              ACTIONS_STRING_LEN - strlen(actions_string),
                              "Sent vacation reply\n");
+                }
             }
             else if (ret == SIEVE_DONE) {
                 snprintf(actions_string + strlen(actions_string),
@@ -1014,7 +1074,9 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe,
     const char *errmsg = NULL;
     strarray_t imapflags = STRARRAY_INITIALIZER;
 
-    if (!interp) return SIEVE_FAIL;
+    if (!interp) {
+        return SIEVE_FAIL;
+    }
 
     if (interp->duplicate) {
         duptrack_list = new_duptrack_list();
@@ -1036,7 +1098,9 @@ EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe,
     if (interp->notify) {
         notify_list = new_notify_list();
         if (notify_list == NULL) {
-            if (duptrack_list) free_duptrack_list(duptrack_list);
+            if (duptrack_list) {
+                free_duptrack_list(duptrack_list);
+            }
             return do_sieve_error(SIEVE_NOMEM,
                                   interp,
                                   script_context,

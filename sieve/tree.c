@@ -62,8 +62,12 @@ static void init_comptags(comp_t *c)
 
 comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
 {
-    if (c->match == -1) c->match = B_IS;
-    if (c->collation == -1) c->collation = B_ASCIICASEMAP;
+    if (c->match == -1) {
+        c->match = B_IS;
+    }
+    if (c->collation == -1) {
+        c->collation = B_ASCIICASEMAP;
+    }
 
     /* i;ascii-numeric is only supported for IS, COUNT, and VALUE match-types */
     if (c->collation == B_ASCIINUMERIC) {
@@ -371,7 +375,9 @@ void free_testlist(testlist_t *tl)
     while (tl) {
         tl2 = tl->next;
 
-        if (tl->t) free_test(tl->t);
+        if (tl->t) {
+            free_test(tl->t);
+        }
 
         free(tl);
         tl = tl2;
@@ -380,7 +386,9 @@ void free_testlist(testlist_t *tl)
 
 void free_test(test_t *t)
 {
-    if (t == NULL) return;
+    if (t == NULL) {
+        return;
+    }
 
     switch (t->type) {
     case BC_ANYOF:

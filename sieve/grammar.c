@@ -46,7 +46,9 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
 {
     /* protect against being called with no string - this is possible in some
      * places */
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     /*
      * variable-ref        =  "${" [namespace] variable-name "}"
