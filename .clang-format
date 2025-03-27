@@ -3,6 +3,7 @@ AlignAfterOpenBracket: Align
 AlignArrayOfStructures: Left
 AllowShortBlocksOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortFunctionsOnASingleLine: false
 AllowShortLoopsOnASingleLine: true
 BinPackArguments: false
 BinPackParameters: false
