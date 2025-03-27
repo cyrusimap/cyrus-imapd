@@ -52,8 +52,10 @@ use Encode qw(decode);
 
 our $VERSION = '1.00';
 
+# XXX we should honor the cyrus_user setting
 use constant USER  => 'cyrus';
 use constant GROUP => 'mail';
+
 use constant RUNPREFIX  => '/var/run/annotatord';
 use constant APPNAME => 'annotatord';
 use constant PIDFILE => RUNPREFIX . '.pid';
