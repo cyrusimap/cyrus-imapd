@@ -39,17 +39,17 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "timeofday.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
-#include "timeofday.h"
+#include <unistd.h>
 
 extern int verbose;
 
-#define MICROSEC_PER_SEC    (1000000)
+#define MICROSEC_PER_SEC (1000000)
 
 struct trans
 {
@@ -85,7 +85,7 @@ static const struct trans identity = { 0, 0, 1, 1 };
 
 static int64_t from_timeval(const struct timeval *tv)
 {
-    return (int64_t)tv->tv_usec + (int64_t)tv->tv_sec * MICROSEC_PER_SEC;
+    return (int64_t) tv->tv_usec + (int64_t) tv->tv_sec * MICROSEC_PER_SEC;
 }
 
 static void to_timeval(int64_t t, struct timeval *tv)
@@ -96,7 +96,7 @@ static void to_timeval(int64_t t, struct timeval *tv)
 
 static int64_t from_time_t(time_t tt)
 {
-    return (int64_t)tt * MICROSEC_PER_SEC;
+    return (int64_t) tt * MICROSEC_PER_SEC;
 }
 
 static time_t to_time_t(int64_t t)
@@ -120,13 +120,14 @@ static int64_t now(void)
 
 static const struct trans *trans_top(void)
 {
-    return (n_trans_stack ? &trans_stack[n_trans_stack-1] : &identity);
+    return (n_trans_stack ? &trans_stack[n_trans_stack - 1] : &identity);
 }
 
 static int64_t transform(int64_t t)
 {
     const struct trans *tr = trans_top();
-    int64_t tt = ((t - tr->start) * tr->factor_num) / tr->factor_den + tr->epoch;
+    int64_t tt =
+        ((t - tr->start) * tr->factor_num) / tr->factor_den + tr->epoch;
     return tt;
 }
 
@@ -193,7 +194,7 @@ void time_restore(void)
  * replace it.  So we need to define EXPORTED ourselves rather than rely on
  * config.h to figure it out. Just assume __attribute__ is supported.
  */
-#define EXPORTED __attribute__((__visibility__("default")))
+#    define EXPORTED __attribute__((__visibility__("default")))
 
 /* call the real libc function */
 static int real_gettimeofday(struct timeval *tv, ...)
@@ -214,23 +215,23 @@ static int real_gettimeofday(struct timeval *tv, ...)
      * So we need to check the glibc version to figure out which macro to base
      * our feature check on.
      */
-#if __GLIBC__ > 2 || ( __GLIBC__ == 2 && __GLIBC_MINOR__ >= 39 )
-# if defined(__USE_TIME64_REDIRECTS)
+#    if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 39)
+#        if defined(__USE_TIME64_REDIRECTS)
     extern int __gettimeofday64(struct timeval *, ...);
     return __gettimeofday64(tv, NULL);
-# else
+#        else
     extern int __gettimeofday(struct timeval *, ...);
     return __gettimeofday(tv, NULL);
-# endif
-#else
-# if defined(__USE_TIME_BITS64)
+#        endif
+#    else
+#        if defined(__USE_TIME_BITS64)
     extern int __gettimeofday64(struct timeval *, ...);
     return __gettimeofday64(tv, NULL);
-# else
+#        else
     extern int __gettimeofday(struct timeval *, ...);
     return __gettimeofday(tv, NULL);
-# endif
-#endif
+#        endif
+#    endif
 }
 
 /* provide a function to hide the libc weak alias */
@@ -248,9 +249,8 @@ EXPORTED time_t time(time_t *tp)
 }
 
 #else
-#error "Don't know how to intercept gettimeofday for this libc"
+#    error "Don't know how to intercept gettimeofday for this libc"
 #endif
-
 
 /*
  * Tests - not usefully runnable, sorry.
@@ -353,4 +353,3 @@ static void test_time_fixed2(void)
     gettimeofday(&tv, NULL); fputs(ctime(&tv.tv_sec), stderr);
 }
 #endif
-
