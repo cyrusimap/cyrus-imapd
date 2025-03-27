@@ -28,6 +28,7 @@ BraceWrapping:
   SplitEmptyRecord: true
   SplitEmptyNamespace: true
 IndentWidth:     4
+InsertBraces: true
 SpaceAfterCStyleCast: true
 IndentPPDirectives: AfterHash
 PenaltyReturnTypeOnItsOwnLine: 1000
