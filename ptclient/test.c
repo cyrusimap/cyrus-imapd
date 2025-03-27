@@ -58,18 +58,21 @@ int main(int argc, char **argv)
         strncpy(cache, argv[3], 16);
         cacheid = cache;
     }
-    else
+    else {
         cacheid = NULL;
+    }
     openlog("pttest", LOG_PID, SYSLOG_FACILITY);
 
-    if (!auth_setid(argv[1], cacheid))
+    if (!auth_setid(argv[1], cacheid)) {
         printf("Auth_memberof(%s,%s) is %d\n",
                argv[1],
                argv[2],
                auth_memberof(argv[2]));
+    }
 
-    else
+    else {
         printf("Auth_setid(%s) failed\n", argv[1]);
+    }
 }
 
 int fatal(char *foo)

@@ -82,7 +82,9 @@ static struct pts_module *pts_fromname()
     const char *name = config_getstring(IMAPOPT_PTS_MODULE);
     static struct pts_module *pts = NULL;
 
-    if (pts) return pts;
+    if (pts) {
+        return pts;
+    }
 
     for (i = 0; pts_modules[i]; i++) {
         if (!strcmp(pts_modules[i]->name, name)) {
@@ -185,13 +187,19 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
     int username_tolower = 0;
     int i = 0;
 
-    if (!len) len = strlen(identifier);
-    if (len >= sizeof(retbuf)) return NULL;
+    if (!len) {
+        len = strlen(identifier);
+    }
+    if (len >= sizeof(retbuf)) {
+        return NULL;
+    }
 
     memcpy(retbuf, identifier, len);
     retbuf[len] = '\0';
 
-    if (!strncmp(retbuf, "group:", 6)) i = 6;
+    if (!strncmp(retbuf, "group:", 6)) {
+        i = 6;
+    }
 
     /* Copy the string and look up values in the allowedchars array above.
      * If we see any we don't like, reject the string.
@@ -200,7 +208,9 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
     username_tolower = config_getswitch(IMAPOPT_USERNAME_TOLOWER);
     sawalpha = 0;
     for (p = retbuf + i; *p; p++) {
-        if (username_tolower && Uisupper(*p)) *p = tolower((unsigned char) *p);
+        if (username_tolower && Uisupper(*p)) {
+            *p = tolower((unsigned char) *p);
+        }
 
         switch (allowedchars[*(unsigned char *) p]) {
         case 0:
@@ -214,7 +224,9 @@ char *ptsmodule_unix_canonifyid(const char *identifier, size_t len)
         }
     }
 
-    if (!sawalpha) return NULL; /* has to be one alpha char */
+    if (!sawalpha) {
+        return NULL; /* has to be one alpha char */
+    }
 
     return retbuf;
 }
@@ -233,7 +245,9 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     const char *fname;
     char *tofree = NULL;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -268,7 +282,9 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
         fatal("can't read pts database", EX_TEMPFAIL);
     }
 
-    if (tofree) free(tofree);
+    if (tofree) {
+        free(tofree);
+    }
 
     ptsmodule_init();
 
@@ -371,7 +387,9 @@ EXPORTED void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
 
-    if (exitcode != EX_PROTOCOL && config_fatals_abort) abort();
+    if (exitcode != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(exitcode);
 }

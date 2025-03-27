@@ -41,7 +41,9 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
 
         part = strtok_r(NULL, ".", &tok_state);
 
-        if (part != NULL) buf_appendcstr(&buf, dc_sep);
+        if (part != NULL) {
+            buf_appendcstr(&buf, dc_sep);
+        }
     }
 
     free(domain_copy);

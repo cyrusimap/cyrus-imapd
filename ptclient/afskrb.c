@@ -90,7 +90,9 @@ int is_local_realm(const char *realm)
 {
     const char *val = localrealms;
 
-    if (!val || !realm) return 0;
+    if (!val || !realm) {
+        return 0;
+    }
 
     while (*val) {
         char buf[1024];
@@ -99,7 +101,9 @@ int is_local_realm(const char *realm)
 
         for (p = (char *) val; *p && !Uisspace(*p); p++);
         len = p - val;
-        if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+        if (len >= sizeof(buf)) {
+            len = sizeof(buf) - 1;
+        }
         memcpy(buf, val, len);
         buf[len] = '\0';
 
@@ -107,7 +111,9 @@ int is_local_realm(const char *realm)
             return 1;
         }
         val = p;
-        while (*val && Uisspace(*val)) val++;
+        while (*val && Uisspace(*val)) {
+            val++;
+        }
     }
 
     return 0;
@@ -129,15 +135,25 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     int striprealm = 0;
     char *identifier2;
 
-    if (retbuf) free(retbuf);
+    if (retbuf) {
+        free(retbuf);
+    }
     retbuf = NULL;
 
-    if (!identifier) return NULL;
-    if (!len) len = strlen(identifier);
+    if (!identifier) {
+        return NULL;
+    }
+    if (!len) {
+        len = strlen(identifier);
+    }
 
-    if (strcasecmp(identifier, "anonymous") == 0) return "anonymous";
+    if (strcasecmp(identifier, "anonymous") == 0) {
+        return "anonymous";
+    }
 
-    if (strcasecmp(identifier, "anyone") == 0) return "anyone";
+    if (strcasecmp(identifier, "anyone") == 0) {
+        return "anyone";
+    }
 
     identifier2 = strdup(identifier);
     if (tmp = strchr(identifier2, '+')) {
@@ -222,7 +238,9 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     if (realmbegin) {
         if (!striprealm) {
             realm = realmbegin + 1;
-            if (is_local_realm(realm)) striprealm = 1;
+            if (is_local_realm(realm)) {
+                striprealm = 1;
+            }
         }
 
         if (striprealm) {
@@ -315,11 +333,14 @@ static struct auth_state *myauthstate(const char *identifier,
     if (rc == PRPERM) {
         int ptscache_timeout =
             config_getduration(IMAPOPT_PTSCACHE_TIMEOUT, 's');
-        if (ptscache_timeout < 60) ptscache_timeout = 60;
+        if (ptscache_timeout < 60) {
+            ptscache_timeout = 60;
+        }
         newstate->mark = time(0) + 60 - ptscache_timeout;
     }
-    else
+    else {
         newstate->mark = time(0);
+    }
 
     newstate->ngroups = groups.namelist_len;
     /* store group list in contiguous array for easy storage in the database */

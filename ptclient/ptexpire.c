@@ -189,7 +189,9 @@ int main(int argc, char *argv[])
 
     cyrus_done();
 
-    if (tofree) free(tofree);
+    if (tofree) {
+        free(tofree);
+    }
 
     syslog(LOG_INFO, "finished");
     return 0;

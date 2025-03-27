@@ -85,7 +85,9 @@ static int login(struct backend *be __attribute__((unused)),
                  int noauth __attribute__((unused)))
 {
     /* No authentication (yet?) */
-    if (status) *status = NULL;
+    if (status) {
+        *status = NULL;
+    }
 
     return 0;
 }
@@ -114,7 +116,9 @@ static int ping(struct backend *be, const char *userid __attribute__((unused)))
         }
     } while (code < 200);
 
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    if (resp_hdrs) {
+        spool_free_hdrcache(resp_hdrs);
+    }
 
     return (code != 200);
 }
@@ -143,11 +147,15 @@ static void myinit(void)
     char *p;
     size_t n;
 
-    if (state.uri.raw) return; // Already configured
+    if (state.uri.raw) {
+        return; // Already configured
+    }
 
     /* Fetch and parse URI uri */
     p = state.uri.raw = xstrdupnull(config_getstring(IMAPOPT_HTTPPTS_URI));
-    if (!p) fatal("Missing 'httppts_uri' option", EX_CONFIG);
+    if (!p) {
+        fatal("Missing 'httppts_uri' option", EX_CONFIG);
+    }
 
     if (!strncasecmp(p, "https://", 8)) {
         state.uri.host = p += 8;
@@ -158,27 +166,35 @@ static void myinit(void)
         state.uri.host = p += 7;
         state.uri.port = 80;
     }
-    else
+    else {
         fatal("Invalid 'httppts_uri' scheme", EX_CONFIG);
+    }
 
     n = strcspn(p, ":/");
-    if (!n) fatal("Missing 'httppts_uri' authority", EX_CONFIG);
+    if (!n) {
+        fatal("Missing 'httppts_uri' authority", EX_CONFIG);
+    }
 
     p += n;
     if (*p == ':') {
         *p++ = '\0';
         state.uri.port = strtoul(p, &p, 10);
-        if (!state.uri.port || state.uri.port > USHRT_MAX)
+        if (!state.uri.port || state.uri.port > USHRT_MAX) {
             fatal("Invalid 'httppts_uri' port", EX_CONFIG);
+        }
     }
 
-    if (*p != '/') fatal("Missing 'httppts_uri' path", EX_CONFIG);
+    if (*p != '/') {
+        fatal("Missing 'httppts_uri' path", EX_CONFIG);
+    }
 
     *p++ = '\0';
     state.uri.prefix = p;
 
     p = strstr(p, "{groupId}");
-    if (!p) fatal("Missing 'httppts_uri' expression", EX_CONFIG);
+    if (!p) {
+        fatal("Missing 'httppts_uri' expression", EX_CONFIG);
+    }
 
     *p++ = '\0';
     state.uri.suffix = p += 8;
@@ -191,8 +207,9 @@ static void myinit(void)
     state.service = buf_release(&state.buf);
 
     buf_setcstr(&state.buf, state.uri.host);
-    if ((state.uri.https && state.uri.port != 443) || state.uri.port != 80)
+    if ((state.uri.https && state.uri.port != 443) || state.uri.port != 80) {
         buf_printf(&state.buf, ":%lu", state.uri.port);
+    }
     state.hosthdr = buf_release(&state.buf);
 
     state.conn = backend_connect(
@@ -239,7 +256,9 @@ static struct auth_state *myauthstate(const char *identifier,
         /* need to reestablish connection to server */
         be =
             backend_connect(be, state.service, &protocol, NULL, NULL, NULL, -1);
-        if (!be) return NULL;
+        if (!be) {
+            return NULL;
+        }
     }
 
     buf_reset(&state.buf);
@@ -247,10 +266,12 @@ static struct auth_state *myauthstate(const char *identifier,
     /* URL-encode the canon_id */
     const char *c;
     for (c = canon_id; *c; c++) {
-        if (isalnum(*c) || strchr("-_.~", *c))
+        if (isalnum(*c) || strchr("-_.~", *c)) {
             buf_putc(&state.buf, *c);
-        else
+        }
+        else {
             buf_printf(&state.buf, "%%%02X", *c);
+        }
     }
     buf_appendcstr(&state.buf, state.uri.suffix);
 
@@ -272,7 +293,9 @@ static struct auth_state *myauthstate(const char *identifier,
         }
     } while (code < 200);
 
-    if (resp_body.flags & BODY_CLOSE) backend_disconnect(be);
+    if (resp_body.flags & BODY_CLOSE) {
+        backend_disconnect(be);
+    }
 
     if (code == 200) {
         json_error_t err;
@@ -305,8 +328,12 @@ static struct auth_state *myauthstate(const char *identifier,
     }
 
     buf_free(&resp_body.payload);
-    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
-    if (resp) json_decref(resp);
+    if (resp_hdrs) {
+        spool_free_hdrcache(resp_hdrs);
+    }
+    if (resp) {
+        json_decref(resp);
+    }
 
     return newstate;
 }

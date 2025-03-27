@@ -65,8 +65,9 @@ static int dump_cb(void *rockp __attribute__((unused)),
            (unsigned) authstate->mark,
            (unsigned) authstate->ngroups);
 
-    for (i = 0; i < authstate->ngroups; i++)
+    for (i = 0; i < authstate->ngroups; i++) {
         printf("  %s\n", authstate->groups[i].id);
+    }
 
     return 0;
 }
@@ -122,7 +123,9 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (tofree) free(tofree);
+    if (tofree) {
+        free(tofree);
+    }
 
     /* iterate through db, printing entries */
     cyrusdb_foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);
