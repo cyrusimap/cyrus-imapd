@@ -57,7 +57,9 @@ int init_error_table(const char *const *msgs, int base, int count)
     struct et_list *etl;
     struct error_table *et;
 
-    if (!base || !count || !msgs) return 0;
+    if (!base || !count || !msgs) {
+        return 0;
+    }
 
     etl = malloc(sizeof *etl);
     et = malloc(sizeof *et);

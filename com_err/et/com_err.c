@@ -152,7 +152,9 @@ EXPORTED void INTERFACE_C com_err(va_alist) va_dcl
 #endif
     va_list pvar;
 
-    if (!com_err_hook) com_err_hook = default_com_err_proc;
+    if (!com_err_hook) {
+        com_err_hook = default_com_err_proc;
+    }
 #ifdef VARARGS
     va_start(pvar);
     whoami = va_arg(pvar, const char *);
@@ -169,10 +171,12 @@ errf set_com_err_hook(errf new_proc)
 {
     errf x = com_err_hook;
 
-    if (new_proc)
+    if (new_proc) {
         com_err_hook = new_proc;
-    else
+    }
+    else {
         com_err_hook = default_com_err_proc;
+    }
 
     return x;
 }

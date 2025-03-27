@@ -72,7 +72,9 @@ const char *error_table_name(long num)
     /* num = 00 000 000 aaa aaa bbb bbb ccc ccc ddd ddd */
     for (i = 4; i >= 0; i--) {
         ch = (num >> BITS_PER_CHAR * i) & ((1 << BITS_PER_CHAR) - 1);
-        if (ch != 0) *p++ = char_set[ch - 1];
+        if (ch != 0) {
+            *p++ = char_set[ch - 1];
+        }
     }
     *p = '\0';
     return (buf);

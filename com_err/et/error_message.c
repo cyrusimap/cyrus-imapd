@@ -80,16 +80,20 @@ EXPORTED const char *INTERFACE error_message(long code)
 #ifdef HAS_STRERROR
         return strerror(offset);
 #else
-        if (offset < sys_nerr)
+        if (offset < sys_nerr) {
             return (sys_errlist[offset]);
-        else
+        }
+        else {
             goto oops;
+        }
 #endif
     }
     for (et = _et_list; et; et = et->next) {
         if (et->table->base == table_num) {
             /* This is the right table */
-            if (et->table->n_msgs <= offset) goto oops;
+            if (et->table->n_msgs <= offset) {
+                goto oops;
+            }
             return (et->table->msgs[offset]);
         }
     }
