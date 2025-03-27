@@ -40,17 +40,20 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-struct charmap {
+struct charmap
+{
     unsigned int c;
     unsigned char next;
 };
 
-struct charset {
+struct charset
+{
     const char *name;
     const struct charmap (*table)[256];
 };
 
-struct charset_alias {
+struct charset_alias
+{
     const char *name;
     const char *canon_name;
 };
