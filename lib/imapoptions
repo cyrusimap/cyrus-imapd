@@ -2691,11 +2691,8 @@ product version in the capabilities
 
 { "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "processcalendar=vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target"), "3.12.0" }
 /* Space-separated list of Sieve extensions allowed to be used in
-   sieve scripts, enforced at submission by timsieved(8).  Any
-   previously installed script will be unaffected by this option and
-   will continue to execute regardless of the extensions used.  This
-   option has no effect on options that are disabled at compile time
-   (e.g., "regex"). */
+   sieve scripts. This option has no effect on options that are
+   disabled at compile time (e.g., "regex"). */
 
 { "sieve_folder", "#sieve", STRING, "3.6.0" }
 /* The name of the folder for storing Sieve scripts. */

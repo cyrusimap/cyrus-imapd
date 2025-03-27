@@ -251,7 +251,7 @@ setproctitle(const char *fmt __attribute__((__unused__)), ...)
 
         /* print the argument string */
         VA_START(fmt);
-        (void) vsprintf(p, fmt, ap);
+        (void) vsnprintf(p, SPT_BUFSIZE, fmt, ap);
         VA_END;
 
         i = strlen(buf);

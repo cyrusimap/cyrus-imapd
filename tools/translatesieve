@@ -245,35 +245,35 @@ while (my $i = readdir H) {
                         $updates = 0;
                         $orig = $_;
                         # INBOX
-                        if (/\s+fileinto\s+"$inbox"\s*;/) {
+                        if (/\bfileinto\s+"$inbox"\s*;/) {
                             # do nothing
                         } else {
                             # Alternate namespace
                             if ($altnamespace != $OPT_WasAlt) {
                                 # Personal namespace
-                                if (/\s+fileinto\s+"($inbox$psep[^"]*)"\s*;/) {
+                                if (/\bfileinto\s+"($inbox$psep[^"]*)"\s*;/) {
                                     substr($_, index($_, $1), 6) = "";
                                     $updates++;
                                 }
                                 # Other Users namespace
-                                elsif (/\s+fileinto\s+"(user$psep[^"]*)"\s*;/) {
+                                elsif (/\bfileinto\s+"(user$psep[^"]*)"\s*;/) {
                                     substr($_, index($_, $1), 4) = $userprefix;
                                     $updates++;
                                 }
                                 # Shared namespace
-                                elsif (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                                elsif (/\bfileinto\s+"([^"]*)"\s*;/) {
                                     substr($_, index($_, $1), 0) = $sharedprefix . $sep;
                                     $updates++;
                                 }
                             }
                             # Hierarchy separator
                             if ($unixhierarchysep > $OPT_WasUnix) {
-                                if (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                                if (/\bfileinto\s+"([^"]*)"\s*;/) {
                                     substr($_, index($_, $1)) =~ s~\.~/~g;
                                     $updates++;
                                 }
                             } elsif ($unixhierarchysep < $OPT_WasUnix) {
-                                if (/\s+fileinto\s+"([^"]*)"\s*;/) {
+                                if (/\bfileinto\s+"([^"]*)"\s*;/) {
                                     substr($_, index($_, $1)) =~ s~/~.~g;
                                     $updates++;
                                 }
