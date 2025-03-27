@@ -52,7 +52,7 @@
 #include "xmalloc.h"
 #include "map.h"
 
-#define SLOP (8*1024)
+#define SLOP (4*1024)
 
 EXPORTED const char map_method_desc[] = "nommap";
 
@@ -80,19 +80,10 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     }
 
     /* Need a larger buffer */
-    if (*len <= newlen) {
+    if (*len < newlen) {
         if (*len) free((char *)*base);
-        /* always map one extra byte so there's a trailing NULL to protect
-         * us from overruns.  This does NOT mean that we should treat this
-         * memory as a cstring */
-        if (onceonly) {
-            *len = newlen;
-            *base = xmalloc(*len+1);
-        }
-        else {
-            *len = (newlen + 2*SLOP) & ~(SLOP-1);
-            *base = xmalloc(*len);
-        }
+        *len = newlen + (onceonly ? 0 : SLOP);
+        *base = xmalloc(*len);
     }
 
     lseek(fd, 0L, 0);
@@ -121,9 +112,6 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
         slowio_maybe_delay_read(n);
     }
-
-    /* ensure the string is always terminated */
-    *p = '\0';
 }
 
 /*

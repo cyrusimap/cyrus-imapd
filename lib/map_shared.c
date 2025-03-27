@@ -89,13 +89,11 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
         }
     }
 
-    /* always map one extra byte so there's a trailing NULL to protect
-     * us from overruns.  This does NOT mean that we should treat this
-     * memory as a cstring */
-    if (!onceonly)
-        newlen = (newlen + 2*SLOP) & ~(SLOP-1);
+    if (!onceonly) {
+        newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
+    }
 
-    *base = (char *)mmap((caddr_t)0, onceonly ? newlen + 1 : newlen, PROT_READ, MAP_SHARED
+    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
 #ifdef MAP_FILE
 | MAP_FILE
 #endif
