@@ -96,7 +96,9 @@ void imclient_xs_cb(struct imclient *client,
     FREETMPS;
     LEAVE;
     /* clean up */
-    if (rock->autofree) imclient_xs_callback_free(rock);
+    if (rock->autofree) {
+        imclient_xs_callback_free(rock);
+    }
 }
 
 /*
@@ -115,9 +117,13 @@ void imclient_xs_fcmdcb(struct imclient *client,
     SvRV(rock->prock) = (SV *) av = newAV();
     av_push(av, newSVpv(reply->keyword, 0));
     av_push(av, newSVpv(reply->text, 0));
-    if (reply->msgno != -1) av_push(av, newSViv(reply->msgno));
+    if (reply->msgno != -1) {
+        av_push(av, newSViv(reply->msgno));
+    }
     /* clean up */
-    if (rock->autofree) imclient_xs_callback_free(rock);
+    if (rock->autofree) {
+        imclient_xs_callback_free(rock);
+    }
 }
 
 /*
@@ -132,19 +138,31 @@ void imclient_xs_callback_free(struct xsccb *rock)
     if (rock) {
         /* find the destructor-cleanup version and nuke its record */
         for (xcb = rock->client->cb; xcb; xcb = xcb->next) {
-            if (xcb->rock == rock) break;
+            if (xcb->rock == rock) {
+                break;
+            }
         }
         if (xcb) {
-            if (xcb->prev)
+            if (xcb->prev) {
                 xcb->prev->next = xcb->next;
-            else
+            }
+            else {
                 rock->client->cb = xcb->next;
-            if (xcb->next) xcb->next->prev = xcb->prev;
-            if (xcb->name) safefree(xcb->name);
+            }
+            if (xcb->next) {
+                xcb->next->prev = xcb->prev;
+            }
+            if (xcb->name) {
+                safefree(xcb->name);
+            }
             safefree(xcb);
         }
-        if (rock->pcb) SvREFCNT_dec(rock->pcb);
-        if (rock->prock) SvREFCNT_dec(rock->prock);
+        if (rock->pcb) {
+            SvREFCNT_dec(rock->pcb);
+        }
+        if (rock->prock) {
+            SvREFCNT_dec(rock->prock);
+        }
         safefree(rock);
     }
 }

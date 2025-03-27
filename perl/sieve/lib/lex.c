@@ -75,22 +75,51 @@ static int lexer_state = LEXER_STATE_NORMAL;
 
 static int token_lookup(const char *str)
 {
-    if (strcmp(str, "ok") == 0) return TOKEN_OK;
-    if (strcmp(str, "no") == 0) return TOKEN_NO;
-    if (strcmp(str, "bye") == 0) return TOKEN_BYE;
-    if (strcmp(str, "active") == 0) return TOKEN_ACTIVE;
-    if (strcmp(str, "referral") == 0) return TOKEN_REFERRAL;
-    if (strcmp(str, "sasl") == 0) return TOKEN_SASL;
-    if (strcmp(str, "quota/maxscripts") == 0) return RESP_CODE_QUOTA_MAXSCRIPTS;
-    if (strcmp(str, "quota/maxsize") == 0) return RESP_CODE_QUOTA_MAXSIZE;
-    if (strcmp(str, "quota") == 0) return RESP_CODE_QUOTA;
-    if (strcmp(str, "transition-needed") == 0)
+    if (strcmp(str, "ok") == 0) {
+        return TOKEN_OK;
+    }
+    if (strcmp(str, "no") == 0) {
+        return TOKEN_NO;
+    }
+    if (strcmp(str, "bye") == 0) {
+        return TOKEN_BYE;
+    }
+    if (strcmp(str, "active") == 0) {
+        return TOKEN_ACTIVE;
+    }
+    if (strcmp(str, "referral") == 0) {
+        return TOKEN_REFERRAL;
+    }
+    if (strcmp(str, "sasl") == 0) {
+        return TOKEN_SASL;
+    }
+    if (strcmp(str, "quota/maxscripts") == 0) {
+        return RESP_CODE_QUOTA_MAXSCRIPTS;
+    }
+    if (strcmp(str, "quota/maxsize") == 0) {
+        return RESP_CODE_QUOTA_MAXSIZE;
+    }
+    if (strcmp(str, "quota") == 0) {
+        return RESP_CODE_QUOTA;
+    }
+    if (strcmp(str, "transition-needed") == 0) {
         return RESP_CODE_TRANSITION_NEEDED;
-    if (strcmp(str, "trylater") == 0) return RESP_CODE_TRYLATER;
-    if (strcmp(str, "nonexistent") == 0) return RESP_CODE_NONEXISTENT;
-    if (strcmp(str, "alreadyexists") == 0) return RESP_CODE_ALREADYEXISTS;
-    if (strcmp(str, "warning") == 0) return RESP_CODE_WARNINGS;
-    if (strcmp(str, "tag") == 0) return RESP_CODE_TAG;
+    }
+    if (strcmp(str, "trylater") == 0) {
+        return RESP_CODE_TRYLATER;
+    }
+    if (strcmp(str, "nonexistent") == 0) {
+        return RESP_CODE_NONEXISTENT;
+    }
+    if (strcmp(str, "alreadyexists") == 0) {
+        return RESP_CODE_ALREADYEXISTS;
+    }
+    if (strcmp(str, "warning") == 0) {
+        return RESP_CODE_WARNINGS;
+    }
+    if (strcmp(str, "tag") == 0) {
+        return RESP_CODE_TAG;
+    }
 
     return -1;
 }
@@ -117,15 +146,21 @@ int yylex(lexstate_t *lvalp, void *client)
 
         ch = prot_getc(stream);
 
-        if (ch == -1) return SIEVE_FAIL;
+        if (ch == -1) {
+            return SIEVE_FAIL;
+        }
 
         switch (lexer_state) {
 
         case LEXER_STATE_RECOVER:
-            if (ch == '\r') lexer_state = LEXER_STATE_RECOVER_CR;
+            if (ch == '\r') {
+                lexer_state = LEXER_STATE_RECOVER_CR;
+            }
             break;
         case LEXER_STATE_RECOVER_CR:
-            if (ch == '\n') lexer_state = LEXER_STATE_NORMAL;
+            if (ch == '\n') {
+                lexer_state = LEXER_STATE_NORMAL;
+            }
             return EOL;
         case LEXER_STATE_CR:
             if (ch == '\n') {
@@ -141,14 +176,22 @@ int yylex(lexstate_t *lvalp, void *client)
                 lexer_state = LEXER_STATE_NORMAL;
                 return STRING;
             }
-            if (ch == '\0' || 0x7F < ((unsigned char) ch)) ERR_PUSHBACK();
+            if (ch == '\0' || 0x7F < ((unsigned char) ch)) {
+                ERR_PUSHBACK();
+            }
             /* Otherwise, we're appending a character */
-            if (buff_end <= buff_ptr) ERR_PUSHBACK(); /* too long! */
+            if (buff_end <= buff_ptr) {
+                ERR_PUSHBACK(); /* too long! */
+            }
             if (ch == '\\') {
                 ch = prot_getc(stream);
 
-                if (result != SIEVE_OK) ERR();
-                if (ch != '\"' && ch != '\\') ERR_PUSHBACK();
+                if (result != SIEVE_OK) {
+                    ERR();
+                }
+                if (ch != '\"' && ch != '\\') {
+                    ERR_PUSHBACK();
+                }
             }
             *buff_ptr++ = ch;
             break;
@@ -156,19 +199,31 @@ int yylex(lexstate_t *lvalp, void *client)
             if (('0' <= ch) && (ch <= '9')) {
                 unsigned long newcount = count * 10 + (ch - '0');
 
-                if (newcount < count) ERR_PUSHBACK(); /* overflow */
+                if (newcount < count) {
+                    ERR_PUSHBACK(); /* overflow */
+                }
 
                 count = newcount;
                 break;
             }
 
-            if (ch != '}') ERR_PUSHBACK();
+            if (ch != '}') {
+                ERR_PUSHBACK();
+            }
             ch = prot_getc(stream);
-            if (ch < 0) ERR();
-            if (ch != '\r') ERR_PUSHBACK();
+            if (ch < 0) {
+                ERR();
+            }
+            if (ch != '\r') {
+                ERR_PUSHBACK();
+            }
             ch = prot_getc(stream);
-            if (ch < 0) ERR();
-            if (ch != '\n') ERR_PUSHBACK();
+            if (ch < 0) {
+                ERR();
+            }
+            if (ch != '\n') {
+                ERR_PUSHBACK();
+            }
 
             lvalp->str = (char *) xmalloc(count + 1);
             /* there is a literal string on the wire. let's read it */
@@ -187,7 +242,9 @@ int yylex(lexstate_t *lvalp, void *client)
             if (('0' <= ch) && (ch <= '9')) {
                 unsigned long newcount = count * 10 + (ch - '0');
 
-                if (newcount < count) ERR_PUSHBACK(); /* overflow */
+                if (newcount < count) {
+                    ERR_PUSHBACK(); /* overflow */
+                }
                 count = newcount;
             }
             else {
@@ -258,10 +315,13 @@ int yylex(lexstate_t *lvalp, void *client)
 
                     return token;
                 }
-                else
+                else {
                     ERR_PUSHBACK();
+                }
             }
-            if (buff_end <= buff_ptr) ERR_PUSHBACK(); /* atom too long */
+            if (buff_end <= buff_ptr) {
+                ERR_PUSHBACK(); /* atom too long */
+            }
             *buff_ptr++ = tolower(ch);
             break;
         }

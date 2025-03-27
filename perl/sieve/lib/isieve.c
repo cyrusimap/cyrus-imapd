@@ -84,7 +84,9 @@ void fillin_interactions(sasl_interact_t *tlist);
  * the same memory for referrals */
 static void sieve_dispose(isieve_t *obj)
 {
-    if (!obj) return;
+    if (!obj) {
+        return;
+    }
     sasl_dispose(&obj->conn);
     free(obj->serverFQDN);
 
@@ -120,8 +122,12 @@ int init_net(char *serverFQDN, int port, isieve_t **obj)
 
     for (res = res0; res; res = res->ai_next) {
         sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-        if (sock < 0) continue;
-        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0) break;
+        if (sock < 0) {
+            continue;
+        }
+        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0) {
+            break;
+        }
         close(sock);
         sock = -1;
     }
@@ -184,23 +190,31 @@ int init_sasl(isieve_t *obj, int ssf, sasl_callback_t *callbacks)
     /* Save the callbacks array */
     obj->callbacks = callbacks;
 
-    if (saslresult != SASL_OK) return -1;
+    if (saslresult != SASL_OK) {
+        return -1;
+    }
 
     addrsize = sizeof(struct sockaddr_storage);
-    if (getpeername(obj->sock, (struct sockaddr *) &saddr_r, &addrsize) != 0)
+    if (getpeername(obj->sock, (struct sockaddr *) &saddr_r, &addrsize) != 0) {
         return -1;
+    }
 
     addrsize = sizeof(struct sockaddr_storage);
-    if (getsockname(obj->sock, (struct sockaddr *) &saddr_l, &addrsize) != 0)
+    if (getsockname(obj->sock, (struct sockaddr *) &saddr_l, &addrsize) != 0) {
         return -1;
+    }
 
-    if (iptostring((struct sockaddr *) &saddr_r, addrsize, remoteip, 60))
+    if (iptostring((struct sockaddr *) &saddr_r, addrsize, remoteip, 60)) {
         return -1;
+    }
 
-    if (iptostring((struct sockaddr *) &saddr_l, addrsize, localip, 60))
+    if (iptostring((struct sockaddr *) &saddr_l, addrsize, localip, 60)) {
         return -1;
+    }
 
-    if (obj->conn) sasl_dispose(&obj->conn);
+    if (obj->conn) {
+        sasl_dispose(&obj->conn);
+    }
 
     /* client new connection */
     saslresult = sasl_client_new(SIEVE_SERVICE_NAME,
@@ -211,7 +225,9 @@ int init_sasl(isieve_t *obj, int ssf, sasl_callback_t *callbacks)
                                  SASL_SUCCESS_DATA,
                                  &obj->conn);
 
-    if (saslresult != SASL_OK) return -1;
+    if (saslresult != SASL_OK) {
+        return -1;
+    }
 
     /* create a security structure and give it to sasl */
     secprops = make_secprops(0, ssf);
@@ -337,7 +353,9 @@ static int getauthline(isieve_t *obj,
                     last_send, last_send_len, *line, len, linelen);
 
                 free(last_send);
-                if (r != SASL_OK) return STAT_NO;
+                if (r != SASL_OK) {
+                    return STAT_NO;
+                }
             }
             return STAT_OK;
         }
@@ -352,9 +370,13 @@ static int getauthline(isieve_t *obj,
     *line = (char *) xmalloc(len);
 
     r = sasl_decode64(state.str, strlen(state.str), *line, len, linelen);
-    if (r != SASL_OK) return STAT_NO;
+    if (r != SASL_OK) {
+        return STAT_NO;
+    }
 
-    if (yylex(&state, obj->pin) != EOL) return STAT_NO;
+    if (yylex(&state, obj->pin) != EOL) {
+        return STAT_NO;
+    }
 
     return STAT_CONT;
 }
@@ -376,18 +398,22 @@ int auth_sasl(char *mechlist,
 
     imt_stat status = STAT_CONT;
 
-    if (!mechlist || !obj || !mechusing) return -1;
+    if (!mechlist || !obj || !mechusing) {
+        return -1;
+    }
 
     /* call sasl client start */
     while (saslresult == SASL_INTERACT) {
         saslresult = sasl_client_start(
             obj->conn, mechlist, &client_interact, &out, &outlen, mechusing);
-        if (saslresult == SASL_INTERACT)
+        if (saslresult == SASL_INTERACT) {
             fillin_interactions(client_interact); /* fill in prompts */
+        }
     }
 
-    if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE))
+    if ((saslresult != SASL_OK) && (saslresult != SASL_CONTINUE)) {
         return saslresult;
+    }
 
     if (out != NULL) {
         prot_printf(obj->pout, "AUTHENTICATE \"%s\" ", *mechusing);
@@ -414,8 +440,9 @@ int auth_sasl(char *mechlist,
             saslresult = sasl_client_step(
                 obj->conn, in, inlen, &client_interact, &out, &outlen);
 
-            if (saslresult == SASL_INTERACT)
+            if (saslresult == SASL_INTERACT) {
                 fillin_interactions(client_interact); /* fill in prompts */
+            }
         }
 
         /* check if sasl succeeded */
@@ -456,14 +483,18 @@ int auth_sasl(char *mechlist,
             saslresult = sasl_client_step(
                 obj->conn, in, inlen, &client_interact, &out, &outlen);
 
-            if (saslresult != SASL_OK) return -1;
+            if (saslresult != SASL_OK) {
+                return -1;
+            }
         }
 
         if (ssf) {
             const void *ssfp;
 
             saslresult = sasl_getprop(obj->conn, SASL_SSF, &ssfp);
-            if (saslresult != SASL_OK) return -1;
+            if (saslresult != SASL_OK) {
+                return -1;
+            }
 
             *ssf = *((sasl_ssf_t *) ssfp);
         }
@@ -522,7 +553,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
     sasl_ssf_t ssf;
 
     /* check scheme */
-    if (strncasecmp(refer_to, scheme, strlen(scheme))) return STAT_NO;
+    if (strncasecmp(refer_to, scheme, strlen(scheme))) {
+        return STAT_NO;
+    }
 
     /* get host */
     if ((host = strrchr(refer_to, '@'))) {
@@ -535,7 +568,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
         authid = obj->refer_authinfo = xstrdup(refer_to + strlen(scheme));
 
         /* get userid */
-        if ((userid = strrchr(authid, ';'))) *userid++ = '\0';
+        if ((userid = strrchr(authid, ';'))) {
+            *userid++ = '\0';
+        }
 
         /* count the callbacks */
         for (n = 0; obj->callbacks[n++].id != SASL_CB_LIST_END;);
@@ -574,8 +609,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
             *p++ = '\0';
             host++; /* skip first bracket */
         }
-        else
+        else {
             p = host;
+        }
     }
     if ((p = strchr(p, ':'))) {
         *p++ = '\0';
@@ -592,11 +628,15 @@ static int do_referral(isieve_t *obj, char *refer_to)
     }
 
     ret = init_net(host, port, &obj_new);
-    if (ret) return STAT_NO;
+    if (ret) {
+        return STAT_NO;
+    }
 
     /* Start up SASL */
     ret = init_sasl(obj_new, 128, callbacks);
-    if (ret) return STAT_NO;
+    if (ret) {
+        return STAT_NO;
+    }
 
     /* Authenticate */
     mechlist = read_capability(obj_new);
@@ -608,7 +648,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
             free(errstr);
             errstr = NULL;
         }
-        if (ret) init_sasl(obj_new, 128, callbacks);
+        if (ret) {
+            init_sasl(obj_new, 128, callbacks);
+        }
 
         if (mtried) {
             char *newlist = (char *) xmalloc(strlen(mechlist) + 1);
@@ -633,7 +675,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
     } while (ret && mtried);
 
     /* xxx leak? */
-    if (ret) return STAT_NO;
+    if (ret) {
+        return STAT_NO;
+    }
 
     if (ssf) {
         /* SASL security layer negotiated --
