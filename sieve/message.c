@@ -42,19 +42,19 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#    include <config.h>
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "assert.h"
-#include "md5.h"
-#include "sieve_interface.h"
 #include "interp.h"
+#include "md5.h"
 #include "message.h"
-#include "xmalloc.h"
+#include "sieve_interface.h"
 #include "util.h"
+#include "xmalloc.h"
 
 /* [e]reject message m with message msg
  *
@@ -69,19 +69,12 @@ int do_reject(action_list_t *a, int action, const char *msg)
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         b = a;
-        if (a->a == ACTION_FILEINTO ||
-            a->a == ACTION_SNOOZE ||
-            a->a == ACTION_KEEP ||
-            a->a == ACTION_REDIRECT ||
-            a->a == ACTION_REJECT ||
-            a->a == ACTION_EREJECT ||
-            a->a == ACTION_VACATION ||
-            a->a == ACTION_SETFLAG ||
-            a->a == ACTION_ADDFLAG ||
-            a->a == ACTION_REMOVEFLAG ||
-            a->a == ACTION_MARK ||
-            a->a == ACTION_UNMARK
-            )
+        if (a->a == ACTION_FILEINTO || a->a == ACTION_SNOOZE
+            || a->a == ACTION_KEEP || a->a == ACTION_REDIRECT
+            || a->a == ACTION_REJECT || a->a == ACTION_EREJECT
+            || a->a == ACTION_VACATION || a->a == ACTION_SETFLAG
+            || a->a == ACTION_ADDFLAG || a->a == ACTION_REMOVEFLAG
+            || a->a == ACTION_MARK || a->a == ACTION_UNMARK)
             return SIEVE_RUN_ERROR;
         a = a->next;
     }
@@ -102,11 +95,18 @@ int do_reject(action_list_t *a, int action, const char *msg)
  *
  * incompatible with: [e]reject
  */
-int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mboxid,
-              const char *awaken_spluse, int do_create,
-              strarray_t *addflags, strarray_t *removeflags, const char *tzid,
-              unsigned char days, arrayu64_t *times,
-              strarray_t *imapflags, struct buf *headers)
+int do_snooze(action_list_t *a,
+              const char *awaken_mbox,
+              const char *awaken_mboxid,
+              const char *awaken_spluse,
+              int do_create,
+              strarray_t *addflags,
+              strarray_t *removeflags,
+              const char *tzid,
+              unsigned char days,
+              arrayu64_t *times,
+              strarray_t *imapflags,
+              struct buf *headers)
 {
     action_list_t *b = NULL;
 
@@ -168,10 +168,15 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, const char *awaken_mbox
  *
  * incompatible with: [e]reject
  */
-int do_fileinto(sieve_interp_t *i, void *sc,
-                action_list_t *a, const char *mbox, const char *specialuse,
-                unsigned flags, const char *mailboxid,
-                strarray_t *imapflags, struct buf *headers)
+int do_fileinto(sieve_interp_t *i,
+                void *sc,
+                action_list_t *a,
+                const char *mbox,
+                const char *specialuse,
+                unsigned flags,
+                const char *mailboxid,
+                strarray_t *imapflags,
+                struct buf *headers)
 {
     action_list_t *new, *b = NULL;
     const char *errmsg;
@@ -207,10 +212,12 @@ int do_fileinto(sieve_interp_t *i, void *sc,
             goto done;
         }
 
-        if ((a->a == ACTION_FILEINTO &&
-             !strcmp(a->u.fil.resolved_mailbox, new->u.fil.resolved_mailbox)) ||
-            ((a->a == ACTION_KEEP &&
-              !strcmp(a->u.keep.resolved_mailbox, new->u.fil.resolved_mailbox)))) {
+        if ((a->a == ACTION_FILEINTO
+             && !strcmp(a->u.fil.resolved_mailbox, new->u.fil.resolved_mailbox))
+            || ((a->a == ACTION_KEEP
+                 && !strcmp(a->u.keep.resolved_mailbox,
+                            new->u.fil.resolved_mailbox))))
+        {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
@@ -231,7 +238,7 @@ int do_fileinto(sieve_interp_t *i, void *sc,
 
     b->next = new;
 
-  done:
+done:
     if (ret != SIEVE_OK) {
         free_action_list(new);
         return ret;
@@ -244,9 +251,14 @@ int do_fileinto(sieve_interp_t *i, void *sc,
  *
  * incompatible with: [e]reject
  */
-int do_redirect(action_list_t *a, const char *addr, char *deliverby,
-                const char *dsn_notify, const char *dsn_ret,
-                int is_ext_list, int cancel_keep, struct buf *headers)
+int do_redirect(action_list_t *a,
+                const char *addr,
+                char *deliverby,
+                const char *dsn_notify,
+                const char *dsn_ret,
+                int is_ext_list,
+                int cancel_keep,
+                struct buf *headers)
 {
     action_list_t *b = NULL;
 
@@ -283,8 +295,12 @@ int do_redirect(action_list_t *a, const char *addr, char *deliverby,
  *
  * incompatible with: [e]reject
  */
-int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
-            action_list_t *a, strarray_t *imapflags, struct buf *headers)
+int do_keep(sieve_interp_t *i,
+            void *sc,
+            unsigned flags,
+            action_list_t *a,
+            strarray_t *imapflags,
+            struct buf *headers)
 {
     action_list_t *new, *b = NULL;
     const char *errmsg;
@@ -313,9 +329,11 @@ int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
             goto done;
         }
 
-        if (a->a == ACTION_KEEP ||
-            (a->a == ACTION_FILEINTO &&
-             !strcmp(a->u.fil.resolved_mailbox, new->u.keep.resolved_mailbox))) {
+        if (a->a == ACTION_KEEP
+            || (a->a == ACTION_FILEINTO
+                && !strcmp(a->u.fil.resolved_mailbox,
+                           new->u.keep.resolved_mailbox)))
+        {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
@@ -335,7 +353,7 @@ int do_keep(sieve_interp_t *i, void *sc, unsigned flags,
 
     b->next = new;
 
-  done:
+done:
     if (ret != SIEVE_OK) {
         free_action_list(new);
         return ret;
@@ -374,7 +392,9 @@ int do_discard(action_list_t *a)
 }
 
 static int makehash(unsigned char hash[],
-                    const char *s1, const char *s2, const char *s3)
+                    const char *s1,
+                    const char *s2,
+                    const char *s3)
 {
     MD5_CTX ctx;
 
@@ -387,9 +407,14 @@ static int makehash(unsigned char hash[],
     return SIEVE_OK;
 }
 
-int do_vacation(action_list_t *a, char *addr, char *fromaddr,
-                char *subj, const char *msg, int seconds,
-                int mime, const char *handle,
+int do_vacation(action_list_t *a,
+                char *addr,
+                char *fromaddr,
+                char *subj,
+                const char *msg,
+                int seconds,
+                int mime,
+                const char *handle,
                 const sieve_fileinto_context_t *fcc)
 {
     action_list_t *b = NULL;
@@ -398,8 +423,8 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
-        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT ||
-            a->a == ACTION_VACATION) /* vacation can't be used twice */
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT
+            || a->a == ACTION_VACATION) /* vacation can't be used twice */
             return SIEVE_RUN_ERROR;
 
         b = a;
@@ -411,7 +436,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
     a->a = ACTION_VACATION;
     a->u.vac.send.addr = addr;
     a->u.vac.send.fromaddr = fromaddr;
-    a->u.vac.send.subj = subj;  /* user specified subject */
+    a->u.vac.send.subj = subj; /* user specified subject */
     a->u.vac.send.msg = msg;
     a->u.vac.send.mime = mime;
     a->u.vac.send.fcc.mailbox = fcc->mailbox;
@@ -458,7 +483,6 @@ int do_mark(action_list_t *a)
     return 0;
 }
 
-
 /* unmark message m
  *
  * incompatible with: [e]reject
@@ -492,9 +516,13 @@ int do_unmark(action_list_t *a)
  *
  * incompatible with: none
  */
-int do_notify(notify_list_t *n, const char *id, const char *from,
-              const char *method, strarray_t *options,
-              const char *priority, const char *message)
+int do_notify(notify_list_t *n,
+              const char *id,
+              const char *from,
+              const char *method,
+              strarray_t *options,
+              const char *priority,
+              const char *message)
 {
     notify_list_t *b = NULL;
 
@@ -525,14 +553,19 @@ int do_notify(notify_list_t *n, const char *id, const char *from,
  *
  * incompatible with: none
  */
-int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
-                strarray_t *match_vars, void *comprock, const char *priority)
+int do_denotify(notify_list_t *n,
+                comparator_t *comp,
+                const void *pat,
+                strarray_t *match_vars,
+                void *comprock,
+                const char *priority)
 {
     while (n != NULL) {
-        if (n->isactive &&
-            (!priority || !strcasecmp(n->priority, priority)) &&
-            (!comp ||
-             (n->id && comp(n->id, strlen(n->id), pat, match_vars, comprock)))) {
+        if (n->isactive && (!priority || !strcasecmp(n->priority, priority))
+            && (!comp
+                || (n->id
+                    && comp(n->id, strlen(n->id), pat, match_vars, comprock))))
+        {
             n->isactive = 0;
         }
         n = n->next;
@@ -613,9 +646,9 @@ void free_action_list(action_list_t *a)
             break;
 
         case ACTION_VACATION:
-            if(a->u.vac.send.subj) free(a->u.vac.send.subj);
-            if(a->u.vac.send.addr) free(a->u.vac.send.addr);
-            if(a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
+            if (a->u.vac.send.subj) free(a->u.vac.send.subj);
+            if (a->u.vac.send.addr) free(a->u.vac.send.addr);
+            if (a->u.vac.send.fromaddr) free(a->u.vac.send.fromaddr);
             strarray_free(a->u.vac.send.fcc.imapflags);
             break;
 

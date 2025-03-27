@@ -42,25 +42,25 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#    include <config.h>
 #endif
 
 #include "sieve_interface.h"
 
 #include "bc_parse.h"
 #include "bytecode.h"
-#include "script.h"
 #include "interp.h"
+#include "script.h"
 
 #include "xmalloc.h"
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <unistd.h>
-#include <netinet/in.h>
 #include <inttypes.h>
+#include <netinet/in.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sysexits.h>
+#include <unistd.h>
 
 #include <string.h>
 
@@ -81,11 +81,11 @@ EXPORTED void fatal(const char *s, int code)
     exit(code);
 }
 
-static int load(int fd, bytecode_input_t ** d)
+static int load(int fd, bytecode_input_t **d)
 {
-    const char * data=NULL;
+    const char *data = NULL;
     struct stat sbuf;
-    size_t len=0;
+    size_t len = 0;
 
     if (fstat(fd, &sbuf) == -1) {
         fprintf(stderr, "IOERROR: fstating sieve script: %m");
@@ -93,17 +93,15 @@ static int load(int fd, bytecode_input_t ** d)
     }
 
     /*this reads in data and length from file*/
-    map_refresh(fd, 1, &(data), &len, sbuf.st_size,
-                "sievescript", "");
-    *d=(bytecode_input_t *)data;
+    map_refresh(fd, 1, &(data), &len, sbuf.st_size, "sievescript", "");
+    *d = (bytecode_input_t *) data;
 
     printf("\n");
 
-    return (len/sizeof(int));
+    return (len / sizeof(int));
 }
 
-
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     bytecode_input_t *bc = NULL;
     int script_fd;
@@ -119,11 +117,12 @@ int main(int argc, char * argv[])
         /* n.b. no long option for -C */
         { "as-sieve", no_argument, NULL, 's' },
 
-        { 0, 0, 0, 0 },
+        { 0,          0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -139,15 +138,13 @@ int main(int argc, char * argv[])
     }
 
     if (usage_error || (argc - optind) < 1) {
-        fprintf(stderr, "Syntax: %s [-s] <bytecode-file>\n",
-               argv[0]);
+        fprintf(stderr, "Syntax: %s [-s] <bytecode-file>\n", argv[0]);
         exit(1);
     }
 
     /*get script*/
     script_fd = open(argv[optind++], O_RDONLY);
-    if (script_fd == -1)
-    {
+    if (script_fd == -1) {
         fprintf(stderr, "can not open script '%s'\n", argv[1]);
         exit(1);
     }
@@ -155,14 +152,17 @@ int main(int argc, char * argv[])
     /* Load configuration file. */
     config_read(alt_config, 0);
 
-    len=load(script_fd,&bc);
+    len = load(script_fd, &bc);
     close(script_fd);
 
     if (bc) {
-        if (gen_script) generate_script(bc, len);
-        else dump2(bc, len);
+        if (gen_script)
+            generate_script(bc, len);
+        else
+            dump2(bc, len);
         exit(0);
-    } else {
+    }
+    else {
         exit(1);
     }
 }
@@ -171,7 +171,8 @@ static void print_string(const char *label, const char *str)
 {
     size_t len;
 
-    if (str) len = strlen(str);
+    if (str)
+        len = strlen(str);
     else {
         str = "[nil]";
         len = -1;
@@ -199,10 +200,14 @@ static void print_stringlist(const char *label, strarray_t *list)
 
 static void print_time(uint64_t t)
 {
-    printf(" %02" PRIu64 ":%02" PRIu64 ":%02" PRIu64, t / 3600, (t % 3600) / 60, t % 60);
+    printf(" %02" PRIu64 ":%02" PRIu64 ":%02" PRIu64,
+           t / 3600,
+           (t % 3600) / 60,
+           t % 60);
 }
 
-static void print_vallist(const char *label, arrayu64_t *list,
+static void print_vallist(const char *label,
+                          arrayu64_t *list,
                           void (*print_cb)(uint64_t))
 {
     int x, list_len = arrayu64_size(list);
@@ -213,8 +218,10 @@ static void print_vallist(const char *label, arrayu64_t *list,
         uint64_t i = arrayu64_nth(list, x);
 
         if (!(x % 5)) printf("\n\t\t");
-        if (print_cb) print_cb(i);
-        else printf(" %" PRIu64, i);
+        if (print_cb)
+            print_cb(i);
+        else
+            printf(" %" PRIu64, i);
     }
     printf("\n\t]");
 
@@ -226,33 +233,64 @@ static void print_comparator(comp_t *comp)
     printf(" COMPARATOR [ ");
 
     switch (comp->match) {
-    case B_IS:       printf("Is");       break;
-    case B_CONTAINS: printf("Contains"); break;
-    case B_MATCHES:  printf("Matches");  break;
-    case B_REGEX:    printf("Regex");    break;
-    case B_LIST:     printf("List");     break;
+    case B_IS:
+        printf("Is");
+        break;
+    case B_CONTAINS:
+        printf("Contains");
+        break;
+    case B_MATCHES:
+        printf("Matches");
+        break;
+    case B_REGEX:
+        printf("Regex");
+        break;
+    case B_LIST:
+        printf("List");
+        break;
     case B_COUNT:
     case B_VALUE:
         printf("%s", comp->match == B_COUNT ? "Count" : "Value");
 
         switch (comp->relation) {
-        case B_GT: printf(" >");  break;
-        case B_GE: printf(" >="); break;
-        case B_LT: printf(" <");  break;
-        case B_LE: printf(" <="); break;
-        case B_NE: printf(" !="); break;
-        case B_EQ: printf(" =="); break;
+        case B_GT:
+            printf(" >");
+            break;
+        case B_GE:
+            printf(" >=");
+            break;
+        case B_LT:
+            printf(" <");
+            break;
+        case B_LE:
+            printf(" <=");
+            break;
+        case B_NE:
+            printf(" !=");
+            break;
+        case B_EQ:
+            printf(" ==");
+            break;
         }
         break;
 
-    default: exit(1);
+    default:
+        exit(1);
     }
 
     switch (comp->collation) {
-    case B_OCTET:          printf(" (octet)");         break;
-    case B_ASCIICASEMAP:   printf(" (ascii-casemap)"); break;
-    case B_ASCIINUMERIC:   printf(" (ascii-numeric)"); break;
-    case B_UNICODECASEMAP: printf(" (unicode-casemap)"); break;
+    case B_OCTET:
+        printf(" (octet)");
+        break;
+    case B_ASCIICASEMAP:
+        printf(" (ascii-casemap)");
+        break;
+    case B_ASCIINUMERIC:
+        printf(" (ascii-numeric)");
+        break;
+    case B_UNICODECASEMAP:
+        printf(" (unicode-casemap)");
+        break;
     }
 
     printf(" ]");
@@ -261,42 +299,66 @@ static void print_comparator(comp_t *comp)
 static const char *addrpart_to_string(int part)
 {
     switch (part) {
-    case B_ALL:       return "all";
-    case B_LOCALPART: return "localpart";
-    case B_DOMAIN:    return "domain";
-    case B_USER:      return "user";
-    case B_DETAIL:    return "detail";
-    default:          return NULL;
+    case B_ALL:
+        return "all";
+    case B_LOCALPART:
+        return "localpart";
+    case B_DOMAIN:
+        return "domain";
+    case B_USER:
+        return "user";
+    case B_DETAIL:
+        return "detail";
+    default:
+        return NULL;
     }
 }
 
 static const char *transform_to_string(int transform)
 {
     switch (transform) {
-    case B_RAW:     return "raw";
-    case B_TEXT:    return "text";
-    case B_CONTENT: return "content";
-    default:        return NULL;
+    case B_RAW:
+        return "raw";
+    case B_TEXT:
+        return "text";
+    case B_CONTENT:
+        return "content";
+    default:
+        return NULL;
     }
 }
 
 static const char *datepart_to_string(int part)
 {
     switch (part) {
-    case B_YEAR:    return "year";
-    case B_MONTH:   return "month";
-    case B_DAY:     return "day";
-    case B_DATE:    return "date";
-    case B_JULIAN:  return "julian";
-    case B_HOUR:    return "hour";
-    case B_MINUTE:  return "minute";
-    case B_SECOND:  return "second";
-    case B_TIME:    return "time";
-    case B_ISO8601: return "iso8601";
-    case B_STD11:   return "std11";
-    case B_ZONE:    return "zone";
-    case B_WEEKDAY: return "weekday";
-    default:        return NULL;
+    case B_YEAR:
+        return "year";
+    case B_MONTH:
+        return "month";
+    case B_DAY:
+        return "day";
+    case B_DATE:
+        return "date";
+    case B_JULIAN:
+        return "julian";
+    case B_HOUR:
+        return "hour";
+    case B_MINUTE:
+        return "minute";
+    case B_SECOND:
+        return "second";
+    case B_TIME:
+        return "time";
+    case B_ISO8601:
+        return "iso8601";
+    case B_STD11:
+        return "std11";
+    case B_ZONE:
+        return "zone";
+    case B_WEEKDAY:
+        return "weekday";
+    default:
+        return NULL;
     }
 }
 
@@ -327,14 +389,16 @@ static void print_test(test_t *test)
 
     case BC_SIZE:
         printf("SIZE %s %d",
-               (test->u.sz.t == B_OVER) ? "over" : "under", test->u.sz.n);
+               (test->u.sz.t == B_OVER) ? "over" : "under",
+               test->u.sz.n);
         break;
 
     case BC_ADDRESS:
         printf("ADDRESS");
         printf(" ADDRPART(%s)", addrpart_to_string(test->u.ae.addrpart));
         if (test->u.ae.comp.index) {
-            printf(" INDEX(%d %s)", abs(test->u.ae.comp.index),
+            printf(" INDEX(%d %s)",
+                   abs(test->u.ae.comp.index),
                    (test->u.ae.comp.index < 0) ? "[LAST]" : "");
         }
         print_comparator(&test->u.ae.comp);
@@ -353,7 +417,8 @@ static void print_test(test_t *test)
     case BC_HEADER:
         printf("HEADER");
         if (test->u.hhs.comp.index) {
-            printf(" INDEX(%d %s)", abs(test->u.hhs.comp.index),
+            printf(" INDEX(%d %s)",
+                   abs(test->u.hhs.comp.index),
                    (test->u.hhs.comp.index < 0) ? "[LAST]" : "");
         }
         print_comparator(&test->u.hhs.comp);
@@ -374,7 +439,8 @@ static void print_test(test_t *test)
     case BC_DATE:
         printf("DATE");
         if (test->u.dt.comp.index) {
-            printf(" INDEX(%d %s)", abs(test->u.dt.comp.index),
+            printf(" INDEX(%d %s)",
+                   abs(test->u.dt.comp.index),
                    (test->u.dt.comp.index < 0) ? "[LAST]" : "");
         }
         print_zone(&test->u.dt.zone);
@@ -458,11 +524,12 @@ static void print_test(test_t *test)
 
     case BC_DUPLICATE:
         printf("DUPLICATE");
-        print_string((test->u.dup.idtype == B_UNIQUEID) ?
-                     " UNIQUEID" : " HDRNAME", test->u.dup.idval);
+        print_string((test->u.dup.idtype == B_UNIQUEID) ? " UNIQUEID"
+                                                        : " HDRNAME",
+                     test->u.dup.idval);
         print_string(" HANDLE", test->u.dup.handle);
-        printf("\n\tSECONDS(%d) LAST(%d)",
-                     test->u.dup.seconds, test->u.dup.last);
+        printf(
+            "\n\tSECONDS(%d) LAST(%d)", test->u.dup.seconds, test->u.dup.last);
         break;
 
     case BC_IHAVE:
@@ -518,8 +585,7 @@ static int dump2_test(bytecode_input_t *d, int i, int version)
     case BC_ALLOF:
         len = test.u.aa.ntests;
 
-        printf("%s({%d}\n\t",
-               (test.type == BC_ANYOF) ? "ANYOF" : "ALLOF", len);
+        printf("%s({%d}\n\t", (test.type == BC_ANYOF) ? "ANYOF" : "ALLOF", len);
 
         while (len--) {
             i = dump2_test(d, i, version);
@@ -539,12 +605,13 @@ static int dump2_test(bytecode_input_t *d, int i, int version)
 static void dump2(bytecode_input_t *d, int bc_len)
 {
     int i;
-    int version, requires;
+    int version,
+        requires;
 
     if (!d) return;
 
     i = bc_header_parse(d, &version, &requires);
-    if (i <  0) {
+    if (i < 0) {
         printf("not a bytecode file [magic number test failed]\n");
         return;
     }
@@ -569,7 +636,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("STOP");
             break;
 
-            
         case B_KEEP_ORIG:
         case B_KEEP_COPY:
         case B_KEEP:
@@ -579,11 +645,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
             }
             break;
 
-
         case B_DISCARD:
             printf("DISCARD");
             break;
-
 
         case B_EREJECT:
             printf("E");
@@ -594,11 +658,9 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string("REJECT ", cmd.u.str);
             break;
 
-
         case B_ERROR:
             print_string("ERROR ", cmd.u.str);
             break;
-
 
         case B_FILEINTO_ORIG:
         case B_FILEINTO_COPY:
@@ -629,7 +691,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" FOLDER", cmd.u.f.t.folder);
             break;
 
-
         case B_REDIRECT_ORIG:
         case B_REDIRECT_COPY:
         case B_REDIRECT_LIST:
@@ -639,7 +700,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 printf(" COPY(%d)", cmd.u.r.copy);
 
                 if (cmd.type >= B_REDIRECT_LIST) {
-                    printf( "LIST(%d)", cmd.u.r.list);
+                    printf("LIST(%d)", cmd.u.r.list);
 
                     if (cmd.type >= B_REDIRECT) {
                         print_string(" BYTIME", cmd.u.r.bytime);
@@ -653,22 +714,18 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" ADDRESS", cmd.u.r.address);
             break;
 
-
         case B_IF:
             printf("IF (ends at %d) ", cmd.u.i.testend);
             i = dump2_test(d, i, version);
             break;
 
-
         case B_MARK:
             printf("MARK");
             break;
 
-
         case B_UNMARK:
             printf("UNMARK");
             break;
-
 
         case B_ADDFLAG_ORIG:
         case B_ADDFLAG:
@@ -678,7 +735,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_stringlist(" FLAGS", cmd.u.fl.flags);
             break;
 
-
         case B_SETFLAG_ORIG:
         case B_SETFLAG:
             printf("SETFLAG");
@@ -686,7 +742,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 print_string(" VARIABLE", cmd.u.fl.variable);
             print_stringlist(" FLAGS", cmd.u.fl.flags);
             break;
-
 
         case B_REMOVEFLAG_ORIG:
         case B_REMOVEFLAG:
@@ -696,7 +751,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_stringlist(" FLAGS", cmd.u.fl.flags);
             break;
 
-
         case B_DENOTIFY:
             printf("DENOTIFY PRIORITY(%d)", cmd.u.d.priority);
             if (cmd.u.d.pattern) {
@@ -704,7 +758,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 print_string("\n\tPATTERN", cmd.u.d.pattern);
             }
             break;
-
 
         case B_ENOTIFY:
             printf("E");
@@ -726,7 +779,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string("\n\tMESSAGE", cmd.u.n.message);
             break;
 
-
         case B_VACATION_ORIG:
         case B_VACATION_SEC:
         case B_VACATION_FCC_ORIG:
@@ -737,7 +789,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string("\n\tSUBJ", cmd.u.v.subject);
             print_string("\n\tMESG", cmd.u.v.message);
             printf("\n\tSECONDS(%d) MIME(%d)",
-                   cmd.u.v.seconds * (cmd.type == B_VACATION_ORIG ? DAY2SEC : 1),
+                   cmd.u.v.seconds
+                       * (cmd.type == B_VACATION_ORIG ? DAY2SEC : 1),
                    cmd.u.v.mime);
 
             if (version >= 0x05) {
@@ -765,24 +818,21 @@ static void dump2(bytecode_input_t *d, int bc_len)
             }
             break;
 
-
         case B_NULL:
             printf("NULL");
             break;
-
 
         case B_JUMP:
             printf("JUMP %d", cmd.u.jump);
             break;
 
-
         case B_INCLUDE:
             printf("INCLUDE LOCATION(%s) ONCE(%d) OPTIONAL(%d)",
                    (cmd.u.inc.location == B_PERSONAL) ? "Personal" : "Global",
-                   !!cmd.u.inc.once, !!cmd.u.inc.optional);
+                   !!cmd.u.inc.once,
+                   !!cmd.u.inc.optional);
             print_string("\n\tSCRIPT", cmd.u.inc.script);
             break;
-
 
         case B_SET:
             printf("SET LOWER(%d) UPPER(%d)",
@@ -801,13 +851,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" VALUE", cmd.u.s.value);
             break;
 
-
         case B_ADDHEADER:
             printf("ADDHEADER INDEX(%d)", cmd.u.ah.index);
             print_string(" NAME", cmd.u.ah.name);
             print_string(" VALUE", cmd.u.ah.value);
             break;
-
 
         case B_DELETEHEADER:
             printf("DELETEHEADER INDEX(%d)", cmd.u.dh.comp.index);
@@ -816,16 +864,13 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_stringlist(" VALUES", cmd.u.dh.values);
             break;
 
-
         case B_LOG:
             printf("LOG TEXT(%s)", cmd.u.l.text);
             break;
 
-
         case B_RETURN:
             printf("RETURN");
             break;
-
 
         case B_SNOOZE_ORIG:
         case B_SNOOZE_TZID:
@@ -852,7 +897,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
             printf("\n\tWEEKDAYS [");
             for (i = 0; i < 7; i++) {
-                if (cmd.u.sn.days & (1<<i)) {
+                if (cmd.u.sn.days & (1 << i)) {
                     printf("%s %u", sep, i);
                     sep = ",";
                 }
@@ -862,17 +907,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
         }
 
-
         case B_PROCESSIMIP:
             printf("PROCESSIMIP INVITESONLY(%d)"
                    " UPDATESONLY(%d) DELETECANCELED(%d)",
                    !!cmd.u.cal.invites_only,
-                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+                   !!cmd.u.cal.updates_only,
+                   !!cmd.u.cal.delete_cancelled);
             print_string(" CALENDARID", cmd.u.cal.calendarid);
             print_string(" OUTCOME", cmd.u.cal.outcome_var);
             print_string(" ERRSTR", cmd.u.cal.reason_var);
             break;
-
 
         case B_IKEEP_TARGET:
             printf("IMPLICIT_KEEP_TARGET");
@@ -881,19 +925,19 @@ static void dump2(bytecode_input_t *d, int bc_len)
             print_string(" FOLDER", cmd.u.ikt.folder);
             break;
 
-
         case B_PROCESSCAL:
             printf("PROCESSCALENDAR ALLOWPUBLIC(%d) INVITESONLY(%d)"
                    " UPDATESONLY(%d) DELETECANCELLED(%d)",
-                   !!cmd.u.cal.allow_public, !!cmd.u.cal.invites_only,
-                   !!cmd.u.cal.updates_only, !!cmd.u.cal.delete_cancelled);
+                   !!cmd.u.cal.allow_public,
+                   !!cmd.u.cal.invites_only,
+                   !!cmd.u.cal.updates_only,
+                   !!cmd.u.cal.delete_cancelled);
             print_stringlist(" ADDRESSES", cmd.u.cal.addresses);
             print_string(" ORGANIZERS", cmd.u.cal.organizers);
             print_string(" CALENDARID", cmd.u.cal.calendarid);
             print_string(" OUTCOME", cmd.u.cal.outcome_var);
             print_string(" REASON", cmd.u.cal.reason_var);
             break;
-
 
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
@@ -906,9 +950,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
     printf("full len is: %d\n", bc_len);
 }
 
-
-/***********  Functions for generating a Sieve script from bytecode  ***********/
-
+/***********  Functions for generating a Sieve script from bytecode ***********/
 
 static void generate_token(const char *token, unsigned indent, struct buf *buf)
 {
@@ -921,13 +963,17 @@ static void generate_number(const char *tag, unsigned n, struct buf *buf)
     buf_printf(buf, " %d", n);
 }
 
-static void generate_switch_capa(const char *tag, int i,
+static void generate_switch_capa(const char *tag,
+                                 int i,
                                  unsigned long long capa,
                                  unsigned long long *requires,
                                  struct buf *buf)
 {
     if (i) {
-        if (requires) *requires |= capa;
+        if (requires)
+        *
+            requires
+        |= capa;
 
         buf_printf(buf, " %s", tag);
     }
@@ -938,7 +984,8 @@ static void generate_switch(const char *tag, int i, struct buf *buf)
     generate_switch_capa(tag, i, 0, NULL, buf);
 }
 
-static void generate_string_capa(const char *tag, const char *s,
+static void generate_string_capa(const char *tag,
+                                 const char *s,
                                  unsigned long long capa,
                                  unsigned long long *requires,
                                  struct buf *buf)
@@ -946,24 +993,30 @@ static void generate_string_capa(const char *tag, const char *s,
     if (s && *s) {
         char *has_lf = strrchr(s, '\n');
 
-        if (requires) *requires |= capa;
+        if (requires)
+        *
+            requires
+        |= capa;
 
         generate_token(tag, 1, buf);
         if (has_lf) {
-            buf_printf(buf, " text:\n%s%s.\n", s,
+            buf_printf(buf,
+                       " text:\n%s%s.\n",
+                       s,
                        (size_t) (has_lf - s) == strlen(s) - 1 ? "" : "\n");
         }
-        else buf_printf(buf, " \"%s%s\"", *s == '\\' ? "\\" : "", s);
+        else
+            buf_printf(buf, " \"%s%s\"", *s == '\\' ? "\\" : "", s);
     }
 }
 
-static void generate_string(const char *tag, const char *s,
-                            struct buf *buf)
+static void generate_string(const char *tag, const char *s, struct buf *buf)
 {
     generate_string_capa(tag, s, 0, NULL, buf);
 }
 
-static void generate_stringlist_capa(const char *tag, const strarray_t *sl,
+static void generate_stringlist_capa(const char *tag,
+                                     const strarray_t *sl,
                                      unsigned long long capa,
                                      unsigned long long *requires,
                                      struct buf *buf)
@@ -973,7 +1026,10 @@ static void generate_stringlist_capa(const char *tag, const strarray_t *sl,
 
     if (!len) return;
 
-    if (requires) *requires |= capa;
+    if (requires)
+    *
+        requires
+    |= capa;
 
     if (tag) buf_printf(buf, " %s", tag);
 
@@ -987,7 +1043,8 @@ static void generate_stringlist_capa(const char *tag, const strarray_t *sl,
     if (len > 1) buf_putc(buf, ']');
 }
 
-static void generate_stringlist(const char *tag, const strarray_t *sl,
+static void generate_stringlist(const char *tag,
+                                const strarray_t *sl,
                                 struct buf *buf)
 {
     generate_stringlist_capa(tag, sl, 0, NULL, buf);
@@ -995,11 +1052,15 @@ static void generate_stringlist(const char *tag, const strarray_t *sl,
 
 static void generate_time(uint64_t t, struct buf *buf)
 {
-    buf_printf(buf, "\"%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 "\"",
-                    t / 3600, (t % 3600) / 60, t % 60);
+    buf_printf(buf,
+               "\"%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64 "\"",
+               t / 3600,
+               (t % 3600) / 60,
+               t % 60);
 }
 
-static void generate_valuelist(const char *name, const arrayu64_t *vl,
+static void generate_valuelist(const char *name,
+                               const arrayu64_t *vl,
                                void (*gen_cb)(uint64_t, struct buf *),
                                struct buf *buf)
 {
@@ -1018,24 +1079,30 @@ static void generate_valuelist(const char *name, const arrayu64_t *vl,
             buf_appendcstr(buf, sep);
             gen_cb(u, buf);
         }
-        else buf_printf(buf, "%s%" PRIu64, sep, u);
+        else
+            buf_printf(buf, "%s%" PRIu64, sep, u);
         sep = ", ";
     }
     if (len > 1) buf_putc(buf, ']');
 }
 
 static void generate_index(int index,
-                           unsigned long long *requires, struct buf *buf)
+                           unsigned long long *requires,
+                           struct buf *buf)
 {
     if (index) {
-        if (requires) *requires |= SIEVE_CAPA_INDEX;
+        if (requires)
+        *
+            requires
+        |= SIEVE_CAPA_INDEX;
         generate_number(":index", abs(index), buf);
         generate_switch(":last", (index < 0), buf);
     }
 }
 
 static void generate_comparator(const comp_t *c,
-                                unsigned long long *requires, struct buf *buf)
+                                unsigned long long *requires,
+                                struct buf *buf)
 {
     switch (c->match) {
     case B_IS: /* default */
@@ -1048,24 +1115,42 @@ static void generate_comparator(const comp_t *c,
         break;
     case B_REGEX:
         buf_printf(buf, " :regex");
-        *requires |= SIEVE_CAPA_REGEX;
+        *
+            requires
+        |= SIEVE_CAPA_REGEX;
         break;
     case B_LIST:
         buf_printf(buf, " :list");
-        *requires |= SIEVE_CAPA_EXTLISTS;
+        *
+            requires
+        |= SIEVE_CAPA_EXTLISTS;
         break;
     case B_COUNT:
     case B_VALUE:
         buf_printf(buf, " :%s", c->match == B_COUNT ? "count" : "value");
-        *requires |= SIEVE_CAPA_RELATIONAL;
+        *
+            requires
+        |= SIEVE_CAPA_RELATIONAL;
 
         switch (c->relation) {
-        case B_GT: buf_printf(buf, " \"gt\""); break;
-        case B_GE: buf_printf(buf, " \"ge\""); break;
-        case B_LT: buf_printf(buf, " \"lt\""); break;
-        case B_LE: buf_printf(buf, " \"le\""); break;
-        case B_NE: buf_printf(buf, " \"ne\""); break;
-        case B_EQ: buf_printf(buf, " \"eq\""); break;
+        case B_GT:
+            buf_printf(buf, " \"gt\"");
+            break;
+        case B_GE:
+            buf_printf(buf, " \"ge\"");
+            break;
+        case B_LT:
+            buf_printf(buf, " \"lt\"");
+            break;
+        case B_LE:
+            buf_printf(buf, " \"le\"");
+            break;
+        case B_NE:
+            buf_printf(buf, " \"ne\"");
+            break;
+        case B_EQ:
+            buf_printf(buf, " \"eq\"");
+            break;
         }
         break;
     }
@@ -1078,11 +1163,15 @@ static void generate_comparator(const comp_t *c,
         break;
     case B_ASCIINUMERIC:
         buf_printf(buf, " :comparator \"i;ascii-numeric\"");
-        *requires |= SIEVE_CAPA_COMP_NUMERIC;
+        *
+            requires
+        |= SIEVE_CAPA_COMP_NUMERIC;
         break;
     case B_UNICODECASEMAP:
         buf_printf(buf, " :comparator \"i;unicode-casemap\"");
-        *requires |= SIEVE_CAPA_COMP_UCASEMAP;
+        *
+            requires
+        |= SIEVE_CAPA_COMP_UCASEMAP;
         break;
     }
 }
@@ -1095,18 +1184,19 @@ static void generate_fileinto(struct Fileinto *f,
     if (is_fcc) {
         /* Put :fcc first */
         generate_string(":fcc", f->t.folder, buf);
-        *requires |= SIEVE_CAPA_FCC;
+        *
+            requires
+        |= SIEVE_CAPA_FCC;
     }
-    generate_switch_capa(":copy", f->copy,
-                         SIEVE_CAPA_COPY, requires, buf);
-    generate_switch_capa(":create", f->create,
-                         SIEVE_CAPA_MAILBOX, requires, buf);
-    generate_string_capa(":specialuse", f->t.specialuse,
-                         SIEVE_CAPA_SPECIAL_USE, requires, buf);
-    generate_string_capa(":mailboxid", f->t.mailboxid,
-                         SIEVE_CAPA_MAILBOXID, requires, buf);
-    generate_stringlist_capa(":flags", f->flags,
-                             SIEVE_CAPA_IMAP4FLAGS, requires, buf);
+    generate_switch_capa(":copy", f->copy, SIEVE_CAPA_COPY, requires, buf);
+    generate_switch_capa(
+        ":create", f->create, SIEVE_CAPA_MAILBOX, requires, buf);
+    generate_string_capa(
+        ":specialuse", f->t.specialuse, SIEVE_CAPA_SPECIAL_USE, requires, buf);
+    generate_string_capa(
+        ":mailboxid", f->t.mailboxid, SIEVE_CAPA_MAILBOXID, requires, buf);
+    generate_stringlist_capa(
+        ":flags", f->flags, SIEVE_CAPA_IMAP4FLAGS, requires, buf);
     if (!is_fcc) {
         /* folder is positional and MUST be last for fileinto */
         generate_string(NULL, f->t.folder, buf);
@@ -1119,16 +1209,17 @@ static void generate_zone(struct Zone *zone, struct buf *buf)
         generate_string(":zone", zone->offset, buf);
     }
     else {
-        generate_switch(":originalzone",
-                        zone->tag == B_ORIGINALZONE, buf);
+        generate_switch(":originalzone", zone->tag == B_ORIGINALZONE, buf);
     }
 }
 
-
 #define INSERT_FOLD(indent, buf) buf_printf(buf, "\n%*s", indent, "");
 
-static int generate_test(bytecode_input_t *bc, int pos, int version,
-                         unsigned indent, unsigned long long *requires,
+static int generate_test(bytecode_input_t *bc,
+                         int pos,
+                         int version,
+                         unsigned indent,
+                         unsigned long long *requires,
                          struct buf *buf)
 {
     test_t test;
@@ -1176,8 +1267,8 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
 
     case BC_SIZE:
         generate_token("size", 0, buf);
-        generate_number((test.u.sz.t == B_OVER) ? ":over" : ":under",
-                        test.u.sz.n, buf);
+        generate_number(
+            (test.u.sz.t == B_OVER) ? ":over" : ":under", test.u.sz.n, buf);
         break;
 
     case BC_ADDRESS:
@@ -1192,7 +1283,9 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_ENVELOPE:
-        *requires |= SIEVE_CAPA_ENVELOPE;
+        *
+            requires
+        |= SIEVE_CAPA_ENVELOPE;
         generate_token("envelope", 0, buf);
         if (test.u.ae.addrpart != B_ALL) {
             buf_printf(buf, " :%s", addrpart_to_string(test.u.ae.addrpart));
@@ -1211,7 +1304,9 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_BODY:
-        *requires |= SIEVE_CAPA_BODY;
+        *
+            requires
+        |= SIEVE_CAPA_BODY;
         generate_token("body", 0, buf);
         generate_comparator(&test.u.b.comp, requires, buf);
         if (test.u.b.transform != B_TEXT) {
@@ -1223,7 +1318,9 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
 
     case BC_DATE_ORIG:
     case BC_DATE:
-        *requires |= SIEVE_CAPA_DATE;
+        *
+            requires
+        |= SIEVE_CAPA_DATE;
         generate_token("date", 0, buf);
         generate_index(test.u.hhs.comp.index, requires, buf);
         generate_zone(&test.u.dt.zone, buf);
@@ -1234,7 +1331,9 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
 
     case BC_CURRENTDATE_ORIG:
     case BC_CURRENTDATE:
-        *requires |= SIEVE_CAPA_DATE;
+        *
+            requires
+        |= SIEVE_CAPA_DATE;
         generate_token("currentdate", 0, buf);
         generate_zone(&test.u.dt.zone, buf);
         generate_comparator(&test.u.dt.comp, requires, buf);
@@ -1243,7 +1342,9 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_HASFLAG:
-        *requires |= SIEVE_CAPA_IMAP4FLAGS;
+        *
+            requires
+        |= SIEVE_CAPA_IMAP4FLAGS;
         generate_token("hasflag", 0, buf);
         generate_comparator(&test.u.hhs.comp, requires, buf);
         generate_stringlist(NULL, test.u.hhs.sl, buf);
@@ -1251,19 +1352,25 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_MAILBOXEXISTS:
-        *requires |= SIEVE_CAPA_MAILBOX;
+        *
+            requires
+        |= SIEVE_CAPA_MAILBOX;
         generate_token("mailboxexists", 0, buf);
         generate_stringlist(NULL, test.u.mm.keylist, buf);
         break;
 
     case BC_MAILBOXIDEXISTS:
-        *requires |= SIEVE_CAPA_MAILBOXID;
+        *
+            requires
+        |= SIEVE_CAPA_MAILBOXID;
         generate_token("mailboxidexists", 0, buf);
         generate_stringlist(NULL, test.u.mm.keylist, buf);
         break;
 
     case BC_METADATA:
-        *requires |= SIEVE_CAPA_MBOXMETA;
+        *
+            requires
+        |= SIEVE_CAPA_MBOXMETA;
         generate_token("metadata", 0, buf);
         generate_comparator(&test.u.mm.comp, requires, buf);
         generate_string(NULL, test.u.mm.extname, buf);
@@ -1272,14 +1379,18 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_METADATAEXISTS:
-        *requires |= SIEVE_CAPA_MBOXMETA;
+        *
+            requires
+        |= SIEVE_CAPA_MBOXMETA;
         generate_token("metadataexists", 0, buf);
         generate_string(NULL, test.u.mm.extname, buf);
         generate_stringlist(NULL, test.u.mm.keylist, buf);
         break;
 
     case BC_SERVERMETADATA:
-        *requires |= SIEVE_CAPA_SERVERMETA;
+        *
+            requires
+        |= SIEVE_CAPA_SERVERMETA;
         generate_token("servermetadata", 0, buf);
         generate_comparator(&test.u.mm.comp, requires, buf);
         generate_string(NULL, test.u.mm.keyname, buf);
@@ -1287,13 +1398,17 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_SERVERMETADATAEXISTS:
-        *requires |= SIEVE_CAPA_SERVERMETA;
+        *
+            requires
+        |= SIEVE_CAPA_SERVERMETA;
         generate_token("servermetadataexists", 0, buf);
         generate_stringlist(NULL, test.u.mm.keylist, buf);
         break;
 
     case BC_STRING:
-        *requires |= SIEVE_CAPA_VARIABLES;
+        *
+            requires
+        |= SIEVE_CAPA_VARIABLES;
         generate_token("string", 0, buf);
         generate_comparator(&test.u.hhs.comp, requires, buf);
         generate_stringlist(NULL, test.u.hhs.sl, buf);
@@ -1301,19 +1416,25 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_VALIDEXTLIST:
-        *requires |= SIEVE_CAPA_EXTLISTS;
+        *
+            requires
+        |= SIEVE_CAPA_EXTLISTS;
         generate_token("validlistext", 0, buf);
         generate_stringlist(NULL, test.u.sl, buf);
         break;
 
     case BC_VALIDNOTIFYMETHOD:
-        *requires |= SIEVE_CAPA_ENOTIFY;
+        *
+            requires
+        |= SIEVE_CAPA_ENOTIFY;
         generate_token("validnotifymethod", 0, buf);
         generate_stringlist(NULL, test.u.sl, buf);
         break;
 
     case BC_NOTIFYMETHODCAPABILITY:
-        *requires |= SIEVE_CAPA_ENOTIFY;
+        *
+            requires
+        |= SIEVE_CAPA_ENOTIFY;
         generate_token("notifymethodcapability", 0, buf);
         generate_comparator(&test.u.mm.comp, requires, buf);
         generate_string(NULL, test.u.mm.extname, buf);
@@ -1322,31 +1443,40 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         break;
 
     case BC_DUPLICATE:
-        *requires |= SIEVE_CAPA_DUPLICATE;
+        *
+            requires
+        |= SIEVE_CAPA_DUPLICATE;
         generate_token("duplicate", 0, buf);
         generate_string(":handle", test.u.dup.handle, buf);
-        generate_string(test.u.dup.idtype == B_UNIQUEID ?
-                        ":uniqueid" : ":header",
-                        test.u.dup.idval, buf);
+        generate_string(test.u.dup.idtype == B_UNIQUEID ? ":uniqueid"
+                                                        : ":header",
+                        test.u.dup.idval,
+                        buf);
         generate_number(":seconds", test.u.dup.seconds, buf);
         generate_switch(":last", test.u.dup.last, buf);
         break;
 
     case BC_IHAVE:
-        *requires |= SIEVE_CAPA_IHAVE;
+        *
+            requires
+        |= SIEVE_CAPA_IHAVE;
         generate_token("ihave", 0, buf);
         generate_stringlist(NULL, test.u.sl, buf);
         break;
 
     case BC_SPECIALUSEEXISTS:
-        *requires |= SIEVE_CAPA_SPECIAL_USE;
+        *
+            requires
+        |= SIEVE_CAPA_SPECIAL_USE;
         generate_token("specialuseexists", 0, buf);
         generate_string(NULL, test.u.mm.extname, buf);
         generate_stringlist(NULL, test.u.mm.keylist, buf);
         break;
 
     case BC_ENVIRONMENT:
-        *requires |= SIEVE_CAPA_ENVIRONMENT;
+        *
+            requires
+        |= SIEVE_CAPA_ENVIRONMENT;
         generate_token("environment", 0, buf);
         generate_comparator(&test.u.mm.comp, requires, buf);
         generate_string(NULL, test.u.mm.keyname, buf);
@@ -1359,7 +1489,9 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         json_t *jquery = json_loads(test.u.jquery, 0, &jerr);
         char *json = json_dumps(jquery, JSON_INDENT(2));
 
-        *requires |= SIEVE_CAPA_JMAPQUERY;
+        *
+            requires
+        |= SIEVE_CAPA_JMAPQUERY;
         generate_token("jmapquery", 0, buf);
         generate_string(NULL, json, buf);
         json_decref(jquery);
@@ -1372,9 +1504,14 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
     return pos;
 }
 
-static int generate_block(bytecode_input_t *bc, int pos, int end,
-                          int version, int elsif, int indent,
-                          unsigned long long *requires, struct buf *buf)
+static int generate_block(bytecode_input_t *bc,
+                          int pos,
+                          int end,
+                          int version,
+                          int elsif,
+                          int indent,
+                          unsigned long long *requires,
+                          struct buf *buf)
 {
     while (pos < end) {
         commandlist_t cmd;
@@ -1384,15 +1521,18 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         switch (cmd.type) {
         case B_IF:
             generate_token(elsif ? "elsif " : "if ", indent, buf);
-            pos = generate_test(bc, pos, version,
+            pos = generate_test(bc,
+                                pos,
+                                version,
                                 indent + 10 + 3 * elsif /* align tests */,
-                                requires, buf);
+                                requires,
+                                buf);
             buf_appendcstr(buf, " {\n");
 
             /* then block */
             pos = bc_action_parse(bc, pos, version, &cmd);
-            pos = generate_block(bc, pos, cmd.u.jump,
-                                 version, 0, indent + 4, requires, buf);
+            pos = generate_block(
+                bc, pos, cmd.u.jump, version, 0, indent + 4, requires, buf);
             if (!elsif) generate_token("}\n", indent, buf);
             continue;
 
@@ -1403,22 +1543,23 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
                 elsif = 1;
                 indent -= 4;
             }
-            else generate_token("else {\n", indent - 4, buf);
+            else
+                generate_token("else {\n", indent - 4, buf);
 
-            pos = generate_block(bc, pos, cmd.u.jump,
-                                 version, elsif, indent, requires, buf);
+            pos = generate_block(
+                bc, pos, cmd.u.jump, version, elsif, indent, requires, buf);
             continue;
 
         case B_STOP:
             generate_token("stop", indent, buf);
-          break;
-            
+            break;
+
         case B_KEEP_ORIG:
         case B_KEEP_COPY:
         case B_KEEP:
             generate_token("keep", indent, buf);
-            generate_stringlist_capa(":flags", cmd.u.k.flags,
-                                     SIEVE_CAPA_IMAP4FLAGS, requires, buf);
+            generate_stringlist_capa(
+                ":flags", cmd.u.k.flags, SIEVE_CAPA_IMAP4FLAGS, requires, buf);
             break;
 
         case B_DISCARD:
@@ -1426,19 +1567,25 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_EREJECT:
-            *requires |= SIEVE_CAPA_EREJECT;
+            *
+                requires
+            |= SIEVE_CAPA_EREJECT;
             generate_token("ereject", indent, buf);
             generate_string(NULL, cmd.u.str, buf);
             break;
 
         case B_REJECT:
-            *requires |= SIEVE_CAPA_REJECT;
+            *
+                requires
+            |= SIEVE_CAPA_REJECT;
             generate_token("reject", indent, buf);
             generate_string(NULL, cmd.u.str, buf);
             break;
 
         case B_ERROR:
-            *requires |= SIEVE_CAPA_IHAVE;
+            *
+                requires
+            |= SIEVE_CAPA_IHAVE;
             generate_token("error", indent, buf);
             generate_string(NULL, cmd.u.str, buf);
             break;
@@ -1449,7 +1596,9 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         case B_FILEINTO_CREATE:
         case B_FILEINTO_SPECIALUSE:
         case B_FILEINTO:
-            *requires |= SIEVE_CAPA_FILEINTO;
+            *
+                requires
+            |= SIEVE_CAPA_FILEINTO;
             generate_token("fileinto", indent, buf);
             generate_fileinto(&cmd.u.f, 0, requires, buf);
             break;
@@ -1458,78 +1607,105 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         case B_REDIRECT_COPY:
         case B_REDIRECT_LIST:
         case B_REDIRECT:
-            generate_switch_capa(":copy", cmd.u.r.copy,
-                                 SIEVE_CAPA_COPY, requires, buf);
-            generate_switch_capa(":list", cmd.u.r.list,
-                                 SIEVE_CAPA_EXTLISTS, requires, buf);
-            generate_string_capa(":notify", cmd.u.r.dsn_notify,
-                                 SIEVE_CAPA_REDIR_DSN, requires, buf);
-            generate_string_capa(":ret", cmd.u.r.dsn_ret,
-                                 SIEVE_CAPA_REDIR_DSN, requires, buf); 
+            generate_switch_capa(
+                ":copy", cmd.u.r.copy, SIEVE_CAPA_COPY, requires, buf);
+            generate_switch_capa(
+                ":list", cmd.u.r.list, SIEVE_CAPA_EXTLISTS, requires, buf);
+            generate_string_capa(":notify",
+                                 cmd.u.r.dsn_notify,
+                                 SIEVE_CAPA_REDIR_DSN,
+                                 requires,
+                                 buf);
+            generate_string_capa(
+                ":ret", cmd.u.r.dsn_ret, SIEVE_CAPA_REDIR_DSN, requires, buf);
             if (cmd.u.r.bytime) {
-                *requires |= SIEVE_CAPA_REDIR_DELBY;
+                *
+                    requires
+                |= SIEVE_CAPA_REDIR_DELBY;
                 if (*cmd.u.r.bytime == '+') {
                     generate_number(":byrelativetime",
-                                    strtoul(cmd.u.r.bytime, NULL, 10), buf);
+                                    strtoul(cmd.u.r.bytime, NULL, 10),
+                                    buf);
                 }
-                else generate_string(":byabsolutetime", cmd.u.r.bytime, buf);
+                else
+                    generate_string(":byabsolutetime", cmd.u.r.bytime, buf);
                 INSERT_FOLD(indent + 4, buf);
             }
-            generate_string_capa(":bymode", cmd.u.r.bymode,
-                                 SIEVE_CAPA_REDIR_DELBY, requires, buf);
-            generate_switch_capa(":bytrace", cmd.u.r.bytrace,
-                                 SIEVE_CAPA_REDIR_DELBY, requires, buf);
+            generate_string_capa(":bymode",
+                                 cmd.u.r.bymode,
+                                 SIEVE_CAPA_REDIR_DELBY,
+                                 requires,
+                                 buf);
+            generate_switch_capa(":bytrace",
+                                 cmd.u.r.bytrace,
+                                 SIEVE_CAPA_REDIR_DELBY,
+                                 requires,
+                                 buf);
             generate_string(NULL, cmd.u.r.address, buf);
             break;
 
         case B_MARK:
-            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            *
+                requires
+            |= SIEVE_CAPA_IMAP4FLAGS;
             generate_token("addflag", indent, buf);
             generate_string(NULL, "\\Flagged", buf);
             break;
 
         case B_UNMARK:
-            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            *
+                requires
+            |= SIEVE_CAPA_IMAP4FLAGS;
             generate_token("removeflag", indent, buf);
             generate_string(NULL, "\\Flagged", buf);
             break;
 
         case B_ADDFLAG_ORIG:
         case B_ADDFLAG:
-            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            *
+                requires
+            |= SIEVE_CAPA_IMAP4FLAGS;
             generate_token("addflag", indent, buf);
-            generate_string_capa(NULL, cmd.u.fl.variable,
-                                 SIEVE_CAPA_VARIABLES, requires, buf);
+            generate_string_capa(
+                NULL, cmd.u.fl.variable, SIEVE_CAPA_VARIABLES, requires, buf);
             generate_stringlist(NULL, cmd.u.fl.flags, buf);
             break;
 
         case B_SETFLAG_ORIG:
         case B_SETFLAG:
-            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            *
+                requires
+            |= SIEVE_CAPA_IMAP4FLAGS;
             generate_token("setflag", indent, buf);
-            generate_string_capa(NULL, cmd.u.fl.variable,
-                                 SIEVE_CAPA_VARIABLES, requires, buf);
+            generate_string_capa(
+                NULL, cmd.u.fl.variable, SIEVE_CAPA_VARIABLES, requires, buf);
             generate_stringlist(NULL, cmd.u.fl.flags, buf);
             break;
 
         case B_REMOVEFLAG_ORIG:
         case B_REMOVEFLAG:
-            *requires |= SIEVE_CAPA_IMAP4FLAGS;
+            *
+                requires
+            |= SIEVE_CAPA_IMAP4FLAGS;
             generate_token("removeflag", indent, buf);
-            generate_string_capa(NULL, cmd.u.fl.variable,
-                                 SIEVE_CAPA_VARIABLES, requires, buf);
+            generate_string_capa(
+                NULL, cmd.u.fl.variable, SIEVE_CAPA_VARIABLES, requires, buf);
             generate_stringlist(NULL, cmd.u.fl.flags, buf);
             break;
 
         case B_DENOTIFY:
             generate_token("/*\n", indent, buf);
-            generate_token(" * NOTE: The DENOTIFY action has been deprecated since Cyrus v3.9.\n",
-                           indent, buf);
-            generate_token(" *       This script will no longer compile.\n",
-                           indent, buf);
+            generate_token(" * NOTE: The DENOTIFY action has been deprecated "
+                           "since Cyrus v3.9.\n",
+                           indent,
+                           buf);
+            generate_token(
+                " *       This script will no longer compile.\n", indent, buf);
             generate_token(" */\n", indent, buf);
 
-            *requires |= SIEVE_CAPA_NOTIFY;
+            *
+                requires
+            |= SIEVE_CAPA_NOTIFY;
             generate_token("denotify", indent, buf);
             if (cmd.u.d.pattern) {
                 generate_comparator(&cmd.u.d.comp, requires, buf);
@@ -1542,12 +1718,14 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_ENOTIFY:
-            *requires |= SIEVE_CAPA_ENOTIFY;
+            *
+                requires
+            |= SIEVE_CAPA_ENOTIFY;
             generate_token("notify", indent, buf);
             generate_string(":from", cmd.u.n.from, buf);
             if (cmd.u.n.priority != B_NORMAL) {
-                generate_string(":importance",
-                                cmd.u.n.priority == B_LOW ? "1" : "3", buf);
+                generate_string(
+                    ":importance", cmd.u.n.priority == B_LOW ? "1" : "3", buf);
             }
             generate_stringlist(":options", cmd.u.n.options, buf);
             generate_string(":message", cmd.u.n.message, buf);
@@ -1556,15 +1734,21 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
 
         case B_NOTIFY:
             generate_token("/*\n", indent, buf);
-            generate_token(" * NOTE: This form of the NOTIFY action has been deprecated since Cyrus v3.9.\n",
-                           indent, buf);
-            generate_token(" *       This script will no longer compile.\n",
-                           indent, buf);
-            generate_token(" *       Update this action to use the syntax in RFC 5435. */\n",
-                           indent, buf);
+            generate_token(" * NOTE: This form of the NOTIFY action has been "
+                           "deprecated since Cyrus v3.9.\n",
+                           indent,
+                           buf);
+            generate_token(
+                " *       This script will no longer compile.\n", indent, buf);
+            generate_token(" *       Update this action to use the syntax in "
+                           "RFC 5435. */\n",
+                           indent,
+                           buf);
             generate_token(" */\n", indent, buf);
 
-            *requires |= SIEVE_CAPA_NOTIFY;
+            *
+                requires
+            |= SIEVE_CAPA_NOTIFY;
             generate_token("notify", indent, buf);
             generate_string(":method", cmd.u.n.method, buf);
             generate_string(":id", cmd.u.n.id, buf);
@@ -1581,12 +1765,16 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         case B_VACATION_FCC_ORIG:
         case B_VACATION_FCC_SPLUSE:
         case B_VACATION:
-            *requires |= SIEVE_CAPA_VACATION;
+            *
+                requires
+            |= SIEVE_CAPA_VACATION;
             generate_token("vacation", indent, buf);
             if (!(cmd.u.v.seconds % 86400))
                 generate_number(":days", cmd.u.v.seconds / 86400, buf);
             else {
-                *requires |= SIEVE_CAPA_VACATION_SEC;
+                *
+                    requires
+                |= SIEVE_CAPA_VACATION_SEC;
                 generate_number(":seconds", cmd.u.v.seconds, buf);
             }
             generate_string(":subject", cmd.u.v.subject, buf);
@@ -1606,7 +1794,9 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_INCLUDE:
-            *requires |= SIEVE_CAPA_INCLUDE;
+            *
+                requires
+            |= SIEVE_CAPA_INCLUDE;
             generate_token("include", indent, buf);
             if (cmd.u.inc.location == B_GLOBAL)
                 generate_switch(":global", 1, buf);
@@ -1616,29 +1806,37 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_SET:
-            *requires |= SIEVE_CAPA_VARIABLES;
+            *
+                requires
+            |= SIEVE_CAPA_VARIABLES;
             generate_token("set", indent, buf);
             generate_switch(":lower", cmd.u.s.modifiers & BFV_LOWER, buf);
             generate_switch(":upper", cmd.u.s.modifiers & BFV_UPPER, buf);
-            generate_switch(":lowerfirst",
-                            cmd.u.s.modifiers & BFV_LOWERFIRST, buf);
-            generate_switch(":upperfirst",
-                            cmd.u.s.modifiers & BFV_UPPERFIRST, buf);
-            generate_switch(":quotewildcard",
-                            cmd.u.s.modifiers & BFV_QUOTEWILDCARD, buf);
+            generate_switch(
+                ":lowerfirst", cmd.u.s.modifiers & BFV_LOWERFIRST, buf);
+            generate_switch(
+                ":upperfirst", cmd.u.s.modifiers & BFV_UPPERFIRST, buf);
+            generate_switch(
+                ":quotewildcard", cmd.u.s.modifiers & BFV_QUOTEWILDCARD, buf);
             generate_switch_capa(":quoteregex",
                                  cmd.u.s.modifiers & BFV_QUOTEREGEX,
-                                 SIEVE_CAPA_REGEX, requires, buf);
+                                 SIEVE_CAPA_REGEX,
+                                 requires,
+                                 buf);
             generate_switch_capa(":encodeurl",
                                  cmd.u.s.modifiers & BFV_ENCODEURL,
-                                 SIEVE_CAPA_ENOTIFY, requires, buf);
+                                 SIEVE_CAPA_ENOTIFY,
+                                 requires,
+                                 buf);
             generate_switch(":length", cmd.u.s.modifiers & BFV_LENGTH, buf);
             generate_string(NULL, cmd.u.s.variable, buf);
             generate_string(NULL, cmd.u.s.value, buf);
             break;
 
         case B_ADDHEADER:
-            *requires |= SIEVE_CAPA_EDITHEADER;
+            *
+                requires
+            |= SIEVE_CAPA_EDITHEADER;
             generate_token("addheader", indent, buf);
             generate_switch(":last", (cmd.u.ah.index < 0), buf);
             generate_string(NULL, cmd.u.ah.name, buf);
@@ -1646,7 +1844,9 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_DELETEHEADER:
-            *requires |= SIEVE_CAPA_EDITHEADER;
+            *
+                requires
+            |= SIEVE_CAPA_EDITHEADER;
             generate_token("deleteheader", indent, buf);
             generate_index(cmd.u.dh.comp.index, NULL, buf);
             generate_comparator(&cmd.u.dh.comp, requires, buf);
@@ -1655,20 +1855,26 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_LOG:
-            *requires |= SIEVE_CAPA_LOG;
+            *
+                requires
+            |= SIEVE_CAPA_LOG;
             generate_token("log", indent, buf);
             generate_string(NULL, cmd.u.l.text, buf);
             break;
 
         case B_RETURN:
-            *requires |= SIEVE_CAPA_INCLUDE;
+            *
+                requires
+            |= SIEVE_CAPA_INCLUDE;
             generate_token("return", indent, buf);
             break;
 
         case B_SNOOZE_ORIG:
         case B_SNOOZE_TZID:
         case B_SNOOZE:
-            *requires |= SIEVE_CAPA_SNOOZE;
+            *
+                requires
+            |= SIEVE_CAPA_SNOOZE;
             if (cmd.u.sn.is_mboxid) {
                 cmd.u.sn.f.t.mailboxid = cmd.u.sn.f.t.folder;
                 cmd.u.sn.f.t.folder = NULL;
@@ -1676,16 +1882,31 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
 
             generate_token("snooze", indent, buf);
             generate_string(":mailbox", cmd.u.sn.f.t.folder, buf);
-            generate_string_capa(":mailboxid", cmd.u.sn.f.t.mailboxid,
-                                 SIEVE_CAPA_MAILBOXID, requires, buf);
-            generate_string_capa(":specialuse", cmd.u.sn.f.t.specialuse,
-                                 SIEVE_CAPA_SPECIAL_USE, requires, buf);
-            generate_switch_capa(":create", cmd.u.sn.f.create,
-                                 SIEVE_CAPA_MAILBOX, requires, buf);
-            generate_stringlist_capa(":addflags", cmd.u.sn.addflags,
-                                     SIEVE_CAPA_IMAP4FLAGS, requires, buf);
-            generate_stringlist_capa(":removeflags", cmd.u.sn.removeflags,
-                                     SIEVE_CAPA_IMAP4FLAGS, requires, buf);
+            generate_string_capa(":mailboxid",
+                                 cmd.u.sn.f.t.mailboxid,
+                                 SIEVE_CAPA_MAILBOXID,
+                                 requires,
+                                 buf);
+            generate_string_capa(":specialuse",
+                                 cmd.u.sn.f.t.specialuse,
+                                 SIEVE_CAPA_SPECIAL_USE,
+                                 requires,
+                                 buf);
+            generate_switch_capa(":create",
+                                 cmd.u.sn.f.create,
+                                 SIEVE_CAPA_MAILBOX,
+                                 requires,
+                                 buf);
+            generate_stringlist_capa(":addflags",
+                                     cmd.u.sn.addflags,
+                                     SIEVE_CAPA_IMAP4FLAGS,
+                                     requires,
+                                     buf);
+            generate_stringlist_capa(":removeflags",
+                                     cmd.u.sn.removeflags,
+                                     SIEVE_CAPA_IMAP4FLAGS,
+                                     requires,
+                                     buf);
             if (cmd.u.sn.days != SNOOZE_WDAYS_MASK) {
                 const char *sep = " [";
                 unsigned i;
@@ -1705,7 +1926,9 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_PROCESSIMIP:
-            *requires |= SIEVE_CAPA_PROCESSCAL;
+            *
+                requires
+            |= SIEVE_CAPA_PROCESSCAL;
             generate_token("processimip", 0, buf);
             generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
             generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
@@ -1716,22 +1939,33 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             break;
 
         case B_IKEEP_TARGET:
-            *requires |= SIEVE_CAPA_IKEEP_TARGET;
+            *
+                requires
+            |= SIEVE_CAPA_IKEEP_TARGET;
             generate_token("implicit_keep_target", indent, buf);
-            generate_string_capa(":mailboxid", cmd.u.ikt.mailboxid,
-                         SIEVE_CAPA_MAILBOXID, requires, buf);
-            generate_string_capa(":specialuse", cmd.u.ikt.specialuse,
-                                 SIEVE_CAPA_SPECIAL_USE, requires, buf);
+            generate_string_capa(":mailboxid",
+                                 cmd.u.ikt.mailboxid,
+                                 SIEVE_CAPA_MAILBOXID,
+                                 requires,
+                                 buf);
+            generate_string_capa(":specialuse",
+                                 cmd.u.ikt.specialuse,
+                                 SIEVE_CAPA_SPECIAL_USE,
+                                 requires,
+                                 buf);
             generate_string(NULL, cmd.u.ikt.folder, buf);
             break;
 
         case B_PROCESSCAL:
-            *requires |= SIEVE_CAPA_PROCESSCAL;
+            *
+                requires
+            |= SIEVE_CAPA_PROCESSCAL;
             generate_token("processcalendar", 0, buf);
             generate_switch(":allowpublic", cmd.u.cal.allow_public, buf);
             generate_switch(":invitesonly", cmd.u.cal.invites_only, buf);
             generate_switch(":updatesonly", cmd.u.cal.updates_only, buf);
-            generate_switch(":deletecancelled", cmd.u.cal.delete_cancelled, buf);
+            generate_switch(
+                ":deletecancelled", cmd.u.cal.delete_cancelled, buf);
             generate_stringlist(":addresses", cmd.u.cal.addresses, buf);
             generate_string(":organizers", cmd.u.cal.organizers, buf);
             generate_string(":calendarid", cmd.u.cal.calendarid, buf);
@@ -1753,13 +1987,15 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
 static void generate_script(bytecode_input_t *d, int bc_len)
 {
     int i, version, req;
-    unsigned long long requires = 0;
+    unsigned long long
+        requires
+    = 0;
     struct buf buf = BUF_INITIALIZER;
 
     if (!d) return;
 
     i = bc_header_parse(d, &version, &req);
-    if (i <  0) {
+    if (i < 0) {
         fprintf(stderr, "not a bytecode file [magic number test failed]\n");
         return;
     }
