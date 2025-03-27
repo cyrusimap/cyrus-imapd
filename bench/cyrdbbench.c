@@ -122,7 +122,9 @@ static char *create_tmp_dir_name(void)
     value = ((size_t) (tv.tv_usec << 16)) ^ tv.tv_sec ^ getpid();
 
     tmpdir = getenv("TMPDIR");
-    if (!tmpdir) tmpdir = "/tmp";
+    if (!tmpdir) {
+        tmpdir = "/tmp";
+    }
 
     snprintf(path, sizeof(path), "%s/zsbench-XXXXXX", tmpdir);
 
@@ -153,10 +155,12 @@ static char *create_tmp_dir_name(void)
         value += 9999;
     }
 
-    if (!ret)
+    if (!ret) {
         return xstrdup(path);
-    else
+    }
+    else {
         return NULL;
+    }
 }
 
 static char *generate_random_string(char *str, size_t length)
@@ -198,7 +202,9 @@ static int recursive_rm_cb(const char *path,
 {
     int ret = remove(path);
 
-    if (ret) perror(path);
+    if (ret) {
+        perror(path);
+    }
 
     return ret;
 }
@@ -274,7 +280,9 @@ static void print_environment(void)
             struct buf key = BUF_INITIALIZER;
             struct buf val = BUF_INITIALIZER;
 
-            if (sep == NULL) continue;
+            if (sep == NULL) {
+                continue;
+            }
 
             buf_setmap(&key, line, (sep - 1 - line));
             buf_trim(&key);
