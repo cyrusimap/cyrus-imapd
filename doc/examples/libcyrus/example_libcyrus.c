@@ -100,7 +100,9 @@ void test_bitvector(void)
     unsigned u;
 
     for (u = 0; u < 20; u++) {
-        if (u % 5 == 0 || u % 3 == 0) bv_set(&bv, u);
+        if (u % 5 == 0 || u % 3 == 0) {
+            bv_set(&bv, u);
+        }
     }
 
     str = bv_cstring(&bv);
@@ -179,9 +181,15 @@ void test_cyrusdb(void)
     snprintf(fname, sizeof(fname), "%s/%s", config_dir, "foo.db");
 
     r = cyrusdb_open(dbname, fname, CYRUSDB_CREATE, &db);
-    if (!r) r = cyrusdb_store(db, key, keylen, "foo", strlen("foo"), &tid);
-    if (!r) r = cyrusdb_fetch(db, key, keylen, &data, &datalen, &tid);
-    if (!r) r = cyrusdb_commit(db, tid);
+    if (!r) {
+        r = cyrusdb_store(db, key, keylen, "foo", strlen("foo"), &tid);
+    }
+    if (!r) {
+        r = cyrusdb_fetch(db, key, keylen, &data, &datalen, &tid);
+    }
+    if (!r) {
+        r = cyrusdb_commit(db, tid);
+    }
 
     r = cyrusdb_close(db);
     (void) r;
