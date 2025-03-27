@@ -130,7 +130,9 @@ int actions_setuser(const char *userid)
         buf_setcstr(&buf, user_sieve_path(userid));
     }
 
-    if (sieve_dir) free(sieve_dir);
+    if (sieve_dir) {
+        free(sieve_dir);
+    }
     sieve_dir = buf_release(&buf);
 
     struct stat sbuf;
@@ -139,17 +141,25 @@ int actions_setuser(const char *userid)
         result = cyrus_mkdir(sieve_dir, 0755);
         if (!result) {
             result = mkdir(sieve_dir, 0755);
-            if (!result) result = stat(sieve_dir, &sbuf);
+            if (!result) {
+                result = stat(sieve_dir, &sbuf);
+            }
         }
     }
 
-    if (result) return TIMSIEVE_FAIL;
+    if (result) {
+        return TIMSIEVE_FAIL;
+    }
 
     sievedb = sievedb_open_userid(sieved_userid);
-    if (!sievedb) return TIMSIEVE_FAIL;
+    if (!sievedb) {
+        return TIMSIEVE_FAIL;
+    }
 
     result = sieve_ensure_folder(sieved_userid, &sieve_mailbox, /*silent*/ 0);
-    if (result) return TIMSIEVE_FAIL;
+    if (result) {
+        return TIMSIEVE_FAIL;
+    }
 
     mailbox_unlock_index(sieve_mailbox, NULL);
 
@@ -223,7 +233,9 @@ int capabilities(struct protstream *conn,
         prot_puts(conn, "\"STARTTLS\"\r\n");
     }
 
-    if (authenticated) prot_printf(conn, "\"OWNER\" \"%s\"\r\n", sieved_userid);
+    if (authenticated) {
+        prot_printf(conn, "\"OWNER\" \"%s\"\r\n", sieved_userid);
+    }
     prot_puts(conn, "\"UNAUTHENTICATE\"\r\n");
 
     prot_puts(conn, "OK\r\n");
@@ -371,7 +383,9 @@ static int list_cb(void *rock, struct sieve_data *sdata)
     struct protstream *conn = (struct protstream *) rock;
 
     prot_printf(conn, "\"%s\"", sdata->name);
-    if (sdata->isactive) prot_puts(conn, " ACTIVE");
+    if (sdata->isactive) {
+        prot_puts(conn, " ACTIVE");
+    }
     prot_puts(conn, "\r\n");
 
     return 0;

@@ -120,10 +120,14 @@ static char *sieve_parsesuccess(char *str, const char **status)
     {
         success = tmp + 6; /* skip SASL " */
         tmp = strstr(success, "\"");
-        if (tmp) *tmp = '\0'; /* clip " */
+        if (tmp) {
+            *tmp = '\0'; /* clip " */
+        }
     }
 
-    if (status) *status = NULL;
+    if (status) {
+        *status = NULL;
+    }
     return success;
 }
 
@@ -177,14 +181,18 @@ int parser(struct protstream *sieved_out,
     int ret = FALSE;
 
     /* get one token from the lexer */
-    while (token == EOL) token = timlex(NULL, NULL, sieved_in);
+    while (token == EOL) {
+        token = timlex(NULL, NULL, sieved_in);
+    }
 
     if (!authenticated && (token > 255) && (token != AUTHENTICATE)
         && (token != LOGOUT) && (token != CAPABILITY) && (token != NOOP)
         && (token != CHECKSCRIPT) && (!tls_enabled() || (token != STARTTLS)))
     {
         error_msg = "Authenticate first";
-        if (token != EOL) lex_setrecovering();
+        if (token != EOL) {
+            lex_setrecovering();
+        }
 
         goto error;
     }
@@ -193,7 +201,9 @@ int parser(struct protstream *sieved_out,
         && (token != PUTSCRIPT) && (token != LOGOUT))
     {
         error_msg = "Script verification only";
-        if (token != EOL) lex_setrecovering();
+        if (token != EOL) {
+            lex_setrecovering();
+        }
 
         goto error;
     }
@@ -244,8 +254,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (authenticated)
+        if (authenticated) {
             prot_printf(sieved_out, "NO \"Already authenticated\"\r\n");
+        }
         else if (cmd_authenticate(sieved_out,
                                   sieved_in,
                                   mechanism_name.s,
@@ -265,7 +276,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         capabilities(sieved_out,
                      sieved_saslconn,
@@ -322,7 +335,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         cmd_havespace(sieved_out, &sieve_name, num);
 
@@ -361,7 +376,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         getscript(sieved_out, &sieve_name);
 
@@ -393,7 +410,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         putscript(sieved_out, &sieve_name, &sieve_data, verify_only);
 
@@ -415,7 +434,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         setactive(sieved_out, &sieve_name);
 
@@ -447,7 +468,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         renamescript(sieved_out, &sieve_name, &sieve_data);
 
@@ -469,7 +492,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         deletescript(sieved_out, &sieve_name);
 
@@ -482,7 +507,9 @@ int parser(struct protstream *sieved_out,
             goto error;
         }
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         listscripts(sieved_out);
 
@@ -498,7 +525,9 @@ int parser(struct protstream *sieved_out,
         /* XXX  discard any input pipelined after STARTTLS */
         prot_flush(sieved_in);
 
-        if (referral_host) goto do_referral;
+        if (referral_host) {
+            goto do_referral;
+        }
 
         cmd_starttls(sieved_out, sieved_in, saslprops);
 
@@ -532,8 +561,9 @@ int parser(struct protstream *sieved_out,
             prot_printliteral(sieved_out, sieve_name.s, sieve_name.len);
             prot_printf(sieved_out, ") \"Done\"\r\n");
         }
-        else
+        else {
             prot_printf(sieved_out, "OK \"Done\"\r\n");
+        }
         break;
 
     case UNAUTHENTICATE:
@@ -559,7 +589,9 @@ done:
 
     prot_flush(sieved_out);
 
-    if (authenticated && ret == TRUE) actions_unsetuser();
+    if (authenticated && ret == TRUE) {
+        actions_unsetuser();
+    }
 
     return ret;
 
@@ -583,7 +615,9 @@ do_referral: {
     /* Truncate the hostname if necessary */
     strlcpy(buf, referral_host, sizeof(buf));
     c = strchr(buf, '!');
-    if (c) *c = '\0';
+    if (c) {
+        *c = '\0';
+    }
 
     prot_printf(
         sieved_out, "BYE (REFERRAL \"sieve://%s\") \"Try Remote.\"\r\n", buf);
@@ -608,7 +642,9 @@ static void cmd_unauthenticate(struct protstream *sieved_out,
     prot_printf(sieved_out, "OK\r\n");
     prot_flush(sieved_out);
 
-    if (chdir("/tmp/")) syslog(LOG_ERR, "Failed to chdir to /tmp/");
+    if (chdir("/tmp/")) {
+        syslog(LOG_ERR, "Failed to chdir to /tmp/");
+    }
     reset_saslconn(&sieved_saslconn);
     prot_unsetsasl(sieved_out);
     prot_unsetsasl(sieved_in);
@@ -744,7 +780,9 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
     if (sasl_result != SASL_OK) {
         /* convert to user error code */
-        if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+        if (sasl_result == SASL_NOUSER) {
+            sasl_result = SASL_BADAUTH;
+        }
         *errmsg = (const char *) sasl_errstring(sasl_result, NULL, NULL);
         syslog(
             LOG_NOTICE, "badlogin: %s %s %s", sieved_clienthost, mech, *errmsg);
@@ -801,8 +839,12 @@ static int cmd_authenticate(struct protstream *sieved_out,
                     }
                     authname = xstrdup((const char *) canon_user);
 
-                    if ((p = strchr(authname, '@'))) *p = '%';
-                    if ((p = strchr(username, '@'))) *p = '%';
+                    if ((p = strchr(authname, '@'))) {
+                        *p = '%';
+                    }
+                    if ((p = strchr(username, '@'))) {
+                        *p = '%';
+                    }
 
                     referral_host =
                         (char *) xmalloc(strlen(authname) + 1 + strlen(username)
@@ -815,8 +857,9 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
                     free(authname);
                 }
-                else
+                else {
                     referral_host = xstrdup(mbentry->server);
+                }
             }
             else {
                 /* We want to set up a connection to the backend for proxying */
@@ -911,8 +954,9 @@ cleanup:
     return ret;
 
 reset:
-    if (reset_saslconn(&sieved_saslconn) != SASL_OK)
+    if (reset_saslconn(&sieved_saslconn) != SASL_OK) {
         fatal("could not reset the sasl_conn_t after failure", EX_TEMPFAIL);
+    }
     ret = FALSE;
     goto cleanup;
 }

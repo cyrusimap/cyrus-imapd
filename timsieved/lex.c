@@ -62,50 +62,78 @@ static int token_lookup(const char *str)
 {
     switch (*str) {
     case 'a':
-        if (strcmp(str, "authenticate") == 0) return AUTHENTICATE;
+        if (strcmp(str, "authenticate") == 0) {
+            return AUTHENTICATE;
+        }
         break;
 
     case 'c':
-        if (strcmp(str, "capability") == 0) return CAPABILITY;
-        if (strcmp(str, "checkscript") == 0) return CHECKSCRIPT;
+        if (strcmp(str, "capability") == 0) {
+            return CAPABILITY;
+        }
+        if (strcmp(str, "checkscript") == 0) {
+            return CHECKSCRIPT;
+        }
         break;
 
     case 'd':
-        if (strcmp(str, "deletescript") == 0) return DELETESCRIPT;
+        if (strcmp(str, "deletescript") == 0) {
+            return DELETESCRIPT;
+        }
         break;
 
     case 'g':
-        if (strcmp(str, "getscript") == 0) return GETSCRIPT;
+        if (strcmp(str, "getscript") == 0) {
+            return GETSCRIPT;
+        }
         break;
 
     case 'h':
-        if (strcmp(str, "havespace") == 0) return HAVESPACE;
+        if (strcmp(str, "havespace") == 0) {
+            return HAVESPACE;
+        }
         break;
 
     case 'l':
-        if (strcmp(str, "listscripts") == 0) return LISTSCRIPTS;
-        if (strcmp(str, "logout") == 0) return LOGOUT;
+        if (strcmp(str, "listscripts") == 0) {
+            return LISTSCRIPTS;
+        }
+        if (strcmp(str, "logout") == 0) {
+            return LOGOUT;
+        }
         break;
 
     case 'n':
-        if (strcmp(str, "noop") == 0) return NOOP;
+        if (strcmp(str, "noop") == 0) {
+            return NOOP;
+        }
         break;
 
     case 'p':
-        if (strcmp(str, "putscript") == 0) return PUTSCRIPT;
+        if (strcmp(str, "putscript") == 0) {
+            return PUTSCRIPT;
+        }
         break;
 
     case 'r':
-        if (strcmp(str, "renamescript") == 0) return RENAMESCRIPT;
+        if (strcmp(str, "renamescript") == 0) {
+            return RENAMESCRIPT;
+        }
         break;
 
     case 's':
-        if (strcmp(str, "setactive") == 0) return SETACTIVE;
-        if (strcmp(str, "starttls") == 0 && tls_enabled()) return STARTTLS;
+        if (strcmp(str, "setactive") == 0) {
+            return SETACTIVE;
+        }
+        if (strcmp(str, "starttls") == 0 && tls_enabled()) {
+            return STARTTLS;
+        }
         break;
 
     case 'u':
-        if (strcmp(str, "unauthenticate") == 0) return UNAUTHENTICATE;
+        if (strcmp(str, "unauthenticate") == 0) {
+            return UNAUTHENTICATE;
+        }
         break;
     }
 
@@ -180,10 +208,14 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
             if (ch == '\n') {
                 lexer_state = LEXER_STATE_NORMAL;
             }
-            if (ch == '\r') lexer_state = LEXER_STATE_RECOVER_CR;
+            if (ch == '\r') {
+                lexer_state = LEXER_STATE_RECOVER_CR;
+            }
             break;
         case LEXER_STATE_RECOVER_CR:
-            if (ch == '\n') lexer_state = LEXER_STATE_NORMAL;
+            if (ch == '\n') {
+                lexer_state = LEXER_STATE_NORMAL;
+            }
             break;
         case LEXER_STATE_CR:
             if (ch == '\n') {
@@ -211,12 +243,18 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
             }
 
             /* Otherwise, we're appending a character */
-            if (buff_end <= buff_ptr) ERR_PUSHBACK(); /* too long! */
+            if (buff_end <= buff_ptr) {
+                ERR_PUSHBACK(); /* too long! */
+            }
             if (ch == '\\') {
                 ch = prot_getc(stream);
 
-                if (result != TIMSIEVE_OK) ERR();
-                if (ch != '\"' && ch != '\\') ERR_PUSHBACK();
+                if (result != TIMSIEVE_OK) {
+                    ERR();
+                }
+                if (ch != '\"' && ch != '\\') {
+                    ERR_PUSHBACK();
+                }
             }
             *buff_ptr++ = ch;
             break;
@@ -224,27 +262,43 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
             if (('0' <= ch) && (ch <= '9')) {
                 unsigned long newcount = count * 10 + (ch - '0');
 
-                if (newcount < count) ERR_PUSHBACK(); /* overflow */
+                if (newcount < count) {
+                    ERR_PUSHBACK(); /* overflow */
+                }
                 /*
                  * XXX This should be fatal if non-synchronizing.
                  */
                 count = newcount;
                 break;
             }
-            if (ch != '+') ERR_PUSHBACK();
+            if (ch != '+') {
+                ERR_PUSHBACK();
+            }
             ch = prot_getc(stream);
-            if (ch != '}') ERR_PUSHBACK();
+            if (ch != '}') {
+                ERR_PUSHBACK();
+            }
             ch = prot_getc(stream);
-            if (ch < 0) ERR();
-            if (ch != '\r') ERR_PUSHBACK();
+            if (ch < 0) {
+                ERR();
+            }
+            if (ch != '\r') {
+                ERR_PUSHBACK();
+            }
             ch = prot_getc(stream);
-            if (ch < 0) ERR();
-            if (ch != '\n') ERR_PUSHBACK();
+            if (ch < 0) {
+                ERR();
+            }
+            if (ch != '\n') {
+                ERR_PUSHBACK();
+            }
 
             if (count > maxscriptsize) {
                 /* too big, eat the input */
                 for (; count > 0; count--) {
-                    if (prot_getc(stream) == EOF) break;
+                    if (prot_getc(stream) == EOF) {
+                        break;
+                    }
                 }
 
                 ERR();
@@ -254,7 +308,9 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
             if (outstr) {
                 for (; count > 0; count--) {
                     ch = prot_getc(stream);
-                    if (ch == EOF) break;
+                    if (ch == EOF) {
+                        break;
+                    }
                     buf_putc(outstr, ch);
                 }
                 buf_cstring(outstr);
@@ -263,7 +319,9 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
                 /* just read the chars and throw them away */
                 unsigned long lup;
 
-                for (lup = 0; lup < count; lup++) (void) prot_getc(stream);
+                for (lup = 0; lup < count; lup++) {
+                    (void) prot_getc(stream);
+                }
             }
             lexer_state = LEXER_STATE_NORMAL;
             return STRING;
@@ -272,14 +330,18 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
             if (Uisdigit(ch)) {
                 unsigned long newcount = tmpnum * 10 + (ch - '0');
 
-                if (newcount < tmpnum) ERR_PUSHBACK(); /* overflow */
+                if (newcount < tmpnum) {
+                    ERR_PUSHBACK(); /* overflow */
+                }
                 tmpnum = newcount;
             }
             else {
                 lexer_state = LEXER_STATE_NORMAL;
                 prot_ungetc(ch, stream);
 
-                if (outnum) *outnum = tmpnum;
+                if (outnum) {
+                    *outnum = tmpnum;
+                }
 
                 return NUMBER;
             }
@@ -338,10 +400,13 @@ int timlex(struct buf *outstr, unsigned long *outnum, struct protstream *stream)
 
                     return token;
                 }
-                else
+                else {
                     ERR_PUSHBACK();
+                }
             }
-            if (buff_end <= buff_ptr) ERR_PUSHBACK(); /* atom too long */
+            if (buff_end <= buff_ptr) {
+                ERR_PUSHBACK(); /* atom too long */
+            }
             *buff_ptr++ = tolower(ch);
             break;
         }

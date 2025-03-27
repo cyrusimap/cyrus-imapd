@@ -122,7 +122,9 @@ void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     /* free interpreter */
-    if (interp) sieve_interp_free(&interp);
+    if (interp) {
+        sieve_interp_free(&interp);
+    }
 
     /* close backend connection */
     if (backend) {
@@ -143,9 +145,13 @@ void shut_down(int code)
         prot_flush(sieved_out);
         prot_free(sieved_out);
     }
-    if (sieved_in) prot_free(sieved_in);
+    if (sieved_in) {
+        prot_free(sieved_in);
+    }
 
-    if (sieved_logfd != -1) close(sieved_logfd);
+    if (sieved_logfd != -1) {
+        close(sieved_logfd);
+    }
 
     cyrus_reset_stdio();
 
@@ -198,7 +204,9 @@ EXPORTED void fatal(const char *s, int code)
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(EX_TEMPFAIL);
 }
@@ -224,7 +232,9 @@ EXPORTED int service_init(int argc,
 
     /* build interpreter for compiling */
     interp = sieve_build_nonexec_interp();
-    if (interp == NULL) shut_down(EX_SOFTWARE);
+    if (interp == NULL) {
+        shut_down(EX_SOFTWARE);
+    }
 
     while ((opt = getopt(argc, argv, "H")) != EOF) {
         switch (opt) {
@@ -260,13 +270,17 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     sieved_out = prot_new(1, 1);
 
     sieved_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
-    if (sieved_timeout < 10 * 60) sieved_timeout = 10 * 60;
+    if (sieved_timeout < 10 * 60) {
+        sieved_timeout = 10 * 60;
+    }
     prot_settimeout(sieved_in, sieved_timeout);
     prot_setflushonread(sieved_in, sieved_out);
 
     signal(SIGPIPE, SIG_IGN);
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", -6);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", -6);
+    }
 
     /* Find out name of client host */
     sieved_clienthost = get_clienthost(0, &localip, &remoteip);
@@ -286,13 +300,17 @@ EXPORTED int service_main(int argc __attribute__((unused)),
                         SASL_SUCCESS_DATA,
                         &sieved_saslconn)
         != SASL_OK)
+    {
         fatal("SASL failed initializing: sasl_server_new()", -1);
+    }
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
     sasl_setprop(sieved_saslconn, SASL_SEC_PROPS, secprops);
 
-    if (actions_init() != TIMSIEVE_OK) fatal("Error initializing actions", -1);
+    if (actions_init() != TIMSIEVE_OK) {
+        fatal("Error initializing actions", -1);
+    }
 
     sieved_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
@@ -320,18 +338,24 @@ int reset_saslconn(sasl_conn_t **conn)
                           NULL,
                           SASL_SUCCESS_DATA,
                           conn);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if (ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
     if (saslprops.ssf) {
         ret = saslprops_set_tls(&saslprops, *conn);
-        if (ret != SASL_OK) return ret;
+        if (ret != SASL_OK) {
+            return ret;
+        }
     }
     /* End TLS/SSL Info */
 
@@ -372,7 +396,9 @@ done:
     /* ok, we're done. */
     protgroup_free(protin);
 
-    if (shutdown) prot_printf(sieved_out, "NO \"%s\"\r\n", buf);
+    if (shutdown) {
+        prot_printf(sieved_out, "NO \"%s\"\r\n", buf);
+    }
 
     return;
 }
