@@ -130,27 +130,43 @@ STATIC int EXPsplit(char *p, char sep, char **argv, int count)
 {
     int i;
 
-    if (!p) return 0;
+    if (!p) {
+        return 0;
+    }
 
-    while (*p == sep) ++p;
+    while (*p == sep) {
+        ++p;
+    }
 
-    if (!*p) return 0;
+    if (!*p) {
+        return 0;
+    }
 
-    if (!p) return 0;
+    if (!p) {
+        return 0;
+    }
 
-    while (*p == sep) ++p;
+    while (*p == sep) {
+        ++p;
+    }
 
-    if (!*p) return 0;
+    if (!*p) {
+        return 0;
+    }
 
-    for (i = 1, *argv++ = p; *p;)
+    for (i = 1, *argv++ = p; *p;) {
         if (*p++ == sep) {
             p[-1] = '\0';
             for (; *p == sep; p++);
-            if (!*p) return i;
-            if (++i == count) /* Overflow. */
+            if (!*p) {
+                return i;
+            }
+            if (++i == count) /* Overflow. */ {
                 return -1;
+            }
             *argv++ = p;
         }
+    }
     return i;
 }
 
@@ -172,15 +188,23 @@ STATIC BOOL EXPgetnum(int line, char *word, time_t *v, char *name)
     }
 
     /* Check the number.  We don't have strtod yet. */
-    for (p = word; ISWHITE(*p); p++) continue;
-    if (*p == '+' || *p == '-') p++;
-    for (SawDot = FALSE; *p; p++)
+    for (p = word; ISWHITE(*p); p++) {
+        continue;
+    }
+    if (*p == '+' || *p == '-') {
+        p++;
+    }
+    for (SawDot = FALSE; *p; p++) {
         if (*p == '.') {
-            if (SawDot) break;
+            if (SawDot) {
+                break;
+            }
             SawDot = TRUE;
         }
-        else if (!Uisdigit(*p))
+        else if (!Uisdigit(*p)) {
             break;
+        }
+    }
     if (*p) {
         (void) fprintf(stderr,
                        "Line %d, bad `%c' character in %s field\n",
@@ -190,10 +214,12 @@ STATIC BOOL EXPgetnum(int line, char *word, time_t *v, char *name)
         return FALSE;
     }
     d = atof(word);
-    if (d > MAGIC_TIME)
+    if (d > MAGIC_TIME) {
         *v = (time_t) 0;
-    else
+    }
+    else {
         *v = Now - (time_t) (d * 86400.);
+    }
     return TRUE;
 }
 
@@ -207,9 +233,11 @@ STATIC void EXPmatch(char *p, NEWSGROUP *v, char mod)
     BOOL negate;
 
     negate = *p == '!';
-    if (negate) p++;
+    if (negate) {
+        p++;
+    }
     for (ngp = Groups, i = nGroups; --i >= 0; ngp++) {
-        if (negate ? !wildmat(ngp->Name, p) : wildmat(ngp->Name, p))
+        if (negate ? !wildmat(ngp->Name, p) : wildmat(ngp->Name, p)) {
             if (mod == 'a') {
                 /*|| (mod == 'm' && ngp->Rest[0] == NF_FLAG_MODERATED)
                   || (mod == 'u' && ngp->Rest[0] != NF_FLAG_MODERATED)) { */
@@ -225,6 +253,7 @@ STATIC void EXPmatch(char *p, NEWSGROUP *v, char mod)
                     (void) printf(" (%s)\n", p);
                 }
             }
+        }
     }
 }
 
@@ -248,8 +277,9 @@ BOOL EXPreadfile(FILE *F)
     EXPremember = -1;
     SawDefault = FALSE;
     patterns = NEW(char *, nGroups);
-    for (i = 0; i < NUM_STORAGE_CLASSES; i++)
+    for (i = 0; i < NUM_STORAGE_CLASSES; i++) {
         EXPclasses[i].ReportedMissing = EXPclasses[i].Missing = TRUE;
+    }
 
     for (i = 1; fgets(buff, sizeof buff, F) != NULL; i++) {
         if ((p = strchr(buff, '\n')) == NULL) {
@@ -258,17 +288,23 @@ BOOL EXPreadfile(FILE *F)
         }
         *p = '\0';
         p = strchr(buff, '#');
-        if (p)
+        if (p) {
             *p = '\0';
-        else
-            p = buff + strlen(buff);
-        while (--p >= buff) {
-            if (Uisspace(*p))
-                *p = '\0';
-            else
-                break;
         }
-        if (buff[0] == '\0') continue;
+        else {
+            p = buff + strlen(buff);
+        }
+        while (--p >= buff) {
+            if (Uisspace(*p)) {
+                *p = '\0';
+            }
+            else {
+                break;
+            }
+        }
+        if (buff[0] == '\0') {
+            continue;
+        }
         if ((j = EXPsplit(buff, ':', fields, SIZEOF(fields))) == -1) {
             (void) fprintf(stderr, "Line %d too many fields\n", i);
             return FALSE;
@@ -284,8 +320,9 @@ BOOL EXPreadfile(FILE *F)
                 (void) fprintf(stderr, "Line %d duplicate /remember/\n", i);
                 return FALSE;
             }
-            if (!EXPgetnum(i, fields[1], &EXPremember, "remember"))
+            if (!EXPgetnum(i, fields[1], &EXPremember, "remember")) {
                 return FALSE;
+            }
             continue;
         }
 
@@ -299,7 +336,9 @@ BOOL EXPreadfile(FILE *F)
             if (!EXPgetnum(i, fields[1], &EXPclasses[j].Keep, "keep")
                 || !EXPgetnum(i, fields[2], &EXPclasses[j].Default, "default")
                 || !EXPgetnum(i, fields[3], &EXPclasses[j].Purge, "purge"))
+            {
                 return FALSE;
+            }
             /* These were turned into offsets, so the test is the opposite
              * of what you think it should be.  If Purge isn't forever,
              * make sure it's greater then the other two fields. */
@@ -330,12 +369,15 @@ BOOL EXPreadfile(FILE *F)
         }
 
         /* Parse the fields. */
-        if (strchr(fields[1], 'M') != NULL)
+        if (strchr(fields[1], 'M') != NULL) {
             mod = 'm';
-        else if (strchr(fields[1], 'U') != NULL)
+        }
+        else if (strchr(fields[1], 'U') != NULL) {
             mod = 'u';
-        else if (strchr(fields[1], 'A') != NULL)
+        }
+        else if (strchr(fields[1], 'A') != NULL) {
             mod = 'a';
+        }
         else {
             (void) fprintf(stderr, "Line %d bad modflag\n", i);
             return FALSE;
@@ -344,7 +386,9 @@ BOOL EXPreadfile(FILE *F)
         if (!EXPgetnum(i, fields[2], &v.Keep, "keep")
             || !EXPgetnum(i, fields[3], &v.Default, "default")
             || !EXPgetnum(i, fields[4], &v.Purge, "purge"))
+        {
             return FALSE;
+        }
         /* These were turned into offsets, so the test is the opposite
          * of what you think it should be.  If Purge isn't forever,
          * make sure it's greater then the other two fields. */
@@ -378,7 +422,9 @@ BOOL EXPreadfile(FILE *F)
             (void) fprintf(stderr, "Line %d too many patterns\n", i);
             return FALSE;
         }
-        for (k = 0; k < j; k++) EXPmatch(patterns[k], &v, mod);
+        for (k = 0; k < j; k++) {
+            EXPmatch(patterns[k], &v, mod);
+        }
     }
     DISPOSE(patterns);
 
@@ -387,7 +433,9 @@ BOOL EXPreadfile(FILE *F)
 
 int ExpireExists(int num)
 {
-    if ((num < 0) || (num >= nGroups)) return 1;
+    if ((num < 0) || (num >= nGroups)) {
+        return 1;
+    }
 
     return 0;
 }
@@ -409,7 +457,9 @@ int readconfig_init(void)
     nGroups = 0;
     nGroups_alloc = 1000;
     Groups = (NEWSGROUP *) malloc(sizeof(NEWSGROUP) * 1000);
-    if (Groups == NULL) fatal("Unable to alloc", 0);
+    if (Groups == NULL) {
+        fatal("Unable to alloc", 0);
+    }
 
     return 0;
 }
@@ -454,31 +504,47 @@ void callback_list(struct imclient *imclient,
 
     s = reply->text;
 
-    if (*s++ != '(') return;
+    if (*s++ != '(') {
+        return;
+    }
     end = strchr(s, ')');
-    if (!end) return;
+    if (!end) {
+        return;
+    }
     attributes = s;
     s = end;
     *s++ = '\0';
 
-    if (*s++ != ' ') return;
+    if (*s++ != ' ') {
+        return;
+    }
     if (*s == 'N') {
-        if (s[1] != 'I' || s[2] != 'L') return;
+        if (s[1] != 'I' || s[2] != 'L') {
+            return;
+        }
         separator = "";
         s += 3;
     }
     else if (*s == '\"') {
         s++;
-        if (*s == '\\') s++;
+        if (*s == '\\') {
+            s++;
+        }
         separator = s++;
-        if (*s != '\"') return;
+        if (*s != '\"') {
+            return;
+        }
         *s++ = '\0';
     }
     (void) separator;
 
-    if (*s++ != ' ') return;
+    if (*s++ != ' ') {
+        return;
+    }
     c = imparse_astring(&s, &mailbox);
-    if (c != '\0') return;
+    if (c != '\0') {
+        return;
+    }
 
     if ((strncasecmp(mailbox, "INBOX", 5) != 0)
         && (strncasecmp(mailbox, "user.", 5) != 0))
@@ -492,7 +558,9 @@ void callback_list(struct imclient *imclient,
             nGroups_alloc += 1000;
             Groups = (NEWSGROUP *) realloc(Groups,
                                            sizeof(NEWSGROUP) * nGroups_alloc);
-            if (Groups == NULL) fatal("Unable to alloc", 0);
+            if (Groups == NULL) {
+                fatal("Unable to alloc", 0);
+            }
         }
     }
 

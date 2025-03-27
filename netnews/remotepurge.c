@@ -125,7 +125,9 @@ static void spew(int level, const char *fmt, ...)
     va_list ap;
     char buf[1024];
 
-    if (verbose < level) return;
+    if (verbose < level) {
+        return;
+    }
 
     va_start(ap, fmt);
     vsnprintf(buf, sizeof buf, fmt, ap);
@@ -149,7 +151,9 @@ EXPORTED void fatal(const char *s, int code)
         fprintf(stderr, "fatal error: %s\n", s);
     }
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -197,12 +201,16 @@ static capabilities_t *parsecapabilitylist(char *str)
         char *end = tmp + 5;
         tmp += 5;
 
-        while (((*end) != ' ') && ((*end) != '\0')) end++;
+        while (((*end) != ' ') && ((*end) != '\0')) {
+            end++;
+        }
 
         (*end) = '\0';
 
         /* add entry to list */
-        if (num > 0) strcat(ret->mechs, " ");
+        if (num > 0) {
+            strcat(ret->mechs, " ");
+        }
         strcat(ret->mechs, tmp);
         num++;
 
@@ -299,13 +307,17 @@ static void callback_search(struct imclient *imclient,
     s = reply->text;
 
     while (Uisdigit(*s)) {
-        if (parseuint32(s, &s, &num)) break;
+        if (parseuint32(s, &s, &num)) {
+            break;
+        }
 
         if (uids->size >= uids->allocsize) {
-            if (uids->allocsize)
+            if (uids->allocsize) {
                 uids->allocsize *= 2;
-            else
+            }
+            else {
                 uids->allocsize = 250;
+            }
 
             uids->list =
                 xrealloc(uids->list, sizeof(unsigned long) * uids->allocsize);
@@ -314,7 +326,9 @@ static void callback_search(struct imclient *imclient,
         uids->list[uids->size] = num;
         uids->size++;
 
-        if (*s == '\0') break;
+        if (*s == '\0') {
+            break;
+        }
         s++;
     }
 }
@@ -330,8 +344,9 @@ static int send_delete(const char *mbox, const char *uidlist)
     while (cmd_done == NOTFINISHED) {
         imclient_processoneevent(imclient_conn);
     }
-    if (cmd_done == IMAP_OK)
+    if (cmd_done == IMAP_OK) {
         return 0;
+    }
     else if (cmd_done == IMAP_NO) {
         syslog(LOG_ERR,
                "%s can't mark messages deleted: %s",
@@ -339,8 +354,9 @@ static int send_delete(const char *mbox, const char *uidlist)
                cmd_resp ? cmd_resp : "");
         return -1;
     }
-    else
+    else {
         fatal("marking message deleted", EX_TEMPFAIL);
+    }
 }
 
 static void mark_all_deleted(const char *mbox,
@@ -355,7 +371,9 @@ static void mark_all_deleted(const char *mbox,
     unsigned long *A = list->list;
     int r;
 
-    if (list->size == 0) return;
+    if (list->size == 0) {
+        return;
+    }
 
     /* we send blocks of 500 or so characters */
     i = 0;
@@ -365,7 +383,9 @@ static void mark_all_deleted(const char *mbox,
     run_start = A[i++];
     r = 0;
     for (; i < list->size && r == 0; i++) {
-        if (A[i] == A[i - 1] + 1) continue; /* continue this run */
+        if (A[i] == A[i - 1] + 1) {
+            continue; /* continue this run */
+        }
         if (first_time) {
             first_time = 0;
         }
@@ -415,7 +435,9 @@ static int purge_me(char *name, time_t when)
     static uid_list_t uidlist;
     struct tm *my_tm;
 
-    if (when == 0) return 0;
+    if (when == 0) {
+        return 0;
+    }
 
     my_tm = gmtime(&when);
 
@@ -540,7 +562,9 @@ static int purge_all(void)
     while (ret == 0) {
         ret = ExpireExists(num);
 
-        if (ret == 0) purge_me(GetExpireName(num), GetExpireTime(num));
+        if (ret == 0) {
+            purge_me(GetExpireName(num), GetExpireTime(num));
+        }
 
         num++;
     }
@@ -564,7 +588,9 @@ static void do_list(char *matchstr)
         imclient_processoneevent(imclient_conn);
     }
 
-    if (cmd_done != IMAP_OK) fatal("unable to LIST mailboxes", EX_TEMPFAIL);
+    if (cmd_done != IMAP_OK) {
+        fatal("unable to LIST mailboxes", EX_TEMPFAIL);
+    }
 }
 
 /*
@@ -617,8 +643,9 @@ static void remote_purge(char *configpath, char **matches)
 
         configstream = fopen(name, "r");
 
-        if (configstream == NULL)
+        if (configstream == NULL) {
             fatal("unable to open config file", EX_CONFIG);
+        }
 
         EXPreadfile(configstream);
         /* ret val */
@@ -668,8 +695,8 @@ int main(int argc, char **argv)
     capabilities_t *capabilitylist;
 
     /* look at all the extra args */
-    while ((c = getopt(argc, argv, "d:vne:k:l:p:u:a:m:t:")) != EOF) switch (c)
-        {
+    while ((c = getopt(argc, argv, "d:vne:k:l:p:u:a:m:t:")) != EOF) {
+        switch (c) {
         case 'd':
             days = atoi(optarg);
             break;
@@ -709,10 +736,13 @@ int main(int argc, char **argv)
             usage();
             break;
         }
+    }
 
     (void) dotls;
     (void) mechanism;
-    if (optind >= argc) usage();
+    if (optind >= argc) {
+        usage();
+    }
 
     if ((days == -1) && (expirectlfile == NULL)) {
         printf("Must specify expire.ctl file OR days old OR bytes large\n\n");
