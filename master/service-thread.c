@@ -79,7 +79,9 @@ static int verbose = 0;
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
-    if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
+    if (verbose) {
+        syslog(LOG_DEBUG, "telling master %x", msg);
+    }
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
@@ -192,21 +194,25 @@ int main(int argc, char **argv, char **envp)
             strarray_appendm(&service_argv, argv[optind - 1]);
 
             /* option has an argument */
-            if (optind < argc && argv[optind][0] != '-')
+            if (optind < argc && argv[optind][0] != '-') {
                 strarray_appendm(&service_argv, argv[optind++]);
+            }
 
             break;
         }
     }
     /* grab the remaining arguments */
-    for (; optind < argc; optind++)
+    for (; optind < argc; optind++) {
         strarray_appendm(&service_argv, argv[optind]);
+    }
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
+    if (p) {
+        verbose = atoi(p) + 1;
+    }
 
     if (verbose > 30) {
         syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
@@ -253,27 +259,32 @@ int main(int argc, char **argv, char **envp)
 
     /* set close on exec */
     fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-    if (fdflags != -1)
+    if (fdflags != -1) {
         fdflags = fcntl(LISTEN_FD, F_SETFD, fdflags | FD_CLOEXEC);
+    }
     if (fdflags == -1) {
         syslog(LOG_ERR, "unable to set close on exec: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
+        if (MESSAGE_MASTER_ON_EXIT) {
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        }
         return 1;
     }
     fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-    if (fdflags != -1)
+    if (fdflags != -1) {
         fdflags = fcntl(STATUS_FD, F_SETFD, fdflags | FD_CLOEXEC);
+    }
     if (fdflags == -1) {
         syslog(LOG_ERR, "unable to set close on exec: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
+        if (MESSAGE_MASTER_ON_EXIT) {
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        }
         return 1;
     }
 
     if (service_init(service_argv.count, service_argv.data, envp) != 0) {
-        if (MESSAGE_MASTER_ON_EXIT)
+        if (MESSAGE_MASTER_ON_EXIT) {
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        }
         return 1;
     }
 
@@ -303,8 +314,9 @@ int main(int argc, char **argv, char **envp)
                     break;
                 default:
                     syslog(LOG_ERR, "accept failed: %m");
-                    if (MESSAGE_MASTER_ON_EXIT)
+                    if (MESSAGE_MASTER_ON_EXIT) {
                         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                    }
                     service_abort(EX_OSERR);
                 }
             }
@@ -330,8 +342,9 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
-    if (MESSAGE_MASTER_ON_EXIT)
+    if (MESSAGE_MASTER_ON_EXIT) {
         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+    }
     service_abort(0);
     return 0;
 }

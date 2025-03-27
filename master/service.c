@@ -89,7 +89,9 @@ static int newfile = 0;
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
-    if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
+    if (verbose) {
+        syslog(LOG_DEBUG, "telling master %x", msg);
+    }
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
@@ -201,16 +203,18 @@ static int lockaccept(void)
             /* noop */;
 
         if (rc < 0 && signals_poll()) {
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(0);
             return -1;
         }
 
         if (rc < 0) {
             syslog(LOG_ERR, "fcntl: F_SETLKW: error getting accept lock: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(EX_OSERR);
             return -1;
         }
@@ -237,8 +241,9 @@ static int unlockaccept(void)
 
         if (rc < 0) {
             syslog(LOG_ERR, "fcntl: F_SETLKW: error releasing accept lock: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(EX_OSERR);
             return -1;
         }
@@ -342,11 +347,15 @@ int main(int argc, char **argv, char **envp)
             break;
         case 'U': /* maximum uses */
             max_use = atoi(optarg);
-            if (max_use < 0) max_use = 0;
+            if (max_use < 0) {
+                max_use = 0;
+            }
             break;
         case 'T': /* reuse timeout */
             reuse_timeout = atoi(optarg);
-            if (reuse_timeout < 0) reuse_timeout = 0;
+            if (reuse_timeout < 0) {
+                reuse_timeout = 0;
+            }
             break;
         case 'D':
             call_debugger = 1;
@@ -358,21 +367,25 @@ int main(int argc, char **argv, char **envp)
             strarray_appendm(&service_argv, argv[optind - 1]);
 
             /* option has an argument */
-            if (optind < argc && argv[optind][0] != '-')
+            if (optind < argc && argv[optind][0] != '-') {
                 strarray_appendm(&service_argv, argv[optind++]);
+            }
 
             break;
         }
     }
     /* grab the remaining arguments */
-    for (; optind < argc; optind++)
+    for (; optind < argc; optind++) {
         strarray_appendm(&service_argv, argv[optind]);
+    }
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
+    if (p) {
+        verbose = atoi(p) + 1;
+    }
 
     if (verbose > 30) {
         syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
@@ -396,7 +409,9 @@ int main(int argc, char **argv, char **envp)
     /* if timeout is enabled, pick a random timeout between reuse_timeout
      * and 2*reuse_timeout to avoid massive IO overload if the network
      * connection goes away */
-    if (reuse_timeout) reuse_timeout = reuse_timeout + (rand() % reuse_timeout);
+    if (reuse_timeout) {
+        reuse_timeout = reuse_timeout + (rand() % reuse_timeout);
+    }
 
     extern const int config_need_data;
     cyrus_init(alt_config, service, 0, config_need_data);
@@ -437,21 +452,25 @@ int main(int argc, char **argv, char **envp)
     else {
         /* set close on exec */
         fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-        if (fdflags != -1)
+        if (fdflags != -1) {
             fdflags = fcntl(LISTEN_FD, F_SETFD, fdflags | FD_CLOEXEC);
+        }
         if (fdflags == -1) {
             syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
         fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-        if (fdflags != -1)
+        if (fdflags != -1) {
             fdflags = fcntl(STATUS_FD, F_SETFD, fdflags | FD_CLOEXEC);
+        }
         if (fdflags == -1) {
             syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
 
@@ -461,30 +480,35 @@ int main(int argc, char **argv, char **envp)
             < 0)
         {
             syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
         if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
             syslog(LOG_ERR, "getsockname: failed: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
 
         if (service_init(service_argv.count, service_argv.data, envp) != 0) {
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
     }
 
     /* determine initial process file inode, size and mtime */
-    if (service_argv.data[0][0] == '/')
+    if (service_argv.data[0][0] == '/') {
         strlcpy(path, service_argv.data[0], sizeof(path));
-    else
+    }
+    else {
         snprintf(
             path, sizeof(path), "%s/%s", LIBEXEC_DIR, service_argv.data[0]);
+    }
 
     stat(path, &sbuf);
     start_ino = sbuf.st_ino;
@@ -536,7 +560,9 @@ int main(int argc, char **argv, char **envp)
                 /* Wait for the file descriptor to be connected to, in a
                  * signal-safe manner.  This ensures the accept() does
                  * not block and we don't need to make it signal-safe.  */
-                if (safe_wait_readable(LISTEN_FD) < 0) continue;
+                if (safe_wait_readable(LISTEN_FD) < 0) {
+                    continue;
+                }
                 fd = accept(LISTEN_FD, NULL, NULL);
                 if (fd < 0) {
                     switch (errno) {
@@ -559,14 +585,17 @@ int main(int argc, char **argv, char **envp)
                         break;
 
                     case EINVAL:
-                        if (signals_poll() == SIGHUP) break;
+                        if (signals_poll() == SIGHUP) {
+                            break;
+                        }
                         GCC_FALLTHROUGH
 
                     default:
                         syslog(LOG_ERR, "accept failed: %m");
-                        if (MESSAGE_MASTER_ON_EXIT)
+                        if (MESSAGE_MASTER_ON_EXIT) {
                             notify_master(STATUS_FD,
                                           MASTER_SERVICE_UNAVAILABLE);
+                        }
                         service_abort(EX_OSERR);
                     }
                 }
@@ -578,7 +607,9 @@ int main(int argc, char **argv, char **envp)
                 char ch;
                 int r;
 
-                if (safe_wait_readable(LISTEN_FD) < 0) continue;
+                if (safe_wait_readable(LISTEN_FD) < 0) {
+                    continue;
+                }
                 fromlen = sizeof(from);
                 r = recvfrom(LISTEN_FD,
                              (void *) &ch,
@@ -587,10 +618,13 @@ int main(int argc, char **argv, char **envp)
                              (struct sockaddr *) &from,
                              &fromlen);
                 if (r == -1) {
-                    if (signals_poll() == SIGHUP) break;
+                    if (signals_poll() == SIGHUP) {
+                        break;
+                    }
                     syslog(LOG_ERR, "recvfrom failed: %m");
-                    if (MESSAGE_MASTER_ON_EXIT)
+                    if (MESSAGE_MASTER_ON_EXIT) {
                         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                    }
                     service_abort(EX_OSERR);
                 }
                 fd = LISTEN_FD;
@@ -602,15 +636,17 @@ int main(int argc, char **argv, char **envp)
 
         if (fd < 0 && (signals_poll() || newfile)) {
             /* timed out (SIGALRM), SIGHUP, or new process file */
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(0);
         }
         if (fd < 0) {
             /* how did this happen? - we might have caught a signal. */
             syslog(LOG_ERR, "accept() failed but we didn't catch it?");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(EX_SOFTWARE);
         }
 
@@ -652,7 +688,9 @@ int main(int argc, char **argv, char **envp)
 
         /* tcp only */
         if (soctype == SOCK_STREAM) {
-            if (fd > STDERR_FILENO) close(fd);
+            if (fd > STDERR_FILENO) {
+                close(fd);
+            }
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
