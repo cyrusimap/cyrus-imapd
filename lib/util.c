@@ -458,6 +458,7 @@ EXPORTED int cyrus_rename(const char *src, const char *dest)
     char *copy = xstrdup(dest);
     const char *dir = dirname(copy);
     int r = 0;
+    int saved_errno = 0;
 
 #if defined(O_DIRECTORY)
     int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
@@ -472,8 +473,15 @@ EXPORTED int cyrus_rename(const char *src, const char *dest)
     r = renameat(AT_FDCWD, src, dirfd, dest);
     if (!r) r = fsync(dirfd);
 
+    // make sure close doesn't clear errno
+    if (r) {
+        saved_errno = errno;
+    }
+
     close(dirfd);
     free(copy);
+
+    errno = saved_errno;
 
     return r;
 }
