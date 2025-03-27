@@ -92,7 +92,9 @@ EXPORTED int run_command(const char *argv0, ...)
     strarray_append(&argv, argv0);
 
     va_start(va, argv0);
-    while ((p = va_arg(va, const char *))) strarray_append(&argv, p);
+    while ((p = va_arg(va, const char *))) {
+        strarray_append(&argv, p);
+    }
     va_end(va);
 
     r = run_command_strarray(&argv);
@@ -124,7 +126,9 @@ EXPORTED int command_popen(struct command **cmdp,
     strarray_append(&argv, argv0);
 
     va_start(va, argv0);
-    while ((p = va_arg(va, const char *))) strarray_append(&argv, p);
+    while ((p = va_arg(va, const char *))) {
+        strarray_append(&argv, p);
+    }
     va_end(va);
 
     if (do_stdin) {
@@ -167,7 +171,9 @@ EXPORTED int command_popen(struct command **cmdp,
 
         if (cwd) {
             r = chdir(cwd);
-            if (r) syslog(LOG_ERR, "Failed to chdir(%s): %m", cwd);
+            if (r) {
+                syslog(LOG_ERR, "Failed to chdir(%s): %m", cwd);
+            }
         }
 
         r = execv(argv0, argv.data);
@@ -179,18 +185,28 @@ EXPORTED int command_popen(struct command **cmdp,
     cmd = xzmalloc(sizeof(struct command));
     cmd->argv0 = xstrdup(argv0);
     cmd->pid = pid;
-    if (do_stdin)
+    if (do_stdin) {
         cmd->stdin_prot = prot_new(stdin_pipe[PIPE_WRITE], /*write*/ 1);
-    if (do_stdout)
+    }
+    if (do_stdout) {
         cmd->stdout_prot = prot_new(stdout_pipe[PIPE_READ], /*write*/ 0);
+    }
     *cmdp = cmd;
 
 out:
-    if (stdin_pipe[PIPE_READ] >= 0) close(stdin_pipe[PIPE_READ]);
-    if (stdout_pipe[PIPE_WRITE] >= 0) close(stdout_pipe[PIPE_WRITE]);
+    if (stdin_pipe[PIPE_READ] >= 0) {
+        close(stdin_pipe[PIPE_READ]);
+    }
+    if (stdout_pipe[PIPE_WRITE] >= 0) {
+        close(stdout_pipe[PIPE_WRITE]);
+    }
     if (r) {
-        if (stdin_pipe[PIPE_WRITE] >= 0) close(stdin_pipe[PIPE_WRITE]);
-        if (stdout_pipe[PIPE_READ] >= 0) close(stdout_pipe[PIPE_READ]);
+        if (stdin_pipe[PIPE_WRITE] >= 0) {
+            close(stdin_pipe[PIPE_WRITE]);
+        }
+        if (stdout_pipe[PIPE_READ] >= 0) {
+            close(stdout_pipe[PIPE_READ]);
+        }
     }
     strarray_fini(&argv);
     return r;
@@ -201,7 +217,9 @@ EXPORTED int command_pclose(struct command **cmdp)
     struct command *cmd = (cmdp ? *cmdp : NULL);
     int r;
 
-    if (!cmd) return 0;
+    if (!cmd) {
+        return 0;
+    }
 
     if (cmd->stdin_prot) {
         prot_flush(cmd->stdin_prot);

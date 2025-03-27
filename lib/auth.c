@@ -60,7 +60,9 @@ static struct auth_mech *auth_fromname(void)
 {
     static struct auth_mech *auth;
 
-    if (auth) return auth;
+    if (auth) {
+        return auth;
+    }
 
     const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
 
@@ -104,7 +106,9 @@ EXPORTED void auth_freestate(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 
-    if (auth_state) auth->freestate(auth_state);
+    if (auth_state) {
+        auth->freestate(auth_state);
+    }
 }
 
 EXPORTED strarray_t *auth_groups(const struct auth_state *auth_state)
@@ -118,5 +122,7 @@ EXPORTED void auth_refresh(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 
-    if (auth->refresh) auth->refresh(auth_state);
+    if (auth->refresh) {
+        auth->refresh(auth_state);
+    }
 }

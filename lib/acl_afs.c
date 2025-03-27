@@ -129,7 +129,9 @@ EXPORTED int cyrus_acl_set(char **acl,
     int oldaccess = 0;
     char *rights;
 
-    if (!identifier) return -1;
+    if (!identifier) {
+        return -1;
+    }
 
     /* Convert 'identifier' into canonical form */
     canonid =
@@ -154,7 +156,9 @@ EXPORTED int cyrus_acl_set(char **acl,
 
     /* Prevent ACLs for empty identifiers */
     if (strlen(identifier) == 0) {
-        if (newidentifier) free(newidentifier);
+        if (newidentifier) {
+            free(newidentifier);
+        }
         return -1;
     }
 
@@ -201,10 +205,12 @@ EXPORTED int cyrus_acl_set(char **acl,
     }
 
     if (canonproc) {
-        if (*identifier == '-')
+        if (*identifier == '-') {
             access = ~(canonproc(canonrock, identifier + 1, ~access));
-        else
+        }
+        else {
             access = canonproc(canonrock, identifier, access);
+        }
     }
 
     if (access == 0L) {
@@ -235,7 +241,9 @@ EXPORTED int cyrus_acl_set(char **acl,
         *acl = newacl;
     }
 
-    if (newidentifier) free(newidentifier);
+    if (newidentifier) {
+        free(newidentifier);
+    }
     return 0;
 }
 
@@ -256,15 +264,24 @@ EXPORTED int is_system_user(const char *userid)
 {
     static strarray_t *admins = NULL;
 
-    if (!admins)
+    if (!admins) {
         admins = strarray_split(
             config_getstring(IMAPOPT_ADMINS), NULL, STRARRAY_TRIM);
+    }
 
-    if (*userid == '-') userid++;
+    if (*userid == '-') {
+        userid++;
+    }
 
-    if (!strcmp(userid, "anyone")) return 1;
-    if (!strcmp(userid, "anonymous")) return 1;
-    if (strarray_contains(admins, userid)) return 1;
+    if (!strcmp(userid, "anyone")) {
+        return 1;
+    }
+    if (!strcmp(userid, "anonymous")) {
+        return 1;
+    }
+    if (strarray_contains(admins, userid)) {
+        return 1;
+    }
 
     return 0;
 }

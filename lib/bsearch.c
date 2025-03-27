@@ -105,7 +105,9 @@ HIDDEN int bsearch_mem_mbox(const char *word,
             /* Use hint supplied by caller */
             firstsearch = 0;
             mid = offset = hint;
-            if (mid <= start || mid > end) mid = offset = start;
+            if (mid <= start || mid > end) {
+                mid = offset = start;
+            }
         }
         else {
             /* Calculate position of middle of this range */
@@ -146,12 +148,16 @@ HIDDEN int bsearch_mem_mbox(const char *word,
         }
 
         if (!cmp) {
-            if (linelenp) *linelenp = linelen;
+            if (linelenp) {
+                *linelenp = linelen;
+            }
             return offset;
         }
 
         if (cmp < 0) {
-            if (mid == 0) break;
+            if (mid == 0) {
+                break;
+            }
             end = mid - 1;
         }
         else {
@@ -160,9 +166,15 @@ HIDDEN int bsearch_mem_mbox(const char *word,
     }
 
     /* Word was not found.  Return offset where word should be inserted */
-    if (linelenp) *linelenp = 0;
-    if (start > len) return len;
-    if (!start) return 0;
+    if (linelenp) {
+        *linelenp = 0;
+    }
+    if (start > len) {
+        return len;
+    }
+    if (!start) {
+        return 0;
+    }
     p = memchr(base + start, '\n', len - start);
     return p - base + 1;
 }
@@ -183,12 +195,15 @@ HIDDEN int bsearch_ncompare_mbox(const char *s1,
         return cmp;
     }
     else {
-        if (l2 > l1)
+        if (l2 > l1) {
             return -1;
-        else if (l1 > l2)
+        }
+        else if (l1 > l2) {
             return 1;
-        else
+        }
+        else {
             return 0;
+        }
     }
 }
 
@@ -206,7 +221,9 @@ HIDDEN int bsearch_memtree_mbox(const unsigned char *s1,
     }
 
     /* found a mismatch */
-    if (cmp) return cmp;
+    if (cmp) {
+        return cmp;
+    }
 
     /* Walked off the end of one (or both strings), in which case one
      * (or both) of these will be zero, and the string with bytes remaining
@@ -240,7 +257,9 @@ EXPORTED int cmpstringp_mbox(const void *p1, const void *p2)
     }
 
     /* found a mismatch */
-    if (cmp) return cmp;
+    if (cmp) {
+        return cmp;
+    }
 
     /* Walked off the end of one (or both strings), in which case one
      * (or both) of these will be zero, and the string with bytes remaining
@@ -261,10 +280,12 @@ HIDDEN int bsearch_ncompare_raw(const char *s1,
     int r = memcmp(s1, s2, min);
 
     if (!r) {
-        if (l1 > l2)
+        if (l1 > l2) {
             r = 1;
-        else if (l2 > l1)
+        }
+        else if (l2 > l1) {
             r = -1;
+        }
     }
 
     return r;

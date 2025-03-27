@@ -113,17 +113,23 @@ EXPORTED void bv_copy(bitvector_t *to, const bitvector_t *from)
 
 EXPORTED void bv_clearall(bitvector_t *bv)
 {
-    if (bv->length) memset(bv_bits(bv), 0, vlen(bv->length));
+    if (bv->length) {
+        memset(bv_bits(bv), 0, vlen(bv->length));
+    }
 }
 
 EXPORTED void bv_setall(bitvector_t *bv)
 {
-    if (bv->length) memset(bv_bits(bv), 0xff, vlen(bv->length));
+    if (bv->length) {
+        memset(bv_bits(bv), 0xff, vlen(bv->length));
+    }
 }
 
 EXPORTED int bv_isset(const bitvector_t *bv, unsigned int i)
 {
-    if (i >= bv->length) return 0;
+    if (i >= bv->length) {
+        return 0;
+    }
     return !!(bv_bits(bv)[vidx(i)] & vmask(i));
 }
 
@@ -131,7 +137,9 @@ EXPORTED void bv_set(bitvector_t *bv, unsigned int i)
 {
     bv_ensure(bv, i + 1);
     bv_bits(bv)[vidx(i)] |= vmask(i);
-    if (i >= bv->length) bv->length = i + 1;
+    if (i >= bv->length) {
+        bv->length = i + 1;
+    }
 }
 
 EXPORTED void bv_clear(bitvector_t *bv, unsigned int i)
@@ -148,15 +156,21 @@ EXPORTED void bv_andeq(bitvector_t *a, const bitvector_t *b)
     unsigned int i;
 
     bv_ensure(a, b->length);
-    if (!a->length) return;
+    if (!a->length) {
+        return;
+    }
 
     unsigned char *abits = bv_bits(a);
     const unsigned char *bbits = bv_bits(b);
 
     n = vlen(b->length);
-    for (i = 0; i < n; i++) abits[i] &= bbits[i];
+    for (i = 0; i < n; i++) {
+        abits[i] &= bbits[i];
+    }
     n = vlen(a->length);
-    for (; i < n; i++) abits[i] = 0;
+    for (; i < n; i++) {
+        abits[i] = 0;
+    }
     a->length = MAX(a->length, b->length);
 }
 
@@ -171,7 +185,9 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
     const unsigned char *bbits = bv_bits(b);
 
     n = vlen(b->length);
-    for (i = 0; i < n; i++) abits[i] |= bbits[i];
+    for (i = 0; i < n; i++) {
+        abits[i] |= bbits[i];
+    }
     a->length = MAX(a->length, b->length);
 }
 
@@ -184,19 +200,26 @@ EXPORTED int bv_next_set(const bitvector_t *bv, int start)
 {
     int i;
 
-    if (start < 0 || start >= (int) bv->length) return -1;
+    if (start < 0 || start >= (int) bv->length) {
+        return -1;
+    }
 
     const unsigned char *bits = bv_bits(bv);
 
-    for (i = start; i < (int) bv->length && !visaligned(i); i++)
-        if (bits[vidx(i)] & vmask(i)) return i;
+    for (i = start; i < (int) bv->length && !visaligned(i); i++) {
+        if (bits[vidx(i)] & vmask(i)) {
+            return i;
+        }
+    }
 
     while (i < (int) bv->length) {
         if (!bits[vidx(i)]) {
             i += BITS_PER_UNIT;
         }
         else {
-            if (bits[vidx(i)] & vmask(i)) return i;
+            if (bits[vidx(i)] & vmask(i)) {
+                return i;
+            }
             i++;
         }
     }
@@ -214,19 +237,26 @@ EXPORTED int bv_prev_set(const bitvector_t *bv, int start)
 {
     int i;
 
-    if (start < 0 || start >= (int) bv->length) return -1;
+    if (start < 0 || start >= (int) bv->length) {
+        return -1;
+    }
 
     const unsigned char *bits = bv_bits(bv);
 
-    for (i = start; i < (int) bv->length && !visaligned(i); i--)
-        if (bits[vidx(i)] & vmask(i)) return i;
+    for (i = start; i < (int) bv->length && !visaligned(i); i--) {
+        if (bits[vidx(i)] & vmask(i)) {
+            return i;
+        }
+    }
 
     while (i >= 0) {
         if (!bits[vidx(i)]) {
             i -= BITS_PER_UNIT;
         }
         else {
-            if (bits[vidx(i)] & vmask(i)) return i;
+            if (bits[vidx(i)] & vmask(i)) {
+                return i;
+            }
             i--;
         }
     }
@@ -258,8 +288,9 @@ EXPORTED unsigned bv_count(const bitvector_t *bv)
     unsigned i;
     unsigned int n = 0;
 
-    for (i = 0; i < bv->length; i += BITS_PER_UNIT)
+    for (i = 0; i < bv->length; i += BITS_PER_UNIT) {
         n += bitcount(bv_bits(bv)[vidx(i)]);
+    }
     return n;
 }
 
@@ -283,14 +314,18 @@ EXPORTED char *bv_cstring(const bitvector_t *bv)
 
     for (i = 0; i < bv->length; i++) {
         if (bv_bits(bv)[vidx(i)] & vmask(i)) {
-            if (first == ~0U) first = i;
+            if (first == ~0U) {
+                first = i;
+            }
         }
         else if (first != ~0U) {
             last = i - 1;
-            if (first == last)
+            if (first == last) {
                 buf_printf(&buf, "%s%u", sep, first);
-            else
+            }
+            else {
                 buf_printf(&buf, "%s%u-%u", sep, first, last);
+            }
             sep = ",";
             first = ~0U;
         }
@@ -298,10 +333,12 @@ EXPORTED char *bv_cstring(const bitvector_t *bv)
 
     if (first != ~0U) {
         last = bv->length - 1;
-        if (first == last)
+        if (first == last) {
             buf_printf(&buf, "%s%u", sep, first);
-        else
+        }
+        else {
             buf_printf(&buf, "%s%u-%u", sep, first, last);
+        }
     }
 
     buf_putc(&buf, ']');
@@ -310,7 +347,9 @@ EXPORTED char *bv_cstring(const bitvector_t *bv)
 
 EXPORTED void bv_fini(bitvector_t *bv)
 {
-    if (bv->alloc) free(bv->bits.alloced);
+    if (bv->alloc) {
+        free(bv->bits.alloced);
+    }
     bv->length = 0;
     bv->alloc = 0;
     memset(bv->bits._noalloc, 0, BV_NOALLOCSIZE);

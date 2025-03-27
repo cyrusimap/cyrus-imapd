@@ -198,29 +198,39 @@ static int mymemberof(const struct auth_state *auth_state,
 
     if (!auth_state) {
         /* special case anonymous */
-        if (!strcmp(identifier, "anyone"))
+        if (!strcmp(identifier, "anyone")) {
             return 1;
-        else if (!strcmp(identifier, "anonymous"))
+        }
+        else if (!strcmp(identifier, "anonymous")) {
             return 3;
+        }
 
         /* "anonymous" is not a member of any group */
-        else
+        else {
             return 0;
+        }
     }
 
     /* is 'identifier' "anyone"? */
-    if (idhash == anyonehash && !strcmp(identifier, "anyone")) return 1;
+    if (idhash == anyonehash && !strcmp(identifier, "anyone")) {
+        return 1;
+    }
 
     /* is 'identifier' me? */
     if (idhash == auth_state->userid.hash
         && !strcmp(identifier, auth_state->userid.id))
+    {
         return 3;
+    }
 
     /* is it a group i'm a member of ? */
-    for (i = 0; i < auth_state->ngroups; i++)
+    for (i = 0; i < auth_state->ngroups; i++) {
         if (idhash == auth_state->groups[i].hash
             && !strcmp(identifier, auth_state->groups[i].id))
+        {
             return 2;
+        }
+    }
 
     return 0;
 }
@@ -486,7 +496,9 @@ static int ptload(const char *identifier, struct auth_state **state)
             goto done;
         }
         n = read(s, response + start, sizeof(response) - 1 - start);
-        if (n < 1) break;
+        if (n < 1) {
+            break;
+        }
         start += n;
     }
     response[sizeof(response) - 1] = '\0';
@@ -554,7 +566,9 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
     strarray_t *sa;
     int i;
 
-    if (!auth_state->ngroups) return NULL;
+    if (!auth_state->ngroups) {
+        return NULL;
+    }
 
     sa = strarray_new();
     for (i = 0; i < auth_state->ngroups; i++) {

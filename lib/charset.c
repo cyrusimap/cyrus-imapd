@@ -595,37 +595,61 @@ static const char index_64url[256] = {
 
 EXPORTED int encoding_lookupname(const char *s)
 {
-    if (!s) return ENCODING_NONE;
+    if (!s) {
+        return ENCODING_NONE;
+    }
 
     switch (s[0]) {
     case '7':
-        if (!strcasecmp(s, "7BIT")) return ENCODING_NONE;
+        if (!strcasecmp(s, "7BIT")) {
+            return ENCODING_NONE;
+        }
         // non-standard stuff seen in the wild
-        if (!strcasecmp(s, "7-BIT")) return ENCODING_NONE;
+        if (!strcasecmp(s, "7-BIT")) {
+            return ENCODING_NONE;
+        }
         break;
     case '8':
-        if (!strcasecmp(s, "8BIT")) return ENCODING_NONE;
+        if (!strcasecmp(s, "8BIT")) {
+            return ENCODING_NONE;
+        }
         // non-standard stuff seen in the wild
-        if (!strcasecmp(s, "8-BIT")) return ENCODING_NONE;
+        if (!strcasecmp(s, "8-BIT")) {
+            return ENCODING_NONE;
+        }
         break;
     case 'B':
     case 'b':
-        if (!strcasecmp(s, "BASE64")) return ENCODING_BASE64;
-        if (!strcasecmp(s, "BASE64URL")) return ENCODING_BASE64URL;
-        if (!strcasecmp(s, "BINARY")) return ENCODING_NONE;
+        if (!strcasecmp(s, "BASE64")) {
+            return ENCODING_BASE64;
+        }
+        if (!strcasecmp(s, "BASE64URL")) {
+            return ENCODING_BASE64URL;
+        }
+        if (!strcasecmp(s, "BINARY")) {
+            return ENCODING_NONE;
+        }
         break;
     case 'N':
-        if (!strcasecmp(s, "NONE")) return ENCODING_NONE;
+        if (!strcasecmp(s, "NONE")) {
+            return ENCODING_NONE;
+        }
         break;
     case 'Q':
     case 'q':
-        if (!strcasecmp(s, "QUOTED-PRINTABLE")) return ENCODING_QP;
+        if (!strcasecmp(s, "QUOTED-PRINTABLE")) {
+            return ENCODING_QP;
+        }
         break;
     case 'u':
     case 'U':
         // this is rubbish, but it's been seen in the wild
-        if (!strcasecmp(s, "UTF-8")) return ENCODING_NONE;
-        if (!strcasecmp(s, "UTF8")) return ENCODING_NONE;
+        if (!strcasecmp(s, "UTF-8")) {
+            return ENCODING_NONE;
+        }
+        if (!strcasecmp(s, "UTF8")) {
+            return ENCODING_NONE;
+        }
         break;
     }
     return ENCODING_UNKNOWN;
@@ -655,7 +679,9 @@ static int convert_flush(struct convert_rock *rock)
     while (rock) {
         if (rock->flush) {
             int r2 = rock->flush(rock);
-            if (!r) r = r2;
+            if (!r) {
+                r = r2;
+            }
         }
         rock = rock->next;
     }
@@ -665,10 +691,12 @@ static int convert_flush(struct convert_rock *rock)
 static inline void convert_putc(struct convert_rock *rock, uint32_t c)
 {
     if (charset_debug) {
-        if (c < 0xff)
+        if (c < 0xff) {
             fprintf(stderr, "%s(0x%x = '%c')\n", convert_name(rock), c, c);
-        else
+        }
+        else {
             fprintf(stderr, "%s(0x%x)\n", convert_name(rock), c);
+        }
     }
     rock->f(rock, c);
 }
@@ -699,7 +727,9 @@ static void qp_flushline(struct convert_rock *rock, int endline)
 
     /* strip trailing whitespace: RFC 2405 transport-padding */
     while (s->len && (s->buf[s->len - 1] == ' ' || s->buf[s->len - 1] == '\t'))
+    {
         s->len--;
+    }
 
     for (i = 0; i < s->len; i++) {
         switch (s->buf[i]) {
@@ -763,7 +793,9 @@ static void qp2byte(struct convert_rock *rock, uint32_t c)
     default:
         s->buf[s->len++] = c;
         /* really overlength line? just flush now */
-        if (s->len > 998) qp_flushline(rock, 0);
+        if (s->len > 998) {
+            qp_flushline(rock, 0);
+        }
         break;
     }
 }
@@ -812,10 +844,12 @@ static int b64_flush(struct convert_rock *rock)
 {
     struct b64_state *s = (struct b64_state *) rock->state;
     if (s->invalid) {
-        if (s->index == index_64url)
+        if (s->index == index_64url) {
             return -1;
-        else
+        }
+        else {
             xsyslog(LOG_WARNING, "ignoring invalid base64 characters", NULL);
+        }
     }
     return 0;
 }
@@ -835,14 +869,17 @@ static void unfold2uni(struct convert_rock *rock, uint32_t c)
 
     switch (s->state) {
     case 0:
-        if (c == '\r')
+        if (c == '\r') {
             s->state = 1;
-        else
+        }
+        else {
             convert_putc(rock->next, c);
+        }
         break;
     case 1:
-        if (c == '\n')
+        if (c == '\n') {
             s->state = 2;
+        }
         else {
             convert_putc(rock->next, '\r');
             convert_putc(rock->next, c);
@@ -911,20 +948,25 @@ static void uni2searchform(struct convert_rock *rock, uint32_t c)
             return;
         }
         if (s->flags & CHARSET_MERGESPACE) {
-            if (s->seenspace) return;
+            if (s->seenspace) {
+                return;
+            }
             s->seenspace = 1;
             code = ' '; /* one SPACE char */
         }
     }
-    else
+    else {
         s->seenspace = 0;
+    }
 
     /* case - one character output */
     if (code > 0) {
         /* diacritical character range.  This duplicates the
          * behaviour of Cyrus versions before 2.5 */
         if (s->flags & CHARSET_SKIPDIACRIT) {
-            if (0x300 <= code && code <= 0x36f) return;
+            if (0x300 <= code && code <= 0x36f) {
+                return;
+            }
         }
         convert_putc(rock->next, code);
         return;
@@ -938,7 +980,9 @@ static void uni2searchform(struct convert_rock *rock, uint32_t c)
         if (s->flags & CHARSET_SKIPDIACRIT) {
             /* XXX combining diacritical marks only range from 0x300 to 0x36f
              * but this would break backwards compatibility */
-            if ((c & ~0xff) == 0x300) continue;
+            if ((c & ~0xff) == 0x300) {
+                continue;
+            }
         }
         /* note: whitespace already stripped from multichar sequences... */
         convert_putc(rock->next, c);
@@ -981,13 +1025,16 @@ static void uni2html(struct convert_rock *rock, uint32_t c)
             return;
         }
         if (s->flags & CHARSET_MERGESPACE) {
-            if (s->seenspace) return;
+            if (s->seenspace) {
+                return;
+            }
             s->seenspace = 1;
             c = ' '; /* one SPACE char */
         }
     }
-    else
+    else {
         s->seenspace = 0;
+    }
 
     convert_putc(rock->next, c);
 }
@@ -1005,10 +1052,14 @@ static void byte2search(struct convert_rock *rock, uint32_t c)
     /* check our "in_progress" matches to see if they're still valid */
     for (i = 0, cur = 0; i < s->max_start; i++) {
         /* no more active offsets */
-        if (s->starts[i] == -1) break;
+        if (s->starts[i] == -1) {
+            break;
+        }
 
         /* if we've passed one that's not ongoing, copy back */
-        if (cur < i) s->starts[cur] = s->starts[i];
+        if (cur < i) {
+            s->starts[cur] = s->starts[i];
+        }
 
         /* check that the substring is still matching */
         if (b == s->substr[s->offset - s->starts[i]]) {
@@ -1025,13 +1076,17 @@ static void byte2search(struct convert_rock *rock, uint32_t c)
     /* starting a new one! */
     if (b == s->substr[0]) {
         /* have to treat this one specially! */
-        if (s->patlen == 1)
+        if (s->patlen == 1) {
             s->havematch = 1;
-        else
+        }
+        else {
             s->starts[cur++] = s->offset;
+        }
     }
     /* empty out any others that aren't being kept */
-    while (cur < i) s->starts[cur++] = -1;
+    while (cur < i) {
+        s->starts[cur++] = -1;
+    }
 
     /* increment the offset counter */
     s->offset++;
@@ -1055,7 +1110,9 @@ static void byte2sha1(struct convert_rock *rock, uint32_t c)
      * to the upfront checks, so this is a good compromise size */
     if (state->len == 4096) {
         SHA1Update(&state->ctx, state->buf, state->len);
-        if (state->outlen) *state->outlen += state->len;
+        if (state->outlen) {
+            *state->outlen += state->len;
+        }
         state->len = 0;
     }
 
@@ -1077,7 +1134,9 @@ static void icu2uni(struct convert_rock *rock, uint32_t c)
     if (!s->flush && c <= 0xff) {
         *s->src_next++ = c;
         /* Is there still space in the buffer? */
-        if (s->src_next < s->src_top) return;
+        if (s->src_next < s->src_top) {
+            return;
+        }
     }
 
     do {
@@ -1105,7 +1164,9 @@ static void icu2uni(struct convert_rock *rock, uint32_t c)
 
         /* Keep any bytes left in the source buffer. */
         n = src_limit - src;
-        if (n) memmove(s->src_base, src, n);
+        if (n) {
+            memmove(s->src_base, src, n);
+        }
         s->src_next = s->src_base + n;
 
         /* Bail out on errors. */
@@ -1125,7 +1186,9 @@ static void icu2uni(struct convert_rock *rock, uint32_t c)
 
         /* Keep any incomplete codepoints and reset the target buffer. */
         n = (tgt - t) * sizeof(UChar);
-        if (n) memmove(s->tgt_base, t, n);
+        if (n) {
+            memmove(s->tgt_base, t, n);
+        }
         s->tgt_next = s->tgt_base + n;
 
     } while (err == U_BUFFER_OVERFLOW_ERROR);
@@ -1156,7 +1219,9 @@ static void uni2icu(struct convert_rock *rock, uint32_t c)
         }
         s->src_next = (char *) src_next;
         /* Can we buffer at least one more 32-bit codepoint. */
-        if (s->src_next < (s->src_top - 2 * sizeof(UChar))) return;
+        if (s->src_next < (s->src_top - 2 * sizeof(UChar))) {
+            return;
+        }
     }
 
     do {
@@ -1178,7 +1243,9 @@ static void uni2icu(struct convert_rock *rock, uint32_t c)
 
         /* Keep any bytes left in the source buffer. */
         n = (src_limit - src) * sizeof(UChar);
-        if (n) memmove(s->src_base, src, n);
+        if (n) {
+            memmove(s->src_base, src, n);
+        }
         s->src_next = s->src_base + n;
 
         /* Bail out on errors. */
@@ -1188,7 +1255,9 @@ static void uni2icu(struct convert_rock *rock, uint32_t c)
         }
 
         /* Emit any converted octets. */
-        for (t = s->tgt_base; t < tgt; t++) convert_putc(rock->next, *t);
+        for (t = s->tgt_base; t < tgt; t++) {
+            convert_putc(rock->next, *t);
+        }
 
         /* Reset the target buffer. */
         s->tgt_next = s->tgt_base;
@@ -1243,24 +1312,31 @@ static void utf8_2uni(struct convert_rock *rock, uint32_t c)
 
     if ((c & 0xf8) == 0xf0) { /* 11110xxx */
         /* first of a 4 char sequence */
-        if (s->bytesleft) /* incomplete sequence */
+        if (s->bytesleft) /* incomplete sequence */ {
             convert_putc(rock->next, U_REPLACEMENT);
-        if (c >= 0xf5 && c <= 0xf7) goto emit_replacement;
+        }
+        if (c >= 0xf5 && c <= 0xf7) {
+            goto emit_replacement;
+        }
         s->bytesleft = 3;
         s->codepoint = c & 0x07; /* 00000111 */
     }
     else if ((c & 0xf0) == 0xe0) { /* 1110xxxx */
         /* first of a 3 char sequence */
-        if (s->bytesleft) /* incomplete sequence */
+        if (s->bytesleft) /* incomplete sequence */ {
             convert_putc(rock->next, U_REPLACEMENT);
+        }
         s->bytesleft = 2;
         s->codepoint = c & 0x0f; /* 00001111 */
     }
     else if ((c & 0xe0) == 0xc0) { /* 110xxxxx */
         /* first of a 2 char sequence */
-        if (s->bytesleft) /* incomplete sequence */
+        if (s->bytesleft) /* incomplete sequence */ {
             convert_putc(rock->next, U_REPLACEMENT);
-        if (c == 0xc0 || c == 0xc1) goto emit_replacement;
+        }
+        if (c == 0xc0 || c == 0xc1) {
+            goto emit_replacement;
+        }
         s->bytesleft = 1;
         s->codepoint = c & 0x1f; /* 00011111 */
     }
@@ -1274,15 +1350,17 @@ static void utf8_2uni(struct convert_rock *rock, uint32_t c)
                 s->codepoint = 0;
             }
         }
-        else
+        else {
             goto emit_replacement;
+        }
     }
     else if (c >= 0xf8 && c <= 0xff) {
         goto emit_replacement;
     }
-    else {                /* plain ASCII char */
-        if (s->bytesleft) /* incomplete sequence */
+    else { /* plain ASCII char */
+        if (s->bytesleft) /* incomplete sequence */ {
             convert_putc(rock->next, U_REPLACEMENT);
+        }
         convert_putc(rock->next, c);
         s->bytesleft = 0;
         s->codepoint = 0;
@@ -1292,7 +1370,9 @@ static void utf8_2uni(struct convert_rock *rock, uint32_t c)
 /* Given a Unicode codepoint, emit valid UTF-8 encoded octets */
 static void uni2utf8(struct convert_rock *rock, uint32_t c)
 {
-    if (!unicode_isvalid(c)) c = U_REPLACEMENT;
+    if (!unicode_isvalid(c)) {
+        c = U_REPLACEMENT;
+    }
 
     /* UTF-8 can encode code points up to 0x7fffffff, but the currently
      * defined last valid codepoint is 0x10ffff so we only handle that
@@ -1333,7 +1413,9 @@ static void table2uni(struct convert_rock *rock, uint32_t c)
 
     assert((unsigned) c <= 0xff);
     map = (struct charmap *) &s->curtable[0][c & 0xff];
-    if (map->c) convert_putc(rock->next, map->c);
+    if (map->c) {
+        convert_putc(rock->next, map->c);
+    }
 
     s->curtable = s->initialtable + map->next;
 }
@@ -1360,7 +1442,9 @@ static int html_uiserror(uint32_t c)
 
     for (i = 0; i < VECTOR_SIZE(ranges); i++) {
         unsigned c2 = (unsigned) c & ranges[i].mask;
-        if (c2 >= ranges[i].lo && c2 <= ranges[i].hi) return 1;
+        if (c2 >= ranges[i].lo && c2 <= ranges[i].hi) {
+            return 1;
+        }
     }
     return 0;
 }
@@ -1435,24 +1519,31 @@ static void html_saw_character(struct convert_rock *rock)
         0x0178  /* LATIN CAPITAL LETTER Y WITH DIAERESIS (Ÿ) */
     };
 
-    if (charset_debug) fprintf(stderr, "html_saw_character(%s)\n", ent);
+    if (charset_debug) {
+        fprintf(stderr, "html_saw_character(%s)\n", ent);
+    }
 
     if (ent[0] == '#') {
-        if (ent[1] == 'x' || ent[1] == 'X')
+        if (ent[1] == 'x' || ent[1] == 'X') {
             c = strtoul(ent + 2, NULL, 16);
-        else
+        }
+        else {
             c = strtoul(ent + 1, NULL, 10);
+        }
         /* no need for format error checking, the lexer did that */
 
         /* Perform character mapping and validation per
          * http://dev.w3.org/html5/spec/tokenization.html#consume-a-character-reference
          */
-        if (c == 0)
+        if (c == 0) {
             c = U_REPLACEMENT;
-        else if (c >= 0x80 && c <= 0x9f)
+        }
+        else if (c >= 0x80 && c <= 0x9f) {
             c = compat_chars[c - 0x80];
-        else if (!unicode_isvalid(c))
+        }
+        else if (!unicode_isvalid(c)) {
             c = U_REPLACEMENT; /* invalid Unicode codepoint */
+        }
 
         if (html_uiserror(c)) {
             /* the HTML5 spec says this is a parse error, but it's
@@ -1547,23 +1638,27 @@ static const char *html_state_as_string(enum html_state state)
 static void html_push(struct striphtml_state *s, enum html_state state)
 {
     assert(s->depth < (int) (sizeof(s->stack) / sizeof(s->stack[0])));
-    if (charset_debug)
+    if (charset_debug) {
         fprintf(stderr, "html_push(%s)\n", html_state_as_string(state));
+    }
     s->stack[s->depth++] = state;
 }
 
 static int html_pop(struct striphtml_state *s)
 {
     assert(s->depth > 0);
-    if (charset_debug) fprintf(stderr, "html_pop()\n");
+    if (charset_debug) {
+        fprintf(stderr, "html_pop()\n");
+    }
     return s->stack[--s->depth];
 }
 
 static void html_go(struct striphtml_state *s, enum html_state state)
 {
     assert(s->depth > 0);
-    if (charset_debug)
+    if (charset_debug) {
         fprintf(stderr, "html_go(%s)\n", html_state_as_string(state));
+    }
     s->stack[s->depth - 1] = state;
 }
 
@@ -1663,34 +1758,41 @@ static void html_saw_tag(struct convert_rock *rock)
     buf_cstring(&s->name);
     tag = s->name.s;
 
-    if (charset_debug)
+    if (charset_debug) {
         fprintf(stderr,
                 "html_saw_tag() state=%s tag=\"%s\" ends=%s,%s\n",
                 html_state_as_string(state),
                 tag,
                 (s->ends & HBEGIN ? "BEGIN" : "-"),
                 (s->ends & HEND ? "END" : "-"));
+    }
 
     /* gnb:TODO: what are we supposed to do with a nested <script> tag? */
 
     if (!strcasecmp(tag, "script")) {
-        if (state == HDATA && s->ends == HBEGIN)
+        if (state == HDATA && s->ends == HBEGIN) {
             html_go(s, HSCRIPTDATA);
-        else if (state == HSCRIPTDATA && s->ends == HEND)
+        }
+        else if (state == HSCRIPTDATA && s->ends == HEND) {
             html_go(s, HDATA);
+        }
         /* BEGIN,END pair is doesn't affect state */
     }
     else if (!strcasecmp(tag, "style")) {
-        if (state == HDATA && s->ends == HBEGIN)
+        if (state == HDATA && s->ends == HBEGIN) {
             html_go(s, HSTYLEDATA);
-        else if (state == HSTYLEDATA && s->ends == HEND)
+        }
+        else if (state == HSTYLEDATA && s->ends == HEND) {
             html_go(s, HDATA);
+        }
         /* BEGIN,END pair is doesn't affect state */
     }
     else {
         if (s->ends & HEND) {
             if (html_attr_have(s, HATTR_HREF)) {
-                if (s->ends == HEND) html_putc(rock, ' ');
+                if (s->ends == HEND) {
+                    html_putc(rock, ' ');
+                }
 
                 html_putc(rock, '<');
                 html_attr_cat(s, rock, HATTR_HREF);
@@ -1730,7 +1832,9 @@ static void html_saw_tag(struct convert_rock *rock)
 
 static int html_maybeuri(struct buf *buf)
 {
-    if (!buf_len(buf)) return 0;
+    if (!buf_len(buf)) {
+        return 0;
+    }
 
     // returns true for string "<scheme>:", see RFC 3986, section 3.1
 
@@ -1739,8 +1843,9 @@ static int html_maybeuri(struct buf *buf)
 
     if (s[len - 1] == ':' && (html_isalpha(s[0]) || html_isdigit(s[0]))) {
         for (char c = s[--len - 1]; len; c = s[--len]) {
-            if (!html_isalpha(c) && !html_isdigit(c) && !strchr("+-.", c))
+            if (!html_isalpha(c) && !html_isdigit(c) && !strchr("+-.", c)) {
                 return 0;
+            }
         }
         return 1;
     }
@@ -2063,8 +2168,9 @@ restart:
             else if (c == '/') {
                 html_go(s, HSCTAG);
             }
-            else
+            else {
                 html_go(s, HTAGPARAMS);
+            }
         }
         break;
 
@@ -2085,8 +2191,9 @@ restart:
             else if (c == '/') {
                 html_go(s, HSCTAG);
             }
-            else
+            else {
                 html_go(s, HTAGPARAMS);
+            }
         }
         break;
 
@@ -2107,8 +2214,9 @@ restart:
             else if (c == '/') {
                 html_go(s, HSCTAG);
             }
-            else
+            else {
                 html_go(s, HTAGPARAMS);
+            }
         }
         break;
 
@@ -2140,7 +2248,9 @@ restart:
     case HMUDECOPEN: /* 8.2.4.45 Markup declaration open state */
         if (c == '-') {
             buf_putc(&s->name, c);
-            if (s->name.len == 2) html_go(s, HCOMMSTART);
+            if (s->name.len == 2) {
+                html_go(s, HCOMMSTART);
+            }
         }
         else {
             /* ignore DOCTYPE or CDATA */
@@ -2150,73 +2260,117 @@ restart:
         break;
 
     case HCOMMSTART: /* 8.2.4.46 Comment start state */
-        if (c == '-')
+        if (c == '-') {
             html_go(s, HCOMMSTARTDASH);
-        else if (c == '>')
+        }
+        else if (c == '>') {
             html_go(s, HDATA); /* very short comment <!-->  */
-        else
+        }
+        else {
             html_go(s, HCOMM);
+        }
         break;
 
     case HCOMMSTARTDASH: /* 8.2.4.47 Comment start dash state */
-        if (c == '-')
+        if (c == '-') {
             html_go(s, HCOMMEND);
-        else if (c == '>')
+        }
+        else if (c == '>') {
             html_go(s, HDATA); /* incorrectly formed -> comment end */
-        else
+        }
+        else {
             html_go(s, HCOMM);
+        }
         /* else strip */
         break;
 
     case HCOMM: /* 8.2.4.48 Comment state */
-        if (c == '-') html_go(s, HCOMMENDDASH);
+        if (c == '-') {
+            html_go(s, HCOMMENDDASH);
+        }
         /* else strip */
         break;
 
     case HCOMMENDDASH: /* 8.2.4.49 Comment end dash state */
-        if (c == '-')
+        if (c == '-') {
             html_go(s, HCOMMEND); /* -- pair in comment */
-        else
+        }
+        else {
             html_go(s, HCOMM); /* lone - in comment */
+        }
         break;
 
     case HCOMMEND: /* 8.2.4.50 Comment end state */
-        if (c == '>')
+        if (c == '>') {
             html_go(s, HDATA); /* correctly formed --> comment end */
-        else if (c == '!')
+        }
+        else if (c == '!') {
             html_go(s, HCOMMENDBANG); /* --! in a comment */
-        else if (c != '-')
+        }
+        else if (c != '-') {
             html_go(s, HCOMM); /* -- in the middle of a comment */
+        }
         /* else, --- in comment, strip */
         break;
 
     case HCOMMENDBANG: /* 8.2.4.51 Comment end bang state */
-        if (c == '-')
+        if (c == '-') {
             html_go(s, HCOMMENDDASH); /* --!- in comment */
-        else if (c == '>')
+        }
+        else if (c == '>') {
             html_go(s, HDATA); /* --!> at end of comment */
-        else
+        }
+        else {
             html_go(s, HCOMM); /* --! in the middle of a comment */
+        }
         break;
     }
 }
 
 static const char *convert_name(struct convert_rock *rock)
 {
-    if (rock->f == b64_2byte) return "b64_2byte";
-    if (rock->f == byte2buffer) return "byte2buffer";
-    if (rock->f == byte2search) return "byte2search";
-    if (rock->f == byte2sha1) return "byte2sha1";
-    if (rock->f == qp2byte) return "qp2byte";
-    if (rock->f == striphtml2uni) return "striphtml2uni";
-    if (rock->f == unfold2uni) return "unfold2uni";
-    if (rock->f == uni2searchform) return "uni2searchform";
-    if (rock->f == uni2html) return "uni2html";
-    if (rock->f == table2uni) return "table2uni";
-    if (rock->f == uni2utf8) return "uni2utf8";
-    if (rock->f == utf8_2uni) return "utf8_2uni";
-    if (rock->f == uni2icu) return "uni2icu";
-    if (rock->f == icu2uni) return "icu2uni";
+    if (rock->f == b64_2byte) {
+        return "b64_2byte";
+    }
+    if (rock->f == byte2buffer) {
+        return "byte2buffer";
+    }
+    if (rock->f == byte2search) {
+        return "byte2search";
+    }
+    if (rock->f == byte2sha1) {
+        return "byte2sha1";
+    }
+    if (rock->f == qp2byte) {
+        return "qp2byte";
+    }
+    if (rock->f == striphtml2uni) {
+        return "striphtml2uni";
+    }
+    if (rock->f == unfold2uni) {
+        return "unfold2uni";
+    }
+    if (rock->f == uni2searchform) {
+        return "uni2searchform";
+    }
+    if (rock->f == uni2html) {
+        return "uni2html";
+    }
+    if (rock->f == table2uni) {
+        return "table2uni";
+    }
+    if (rock->f == uni2utf8) {
+        return "uni2utf8";
+    }
+    if (rock->f == utf8_2uni) {
+        return "utf8_2uni";
+    }
+    if (rock->f == uni2icu) {
+        return "uni2icu";
+    }
+    if (rock->f == icu2uni) {
+        return "icu2uni";
+    }
     return "wtf";
 }
 
@@ -2250,7 +2404,9 @@ static inline int search_havematch(struct convert_rock *rock)
 static void basic_free(struct convert_rock *rock)
 {
     if (rock) {
-        if (!rock->dont_free_state) free(rock->state);
+        if (!rock->dont_free_state) {
+            free(rock->state);
+        }
         free(rock);
     }
 }
@@ -2272,8 +2428,12 @@ static int icu_flush(struct convert_rock *rock)
 static void icu_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock) {
-        if (rock->state) icu_reset(rock, -1 /*don't care*/);
-        if (is_free) free(rock);
+        if (rock->state) {
+            icu_reset(rock, -1 /*don't care*/);
+        }
+        if (is_free) {
+            free(rock);
+        }
     }
 }
 
@@ -2283,12 +2443,16 @@ static void sha1_cleanup(struct convert_rock *rock, int do_free)
 
     if (state->len) {
         SHA1Update(&state->ctx, state->buf, state->len);
-        if (state->outlen) *state->outlen += state->len;
+        if (state->outlen) {
+            *state->outlen += state->len;
+        }
     }
 
     SHA1Final(state->dest, &state->ctx);
 
-    if (do_free) basic_free(rock);
+    if (do_free) {
+        basic_free(rock);
+    }
 }
 
 static void icu_reset(struct convert_rock *rock, int to_uni)
@@ -2316,7 +2480,9 @@ static void icu_reset(struct convert_rock *rock, int to_uni)
 
 static void table_cleanup(struct convert_rock *rock, int is_free)
 {
-    if (is_free) free(rock);
+    if (is_free) {
+        free(rock);
+    }
 }
 
 static void table_reset(struct convert_rock *rock, int to_uni)
@@ -2381,29 +2547,40 @@ static void search_cleanup(struct convert_rock *rock, int is_free)
                 s->starts[i] = -1;
             }
         }
-        else
+        else {
             free(s->starts);
+        }
     }
-    if (is_free) basic_free(rock);
+    if (is_free) {
+        basic_free(rock);
+    }
 }
 
 static void buffer_cleanup(struct convert_rock *rock, int is_free)
 {
     if (rock && rock->state) {
         struct buf *buf = (struct buf *) rock->state;
-        if (is_free)
+        if (is_free) {
             buf_free(buf);
-        else
+        }
+        else {
             buf_reset(buf);
+        }
     }
-    if (is_free) basic_free(rock);
+    if (is_free) {
+        basic_free(rock);
+    }
 }
 
 static void dont_free(struct convert_rock *rock, int is_free)
 {
-    if (!rock || !is_free) return;
+    if (!rock || !is_free) {
+        return;
+    }
     /* NULL out state owned by caller, so we won't free in basic_free */
-    if (rock) rock->state = NULL;
+    if (rock) {
+        rock->state = NULL;
+    }
     basic_free(rock);
 }
 
@@ -2424,7 +2601,9 @@ static void striphtml_cleanup(struct convert_rock *rock, int is_free)
             s->prev_was_whitespace = 1;
         }
     }
-    if (is_free) basic_free(rock);
+    if (is_free) {
+        basic_free(rock);
+    }
 }
 
 static void convert_ncleanup(struct convert_rock *rock, int n, int is_free)
@@ -2433,10 +2612,12 @@ static void convert_ncleanup(struct convert_rock *rock, int n, int is_free)
     int i = 0;
     while (rock && (!n || (i++ < n))) {
         next = rock->next;
-        if (rock->cleanup)
+        if (rock->cleanup) {
             rock->cleanup(rock, is_free);
-        else if (is_free)
+        }
+        else if (is_free) {
             basic_free(rock);
+        }
         rock = next;
     }
 }
@@ -2452,22 +2633,31 @@ struct ucharbuf
 static void ucharbuf_reserve(struct ucharbuf *ubuf, int32_t nchar)
 {
 
-    if (ubuf->alloc >= nchar || nchar == 0) return;
+    if (ubuf->alloc >= nchar || nchar == 0) {
+        return;
+    }
 
-    if (nchar <= 8)
+    if (nchar <= 8) {
         nchar = 8;
-    else if (nchar <= 16)
+    }
+    else if (nchar <= 16) {
         nchar = 16;
-    else if (nchar <= 32)
+    }
+    else if (nchar <= 32) {
         nchar = 32;
-    else if (nchar <= 64)
+    }
+    else if (nchar <= 64) {
         nchar = 64;
-    else if (nchar <= 128)
+    }
+    else if (nchar <= 128) {
         nchar = 128;
-    else if (nchar <= 256)
+    }
+    else if (nchar <= 256) {
         nchar = 256;
-    else if (nchar <= 512)
+    }
+    else if (nchar <= 512) {
         nchar = 512;
+    }
 
     ubuf->s = xrealloc(ubuf->s, nchar * sizeof(UChar));
     ubuf->alloc = nchar;
@@ -2570,7 +2760,9 @@ static void unorm_convert(struct convert_rock *rock, uint32_t c)
 
 static void unorm_cleanup(struct convert_rock *rock, int is_free)
 {
-    if (!rock || !rock->state) return;
+    if (!rock || !rock->state) {
+        return;
+    }
 
     struct unorm_state *state = rock->state;
     if (is_free) {
@@ -2649,10 +2841,12 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct canon_state *s = xzmalloc(sizeof(struct canon_state));
     s->flags = flags;
-    if ((flags & CHARSET_KEEPCASE))
+    if ((flags & CHARSET_KEEPCASE)) {
         rock->f = uni2html;
-    else
+    }
+    else {
         rock->f = uni2searchform;
+    }
     rock->state = s;
     rock->next = next;
 
@@ -2717,7 +2911,9 @@ static struct convert_rock *buffer_init(size_t hint)
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct buf *buf = xzmalloc(sizeof(struct buf));
 
-    if (hint) buf_ensure(buf, hint);
+    if (hint) {
+        buf_ensure(buf, hint);
+    }
 
     rock->f = byte2buffer;
     rock->cleanup = buffer_cleanup;
@@ -2746,7 +2942,9 @@ static struct convert_rock *buffer_initm(size_t hint, struct buf *buf)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
 
-    if (hint) buf_ensure(buf, hint);
+    if (hint) {
+        buf_ensure(buf, hint);
+    }
 
     rock->f = byte2buffer;
     rock->cleanup = buffer_cleanup;
@@ -2798,7 +2996,9 @@ static int convert_to_name(struct buf *dst,
     /* allocate the target buffer */
     /* we preflight to compromise between memory and runtime efficiency */
     n = ucnv_convert(to_name, from, dst->s, 0, src, len, &err) + 1;
-    if (err != U_BUFFER_OVERFLOW_ERROR) return -1;
+    if (err != U_BUFFER_OVERFLOW_ERROR) {
+        return -1;
+    }
 
     /* ucnv_convert return value includes size with NUL byte */
     if (n < 2) {
@@ -3118,14 +3318,20 @@ EXPORTED const char *charset_alias_name(charset_t cs)
  */
 EXPORTED const char *charset_canon_name(charset_t cs)
 {
-    if (!cs) goto done;
+    if (!cs) {
+        goto done;
+    }
 
-    if (cs->canon_name) return cs->canon_name;
+    if (cs->canon_name) {
+        return cs->canon_name;
+    }
 
     if (cs->conv) {
         UErrorCode err = U_ZERO_ERROR;
         const char *name = ucnv_getName(cs->conv, &err);
-        if (U_SUCCESS(err)) return name;
+        if (U_SUCCESS(err)) {
+            return name;
+        }
     }
     else if (cs->num >= 0 && cs->num < chartables_num_charsets) {
         return chartables_charset_table[cs->num].name;
@@ -3207,9 +3413,13 @@ EXPORTED void charset_free(charset_t *charsetp)
     if (charsetp && *charsetp != CHARSET_UNKNOWN_CHARSET) {
         struct charset_charset *s = *charsetp;
         /* Close the ICU converter */
-        if (s->conv) ucnv_close(s->conv);
+        if (s->conv) {
+            ucnv_close(s->conv);
+        }
         /* Free up memory. */
-        if (s->buf) free(s->buf);
+        if (s->buf) {
+            free(s->buf);
+        }
         free(s->alias_name);
         free(s->canon_name);
         /* Release the converter */
@@ -3221,8 +3431,12 @@ EXPORTED void charset_free(charset_t *charsetp)
 /* Lookup charset for the legacy numeric charset identifier id */
 EXPORTED charset_t charset_lookupnumid(int id)
 {
-    if (id < 0 || id >= chartables_num_charsets) return CHARSET_UNKNOWN_CHARSET;
-    if (!chartables_charset_table[id].name) return CHARSET_UNKNOWN_CHARSET;
+    if (id < 0 || id >= chartables_num_charsets) {
+        return CHARSET_UNKNOWN_CHARSET;
+    }
+    if (!chartables_charset_table[id].name) {
+        return CHARSET_UNKNOWN_CHARSET;
+    }
     return charset_lookupname(chartables_charset_table[id].name);
 }
 
@@ -3255,22 +3469,28 @@ EXPORTED charset_conv_t *charset_conv_new(charset_t charset, int flags)
 
 EXPORTED const char *charset_conv_convert(charset_conv_t *conv, const char *s)
 {
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     convert_ncleanup(conv->input, 0, 0);
     buf_reset(&conv->dst);
 
-    if (conv->charset == CHARSET_UNKNOWN_CHARSET)
+    if (conv->charset == CHARSET_UNKNOWN_CHARSET) {
         buf_setcstr(&conv->dst, "X");
-    else
+    }
+    else {
         convert_cat(conv->input, s);
+    }
 
     return buf_cstring(&conv->dst);
 }
 
 EXPORTED void charset_conv_free(charset_conv_t **convp)
 {
-    if (!convp || !*convp) return;
+    if (!convp || !*convp) {
+        return;
+    }
 
     charset_conv_t *conv = *convp;
     convert_free(conv->input);
@@ -3307,10 +3527,14 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base,
     charset_t imaputf7;
 
     /* Initialize character set mapping */
-    if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) {
+        return 0;
+    }
 
     /* check for trivial case */
-    if (len == 0) return xstrdup("");
+    if (len == 0) {
+        return xstrdup("");
+    }
 
     /* check if we can convert the whole block at once */
     if (encoding == ENCODING_NONE) {
@@ -3321,8 +3545,9 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base,
             buf_free(&buf);
             return NULL;
         }
-        else
+        else {
             return buf_release(&buf);
+        }
     }
 
     /* set up the conversion path */
@@ -3476,10 +3701,14 @@ EXPORTED int charset_to_utf8(struct buf *dst,
     buf_reset(dst);
 
     /* Initialize character set mapping */
-    if (charset == CHARSET_UNKNOWN_CHARSET) return -1;
+    if (charset == CHARSET_UNKNOWN_CHARSET) {
+        return -1;
+    }
 
     /* check for trivial search */
-    if (len == 0) return 0;
+    if (len == 0) {
+        return 0;
+    }
 
     /* check if we can convert the whole block at once */
     if (encoding == ENCODING_NONE) {
@@ -3617,13 +3846,17 @@ static void encode_b64(struct buf *dst,
         buf_putc(dst, b64[s[len - r] >> 2]);
         if (r == 1) {
             buf_putc(dst, b64[(s[len - 1] & 0x03) << 4]);
-            if (pad) buf_putc(dst, pad);
+            if (pad) {
+                buf_putc(dst, pad);
+            }
         }
         else {
             buf_putc(dst, b64[((s[len - 2] & 0x03) << 4) | (s[len - 1] >> 4)]);
             buf_putc(dst, b64[(s[len - 1] & 0x0f) << 2]);
         }
-        if (pad) buf_putc(dst, pad);
+        if (pad) {
+            buf_putc(dst, pad);
+        }
     }
 }
 
@@ -3643,12 +3876,15 @@ EXPORTED int charset_encode(struct buf *dst,
     else if (encoding == ENCODING_QP) {
         size_t outlen = 0;
         char *val = charset_qpencode_mimebody(src, len, 0, &outlen);
-        if (val && outlen) buf_setmap(dst, val, outlen);
+        if (val && outlen) {
+            buf_setmap(dst, val, outlen);
+        }
         free(val);
         return 0;
     }
-    else
+    else {
         return -1;
+    }
 }
 
 /* Decode bytes from src to sha1 of bytes */
@@ -3663,7 +3899,9 @@ EXPORTED int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH],
     if (encoding == ENCODING_NONE) {
         // short circuit to xsha1
         xsha1((unsigned char *) src, len, dest);
-        if (decodedlen) *decodedlen = len;
+        if (decodedlen) {
+            *decodedlen = len;
+        }
         return 0;
     }
 
@@ -3710,7 +3948,9 @@ static void mimeheader_cat(struct convert_rock *target,
     const char *p;
     charset_t defaultcs, cs;
 
-    if (!s) return;
+    if (!s) {
+        return;
+    }
 
     /* Keep track of the decoding pipeline before the current
      * encoded-word. This allows to share decoding state for
@@ -3735,16 +3975,23 @@ static void mimeheader_cat(struct convert_rock *target,
     start = s;
     while ((start = (const char *) strchr(start, '=')) != 0) {
         start++;
-        if (*start != '?') continue;
+        if (*start != '?') {
+            continue;
+        }
         endcharset = NULL;
-        for (p = start + 1; *p && *p != '=' && *p != '?'; ++p)
-            if ('*' == *p && !endcharset) endcharset = p;
+        for (p = start + 1; *p && *p != '=' && *p != '?'; ++p) {
+            if ('*' == *p && !endcharset) {
+                endcharset = p;
+            }
+        }
         if (*p != '?') {
             start = p;
             continue;
         }
         encoding = p;
-        if (!endcharset) endcharset = p;
+        if (!endcharset) {
+            endcharset = p;
+        }
         if ((encoding[1] != 'b' && encoding[1] != 'B' && encoding[1] != 'q'
              && encoding[1] != 'Q')
             || (encoding[2] != '?'))
@@ -3752,14 +3999,19 @@ static void mimeheader_cat(struct convert_rock *target,
             start = p;
             continue;
         }
-        for (p = encoding + 3; *p && *p != '?'; ++p)
-            if ('=' == *p && '?' == p[1] && '=' != p[2]) break;
+        for (p = encoding + 3; *p && *p != '?'; ++p) {
+            if ('=' == *p && '?' == p[1] && '=' != p[2]) {
+                break;
+            }
+        }
         if (*p != '?' || p[1] != '=') {
             start = p;
             continue;
         }
         end = p;
-        if (!end || end[1] != '=') continue;
+        if (!end || end[1] != '=') {
+            continue;
+        }
 
         /*
          * We have recognized a valid 1522-word.
@@ -3768,7 +4020,9 @@ static void mimeheader_cat(struct convert_rock *target,
          */
         if (eatspace) {
             for (p = s; p < (start - 1) && Uisspace(*p); p++);
-            if (p < (start - 1)) eatspace = 0;
+            if (p < (start - 1)) {
+                eatspace = 0;
+            }
         }
 
         if (!eatspace) {
@@ -3865,7 +4119,9 @@ EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
     char *res;
     charset_t utf8;
 
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init(0);
@@ -3893,12 +4149,16 @@ EXPORTED char *charset_unfold(const char *s, size_t len, int flags)
     struct convert_rock *tobuffer, *input;
     char *res = NULL;
 
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     tobuffer = buffer_init(len);
     input = unfold_init(flags & CHARSET_UNFOLD_SKIPWS, tobuffer);
 
-    if (!convert_catn(input, s, len)) res = buffer_cstring(tobuffer);
+    if (!convert_catn(input, s, len)) {
+        res = buffer_cstring(tobuffer);
+    }
 
     convert_free(input);
 
@@ -3916,7 +4176,9 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
     char *res;
     charset_t utf8;
 
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     utf8 = charset_lookupname("utf-8");
     tobuffer = buffer_init(0);
@@ -3924,7 +4186,9 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
 
     mimeheader_cat(input, s, flags);
 
-    if (flags & CHARSET_TRIMWS) buffer_trim(tobuffer);
+    if (flags & CHARSET_TRIMWS) {
+        buffer_trim(tobuffer);
+    }
 
     res = buffer_cstring(tobuffer);
 
@@ -3946,7 +4210,9 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
  * header, nor returns the value verbatim. */
 EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
 {
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
     const char *p, *q;
     struct buf buf = BUF_INITIALIZER;
     charset_t cs;
@@ -3955,16 +4221,22 @@ EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
     /* Determine charset */
     p = s;
     q = strchr(p, '\'');
-    if (!q) return NULL;
+    if (!q) {
+        return NULL;
+    }
 
     buf_setmap(&buf, p, q - p);
     cs = charset_lookupname(buf_cstring(&buf));
-    if (cs == CHARSET_UNKNOWN_CHARSET) goto done;
+    if (cs == CHARSET_UNKNOWN_CHARSET) {
+        goto done;
+    }
 
     /* Determine language */
     p = q + 1;
     q = strchr(p, '\'');
-    if (!q) goto done;
+    if (!q) {
+        goto done;
+    }
     if (lang) {
         buf_setmap(lang, p, q - p);
     }
@@ -3975,8 +4247,12 @@ EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
     while (*p) {
         if (*p == '%') {
             char c;
-            if (*(p + 1) == 0 || *(p + 2) == 0) goto done;
-            if (hex_to_bin(p + 1, 2, &c) == -1) goto done;
+            if (*(p + 1) == 0 || *(p + 2) == 0) {
+                goto done;
+            }
+            if (hex_to_bin(p + 1, 2, &c) == -1) {
+                goto done;
+            }
             buf_appendmap(&buf, &c, 1);
             p += 3;
         }
@@ -4000,7 +4276,9 @@ EXPORTED char *charset_encode_mimexvalue(const char *s, const char *lang)
     const unsigned char *p;
     struct buf buf = BUF_INITIALIZER;
 
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     buf_printf(&buf, "utf-8'%s'", lang ? lang : "");
     for (p = (const unsigned char *) s; *p; p++) {
@@ -4010,8 +4288,9 @@ EXPORTED char *charset_encode_mimexvalue(const char *s, const char *lang)
             // Safe attr char
             buf_putc(&buf, *p);
         }
-        else
+        else {
             buf_printf(&buf, "%%%X%X", *p >> 4, *p & 0xf);
+        }
     }
 
     return buf_release(&buf);
@@ -4052,7 +4331,9 @@ EXPORTED comp_pat *charset_compilepat(const char *s)
     const char *p = s;
     /* count occurrences */
     while (*p) {
-        if (*p == *s) pat->max_start++;
+        if (*p == *s) {
+            pat->max_start++;
+        }
         pat->patlen++;
         p++;
     }
@@ -4077,7 +4358,9 @@ EXPORTED void charset_freepat(comp_pat *pat)
 EXPORTED int charset_searchstring(
     const char *substr, comp_pat *pat, const char *s, size_t len, int flags)
 {
-    if (!substr[0]) return 1; /* zero length string always matches */
+    if (!substr[0]) {
+        return 1; /* zero length string always matches */
+    }
 
     struct convert_rock *tosearch;
     struct convert_rock *input;
@@ -4097,7 +4380,9 @@ EXPORTED int charset_searchstring(
     /* feed the handler */
     while (len-- > 0) {
         convert_putc(input, (unsigned char) *s++);
-        if (search_havematch(tosearch)) break; /* shortcut if there's a match */
+        if (search_havematch(tosearch)) {
+            break; /* shortcut if there's a match */
+        }
     }
 
     /* copy the value */
@@ -4132,10 +4417,14 @@ EXPORTED int charset_searchfile(const char *substr,
     charset_t utf8;
 
     /* Initialize character set mapping */
-    if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) {
+        return 0;
+    }
 
     /* check for trivial search */
-    if (strlen(substr) == 0) return 1;
+    if (strlen(substr) == 0) {
+        return 1;
+    }
 
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
@@ -4171,7 +4460,9 @@ EXPORTED int charset_searchfile(const char *substr,
     /* implement the loop here so we can check on the search each time */
     for (i = 0; i < len; i++) {
         convert_putc(input, (unsigned char) msg_base[i]);
-        if (search_havematch(tosearch)) break;
+        if (search_havematch(tosearch)) {
+            break;
+        }
     }
 
     res = search_havematch(tosearch); /* copy before we free it */
@@ -4197,10 +4488,14 @@ EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
     charset_t utf8;
     int r = 0;
 
-    if (charset_debug) fprintf(stderr, "charset_extract()\n");
+    if (charset_debug) {
+        fprintf(stderr, "charset_extract()\n");
+    }
 
     /* Initialize character set mapping */
-    if (charset == CHARSET_UNKNOWN_CHARSET) return 0;
+    if (charset == CHARSET_UNKNOWN_CHARSET) {
+        return 0;
+    }
 
     /* set up the conversion path */
     utf8 = charset_lookupname("utf-8");
@@ -4257,7 +4552,9 @@ EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
         if (buf_len(out) > 4096) {
             r = cb(out, rock);
             buf_reset(out);
-            if (r) break;
+            if (r) {
+                break;
+            }
         }
     }
     if (!r) {
@@ -4371,13 +4668,20 @@ EXPORTED char *charset_b64encode_mimebody(const char *msg_base,
         /* account for CRLF added to each line */
         b64_len += 2 * b64_lines;
     }
-    else
+    else {
         b64_lines = 1;
+    }
 
-    if (outlen) *outlen = b64_len;
-    if (outlines) *outlines = b64_lines;
+    if (outlen) {
+        *outlen = b64_len;
+    }
+    if (outlines) {
+        *outlines = b64_lines;
+    }
 
-    if (!msg_base) return NULL;
+    if (!msg_base) {
+        return NULL;
+    }
 
     for (s = (const unsigned char *) msg_base, d = retval, cnt = 0; len;
          s += 3, d += 4, cnt += 4)
@@ -4437,11 +4741,15 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
     const char *s, *e, *at;
     int angle_addr = 0;
 
-    if (datalen < 3) return NULL;
+    if (datalen < 3) {
+        return NULL;
+    }
 
     at = strchr(data + 1, '@');
 
-    if (!at || at >= end - 1) return NULL;
+    if (!at || at >= end - 1) {
+        return NULL;
+    }
 
     /* find end of domain */
     e = at + 1;
@@ -4451,17 +4759,22 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         while (++e < end && !(*e == '[' || *e == ']' || *e == '\\'));
 
         /* domain-literal MUST end with ']' */
-        if (*e++ != ']') return NULL;
+        if (*e++ != ']') {
+            return NULL;
+        }
     }
     else if (!strchr(ATOM_SPECIALS, *e)) {
         /* find end of dot-atom */
         while (++e < end && (*e == '.' || !strchr(ATOM_SPECIALS, *e)));
 
         /* atom MUST NOT end with '.' */
-        if (*(e - 1) == '.') return NULL;
+        if (*(e - 1) == '.') {
+            return NULL;
+        }
     }
-    else
+    else {
         return NULL;
+    }
 
     if (e < end) {
         /* gobble trailing data */
@@ -4471,13 +4784,19 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         }
 
         /* gobble trailing whitespace */
-        while (e < end && qp_isspace(*e)) e++;
+        while (e < end && qp_isspace(*e)) {
+            e++;
+        }
 
         /* multiple addresses MUST only be separated with ',' */
-        if (e < end && *e++ != ',') return NULL;
+        if (e < end && *e++ != ',') {
+            return NULL;
+        }
 
         /* gobble trailing whitespace */
-        while (e < end && qp_isspace(*e)) e++;
+        while (e < end && qp_isspace(*e)) {
+            e++;
+        }
     }
 
     /* find start of localpart */
@@ -4488,26 +4807,36 @@ static const char *find_addr(const char *data, size_t datalen, size_t *addrlen)
         while (--s >= data && (*s != '"' || (--s >= data && *s == '\\')));
 
         /* quoted-string must start with '"' */
-        if (*(s + 1) != '"') return NULL;
+        if (*(s + 1) != '"') {
+            return NULL;
+        }
     }
     else if (!qp_isspace(*s) && !strchr(ATOM_SPECIALS, *s)) {
         /* find start of dot-atom */
         while (--s >= data && (*s == '.' || !strchr(ATOM_SPECIALS, *s)));
 
         /* atom MUST NOT start with '.' */
-        if (*(s + 1) == '.') return NULL;
+        if (*(s + 1) == '.') {
+            return NULL;
+        }
     }
-    else
+    else {
         return NULL;
+    }
 
-    if (s < data)
+    if (s < data) {
         s = data;
+    }
     else if (angle_addr) {
         /* angle-addr MUST start with '<' */
-        if (*s != '<') return NULL;
+        if (*s != '<') {
+            return NULL;
+        }
 
         /* gobble leading whitespace */
-        while (s > data && qp_isspace(*(s - 1))) s--;
+        while (s > data && qp_isspace(*(s - 1))) {
+            s--;
+        }
     }
     else if (!(qp_isspace(*s) || *s == ',')) {
         /* invalid separator */
@@ -4545,15 +4874,21 @@ static char *qp_encode(
                 /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
                 /* but only if the line doesn't exceed the 76 octet limit */
 
-                if (this == ' ' || this == '\t') last_sp = n;
+                if (this == ' ' || this == '\t') {
+                    last_sp = n;
+                }
 
-                if (n - prev_lf <= 74) continue;
+                if (n - prev_lf <= 74) {
+                    continue;
+                }
 
                 if (isheader) {
-                    if (n - last_sp > 74)
+                    if (n - last_sp > 74) {
                         need_quote = 1;
-                    else
+                    }
+                    else {
                         need_fold = 1;
+                    }
                     continue;
                 }
             }
@@ -4587,18 +4922,24 @@ static char *qp_encode(
             if (isheader) {
                 /* RFC 2047 forbids splitting multi-octet characters */
                 int needbytes;
-                if (this < 0x80)
+                if (this < 0x80) {
                     needbytes = 0;
-                else if (this < 0xc0)
+                }
+                else if (this < 0xc0) {
                     needbytes = 0; // UTF-8 continuation
-                else if (this < 0xe0)
+                }
+                else if (this < 0xe0) {
                     needbytes = 3;
-                else if (this < 0xf0)
+                }
+                else if (this < 0xf0) {
                     needbytes = 6;
-                else if (this < 0xf8)
+                }
+                else if (this < 0xf8) {
                     needbytes = 9;
-                else
+                }
+                else {
                     needbytes = 0; // impossible UTF-8 encoding
+                }
                 if (cnt + needbytes >= ENCODED_MAX_LINE_LEN) {
                     buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
                     cnt = 11;
@@ -4635,7 +4976,9 @@ static char *qp_encode(
                     /* folded header, split encoded token */
                     if (n < len - 2) {
                         /* only if actually a folding character, skip it */
-                        if (data[n + 2] == ' ' || data[n + 2] == '\t') n++;
+                        if (data[n + 2] == ' ' || data[n + 2] == '\t') {
+                            n++;
+                        }
                         buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
                         cnt = 12;
                     }
@@ -4654,7 +4997,9 @@ static char *qp_encode(
             }
         }
 
-        if (isheader) buf_appendcstr(&buf, "?=");
+        if (isheader) {
+            buf_appendcstr(&buf, "?=");
+        }
     }
     else if (need_fold) {
         /* fold header every MIME_MAX_HEADER_LENGTH characters (if possible) */
@@ -4676,7 +5021,9 @@ static char *qp_encode(
         buf_setmap(&buf, data, len);
     }
 
-    if (outlen) *outlen = buf_len(&buf);
+    if (outlen) {
+        *outlen = buf_len(&buf);
+    }
 
     return buf_release(&buf);
 }
@@ -4692,7 +5039,9 @@ EXPORTED char *charset_qpencode_mimebody(const char *msg_base,
                                          int force_quote,
                                          size_t *outlen)
 {
-    if (!msg_base) return NULL;
+    if (!msg_base) {
+        return NULL;
+    }
 
     return qp_encode(msg_base, len, 0, force_quote, outlen);
 }
@@ -4759,7 +5108,9 @@ static char *encode_addrheader(const char *header,
         n += phrase_len + addr_len;
 
         /* reached end of header */
-        if (n >= len) break;
+        if (n >= len) {
+            break;
+        }
 
     } while ((addr = find_addr(header + n, len - n, &addr_len)));
 
@@ -4774,9 +5125,13 @@ EXPORTED char *charset_encode_mimeheader(const char *header,
                                          size_t len,
                                          int force_quote)
 {
-    if (!header) return NULL;
+    if (!header) {
+        return NULL;
+    }
 
-    if (!len) len = strlen(header);
+    if (!len) {
+        len = strlen(header);
+    }
 
     size_t addr_len = 0;
     const char *addr = find_addr(header, len, &addr_len);
@@ -4810,18 +5165,24 @@ static void encode_mimephrase(const char *data,
 
         /* RFC 2047 forbids splitting multi-octet characters */
         int needbytes;
-        if (this < 0x80)
+        if (this < 0x80) {
             needbytes = 0;
-        else if (this < 0xc0)
+        }
+        else if (this < 0xc0) {
             needbytes = 0; // UTF-8 continuation
-        else if (this < 0xe0)
+        }
+        else if (this < 0xe0) {
             needbytes = 3;
-        else if (this < 0xf0)
+        }
+        else if (this < 0xf0) {
             needbytes = 6;
-        else if (this < 0xf8)
+        }
+        else if (this < 0xf8) {
             needbytes = 9;
-        else
+        }
+        else {
             needbytes = 0; // impossible UTF-8 encoding
+        }
         if (*cnt + needbytes >= ENCODED_MAX_LINE_LEN) {
             buf_appendcstr(buf, "?=\r\n =?UTF-8?Q?");
             *cnt = 11;
@@ -4868,7 +5229,9 @@ static int extract_plain_cb(const struct buf *buf, void *rock)
      * it to canonify the text into search form */
     for (p = buf_base(buf); p < buf_base(buf) + buf_len(buf) && *p; p++) {
         if (*p == ' ') {
-            if (seenspace) continue;
+            if (seenspace) {
+                continue;
+            }
             seenspace = 1;
         }
         else {
@@ -4951,14 +5314,18 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data,
         U8_NEXT(data8, i, length, c);
         counts.total++;
         counts.bytelen[U8_LENGTH(c)]++;
-        if (c == 0xfffd)
+        if (c == 0xfffd) {
             counts.replacement++;
+        }
         else if (c >= 0) {
             counts.valid++;
-            if (u_iscntrl(c)) counts.cntrl++;
+            if (u_iscntrl(c)) {
+                counts.cntrl++;
+            }
         }
-        else
+        else {
             counts.invalid++;
+        }
     }
 
     return counts;
@@ -5325,10 +5692,12 @@ EXPORTED void charset_append_mime_param(struct buf *buf,
     if (!(flags & CHARSET_PARAM_NEWLINE)
         && before_val_len + strlen(xvalue) < MIME_MAX_HEADER_LENGTH)
     {
-        if (extended && !is_qstring)
+        if (extended && !is_qstring) {
             buf_printf(buf, "; %s*=%s", name, xvalue);
-        else
+        }
+        else {
             buf_printf(buf, "; %s=\"%s\"", name, xvalue);
+        }
     }
     else if (!extended) {
         buf_printf(buf, ";\r\n\t%s=\"%s\"", name, xvalue);
@@ -5349,9 +5718,13 @@ EXPORTED void charset_append_mime_param(struct buf *buf,
                 n++;
                 p++;
                 if (!is_qstring && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
+                {
                     break;
+                }
             } while (*p && n < MIME_MAX_HEADER_LENGTH);
-            if (is_qstring) buf_putc(&line, '"');
+            if (is_qstring) {
+                buf_putc(&line, '"');
+            }
             /* Write line */
             buf_append(buf, &line);
         }
@@ -5439,10 +5812,12 @@ EXPORTED char *unicode_casemap(const char *s, ssize_t slen)
     err = U_ZERO_ERROR;
 
 done:
-    if (csm)
+    if (csm) {
         ucasemap_close(csm);
-    else if (bi)
+    }
+    else if (bi) {
         ubrk_close(bi);
+    }
 
     free(uni);
     free(title);
@@ -5490,7 +5865,9 @@ static char *domain_to_x(const char *domain,
         uerr = U_ZERO_ERROR;
         conv(global_uidna, domain, -1, result, len, &uinfo2, &uerr);
         result[len] = '\0';
-        if (U_FAILURE(uerr) || uinfo2.errors) xzfree(result);
+        if (U_FAILURE(uerr) || uinfo2.errors) {
+            xzfree(result);
+        }
     }
 
     return result;

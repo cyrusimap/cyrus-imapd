@@ -72,13 +72,21 @@ static struct auth_state auth_anonymous = { "anonymous", STRARRAY_INITIALIZER };
 static int mymemberof(const struct auth_state *auth_state,
                       const char *identifier)
 {
-    if (!auth_state) auth_state = &auth_anonymous;
+    if (!auth_state) {
+        auth_state = &auth_anonymous;
+    }
 
-    if (strcmp(identifier, "anyone") == 0) return 1;
+    if (strcmp(identifier, "anyone") == 0) {
+        return 1;
+    }
 
-    if (strcmp(identifier, auth_state->userid) == 0) return 3;
+    if (strcmp(identifier, auth_state->userid) == 0) {
+        return 3;
+    }
 
-    if (strarray_contains(&auth_state->groups, identifier)) return 2;
+    if (strarray_contains(&auth_state->groups, identifier)) {
+        return 2;
+    }
 
     return 0;
 }
@@ -146,8 +154,12 @@ static const char *mycanonifyid(const char *identifier, size_t len)
     char *p;
     int username_tolower = 0;
 
-    if (!len) len = strlen(identifier);
-    if (len >= sizeof(retbuf)) return NULL;
+    if (!len) {
+        len = strlen(identifier);
+    }
+    if (len >= sizeof(retbuf)) {
+        return NULL;
+    }
 
     memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
@@ -170,7 +182,9 @@ static const char *mycanonifyid(const char *identifier, size_t len)
      */
     username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
     for (p = retbuf; *p; p++) {
-        if (username_tolower && Uisupper(*p)) *p = tolower((unsigned char) *p);
+        if (username_tolower && Uisupper(*p)) {
+            *p = tolower((unsigned char) *p);
+        }
 
         switch (allowedchars[*(unsigned char *) p]) {
         case 0:
@@ -191,14 +205,18 @@ static struct auth_state *mynewstate(const char *identifier)
     struct auth_state *newstate;
 
     identifier = mycanonifyid(identifier, 0);
-    if (!identifier) return NULL;
+    if (!identifier) {
+        return NULL;
+    }
 
     newstate = (struct auth_state *) xzmalloc(sizeof(struct auth_state));
 
     strcpy(newstate->userid, identifier);
     strarray_init(&newstate->groups);
 
-    if (our_mboxlookup) our_mboxlookup(identifier, &newstate->groups);
+    if (our_mboxlookup) {
+        our_mboxlookup(identifier, &newstate->groups);
+    }
 
     return newstate;
 }
@@ -217,9 +235,13 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
 /* reloads groups */
 static void myrefresh(struct auth_state *auth_state)
 {
-    if (!auth_state) return;
+    if (!auth_state) {
+        return;
+    }
     strarray_truncate(&auth_state->groups, 0);
-    if (our_mboxlookup) our_mboxlookup(auth_state->userid, &auth_state->groups);
+    if (our_mboxlookup) {
+        our_mboxlookup(auth_state->userid, &auth_state->groups);
+    }
 }
 
 EXPORTED void register_mboxgroups_cb(int (*l)(const char *, strarray_t *))

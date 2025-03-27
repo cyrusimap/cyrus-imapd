@@ -77,13 +77,21 @@ static int mymemberof(const struct auth_state *auth_state,
     const char *ident;
     int ret = 0;
 
-    if (strcmp(identifier, "anyone") == 0) return 1;
-    if (!auth_state && !strcmp(identifier, "anonymous"))
+    if (strcmp(identifier, "anyone") == 0) {
+        return 1;
+    }
+    if (!auth_state && !strcmp(identifier, "anonymous")) {
         return 3;
-    else if (!auth_state)
+    }
+    else if (!auth_state) {
         return 0;
-    if (strcmp(identifier, auth_state->userid) == 0) return 3;
-    if (strcmp(auth_state->userid, "anonymous") == 0) return 0;
+    }
+    if (strcmp(identifier, auth_state->userid) == 0) {
+        return 3;
+    }
+    if (strcmp(auth_state->userid, "anonymous") == 0) {
+        return 0;
+    }
 
     ident = auth_canonifyid(identifier, 0);
 
@@ -107,17 +115,29 @@ static const char *mycanonifyid(const char *identifier, size_t len)
     char *realm;
     int striprealm = 0;
 
-    if (retbuf) free(retbuf);
+    if (retbuf) {
+        free(retbuf);
+    }
     retbuf = NULL;
 
-    if (!identifier) return NULL;
-    if (!len) len = strlen(identifier);
+    if (!identifier) {
+        return NULL;
+    }
+    if (!len) {
+        len = strlen(identifier);
+    }
 
-    if (strcasecmp(identifier, "anonymous") == 0) return "anonymous";
+    if (strcasecmp(identifier, "anonymous") == 0) {
+        return "anonymous";
+    }
 
-    if (strcasecmp(identifier, "anyone") == 0) return "anyone";
+    if (strcasecmp(identifier, "anyone") == 0) {
+        return "anyone";
+    }
 
-    if (krb5_init_context(&context)) return NULL;
+    if (krb5_init_context(&context)) {
+        return NULL;
+    }
 
     if (krb5_parse_name(context, identifier, &princ)) {
         krb5_free_context(context);
@@ -160,7 +180,9 @@ static const char *mycanonifyid(const char *identifier, size_t len)
     /* we have the canonical name pointed to by p -- strip realm if local */
     if (striprealm) {
         char *realmbegin = strrchr(retbuf, '@');
-        if (realmbegin) *realmbegin = '\0';
+        if (realmbegin) {
+            *realmbegin = '\0';
+        }
     }
 
     krb5_free_principal(context, princ);
@@ -177,7 +199,9 @@ static struct auth_state *mynewstate(const char *identifier)
     const char *ident;
 
     ident = auth_canonifyid(identifier, 0);
-    if (!ident) return NULL;
+    if (!ident) {
+        return NULL;
+    }
 
     newstate = (struct auth_state *) xmalloc(sizeof(struct auth_state));
     newstate->userid = xstrdup(ident);
@@ -187,7 +211,9 @@ static struct auth_state *mynewstate(const char *identifier)
 
 static void myfreestate(struct auth_state *auth_state)
 {
-    if (!auth_state) return;
+    if (!auth_state) {
+        return;
+    }
 
     free(auth_state->userid);
     free(auth_state);
