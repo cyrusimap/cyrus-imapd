@@ -105,13 +105,19 @@ char **argv;
     argc -= optind;
     argv += optind;
 
-    if (!*argv) usage();
+    if (!*argv) {
+        usage();
+    }
     hname = *argv;
     argv++;
-    if (!*argv) usage();
+    if (!*argv) {
+        usage();
+    }
     strcpy(username, *argv);
     argv++;
-    if (!*argv) usage();
+    if (!*argv) {
+        usage();
+    }
     strcpy(mbox, *argv);
 
     soc = socket(PF_INET, SOCK_DGRAM, 0);
