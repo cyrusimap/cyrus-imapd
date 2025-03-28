@@ -5509,8 +5509,10 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     int dirtycache = 0;
     const message_t *msg;
     struct index_record copyrecord;
-    const char *srcname;
-    const char *destname;
+    const char *srcname = NULL;
+    int *srcdirfdp = NULL;
+    const char *destname = NULL;
+    int *destdirfdp = NULL;
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
@@ -5536,7 +5538,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             copyrecord = *record;
             srcname = mailbox_spool_fname(mailbox, copyrecord.uid);
+            srcdirfdp = &mailbox->spool_dirfd;
             destname = mailbox_archive_fname(mailbox, copyrecord.uid);
+            destdirfdp = &mailbox->archive_dirfd;
 
             /* load cache before changing the flags */
             r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -5571,7 +5575,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             copyrecord = *record;
             destname = mailbox_spool_fname(mailbox, copyrecord.uid);
+            destdirfdp = &mailbox->spool_dirfd;
             srcname = mailbox_archive_fname(mailbox, copyrecord.uid);
+            srcdirfdp = &mailbox->archive_dirfd;
 
             /* load cache before changing the flags */
             r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -5606,7 +5612,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         if (!object_storage_enabled){
             /* got a file to copy! */
             if (strcmp(srcname, destname)) {
-                r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR|COPYFILE_KEEPTIME);
+                r = cyrus_copyfile_fdptr(srcname, destname, COPYFILE_MKDIR|COPYFILE_KEEPTIME,
+                                         srcdirfdp, destdirfdp);
                 if (r) {
                     xsyslog(LOG_ERR, "IOERROR: copyfile failed",
                                      "mailbox=<%s> record=<%u> "
