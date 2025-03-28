@@ -6856,14 +6856,15 @@ EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr)
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-EXPORTED int mailbox_copyfile(const char *from, const char *to, int nolink)
+EXPORTED int mailbox_copyfile_fdptr(const char *from, const char *to,
+                                    int nolink, int *dest_dirfdp)
 {
     int flags = COPYFILE_MKDIR|COPYFILE_KEEPTIME;
     if (nolink) flags |= COPYFILE_NOLINK;
 
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
 
-    if (cyrus_copyfile(from, to, flags))
+    if (cyrus_copyfile_fdptr(from, to, flags, NULL, dest_dirfdp))
         return IMAP_IOERROR;
 
     return 0;
