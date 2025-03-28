@@ -248,7 +248,7 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
 
         if (fsync(writefd) ||
             fstat(writefd, &sbuf) == -1 ||
-            rename(tid->fnamenew, fname) == -1 ||
+            cyrus_rename(tid->fnamenew, fname) == -1 ||
             lock_unlock(writefd, fname) == -1) {
             xsyslog(LOG_ERR, "IOERROR: commit failed",
                              "fname=<%s>",

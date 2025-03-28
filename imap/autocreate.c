@@ -393,13 +393,13 @@ static int autocreate_sieve(const char *userid, const char *source_script)
 
 
     /* Renaming the necessary stuff */
-    if (rename(script_names.tmpname1, script_names.scriptname)) {
+    if (cyrus_rename(script_names.tmpname1, script_names.scriptname)) {
         syslog(LOG_ERR, "autocreate_sieve: rename %s -> %s failed: %m",
                script_names.tmpname1, script_names.scriptname);
         goto failed3;
     }
 
-    if (rename(script_names.bctmpname, script_names.bcscriptname)) {
+    if (cyrus_rename(script_names.bctmpname, script_names.bcscriptname)) {
         syslog(LOG_ERR, "autocreate_sieve: rename %s -> %s failed: %m",
                script_names.bctmpname, script_names.bcscriptname);
         xunlink(script_names.bcscriptname);
@@ -473,7 +473,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
         } /* if else if */
 
         /* rename the temporary created sieve script to its final name. */
-        if (rename(script_names.tmpname2, compiled_source_script)) {
+        if (cyrus_rename(script_names.tmpname2, compiled_source_script)) {
             if (errno != EEXIST) {
                 xunlink(script_names.tmpname2);
                 xunlink(compiled_source_script);

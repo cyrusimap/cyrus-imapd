@@ -430,7 +430,7 @@ static int user_renamesieve(const char *olduser, const char *newuser)
      *
      * XXX this doesn't rename sieve scripts
      */
-    if (!r) r = rename(oldpath, newpath);
+    if (!r) r = cyrus_rename(oldpath, newpath);
     if (r < 0) {
         if (errno == ENOENT) {
             syslog(LOG_WARNING, "error renaming %s to %s: %m",

@@ -534,7 +534,7 @@ gotdata:
                         "tempfname=<%s>", tempfname);
             }
             else {
-                if (rename(tempfname, cachefname)) {
+                if (cyrus_rename(tempfname, cachefname)) {
                     xsyslog(LOG_WARNING, "failed to rename tempfile to cache file",
                             "tempfname=<%s> cachefname=<%s>",
                             tempfname, cachefname);

@@ -2191,8 +2191,10 @@ static int replay_cb(void *rock,
 static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *newname)
 {
     struct stat sbuf, sbuffile;
-    char *copy = strdup(db->fname);
-    const char *dir = dirname(copy);
+    char *copyd = strdup(db->fname);
+    char *copyb = strdup(db->fname);
+    const char *dir = dirname(copyd);
+    const char *file = dirname(copyb);
     int r = 0;
     int dirfd = -1;
 
@@ -2230,7 +2232,7 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
         goto done;
     }
 
-    r = renameat(AT_FDCWD, newname, dirfd, db->fname);
+    r = renameat(AT_FDCWD, newname, dirfd, file);
     if (r) goto done;
 
     if (!db->nosync) {
@@ -2245,7 +2247,8 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
 
  done:
     if (dirfd >= 0) close(dirfd);
-    free(copy);
+    free(copyd);
+    free(copyb);
     return r;
 }
 

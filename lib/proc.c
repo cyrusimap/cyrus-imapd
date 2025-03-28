@@ -187,7 +187,7 @@ EXPORTED int proc_register(struct proc_handle **handlep,
                       servicename, clienthost, userid, mailbox, cmd);
     fclose(procfile);
 
-    if (rename(newfname, handle->fname)) {
+    if (cyrus_rename(newfname, handle->fname)) {
         xsyslog(LOG_ERR, "IOERROR: rename failed",
                          "source=<%s> dest=<%s>",
                          newfname, handle->fname);

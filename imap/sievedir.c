@@ -242,7 +242,7 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
         return SIEVEDIR_IOERROR;
     }
 
-    if (rename(tmp, active) < 0) {
+    if (cyrus_rename(tmp, active) < 0) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename active script link",
                 "oldpath=<%s> newpath=<%s>", tmp, active);
         xunlink(tmp);
@@ -298,7 +298,7 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
              "%s/%s%s", sievedir, oldname, BYTECODE_SUFFIX);
     snprintf(newpath, sizeof(newpath),
              "%s/%s%s", sievedir, newname, BYTECODE_SUFFIX);
-    r = rename(oldpath, newpath);
+    r = cyrus_rename(oldpath, newpath);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
                 "oldpath=<%s> newpath=<%s>", oldpath, newpath);
@@ -375,7 +375,7 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     /* rename */
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
-    r = rename(new_bcpath, path);
+    r = cyrus_rename(new_bcpath, path);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
                 "oldpath=<%s> newpath=<%s>", new_bcpath, path);
