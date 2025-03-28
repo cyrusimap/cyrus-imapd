@@ -249,6 +249,7 @@ static int accum_stats(const struct prom_stats *stats, void *rock)
 struct format_metric_rock {
     struct buf *buf;
     enum prom_metric_id metric;
+    int64_t report_time;
 };
 
 static void format_metric(const char *key __attribute__((unused)),
@@ -267,7 +268,7 @@ static void format_metric(const char *key __attribute__((unused)),
         buf_printf(fmrock->buf, ",%s", prom_metric_descs[fmrock->metric].label);
     buf_printf(fmrock->buf, "} %0.f %" PRId64 "\n",
                             stats->metrics[fmrock->metric].value,
-                            stats->metrics[fmrock->metric].last_updated);
+                            fmrock->report_time);
 }
 
 static void do_collate_service_report(struct buf *buf)
@@ -276,6 +277,7 @@ static void do_collate_service_report(struct buf *buf)
     char *doneprocs_lock_fname;
     int doneprocs_lock_fd;
     int i;
+    int64_t report_time;
 
     buf_reset(buf);
     construct_hash_table(&all_stats, 128, 0);
@@ -306,6 +308,7 @@ static void do_collate_service_report(struct buf *buf)
     /* slurp up and accumulate current stats */
     promdir_foreach(&accum_stats, PROMDIR_FOREACH_PIDS, &all_stats);
 
+    report_time = now_ms();
     syslog(LOG_DEBUG, "updating prometheus report for %d services",
                       hash_numrecords(&all_stats));
 
@@ -326,7 +329,7 @@ static void do_collate_service_report(struct buf *buf)
                             prom_metric_type_names[prom_metric_descs[i].type]);
         }
 
-        struct format_metric_rock fmrock = { buf, i };
+        struct format_metric_rock fmrock = { buf, i, report_time };
         hash_enumerate(&all_stats, &format_metric, &fmrock);
     }
 
