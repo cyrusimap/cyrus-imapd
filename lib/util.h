@@ -221,6 +221,9 @@ extern char *create_tempdir(const char *path, const char *subname);
 extern int removedir(const char *path);
 
 /* Call rename but fsync the directory before returning success */
+extern int xopendir(const char *dest);
+extern int xrenameat(int dirfd, const char *src, const char *dest);
+extern void xclosedir(int dirfd);
 extern int cyrus_rename(const char *src, const char *dest);
 
 /* Close a network filedescriptor the "safe" way */
@@ -242,7 +245,9 @@ enum {
     COPYFILE_NODIRSYNC = (1<<4)
 };
 
-extern int cyrus_copyfile(const char *from, const char *to, int flags);
+extern int cyrus_copyfile_fdptr(const char *from, const char *to, int flags,
+                                int *from_dirfdp, int *to_dirfdp);
+#define cyrus_copyfile(from, to, flags) cyrus_copyfile_fdptr(from, to, flags, NULL, NULL)
 
 enum {
     BEFORE_SETUID,
