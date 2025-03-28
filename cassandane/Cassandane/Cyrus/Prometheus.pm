@@ -146,17 +146,36 @@ sub test_service_reportfile_exists
     # do something that'll get counted
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->select("INBOX");
-    # and wait for a fresh report
-    sleep 3;
 
     my $fname = "$self->{instance}->{basedir}/conf/stats/service.txt";
+    my $last_timestamp = 0;
+    my $last_value = undef;
 
-    $self->assert_file_test($fname, '-f');
+    # get a few consecutive reports
+    for (1..3) {
+        sleep 3;
 
-    my $report = parse_report(scalar read_file $fname);
+        $self->assert_file_test($fname, '-f');
 
-    $self->assert(scalar keys %{$report});
-    $self->assert(exists $report->{cyrus_imap_connections_total});
+        my $report = parse_report(scalar read_file $fname);
+
+        $self->assert(scalar keys %{$report});
+        $self->assert(exists $report->{cyrus_imap_connections_total});
+
+        my $stat = $report->{cyrus_imap_connections_total}->{'service="imap"'};
+
+        # timestamp is the report time, not the time the value last changed,
+        # so it should have a new timestamp in each report...
+        $self->assert_not_equals($last_timestamp, $stat->{timestamp});
+
+        # ... even though we don't expect its value to have changed
+        if (defined $last_value) {
+            $self->assert_equals($last_value, $stat->{value});
+        }
+
+        $last_timestamp = $stat->{timestamp};
+        $last_value = $stat->{value};
+    }
 }
 
 sub test_httpreport
@@ -167,18 +186,38 @@ sub test_httpreport
     # do something that'll get counted
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->select("INBOX");
-    # and wait for a fresh report
-    sleep 3;
 
-    my $response = $self->http_report();
+    my $last_timestamp = 0;
+    my $last_value = undef;
 
-    $self->assert($response->{success});
-    $self->assert(length $response->{content});
+    # get a few consecutive reports
+    for (1..3) {
+        sleep 3;
 
-    my $report = parse_report($response->{content});
+        my $response = $self->http_report();
 
-    $self->assert(scalar keys %{$report});
-    $self->assert(exists $report->{cyrus_imap_connections_total});
+        $self->assert($response->{success});
+        $self->assert(length $response->{content});
+
+        my $report = parse_report($response->{content});
+
+        $self->assert(scalar keys %{$report});
+        $self->assert(exists $report->{cyrus_imap_connections_total});
+
+        my $stat = $report->{cyrus_imap_connections_total}->{'service="imap"'};
+
+        # timestamp is the report time, not the time the stat was last counted,
+        # so it should have a new timestamp in each report...
+        $self->assert_not_equals($last_timestamp, $stat->{timestamp});
+
+        # ... even though we don't expect its value to have changed
+        if (defined $last_value) {
+            $self->assert_equals($last_value, $stat->{value});
+        }
+
+        $last_timestamp = $stat->{timestamp};
+        $last_value = $stat->{value};
+    }
 }
 
 sub test_disabled
