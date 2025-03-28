@@ -1,0 +1,96 @@
+#!/usr/bin/perl
+use v5.12.0;
+use warnings;
+
+use utf8;
+
+binmode *STDOUT, ':encoding(utf-8)';
+binmode *STDERR, ':encoding(utf-8)';
+
+use Getopt::Long;
+use IO::File;
+use IO::Dir;
+
+my $getopt_ok = GetOptions(
+  "help"   => \my $help,
+);
+
+if (!$getopt_ok || $help) {
+  die "usage: tab-tool [--really] PATH...";
+}
+
+my @errors = scan([@ARGV]);
+
+say for @errors;
+exit 1 if @errors;
+
+sub scan {
+  my ($paths) = @_;
+
+  my @lines = `git ls-files -- @$paths`;
+
+  die "problem running git ls-files\n" if $?;
+
+  chomp @lines;
+
+  my @found;
+  for my $filename (@lines) {
+    my @bad_line_numbers = scan_file($filename);
+    push @found, map {; "$filename;$_" } @bad_line_numbers;
+  }
+
+  return @found;
+}
+
+sub peek_magic {
+  my ($fh) = @_;
+
+  sysread $fh, my $magic, 2;
+
+  seek $fh, 0, 0;
+
+  return $magic;
+}
+
+sub scan_file {
+  my ($filename) = @_;
+
+  # We need to have the string in the source to find it, basically!
+  return if $filename eq 'tools/find-fixme-markers';
+
+  open my $ih, '<', $filename or die "can't read $filename: $!";
+
+  unless (
+    file_is_interesting($filename)
+    ||
+    -x $filename && peek_magic($ih) eq '#!'
+  ) {
+    return;
+  }
+
+  my @bad_line_numbers;
+  while (<$ih>) {
+    /FIXME/ && push @bad_line_numbers, $.;
+  }
+
+  close $ih or die "error reading from $filename: $!";
+
+  return @bad_line_numbers;
+}
+
+sub file_is_interesting {
+  (local $_) = @_;
+
+  return if -l $_;
+
+  return 1 if m{\.rst\z}
+           || m{\.pl\z}
+           || m{\.c\z}
+           || m{\.h\z}
+           || m{\.pm\z}
+           || m{\Acassandane/tiny-tests/}
+           || m{\Atools/}
+           || $_ eq 'configure.ac';
+
+  return;
+}

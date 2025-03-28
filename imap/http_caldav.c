@@ -5310,7 +5310,7 @@ static void prune_properties(icalcomponent *parent,
 
 static int expand_cb(icalcomponent *comp,
                      icaltimetype start, icaltimetype end,
-                     icaltimetype _recurid __attribute__((unused)), // FIXME
+                     icaltimetype _recurid __attribute__((unused)), // XXX
                      int is_standalone __attribute__((unused)),
                      void *rock)
 {

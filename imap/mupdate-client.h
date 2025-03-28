@@ -95,7 +95,7 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
 /* Callbacks for mupdate_scarf and mupdate_list */
 /* cmd is one of DELETE, MAILBOX, RESERVE */
 /* context is as provided to mupdate_scarf */
-/* FIXME/xxx: "cmd" can probably go away and instead
+/* XXX: "cmd" can probably go away and instead
  * we just use the t in mdata */
 typedef int (*mupdate_callback)(struct mupdate_mailboxdata *mdata,
                                 const char *cmd, void *context);

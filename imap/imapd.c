@@ -5052,7 +5052,7 @@ static void cmd_close(char *tag, char *cmd)
     if (backend_current) {
         /* remote mailbox */
         prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
-        /* xxx do we want this to say OK if the connection is gone?
+        /* XXX do we want this to say OK if the connection is gone?
          * saying NO is clearly wrong, hense the fatal request. */
         pipe_including_tag(backend_current, tag, 0);
 
@@ -6654,7 +6654,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     if (!r && backend_current) {
         /* remote mailbox -> local or remote mailbox */
 
-        /* xxx  start of separate proxy-only code
+        /* XXX  start of separate proxy-only code
            (remove when we move to a unified environment) */
         struct backend *s = NULL;
 
@@ -6674,7 +6674,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             proxy_copy(tag, sequence, name, myrights, usinguid, s);
             goto cleanup;
         }
-        /* xxx  end of separate proxy-only code */
+        /* XXX  end of separate proxy-only code */
 
         /* simply send the COPY to the backend */
         prot_printf(
@@ -6696,7 +6696,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
          *
          * fetch the messages and APPEND them to the backend
          *
-         * xxx  completely untested
+         * XXX  completely untested
          */
         struct backend *s = NULL;
         int res;

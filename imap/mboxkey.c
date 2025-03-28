@@ -449,7 +449,7 @@ HIDDEN int mboxkey_merge(const char *tmpfile, const char *tgtfile)
     struct db *tmp = NULL, *tgt = NULL;
     struct mboxkey_merge_rock rock;
 
-    /* xxx does this need to be CYRUSDB_CREATE? */
+    /* XXX does this need to be CYRUSDB_CREATE? */
     r = cyrusdb_open(DB, tmpfile, CYRUSDB_CREATE, &tmp);
     if(r) goto done;
 

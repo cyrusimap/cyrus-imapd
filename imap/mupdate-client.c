@@ -397,7 +397,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     if (!h || !cmd || !mdata) return 1;
 
     /* coyp the data to the handle storage */
-    /* xxx why can't we just point to the 'mdata' buffers? */
+    /* XXX why can't we just point to the 'mdata' buffers? */
     strlcpy(h->mailbox_buf, mdata->mailbox, sizeof(h->mailbox_buf));
     strlcpy(h->location_buf, mdata->location, sizeof(h->location_buf));
 

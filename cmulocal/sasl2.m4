@@ -90,8 +90,8 @@ if test "$gssapi" != no; then
      GSSAPIBASE_LIBS="-L$gssapi_dir"
      GSSAPIBASE_STATIC_LIBS="-L$gssapi_dir"
   else
-     # FIXME: This is only used for building cyrus, and then only as
-     # a real hack.  it needs to be fixed.
+     # XXX: This is only used for building cyrus, and then only as a real hack.
+     # it needs to be fixed.
      gssapi_dir="/usr/local/lib"
   fi
 
@@ -126,7 +126,7 @@ if test "$gssapi" != no; then
 
     cmu_saved_CPPFLAGS=$CPPFLAGS
     cmu_saved_GSSAPIBASE_LIBS=$GSSAPIBASE_LIBS
-# FIXME - Note that the libraries are in .../lib64 for 64bit kernels
+# XXX - Note that the libraries are in .../lib64 for 64bit kernels
     if test -d "${gssapi}/appsec-rt/lib"; then
       GSSAPIBASE_LIBS="$GSSAPIBASE_LIBS -L${gssapi}/appsec-rt/lib"
     fi

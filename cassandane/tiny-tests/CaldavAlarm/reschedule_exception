@@ -6,7 +6,7 @@ sub test_reschedule_exception
 {
     my ($self) = @_;
 
-    # FIXME disable this test until calalarmd is fixed
+    # XXX disable this test until calalarmd is fixed
     return;
 
     my $CalDAV = $self->{caldav};

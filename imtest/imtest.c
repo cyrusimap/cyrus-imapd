@@ -1324,7 +1324,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
             rock = NULL;
         }
 
-        tv.tv_sec = 600; /* 10 minute timeout - xxx protocol specific? */
+        tv.tv_sec = 600; /* 10 minute timeout - XXX protocol specific? */
         tv.tv_usec = 0;
 
         aset = accept_set;

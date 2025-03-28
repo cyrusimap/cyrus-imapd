@@ -99,7 +99,7 @@
 #include "sync_support.h"
 #include "sync_log.h"
 
-static int opt_force = 0; // FIXME
+static int opt_force = 0; // XXX
 
 static struct sync_client_state rightnow_sync_cs;
 
@@ -121,9 +121,9 @@ struct protocol_t imap_csync_protocol =
         CAPAF_MANY_PER_LINE,
         { { "AUTH", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
-// FIXME doesn't work with compress at the moment for some reason
+// XXX doesn't work with compress at the moment for some reason
 //        { "COMPRESS=DEFLATE", CAPA_COMPRESS },
-// FIXME do we need these ones?
+// XXX do we need these ones?
 //        { "IDLE", CAPA_IDLE },
 //        { "MUPDATE", CAPA_MUPDATE },
 //        { "MULTIAPPEND", CAPA_MULTIAPPEND },
@@ -189,7 +189,7 @@ static char *imap_sasl_parsesuccess(char *str, const char **status)
     syslog(LOG_DEBUG, "imap_sasl_parsesuccess(): input is: %s", str);
     if (NULL == status)  return NULL; /* nothing useful we can do */
 
-    const char *prelude = "A01 OK "; // FIXME don't hardcode this, get it from sasl_cmd->ok
+    const char *prelude = "A01 OK "; // XXX don't hardcode this, get it from sasl_cmd->ok
     const size_t prelude_len = strlen(prelude);
 
     const char *capability = "[CAPABILITY ";

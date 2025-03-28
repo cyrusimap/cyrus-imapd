@@ -40,9 +40,9 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* xxx check retry_xxx for failure */
+/* XXX check retry_xxx for failure */
 
-/* xxx all offsets should be uint32_ts i think */
+/* XXX all offsets should be uint32_ts i think */
 
 #include <config.h>
 
@@ -201,7 +201,7 @@ static void getsyncfd(struct dbengine *db, struct txn *t)
         t->syncfd = db->fd;
     } else if (t->syncfd == -1) {
         t->syncfd = open(db->fname, O_RDWR | O_DSYNC, 0666);
-        assert(t->syncfd != -1); /* xxx do better error recovery */
+        assert(t->syncfd != -1); /* XXX do better error recovery */
     }
 }
 
@@ -1339,7 +1339,7 @@ static int mystore(struct dbengine *db,
             db->curlevel = lvl;
 
             /* write out that change */
-            write_header(db); /* xxx errors? */
+            write_header(db); /* XXX errors? */
         }
 
         /* we point to what we're updating used to point to */
@@ -1535,7 +1535,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         goto done;
     }
 
-    /* xxx consider unlocking the database here: the transaction isn't
+    /* XXX consider unlocking the database here: the transaction isn't
        yet durable but the file is in a form that is consistent for
        other transactions to use. releasing the lock here would give
        ACI properties. */
@@ -2125,9 +2125,9 @@ static int recovery(struct dbengine *db, int flags)
 
         db->listsize++;
 
-        /* xxx check \0 fill on key */
+        /* XXX check \0 fill on key */
 
-        /* xxx check \0 fill on data */
+        /* XXX check \0 fill on data */
 
         /* update previous pointers, record these for updating */
         for (i = 0; !r && i < LEVEL_safe(db, ptr); i++) {

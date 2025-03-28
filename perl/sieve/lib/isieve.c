@@ -346,7 +346,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
           }
           return STAT_OK;
       } else { /* server said no or bye*/
-          /* xxx handle referrals */
+          /* XXX handle referrals */
           *errstrp = errstr;
           return STAT_NO;
       }
@@ -646,7 +646,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
         }
     } while(ret && mtried);
 
-    /* xxx leak? */
+    /* XXX leak? */
     if(ret) return STAT_NO;
 
     if (ssf) {

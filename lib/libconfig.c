@@ -704,7 +704,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     config_loaded = 1;
 
-    /* xxx this is leaked, this may be able to be better in 2.2 (cyrus_done) */
+    /* XXX this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if (alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
@@ -728,7 +728,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
         /* Scan options to see if we need to replace {configdirectory} */
-        /* xxx need to scan overflow options as well! */
+        /* XXX need to scan overflow options as well! */
 
         /* Skip options that have a NULL value, aren't strings, or
          * are the configdirectory option */
@@ -1262,7 +1262,7 @@ static void config_read_file(const char *filename)
             /* that is, partition names and anything that might be
              * used by SASL */
 /*
-  xxx this would be nice if it wasn't for other services who might be
+  XXX this would be nice if it wasn't for other services who might be
       sharing this config file and whose names we cannot predict
 
             if (strncasecmp(key,"sasl_",5)

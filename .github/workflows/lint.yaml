@@ -1,4 +1,4 @@
-name: No hard tabs
+name: Content linting
 
 on:
   workflow_dispatch:
@@ -11,7 +11,8 @@ on:
       - master
       - main
 jobs:
-  assert-no-tabs:
+  content-linting:
+    name: Content linting
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -20,3 +21,6 @@ jobs:
     - name: Assert no tabs
       shell: bash
       run: ./tools/hard-tab-tool
+    - name: Assert no FIXME
+      shell: bash
+      run: ./tools/find-fixme-markers

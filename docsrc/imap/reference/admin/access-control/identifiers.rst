@@ -7,7 +7,7 @@ The Access Control Identifier (ACI) part of an ACL entry specifies the
 user or group for which the entry applies.  Group identifiers are
 distinguished by the prefix "group:".  For example, "group:accounting".
 
-.. todo:: FIXME: Clarify what an ACL entry looks like first. Refer to
+.. TODO:: Clarify what an ACL entry looks like first. Refer to
           how user login names are translated into their identifiers, and (in
           that section) refer to altnamespace, unixhierarchysep, default domain,
           virtdomains, tips and tricks etc.

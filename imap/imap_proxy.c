@@ -816,7 +816,7 @@ out:
     return r;
 }
 
-/* xxx  start of separate proxy-only code
+/* XXX  start of separate proxy-only code
    (remove when we move to a unified environment) */
 static int chomp(struct protstream *p, const char *s)
 {
@@ -1239,7 +1239,7 @@ int proxy_fetch(char *sequence, int usinguid, unsigned items,
 
     return PROXY_OK;
 }
-/* xxx  end of separate proxy-only code */
+/* XXX  end of separate proxy-only code */
 
 int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
                        size_t maxsize, unsigned long *size, const char **parseerr)

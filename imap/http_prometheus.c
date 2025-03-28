@@ -114,18 +114,18 @@ static void prom_init(struct buf *serverinfo __attribute__((unused)))
 
 static int prom_auth(const char *userid __attribute__((unused)))
 {
-    /* FIXME */
+    /* XXX */
     return 0;
 }
 
 static void prom_reset(void)
 {
-    /* FIXME */
+    /* XXX */
 }
 
 static void prom_shutdown(void)
 {
-    /* FIXME */
+    /* XXX */
 }
 
 static int prom_get(struct transaction_t *txn,

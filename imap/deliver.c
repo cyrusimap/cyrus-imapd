@@ -361,7 +361,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     if (numusers == 0) {
         /* just deliver to mailbox 'mailbox' */
         const char *BB = config_getstring(IMAPOPT_POSTUSER);
-        txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* xxx leaks! */
+        txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* XXX leaks! */
         sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
         txn->rcpt[0].ignorequota = ignorequota;
     } else {

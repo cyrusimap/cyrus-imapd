@@ -713,7 +713,7 @@ static int mystore(struct dbengine *db,
     if (mytid) {
         /* setup so further accesses will be against fname.NEW */
         if (fstat(writefd, &sbuf) == -1) {
-            /* xxx ? */
+            /* XXX ? */
         }
 
         if (!(*mytid)->fnamenew) (*mytid)->fnamenew = xstrdup(fnamebuf);

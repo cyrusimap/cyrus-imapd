@@ -970,7 +970,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         if (r) goto out;
     }
 
-    /* xxx check errors */
+    /* XXX check errors */
     mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
@@ -1015,7 +1015,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             /* maybe the directory doesn't exist? */
             char stagedir[MAX_MAILBOX_PATH+1];
 
-            /* xxx check errors */
+            /* XXX check errors */
             mboxlist_findstage(mailbox_name(mailbox), stagedir, sizeof(stagedir));
             if (mkdir(stagedir, 0755) != 0) {
                 syslog(LOG_ERR, "couldn't create stage directory: %s: %m",

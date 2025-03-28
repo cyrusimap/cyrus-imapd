@@ -82,37 +82,37 @@ sub tear_down
 #sub test_rfc5258_ex04_remote_children
 #{
 #    my ($self) = @_;
-#    $self->assert(0, 'FIXME test not implemented');
+#    $self->assert(0, 'XXX test not implemented');
 #}
 
 #sub test_rfc5258_ex05_remote_subscribed
 #{
 #    my ($self) = @_;
-#    $self->assert(0, 'FIXME test not implemented');
+#    $self->assert(0, 'XXX test not implemented');
 #}
 
 #sub test_rfc5258_ex06_remote_return_subscribed
 #{
 #    my ($self) = @_;
-#    $self->assert(0, 'FIXME test not implemented');
+#    $self->assert(0, 'XXX test not implemented');
 #}
 
 #sub test_rfc5258_ex09_childinfo
 #{
 #    my ($self) = @_;
-#    $self->assert(0, 'FIXME test not implemented');
+#    $self->assert(0, 'XXX test not implemented');
 #}
 
 #sub test_rfc5258_ex10_multiple_mailbox_patterns_childinfo
 #{
 #    my ($self) = @_;
-#    $self->assert(0, 'FIXME test not implemented');
+#    $self->assert(0, 'XXX test not implemented');
 #}
 
 #sub test_rfc5258_ex11_missing_hierarchy_elements
 #{
 #    my ($self) = @_;
-#    $self->assert(0, 'FIXME test not implemented');
+#    $self->assert(0, 'XXX test not implemented');
 #}
 
 # tests based on rfc 6154 examples:

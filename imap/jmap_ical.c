@@ -8191,8 +8191,8 @@ static void calendarevent_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "alerts");
     }
 
-    /* FIXME localizations */
-    /* FIXME categories */
+    /* XXX localizations */
+    /* XXX categories */
 
     /* mayInviteSelf */
     jprop = json_object_get(event, "mayInviteSelf");

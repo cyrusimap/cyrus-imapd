@@ -260,7 +260,7 @@ static int dump_me(struct findall_data *data, void *rock)
     i = 0;
     while (i < numuids && uids[i] < irec->incruid) {
         /* already dumped this message */
-        /* xxx could do binary search to get to the first
+        /* XXX could do binary search to get to the first
            undumped uid */
         i++;
     }

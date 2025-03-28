@@ -2594,7 +2594,7 @@ static void cmd_list(char *arg1, char *arg2)
         /* split the list of wildmats */
         lrock.wild = split_wildmats(arg2, config_getstring(IMAPOPT_NEWSPREFIX));
 
-        /* xxx better way to determine a size for this table? */
+        /* XXX better way to determine a size for this table? */
         construct_hash_table(&lrock.server_table, 10, 1);
 
         prot_printf(nntp_out, "215 List of newsgroups follows:\r\n");
@@ -2651,7 +2651,7 @@ static void cmd_list(char *arg1, char *arg2)
         /* split the list of wildmats */
         lrock.wild = split_wildmats(arg2, config_getstring(IMAPOPT_NEWSPREFIX));
 
-        /* xxx better way to determine a size for this table? */
+        /* XXX better way to determine a size for this table? */
         construct_hash_table(&lrock.server_table, 10, 1);
 
         prot_printf(nntp_out, "215 List of newsgroups follows:\r\n");
