@@ -189,6 +189,21 @@ static void child_sighandler_setup(void);
 static sigset_t pselect_sigmask;
 #endif
 
+#define MAX_SAMPLES (1000u)
+static struct {
+    unsigned n_samples;
+    unsigned n_timed_out;
+    unsigned n_interrupted;
+    unsigned n_ready;
+    double timeout[MAX_SAMPLES];
+    double elapsed[MAX_SAMPLES];
+} myselect_stats = {0};
+
+static void dump_myselect_stats(void)
+{
+    /* XXX */
+}
+
 static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
                     fd_set *efds, struct timeval *tout)
 {
@@ -196,13 +211,46 @@ static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
     /* pselect() closes the race between SIGCHLD arriving
     * and select() sleeping for up to 10 seconds. */
     struct timespec ts, *tsptr = NULL;
+    struct timeval start, end;
+    int r, pselect_errno;
 
     if (tout) {
         ts.tv_sec = tout->tv_sec;
         ts.tv_nsec = tout->tv_usec * 1000;
         tsptr = &ts;
     }
-    return pselect(nfds, rfds, wfds, efds, tsptr, &pselect_sigmask);
+
+    gettimeofday(&start, NULL);
+    errno = 0;
+    r = pselect(nfds, rfds, wfds, efds, tsptr, &pselect_sigmask);
+    pselect_errno = errno;
+    gettimeofday(&end, NULL);
+
+    myselect_stats.timeout[myselect_stats.n_samples] = tout
+                                                     ? timeval_get_double(tout)
+                                                     : INFINITY;
+    myselect_stats.elapsed[myselect_stats.n_samples] = timesub(&start, &end);
+
+    if (r > 0) {
+        myselect_stats.n_ready++;
+    }
+    else if (r < 0) {
+        /* this is either an interrupt, or we're about to call fatal anyway */
+        myselect_stats.n_interrupted++;
+    }
+    else {
+        myselect_stats.n_timed_out++;
+    }
+
+    myselect_stats.n_samples++;
+
+    if (myselect_stats.n_samples == MAX_SAMPLES) {
+        dump_myselect_stats();
+        memset(&myselect_stats, 0, sizeof(myselect_stats));
+    }
+
+    errno = pselect_errno;
+    return r;
 #else
     return select(nfds, rfds, wfds, efds, tout);
 #endif
@@ -3498,6 +3546,7 @@ finished:
 
     /* XXX paranoia: burn through child table, complain if anything there? */
 
+    dump_myselect_stats();
     syslog(LOG_NOTICE, "All children have exited, closing down");
     return 0;
 }
