@@ -302,6 +302,8 @@ struct mailbox {
     int header_dirty;
     int quota_dirty;
     int has_changed;
+    int spool_dirfd;
+    int archive_dirfd;
     time_t last_updated; /* for appends*/
     quota_t quota_previously_used[QUOTA_NUMRESOURCES]; /* for quota change */
 

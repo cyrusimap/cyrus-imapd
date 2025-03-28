@@ -148,6 +148,8 @@ static struct mailbox *open_mailboxes = NULL;
 #define zeromailbox(m) do { memset(&m, 0, sizeof(struct mailbox)); \
                             (m).index_fd = -1; \
                             (m).header_fd = -1; \
+                            (m).spool_dirfd = -1; \
+                            (m).archive_dirfd = -1; \
 } while (0)
 
 /* for repack */
@@ -2835,6 +2837,27 @@ static int mailbox_commit_header(struct mailbox *mailbox)
     return 0;
 }
 
+static int mailbox_commit_dirhandles(struct mailbox *mailbox)
+{
+    if (mailbox->archive_dirfd >= 0) {
+        int r = fsync(mailbox->archive_dirfd);
+        if (r) return r;
+        r = close(mailbox->archive_dirfd);
+        if (r) return r;
+        mailbox->archive_dirfd = -1;
+    }
+
+    if (mailbox->spool_dirfd >= 0) {
+        int r = fsync(mailbox->spool_dirfd);
+        if (r) return r;
+        r = close(mailbox->spool_dirfd);
+        if (r) return r;
+        mailbox->spool_dirfd = -1;
+    }
+
+    return 0;
+}
+
 static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 {
     bit32 crc;
@@ -3099,6 +3122,9 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     if (r) return r;
 
     r = mailbox_commit_header(mailbox);
+    if (r) return r;
+
+    r = mailbox_commit_dirhandles(mailbox);
     if (r) return r;
 
     r = _commit_changes(mailbox);
