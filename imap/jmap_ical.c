@@ -4330,6 +4330,11 @@ static void repair_broken_ical(icalcomponent **icalp)
                 }
                 else needs_rewrite = 1;
             }
+
+            // Make sure SEQUENCE >= 0
+            if (icalcomponent_get_sequence(vevent) < 0) {
+                icalcomponent_set_sequence(vevent, 0);
+            }
         }
 
         if (!needs_rewrite)

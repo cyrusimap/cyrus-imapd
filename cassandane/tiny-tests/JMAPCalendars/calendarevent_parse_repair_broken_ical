@@ -182,6 +182,31 @@ END:VALARM
 END:VEVENT
 END:VCALENDAR
 EOF
+    }, {
+        desc => 'Bad SEQUENCE',
+        wantParsed => {
+            '@type' => 'Event',
+            sequence => 0
+        },
+        ical => <<EOF
+BEGIN:VCALENDAR
+PRODID:-//www.norwegian.no//iCalendar MIMEDIR//EN
+VERSION:2.0
+BEGIN:VEVENT
+UID:RFCALITEMXXXXXX1
+SEQUENCE:2503271528
+DTSTAMP:20250327T152821Z
+DTSTART:20250331T100000Z
+DTEND:20250331T105500Z
+LOCATION:Trondheim-Vaernes
+SUMMARY:Norwegian til Oslo-Gardermoen - XXXXXX
+CATEGORIES:Appointment
+PRIORITY:5
+CLASS:PUBLIC
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
+EOF
     });
 
     for my $tc (@testCases) {
