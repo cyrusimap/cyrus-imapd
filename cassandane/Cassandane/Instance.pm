@@ -160,6 +160,13 @@ sub new
     return bless $self, $class;
 }
 
+# return an id for use by xlog
+sub id
+{
+    my ($self) = @_;
+    return $self->{name}; # XXX something cleverer?
+}
+
 # Class method! Need to be able to interrogate the Cyrus version
 # being tested without actually instantiating a Cassandane::Instance.
 # This also means we have to do a few things here the direct way,
