@@ -68,6 +68,7 @@
 #include <arpa/inet.h>
 #include <sysexits.h>
 #include <errno.h>
+#include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <inttypes.h>
@@ -189,6 +190,85 @@ static void child_sighandler_setup(void);
 static sigset_t pselect_sigmask;
 #endif
 
+/* Kahan-Babushka-Neumaier sum
+ * "significantly reduces the numerical error in the total obtained by adding
+ * a sequence of finite-precision floating-point numbers, compared to the
+ * naive approach"
+ */
+static inline void kbn_sum(double *sum, double *error, double addend)
+{
+    double s = *sum, e = *error, t;
+
+    t = s + addend;
+    if (fabs(s) >= fabs(addend))
+        e += (s - t) + addend;
+    else
+        e += (addend - t) + s;
+
+    *sum = t;
+    *error = e;
+}
+
+static int cmp_double(const void *a, const void *b)
+{
+    double aa = *(const double *) a, bb = *(const double *) b;
+    return (aa > bb) - (aa < bb);
+}
+
+static void sample_stats(double *samples, size_t n_samples,
+                         double *pmin, double *pmax,
+                         double *pmedian, double *pmean, double *pstddev)
+{
+    double mean, mean_error;
+    double variance, variance_error;
+    size_t i;
+
+    if (pmin || pmax || pmedian) {
+        qsort(samples, n_samples, sizeof(*samples), &cmp_double);
+
+        if (pmin) *pmin = samples[0];
+        if (pmax) *pmax = samples[n_samples - 1];
+
+        if (pmedian) {
+            if ((n_samples & 1)) {
+                /* odd: median is middle element */
+                *pmedian = samples[n_samples / 2];
+            }
+            else {
+                /* even: median is average of two middle elements */
+                *pmedian = 0.5 * (samples[n_samples / 2 - 1]
+                                  + samples[n_samples / 2]);
+            }
+        }
+    }
+
+    if (pmean || pstddev) {
+        double scale = 1.0 / n_samples;
+
+        mean = mean_error = 0.0;
+        for (i = 0; i < n_samples; i++) {
+            kbn_sum(&mean, &mean_error, samples[i] * scale);
+        }
+        mean += mean_error;
+
+        if (pmean) *pmean = mean;
+    }
+
+    if (pstddev) {
+        double scale = 1.0 / (n_samples - 1);
+
+        variance = variance_error = 0.0;
+        for (i = 0; i < n_samples; i++) {
+            double diff = samples[i] - mean;
+
+            kbn_sum(&variance, &variance_error, diff * diff * scale);
+        }
+        variance += variance_error;
+
+        *pstddev = sqrt(variance);
+    }
+}
+
 #define MAX_SAMPLES (1000u)
 static struct {
     unsigned n_samples;
@@ -201,7 +281,37 @@ static struct {
 
 static void dump_myselect_stats(void)
 {
-    /* XXX */
+    char timeout[256];
+    char elapsed[256];
+    double min, max, median, mean, stddev;
+
+    sample_stats(myselect_stats.timeout, myselect_stats.n_samples,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(timeout, sizeof(timeout), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    sample_stats(myselect_stats.elapsed, myselect_stats.n_samples,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(elapsed, sizeof(elapsed), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    xsyslog(LOG_INFO, "pselect stats",
+                      "timeout=<%s> elapsed=<%s>"
+                      " samples=<%u> timed_out=<%u> interrupted=<%u> ready=<%u>",
+                      timeout,
+                      elapsed,
+                      myselect_stats.n_samples,
+                      myselect_stats.n_timed_out,
+                      myselect_stats.n_interrupted,
+                      myselect_stats.n_ready);
 }
 
 static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
