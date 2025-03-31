@@ -33,7 +33,7 @@ Major changes since the 3.10 series
   ``color`` and ``order`` properties.  Thanks Дилян Палаузов.
 * Enables the calendar-timezone-id (:rfc:`7809`) DAV property even if tzdist
   http module is disabled.
-* Adds support for IMAP JMAPACCESS (:draft:`draft-ietf-extra-jmapaccess`).
+* Adds support for IMAP JMAPACCESS (:rfc:`9698`).
 * Adds the :ref:`mboxgroups<auth_mech_mboxgroups>` authorization mechanism
   for access control groups that are managed within Cyrus.
 * Adds support for IMAP PARTIAL (:rfc:`9394`) and INPROGRESS (:rfc:`9585`)
@@ -75,8 +75,9 @@ The following features and behaviours have been removed in 3.12.  If your
 deployment depends on these, you should not upgrade to 3.12.
 
 * The experimental Cyrus Backups feature has been removed.
-* DIGEST-MD5 is no longer supported.  You may need to remove it from
-  ``sasl_mech_list`` in :cyrusman:`imapd.conf(5)`.  Thanks Дилян Палаузов.
+* DIGEST-MD5 and NTLM are no longer supported in httpd.  You may need to remove
+  DIGEST-MD5 from ``sasl_mech_list`` in :cyrusman:`imapd.conf(5)`.  Thanks
+  Дилян Палаузов.
 * The ``improved_mboxlist_sort`` :cyrusman:`imapd.conf(5)` option had no effect
   since v3.6.  It is now deprecated.  Thanks Дилян Палаузов.
 * :cyrusman:`timsieved(8)` now always sends a capability response after a
