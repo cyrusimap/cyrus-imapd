@@ -11586,6 +11586,8 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
      * and thus overwrite our cdata
      */
     cdata = memcpy(&mycdata, cdata, sizeof(mycdata));
+    cdata->vcard_uid = uid;
+    cdata->dav.resource = resource = xstrdup(cdata->dav.resource);
 
     json_t *jkind = json_object_get(jcard, "kind");
     if (jkind) {
@@ -11669,7 +11671,6 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     if (r) goto done;
 
     olduid = cdata->dav.imap_uid;
-    resource = xstrdup(cdata->dav.resource);
 
     annots = mailbox_extract_annots(*mailbox, &record);
 
