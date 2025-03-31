@@ -19,30 +19,52 @@ sub test_cardgroup_set_update
         expandurl => 1,
     );
 
-    my $name = 'The Doe Family';
-    my $member1 = "urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af";
-    my $member2 = "urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519";
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
-
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {
             create => {
                 "1" => {
                     '@type' => 'Card',
                     version => '1.0',
-                    uid => $id,
+                    name => { full => 'John Doe' },
+                },
+                "2" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Jane Doe' },
+                }
+            }
+        }, 'R1']
+    ]);
+
+    my $uid1 = $res->[0][1]{created}{1}{uid};
+    $self->assert_not_null($uid1);
+    my $uid2 = $res->[0][1]{created}{2}{uid};
+    $self->assert_not_null($uid2);
+
+    my $name = 'The Doe Family';
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     name => { full => $name },
                     members => {
-                        $member1 => JSON::true
+                        $uid1 => JSON::true
                     }
                 }
             }
         }, 'R1']
     ]);
 
-    $self->assert_not_null($res->[0][1]{created}{1});
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    my $href = "Default/$id.vcf";
+    my $member1 = "urn:uuid:$uid1";
+    my $member2 = "urn:uuid:$uid2";
 
     $res = $carddav->Request('GET', $href, '',
                              'Accept' => 'text/vcard; version=4.0');
@@ -56,7 +78,7 @@ sub test_cardgroup_set_update
         ['ContactCard/set', {
             update => {
                 $id => {
-                    "members/$member2" => JSON::true
+                    "members/$uid2" => JSON::true
                 }
             }
          }, "R2"]
@@ -77,7 +99,7 @@ sub test_cardgroup_set_update
         ['ContactCard/set', {
             update => {
                 $id => {
-                    "members/$member1" => JSON::null
+                    "members/$uid1" => JSON::null
                 }
             }
          }, "R2"]
