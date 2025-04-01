@@ -41,10 +41,8 @@
 SUBDIRS := utils
 PERL := perl
 
-all clean install::
+all clean install:
 	@for dir in $(SUBDIRS) ; do cd $$dir ; $(MAKE) $@ || exit 1 ; done
-
-all:: syntax
 
 # utils/annotator.pl depends on modules installed with Cyrus, which it
 # will only be able to find when invoked by Cyrus::Instance (which sets
