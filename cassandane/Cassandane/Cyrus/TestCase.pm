@@ -480,9 +480,9 @@ magic(NoReplicaonly => sub {
     my $self = shift;
     $self->{no_replicaonly} = 1;
 });
-magic(ConversationMaxThread10 => sub {
+magic(ConversationsMaxThread10 => sub {
     my $self = shift;
-    $self->config_set('conversation_max_thread' => 10);
+    $self->config_set('conversations_max_thread' => 10);
 });
 magic(SlowIO => sub {
     my $self = shift;
