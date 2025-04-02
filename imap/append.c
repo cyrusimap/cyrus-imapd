@@ -1592,7 +1592,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         destfname = xstrdup(tmp);
 
         int *fdptr = dst_internal_flags & FLAG_INTERNAL_ARCHIVED
-                   ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
+                   ? &as->mailbox->archive_dirfd : &as->mailbox->spool_dirfd;
 
         if (!(object_storage_enabled &&
               src_internal_flags & FLAG_INTERNAL_ARCHIVED))   // if object storage do not move file
