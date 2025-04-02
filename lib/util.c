@@ -586,9 +586,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
         char *copy = xstrdup(to);
         const char *file = basename(copy);
         r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
-        free(copy);
-        if (!r) goto sync;
-        if (errno == EEXIST) {
+        if (r && errno == EEXIST) {
             /* n.b. unlink rather than xunlink.  at this point we believe
              * a file definitely exists that we want to remove, so if
              * unlink tells us ENOENT then that's super weird and we're
@@ -599,10 +597,14 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
                                  "filename=<%s>", to);
                 errno = 0;
                 r = -1;
+                free(copy);
                 goto done;
             }
-            if (linkat(AT_FDCWD, from, *dirfdp, to, 0) == 0) goto sync;
+
+            r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
         }
+        free(copy);
+        if (!r) goto sync;
     }
 
     srcfd = open(from, O_RDONLY, 0666);
