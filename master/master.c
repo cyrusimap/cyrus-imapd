@@ -269,7 +269,7 @@ static void sample_stats(double *samples, size_t n_samples,
     }
 }
 
-#define MAX_SAMPLES (1000u)
+#define MAX_SAMPLES (10000u)
 static struct {
     unsigned n_samples;
     unsigned n_timed_out;
