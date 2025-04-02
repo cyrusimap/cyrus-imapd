@@ -276,13 +276,17 @@ static struct {
     unsigned n_interrupted;
     unsigned n_ready;
     double timeout[MAX_SAMPLES];
-    double elapsed[MAX_SAMPLES];
+    double timed_out[MAX_SAMPLES];
+    double interrupted[MAX_SAMPLES];
+    double ready[MAX_SAMPLES];
 } myselect_stats = {0};
 
 static void dump_myselect_stats(void)
 {
     char timeout[256];
-    char elapsed[256];
+    char timed_out[256];
+    char interrupted[256];
+    char ready[256];
     double min, max, median, mean, stddev;
 
     sample_stats(myselect_stats.timeout, myselect_stats.n_samples,
@@ -294,9 +298,27 @@ static void dump_myselect_stats(void)
              DBL_DECIMAL_DIG, mean,
              DBL_DECIMAL_DIG, stddev);
 
-    sample_stats(myselect_stats.elapsed, myselect_stats.n_samples,
+    sample_stats(myselect_stats.timed_out, myselect_stats.n_timed_out,
                  &min, &max, &median, &mean, &stddev);
-    snprintf(elapsed, sizeof(elapsed), "%.*g|%.*g|%.*g|%.*g|%.*g",
+    snprintf(timed_out, sizeof(timed_out), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    sample_stats(myselect_stats.interrupted, myselect_stats.n_interrupted,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(interrupted, sizeof(interrupted), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    sample_stats(myselect_stats.ready, myselect_stats.n_ready,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(ready, sizeof(ready), "%.*g|%.*g|%.*g|%.*g|%.*g",
              DBL_DECIMAL_DIG, min,
              DBL_DECIMAL_DIG, max,
              DBL_DECIMAL_DIG, median,
@@ -304,14 +326,18 @@ static void dump_myselect_stats(void)
              DBL_DECIMAL_DIG, stddev);
 
     xsyslog(LOG_INFO, "pselect stats",
-                      "timeout=<%s> elapsed=<%s>"
-                      " samples=<%u> timed_out=<%u> interrupted=<%u> ready=<%u>",
-                      timeout,
-                      elapsed,
+                      "samples=<%u> timeout=<%s>"
+                      " n_timed_out=<%u> timed_out=<%s>"
+                      " n_interrupted=<%u> interrupted=<%s>"
+                      " n_ready=<%u> ready=<%s>",
                       myselect_stats.n_samples,
+                      timeout,
                       myselect_stats.n_timed_out,
+                      timed_out,
                       myselect_stats.n_interrupted,
-                      myselect_stats.n_ready);
+                      interrupted,
+                      myselect_stats.n_ready,
+                      ready);
 }
 
 static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
@@ -322,6 +348,7 @@ static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
     * and select() sleeping for up to 10 seconds. */
     struct timespec ts, *tsptr = NULL;
     struct timeval start, end;
+    double elapsed;
     int r, pselect_errno;
 
     if (tout) {
@@ -335,24 +362,26 @@ static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
     r = pselect(nfds, rfds, wfds, efds, tsptr, &pselect_sigmask);
     pselect_errno = errno;
     gettimeofday(&end, NULL);
+    elapsed = timesub(&start, &end);
 
     myselect_stats.timeout[myselect_stats.n_samples] = tout
                                                      ? timeval_get_double(tout)
                                                      : INFINITY;
-    myselect_stats.elapsed[myselect_stats.n_samples] = timesub(&start, &end);
+    myselect_stats.n_samples++;
 
     if (r > 0) {
+        myselect_stats.ready[myselect_stats.n_ready] = elapsed;
         myselect_stats.n_ready++;
     }
     else if (r < 0) {
         /* this is either an interrupt, or we're about to call fatal anyway */
+        myselect_stats.interrupted[myselect_stats.n_interrupted] = elapsed;
         myselect_stats.n_interrupted++;
     }
     else {
+        myselect_stats.timed_out[myselect_stats.n_timed_out] = elapsed;
         myselect_stats.n_timed_out++;
     }
-
-    myselect_stats.n_samples++;
 
     if (myselect_stats.n_samples == MAX_SAMPLES) {
         dump_myselect_stats();
