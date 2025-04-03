@@ -1,0 +1,332 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_keyword_splitconv
+  : ConversationsMaxThread10 {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    my ($split1Ids, $split2Ids) = $self->create_splitconv;
+    my $bothIds    = [ sort(@$split1Ids, @$split2Ids) ];
+    my $nMaxThread = scalar @$split1Ids;
+
+    xlog $self, "Set flag in neither first or second split";
+    $imap->store('1:*', '-flags', '($IsMailingList)');
+
+    my $ids = $self->query_emails;
+    $self->assert_deep_equals($bothIds, $ids->{noneHaveKeyword});
+    $self->assert_deep_equals($bothIds, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals([],       $ids->{someHaveKeyword});
+    $self->assert_deep_equals([],       $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals([],       $ids->{allHaveKeyword});
+    $self->assert_deep_equals([],       $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in first split";
+    $imap->store('2', '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeyword});
+    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeyword});
+    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals([],         $ids->{allHaveKeyword});
+    $self->assert_deep_equals([],         $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in second split";
+    $imap->store('1:*',           '-flags', '($IsMailingList)');
+    $imap->store($nMaxThread + 1, '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeyword});
+    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeyword});
+    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals([],         $ids->{allHaveKeyword});
+    $self->assert_deep_equals([],         $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in bothIds splits";
+    $imap->store('1:*',           '-flags', '($IsMailingList)');
+    $imap->store('2',             '+flags', '($IsMailingList)');
+    $imap->store($nMaxThread + 1, '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals([],       $ids->{noneHaveKeyword});
+    $self->assert_deep_equals([],       $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($bothIds, $ids->{someHaveKeyword});
+    $self->assert_deep_equals($bothIds, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals([],       $ids->{allHaveKeyword});
+    $self->assert_deep_equals([],       $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in all of first split";
+    $imap->store('1:*',              '-flags', '($IsMailingList)');
+    $imap->store("1:" . $nMaxThread, '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeyword});
+    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeyword});
+    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeyword});
+    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in all of second split";
+    $imap->store('1:*',                  '-flags', '($IsMailingList)');
+    $imap->store($nMaxThread + 1 . ":*", '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeyword});
+    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeyword});
+    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeyword});
+    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in all of first and some of second split";
+    $imap->store('1:*',              '-flags', '($IsMailingList)');
+    $imap->store("1:" . $nMaxThread, '+flags', '($IsMailingList)');
+    $imap->store($nMaxThread + 1,    '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals([],         $ids->{noneHaveKeyword});
+    $self->assert_deep_equals([],         $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeyword});
+    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeyword});
+    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in some of first and all of second split";
+    $imap->store('1:*',                  '-flags', '($IsMailingList)');
+    $imap->store(2,                      '+flags', '($IsMailingList)');
+    $imap->store($nMaxThread + 1 . ":*", '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals([],         $ids->{noneHaveKeyword});
+    $self->assert_deep_equals([],         $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeyword});
+    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeyword});
+    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeywordGuidSearch});
+
+    xlog $self, "Set flag in all of first and second split";
+    $imap->store('1:*', '+flags', '($IsMailingList)');
+
+    $ids = $self->query_emails;
+    $self->assert_deep_equals([],       $ids->{noneHaveKeyword});
+    $self->assert_deep_equals([],       $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_deep_equals($bothIds, $ids->{someHaveKeyword});
+    $self->assert_deep_equals($bothIds, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_deep_equals($bothIds, $ids->{allHaveKeyword});
+    $self->assert_deep_equals($bothIds, $ids->{allHaveKeywordGuidSearch});
+}
+
+sub query_emails {
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods(
+        [
+            [
+                'Email/query',
+                {
+                    filter => {
+                        noneInThreadHaveKeyword => '$IsMailingList',
+                    },
+                },
+                'R1'
+            ],
+            [
+                'Email/query',
+                {
+                    filter => {
+                        someInThreadHaveKeyword => '$IsMailingList',
+                    },
+                },
+                'R2'
+            ],
+            [
+                'Email/query',
+                {
+                    filter => {
+                        allInThreadHaveKeyword => '$IsMailingList',
+                    },
+                },
+                'R3'
+            ],
+            [
+                'Email/query',
+                {
+                    filter => {
+                        noneInThreadHaveKeyword => '$IsMailingList',
+                        subject                 => 'email',
+                    },
+                },
+                'R4'
+            ],
+            [
+                'Email/query',
+                {
+                    filter => {
+                        someInThreadHaveKeyword => '$IsMailingList',
+                        subject                 => 'email',
+                    },
+                },
+                'R5'
+            ],
+            [
+                'Email/query',
+                {
+                    filter => {
+                        allInThreadHaveKeyword => '$IsMailingList',
+                        subject                => 'email',
+                    },
+                },
+                'R6'
+            ]
+        ],
+        [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:mail',
+            'urn:ietf:params:jmap:submission',
+            'https://cyrusimap.org/ns/jmap/mail',
+            'https://cyrusimap.org/ns/jmap/quota',
+            'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/performance',
+        ]
+    );
+    $self->assert_equals(
+        JSON::false,
+        $res->[0][1]{performance}{details}{isGuidSearch}
+    );
+    $self->assert_equals(
+        JSON::false,
+        $res->[1][1]{performance}{details}{isGuidSearch}
+    );
+    $self->assert_equals(
+        JSON::false,
+        $res->[2][1]{performance}{details}{isGuidSearch}
+    );
+    $self->assert_equals(
+        JSON::true,
+        $res->[3][1]{performance}{details}{isGuidSearch}
+    );
+    $self->assert_equals(
+        JSON::true,
+        $res->[4][1]{performance}{details}{isGuidSearch}
+    );
+    $self->assert_equals(
+        JSON::true,
+        $res->[5][1]{performance}{details}{isGuidSearch}
+    );
+    return {
+        noneHaveKeyword           => [ sort @{ $res->[0][1]{ids} } ],
+        someHaveKeyword           => [ sort @{ $res->[1][1]{ids} } ],
+        allHaveKeyword            => [ sort @{ $res->[2][1]{ids} } ],
+        noneHaveKeywordGuidSearch => [ sort @{ $res->[3][1]{ids} } ],
+        someHaveKeywordGuidSearch => [ sort @{ $res->[4][1]{ids} } ],
+        allHaveKeywordGuidSearch  => [ sort @{ $res->[5][1]{ids} } ],
+    };
+}
+
+sub create_splitconv {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    xlog $self, "Create first message of conversation";
+    $self->make_message('Email A', messageid => "msg1\@example.com");
+    my $lastUid = 1;
+
+    # Helper routine to append a new reply to this thread.
+    my $append_reply = sub {
+        my $nextUid = $lastUid + 1;
+        $self->make_message(
+            "Re: Email A",
+            body          => "msg$nextUid",
+            messageid     => "msg$nextUid\@example.com",
+            extra_headers => [
+                [ "in-reply-to", sprintf('<msg%d@example.com>', $lastUid) ],
+            ],
+        );
+        $lastUid = $nextUid;
+    };
+
+    xlog $self, "Fill conversation until maximum thread count";
+    my $convsMaxThread
+      = $self->{instance}->{config}->get('conversations_max_thread');
+    foreach my $i (2 .. $convsMaxThread) {
+        $append_reply->();
+    }
+
+    xlog $self, "Assert all messages are in the same thread";
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, "R1" ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => [ 'threadId', 'subject' ],
+            },
+            'R2'
+        ],
+    ]);
+    my %threadIds;
+    @threadIds{ map { $_->{threadId} } @{ $res->[1][1]{list} } } = ();
+    $self->assert_num_equals(1, scalar keys %threadIds);
+    my $baseThreadId = (keys %threadIds)[0];
+    $self->assert_not_null($baseThreadId);
+    my $emailState = $res->[1][1]{state};
+    $self->assert_not_null($emailState);
+    my @split1Ids = sort @{ $res->[0][1]{ids} };
+
+    xlog $self, "Append two more messages";
+    $append_reply->();
+    $append_reply->();
+
+    xlog $self, "Assert emails got assigned to new split thread";
+    $res = $jmap->CallMethods([
+        [
+            'Email/changes',
+            {
+                sinceState => $emailState,
+            },
+            "R1"
+        ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/changes',
+                    path     => '/created'
+                },
+                properties => ['threadId'],
+            },
+            'R2'
+        ],
+        [ 'Email/query', {}, 'R2' ]
+    ]);
+    $self->assert_num_equals(2, scalar @{ $res->[1][1]{list} });
+    $self->assert_str_not_equals(
+        $baseThreadId,
+        $res->[1][1]{list}[0]{threadId}
+    );
+    $self->assert_str_not_equals(
+        $baseThreadId,
+        $res->[1][1]{list}[1]{threadId}
+    );
+    $self->assert_str_equals(
+        $res->[1][1]{list}[0]{threadId},
+        $res->[1][1]{list}[1]{threadId}
+    );
+    my @split2Ids = sort @{ $res->[0][1]{created} };
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    return (\@split1Ids, \@split2Ids);
+}
+

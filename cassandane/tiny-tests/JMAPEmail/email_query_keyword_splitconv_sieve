@@ -1,0 +1,176 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_keyword_splitconv_sieve
+  : needs_component_sieve : ConversationsMaxThread10 {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    xlog $self, "Set up Sieve script";
+    my $sieve = <<'EOF';
+require ["imap4flags", "vnd.cyrus.jmapquery"];
+
+if jmapquery "{\"someInThreadHaveKeyword\":\"$IsMailingList\"}" {
+  addflag "$matched_someinthread";
+}
+
+if jmapquery "{\"allInThreadHaveKeyword\":\"$IsMailingList\"}" {
+  addflag "$matched_allinthread";
+}
+
+if jmapquery "{\"noneInThreadHaveKeyword\":\"$IsMailingList\"}" {
+  addflag "$matched_noneinthread";
+}
+
+EOF
+    $self->{instance}->install_sieve_script($sieve);
+
+    xlog $self, "Create conversation with maximum thread count";
+    my $convsMaxThread
+      = $self->{instance}->{config}->get('conversations_max_thread');
+    $self->make_message('Email A', messageid => "msg1\@example.com");
+    foreach my $i (2 .. $convsMaxThread) {
+        $self->make_message(
+            "Re: Email A",
+            messageid     => "msg$i\@example.com",
+            extra_headers => [
+                [ "in-reply-to", sprintf('<msg%d@example.com>', $i - 1) ],
+            ],
+        );
+    }
+    my $lastUid = $convsMaxThread;
+
+    xlog $self, "Assert all messages are in the same thread";
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, "R1" ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => ['threadId'],
+            },
+            'R2'
+        ],
+    ]);
+    my %threadIds;
+    @threadIds{ map { $_->{threadId} } @{ $res->[1][1]{list} } } = ();
+    $self->assert_num_equals(1, scalar keys %threadIds);
+    my $split1ThreadId = (keys %threadIds)[0];
+    $self->assert_not_null($split1ThreadId);
+    my $emailState = $res->[1][1]{state};
+    $self->assert_not_null($emailState);
+
+    # Helper routine to deliver a new reply to the thread.
+    my $deliver_reply = sub {
+        my $nextUid = $lastUid + 1;
+        my $msg     = $self->{gen}->generate(
+            subject       => "Re: Email A",
+            messageid     => sprintf('msg%d@example.com', $nextUid),
+            extra_headers => [
+                [
+                    "in-reply-to",
+                    sprintf('<msg%d@example.com>', $lastUid)
+                ],
+            ],
+        );
+        $self->{instance}->deliver($msg);
+        $lastUid = $nextUid;
+
+        $res = $jmap->CallMethods([
+            [
+                'Email/changes',
+                {
+                    sinceState => $emailState,
+                },
+                "R1"
+            ],
+            [
+                'Email/get',
+                {
+                    '#ids' => {
+                        resultOf => 'R1',
+                        name     => 'Email/changes',
+                        path     => '/created'
+                    },
+                    properties => [ 'threadId', 'keywords' ],
+                },
+                'R2'
+            ]
+        ]);
+        $self->assert_num_equals(1, scalar @{ $res->[1][1]{list} });
+        $emailState = $res->[0][1]{newState};
+
+        return $res->[1][1]{list}[0];
+    };
+
+    xlog $self, "Set flag in all of first split";
+    $imap->store('1:*', '+flags', '($IsMailingList)');
+
+    xlog $self, "Deliver new reply, causing a split";
+    my $email = $deliver_reply->();
+    $self->assert_deep_equals(
+        {
+            '$matched_allinthread'  => JSON::true,
+            '$matched_someinthread' => JSON::true,
+        },
+        $email->{keywords}
+    );
+    my $split2ThreadId = $email->{threadId};
+    $self->assert_str_not_equals($split1ThreadId, $split2ThreadId);
+    my $split2FirstUid = $lastUid;
+
+    xlog $self, "Deliver new reply";
+    $email = $deliver_reply->();
+    $self->assert_deep_equals(
+        {
+            '$matched_noneinthread' => JSON::true,
+        },
+        $email->{keywords}
+    );
+    $self->assert_str_equals($split2ThreadId, $email->{threadId});
+
+    xlog $self, "Set flag in one of second split";
+    $imap->store($lastUid, '+flags', '($IsMailingList)');
+
+    xlog $self, "Deliver new reply";
+    $email = $deliver_reply->();
+    $self->assert_deep_equals(
+        {
+            '$matched_someinthread' => JSON::true,
+        },
+        $email->{keywords}
+    );
+    $self->assert_str_equals($split2ThreadId, $email->{threadId});
+
+    xlog $self, "Set flag in all of second split";
+    $imap->store("$split2FirstUid:*", '+flags', '($IsMailingList)');
+
+    xlog $self, "Deliver new reply";
+    $email = $deliver_reply->();
+    $self->assert_deep_equals(
+        {
+            '$matched_allinthread' => JSON::true,
+            '$matched_someinthread' => JSON::true,
+        },
+        $email->{keywords}
+    );
+    $self->assert_str_equals($split2ThreadId, $email->{threadId});
+
+    xlog $self, "Delete flag from all of second split";
+    $imap->store("$split2FirstUid:*", '-flags', '($IsMailingList)');
+
+    xlog $self, "Deliver new reply";
+    $email = $deliver_reply->();
+    $self->assert_deep_equals(
+        {
+            '$matched_noneinthread' => JSON::true,
+        },
+        $email->{keywords}
+    );
+    $self->assert_str_equals($split2ThreadId, $email->{threadId});
+}
