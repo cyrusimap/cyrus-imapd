@@ -571,6 +571,10 @@ static json_t *_mbox_get(jmap_req_t *req,
     jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
     json_object_set_new(obj, "id", json_string(mboxid));
 
+    if (jmap_wantprop(props, "uniqueId")) {
+        json_object_set_new(obj, "uniqueId", json_string(mbentry->uniqueid));
+    }
+
     if (jmap_wantprop(props, "name")) {
         char *name = _mbox_get_name(req->accountid, mbname);
         if (!name) goto done;
@@ -917,6 +921,11 @@ static const jmap_property_t mailbox_props[] = {
         "showAsLabel",
         JMAP_MAIL_EXTENSION,
         0
+    },
+    {
+        "uniqueId",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
     { NULL, NULL, 0 }
 };
@@ -2375,6 +2384,10 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                       "myRights", _mbox_get_myrights(req, mbentry),
                       "totalEmails", 0, "unreadEmails", 0,
                       "totalThreads", 0, "unreadThreads", 0);
+
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        json_object_set_new(*mbox, "uniqueId", json_string(mbentry->uniqueid));
+    }
 
     /* Set server defaults */
     if (args->is_subscribed < 0) {
