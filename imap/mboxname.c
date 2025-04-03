@@ -2965,7 +2965,7 @@ static int mboxname_set_fcounters(const char *fname, struct mboxname_counters *v
     close(newfd);
     newfd = -1;
 
-    if (rename(newfname, fname)) {
+    if (cyrus_rename(newfname, fname)) {
         r = IMAP_IOERROR;
         xsyslog(LOG_ERR, "IOERROR: rename failed",
                          "oldfname=<%s> newfname=<%s>",

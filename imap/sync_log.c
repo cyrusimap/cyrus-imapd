@@ -553,7 +553,7 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
         }
 
         /* Move sync_log to our work file */
-        if (rename(slr->log_file, slr->work_file) < 0) {
+        if (cyrus_rename(slr->log_file, slr->work_file) < 0) {
             syslog(LOG_ERR, "Rename %s -> %s failed: %m",
                    slr->log_file, slr->work_file);
             return IMAP_IOERROR;

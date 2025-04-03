@@ -527,7 +527,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
             xunlink(buf_cstring(&newfname));
         }
         else {
-            rename(buf_cstring(&newfname), buf_cstring(&fname));
+            cyrus_rename(buf_cstring(&newfname), buf_cstring(&fname));
         }
     }
 
