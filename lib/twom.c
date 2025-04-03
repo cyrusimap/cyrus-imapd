@@ -2194,7 +2194,7 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
     char *copyd = strdup(db->fname);
     char *copyb = strdup(db->fname);
     const char *dir = dirname(copyd);
-    const char *file = dirname(copyb);
+    const char *file = basename(copyb);
     int r = 0;
     int dirfd = -1;
 
