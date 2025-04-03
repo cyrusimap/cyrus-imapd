@@ -3251,9 +3251,9 @@ static int emailsearch_is_mutable(struct emailsearch *search)
 struct guidsearch_match {
     char guidrep[MESSAGE_GUID_SIZE*2+1];
     uint32_t system_flags;
-    uint32_t internaldate;
+    uint64_t internaldate;  // nanoseconds since epoch
     conversation_id_t cid;
-    bitvector_t folders; // only set if numfolders > 0
+    bitvector_t folders;    // only set if numfolders > 0
 };
 
 static void guidsearch_match_init(struct guidsearch_match *match,
@@ -3277,10 +3277,14 @@ static int guidsearch_match_cmp QSORT_R_COMPAR_ARGS(const void *va,
     while (sort->key != SORT_SEQUENCE) {
         int ret;
         switch (sort->key) {
-            case SORT_ARRIVAL:
-                ret = a->internaldate < b->internaldate ? -1 :
-                      a->internaldate > b->internaldate ?  1 : 0;
+            case SORT_ARRIVAL: {
+                struct timespec a_internaldate, b_internaldate;
+                TIMESPEC_FROM_NANOSEC(&a_internaldate, a->internaldate);
+                TIMESPEC_FROM_NANOSEC(&b_internaldate, b->internaldate);
+                ret = a_internaldate.tv_sec < b_internaldate.tv_sec ? -1 :
+                      a_internaldate.tv_sec > b_internaldate.tv_sec ?  1 : 0;
                 break;
+            }
             case SORT_GUID:
                 ret = memcmp(a->guidrep, b->guidrep, MESSAGE_GUID_SIZE*2);
                 break;

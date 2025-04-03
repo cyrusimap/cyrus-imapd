@@ -986,8 +986,8 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
         nn = dlist_newlist(n, "THREAD");
         dlist_setguid(nn, "GUID", &thread->guid);
         dlist_setnum32(nn, "EXISTS", thread->exists);
-        dlist_setnum32(nn, "INTERNALDATE", thread->internaldate);
-        dlist_setnum32(nn, "CREATEDMODSEQ", thread->createdmodseq);
+        dlist_setnum64(nn, "INTERNALDATE", thread->internaldate);
+        dlist_setnum64(nn, "CREATEDMODSEQ", thread->createdmodseq);
     }
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
@@ -1514,7 +1514,7 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             return 0;
 
         case 2:
-            rock->thread->internaldate = atol(d->data);
+            rock->thread->internaldate = atoll(d->data);
             rock->substate = 3;
             return 0;
 
@@ -1799,8 +1799,12 @@ static int _thread_datesort(const void **a, const void **b)
 {
     const conv_thread_t *ta = (const conv_thread_t *)*a;
     const conv_thread_t *tb = (const conv_thread_t *)*b;
+    struct timespec ta_internaldate, tb_internaldate;
 
-    int r = (ta->internaldate - tb->internaldate);
+    TIMESPEC_FROM_NANOSEC(&ta_internaldate, ta->internaldate);
+    TIMESPEC_FROM_NANOSEC(&tb_internaldate, tb->internaldate);
+
+    int r = (ta_internaldate.tv_sec - tb_internaldate.tv_sec);
     if (r < 0) return -1;
     if (r > 0) return 1;
 
@@ -1841,7 +1845,7 @@ static void conversations_thread_sort(conversation_t *conv)
 
 EXPORTED void conversation_update_thread(conversation_t *conv,
                                          const struct message_guid *guid,
-                                         time_t internaldate,
+                                         uint64_t internaldate,
                                          modseq_t createdmodseq,
                                          int delta_exists)
 {
@@ -1987,7 +1991,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
                      conversation_id_t basecid,
                      uint32_t system_flags,
                      uint32_t internal_flags,
-                     time_t internaldate,
+                     uint64_t internaldate,
                      char version)
 {
     const char *p, *err;
@@ -2101,7 +2105,7 @@ static int _guid_cb(void *rock,
     conversation_id_t basecid = 0;
     uint32_t system_flags = 0;
     uint32_t internal_flags = 0;
-    time_t internaldate = 0;
+    uint64_t internaldate = 0;
     char version = 0;
     union cdata_u scratch;
     if (datalen >= 16) {
@@ -2149,7 +2153,7 @@ static int _guid_cb(void *rock,
             internal_flags = ntohl(*((bit32*)p));
             p += 4;
             /* internaldate*/
-            internaldate = (time_t) ntohll(*((bit64*)p));
+            internaldate = ntohll(*((bit64*)p));
             p += 8;
             /* basecid */
             basecid = ntohll(*((bit64*)p));
@@ -2263,7 +2267,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
                                       conversation_id_t basecid,
                                       uint32_t system_flags,
                                       uint32_t internal_flags,
-                                      time_t internaldate,
+                                      uint64_t internaldate,
                                       int add)
 {
     struct buf key = BUF_INITIALIZER;
@@ -2306,7 +2310,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
-            buf_appendbit64(&val, (bit64)internaldate);
+            buf_appendbit64(&val, internaldate);
         }
         /* When bumping the G value version, make sure to update _guid_cb */
         else {
@@ -2314,7 +2318,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
-            buf_appendbit64(&val, (bit64)internaldate);
+            buf_appendbit64(&val, internaldate);
             buf_appendbit64(&val, basecid == cid ? 0 : basecid);
         }
 
@@ -2337,7 +2341,7 @@ static int _guid_addbody(struct conversations_state *state,
                          conversation_id_t cid,
                          conversation_id_t basecid,
                          uint32_t system_flags, uint32_t internal_flags,
-                         time_t internaldate,
+                         uint64_t internaldate,
                          struct body *body,
                          const char *base, int add)
 {
@@ -2392,15 +2396,38 @@ static int conversations_set_guid(struct conversations_state *state,
     buf_printf(&item, "%d:%u", folder, record->uid);
     const char *base = buf_cstring(&item);
 
-    r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
+    const char *guidrep = message_guid_encode(&record->guid);
+    uint64_t internaldate = TIMESPEC_TO_NANOSEC(&record->internaldate);
+    r = conversations_guid_setitem(state, guidrep,
                                    base, record->cid, record->basecid,
                                    record->system_flags,
                                    record->internal_flags,
-                                   record->internaldate.tv_sec,
+                                   internaldate,
                                    add);
+    if (!r) {
+        struct buf key = BUF_INITIALIZER;
+
+        /* Build J key */
+        buf_setcstr(&key, "J");
+        NANOSEC_TO_JMAPID(&key, internaldate);
+
+        /* Do we have an existing toplevel G record? */
+        if (!conversations_guid_cid_lookup(state, guidrep, NULL)) {
+            /* Remove J record */
+            r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
+                               &state->txn, /*force*/1);
+        }
+        else {
+            /* Add J record */
+            r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
+                              guidrep, strlen(guidrep), &state->txn);
+        }
+
+        buf_free(&key);
+    }
     if (!r) r = _guid_addbody(state, record->cid, record->basecid,
                               record->system_flags, record->internal_flags,
-                              record->internaldate.tv_sec, body, base, add);
+                              internaldate, body, base, add);
 
     message_free_body(body);
     free(body);
@@ -2553,6 +2580,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (new) {
         if (!old || old->system_flags != new->system_flags ||
                     old->internal_flags != new->internal_flags ||
+                    old->internaldate.tv_nsec != new->internaldate.tv_nsec  ||
                     old->internaldate.tv_sec != new->internaldate.tv_sec) {
             r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
             if (r) goto done;
@@ -2669,7 +2697,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     conversation_update_thread(conv,
                                &record->guid,
-                               record->internaldate.tv_sec,
+                               TIMESPEC_TO_NANOSEC(&record->internaldate),
                                record->createdmodseq,
                                delta_exists);
 
@@ -3222,6 +3250,11 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state, int wi
 
         /* wipe G keys (there's no modseq kept, so we can just wipe them) */
         r = cyrusdb_foreach(state->db, "G", 1, NULL, zero_g_cb,
+                            state, &state->txn);
+        if (r) return r;
+
+        /* wipe J keys */
+        r = cyrusdb_foreach(state->db, "J", 1, NULL, zero_g_cb,
                             state, &state->txn);
         if (r) return r;
 
