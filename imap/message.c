@@ -3946,6 +3946,10 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             record->cid = generate_conversation_id(record);
             if (record->cid) mustkeep = 1;
         }
+        if (!mustkeep) {
+            /* Do not split conversations for messages with '$memo' flag */
+            mustkeep = mailbox_record_hasflag(mailbox, record, "$memo");
+        }
         if (!mustkeep && !record->basecid) {
             /* try finding a CID in the match list, or if we came in with it */
             struct buf annotkey = BUF_INITIALIZER;

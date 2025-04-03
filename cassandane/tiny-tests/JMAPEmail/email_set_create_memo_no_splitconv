@@ -1,0 +1,89 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_memo_no_splitconv
+  : ConversationsMaxThread10 {
+  my ($self) = @_;
+  my $jmap   = $self->{jmap};
+  my $imap   = $self->{store}->get_client();
+
+  xlog $self, "Create conversation with maximum thread count";
+  my $convsMaxThread
+    = $self->{instance}->{config}->get('conversations_max_thread');
+  $self->make_message('Email A', messageid => "msg1\@example.com");
+  my $lastUid = 1;
+  foreach my $i (2 .. $convsMaxThread) {
+    my $nextUid = $lastUid + 1;
+    $self->make_message(
+      "Re: Email A",
+      messageid     => "msg$nextUid\@example.com",
+      extra_headers => [
+        [ "in-reply-to", "<msg$lastUid\@example.com>" ],
+      ],
+    );
+    $lastUid = $nextUid;
+  }
+
+  xlog $self, "Create new reply with 'memo' keyword'";
+  my $nextUid = $lastUid + 1;
+  my $res     = $jmap->CallMethods([
+    [
+      'Email/query',
+      {
+        collapseThreads => JSON::true,
+      },
+      'R1'
+    ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => ['threadId'],
+      },
+      'R2'
+    ],
+    [
+      'Email/set',
+      {
+        create => {
+          "$nextUid" => {
+            mailboxIds    => { '$inbox' => JSON::true },
+            from          => [ { email => 'from@local' } ],
+            to            => [ { email => 'to@local' } ],
+            subject       => "Re: Email A",
+            messageId     => ["msg$nextUid\@example.com"],
+            inReplyTo     => ["msg$lastUid\@example.com"],
+            bodyStructure => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => {
+              part1 => {
+                value => "body$nextUid XXX",
+              },
+            },
+            keywords => {
+              '$memo' => JSON::true,
+            },
+          },
+        },
+      },
+      'R3'
+    ],
+  ]);
+
+  my $baseThreadId = $res->[1][1]{list}[0]{threadId};
+  $self->assert_not_null($baseThreadId);
+
+  xlog $self, "Assert that conversation did not get split";
+  $self->assert_str_equals(
+    $baseThreadId,
+    $res->[2][1]{created}{$nextUid}{threadId}
+  );
+
+  $lastUid = $nextUid;
+}
