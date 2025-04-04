@@ -22,14 +22,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [ "--gcc", "--clang" ]
-        san: [ "" ]
-        skip: [ "" ]
         include:
-          - san: "--ubsan"
-            compiler: "--gcc"
-          - san: "--asan"
-            compiler: "--gcc"
+          - compiler: "--gcc"
+          - compiler: "--clang"
+          - compiler: "--gcc"
+            san: "--ubsan"
+          - compiler: "--gcc"
+            san: "--asan"
             skip: "!Cyrus::Sieve.badscript_timsieved !Cyrus::LibCyrus"
     runs-on: ubuntu-latest
     container:
