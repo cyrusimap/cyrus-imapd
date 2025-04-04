@@ -66,13 +66,13 @@
     (!mbentry ? NULL : (state->folders_byname ? mbentry->name : mbentry->uniqueid))
 
 typedef bit64   conversation_id_t;
-#define CONV_FMT "%016llx"
+#define CONV_FMT BIT64_FMT
 #define NULLCONVERSATION        (0ULL)
 
 struct index_record;
 struct mailbox;
 
-#define CONVERSATIONS_VERSION 1
+#define CONVERSATIONS_VERSION 2
 #define CONVERSATIONS_KEY_VERSION 0
 #define CONVERSATIONS_STATUS_VERSION 0
 #define CONVERSATIONS_RECORD_VERSION 1
@@ -126,7 +126,7 @@ struct conv_thread {
     conv_thread_t *next;
     struct message_guid guid;
     uint32_t exists;
-    time_t internaldate;
+    uint64_t internaldate; // nanoseconds since epoch
     modseq_t createdmodseq;
 };
 
@@ -140,7 +140,7 @@ struct conv_folder {
     uint32_t        prev_exists;
 };
 
-#define CONV_GUIDREC_VERSION 3          // (must be <= 127)
+#define CONV_GUIDREC_VERSION 4          // (must be <= 127)
 #define CONV_GUIDREC_BYNAME_VERSION 1   // last folders byname version
 
 struct conv_guidrec {
@@ -150,11 +150,11 @@ struct conv_guidrec {
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
-    conversation_id_t basecid;
+    conversation_id_t basecid;      // if version >= 3
     char            version;
     uint32_t        system_flags;   // if version >= 1
     uint32_t        internal_flags; // if version >= 1
-    time_t          internaldate;   // if version >= 1
+    uint64_t        internaldate;   // if version >= 4 (nanoseconds since epoch)
 };
 
 struct conv_sender {
@@ -291,6 +291,16 @@ extern int conversations_guid_cid_lookup(struct conversations_state *state,
    strcmpsafe(conv_guidrec_uniqueid(rec), mailbox_uniqueid(mbox)) : \
    strcmpsafe(conv_guidrec_mboxname(rec), mailbox_name(mbox)) \
  )
+
+/* J record items */
+#define CONV_JMAPID_SIZE 11  // 64-bits base64-encoded w/o padding
+extern int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
+                                               const char *jidrep,
+                                               char guidrep[2*MESSAGE_GUID_SIZE+1]);
+extern void conversations_adjust_internaldate(struct conversations_state *cstate,
+                                              const char *guidrep,
+                                              struct timespec *internaldate);
+
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
                                   const char *mailbox,
@@ -356,7 +366,7 @@ extern void conversation_update_sender(conversation_t *conv,
                                        ssize_t delta_exists);
 extern void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
-                                       time_t internaldate,
+                                       uint64_t internaldate,
                                        modseq_t createdmodseq,
                                        int delta_exists);
 
