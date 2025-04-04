@@ -297,6 +297,9 @@ extern int conversations_guid_cid_lookup(struct conversations_state *state,
 extern int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
                                                const char *jidrep,
                                                char guidrep[2*MESSAGE_GUID_SIZE+1]);
+extern void conversations_adjust_internaldate(struct conversations_state *cstate,
+                                              const char *guidrep,
+                                              struct timespec *internaldate);
 
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
