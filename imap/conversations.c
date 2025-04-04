@@ -3424,4 +3424,39 @@ EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *sta
     return 0;
 }
 
+EXPORTED void conversations_adjust_internaldate(struct conversations_state *cstate,
+                                                const char *my_guid,
+                                                struct timespec *internaldate)
+{
+    struct buf jidrep = BUF_INITIALIZER;
+    uint64_t count = 0;
+
+    // check for a JMAPID (internaldate) clash, and adjust nanosec as needed
+    do {
+        char existing_guid[2*MESSAGE_GUID_SIZE+1];
+
+        buf_reset(&jidrep);
+        NANOSEC_TO_JMAPID(&jidrep, TIMESPEC_TO_NANOSEC(internaldate));
+        int r = conversations_jmapid_guidrep_lookup(cstate,
+                                                    buf_cstring(&jidrep),
+                                                    existing_guid);
+        if (r || !strcmp(my_guid, existing_guid)) {
+            // JMAP ID doesn't exist or it references our GUID
+            break;
+        }
+
+        xsyslog(LOG_INFO, "IOERROR: JMAPID conflict during append,"
+                " incrementing internaldate.tv_nsec",
+                "JMAPID=<%s> GUID=<%s> existing_GUID=<%s>",
+                buf_cstring(&jidrep), my_guid, existing_guid);
+
+        // try the next nanosecond */
+        internaldate->tv_nsec = (internaldate->tv_nsec + 1) % 1000000000;
+
+        // in the unlikely event that we reach the limit below, we're screwed
+    } while (++count < 1000000000);
+
+    buf_free(&jidrep);
+}
+
 #undef DB
