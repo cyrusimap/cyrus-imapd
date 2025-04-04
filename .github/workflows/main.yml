@@ -24,9 +24,13 @@ jobs:
       matrix:
         compiler: [ "--gcc", "--clang" ]
         san: [ "" ]
+        skip: [ "" ]
         include:
           - san: "--ubsan"
             compiler: "--gcc"
+          - san: "--asan"
+            compiler: "--gcc"
+            skip: "!Cyrus::Sieve.badscript_timsieved !Cyrus::LibCyrus"
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
@@ -61,45 +65,13 @@ jobs:
       id: cass1
       continue-on-error: true
       # We haven't figured out how to make Test::Core work in actions yet.
-      run: cyd test --slow --format prettier "!Test::Core"
+      run: cyd test --slow "!Test::Core" --format prettier "${{ matrix.skip }}"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
       run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
       if: always()
       run: cat /tmp/cass/*/conf/log/syslog
-  asan-make-check:
-    runs-on: ubuntu-latest
-    container:
-        image: ghcr.io/cyrusimap/cyrus-docker:bookworm
-        options: --init
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: setup git safe directory
-      shell: bash
-      run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
-    - name: fetch upstream release tags
-      if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
-      shell: bash
-      run: |
-        git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
-        # n.b. --no-tags does not mean "no tags", it means "no automatic tag
-        # following".  we're explicitly fetching the tags we want, we do not
-        # need every other tag that's reachable from them
-        git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
-    - name: configure and build
-      shell: bash
-      run: |
-        echo "building cyrus version" $(./tools/git-version.sh)
-        cyd build --gcc --asan
-    - name: report version information
-      shell: bash
-      run: |
-        echo "debian" $(cat /etc/debian_version)
-        /usr/cyrus/libexec/master -V
-        /usr/cyrus/sbin/cyr_buildinfo
   valgrind-make-check:
     runs-on: ubuntu-latest
     container:
