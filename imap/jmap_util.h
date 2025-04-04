@@ -193,8 +193,13 @@ extern int jmap_is_valid_id(const char *id);
 #define JMAP_BLOBID_SIZE 42
 extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
 
-#define JMAP_EMAILID_SIZE 26
-extern void jmap_set_emailid(const struct message_guid *guid, char *buf);
+#define JMAP_EMAILID_PREFIX 'S'
+#define JMAP_EMAILID_SIZE (CONV_JMAPID_SIZE + 2)
+
+#define jmap_set_emailid_from_timespec(ts, buf)                 \
+    jmap_set_emailid_from_nanosec(TIMESPEC_TO_NANOSEC(ts), buf)
+
+extern void jmap_set_emailid_from_nanosec(uint64_t nanosec, char *buf);
 
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(conversation_id_t cid, char *buf);

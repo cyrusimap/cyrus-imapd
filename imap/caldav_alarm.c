@@ -1602,7 +1602,8 @@ static int find_scheduled_email(const char *emailid,
     struct conversations_state *cstate = NULL;
     int r;
 
-    if (emailid[0] != 'M' || strlen(emailid) != 25) {
+    if (emailid[0] != JMAP_EMAILID_PREFIX ||
+        strlen(emailid) != JMAP_EMAILID_SIZE - 1) {
         return IMAP_NOTFOUND;
     }
 
@@ -1613,8 +1614,9 @@ static int find_scheduled_email(const char *emailid,
         return r;
     }
 
-    const char *guid = emailid + 1;
-    r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+    char guid[2*MESSAGE_GUID_SIZE+1];
+    r = conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guid);
+    if (!r) r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
     conversations_commit(&cstate);
 
     if (r == IMAP_OK_COMPLETED) r = 0;

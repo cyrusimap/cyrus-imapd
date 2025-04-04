@@ -291,6 +291,13 @@ extern int conversations_guid_cid_lookup(struct conversations_state *state,
    strcmpsafe(conv_guidrec_uniqueid(rec), mailbox_uniqueid(mbox)) : \
    strcmpsafe(conv_guidrec_mboxname(rec), mailbox_name(mbox)) \
  )
+
+/* J record items */
+#define CONV_JMAPID_SIZE 11  // 64-bits base64-encoded w/o padding
+extern int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
+                                               const char *jidrep,
+                                               char guidrep[2*MESSAGE_GUID_SIZE+1]);
+
 /* F record items */
 extern int conversation_getstatus(struct conversations_state *state,
                                   const char *mailbox,

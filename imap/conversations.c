@@ -3373,4 +3373,43 @@ EXPORTED int conversations_zero_modseq(struct conversations_state *state)
     return r;
 }
 
+EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
+                                                 const char *jidrep,
+                                                 char guidrep[2*MESSAGE_GUID_SIZE+1])
+{
+    static const char jmapid_alphabet[] =
+        "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+    char key[CONV_JMAPID_SIZE+2] = "J";
+    size_t idlen, datalen = 0;
+    const char *data;
+    int r;
+
+    /* sanity check the ID:
+       - to prevent strcat() from overrunning a fixed-length buffer
+       - to short-circuit an ill-fated DB fetch
+    */
+    idlen = strspn(jidrep, jmapid_alphabet);
+    if (idlen != CONV_JMAPID_SIZE || jidrep[idlen] != '\0') {
+        /* we know this J key can't exist */
+        return CYRUSDB_NOTFOUND;
+    }
+
+    strcat(key, jidrep);
+
+    r = cyrusdb_fetch(state->db, key, CONV_JMAPID_SIZE+1,
+                      &data, &datalen, &state->txn);
+    if (r) return r;
+
+    if (datalen < 2*MESSAGE_GUID_SIZE) {
+        xsyslog(LOG_NOTICE, "IOERROR: malformed data value in J record",
+                "key=<%s>", key);
+        return CYRUSDB_NOTFOUND;
+    }
+
+    strncpy(guidrep, data, 2*MESSAGE_GUID_SIZE);
+    guidrep[datalen] = '\0';
+
+    return 0;
+}
+
 #undef DB
