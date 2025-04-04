@@ -352,7 +352,7 @@ sub test_proc_crashed_services
         # sanitizers might complain about the SEGV
         my $ubsan_logdir = $self->{instance}->_sanitizer_log_dir("ubsan");
         unlink("$ubsan_logdir/ubsan.$pid");
-        my $asan_logdir = $self->{instance}->_sanitizer_log_dir("ubsan");
+        my $asan_logdir = $self->{instance}->_sanitizer_log_dir("asan");
         unlink("$asan_logdir/asan.$pid");
 
         @output = $self->{instance}->run_cyr_info('proc');
