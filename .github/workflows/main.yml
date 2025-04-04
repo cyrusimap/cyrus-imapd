@@ -30,6 +30,11 @@ jobs:
           - compiler: "--gcc"
             san: "--asan"
             skip: "!Cyrus::Sieve.badscript_timsieved !Cyrus::LibCyrus"
+          - compiler: "--gcc"
+            # -Og finds more errors at compile time
+            cflags: "-Og"
+            cxxflags: "-Og"
+            skip-cass: 1
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
@@ -52,7 +57,7 @@ jobs:
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
       shell: bash
-      run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}"
+      run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}" --cflags "${{ matrix.cflags }}" --cxxflags "${{ matrix.cxxflags }}"
     - name: report version information
       shell: bash
       run: |
@@ -61,6 +66,7 @@ jobs:
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
     - name: run cassandane quietly
+      if: ${{ ! matrix.skip-cass }}
       id: cass1
       continue-on-error: true
       # We haven't figured out how to make Test::Core work in actions yet.
@@ -69,7 +75,7 @@ jobs:
       if: ${{ steps.cass1.outcome == 'failure' }}
       run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
-      if: always()
+      if: ${{ ! matrix.skip-cass }}
       run: cat /tmp/cass/*/conf/log/syslog
   valgrind-make-check:
     runs-on: ubuntu-latest
