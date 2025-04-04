@@ -220,8 +220,16 @@ static void sample_stats(double *samples, size_t n_samples,
                          double *pmedian, double *pmean, double *pstddev)
 {
     double mean, mean_error;
-    double variance, variance_error;
     size_t i;
+
+    if (!n_samples) {
+        if (pmin) *pmin = NAN;
+        if (pmax) *pmax = NAN;
+        if (pmedian) *pmedian = NAN;
+        if (pmean) *pmean = NAN;
+        if (pstddev) *pstddev = NAN;
+        return;
+    }
 
     if (pmin || pmax || pmedian) {
         qsort(samples, n_samples, sizeof(*samples), &cmp_double);
@@ -243,27 +251,45 @@ static void sample_stats(double *samples, size_t n_samples,
     }
 
     if (pmean || pstddev) {
-        double scale = 1.0 / n_samples;
+        size_t n_infinities = 0;
 
         mean = mean_error = 0.0;
         for (i = 0; i < n_samples; i++) {
-            kbn_sum(&mean, &mean_error, samples[i] * scale);
+            if (isinf(samples[i]))
+                n_infinities++;
+            else
+                kbn_sum(&mean, &mean_error, samples[i]);
         }
-        mean += mean_error;
+        mean = (mean + mean_error) / (n_samples - n_infinities);
 
         if (pmean) *pmean = mean;
     }
 
     if (pstddev) {
-        double scale = 1.0 / (n_samples - 1);
+        double variance, variance_error;
+        size_t n_infinities = 0;
 
         variance = variance_error = 0.0;
-        for (i = 0; i < n_samples; i++) {
-            double diff = samples[i] - mean;
+        if (n_samples > 1) {
+            for (i = 0; i < n_samples; i++) {
+                if (isinf(samples[i])) {
+                    n_infinities++;
+                }
+                else {
+                    double diff = samples[i] - mean;
 
-            kbn_sum(&variance, &variance_error, diff * diff * scale);
+                    kbn_sum(&variance, &variance_error, diff * diff);
+                }
+            }
+
+            if (n_infinities == n_samples) {
+                variance = NAN;
+            }
+            else {
+                variance = (variance + variance_error)
+                           / (n_samples - 1 - n_infinities);
+            }
         }
-        variance += variance_error;
 
         *pstddev = sqrt(variance);
     }
