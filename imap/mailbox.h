@@ -150,7 +150,7 @@ struct statusdata {
 
 struct index_record {
     uint32_t uid;
-    struct timespec internaldate;
+    struct timespec internaldate;  // nanoseconds since epoch
     time_t sentdate;
     uint64_t size;
     uint32_t header_size;
@@ -399,7 +399,7 @@ struct mailbox_iter;
  */
 #define OFFSET_UID              0
 #define OFFSET_CACHE_OFFSET     4
-#define OFFSET_INTERNALDATE     8 /* grew to 64-bit in v20 */
+#define OFFSET_INTERNALDATE     8 /* grew to 64-bit in v20 (nsec since epoch) */
 #define OFFSET_SENTDATE        16 /* grew to 64-bit in v20 */
 #define OFFSET_SIZE            24 /* grew to 64-bit in v20 */
 #define OFFSET_HEADER_SIZE     32
