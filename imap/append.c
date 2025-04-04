@@ -1046,6 +1046,11 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             if (existing_internaldate.tv_nsec != UTIME_OMIT)
                 internaldate = &existing_internaldate;
 
+            else if (internaldate) {
+                // make sure we don't have a JMAP ID (internaldate) clash
+                conversations_adjust_internaldate(cstate, guid, internaldate);
+            }
+
             // if we found a file, use it
             if (rock.fname) {
                 syslog(LOG_NOTICE, "found existing file %s for %s; linking",
