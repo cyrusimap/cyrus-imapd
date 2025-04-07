@@ -46,6 +46,7 @@
 #include "acl.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "jmap_util.h"
 #include "util.h"
 #include <syslog.h>
 
@@ -104,7 +105,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     int rc = HTTP_BAD_REQUEST, r = 0;
     struct strlist *vals = NULL;
     const char *token = NULL, *key = NULL, *aps_topic = NULL;
-    const char *mailbox_userid = NULL, *mailbox_uniqueid = NULL;
+    const char *mailbox_userid = NULL, *mailbox_id = NULL;
     strarray_t *keyparts = NULL;
     char *mboxname = NULL;
     struct mboxlist_entry *mbentry = NULL;
@@ -124,16 +125,28 @@ static int meth_get_applepush(struct transaction_t *txn,
     if (strarray_size(keyparts) != 2)
         goto done;
     mailbox_userid = strarray_nth(keyparts, 0);
-    mailbox_uniqueid = strarray_nth(keyparts, 1);
+    mailbox_id = strarray_nth(keyparts, 1);
 
     /* lookup mailbox */
-    mboxname = mboxlist_find_uniqueid(mailbox_uniqueid, mailbox_userid,
-                                      httpd_authstate);
-    if (!mboxname) {
-        syslog(LOG_ERR,
-               "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",
-               mailbox_uniqueid, mailbox_userid);
-        goto done;
+    if (*mailbox_id == JMAP_MAILBOXID_PREFIX) {
+        mboxname =
+            mboxlist_find_jmapid(mailbox_id+1, mailbox_userid, httpd_authstate);
+        if (!mboxname) {
+            syslog(LOG_ERR,
+                   "meth_get_applepush: mboxlist_find_jmapid(%s, %s) not found",
+                   mailbox_id+1, mailbox_userid);
+            goto done;
+        }
+    }
+    else {
+        mboxname = 
+            mboxlist_find_uniqueid(mailbox_id, mailbox_userid, httpd_authstate);
+        if (!mboxname) {
+            syslog(LOG_ERR,
+                   "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",
+                   mailbox_id, mailbox_userid);
+            goto done;
+        }
     }
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
@@ -170,7 +183,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     /* notify! */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE_DAV);
     mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid,
-                                       mailbox_userid, mailbox_uniqueid, mbtype,
+                                       mailbox_userid, mailbox_id, mbtype,
                                        config_getduration(IMAPOPT_APS_EXPIRY, 'd'));
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
@@ -287,10 +300,11 @@ int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
     /* Only on collections */
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    /* key is userid and mailbox uniqueid */
+    /* key is userid and JMAP mailbox id */
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/%s",
-               fctx->req_tgt->userid, mailbox_uniqueid(fctx->mailbox));
+    buf_printf(&fctx->buf, "%s/%c",
+               fctx->req_tgt->userid, JMAP_MAILBOXID_PREFIX);
+    MODSEQ_TO_JMAPID(&fctx->buf, mailbox_createdmodseq(fctx->mailbox));
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                  name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
 
