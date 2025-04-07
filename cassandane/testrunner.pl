@@ -42,6 +42,7 @@
 use strict;
 use warnings;
 use File::Slurp;
+use List::Util qw(uniq);
 
 use lib '.';
 use Cassandane::Util::Setup;
@@ -294,6 +295,10 @@ while (my $a = shift)
     {
         $want_rerun = 1;
     }
+    elsif ($a eq '--rerun-suite')
+    {
+        $want_rerun = 2;
+    }
     elsif ($a =~ m/^-/)
     {
         usage;
@@ -321,6 +326,10 @@ if ($want_rerun) {
     }
 
     if (scalar @failed) {
+        if ($want_rerun > 1) {
+            # rerun whole suites for failed tests
+            @failed = uniq sort map { s/\..*$//r } @failed;
+        }
         push @names, @failed;
     }
     else {
