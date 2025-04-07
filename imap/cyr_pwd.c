@@ -62,7 +62,7 @@ static struct namespace cyr_pwd_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr, "usage: cyr_pwd [-C <alt_config>]\n");
+    fprintf(stderr, "usage: cyr_pwd [-C <alt_config>] [mailboxdir ...]\n");
     fprintf(stderr, "\n");
     if (error) {
         fprintf(stderr, "\n");
@@ -71,9 +71,34 @@ static int usage(const char *error)
     exit(-1);
 }
 
+static int translate(const char *path)
+{
+    int r = 0;
+
+    /* Translate mailboxname */
+    mbname_t *mbname = NULL;
+    const char *extname = NULL;
+
+    mbname = mbname_from_path(path);
+
+    if (mbname)
+        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
+
+    if (extname)
+        printf("%s\n", extname);
+    else {
+        fprintf(stderr, "ERROR: not in Cyrus UUID mailbox directory\n");
+        r = 1;
+    }
+
+    mbname_free(&mbname);
+
+    return r;
+}
+
 int main(int argc, char **argv)
 {
-    int r;
+    int i, r;
     int opt;
     char *alt_config = NULL;
 
@@ -105,23 +130,17 @@ int main(int argc, char **argv)
         fatal(error_message(r), -1);
     }
 
-    /* Translate mailboxname */
-    mbname_t *mbname = NULL;
-    const char *extname = NULL;
-
-    mbname = mbname_from_path(".");
-
-    if (mbname) 
-        extname = mbname_extname(mbname, &cyr_pwd_namespace, "cyrus");
-
-    if (extname)
-        printf("%s\n", extname);
-    else
-        fprintf(stderr, "ERROR: not in Cyrus UUID mailbox directory\n");
-
-    mbname_free(&mbname);
+    if (optind == argc) {
+        r = translate(".");
+    }
+    else {
+        r = 0;
+        for (i = optind; i < argc; i++) {
+            r |= translate(argv[i]);
+        }
+    }
 
     cyrus_done();
 
-    exit(0);
+    exit(r);
 }
