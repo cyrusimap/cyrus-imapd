@@ -9275,8 +9275,11 @@ static void _email_append(jmap_req_t *req,
         time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
                           &savedate);
     }
-    r = append_fromstage_full(&as, &body, stage, internaldate, savedate, 0,
-                         flags.count ? &flags : NULL, 0, &annots);
+    struct append_metadata meta = {
+        internaldate, savedate, /*cmodseq*/ 0, flags.count ? &flags : NULL,
+        &annots, /*nolink*/ 0, /*replacing*/ { 0, NULL }
+    };
+    r = append_fromstage_full(&as, &body, stage, &meta);
     freeentryatts(annots);
     if (r) {
         append_abort(&as);

@@ -1522,8 +1522,11 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     if (r) goto done;
 
     /* Append the message to the mailbox */
-    r = append_fromstage_full(&as, &body, stage, &record->internaldate,
-                              savedate, 0, flags, 0, &annots);
+    struct append_metadata meta = {
+        &record->internaldate, savedate, /*cmodseq*/ 0,
+        flags, &annots, /*nolink*/ 0, /*replacing*/ { 0, NULL }
+    };
+    r = append_fromstage_full(&as, &body, stage, &meta);
     if (r) {
         append_abort(&as);
         goto done;
