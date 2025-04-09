@@ -467,7 +467,9 @@ EXPORTED int bc_header_parse(bytecode_input_t *bc, int *version, int *requires)
     int pos = 0;
 
     *version = 0;
-    if (requires) *requires = 0;
+    if (requires) {
+        *requires = 0;
+    }
 
     if (memcmp(bc, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) return -1;
 
@@ -477,7 +479,9 @@ EXPORTED int bc_header_parse(bytecode_input_t *bc, int *version, int *requires)
     if (*version >= 0x11) {
         int req = ntohl(bc[pos++].value);
 
-        if (requires) *requires = req;
+        if (requires) {
+            *requires = req;
+        }
     }
 
     return pos;
