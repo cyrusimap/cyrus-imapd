@@ -292,7 +292,7 @@ EXPORTED void appendstrlist(struct strlist **l, char *s)
 
     while (*tail) tail = &(*tail)->next;
 
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
+    *tail = xmalloc(sizeof(struct strlist));
     (*tail)->s = xstrdup(s);
     (*tail)->next = 0;
 }
@@ -356,7 +356,7 @@ EXPORTED void appendentryatt(struct entryattlist **l, const char *entry,
 
     while (*tail) tail = &(*tail)->next;
 
-    *tail = (struct entryattlist *)xmalloc(sizeof(struct entryattlist));
+    *tail = xmalloc(sizeof(struct entryattlist));
     (*tail)->entry = xstrdup(entry);
     (*tail)->attvalues = attvalues;
     (*tail)->next = NULL;
