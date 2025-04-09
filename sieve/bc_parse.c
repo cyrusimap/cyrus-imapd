@@ -57,6 +57,7 @@ struct args_t {
     const size_t offsets[MAX_ARGS];
 };
 
+// clang-format: off
 static const struct args_t cmd_args_table[] = {
     { B_STOP,                    "", { 0 } },                            /*  0 */
     { B_KEEP_ORIG,               "", { 0 } },                            /*  1 */
@@ -306,7 +307,9 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.cal.reason_var)
       } },
 };
+// clang-format: on
 
+// clang-format: off
 static const struct args_t test_args_table[] = {
     { BC_FALSE,                  "", { 0 } },                            /*  0 */
     { BC_TRUE,                   "", { 0 } },                            /*  1 */
@@ -454,6 +457,7 @@ static const struct args_t test_args_table[] = {
         offsetof(struct Test, u.dt.kl)
       } },
 };
+// clang-format: on
 
 /* Given a bytecode_input_t at the beginning of a file,
  * return the version, the required extensions,
