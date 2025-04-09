@@ -86,6 +86,7 @@ EXPORTED void charset_lib_done(void)
 #define unicode_isvalid(c) \
         (!((c >= 0xd800 && c <= 0xdfff) || ((unsigned)c > 0x10ffff)))
 
+// clang-format: off
 static const char QPSAFECHAR[256] = {
 /* control chars are unsafe */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -109,6 +110,7 @@ static const char QPSAFECHAR[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+// clang-format: on
 
 struct qp_state {
     int isheader;
@@ -285,6 +287,7 @@ static const char *convert_name(struct convert_rock *rock);
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
+// clang-format: off
 static const unsigned char index_hex[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -303,11 +306,13 @@ static const unsigned char index_hex[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
+// clang-format: on
 #define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
 
 /*
  * Table for decoding base64
  */
+// clang-format: off
 static const char index_64[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -326,10 +331,12 @@ static const char index_64[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
+// clang-format: on
 
 /*
  * Table for decoding base64url
  */
+// clang-format: off
 static const char index_64url[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -348,10 +355,12 @@ static const char index_64url[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
+// clang-format: on
 
 /*
  * Table for decoding base64jmapid
  */
+// clang-format: off
 static const char index_64jmapid[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -370,6 +379,7 @@ static const char index_64jmapid[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
+// clang-format: on
 #define CHAR64(c, index)  (index[(unsigned char)(c)])
 
 EXPORTED int encoding_lookupname(const char *s)
@@ -1087,6 +1097,7 @@ static void uni2utf8(struct convert_rock *rock, uint32_t c)
      * defined last valid codepoint is 0x10ffff so we only handle that
      * range. */
 
+    // clang-format: off
     if (c > 0xffff) {
         convert_putc(rock->next, 0xF0 + ((c >> 18) & 0x07));
         convert_putc(rock->next, 0x80 + ((c >> 12) & 0x3f));
@@ -1105,6 +1116,7 @@ static void uni2utf8(struct convert_rock *rock, uint32_t c)
     else {
         convert_putc(rock->next, c);
     }
+    // clang-format: on
 }
 
 /* Given an octet which is a codepoint in some 7bit or 8bit character
@@ -2727,6 +2739,7 @@ static charset_t lookup_buf(const char *buf, size_t len)
 /* of course = and _ are not included in the set, because they themselves
    need to be quoted it’s just saying they can be present in the Q wordi
    itself, because they’re part of the quoting system */
+// clang-format: off
 static const char QPMIMEPHRASESAFECHAR[256] = {
 /* control chars are unsafe */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2754,6 +2767,7 @@ static const char QPMIMEPHRASESAFECHAR[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+// clang-format: on
 
 
 /* API */
@@ -4622,6 +4636,7 @@ EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t dat
     return counts;
 }
 
+// clang-format: off
 static const unsigned char hexdigit[256] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -4657,6 +4672,7 @@ static const unsigned char hexdigit[256] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 };
+// clang-format: on
 
 EXPORTED int charset_decode_percent(struct buf *dst, const char *val)
 {
@@ -4682,6 +4698,7 @@ EXPORTED int charset_decode_percent(struct buf *dst, const char *val)
     return r;
 }
 
+// clang-format: off
 const char QSTRINGCHAR[256] = {
 /* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
  * are not permitted, all other control characters obsolete */
@@ -4706,6 +4723,7 @@ const char QSTRINGCHAR[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+// clang-format: on
 
 EXPORTED void charset_append_mime_param(struct buf *buf, unsigned flags,
                                         const char *name, const char *value)
