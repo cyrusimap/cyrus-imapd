@@ -187,15 +187,16 @@ static int _init_counted(struct conversations_state *state,
                 syslog(LOG_ERR, "Failed to write counted_flags");
                 return r;
             }
-            // we use the lack of COUNTED_FLAGS to say it's a new DB, so set the version too
-            char vbuf[16];
-            snprintf(vbuf, sizeof(vbuf), "%d", CONVERSATIONS_VERSION);
-            r = cyrusdb_store(state->db, VERSIONKEY, strlen(VERSIONKEY),
-                    vbuf, strlen(vbuf), &state->txn);
-            if (r) {
-                syslog(LOG_ERR, "Failed to write version");
-                return r;
-            }
+        }
+
+        // we use the lack of COUNTED_FLAGS to say it's a new DB, so set the version too
+        char vbuf[16];
+        snprintf(vbuf, sizeof(vbuf), "%d", state->version);
+        r = cyrusdb_store(state->db, VERSIONKEY, strlen(VERSIONKEY),
+                          vbuf, strlen(vbuf), &state->txn);
+        if (r) {
+            syslog(LOG_ERR, "Failed to write version");
+            return r;
         }
     }
 
@@ -397,21 +398,19 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
         open->local_namespacelock = user_namespacelock_full(userid, locktype);
     }
 
+    /* set version -
+       for new files we use CONVERSATIONS_VERSION,
+       otherwise we assume v1 unless/until we read VERSIONKEY
+    */
+    struct stat sbuf;
+    open->s.version = stat(fname, &sbuf) ? CONVERSATIONS_VERSION : 1;
+
     /* open db */
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
     r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
     if (r || open->s.db == NULL) {
         _conv_remove(&open->s);
         return IMAP_IOERROR;
-    }
-
-    /* load or initialize counted flags */
-    cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
-    r = _init_counted(&open->s, val, vallen);
-    if (r) {
-        cyrusdb_abort(open->s.db, open->s.txn);
-        _conv_remove(&open->s);
-        return r;
     }
 
     /* parse the version */
@@ -426,6 +425,15 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
             return IMAP_MAILBOX_BADFORMAT;
         }
         open->s.version = version;
+    }
+
+    /* load or initialize counted flags */
+    cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
+    r = _init_counted(&open->s, val, vallen);
+    if (r) {
+        cyrusdb_abort(open->s.db, open->s.txn);
+        _conv_remove(&open->s);
+        return r;
     }
 
     /* we should just read the folder names up front too */
@@ -3265,6 +3273,7 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state, int wi
     }
 
     /* re-init the counted flags */
+    state->version = CONVERSATIONS_VERSION;
     r = _init_counted(state, NULL, 0);
     if (r) return r;
 
