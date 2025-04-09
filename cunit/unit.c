@@ -213,8 +213,9 @@ static void params_assign(struct cunit_param *params)
 {
     struct cunit_param *p;
 
-    for (p = params ; p->name ; p++)
+    for (p = params ; p->name ; p++) {
         *(p->variable) = p->values[p->idx];
+    }
 
     if (verbose) {
         char buf[1024];
@@ -249,8 +250,9 @@ void __cunit_params_begin(struct cunit_param *params)
             }
         }
     }
-    for (p = params ; p->name ; p++)
+    for (p = params ; p->name ; p++) {
         p->idx = 0;
+    }
     params_assign(params);
     current_params = params;
 }
