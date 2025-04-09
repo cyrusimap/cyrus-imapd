@@ -165,6 +165,7 @@ typedef union
  * <match-type: int> <relational-match: int> <collation: int>
  */
 
+// clang-format: off
 enum bytecode {
     B_STOP,
     B_KEEP_ORIG,                /* legacy keep w/o support for :flags          */
@@ -456,7 +457,9 @@ enum bytecode {
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */
 };
+// clang-format: on
 
+// clang-format: off
 enum bytecode_comps {
     BC_FALSE,
     BC_TRUE,
@@ -594,6 +597,7 @@ enum bytecode_comps {
     /*****  insert new tests above this line  *****/
     BC_ILLEGAL_VALUE    /* any value >= this code is illegal */
 };
+// clang-format: on
 
 /* currently one enum so as to help determine where values are being misused.
  * we have left placeholders incase we need to add more later to the middle */
