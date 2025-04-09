@@ -414,13 +414,16 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             int testdist, thendist, elsedist;
             int c;
 
-            int jumpFalseLoc = -1;/* this is the location that is being reserved
-                                     for the first jump command
-                                     we jump to the false condition of the test */
+            /* this is the location that is being reserved for the first jump
+             * command.  we jump to the false condition of the test
+             */
+            int jumpFalseLoc = -1;
 
-            int jumpEndLoc = -1; /* this is the location that is being reserved
-                                    for the optional jump command
-                                    it jumps over the else statement to the end */
+            /* this is the location that is being reserved for the optional
+             * jump command.  it jumps over the else statement to the end
+             */
+            int jumpEndLoc = -1;
+
             int jumpto = -1;
             int jumpop = B_JUMP;
 
