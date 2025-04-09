@@ -1306,13 +1306,24 @@ EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
     buf[JMAP_BLOBID_SIZE-1] = '\0';
 }
 
-EXPORTED void jmap_set_emailid_from_nanosec(uint64_t nanosec, char *emailid)
+EXPORTED void jmap_set_emailid(int cstate_version,
+                               const struct message_guid *guid,
+                               uint64_t nanosec, struct timespec *ts,
+                               char *emailid)
 {
-    // initialize a struct buf with char emailid[JMAP_EMAILID_SIZE]
-    struct buf buf = { emailid, 0, JMAP_EMAILID_SIZE, 0 };
+    // initialize a struct buf with char emailid[JMAP_MAX_EMAILID_SIZE]
+    struct buf buf = { emailid, 0, JMAP_MAX_EMAILID_SIZE, 0 };
 
-    buf_putc(&buf, JMAP_EMAILID_PREFIX);
-    NANOSEC_TO_JMAPID(&buf, nanosec);
+    if (cstate_version < 2) {
+        buf_putc(&buf, JMAP_LEGACY_EMAILID_PREFIX);
+        buf_appendmap(&buf,
+                      message_guid_encode(guid), JMAP_LEGACY_EMAILID_SIZE-2);
+    }
+    else {
+        buf_putc(&buf, JMAP_EMAILID_PREFIX);
+        NANOSEC_TO_JMAPID(&buf, ts ? TIMESPEC_TO_NANOSEC(ts) : nanosec);
+    }
+
     buf_cstring(&buf);
 }
 
