@@ -2037,6 +2037,7 @@ static void annotation_get_fromdb(annotate_state_t *state,
 }
 
 /* TODO: need to handle /<section-part>/ somehow */
+// clang-format: off
 static const annotate_entrydesc_t message_builtin_entries[] =
 {
     {
@@ -2136,6 +2137,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
     },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL, NULL }
 };
+// clang-format: on
 
 static const annotate_entrydesc_t message_db_entry =
     {
@@ -2150,6 +2152,7 @@ static const annotate_entrydesc_t message_db_entry =
         NULL
     };
 
+// clang-format: off
 static const annotate_entrydesc_t mailbox_builtin_entries[] =
 {
     {
@@ -2486,6 +2489,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL
     },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL, NULL }
 };
+// clang-format: on
 
 static const annotate_entrydesc_t mailbox_db_entry =
     {
@@ -2500,6 +2504,7 @@ static const annotate_entrydesc_t mailbox_db_entry =
         NULL
     };
 
+// clang-format: off
 static const annotate_entrydesc_t server_builtin_entries[] =
 {
     {
@@ -2627,6 +2632,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
     },{ NULL, 0, ANNOTATION_PROXY_T_INVALID,
         0, 0, NULL, NULL, NULL, NULL }
 };
+// clang-format: on
 
 static const annotate_entrydesc_t server_db_entry =
     {
