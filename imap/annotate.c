@@ -501,10 +501,8 @@ static void init_internal()
 }
 
 /* must be called after cyrus_init */
-EXPORTED void annotate_init(int (*fetch_func)(const char *, const char *,
-                                     const strarray_t *, const strarray_t *),
-                            int (*store_func)(const char *, const char *,
-                                     struct entryattlist *))
+EXPORTED void annotate_init(annotate_fetch_func *fetch_func,
+                            annotate_store_func *store_func)
 {
     if (fetch_func) {
         proxy_fetch_func = fetch_func;
