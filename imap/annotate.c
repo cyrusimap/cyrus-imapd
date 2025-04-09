@@ -3384,12 +3384,12 @@ static int annotate_canon_value(struct buf *value, int type)
         errno = 0;
         buf_cstring(value);
         uwhatever = strtoul(value->s, &p, 10);
-        if ((p == value->s)             /* no value */
-            || (*p != '\0')             /* illegal char */
-            || (unsigned)(p - value->s) != value->len
-                                        /* embedded NUL */
-            || errno                    /* overflow */
-            || strchr(value->s, '-')) { /* negative number */
+        if ((p == value->s)                           /* no value */
+            || (*p != '\0')                           /* illegal char */
+            || (unsigned)(p - value->s) != value->len /* embedded NUL */
+            || errno                                  /* overflow */
+            || strchr(value->s, '-')                  /* negative number */)
+        {
             return IMAP_ANNOTATION_BADVALUE;
         }
         break;
@@ -3399,11 +3399,11 @@ static int annotate_canon_value(struct buf *value, int type)
         errno = 0;
         buf_cstring(value);
         whatever = strtol(value->s, &p, 10);
-        if ((p == value->s)             /* no value */
-            || (*p != '\0')             /* illegal char */
-            || (unsigned)(p - value->s) != value->len
-                                        /* embedded NUL */
-            || errno) {                 /* underflow/overflow */
+        if ((p == value->s)                           /* no value */
+            || (*p != '\0')                           /* illegal char */
+            || (unsigned)(p - value->s) != value->len /* embedded NUL */
+            || errno                                  /* underflow/overflow */)
+        {
             return IMAP_ANNOTATION_BADVALUE;
         }
         break;
