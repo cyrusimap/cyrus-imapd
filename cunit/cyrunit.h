@@ -245,6 +245,7 @@ extern int fatal_expected;
 extern char *fatal_string;
 extern int fatal_code;
 
+// clang-format off
 #define CU_EXPECT_CYRFATAL_BEGIN                                \
 do {                                                            \
     fatal_expected = 1;                                         \
@@ -264,6 +265,7 @@ do {                                                            \
         if (fatal_string) free(fatal_string);                   \
         fatal_string = NULL;                                    \
 }   } while (0)
+// clang-format on
 
 
 /* for parametrised tests */
