@@ -1259,7 +1259,7 @@ EXPORTED int annotatemore_findall_mboxname(const char *mboxname,
     return r;
 }
 
-/***************************  Annotate State Management  ***************************/
+/************************  Annotate State Management  ************************/
 
 EXPORTED annotate_state_t *annotate_state_new(void)
 {
