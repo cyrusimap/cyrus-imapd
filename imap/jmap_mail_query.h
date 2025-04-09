@@ -160,6 +160,8 @@ extern struct jmap_headermatch *jmap_headermatch_dup(struct jmap_headermatch *hm
 
 extern int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg);
 
+extern void jmap_headermatch_serialize(struct jmap_headermatch*, struct buf*);
+
 
 #endif /* WITH_DAV */
 
