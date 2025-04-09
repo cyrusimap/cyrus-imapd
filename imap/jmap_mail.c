@@ -286,6 +286,8 @@ static void emailquery_handler(enum jmap_handler_event event, jmap_req_t *req, v
 
 static int emailquery_cache_max_age = 0;
 
+static ptrarray_t empty_ptrarray = PTRARRAY_INITIALIZER;
+
 HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
     jmap_add_methods(jmap_mail_methods_standard, settings);
@@ -5092,7 +5094,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     if (r) goto done;
 
     /* Prepare result loop */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
@@ -5307,7 +5309,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     if (r) goto done;
 
     /* Prepare result loop */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
@@ -5502,7 +5504,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     if (r) goto done;
 
     /* Process results */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_EMAILID_SIZE];
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
@@ -5634,7 +5636,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     if (r) goto done;
 
     /* Process results */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
     int i;
