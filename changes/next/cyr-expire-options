@@ -1,0 +1,27 @@
+Description:
+
+Options to control cyr_expire's mailbox cleanup behaviour.
+
+
+Config changes:
+
+Adds two config options:
+
+1) expire_by_savedate (default false)
+
+If set, check the savedate rather than gmtime on records to decide
+whether to expunge them
+
+2) expire_keep_flagged (default false)
+
+If set, never expunge messages with the \Flagged system flag set.
+
+
+Upgrade instructions:
+
+No change required.
+
+
+GitHub issue:
+
+No issue
