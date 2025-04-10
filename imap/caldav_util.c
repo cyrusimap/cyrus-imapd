@@ -1168,7 +1168,7 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         if (organizer) {
             assert(!buf_len(&txn->buf));
             buf_printf(&txn->buf, "<%s>", organizer);
-            mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
+            mimehdr = charset_encode_addrheader(buf_cstring(&txn->buf),
                                                 buf_len(&txn->buf), 0);
             spool_replace_header(xstrdup("From"), mimehdr, txn->req_hdrs);
             buf_reset(&txn->buf);
@@ -1193,7 +1193,7 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
 
     if (strarray_size(schedule_addresses)) {
         char *value = strarray_join(schedule_addresses, ",");
-        mimehdr = charset_encode_mimeheader(value, 0, 0);
+        mimehdr = charset_encode_addrheader(value, 0, 0);
         spool_replace_header(xstrdup("X-Schedule-User-Address"),
                              mimehdr, txn->req_hdrs);
         free(value);

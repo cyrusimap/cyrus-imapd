@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_subject_with_address
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # This is a regression test for encoding of the Subject header: everything
+    # after the comma got chopped off when the first bit of a subject was an
+    # email address.
+    my $subject = 'foo@example.com, some more words here';
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                    subject => $subject,
+                    from => [{
+                        email => 'from@local'
+                    }] ,
+                    to => [{
+                        email => 'to@local'
+                    }] ,
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'email',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#email'],
+            properties => ['subject'],
+        }, 'R2'],
+    ]);
+
+    $self->assert_str_equals($subject, $res->[1][1]{list}[0]{subject});
+}
