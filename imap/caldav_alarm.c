@@ -1338,8 +1338,9 @@ static int process_valarms(struct mailbox *mailbox,
 
     /* don't process alarms in draft messages */
     if (record->system_flags & FLAG_DRAFT) {
-        syslog(LOG_NOTICE, "ignoring draft message in mailbox %s uid %u",
+        syslog(LOG_NOTICE, "removing lastalarm for draft message in mailbox %s uid %u",
                mailbox_name(mailbox), record->uid);
+        caldav_alarm_delete_record(mboxname, record->uid);
         goto done_item;
     }
 
