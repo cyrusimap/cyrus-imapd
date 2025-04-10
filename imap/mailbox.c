@@ -5787,7 +5787,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
             break;
         }
 
-        if (limit && limit >= (int)numdeleted) {
+        if (limit && limit <= (int)numdeleted) {
             r = IMAP_AGAIN;
             break;
         }
