@@ -442,44 +442,16 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 
 EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
 {
-    char *copy = xstrdup(newname);
-    const char *dir = dirname(copy);
-    int r = 0;
-
-#if defined(O_DIRECTORY)
-    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
-#else
-    int dirfd = open(dir, O_RDONLY, 0600);
-#endif
-    if (dirfd < 0) {
-        xsyslog(LOG_ERR, "IOERROR: open directory failed",
-                         "filename=<%s> newname=<%s> directory=<%s>",
-                         mf->fname, newname, dir);
-        r = dirfd;
-        goto done;
-    }
-
-    r = rename(mf->fname, newname);
+    int r = cyrus_rename(mf->fname, newname);
     if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: rename failed",
+        xsyslog(LOG_ERR, "IOERROR: mappedfile_rename failed",
                          "filename=<%s> newname=<%s>",
                          mf->fname, newname);
-        goto done;
+        return r;
     }
 
-    r = fsync(dirfd);
-    if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
-                         "filename=<%s> newname=<%s> directory=<%s>",
-                         mf->fname, newname, dir);
-        goto done;
-    }
-
+    // rename done
     free(mf->fname);
     mf->fname = xstrdup(newname);
-
- done:
-    if (dirfd >= 0) close(dirfd);
-    free(copy);
-    return r;
+    return 0;
 }

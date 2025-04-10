@@ -451,6 +451,68 @@ EXPORTED int removedir(const char *path)
     return nftw(path, removedir_cb, 128, FTW_DEPTH|FTW_PHYS);
 }
 
+EXPORTED int xrenameat(int dirfd, const char *src, const char *dest)
+{
+    char *copy = xstrdup(dest);
+    const char *file = basename(copy);
+    int r = renameat(AT_FDCWD, src, dirfd, file);
+    free(copy);
+    return r;
+}
+
+EXPORTED int xopendir(const char *dest)
+{
+    char *copy = xstrdup(dest);
+    const char *dir = dirname(copy);
+
+#if defined(O_DIRECTORY)
+    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    int dirfd = open(dir, O_RDONLY, 0600);
+#endif
+    free(copy);
+    return dirfd;
+}
+
+EXPORTED void xclosedir(int dirfd)
+{
+    // make sure close doesn't clear errno
+    int saved_errno = errno;
+    close(dirfd);
+    errno = saved_errno;
+}
+
+static int xunlink_helper(const char *path, int *dirfdp)
+{
+    int local_dirfd = -1;
+    if (!dirfdp) dirfdp = &local_dirfd;
+
+    if (!*dirfdp) *dirfdp = xopendir(path);
+    if (!*dirfdp) return -1;
+
+    int r = xunlinkat(*dirfdp, path, /*flags*/0);
+
+    if (local_dirfd >= 0) xclosedir(local_dirfd);
+
+    return r;
+}
+
+// rename a file (probably in the same directory) and fsync the
+// destination directory before returning
+EXPORTED int cyrus_rename(const char *src, const char *dest)
+{
+    int dirfd = xopendir(dest);
+    if (dirfd < 0) {
+        return dirfd;
+    }
+
+    int r = xrenameat(dirfd, src, dest);
+    if (!r) r = fsync(dirfd);
+    xclosedir(dirfd);
+
+    return r;
+}
+
 /* Create all parent directories for the given path,
  * up to but not including the basename.
  */
@@ -485,11 +547,11 @@ EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused
     return 0;
 }
 
-static int _copyfile_helper(const char *from, const char *to, int flags)
+static int _copyfile_helper(const char *from, const char *to, int flags, int *dirfdp)
 {
     int srcfd = -1;
     int destfd = -1;
-    int dirfd = -1;
+    int local_dirfd = -1;
     const char *src_base = 0;
     size_t src_size = 0;
     struct stat sbuf;
@@ -499,15 +561,19 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     int keeptime = flags & COPYFILE_KEEPTIME;
     int nodirsync = flags & COPYFILE_NODIRSYNC;
 
-    char *copy = xstrdup(to);
-    const char *dir = dirname(copy);
+    if (!dirfdp) dirfdp = &local_dirfd;
+
+    if (*dirfdp < 0) {
+        char *copy = xstrdup(to);
+        const char *dir = dirname(copy);
 #if defined(O_DIRECTORY)
-    dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+        *dirfdp = open(dir, O_RDONLY|O_DIRECTORY, 0600);
 #else
-    dirfd = open(dir, O_RDONLY, 0600);
+        *dirfdp = open(dir, O_RDONLY, 0600);
 #endif
-    free(copy);
-    if (dirfd == -1) {
+        free(copy);
+    }
+    if (*dirfdp == -1) {
         if (!(flags & COPYFILE_MKDIR))
             xsyslog(LOG_ERR, "IOERROR: open directory failed",
                              "filename=<%s>", to);
@@ -517,8 +583,10 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
 
     /* try to hard link, but don't fail - fall back to regular copy */
     if (!nolink) {
-        if (linkat(AT_FDCWD, from, dirfd, to, 0) == 0) goto sync;
-        if (errno == EEXIST) {
+        char *copy = xstrdup(to);
+        const char *file = basename(copy);
+        r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
+        if (r && errno == EEXIST) {
             /* n.b. unlink rather than xunlink.  at this point we believe
              * a file definitely exists that we want to remove, so if
              * unlink tells us ENOENT then that's super weird and we're
@@ -529,10 +597,14 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
                                  "filename=<%s>", to);
                 errno = 0;
                 r = -1;
+                free(copy);
                 goto done;
             }
-            if (linkat(AT_FDCWD, from, dirfd, to, 0) == 0) goto sync;
+
+            r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
         }
+        free(copy);
+        if (!r) goto sync;
     }
 
     srcfd = open(from, O_RDONLY, 0666);
@@ -609,9 +681,9 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     }
 
 sync:
-    if (!nodirsync) {
-        if (fsync(dirfd) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
+    if (!nodirsync && local_dirfd >= 0) {
+        if (fsync(local_dirfd) < 0) {
+           xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
                              "filename=<%s>", to);
             r = -1;
             xunlink(to);  /* remove any rubbish we created */
@@ -624,12 +696,14 @@ done:
 
     if (srcfd != -1) close(srcfd);
     if (destfd != -1) close(destfd);
-    if (dirfd != -1) close(dirfd);
+    if (local_dirfd != -1) close(local_dirfd);
 
     return r;
 }
 
-EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
+EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
+                                  int flags, int *from_dirfdp,
+                                  int *to_dirfdp)
 {
     int r;
 
@@ -637,17 +711,17 @@ EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
     if (!strcmp(from, to))
         return -1;
 
-    r = _copyfile_helper(from, to, flags);
+    r = _copyfile_helper(from, to, flags, to_dirfdp);
 
     /* try creating the target directory if requested */
     if (r && (flags & COPYFILE_MKDIR)) {
         r = cyrus_mkdir(to, 0755);
-        if (!r) r = _copyfile_helper(from, to, flags & ~COPYFILE_MKDIR);
+        if (!r) r = _copyfile_helper(from, to, flags & ~COPYFILE_MKDIR, to_dirfdp);
     }
 
     if (!r && (flags & COPYFILE_RENAME)) {
         /* remove the original file if the copy succeeded */
-        xunlink(from);
+        xunlink_helper(from, from_dirfdp);
     }
 
     return r;

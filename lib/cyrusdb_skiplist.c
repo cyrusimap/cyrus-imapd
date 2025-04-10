@@ -1862,7 +1862,7 @@ static int mycheckpoint(struct dbengine *db)
     }
 
     /* move new file to original file name */
-    if (!r && (rename(fname, db->fname) < 0)) {
+    if (!r && (cyrus_rename(fname, db->fname) < 0)) {
         xsyslog(LOG_ERR, "DBERROR: rename failed",
                          "source=<%s> destination=<%s>",
                          fname, db->fname);

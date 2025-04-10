@@ -1075,9 +1075,11 @@ havefile:
     if (r) goto out;
 
     /* should we archive it straight away? */
+    int *fdptr = &mailbox->spool_dirfd;
     if (msgrecord_should_archive(msgrec, NULL)) {
         r = msgrecord_add_internalflags(msgrec, FLAG_INTERNAL_ARCHIVED);
         if (r) goto out;
+        fdptr = &mailbox->archive_dirfd;
     }
 
     /* unlink BOTH potential destination files to clean up any past failure.
@@ -1092,7 +1094,7 @@ havefile:
     r = msgrecord_get_fname(msgrec, &fname);
     if (r) goto out;
 
-    r = mailbox_copyfile(linkfile ? linkfile : stagefile, fname, nolink);
+    r = mailbox_copyfile_fdptr(linkfile ? linkfile : stagefile, fname, nolink, fdptr);
     if (r) goto out;
 
     if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
@@ -1589,9 +1591,12 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
         destfname = xstrdup(tmp);
 
+        int *fdptr = dst_internal_flags & FLAG_INTERNAL_ARCHIVED
+                   ? &as->mailbox->archive_dirfd : &as->mailbox->spool_dirfd;
+
         if (!(object_storage_enabled &&
               src_internal_flags & FLAG_INTERNAL_ARCHIVED))   // if object storage do not move file
-           r = mailbox_copyfile(srcfname, destfname, nolink);
+           r = mailbox_copyfile_fdptr(srcfname, destfname, nolink, fdptr);
 
         if (r) goto out;
 

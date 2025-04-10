@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
 
                 /* move db.backup1 to db.backup2 */
                 if (r2 == 0 || errno == ENOENT)
-                    r2 = rename(backup1, backup2);
+                    r2 = cyrus_rename(backup1, backup2);
 
                 /* make a new db.backup1 */
                 if (r2 == 0 || errno == ENOENT)

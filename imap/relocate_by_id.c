@@ -477,10 +477,10 @@ static int relocate(const char *old, const char *new)
     if (!quiet) printf("\tRenaming: %s\t -> %s\n", old, new);
 
     if (!nochanges) {
-        r = rename(old, new);
+        r = cyrus_rename(old, new);
         if (r && errno == ENOENT) {
             cyrus_mkdir(new, 0755);
-            r = rename(old, new);
+            r = cyrus_rename(old, new);
         }
 
         if (r) fprintf(stderr, "\tFailed to rename %s\t -> %s: %m\n", old, new);

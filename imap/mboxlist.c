@@ -5718,7 +5718,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     mboxlist_close();
 
     /* rename new db file */
-    if (!r) r = rename(newfname, fname);
+    if (!r) r = cyrus_rename(newfname, fname);
 
     if (!r && upgraded) *upgraded = 1;
 
@@ -5931,7 +5931,7 @@ static int mboxlist_upgrade_subs_work(const char *userid,
 
     if (!db_r) {
         /* rename new db file */
-        if (rename(newsubsfname, subsfname) < 0) {
+        if (cyrus_rename(newsubsfname, subsfname) < 0) {
             syslog(LOG_ERR, "DBERROR: renaming %s: %m", newsubsfname);
             fatal("can't rename subscriptions file", EX_TEMPFAIL);
         }

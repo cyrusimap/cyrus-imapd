@@ -148,6 +148,8 @@ static struct mailbox *open_mailboxes = NULL;
 #define zeromailbox(m) do { memset(&m, 0, sizeof(struct mailbox)); \
                             (m).index_fd = -1; \
                             (m).header_fd = -1; \
+                            (m).spool_dirfd = -1; \
+                            (m).archive_dirfd = -1; \
 } while (0)
 
 /* for repack */
@@ -331,7 +333,7 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
     const char *fname = mailbox_meta_fname(mailbox, metafile);
     const char *newfname = mailbox_meta_newfname(mailbox, metafile);
 
-    if (rename(newfname, fname))
+    if (cyrus_rename(newfname, fname))
         return IMAP_IOERROR;
 
     return 0;
@@ -2835,6 +2837,27 @@ static int mailbox_commit_header(struct mailbox *mailbox)
     return 0;
 }
 
+static int mailbox_commit_dirhandles(struct mailbox *mailbox)
+{
+    if (mailbox->archive_dirfd >= 0) {
+        int r = fsync(mailbox->archive_dirfd);
+        if (r) return r;
+        r = close(mailbox->archive_dirfd);
+        if (r) return r;
+        mailbox->archive_dirfd = -1;
+    }
+
+    if (mailbox->spool_dirfd >= 0) {
+        int r = fsync(mailbox->spool_dirfd);
+        if (r) return r;
+        r = close(mailbox->spool_dirfd);
+        if (r) return r;
+        mailbox->spool_dirfd = -1;
+    }
+
+    return 0;
+}
+
 static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 {
     bit32 crc;
@@ -3099,6 +3122,9 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     if (r) return r;
 
     r = mailbox_commit_header(mailbox);
+    if (r) return r;
+
+    r = mailbox_commit_dirhandles(mailbox);
     if (r) return r;
 
     r = _commit_changes(mailbox);
@@ -5483,8 +5509,10 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     int dirtycache = 0;
     const message_t *msg;
     struct index_record copyrecord;
-    const char *srcname;
-    const char *destname;
+    const char *srcname = NULL;
+    int *srcdirfdp = NULL;
+    const char *destname = NULL;
+    int *destdirfdp = NULL;
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
@@ -5510,7 +5538,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             copyrecord = *record;
             srcname = mailbox_spool_fname(mailbox, copyrecord.uid);
+            srcdirfdp = &mailbox->spool_dirfd;
             destname = mailbox_archive_fname(mailbox, copyrecord.uid);
+            destdirfdp = &mailbox->archive_dirfd;
 
             /* load cache before changing the flags */
             r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -5545,7 +5575,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             copyrecord = *record;
             destname = mailbox_spool_fname(mailbox, copyrecord.uid);
+            destdirfdp = &mailbox->spool_dirfd;
             srcname = mailbox_archive_fname(mailbox, copyrecord.uid);
+            srcdirfdp = &mailbox->archive_dirfd;
 
             /* load cache before changing the flags */
             r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -5580,7 +5612,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         if (!object_storage_enabled){
             /* got a file to copy! */
             if (strcmp(srcname, destname)) {
-                r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR|COPYFILE_KEEPTIME);
+                r = cyrus_copyfile_fdptr(srcname, destname, COPYFILE_MKDIR|COPYFILE_KEEPTIME,
+                                         srcdirfdp, destdirfdp);
                 if (r) {
                     xsyslog(LOG_ERR, "IOERROR: copyfile failed",
                                      "mailbox=<%s> record=<%u> "
@@ -6823,14 +6856,15 @@ EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr)
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-EXPORTED int mailbox_copyfile(const char *from, const char *to, int nolink)
+EXPORTED int mailbox_copyfile_fdptr(const char *from, const char *to,
+                                    int nolink, int *dest_dirfdp)
 {
     int flags = COPYFILE_MKDIR|COPYFILE_KEEPTIME;
     if (nolink) flags |= COPYFILE_NOLINK;
 
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
 
-    if (cyrus_copyfile(from, to, flags))
+    if (cyrus_copyfile_fdptr(from, to, flags, NULL, dest_dirfdp))
         return IMAP_IOERROR;
 
     return 0;
@@ -7617,7 +7651,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
         oldfname = xstrdup(fname);
         newfname = xstrdup(mailbox_record_fname(mailbox, &record));
-        r = rename(oldfname, newfname);
+        r = cyrus_rename(oldfname, newfname);
         free(oldfname);
         free(newfname);
         if (r) {
