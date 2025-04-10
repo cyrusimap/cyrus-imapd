@@ -3793,7 +3793,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         r = caldav_delete(caldavdb, cdata->dav.rowid);
     }
     else if (cdata->dav.imap_uid == new->uid) {
-        if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+        if ((new->internal_flags & FLAG_INTERNAL_EXPUNGED) || (new->system_flags & FLAG_DRAFT)) {
             /* remove associated alarms */
             caldav_alarm_delete_record(mailbox_name(mailbox), cdata->dav.imap_uid);
         }
@@ -3834,12 +3834,12 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->comp_flags.tzbyref = tzbyref;
         cdata->comp_flags.shared = shared;
 
-        /* add new ones unless this record is expunged */
+        /* add new ones unless this record is expunged or a draft */
         /* we need to skip silent records (replication)
          * because the lastalarm annotation won't be set yet -
          * instead, we have an explicit sync from the annotation
          * which is done after the annotations are written in sync_support.c */
-        if (cdata->dav.alive && !new->silentupdate) {
+        if (cdata->dav.alive && !(new->system_flags & FLAG_DRAFT) && !new->silentupdate) {
             r = caldav_alarm_add_record(mailbox, new, ical);
             if (r) goto alarmdone;
         }
