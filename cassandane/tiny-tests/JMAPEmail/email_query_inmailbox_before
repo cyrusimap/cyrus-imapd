@@ -1,0 +1,163 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_inmailbox_before
+    :min_version_3_1 :needs_component_sieve
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $account = undef;
+    my $store = $self->{store};
+    my $mboxprefix = "INBOX";
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create mailboxes";
+    $talk->create("$mboxprefix.A") || die;
+    $talk->create("$mboxprefix.B") || die;
+    $talk->create("$mboxprefix.C") || die;
+
+    $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxa = $m{"A"}->{id};
+    my $mboxb = $m{"B"}->{id};
+    my $mboxc = $m{"C"}->{id};
+    $self->assert_not_null($mboxa);
+    $self->assert_not_null($mboxb);
+    $self->assert_not_null($mboxc);
+
+    xlog $self, "create emails";
+    my %params;
+    $store->set_folder("$mboxprefix.A");
+    my $dtfoo = DateTime->new(
+        year       => 2016,
+        month      => 11,
+        day        => 1,
+        hour       => 7,
+        time_zone  => 'Etc/UTC',
+    );
+    my $bodyfoo = "A rather short email";
+    %params = (
+        date => $dtfoo,
+        body => $bodyfoo,
+        store => $store,
+    );
+    $res = $self->make_message("foo", %params) || die;
+
+    $store->set_folder("$mboxprefix.B");
+    my $dtbar = DateTime->new(
+        year       => 2016,
+        month      => 3,
+        day        => 1,
+        hour       => 19,
+        time_zone  => 'Etc/UTC',
+    );
+    my $bodybar = ""
+    . "In the context of electronic mail, emails are viewed as having an\r\n"
+    . "envelope and contents.  The envelope contains whatever information is\r\n"
+    . "needed to accomplish transmission and delivery.  (See [RFC5321] for a\r\n"
+    . "discussion of the envelope.)  The contents comprise the object to be\r\n"
+    . "delivered to the recipient.  This specification applies only to the\r\n"
+    . "format and some of the semantics of email contents.  It contains no\r\n"
+    . "specification of the information in the envelope.i\r\n"
+    . "\r\n"
+    . "However, some email systems may use information from the contents\r\n"
+    . "to create the envelope.  It is intended that this specification\r\n"
+    . "facilitate the acquisition of such information by programs.\r\n"
+    . "\r\n"
+    . "This specification is intended as a definition of what email\r\n"
+    . "content format is to be passed between systems.  Though some email\r\n"
+    . "systems locally store emails in this format (which eliminates the\r\n"
+    . "need for translation between formats) and others use formats that\r\n"
+    . "differ from the one specified in this specification, local storage is\r\n"
+    . "outside of the scope of this specification.\r\n";
+
+    %params = (
+        date => $dtbar,
+        body => $bodybar,
+        extra_headers => [
+            ['x-tra', "baz"],
+        ],
+        store => $store,
+    );
+    $self->make_message("bar", %params) || die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "fetch emails without filter";
+    $res = $jmap->CallMethods([
+        ['Email/query', { accountId => $account }, 'R1'],
+        ['Email/get', {
+            accountId => $account,
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(2, scalar @{$res->[1][1]->{list}});
+
+    %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $foo = $m{"foo"}->{id};
+    my $bar = $m{"bar"}->{id};
+    $self->assert_not_null($foo);
+    $self->assert_not_null($bar);
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    xlog $self, "filter mailbox A with just mailbox";
+    $res = $jmap->CallMethods([['Email/query', {
+                    accountId => $account,
+                    filter => {
+                        inMailbox => $mboxa,
+                    },
+                }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isImapFolderSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{neverMatches});
+
+    xlog $self, "filter mailbox A with a date range before";
+    $res = $jmap->CallMethods([['Email/query', {
+                    accountId => $account,
+                    filter => {
+                        inMailbox => $mboxa,
+                        before => '2020-01-01T00:00:00Z',
+                    },
+                }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isImapFolderSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{neverMatches});
+
+    xlog $self, "filter mailbox A with a date range after";
+    $res = $jmap->CallMethods([['Email/query', {
+                    accountId => $account,
+                    filter => {
+                        inMailbox => $mboxa,
+                        after => '2020-01-01T00:00:00Z',
+                    },
+                }, "R1"]], $using);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isImapFolderSearch});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{neverMatches});
+
+    xlog $self, "filter invalid mailbox never matches";
+    $res = $jmap->CallMethods([['Email/query', {
+                    accountId => $account,
+                    filter => {
+                        inMailbox => $mboxc,
+                    },
+                }, "R1"]], $using);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isImapFolderSearch});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{neverMatches});
+}

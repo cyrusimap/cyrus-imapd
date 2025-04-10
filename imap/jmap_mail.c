@@ -286,6 +286,8 @@ static void emailquery_handler(enum jmap_handler_event event, jmap_req_t *req, v
 
 static int emailquery_cache_max_age = 0;
 
+static ptrarray_t empty_ptrarray = PTRARRAY_INITIALIZER;
+
 HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
     jmap_add_methods(jmap_mail_methods_standard, settings);
@@ -2754,6 +2756,7 @@ struct emailsearch {
     int want_partids;
     int ignore_timer;
     int is_mutable;
+    int never_matches;
     search_expr_t *expr_dnf;
     search_expr_t *expr_orig;
     struct sortcrit *sort;
@@ -3068,6 +3071,12 @@ static int emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *search
             &jmap_namespace, req->accountid, req->authstate, 0);
     search->args->root = search_expr_duplicate(search->expr_dnf);
 
+    /* if always false, we don't need to search */
+    if (search_expr_always_same(search->args->root) == -1) {
+        search->never_matches = 1;
+        return 0;
+    }
+
     /* Build index state */
     search->init.userid = req->accountid;
     search->init.authstate = req->authstate;
@@ -3155,6 +3164,7 @@ struct emailquery_result {
     int is_mutable;
     int is_guidsearch;
     int is_imapfoldersearch;
+    int never_matches;
     size_t total_ceiling;
 
     void(*ensure)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
@@ -4398,6 +4408,7 @@ static int emailquery_uidsearch(jmap_req_t *req,
         }
         return r;
     }
+    if (search->never_matches) return 0;
     if (!search->query->merged_msgdata.count) return 0;
 
     struct emailquery_uidsearch_result_rock *rrock =
@@ -4474,6 +4485,7 @@ static int emailquery_search(jmap_req_t *req,
     qr->is_mutable = emailsearch_is_mutable(&search);
     qr->is_imapfoldersearch = search.is_imapfolder;
     qr->is_guidsearch = is_guidsearch;
+    qr->never_matches = search.never_matches;
 
     /* set search cost info */
     if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
@@ -4893,6 +4905,8 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
         json_object_set_new(req->perf_details, "isCached", json_boolean(is_cached));
         json_object_set_new(req->perf_details, "isGuidSearch",
                 json_boolean(emailquery_cache.qr.is_guidsearch));
+        json_object_set_new(req->perf_details, "neverMatches",
+                json_boolean(emailquery_cache.qr.never_matches));
     }
     res = jmap_query_reply(&q->super);
     if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
@@ -5080,7 +5094,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     if (r) goto done;
 
     /* Prepare result loop */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
@@ -5295,7 +5309,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     if (r) goto done;
 
     /* Prepare result loop */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
@@ -5490,7 +5504,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     if (r) goto done;
 
     /* Process results */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_EMAILID_SIZE];
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
@@ -5622,7 +5636,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     if (r) goto done;
 
     /* Process results */
-    const ptrarray_t *msgdata = &search.query->merged_msgdata;
+    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
     int i;
