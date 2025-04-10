@@ -7289,7 +7289,16 @@ localcreate:
     }
 
     /* Close newly created mailbox before writing annotations */
-    mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (cstate && cstate->version < 2) {
+        mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        buf_putc(&buf, 'P');
+        MODSEQ_TO_JMAPID(&buf, mailbox_createdmodseq(mailbox));
+        mailboxid = buf_release(&buf);
+    }
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -9668,7 +9677,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
     int r;
     struct conversations_state *state = NULL;
 
-    if (!(statusitems & STATUS_CONVITEMS)) goto nonconv;
+    if (!(statusitems & (STATUS_CONVITEMS | STATUS_MAILBOXID))) goto nonconv;
     statusitems &= ~STATUS_CONVITEMS; /* strip them for the regular lookup */
 
     /* use the existing state if possible */
@@ -9687,6 +9696,16 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
             goto nonconv;
         }
         global_conversations = state;
+    }
+
+    if (!state || state->version < 2) {
+        sd->mailboxid = mbentry->uniqueid;
+    }
+    else {
+        static struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "P");
+        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
+        sd->mailboxid = buf_cstring(&buf);
     }
 
     r = conversation_getstatus(state,
