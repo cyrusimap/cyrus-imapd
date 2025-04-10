@@ -1161,6 +1161,13 @@ EXPORTED modseq_t mailbox_foldermodseq(const struct mailbox *mailbox)
     return mailbox->mbentry->foldermodseq;
 }
 
+EXPORTED modseq_t mailbox_createdmodseq(const struct mailbox *mailbox)
+{
+    mbentry_t *mbentry = mailbox->mbentry;
+
+    return mbentry->createdmodseq ? mbentry->createdmodseq : mailbox->i.createdmodseq;
+}
+
 EXPORTED const char *mailbox_quotaroot(const struct mailbox *mailbox)
 {
     return mailbox->h.quotaroot;

@@ -620,6 +620,7 @@ extern const char *mailbox_acl(const struct mailbox *mailbox);
 extern const char *mailbox_quotaroot(const struct mailbox *mailbox);
 extern uint32_t mailbox_mbtype(const struct mailbox *mailbox);
 extern modseq_t mailbox_foldermodseq(const struct mailbox *mailbox);
+extern modseq_t mailbox_createdmodseq(const struct mailbox *mailbox);
 extern uint32_t mailbox_uidvalidity(const struct mailbox *mailbox);
 
 /* caller must free - tab separated lists of userids */

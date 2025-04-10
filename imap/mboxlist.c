@@ -92,6 +92,7 @@
 #define KEY_TYPE_NAME 'N'
 #define KEY_TYPE_ID   'I'
 #define KEY_TYPE_ACL  'A'
+#define KEY_TYPE_JID  'J'
 
 #define DB_DOMAINSEP_STR    "\x1D"  /* group separator (GS) */
 #define DB_DOMAINSEP_CHAR   DB_DOMAINSEP_STR[0]
@@ -431,6 +432,26 @@ static void mboxlist_id_to_key(const char *id, struct buf *key)
     buf_reset(key);
     buf_putc(key, KEY_TYPE_ID);
     buf_appendcstr(key, id);
+}
+
+static void mboxlist_jmapid_to_key(const char *userid,
+                                   const char *id, struct buf *key)
+{
+    buf_reset(key);
+    buf_putc(key, KEY_TYPE_JID);
+    buf_appendcstr(key, userid ? userid : "");
+    buf_putc(key, '.');
+    buf_appendcstr(key, id);
+}
+
+static void mboxlist_cmodseq_to_key(const char *userid,
+                                    modseq_t createdmodseq, struct buf *key)
+{
+    buf_reset(key);
+    buf_putc(key, KEY_TYPE_JID);
+    buf_appendcstr(key, userid ? userid : "");
+    buf_putc(key, '.');
+    MODSEQ_TO_JMAPID(key, createdmodseq);
 }
 
 /*
@@ -979,6 +1000,87 @@ EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid,
     return 0;
 }
 
+/*
+ * read a single _J_mapid record from the mailboxes.db and return a pointer to it
+ */
+static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
+                                const char **dataptr, size_t *datalenptr,
+                                struct txn **tid, int wrlock)
+{
+    struct buf key = BUF_INITIALIZER;
+    int r;
+
+    if (!jmapid)
+        return IMAP_MAILBOX_NONEXISTENT;
+
+    mboxlist_jmapid_to_key(inboxid, jmapid, &key);
+
+    if (wrlock) {
+        r = cyrusdb_fetchlock(mbdb, buf_base(&key), buf_len(&key),
+                              dataptr, datalenptr, tid);
+    } else {
+        r = cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key),
+                          dataptr, datalenptr, tid);
+    }
+
+    switch (r) {
+    case CYRUSDB_OK:
+        /* no entry required, just checking if it exists */
+        r = 0;
+        break;
+
+    case CYRUSDB_AGAIN:
+        r = IMAP_AGAIN;
+        break;
+
+    case CYRUSDB_NOTFOUND:
+        r = IMAP_MAILBOX_NONEXISTENT;
+        break;
+
+    default:
+        syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
+               jmapid, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        break;
+    }
+
+    buf_free(&key);
+    return r;
+}
+
+/*
+ * Lookup 'uniqueid' in the mailbox list, ignoring reserved records
+ */
+EXPORTED int mboxlist_lookup_by_jmapid(const char *inboxid, const char *jmapid,
+                                       mbentry_t **entryptr, struct txn **tid)
+{
+    mbentry_t *entry = NULL;
+    const char *data;
+    size_t datalen;
+    int r;
+
+    init_internal();
+
+    r = mboxlist_read_jmapid(inboxid, jmapid, &data, &datalen, tid, 0);
+    if (r) return r;
+
+    r = mboxlist_parse_entry(&entry, NULL, 0, data, datalen);
+    if (r) return r;
+
+    /* Ignore "reserved" entries, like they aren't there */
+    if (entry->mbtype & MBTYPE_RESERVE) {
+        mboxlist_entry_free(&entry);
+        return IMAP_MAILBOX_RESERVED;
+    }
+
+    if (entryptr) {
+        *entryptr = entry;
+    }
+    else mboxlist_entry_free(&entry);
+
+    return 0;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
@@ -1213,6 +1315,7 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
     int r = 0;
     struct txn *mytid = NULL;
     char *dbname = mbname_dbname(mbname);
+    const char *userid = mbname_userid(mbname);
 
     /* make sure the name is locked first - NOTE, this doesn't guarantee ordering
      * on the I key since we can't tell to lock that (and may be accessing two) so
@@ -1270,8 +1373,18 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
         mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                           buf_cstring(&mboxent), buf_len(&mboxent), txn);
+
+        if (!r && mbentry->createdmodseq) {
+            /* Create J record -- need to add mailbox name to value */
+            dlist_setatom(dl, "N", dbname);
+            buf_reset(&mboxent);
+            dlist_printbuf(dl, 0, &mboxent);
+            mboxlist_cmodseq_to_key(userid, mbentry->createdmodseq, &key);
+            r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
+                              buf_cstring(&mboxent), buf_len(&mboxent), txn);
+        }
+
         dlist_free(&dl);
-        buf_free(&mboxent);
         if (r) goto done;
 
         /* If there's an uniqueid, update the I key too */
@@ -1306,15 +1419,17 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
 
             /* And finally write the new entry */
             dl = mboxlist_entry_dlist(dbname, newi, /*for_ikey*/1);
+            buf_reset(&mboxent);
             dlist_printbuf(dl, 0, &mboxent);
             mboxlist_id_to_key(mbentry->uniqueid, &key);
             r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                             buf_cstring(&mboxent), buf_len(&mboxent), txn);
             dlist_free(&dl);
-            buf_free(&mboxent);
             mboxlist_entry_free(&newi);
             if (r) goto done;
         }
+
+        buf_free(&mboxent);
 
         if (config_auditlog && (!old || strcmpsafe(old->acl, mbentry->acl))) {
             /* XXX is there a difference between "" and NULL? */
@@ -1333,6 +1448,13 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
         mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
         if (r) goto done;
+
+        /* Delete the existing J record value */
+        if (old->createdmodseq) {
+            mboxlist_cmodseq_to_key(userid, old->createdmodseq, &key);
+            r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+            if (r) goto done;
+        }
 
         if (old->uniqueid) {
             /* Get the existing I key if any */

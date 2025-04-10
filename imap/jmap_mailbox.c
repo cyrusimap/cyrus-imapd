@@ -567,7 +567,10 @@ static json_t *_mbox_get(jmap_req_t *req,
     /* Build JMAP mailbox response. */
     obj = json_object();
 
-    json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
+    json_object_set_new(obj, "id", json_string(mboxid));
+
     if (jmap_wantprop(props, "name")) {
         char *name = _mbox_get_name(req->accountid, mbname);
         if (!name) goto done;
@@ -576,9 +579,12 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "parentId")) {
-        json_object_set_new(obj, "parentId",
-                (is_inbox || parent_is_inbox || !parent) ?
-                json_null() : json_string(parent->uniqueid));
+        if (is_inbox || parent_is_inbox || !parent)
+            json_object_set_new(obj, "parentId", json_null());
+        else {
+            jmap_set_mailboxid(req->cstate->version, parent, mboxid);
+            json_object_set_new(obj, "parentId", json_string(mboxid));
+        }
     }
 
     if (jmap_wantprop(props, "myRights")) {
@@ -731,12 +737,22 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     struct jmap_mailbox_get_cb_rock *rock = _rock;
     jmap_req_t *req = rock->req;
     json_t *list = (json_t *) rock->get->list, *obj;
+    const char *id = NULL;
 
     if (!is_jmap_mailbox(rock->req, mbentry, 0)) return 0;
 
     /* Do we need to process this mailbox? */
-    if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
-        return 0;
+    if (rock->want) {
+        static char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+        jmap_set_mailboxid(rock->req->cstate->version, mbentry, mboxid);
+        if (hash_lookup(mboxid, rock->want))
+            id = mboxid;
+        else if (rock->req->cstate->version >= 2 && // check for legacy id
+                 hash_lookup(mbentry->uniqueid, rock->want))
+            id = mbentry->uniqueid;
+        else
+            return 0;
+    }
 
     /* Check share_type for this mailbox */
     enum shared_mbox_type share_type =
@@ -754,7 +770,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
 
     /* Move this mailbox of the lookup list */
     if (rock->want) {
-        hash_del(mbentry->uniqueid, rock->want);
+        hash_del(id, rock->want);
         // are we done looking?
         if (!hash_numrecords(rock->want))
             return IMAP_OK_COMPLETED;
@@ -1005,6 +1021,7 @@ typedef struct {
     int include_tombstones;
     int include_hidden;
 
+    int cstate_version;  // to generate proper MAILBOXIDs
     int need_name;
     int need_sort_order;
     int need_role;
@@ -1014,7 +1031,7 @@ typedef struct {
 } mboxquery_t;
 
 typedef struct {
-    char *id;
+    char id[JMAP_MAX_MAILBOXID_SIZE];
     mbname_t *mbname;
     char *mboxname;
     char *jmapname;
@@ -1051,7 +1068,6 @@ static void _mboxquery_record_fini(mboxquery_record_t *rec)
 {
     if (!rec) return;
 
-    free(rec->id);
     mbname_free(&rec->mbname);
     free(rec->mboxname);
     free(rec->parent_id);
@@ -1193,6 +1209,7 @@ static mboxquery_t *_mboxquery_new(jmap_req_t *req, json_t *filter, json_t *sort
     mboxquery_t *q = xzmalloc(sizeof(mboxquery_t));
     q->req = req;
     q->shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
+    q->cstate_version = req->cstate->version;
 
     /* Prepare filter */
     q->filter = _mboxquery_build_filter(q, filter);
@@ -1264,13 +1281,14 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
             goto done;
         }
         if (!r) {
-            rec->parent_id = xstrdup(mbparent->uniqueid);
+            rec->parent_id = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
+            jmap_set_mailboxid(q->cstate_version, mbparent, rec->parent_id);
         }
         mboxlist_entry_free(&mbparent);
         r = 0;
     }
 
-    rec->id = xstrdup(mbentry->uniqueid);
+    jmap_set_mailboxid(q->cstate_version, mbentry, rec->id);
     rec->mbname = mbname;
     mbname = NULL; // takes ownership
     rec->foldermodseq = mbentry->foldermodseq;
@@ -1637,13 +1655,17 @@ done:
 struct mboxquerychanges_rock {
     hash_table *removed;
     modseq_t sincemodseq;
+
+    int cstate_version;  // to generate proper MAILBOXIDs
 };
 
 static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct mboxquerychanges_rock *rock = vrock;
     if (mbentry->foldermodseq > rock->sincemodseq) {
-        hash_insert(mbentry->uniqueid, (void*)1, rock->removed);
+        char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+        jmap_set_mailboxid(rock->cstate_version, mbentry, mboxid);
+        hash_insert(mboxid, (void*)1, rock->removed);
     }
     return 0;
 }
@@ -1696,7 +1718,9 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
          * XXX the workaround is to report all mailboxes in removed,
          * until we have a sane way of tracking annotation changes */
 
-        struct mboxquerychanges_rock rock = { &removed, sincemodseq };
+        struct mboxquerychanges_rock rock = {
+            &removed, sincemodseq, req->cstate->version
+        };
         int r = mboxlist_usermboxtree(req->accountid, req->authstate,
                                       _mboxquerychanges_cb, &rock,
                                       MBOXTREE_TOMBSTONES|
@@ -2229,7 +2253,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     parent_id = args->is_toplevel ? mbinbox->uniqueid : parent_id;
 
     /* Check parent exists and has the proper ACL. */
-    const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
+    const mbentry_t *mbparent = jmap_mbentry_by_mboxid(req, parent_id);
     if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD) ||
                 mboxname_isnondeliverymailbox(mbparent->name, mbparent->mbtype)) {
         jmap_parser_invalid(&parser, "parentId");
@@ -2344,8 +2368,10 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Lookup and return the new mailbox id and other server-set properties */
     r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) goto done;
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
     *mbox = json_pack("{s:s s:o s:i s:i s:i s:i}",
-                      "id", mbentry->uniqueid,
+                      "id", mboxid,
                       "myRights", _mbox_get_myrights(req, mbentry),
                       "totalEmails", 0, "unreadEmails", 0,
                       "totalThreads", 0, "unreadThreads", 0);
@@ -2477,7 +2503,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Lookup current mailbox entry */
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, args->mbox_id);
+    mbentry = jmap_mbentry_by_mboxid_copy(req, args->mbox_id);
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP) ||
             mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
         mboxlist_entry_free(&mbentry);
@@ -2493,7 +2519,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     char *oldparentname = NULL;
     int was_toplevel = 0;
     int is_inbox = 0;
-    if (strcmp(args->mbox_id, mbinbox->uniqueid)) {
+    if (strcmp(mbentry->uniqueid, mbinbox->uniqueid)) {
         oldmboxname = xstrdup(mbentry->name);
         r = _findparent(oldmboxname, &mbparent);
         if (r) {
@@ -2555,7 +2581,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         /* Compare old parent with new parent. */
         char *newparentname = NULL;
 
-        mbentry_t *pmbentry = jmap_mbentry_by_uniqueid_copy(req, parent_id);
+        mbentry_t *pmbentry = jmap_mbentry_by_mboxid_copy(req, parent_id);
         if (pmbentry && jmap_hasrights_mbentry(req, pmbentry, JACL_LOOKUP)) {
             newparentname = xstrdup(pmbentry->name);
         }
@@ -2571,7 +2597,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         /* Reject cycles in mailbox tree. */
         char *pname = xstrdup(newparentname);
         while (_findparent(pname, &pmbentry) == 0) {
-            if (!strcmp(args->mbox_id, pmbentry->uniqueid)) {
+            if (!strcmp(mbentry->uniqueid, pmbentry->uniqueid)) {
                 jmap_parser_invalid(&parser, "parentId");
                 free(pname);
                 mboxlist_entry_free(&pmbentry);
@@ -2819,7 +2845,7 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
 
     /* Open mailboxes */
     const mbentry_t *dst_mbentry =
-        jmap_mbentry_by_uniqueid(req, set->on_destroy_move_to_mailboxid);
+        jmap_mbentry_by_mboxid(req, set->on_destroy_move_to_mailboxid);
     if (!dst_mbentry) {
         syslog(LOG_ERR, "%s: can't find mailbox id %s", __func__,
                         set->on_destroy_move_to_mailboxid);
@@ -2916,20 +2942,20 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
     int is_intermediate = 0;
 
+    /* Lookup mailbox by id. */
+    mbentry = jmap_mbentry_by_mboxid_copy(req, mboxid);
+    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
+        result->err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
     free(inboxname);
 
     /* Do not allow to remove INBOX. */
-    if (!strcmpsafe(mboxid, mbinbox->uniqueid)) {
+    if (!strcmpsafe(mbentry->uniqueid, mbinbox->uniqueid)) {
         result->err = json_pack("{s:s}", "type", "forbidden");
-        goto done;
-    }
-
-    /* Lookup mailbox by id. */
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, mboxid);
-    if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
-        result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
 
@@ -2992,7 +3018,8 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             CONV_FOLDER_KEY_MBE(req->cstate, mbentry), &convstatus);
     if (r) {
         xsyslog(LOG_WARNING, "could not read msgcount, will default to 0",
-                "mboxid=<%s> err=<%s>", mbentry->uniqueid, error_message(r));
+                "mboxid=<%s> uniqueid=<%s> err=<%s>",
+                mboxid, mbentry->uniqueid, error_message(r));
         r = 0;
     }
     else msgcount = convstatus.emailexists;
@@ -3031,8 +3058,9 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
         goto done;
     }
 
-    xsyslog(LOG_INFO, "Destroyed mailbox", "mboxid=<%s> msgcount=<%zu>",
-            mbentry->uniqueid, msgcount);
+    xsyslog(LOG_INFO, "Destroyed mailbox",
+            "mboxid=<%s> uniqueid=<%s> msgcount=<%zu>",
+            mboxid, mbentry->uniqueid, msgcount);
 
     /* Remove subscription */
     int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
@@ -3186,7 +3214,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         construct_hash_table(&parent_id_by_id, strarray_size(set->destroy) + 1, 0);
         for (i = 0; i < strarray_size(set->destroy); i++) {
             const char *mbox_id = strarray_nth(set->destroy, i);
-            const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
+            const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mbox_id);
             if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 json_object_set_new(set->super.not_destroyed, mbox_id,
                         json_pack("{s:s}", "type", "notFound"));
@@ -3194,7 +3222,9 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
             }
             mbentry_t *parent = NULL;
             if (_findparent(mbentry->name, &parent) == 0) {
-                hash_insert(mbox_id, xstrdup(parent->uniqueid), &parent_id_by_id);
+                char *parentid = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
+                jmap_set_mailboxid(req->cstate->version, parent, parentid);
+                hash_insert(mbox_id, parentid, &parent_id_by_id);
             }
             else {
                 strarray_append(ops->del, mbox_id);
@@ -3369,7 +3399,9 @@ static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
     struct mboxset_state *state = rock;
 
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
-        hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
+        char *mboxid = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
+        jmap_set_mailboxid(state->req->cstate->version, mbentry, mboxid);
+        hash_insert(mbentry->name, mboxid, state->id_by_imapname);
     }
     return 0;
 }
@@ -3397,7 +3429,8 @@ static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *r
         break;
     default:
         assert(_findparent(imapname, &pmbentry) == 0);
-        entry->parent_id = xstrdup(pmbentry->uniqueid);
+        entry->parent_id = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
+        jmap_set_mailboxid(state->req->cstate->version, pmbentry, entry->parent_id);
         break;
     }
 
@@ -4133,7 +4166,7 @@ done:
 }
 
 struct _mbox_changes_data {
-    json_t *created;          /* maps mailbox ids to {id:foldermodseq} */
+    json_t *created;        /* maps mailbox ids to {id:foldermodseq} */
     json_t *updated;        /* maps mailbox ids to {id:foldermodseq} */
     json_t *destroyed;      /* maps mailbox ids to {id:foldermodseq} */
     modseq_t since_modseq;
@@ -4199,6 +4232,9 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         *(data->only_counts_changed) = 0;
     }
 
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(data->req->cstate->version, mbentry, mboxid);
+
     /* Is this a more recent update for an id that we have already seen?
      * (check all three) */
     json_t *old[3];
@@ -4207,16 +4243,16 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     old[2] = data->destroyed;
     int i;
     for (i = 0; i < 3; i++) {
-        json_t *val = json_object_get(old[i], mbentry->uniqueid);
+        json_t *val = json_object_get(old[i], mboxid);
         if (!val) continue;
         modseq = (modseq_t)json_integer_value(json_object_get(val, "modseq"));
         if (modseq < mbmodseq) {
             /* use new update */
-            json_object_del(old[i], mbentry->uniqueid);
+            json_object_del(old[i], mboxid);
         } else if (modseq == mbmodseq) {
             /* most likely a rename: report it in 'updated' */
             if (dest == data->updated) {
-                json_object_del(old[i], mbentry->uniqueid);
+                json_object_del(old[i], mboxid);
             }
             else if (i == 1) {
                 return 0;
@@ -4229,9 +4265,9 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 
     /* OK, report that update */
     if (dest)
-        json_object_set_new(dest, mbentry->uniqueid,
+        json_object_set_new(dest, mboxid,
                             json_pack("{s:s s:i}", "id",
-                                mbentry->uniqueid, "modseq", mbmodseq));
+                                mboxid, "modseq", mbmodseq));
 
     return 0;
 }

@@ -206,6 +206,14 @@ extern void jmap_set_emailid(int cstate_version,
                              uint64_t nanosec, struct timespec *ts,
                              char *emailid);
 
+#define JMAP_MAILBOXID_PREFIX 'P'
+#define JMAP_MAILBOXID_SIZE (CONV_JMAPID_SIZE + 2)  // +2 for prefix and NUL
+
+#define JMAP_MAX_MAILBOXID_SIZE MAX(JMAP_MAILBOXID_SIZE, UUID_STR_LEN)
+
+extern void jmap_set_mailboxid(int cstate_version,
+                               const mbentry_t *mbentry, char *mboxid);
+
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(conversation_id_t cid, char *buf);
 
