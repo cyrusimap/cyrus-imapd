@@ -1306,11 +1306,42 @@ EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
     buf[JMAP_BLOBID_SIZE-1] = '\0';
 }
 
-EXPORTED void jmap_set_emailid(const struct message_guid *guid, char *buf)
+EXPORTED void jmap_set_emailid(int cstate_version,
+                               const struct message_guid *guid,
+                               uint64_t nanosec, struct timespec *ts,
+                               char *emailid)
 {
-    buf[0] = 'M';
-    memcpy(buf+1, message_guid_encode(guid), JMAP_EMAILID_SIZE-2);
-    buf[JMAP_EMAILID_SIZE-1] = '\0';
+    // initialize a struct buf with char emailid[JMAP_MAX_EMAILID_SIZE]
+    struct buf buf = { emailid, 0, JMAP_MAX_EMAILID_SIZE, 0 };
+
+    if (cstate_version < 2) {
+        buf_putc(&buf, JMAP_LEGACY_EMAILID_PREFIX);
+        buf_appendmap(&buf,
+                      message_guid_encode(guid), JMAP_LEGACY_EMAILID_SIZE-2);
+    }
+    else {
+        buf_putc(&buf, JMAP_EMAILID_PREFIX);
+        NANOSEC_TO_JMAPID(&buf, ts ? TIMESPEC_TO_NANOSEC(ts) : nanosec);
+    }
+
+    buf_cstring(&buf);
+}
+
+EXPORTED void jmap_set_mailboxid(int cstate_version,
+                                 const mbentry_t *mbentry, char *mboxid)
+{
+    // initialize a struct buf with char mboxid[JMAP_MAX_MAILBOXID_SIZE]
+    struct buf buf = { mboxid, 0, JMAP_MAX_MAILBOXID_SIZE, 0 };
+
+    if (cstate_version < 2) {
+        buf_setcstr(&buf,  mbentry->uniqueid);
+    }
+    else {
+        buf_putc(&buf, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
+    }
+
+    buf_cstring(&buf);
 }
 
 EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
