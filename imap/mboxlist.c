@@ -1003,7 +1003,7 @@ EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid,
 /*
  * read a single _J_mapid record from the mailboxes.db and return a pointer to it
  */
-static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
+static int mboxlist_read_jmapid(const char *userid, const char *jmapid,
                                 const char **dataptr, size_t *datalenptr,
                                 struct txn **tid, int wrlock)
 {
@@ -1013,7 +1013,7 @@ static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
     if (!jmapid)
         return IMAP_MAILBOX_NONEXISTENT;
 
-    mboxlist_jmapid_to_key(inboxid, jmapid, &key);
+    mboxlist_jmapid_to_key(userid, jmapid, &key);
 
     if (wrlock) {
         r = cyrusdb_fetchlock(mbdb, buf_base(&key), buf_len(&key),
@@ -1048,10 +1048,39 @@ static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
     return r;
 }
 
+EXPORTED char *mboxlist_find_jmapid(const char *jmapid,
+                                    const char *userid,
+                                    const struct auth_state *auth_state __attribute__((unused)))
+{
+    int r;
+    const char *data;
+    size_t datalen;
+    mbentry_t *mbentry = NULL;
+    char *mbname = NULL;
+
+    init_internal();
+
+    r = mboxlist_read_jmapid(userid, jmapid, &data, &datalen, NULL, 0);
+    if (r) return NULL;
+
+    r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+    if (r) return NULL;
+
+    // only note the name down if it's not deleted
+    if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+        mbname = mbentry->name;
+        mbentry->name = NULL;
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return mbname;
+}
+
 /*
- * Lookup 'uniqueid' in the mailbox list, ignoring reserved records
+ * Lookup 'jmapid' in the mailbox list, ignoring reserved records
  */
-EXPORTED int mboxlist_lookup_by_jmapid(const char *inboxid, const char *jmapid,
+EXPORTED int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
                                        mbentry_t **entryptr, struct txn **tid)
 {
     mbentry_t *entry = NULL;
@@ -1061,7 +1090,7 @@ EXPORTED int mboxlist_lookup_by_jmapid(const char *inboxid, const char *jmapid,
 
     init_internal();
 
-    r = mboxlist_read_jmapid(inboxid, jmapid, &data, &datalen, tid, 0);
+    r = mboxlist_read_jmapid(userid, jmapid, &data, &datalen, tid, 0);
     if (r) return r;
 
     r = mboxlist_parse_entry(&entry, NULL, 0, data, datalen);
@@ -5612,12 +5641,16 @@ static char *mboxname_to_dbname(const char *intname)
     return res;
 }
 
+struct check_rec_rock {
+    int do_upgrade;
+    int need_jids;
+};
 
 static int _check_rec_cb(void *rock,
                          const char *key, size_t keylen,
                          const char *data, size_t datalen)
 {
-    int *do_upgrade = (int *) rock;
+    struct check_rec_rock *crock = (struct check_rec_rock *) rock;
     int r = CYRUSDB_OK;
 
     if (!keylen) return r;
@@ -5627,7 +5660,7 @@ static int _check_rec_cb(void *rock,
         /* Verify that we have a $RACL or $RUNQ record */
         if (keylen >= 6 &&
             (!strncmp(key, "$RACL", 5) || !strncmp(key, "$RUNQ", 5))) {
-            *do_upgrade = 1;
+            crock->do_upgrade = crock->need_jids = 1;
             r = CYRUSDB_DONE;
         }
         break;
@@ -5639,8 +5672,8 @@ static int _check_rec_cb(void *rock,
         mboxlist_racl_key(0, NULL, NULL, &aclkey);
         if (keylen >= buf_len(&aclkey) &&
             !strncmp(key, buf_cstring(&aclkey), buf_len(&aclkey))) {
-            *do_upgrade = 0;
-            r = CYRUSDB_DONE;
+            crock->do_upgrade = 0;
+            // continue checking for J records
         }
         break;
     }
@@ -5651,7 +5684,20 @@ static int _check_rec_cb(void *rock,
 
         r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
         if (!r) {
-            *do_upgrade = (mbentry->name == NULL);
+            crock->do_upgrade = (mbentry->name == NULL);
+            mboxlist_entry_free(&mbentry);
+            // continue checking for J records
+        }
+        break;
+    }
+
+    case KEY_TYPE_JID: {
+        /* Verify that we have a valid I record */
+        mbentry_t *mbentry = NULL;
+
+        r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+        if (!r) {
+            crock->do_upgrade = crock->need_jids = 0;
             mboxlist_entry_free(&mbentry);
             r = CYRUSDB_DONE;
         }
@@ -5664,7 +5710,7 @@ static int _check_rec_cb(void *rock,
 
         r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
         if (!r) {
-            *do_upgrade = 0;
+            crock->do_upgrade = 0;
             mboxlist_entry_free(&mbentry);
             r = CYRUSDB_DONE;
         }
@@ -5771,9 +5817,9 @@ static void _upgrade_cb(const char *key __attribute__((unused)),
     ptrarray_free(pa);
 }
 
-EXPORTED int mboxlist_upgrade(int *upgraded)
+EXPORTED int mboxlist_upgrade(int *upgraded, int *need_jids)
 {
-    int r, r2 = 0, do_upgrade = 1;
+    int r, r2 = 0;
     struct buf buf = BUF_INITIALIZER;
     struct db *old = NULL;
     struct txn *tid = NULL;
@@ -5781,16 +5827,19 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     struct upgrade_rock urock = { NULL, NULL, NULL, &tid, &ids, &r, 0 };
     char *fname = NULL;
     const char *newfname;
+    struct check_rec_rock crock = { 1/*do_upgrade*/, 1/*need_jids*/ };
 
     if (upgraded) *upgraded = 0;
 
     /* check if we need to upgrade */
     mboxlist_open(NULL);
-    r = cyrusdb_foreach(mbdb, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
+    r = cyrusdb_foreach(mbdb, "", 0, NULL, _check_rec_cb, &crock, NULL);
     mboxlist_close();
 
+    if (need_jids) *need_jids = crock.need_jids;
+
     if (r && r != CYRUSDB_DONE) return r;
-    else if (!do_upgrade) return 0;
+    else if (!crock.do_upgrade) return 0;
 
     /* create db file names */
     fname = mboxlist_fname();
