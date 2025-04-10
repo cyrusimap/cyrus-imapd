@@ -1327,6 +1327,23 @@ EXPORTED void jmap_set_emailid(int cstate_version,
     buf_cstring(&buf);
 }
 
+EXPORTED void jmap_set_mailboxid(int cstate_version,
+                                 const mbentry_t *mbentry, char *mboxid)
+{
+    // initialize a struct buf with char mboxid[JMAP_MAX_MAILBOXID_SIZE]
+    struct buf buf = { mboxid, 0, JMAP_MAX_MAILBOXID_SIZE, 0 };
+
+    if (cstate_version < 2) {
+        buf_setcstr(&buf,  mbentry->uniqueid);
+    }
+    else {
+        buf_putc(&buf, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
+    }
+
+    buf_cstring(&buf);
+}
+
 EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
 {
     buf[0] = 'T';
