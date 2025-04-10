@@ -2311,6 +2311,13 @@ EXPORTED int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
     return r;
 }
 
+EXPORTED void xapian_query_serialize(xapian_query_t *xq, struct buf *buf)
+{
+    if (!xq) return;
+    const Xapian::Query *query = (const Xapian::Query *)xq;
+    buf_appendcstr(buf, query->get_description().c_str());
+}
+
 /* ====================================================================== */
 
 struct xapian_snipgen
