@@ -4143,6 +4143,28 @@ static char *encode_addrheader(const char *header, size_t len, int force_quote,
         if (phrase_len) {
             /* display-name precedes address */
             const char *phrase = header + n;
+
+            /* if phrase and address is separated by ','
+             * then header isn't a valid address list */
+            if (memchr(phrase, ',', addr - phrase)) {
+                // check if comma is within a quoted-string
+                const char *qstart = phrase;
+                while (strchr(" \t", *qstart))
+                    qstart++;
+
+                const char *qend = phrase + phrase_len - 1;
+                while (strchr(" \t", *qend))
+                    qend--;
+
+                if (*qstart != '"' || *qend != '"'
+                    || memchr(qstart + 1, '"', qend - qstart - 1))
+                {
+                    // this isn't a quoted string
+                    buf_free(&buf);
+                    break;
+                }
+            }
+
             int need_encode = 0, need_bytes = phrase_len;
             const char *c;
 
@@ -4189,14 +4211,24 @@ static char *encode_addrheader(const char *header, size_t len, int force_quote,
 
     } while ((addr = find_addr(header + n , len - n, &addr_len)));
 
-    return buf_release(&buf);
+    if (n < len) {
+        // this isn't a valid address-list header
+        buf_free(&buf);
+    }
+
+    return buf_releasenull(&buf);
 }
 
-/* "Q" encode the header field body (per RFC 2047) of 'len' bytes
- * located at 'header'.
- * Returns a buffer which the caller must free.
- */
 EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int force_quote)
+{
+    if (!header) return NULL;
+
+    if (!len) len = strlen(header);
+
+    return qp_encode(header, len, 1, force_quote, NULL);
+}
+
+EXPORTED char *charset_encode_addrheader(const char *header, size_t len, int force_quote)
 {
     if (!header) return NULL;
 
@@ -4206,8 +4238,9 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int for
     const char *addr = find_addr(header, len, &addr_len);
 
     if (addr) {
-        /* "Q" encode as an address header */
-        return encode_addrheader(header, len, force_quote, addr, addr_len);
+        /* try to "Q" encode as an address header */
+        char *s = encode_addrheader(header, len, force_quote, addr, addr_len);
+        if (s) return s;
     }
     
     return qp_encode(header, len, 1, force_quote, NULL);
