@@ -177,9 +177,14 @@ static void long_list(struct stat *statp)
     pwd = getpwuid(statp->st_uid);
     grp = getgrgid(statp->st_gid);
 
-    if (now - statp->st_ctime > SECONDS_PER_YEAR) datefmt = "%b %d  %Y";
+    if (now - statp->st_ctime > SECONDS_PER_YEAR)
+        datefmt = "%b %d  %Y";
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string chosen above */
     strftime(datestr, 13, datefmt, localtime(&(statp->st_ctime)));
+#pragma GCC diagnostic pop
 
     /* XXX statp->st_size should use OFF_T_FMT not PRIi64, but our FMT
      * XXX macros don't allow setting flags
