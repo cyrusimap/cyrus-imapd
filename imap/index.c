@@ -3586,7 +3586,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     r = index_reload_record(state, msgno, &record);
     if (r) {
         prot_printf(state->out, "* OK ");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+        /* format string comes from imap_err.et */
         prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
+#pragma GCC diagnostic pop
         prot_printf(state->out, "\r\n");
         return 0;
     }
@@ -3598,7 +3602,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         fetchargs->bodysections) {
         if (mailbox_map_record(mailbox, &record, &buf)) {
             prot_printf(state->out, "* OK ");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* format string comes from imap_err.et */
             prot_printf(state->out, error_message(IMAP_NO_MSGGONE), msgno);
+#pragma GCC diagnostic pop
             prot_printf(state->out, "\r\n");
             return 0;
         }

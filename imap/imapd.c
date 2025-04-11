@@ -4680,12 +4680,22 @@ static void warn_about_quota(const char *quotaroot)
             pc_usage = (int)(((double) q.useds[res] * 100.0) /
                              (double) ((quota_t) q.limits[res] * quota_units[res]));
 
-            if (q.useds[res] > (quota_t) q.limits[res] * quota_units[res])
+            if (q.useds[res] > (quota_t) q.limits[res] * quota_units[res]) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+                /* format string from imap_err.et */
                 buf_printf(&msg, error_message(IMAP_NO_OVERQUOTA),
                            quota_names[res]);
-            else if (pc_usage > pc_threshold)
+#pragma GCC diagnostic pop
+            }
+            else if (pc_usage > pc_threshold) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+                /* format string from imap_err.et */
                 buf_printf(&msg, error_message(IMAP_NO_CLOSEQUOTA),
                            pc_usage, quota_names[res]);
+#pragma GCC diagnostic pop
+            }
         }
 
         if (msg.len)
