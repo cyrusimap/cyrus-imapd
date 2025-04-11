@@ -1728,7 +1728,11 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
     else fmt = "End date-time <= start date-time";
 
     assert(!buf_len(&txn->buf));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string chosen above */
     buf_printf(&txn->buf, fmt, param_name);
+#pragma GCC diagnostic pop
 
     root = json_pack("{s:s s:s s:i}", "title", buf_cstring(&txn->buf),
                      "type", error_message(tz_code),
