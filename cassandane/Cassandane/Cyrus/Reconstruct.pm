@@ -44,6 +44,7 @@ use Data::Dumper;
 use File::Copy;
 use IO::File;
 use JSON;
+use Cwd qw(abs_path);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -629,6 +630,80 @@ sub test_downgrade_upgrade
         $self->{store}->_select();
         $self->check_messages(\%msg);
     }
+}
+
+sub test_upgrade_v19_to_v20
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations :Replication
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('INBOX.foo');
+
+    # replicate and check initial state
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $data_file = abs_path("data/old-mailboxes/version19.tar.gz");
+    die "Old mailbox data does not exist: $data_file" if not -f $data_file;
+
+    xlog "installing version 19 mailboxes";
+    $self->{instance}->unpackfile($data_file, $self->{instance}->get_basedir());
+    $self->{instance}->unpackfile($data_file, $self->{replica}->get_basedir());
+
+    xlog "reconstructing indexes at v19 to get predictable senddate";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
+    $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
+
+    xlog $self, "Upgrade master to mailbox version 20";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
+
+    xlog $self, "Upgrade master to conv.db version 2";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-U', '-r');
+
+    # replicate new version to old version
+    $self->run_replication();
+
+    # check_replication() will fail here due to the internaldate.nsec annotation
+    # being present on the replica but NOT on the master
+
+    xlog $self, "Upgrade replica to mailbox version 20";
+    $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
+
+    xlog $self, "Upgrade replica to conv.db version 2";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-U', '-r');
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "Fetching EMAILIDs";
+    $talk = $self->{master_store}->get_client();
+    $talk->examine('INBOX');
+    my $res = $talk->fetch('1:*', '(UID EMAILID)');
+    my $id1 = $res->{1}{emailid}[0];
+    my $id2 = $res->{2}{emailid}[0];
+    my $id3 = $res->{3}{emailid}[0];
+    my $id4 = $res->{4}{emailid}[0];
+
+    $talk->examine('INBOX.foo');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+
+    # EMAILIDs on the replca should be identical to those on the master
+    # since they are the encoded nanoseconds since epoch
+    $talk = $self->{replica_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+    $self->assert_str_equals($id2, $res->{2}{emailid}[0]);
+    $self->assert_str_equals($id3, $res->{3}{emailid}[0]);
+    $self->assert_str_equals($id4, $res->{4}{emailid}[0]);
+
+    $talk->examine('INBOX.foo');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
 }
 
 1;
