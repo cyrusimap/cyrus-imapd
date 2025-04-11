@@ -4883,25 +4883,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         }
     }
 
-    int object_storage_enabled = 0 ;
-#if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
-#endif
-
     if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
-        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED))) {  // maybe there is no file in directory.
-            struct timespec settimes[] = {
-                { record->internaldate.tv_sec, record->internaldate.tv_nsec },
-                { record->internaldate.tv_sec, record->internaldate.tv_nsec }
-            };
-            const char *fname = mailbox_record_fname(mailbox, record);
-            r = utimensat(AT_FDCWD, fname, settimes, 0);
-            if (r == -1) {
-                syslog(LOG_ERR, "failed to set mtime on %s: %m", fname);
-                return IMAP_IOERROR;
-            }
-        }
+        r = mailbox_set_datafile_timestamps(mailbox, record);
+        if (r) return r;
 
         /* write the cache record before buffering the message, it
          * will set the cache_offset field. */
@@ -5401,10 +5386,36 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     return r;
 }
 
+static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
+{
+    int ret = 0;
+
+    if (rec->version == 4 && !rec->part &&
+        !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        mbentry_t *mbentry = NULL;
+
+        if (conv_guidrec_mbentry(rec, &mbentry)) return 0;
+
+        if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
+            // found a non-expunged duplicate email; use its internaldate
+            struct timespec *internaldate = (struct timespec *) rock;
+
+            TIMESPEC_FROM_NANOSEC(internaldate, rec->internaldate);
+            ret = CYRUSDB_DONE;
+        }
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    return ret;
+}
+
 /* need a mailbox exclusive lock, we're rewriting files */
 static int mailbox_index_repack(struct mailbox *mailbox, int version)
 {
     struct mailbox_repack *repack = NULL;
+    struct conversations_state *cstate = NULL;
+    uint32_t mbtype = mbtype_isa(mailbox_mbtype(mailbox));
     const message_t *msg;
     struct mailbox_iter *iter = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -5414,6 +5425,14 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 
     r = mailbox_repack_setup(mailbox, version, &repack);
     if (r) goto done;
+
+    if (mbtype == MBTYPE_EMAIL &&
+        mailbox->i.minor_version < 20 &&
+        repack->newmailbox.i.minor_version >= 20 &&
+        !(cstate = mailbox_get_cstate_full(mailbox, 1/*allow_deleted*/))) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
 
     iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
@@ -5556,6 +5575,51 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                 bit64 newval;
                 parsenum(p, &p, 0, &newval);
                 copyrecord.internaldate.tv_nsec = newval;
+            }
+            else {
+                // assign internaldate.nsec in a deterministic manner -
+                // use the first 29 bits of GUID
+                // (0x1FFFFFFF < 999999999 nanoseconds)
+                copyrecord.internaldate.tv_nsec =
+                    *((uint32_t *) record->guid.value) >> 3;
+
+                if (mbtype == MBTYPE_EMAIL) {
+                    // attempt to find an existing message with the same guid
+                    // and use its internaldate instead
+                    struct timespec existing_internaldate = { 0, UTIME_OMIT };
+                    char guid[2*MESSAGE_GUID_SIZE+1];
+
+                    strcpy(guid, message_guid_encode(&record->guid));
+
+                    // ignore errors, it's OK for this to fail
+                    conversations_guid_foreach(cstate, guid, find_dup_msg,
+                                               &existing_internaldate);
+
+                    // if we found a matching message, use its internaldate
+                    if (existing_internaldate.tv_nsec != UTIME_OMIT) {
+                        copyrecord.internaldate = existing_internaldate;
+                    }
+                    else {
+                        // make sure we don't have a JMAP ID (internaldate) clash
+                        conversations_adjust_internaldate(cstate, guid,
+                                                          &copyrecord.internaldate);
+                    }
+                }
+
+                // make the file timestamp correct
+                r = mailbox_set_datafile_timestamps(mailbox, &copyrecord);
+                if (r) goto done;
+
+                // update G & J records
+                r = mailbox_update_conversations(mailbox, record, &copyrecord);
+                if (r) goto done;
+
+                // add virtual annotation to old crc
+                buf_reset(&buf);
+                buf_printf(&buf, UINT64_FMT, copyrecord.internaldate.tv_nsec);
+                repack->crcs.annot ^=
+                    crc_annot(record->uid,
+                              IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
             }
             buf_reset(&buf);
             r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
@@ -8789,4 +8853,31 @@ EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *header_pat
     }
 
     return mbentry;
+}
+
+EXPORTED int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
+                                             struct index_record *record)
+{
+    int object_storage_enabled = 0;
+#if defined ENABLE_OBJECTSTORE
+    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
+#endif
+
+    if (object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)) {
+        // there is no file in directory
+        return 0;
+    }
+
+    const char *fname = mailbox_record_fname(mailbox, record);
+    struct timespec settimes[] = {
+        { record->internaldate.tv_sec, record->internaldate.tv_nsec },
+        { record->internaldate.tv_sec, record->internaldate.tv_nsec }
+    };
+
+    if (utimensat(AT_FDCWD, fname, settimes, 0) == -1) {
+        syslog(LOG_ERR, "failed to set mtime on %s: %m", fname);
+        return IMAP_IOERROR;
+    }
+
+    return 0;
 }
