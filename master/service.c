@@ -405,7 +405,6 @@ int main(int argc, char **argv, char **envp)
         if (debugger) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
-#pragma GCC diagnostic ignored "-Wformat-security"
             /* This is exactly the kind of usage that -Wformat is designed to
              * complain about (using user-supplied string as format argument),
              * but in this case the "user" is the server administrator, and
