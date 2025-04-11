@@ -171,8 +171,12 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
 
     case IMAP_PERMISSION_DENIED:
         if (LMTP_LONG_ERROR_MSGS) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* format string comes from lmtp_err.et */
             prot_printf(pout, error_message(LMTP_NOT_AUTHORIZED_LONG),
                         config_getstring(IMAPOPT_POSTMASTER));
+#pragma GCC diagnostic pop
         }
         code = LMTP_NOT_AUTHORIZED;
         break;
@@ -227,7 +231,11 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
         break;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string comes from lmtp_err.et */
     prot_printf(pout, error_message(code), text, session_id());
+#pragma GCC diagnostic pop
     prot_puts(pout, "\r\n");
 }
 
