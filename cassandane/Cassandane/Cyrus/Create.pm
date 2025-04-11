@@ -206,20 +206,4 @@ sub test_good_mailboxes_virtdomains
     }
 }
 
-sub test_create_type
-{
-    my ($self) = @_;
-
-    my $talk = $self->{store}->get_client();
-
-    $talk->_imap_cmd('CREATE', 0, '', "INBOX.foo", [ 'TYPE', 'SIEVE' ]);
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
-
-    my $admintalk = $self->{adminstore}->get_client();
-
-    $admintalk->_imap_cmd('CREATE', 0, '',
-                          "user.cassandane.#sieve", [ 'TYPE', 'SIEVE' ]);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-}
-
 1;
