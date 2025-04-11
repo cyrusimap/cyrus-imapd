@@ -214,6 +214,7 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
         }
 
         r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, accountid, httpd_authstate,
                                    0/*flags*/, NULL/*mailboxptr*/);
         if (r) {

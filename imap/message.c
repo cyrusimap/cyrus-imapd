@@ -3585,6 +3585,7 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
         mbentry.mbtype = MBTYPE_COLLECTION;
 
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
                                    0/*flags*/, mailboxptr);
     }

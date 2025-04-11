@@ -343,6 +343,7 @@ static int ensure_submission_collection(const char *accountid,
         int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
             | OPT_POP3_NEW_UIDL | OPT_IMAP_HAS_ALARMS;
         r = mboxlist_createmailbox(mbentry, options, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, accountid, httpd_authstate,
                                    0/*flags*/, NULL/*mailboxptr*/);
         if (r) {

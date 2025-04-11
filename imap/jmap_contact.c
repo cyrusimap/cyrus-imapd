@@ -5565,7 +5565,7 @@ static void setaddressbooks_create(struct jmap_req *req,
     mbentry.acl = acl;
     mbentry.mbtype = MBTYPE_ADDRESSBOOK;
     r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-            0/*isadmin*/, req->userid, req->authstate,
+            0/*minor_version*/, 0/*isadmin*/, req->userid, req->authstate,
             0/*flags*/, NULL/*mailboxptr*/);
     free(acl);
     if (r) {

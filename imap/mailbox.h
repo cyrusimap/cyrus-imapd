@@ -687,7 +687,7 @@ extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd)
 extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
                           const char *uniqueid, int options, unsigned uidvalidity,
                           modseq_t createdmodseq, modseq_t highestmodseq,
-                          struct mailbox **mailboxptr);
+                          int minor_version, struct mailbox **mailboxptr);
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
                               const char *newname, const char *newuniqueid);

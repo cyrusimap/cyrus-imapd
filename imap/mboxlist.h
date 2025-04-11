@@ -221,6 +221,7 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
  * for further manipulation */
 int mboxlist_createmailbox(const mbentry_t *mbentry,
                            unsigned mboxopts, modseq_t highestmodseq,
+                           int minor_version,
                            unsigned isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            unsigned flags, struct mailbox **mboxptr);

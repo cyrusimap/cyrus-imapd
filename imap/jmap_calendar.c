@@ -2019,7 +2019,7 @@ static void setcalendars_create(struct jmap_req *req,
     mymbentry.acl = acl;
     mymbentry.mbtype = MBTYPE_CALENDAR;
     r = mboxlist_createmailbox(&mymbentry, 0/*options*/, 0/*highestmodseq*/,
-            0/*isadmin*/, req->userid, req->authstate,
+            0/*minor_version*/, 0/*isadmin*/, req->userid, req->authstate,
             0/*flags*/, &mbox);
     free(acl);
     if (r) {

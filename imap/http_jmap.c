@@ -922,6 +922,7 @@ static int _create_upload_collection(const char *accountid,
 
         /* create the mailbox and keep it open for writing */
         r = mboxlist_createmailbox(mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, accountid, httpd_authstate,
                                    0/*flags*/, mailboxp);
         if (r) {

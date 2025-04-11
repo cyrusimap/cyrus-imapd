@@ -2340,6 +2340,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
     r = mboxlist_createmailbox(&newmbentry, options, 0/*highestmodseq*/,
+                               0/*minor_version*/,
                                0/*isadmin*/, req->userid, req->authstate,
                                flags, args->shareWith ? &mailbox : NULL);
     if (r) {

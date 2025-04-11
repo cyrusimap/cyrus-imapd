@@ -352,6 +352,7 @@ static int my_webdav_auth(const char *userid)
             mbentry.name = (char *) mbname_intname(mbname);
             mbentry.mbtype = MBTYPE_COLLECTION;
             r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                       0/*minor_version*/,
                                        httpd_userisadmin || httpd_userisproxyadmin,
                                        userid, httpd_authstate,
                                        0/*flags*/, NULL/*mailboxptr*/);

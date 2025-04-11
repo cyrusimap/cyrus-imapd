@@ -774,6 +774,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
     mbentry.mbtype = MBTYPE_EMAIL;
 
     r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*minor_version*/,
                                1/*isadmin*/, userid, auth_state,
                                MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
 
@@ -822,6 +823,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         mbentry.mbtype = MBTYPE_EMAIL;
 
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, userid, auth_state,
                                    MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
 

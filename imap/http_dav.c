@@ -5819,6 +5819,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     mbentry.mbtype = mparams->mkcol.mbtype;
     mbentry.partition = partition;
     r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*minor_version*/,
                                httpd_userisadmin || httpd_userisproxyadmin,
                                httpd_userid, httpd_authstate,
                                0/*flags*/, &mailbox);

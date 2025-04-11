@@ -2531,6 +2531,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     mbentry.mbtype = MBTYPE_EMAIL;
 
     r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*minor_version*/,
                                0/*isadmin*/, userid, auth_state,
                                MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
     if (r) {

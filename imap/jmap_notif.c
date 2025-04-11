@@ -84,6 +84,7 @@ HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentry
         mbentry.name = notifmboxname;
         mbentry.mbtype = MBTYPE_JMAPNOTIFY;
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, userid, NULL/*authstate*/,
                                    0/*flags*/, NULL/*mboxptr*/);
 

@@ -1218,6 +1218,7 @@ static int recreate_calendar(const mbentry_t *mbentry,
         newmbentry.mbtype = MBTYPE_CALENDAR;
 
         r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    0/*isadmin*/, req->accountid, req->authstate,
                                    0/*flags*/, newmailbox);
 
@@ -1943,6 +1944,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                         r = mboxlist_createmailbox(&newmbentry,
                                                    0/*options*/,
                                                    0/*highestmodseq*/,
+                                                   0/*minor_version*/,
                                                    0/*isadmin*/,
                                                    req->accountid,
                                                    req->authstate,
@@ -1968,6 +1970,7 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 r = mboxlist_createmailbox(&newmbentry,
                                            0/*options*/,
                                            0/*highestmodseq*/,
+                                           0/*minor_version*/,
                                            0/*isadmin*/,
                                            req->accountid,
                                            req->authstate,

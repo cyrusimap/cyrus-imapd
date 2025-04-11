@@ -1972,6 +1972,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         int flags = MBOXLIST_CREATE_KEEP_INTERMEDIARIES; // avoid infinite looping!
         flags |= MBOXLIST_CREATE_SYNC; /* for silent */
         r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   0/*minor_version*/,
                                    1/*isadmin*/, NULL/*userid*/, NULL/*authstate*/,
                                    flags, NULL/*mailboxptr*/);
         if (r) goto out;
@@ -2014,7 +2015,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
                        mbentry->uniqueid, 0 /* options */,
                        mbentry->uidvalidity,
                        mbentry->createdmodseq,
-                       mbentry->foldermodseq, &mailbox);
+                       mbentry->foldermodseq, 0, &mailbox);
     if (r) goto done;
 
     r = mailbox_add_conversations(mailbox, /*silent*/1);
@@ -2051,6 +2052,7 @@ done:
 
 EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
                                     unsigned options, modseq_t highestmodseq,
+                                    int minor_version,
                                     unsigned isadmin, const char *userid,
                                     const struct auth_state *auth_state,
                                     unsigned flags, struct mailbox **mboxptr)
@@ -2151,7 +2153,8 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
 
         /* Filesystem Operations */
         r = mailbox_create(mboxname, mbtype, newpartition, acl, newmbentry->uniqueid,
-                           options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
+                           options, uidvalidity, createdmodseq, highestmodseq,
+                           minor_version, &newmailbox);
         if (!r) r = mailbox_add_conversations(newmailbox, silent);
         if (r) {
             /* CREATE failed - remove mbentry */
@@ -2232,6 +2235,7 @@ EXPORTED int mboxlist_createmailboxlock(const mbentry_t *mbentry,
     struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
 
     int r = mboxlist_createmailbox(mbentry, options, highestmodseq,
+                                   0/*minor_version*/,
                                    isadmin, userid, auth_state,
                                    flags, mboxptr);
 

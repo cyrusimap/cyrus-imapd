@@ -46,6 +46,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
+use Cyrus::IndexFile;
 
 $Data::Dumper::Sortkeys = 1;
 
@@ -204,6 +205,35 @@ sub test_good_mailboxes_virtdomains
         $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
     }
+}
+
+sub test_mailbox_version
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->_imap_cmd('CREATE', 0, '',
+                          "user.cassandane.foo", [ 'VERSION', '19' ]);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane.foo');
+    my $file = "$dir/cyrus.index";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+
+    $self->assert_num_equals(19, $index->header('MinorVersion'));
+
+    $admintalk->create('user.cassandane.foo.bar');
+
+    $dir = $self->{instance}->folder_to_directory('user.cassandane.foo.bar');
+    $file = "$dir/cyrus.index";
+    $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    $index = Cyrus::IndexFile->new($fh);
+
+    $self->assert_num_equals(19, $index->header('MinorVersion'));
 }
 
 1;

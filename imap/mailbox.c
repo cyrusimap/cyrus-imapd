@@ -6117,6 +6117,7 @@ EXPORTED int mailbox_create(const char *name,
                    unsigned uidvalidity,
                    modseq_t createdmodseq,
                    modseq_t highestmodseq,
+                   int minor_version, 
                    struct mailbox **mailboxptr)
 {
     int r = 0;
@@ -6128,6 +6129,23 @@ EXPORTED int mailbox_create(const char *name,
     int createfnames[] = { META_INDEX, META_HEADER, 0 };
 
     assert(uniqueid);
+
+    if (!minor_version) {
+        minor_version = MAILBOX_MINOR_VERSION;
+
+        // Use the minor version of our parent, if exists
+        mbentry_t *mbentry = NULL;
+        mboxlist_findparent(name, &mbentry);
+        if (mbentry) {
+            struct mailbox *parent = NULL;
+            mailbox_open_from_mbe(mbentry, &parent);
+            if (parent) {
+                minor_version = parent->i.minor_version;
+                mailbox_close(&parent);
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+    }
 
     /* if we already have this name open then that's an error too */
     uint32_t legacy_dirs = (mbtype & MBTYPE_LEGACY_DIRS);
@@ -6256,7 +6274,7 @@ EXPORTED int mailbox_create(const char *name,
 
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
-    mailbox->i.minor_version = MAILBOX_MINOR_VERSION;
+    mailbox->i.minor_version = minor_version;
     mailbox->i.start_offset = INDEX_HEADER_SIZE;
     mailbox->i.record_size = INDEX_RECORD_SIZE;
     mailbox->i.options = options;
@@ -6958,7 +6976,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
                        mailbox_acl(oldmailbox), mailbox_uniqueid(oldmailbox),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
-                       highestmodseq, &newmailbox);
+                       highestmodseq, oldmailbox->i.minor_version, &newmailbox);
 
     if (r) return r;
 
@@ -7368,7 +7386,8 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
         mailbox_close(&mailbox);
         r = mailbox_create(name, mbentry->mbtype, mbentry->partition, mbentry->acl,
-                           mbentry->uniqueid, options, 0, 0, 0, mbptr);
+                           mbentry->uniqueid, options, 0, 0, 0,
+                           mailbox->i.minor_version, mbptr);
         mboxlist_entry_free(&mbentry);
         return r;
     }

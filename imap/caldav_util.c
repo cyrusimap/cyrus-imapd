@@ -1361,6 +1361,7 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
     mbentry.name = (char *) mailboxname;
     mbentry.mbtype = type;
     r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                               0/*minor_version*/,
                                0/*isadmin*/, userid, authstate,
                                0/*flags*/, displayname ? &mailbox : NULL);
     if (!r && displayname) {
