@@ -3817,8 +3817,11 @@ static void capa_response(int flags)
             do {
                 prot_putc(' ', imapd_out);
                 prot_puts(imapd_out, capa);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+                /* format string and args chosen carefully */
                 prot_printf(imapd_out, valfmt, s, i64);
-
+#pragma GCC diagnostic pop
             } while ((mask & CAPA_MULTI) && (++n < num) && (s = *(++strp)));
         }
     }

@@ -4298,7 +4298,12 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         goto done;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string chosen above */
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
+#pragma GCC diagnostic pop
+
     r = carddav_store(*mailbox, card, resourcename, 0, flags, &annots,
                       req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
