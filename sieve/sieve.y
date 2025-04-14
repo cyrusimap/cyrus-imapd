@@ -2063,7 +2063,11 @@ void sieveerror_c(sieve_script_t *sscript, int code, ...)
     va_list args;
 
     va_start(args, code);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string comes from sieve_err.et */
     vsieveerror_f(sscript, error_message(code), args);
+#pragma GCC diagnostic pop
     va_end(args);
 }
 
