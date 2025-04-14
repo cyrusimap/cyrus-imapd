@@ -105,7 +105,7 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
     struct stat sbuf;
     int openmode = (flags & MAPPEDFILE_RW) ? O_RDWR : O_RDONLY;
     int create = (flags & MAPPEDFILE_CREATE) ? 1 : 0;
-    int r;
+    int r = -1;
 
     assert(fname);
     assert(!*mfp);
@@ -120,13 +120,25 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
             r = -errno;
             goto err;
         }
-        r = cyrus_mkdir(mf->fname, 0755);
-        if (r < 0) {
-            xsyslog(LOG_ERR, "IOERROR: cyrus_mkdir failed",
+        int dirfd = xopendir(mf->fname, /*create*/1);
+        if (dirfd < 0) {
+            xsyslog(LOG_ERR, "IOERROR: open directory failed for mappedfile",
                              "filename=<%s>", mf->fname);
             goto err;
         }
-        mf->fd = open(mf->fname, O_RDWR | O_CREAT, 0644);
+        char *copy = xstrdup(mf->fname);
+        const char *leaf = basename(copy);
+        mf->fd = openat(dirfd, leaf, O_RDWR | O_CREAT, 0644);
+        free(copy);
+        if (mf->fd >= 0) {
+            if (fsync(dirfd) < 0) {
+                xsyslog(LOG_ERR, "IOERROR: directory sync failed for mappedfile",
+                                 "filename=<%s>", mf->fname);
+                close(dirfd);
+                goto err;
+            }
+        }
+        close(dirfd);
     }
 
     if (mf->fd == -1) {
