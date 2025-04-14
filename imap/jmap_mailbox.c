@@ -101,6 +101,7 @@ static struct rolesort_data ROLESORT[] = {
     { NULL, 10 }  // default
 };
 
+// clang-format off
 static jmap_method_t jmap_mailbox_methods_standard[] = {
     {
         "Mailbox/get",
@@ -134,10 +135,13 @@ static jmap_method_t jmap_mailbox_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_mailbox_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
 {
@@ -764,6 +768,7 @@ static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((
     json_array_append_new((json_t*) rock, json_string(id));
 }
 
+// clang-format off
 static const jmap_property_t mailbox_props[] = {
     {
         "id",
@@ -899,6 +904,7 @@ static const jmap_property_t mailbox_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_mailbox_get(jmap_req_t *req)
 {

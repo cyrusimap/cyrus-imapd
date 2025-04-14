@@ -93,6 +93,7 @@ static int action_conf(struct transaction_t *txn);
 
 
 /* Namespace for admin service */
+// clang-format off
 struct namespace_t namespace_admin = {
     URL_NS_ADMIN, 1, "admin", "/admin", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -124,6 +125,7 @@ struct namespace_t namespace_admin = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 static void admin_init(struct buf *serverinfo __attribute__((unused)))

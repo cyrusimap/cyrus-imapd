@@ -350,7 +350,7 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     /* create this file and put it into stage->parts[0] */
     xunlink(stagefile);
     if (sourcefile) {
-        r = mailbox_copyfile(sourcefile, stagefile, 0);
+        r = cyrus_copyfile(sourcefile, stagefile, COPYFILE_NODIRSYNC);
         if (r) {
             syslog(LOG_ERR, "couldn't copy stagefile '%s' for mbox: '%s': %s",
                    sourcefile, mailboxname, error_message(r));
@@ -1010,7 +1010,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         /* ok, create this file, and copy the name of it into stage->parts. */
 
         /* create the new staging file from the first stage part */
-        r = mailbox_copyfile(stage->parts.data[0], stagefile, 0);
+        r = cyrus_copyfile(stage->parts.data[0], stagefile, COPYFILE_NODIRSYNC);
         if (r) {
             /* maybe the directory doesn't exist? */
             char stagedir[MAX_MAILBOX_PATH+1];
@@ -1023,7 +1023,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             } else {
                 syslog(LOG_NOTICE, "created stage directory %s",
                        stagedir);
-                r = mailbox_copyfile(stage->parts.data[0], stagefile, 0);
+                r = cyrus_copyfile(stage->parts.data[0], stagefile, COPYFILE_NODIRSYNC);
             }
         }
         if (r) {

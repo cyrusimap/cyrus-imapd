@@ -57,6 +57,7 @@ static void applepush_init(struct buf *serverinfo);
 static int meth_get_applepush(struct transaction_t *txn, void *params);
 static int meth_post_applepush(struct transaction_t *txn, void *params);
 
+// clang-format off
 struct namespace_t namespace_applepush = {
     URL_NS_APPLEPUSH, /*enabled*/0, "applepush", "/applepush/subscribe", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -88,6 +89,7 @@ struct namespace_t namespace_applepush = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 static void applepush_init(struct buf *serverinfo __attribute__((unused)))
 {

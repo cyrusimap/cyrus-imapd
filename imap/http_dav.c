@@ -194,6 +194,7 @@ static const struct report_type_t principal_reports[] = {
 };
 
 /* Array of known "live" properties */
+// clang-format off
 static const struct prop_entry principal_props[] = {
 
     /* WebDAV (RFC 4918) properties */
@@ -292,6 +293,7 @@ static const struct prop_entry principal_props[] = {
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
+// clang-format on
 
 
 struct meth_params princ_params = {
@@ -301,6 +303,7 @@ struct meth_params princ_params = {
 };
 
 /* Namespace for WebDAV principals */
+// clang-format off
 struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "principal", "/dav/principals", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -332,6 +335,7 @@ struct namespace_t namespace_principal = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 /* Linked-list of properties for fetching */
@@ -8030,6 +8034,7 @@ static int principal_search(const char *userid, void *rock)
 }
 
 
+// clang-format off
 static const struct prop_entry prin_search_props[] = {
 
     /* WebDAV (RFC 4918) properties */
@@ -8041,6 +8046,7 @@ static const struct prop_entry prin_search_props[] = {
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
+// clang-format on
 
 
 /* DAV:principal-property-search REPORT */

@@ -70,6 +70,7 @@ static int meth_post(struct transaction_t *txn, void *params);
 
 
 /* Namespace for CGI */
+// clang-format off
 struct namespace_t namespace_cgi = {
     URL_NS_CGI, 0, "cgi", "/cgi-bin", NULL,
     http_allow_noauth, /*authschemes*/0,
@@ -101,6 +102,7 @@ struct namespace_t namespace_cgi = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 static void cgi_init(struct buf *serverinfo __attribute__((unused)))

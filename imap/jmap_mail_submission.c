@@ -81,6 +81,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 static int jmap_identity_get(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_emailsubmission_methods_standard[] = {
     {
         "EmailSubmission/get",
@@ -120,10 +121,13 @@ static jmap_method_t jmap_emailsubmission_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_emailsubmission_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
 {
@@ -1230,6 +1234,7 @@ static int getsubmission(jmap_req_t *req, struct jmap_get *get,
     return r;
 }
 
+// clang-format off
 static const jmap_property_t submission_props[] = {
     {
         "id",
@@ -1295,6 +1300,7 @@ static const jmap_property_t submission_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_emailsubmission_get(jmap_req_t *req)
 {
@@ -2281,6 +2287,7 @@ done:
 }
 
 /* Identity/get method */
+// clang-format off
 static const jmap_property_t identity_props[] = {
     {
         "id",
@@ -2397,6 +2404,7 @@ static const jmap_property_t identity_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_identity_get(jmap_req_t *req)
 {

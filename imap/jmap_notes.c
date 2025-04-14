@@ -75,10 +75,13 @@ static int jmap_note_get(jmap_req_t *req);
 static int jmap_note_set(jmap_req_t *req);
 static int jmap_note_changes(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_notes_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_notes_methods_nonstandard[] = {
     {
         "Note/get",
@@ -100,6 +103,7 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_notes_init(jmap_settings_t *settings)
 {
@@ -405,6 +409,7 @@ static void not_found_cb(const char *id,
     }
 }
 
+// clang-format off
 static const jmap_property_t notes_props[] = {
     {
         "id",
@@ -438,6 +443,7 @@ static const jmap_property_t notes_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_note_get(jmap_req_t *req)
 {

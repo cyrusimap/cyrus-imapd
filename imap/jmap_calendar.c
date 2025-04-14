@@ -129,6 +129,7 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
 
 #define JMAPCACHE_CALVERSION 26
 
+// clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
     {
         "Calendar/get",
@@ -318,10 +319,13 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 jmap_method_t jmap_calendar_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
 {
@@ -854,6 +858,7 @@ done:
     return r;
 }
 
+// clang-format off
 static const jmap_property_t calendar_props[] = {
     {
         "id",
@@ -965,6 +970,7 @@ static const jmap_property_t calendar_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int has_calendars_cb(const mbentry_t *mbentry, void *rock)
 {
@@ -3640,6 +3646,7 @@ done:
     return r;
 }
 
+// clang-format off
 static const jmap_property_t event_props[] = {
     {
         "id",
@@ -3911,6 +3918,7 @@ static const jmap_property_t event_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
 {
@@ -8274,6 +8282,7 @@ done:
     return 0;
 }
 
+// clang-format off
 static const jmap_property_t calendarprincipal_props[] = {
     {
         "id",
@@ -8327,6 +8336,7 @@ static const jmap_property_t calendarprincipal_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 typedef int(*principal_foreach_fn)
     (jmap_req_t* req, const char* accountid, int rights, void* rock);
@@ -10346,7 +10356,7 @@ done:
     mailbox_close(&notifmbox);
 }
 
-
+// clang-format off
 static const jmap_property_t sharenotification_props[] = {
     {
         "id",
@@ -10390,6 +10400,7 @@ static const jmap_property_t sharenotification_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *props,
                                  void *rock __attribute__((unused)))
@@ -10963,6 +10974,7 @@ done:
     return 0;
 }
 
+// clang-format off
 static const jmap_property_t calendareventnotification_props[] = {
     {
         "id",
@@ -11011,6 +11023,7 @@ static const jmap_property_t calendareventnotification_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 struct eventnotif_tojmap_rock {
     int check_acl;
@@ -11520,6 +11533,7 @@ done:
     return 0;
 }
 
+// clang-format off
 static const jmap_property_t participantidentity_props[] = {
     {
         "id",
@@ -11538,6 +11552,7 @@ static const jmap_property_t participantidentity_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static void encode_participantidentity_id(struct buf *buf, const char *addr)
 {
@@ -11815,6 +11830,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
     return jsevents_by_partid;
 }
 
+// clang-format off
 static const jmap_property_t calendarpreferences_props[] = {
     {
         "id",
@@ -11833,6 +11849,7 @@ static const jmap_property_t calendarpreferences_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_calendarpreferences_get(struct jmap_req *req)
 {

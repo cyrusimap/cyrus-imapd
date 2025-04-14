@@ -123,6 +123,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
  * - Identity/set
  */
 
+// clang-format off
 static jmap_method_t jmap_mail_methods_standard[] = {
     {
         "Email/query",
@@ -192,7 +193,9 @@ static jmap_method_t jmap_mail_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_mail_methods_nonstandard[] = {
     {
         "Email/matchMime",
@@ -202,6 +205,7 @@ static jmap_method_t jmap_mail_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 /* NULL terminated list of supported jmap_email_query sort fields */
 struct email_sortfield {
@@ -209,6 +213,7 @@ struct email_sortfield {
     const char *capability;
 };
 
+// clang-format off
 static struct email_sortfield email_sortfields[] = {
     {
         "receivedAt",
@@ -271,6 +276,7 @@ static struct email_sortfield email_sortfields[] = {
         NULL
     }
 };
+// clang-format on
 
 #define jmap_openmbox_by_guidrec(req, rec, mbox, rw)           \
     ((rec->version > CONV_GUIDREC_BYNAME_VERSION) ?            \
@@ -6375,6 +6381,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
     return r;
 }
 
+// clang-format off
 static const jmap_property_t thread_props[] = {
     {
         "id",
@@ -6388,6 +6395,7 @@ static const jmap_property_t thread_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_thread_get(jmap_req_t *req)
 {
@@ -7170,6 +7178,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     return conv(json_string_value(jheaderval));
 }
 
+// clang-format off
 static const struct blob_header_t {
     const char *name;
     const char *type;
@@ -7177,6 +7186,7 @@ static const struct blob_header_t {
     { "bimi-indicator", "image/svg+xml" },
     { NULL, NULL }
 };
+// clang-format on
 
 static const char *_encode_emailheader_blobid(const char *emailid,
                                               const char *hdr,
@@ -8420,6 +8430,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
     ptrarray_fini(&rock.mboxes);
 }
 
+// clang-format off
 static const jmap_property_t email_props[] = {
     {
         "id",
@@ -8620,6 +8631,7 @@ static const jmap_property_t email_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_email_get(jmap_req_t *req)
 {
